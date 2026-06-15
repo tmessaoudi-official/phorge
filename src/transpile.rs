@@ -172,22 +172,23 @@ impl Transpiler {
     }
 
     fn emit_class(&mut self, c: &ClassDecl) -> Result<(), String> {
-        // Field set for `$this->` resolution = explicit decls + promoted ctor params
-        // (mirrors the checker's `collect_class`).
-        let mut fields: HashSet<String> = HashSet::new();
+        // Names of ctor params that PHP will promote to properties.
+        let mut promoted_names: HashSet<String> = HashSet::new();
         for m in &c.members {
-            match m {
-                ClassMember::Field { name, .. } => {
-                    fields.insert(name.clone());
-                }
-                ClassMember::Constructor { params, .. } => {
-                    for p in params {
-                        if is_promoted(&p.modifiers) {
-                            fields.insert(p.name.clone());
-                        }
+            if let ClassMember::Constructor { params, .. } = m {
+                for p in params {
+                    if is_promoted(&p.modifiers) {
+                        promoted_names.insert(p.name.clone());
                     }
                 }
-                ClassMember::Method(_) => {}
+            }
+        }
+        // Field set for `$this->` resolution = explicit decls + promoted ctor params
+        // (mirrors the checker's `collect_class`).
+        let mut fields: HashSet<String> = promoted_names.clone();
+        for m in &c.members {
+            if let ClassMember::Field { name, .. } = m {
+                fields.insert(name.clone());
             }
         }
         self.line(&format!("class {} {{", c.name));
@@ -196,6 +197,11 @@ impl Transpiler {
         for m in &c.members {
             match m {
                 ClassMember::Field { modifiers, ty, name, .. } => {
+                    // A field that is ALSO a promoted ctor param is declared by the
+                    // promotion — emitting it again is a PHP "redeclare" fatal.
+                    if promoted_names.contains(name) {
+                        continue;
+                    }
                     self.line(&format!("{} {} ${name};", vis(modifiers), Self::emit_type(ty)));
                 }
                 ClassMember::Constructor { params, body, .. } => {
@@ -641,9 +647,19 @@ mod tests {
     }
 
     #[test]
-    fn explicit_field_decl_emitted() {
+    fn explicit_non_promoted_field_emitted() {
+        // A plain field (not a ctor param) is emitted as a standalone property.
+        let out = php("class C { private int count; constructor() {} }");
+        assert!(out.contains("private int $count;"), "{out}");
+    }
+
+    #[test]
+    fn promoted_field_not_redeclared() {
+        // Declared both explicitly AND via promotion: emit only the promotion (PHP forbids
+        // redeclaring a promoted property as a separate one — caught by the round-trip test).
         let out = php("class C { private int total; constructor(private int total) {} }");
-        assert!(out.contains("private int $total;"), "{out}");
+        assert!(out.contains("function __construct(private int $total) {}"), "{out}");
+        assert!(!out.contains("private int $total;"), "standalone redeclaration must be gone: {out}");
     }
 
     #[test]

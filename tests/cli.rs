@@ -50,3 +50,36 @@ fn transpile_sample_exits_0_with_php() {
     assert!(out.status.success(), "exit {:?}", out.status.code());
     assert!(String::from_utf8_lossy(&out.stdout).starts_with("<?php"));
 }
+
+/// The strongest correctness signal: the emitted PHP, run by a real `php`, prints exactly
+/// what the interpreter prints. Self-skips (passes) if `php` is not on PATH.
+#[test]
+fn transpiled_php_runs_and_matches_interpreter() {
+    let have_php = Command::new("php")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !have_php {
+        eprintln!("skipping round-trip: php not on PATH");
+        return;
+    }
+    let php = Command::new(BIN)
+        .args(["transpile", "tests/fixtures/sample.phg"])
+        .output()
+        .expect("spawn transpile");
+    assert!(php.status.success());
+
+    let dir = std::env::temp_dir().join("phorge_rt");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("sample.php");
+    std::fs::write(&path, &php.stdout).unwrap();
+
+    let run = Command::new("php").arg(&path).output().expect("spawn php");
+    let _ = std::fs::remove_file(&path);
+    assert!(run.status.success(), "php stderr: {}", String::from_utf8_lossy(&run.stderr));
+    assert_eq!(
+        String::from_utf8_lossy(&run.stdout),
+        "Hello Tak\narea = 12.56636\narea = 12\n"
+    );
+}
