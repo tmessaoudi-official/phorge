@@ -134,3 +134,27 @@ fn run_runtime_error_exits_1() {
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&out.stderr).contains("runtime error"));
 }
+
+#[test]
+fn runvm_simple_program_exits_0() {
+    let path = write_temp("runvm_ok", r#"function main() { println("{1 + 1}"); }"#);
+    let out = Command::new(BIN)
+        .args(["runvm", path.to_str().unwrap()])
+        .output()
+        .expect("spawn phorge");
+    let _ = std::fs::remove_file(&path);
+    assert!(out.status.success(), "exit {:?}", out.status.code());
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "2\n");
+}
+
+#[test]
+fn runvm_runtime_error_exits_1() {
+    let path = write_temp("runvm_rt", r#"function main() { println("{1 / 0}"); }"#);
+    let out = Command::new(BIN)
+        .args(["runvm", path.to_str().unwrap()])
+        .output()
+        .expect("spawn phorge");
+    let _ = std::fs::remove_file(&path);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("runtime error"));
+}
