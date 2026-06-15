@@ -280,7 +280,10 @@ impl Interp {
     fn eval_unary(&mut self, op: UnaryOp, expr: &Expr) -> R<Value> {
         let v = self.eval(expr)?;
         match (op, v) {
-            (UnaryOp::Neg, Value::Int(n)) => Ok(Value::Int(-n)),
+            (UnaryOp::Neg, Value::Int(n)) => match n.checked_neg() {
+                Some(v) => Ok(Value::Int(v)),
+                None => rt("integer overflow"),
+            },
             (UnaryOp::Neg, Value::Float(x)) => Ok(Value::Float(-x)),
             (UnaryOp::Not, Value::Bool(b)) => Ok(Value::Bool(!b)),
             (op, v) => rt(format!("cannot apply {op:?} to {}", v.type_name())),
@@ -473,25 +476,30 @@ fn arith(op: BinaryOp, l: Value, r: Value) -> R<Value> {
     use BinaryOp::*;
     match (l, r) {
         (Value::Int(a), Value::Int(b)) => {
+            // Checked ops: overflow is a fault the type system can't catch, so it
+            // becomes a RuntimeError rather than a panic (EV-7 / no-panic principle).
             let v = match op {
-                Add => a + b,
-                Sub => a - b,
-                Mul => a * b,
+                Add => a.checked_add(b),
+                Sub => a.checked_sub(b),
+                Mul => a.checked_mul(b),
                 Div => {
                     if b == 0 {
                         return rt("division by zero");
                     }
-                    a / b
+                    a.checked_div(b)
                 }
                 Rem => {
                     if b == 0 {
                         return rt("modulo by zero");
                     }
-                    a % b
+                    a.checked_rem(b)
                 }
                 _ => unreachable!("arith only called with +-*/%"),
             };
-            Ok(Value::Int(v))
+            match v {
+                Some(n) => Ok(Value::Int(n)),
+                None => rt("integer overflow"),
+            }
         }
         (Value::Float(a), Value::Float(b)) => {
             let v = match op {
@@ -696,6 +704,13 @@ mod tests {
             }
         "#;
         assert_eq!(out(src), "1\n2\n3\n");
+    }
+
+    #[test]
+    fn integer_overflow_is_runtime_error_not_panic() {
+        let src = r#"function main() { println("{9223372036854775807 + 1}"); }"#;
+        let e = run(src).unwrap_err();
+        assert!(e.message.contains("overflow"), "{}", e.message);
     }
 
     #[test]
