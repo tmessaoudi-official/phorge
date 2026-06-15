@@ -249,11 +249,44 @@ impl Transpiler {
             }
             Expr::Null(_) => Err("transpile error: null is not yet supported".into()),
             Expr::Index { .. } => Err("transpile error: indexing is not yet supported".into()),
-            // Implemented in Tasks 3–6:
-            Expr::Str(..) | Expr::Call { .. } | Expr::Member { .. } | Expr::Match { .. } => {
+            Expr::Str(parts, _) => self.emit_string(parts),
+            Expr::Call { callee, args, .. } => self.emit_call(callee, args),
+            // Implemented in Tasks 5–6:
+            Expr::Member { .. } | Expr::Match { .. } => {
                 Err("transpile error: implemented in a later task".into())
             }
         }
+    }
+
+    /// Emit an interpolated string literal as a PHP concatenation of quoted literal chunks
+    /// and parenthesized expressions. Always-correct (avoids PHP's interpolation limits,
+    /// e.g. free function calls inside `"{…}"`).
+    fn emit_string(&mut self, parts: &[StrPart]) -> Result<String, String> {
+        if parts.is_empty() {
+            return Ok("\"\"".into());
+        }
+        let mut chunks: Vec<String> = Vec::new();
+        for p in parts {
+            match p {
+                StrPart::Literal(s) => chunks.push(format!("\"{}\"", php_escape(s))),
+                StrPart::Expr(e) => {
+                    let code = self.emit_expr(e)?;
+                    chunks.push(format!("({code})"));
+                }
+            }
+        }
+        Ok(chunks.join(" . "))
+    }
+
+    fn emit_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<String, String> {
+        if let Expr::Ident(name, _) = callee {
+            if name == "println" {
+                let a = if args.is_empty() { "\"\"".into() } else { self.emit_expr(&args[0])? };
+                return Ok(format!(r#"echo {a} . "\n""#)); // trailing ';' added by Stmt::Expr
+            }
+        }
+        // Full free-fn / `new` / method dispatch lands in Tasks 4–5.
+        Err("transpile error: call dispatch implemented in Task 4".into())
     }
 
     fn binop(op: &BinaryOp) -> &'static str {
@@ -285,6 +318,12 @@ impl Transpiler {
             format!("${name}") // best-effort; the checker guarantees resolution
         }
     }
+}
+
+/// Escape a literal string chunk for embedding in a PHP double-quoted string.
+/// `$` is escaped so PHP does not attempt its own interpolation on emitted literals.
+fn php_escape(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"").replace('$', "\\$")
 }
 
 #[cfg(test)]
@@ -332,5 +371,23 @@ mod tests {
         assert!(out.contains("} else {"), "{out}");
         assert!(out.contains("$a = -$x;") && out.contains("$b = !true;"), "{out}");
         assert!(out.contains("[1, 2]"), "{out}");
+    }
+
+    #[test]
+    fn interpolation_emits_concatenation() {
+        let out = php("function greet(string name) -> string { return \"Hello {name}\"; }");
+        assert!(out.contains(r#"return "Hello " . ($name);"#), "{out}");
+    }
+
+    #[test]
+    fn pure_string_literal_no_concat() {
+        let out = php("function f() -> string { return \"hi\"; }");
+        assert!(out.contains(r#"return "hi";"#), "{out}");
+    }
+
+    #[test]
+    fn println_becomes_echo() {
+        let out = php("function main() { println(\"hi\"); }");
+        assert!(out.contains(r#"echo "hi" . "\n";"#), "{out}");
     }
 }
