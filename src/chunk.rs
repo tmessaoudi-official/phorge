@@ -1,11 +1,14 @@
 //! Bytecode chunk + instruction set for the M2 VM.
 //! See docs/specs/2026-06-15-m2-bytecode-vm-design.md (§4, §5).
-//! P1 scope: scalar arithmetic + print. Reuses `value::Value` (scalar formatting parity
-//! with the interpreter is free); the VM heap/handle object model arrives in P4.
+//! P2 scope: full M1 expression/statement surface for `main` (see
+//! docs/plans/2026-06-15-m2-plan2-compiler-runvm.md). Reuses `value::Value` (scalar
+//! formatting parity with the interpreter is free); lists are inline in P2 — the VM
+//! heap/handle object model arrives in P4.
 
 use crate::value::Value;
 
 /// One VM instruction. Typed operands — no raw-byte decode (decision M2-7).
+/// Jump targets are absolute instruction indices (decision P2-2).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Op {
     /// Push `consts[idx]`.
@@ -15,14 +18,43 @@ pub enum Op {
     SubI,
     MulI,
     DivI,
+    RemI,
     AddF,
     SubF,
     MulF,
     DivF,
+    RemF,
     /// Negate the top of stack (int or float).
     Neg,
-    /// Pop, render, append a line to captured output.
-    Print,
+    /// Logical not (bool).
+    Not,
+    // Comparison / equality — runtime-generic (decision P2-8).
+    Eq,
+    Ne,
+    Lt,
+    Gt,
+    Le,
+    Ge,
+    /// Discard the top of stack.
+    Pop,
+    /// Push a copy of the local at stack slot `n`.
+    GetLocal(usize),
+    /// Pop and store into the local at stack slot `n` (set-and-pop, decision P2-4).
+    SetLocal(usize),
+    /// Unconditional jump to absolute instruction index.
+    Jump(usize),
+    /// Pop a bool; if false, jump to absolute instruction index (decision P2-5).
+    JumpIfFalse(usize),
+    /// Pop `n` values, concatenate their `as_display` (interpolation), push the `Str`.
+    Concat(usize),
+    /// Pop `n` values into a `List` (top-of-stack is the last element).
+    MakeList(usize),
+    /// Pop an int index and a list; push the element clone (bounds-checked).
+    Index,
+    /// Pop a list; push its length as an `Int`.
+    Len,
+    /// Pop `n` values, space-join their `as_display`, append a line to output.
+    Print(usize),
     /// End execution, returning captured output.
     Return,
 }
