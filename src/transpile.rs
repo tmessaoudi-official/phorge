@@ -164,9 +164,69 @@ impl Transpiler {
         Ok(())
     }
 
-    // Stub replaced in Task 5 (classes). Present so `emit_program` compiles.
-    fn emit_class(&mut self, _c: &ClassDecl) -> Result<(), String> {
-        Err("transpile error: classes implemented in Task 5".into())
+    fn emit_class(&mut self, c: &ClassDecl) -> Result<(), String> {
+        // Field set for `$this->` resolution = explicit decls + promoted ctor params
+        // (mirrors the checker's `collect_class`).
+        let mut fields: HashSet<String> = HashSet::new();
+        for m in &c.members {
+            match m {
+                ClassMember::Field { name, .. } => {
+                    fields.insert(name.clone());
+                }
+                ClassMember::Constructor { params, .. } => {
+                    for p in params {
+                        if is_promoted(&p.modifiers) {
+                            fields.insert(p.name.clone());
+                        }
+                    }
+                }
+                ClassMember::Method(_) => {}
+            }
+        }
+        self.line(&format!("class {} {{", c.name));
+        self.indent += 1;
+        let prev = self.cur_class_fields.replace(fields);
+        for m in &c.members {
+            match m {
+                ClassMember::Field { modifiers, ty, name, .. } => {
+                    self.line(&format!("{} {} ${name};", vis(modifiers), Self::emit_type(ty)));
+                }
+                ClassMember::Constructor { params, body, .. } => {
+                    let ps: Vec<String> = params
+                        .iter()
+                        .map(|p| {
+                            let v = vis(&p.modifiers);
+                            if v.is_empty() {
+                                format!("{} ${}", Self::emit_type(&p.ty), p.name)
+                            } else {
+                                format!("{} {} ${}", v, Self::emit_type(&p.ty), p.name)
+                            }
+                        })
+                        .collect();
+                    if body.is_empty() {
+                        self.line(&format!("function __construct({}) {{}}", ps.join(", ")));
+                    } else {
+                        self.line(&format!("function __construct({}) {{", ps.join(", ")));
+                        self.indent += 1;
+                        self.push_scope();
+                        for p in params {
+                            self.declare(&p.name);
+                        }
+                        for s in body {
+                            self.emit_stmt(s)?;
+                        }
+                        self.pop_scope();
+                        self.indent -= 1;
+                        self.line("}");
+                    }
+                }
+                ClassMember::Method(f) => self.emit_function(f, true)?,
+            }
+        }
+        self.cur_class_fields = prev;
+        self.indent -= 1;
+        self.line("}");
+        Ok(())
     }
 
     fn emit_stmt(&mut self, s: &Stmt) -> Result<(), String> {
@@ -268,9 +328,13 @@ impl Transpiler {
             Expr::Index { .. } => Err("transpile error: indexing is not yet supported".into()),
             Expr::Str(parts, _) => self.emit_string(parts),
             Expr::Call { callee, args, .. } => self.emit_call(callee, args),
-            // Implemented in Tasks 5–6:
-            Expr::Member { .. } | Expr::Match { .. } => {
-                Err("transpile error: implemented in a later task".into())
+            Expr::Member { object, name, .. } => {
+                let o = self.emit_expr(object)?;
+                Ok(format!("{o}->{name}"))
+            }
+            // Implemented in Task 6:
+            Expr::Match { .. } => {
+                Err("transpile error: match in this position is not yet supported".into())
             }
         }
     }
@@ -319,9 +383,13 @@ impl Transpiler {
         Ok(parts?.join(", "))
     }
 
-    // Stub replaced in Task 5 (member access + method calls).
-    fn emit_member_call(&mut self, _callee: &Expr, _args: &[Expr]) -> Result<String, String> {
-        Err("transpile error: method calls implemented in Task 5".into())
+    fn emit_member_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<String, String> {
+        if let Expr::Member { object, name, .. } = callee {
+            let o = self.emit_expr(object)?;
+            let a = self.emit_args(args)?;
+            return Ok(format!("{o}->{name}({a})"));
+        }
+        Err("transpile error: bad member call".into())
     }
 
     fn binop(op: &BinaryOp) -> &'static str {
@@ -359,6 +427,26 @@ impl Transpiler {
 /// `$` is escaped so PHP does not attempt its own interpolation on emitted literals.
 fn php_escape(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"").replace('$', "\\$")
+}
+
+/// A ctor param is promoted (becomes a field) iff it carries a visibility modifier —
+/// matches the evaluator (EV-4) and the checker's `collect_class`.
+fn is_promoted(mods: &[Modifier]) -> bool {
+    mods.iter()
+        .any(|m| matches!(m, Modifier::Public | Modifier::Private | Modifier::Protected))
+}
+
+/// PHP visibility keyword for a member's modifiers (empty string = no keyword).
+fn vis(mods: &[Modifier]) -> &'static str {
+    if mods.iter().any(|m| matches!(m, Modifier::Private)) {
+        "private"
+    } else if mods.iter().any(|m| matches!(m, Modifier::Protected)) {
+        "protected"
+    } else if mods.iter().any(|m| matches!(m, Modifier::Public)) {
+        "public"
+    } else {
+        ""
+    }
 }
 
 #[cfg(test)]
@@ -451,5 +539,35 @@ mod tests {
              function f() -> int { return inc(1); }",
         );
         assert!(out.contains("return inc(1);"), "{out}");
+    }
+
+    #[test]
+    fn class_with_promotion_and_method() {
+        let out = php(
+            "class Greeter { constructor(private string name) {} \
+               function greet() -> string { return \"Hello {name}\"; } }",
+        );
+        assert!(out.contains("class Greeter {"), "{out}");
+        assert!(out.contains("function __construct(private string $name) {}"), "{out}");
+        assert!(out.contains("function greet(): string {"), "{out}");
+        // bare field ref inside a method resolves to $this->name
+        assert!(out.contains(r#"return "Hello " . ($this->name);"#), "{out}");
+    }
+
+    #[test]
+    fn explicit_field_decl_emitted() {
+        let out = php("class C { private int total; constructor(private int total) {} }");
+        assert!(out.contains("private int $total;"), "{out}");
+    }
+
+    #[test]
+    fn member_access_and_method_call() {
+        let out = php(
+            "class Greeter { constructor(private string name) {} \
+               function greet() -> string { return name; } } \
+             function main() { Greeter g = Greeter(\"Tak\"); println(g.greet()); }",
+        );
+        assert!(out.contains(r#"$g = new Greeter("Tak");"#), "{out}");
+        assert!(out.contains("$g->greet()"), "{out}");
     }
 }
