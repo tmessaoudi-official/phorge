@@ -46,9 +46,35 @@ pub fn lex(src: &str) -> Result<Vec<Token>, LexError> {
                 out.push(Token { kind: TokenKind::Eof, span: Span { start, len: 0, line, col } });
                 return Ok(out);
             }
-            Some(_) => {
-                // Subsequent tasks fill in real scanning here.
-                return Err(LexError { message: "unexpected character".into(), line, col });
+            Some(b) => {
+                let single = |k: TokenKind| Token { kind: k, span: Span { start, len: 1, line, col } };
+                let kind = match b {
+                    b'.' => Some(TokenKind::Dot),
+                    b';' => Some(TokenKind::Semicolon),
+                    b',' => Some(TokenKind::Comma),
+                    b':' => Some(TokenKind::Colon),
+                    b'?' => Some(TokenKind::Question),
+                    b'(' => Some(TokenKind::LParen),
+                    b')' => Some(TokenKind::RParen),
+                    b'{' => Some(TokenKind::LBrace),
+                    b'}' => Some(TokenKind::RBrace),
+                    b'[' => Some(TokenKind::LBracket),
+                    b']' => Some(TokenKind::RBracket),
+                    b'+' => Some(TokenKind::Plus),
+                    b'-' => Some(TokenKind::Minus),
+                    b'*' => Some(TokenKind::Star),
+                    b'/' => Some(TokenKind::Slash),
+                    b'%' => Some(TokenKind::Percent),
+                    b'<' => Some(TokenKind::Lt),
+                    b'>' => Some(TokenKind::Gt),
+                    b'=' => Some(TokenKind::Eq),
+                    b'!' => Some(TokenKind::Bang),
+                    _ => None,
+                };
+                match kind {
+                    Some(k) => { lx.bump(); out.push(single(k)); }
+                    None => return Err(LexError { message: format!("unexpected character {:?}", b as char), line, col }),
+                }
             }
         }
     }
@@ -67,5 +93,16 @@ mod tests {
     fn empty_and_whitespace_yield_eof_only() {
         assert_eq!(kinds(""), vec![TokenKind::Eof]);
         assert_eq!(kinds("   \n\t \r\n"), vec![TokenKind::Eof]);
+    }
+
+    #[test]
+    fn single_char_tokens() {
+        use TokenKind::*;
+        assert_eq!(
+            kinds(". ; , : ? ( ) { } [ ] < > = ! + - * / %"),
+            vec![Dot, Semicolon, Comma, Colon, Question, LParen, RParen,
+                 LBrace, RBrace, LBracket, RBracket, Lt, Gt, Eq, Bang,
+                 Plus, Minus, Star, Slash, Percent, Eof]
+        );
     }
 }
