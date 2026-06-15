@@ -134,9 +134,29 @@ impl Checker {
 
     /// Phase 1 — hoist all top-level declarations and the builtin prelude.
     fn collect(&mut self, program: &Program) {
+        use crate::ast::Item;
         self.register_prelude();
-        // user decl collection added in Task 4 & Task 5.
-        let _ = program;
+        for item in &program.items {
+            match item {
+                Item::Function(f) => self.collect_function(f),
+                Item::Enum(_) => {} // Task 5
+                Item::Class(_) => {} // Task 6
+                Item::Import { .. } => {} // module resolution deferred; prelude covers println
+            }
+        }
+    }
+
+    fn collect_function(&mut self, f: &crate::ast::FunctionDecl) {
+        if self.funcs.contains_key(&f.name) {
+            self.err(f.span, format!("function overloading is not yet supported in M1 (`{}` already defined)", f.name));
+            return;
+        }
+        let params = f.params.iter().map(|p| self.resolve_type(&p.ty)).collect();
+        let ret = match &f.ret {
+            Some(t) => self.resolve_type(t),
+            None => Ty::Unit,
+        };
+        self.funcs.insert(f.name.clone(), FnSig { params, ret });
     }
 
     /// Phase 2 — check every function/method body.
@@ -347,8 +367,75 @@ impl Checker {
     fn check_index(&mut self, _o: &crate::ast::Expr, _i: &crate::ast::Expr, span: Span) -> Ty {
         self.err(span, "indexing is not yet supported in M1") // refined in Task 5
     }
-    fn check_call(&mut self, _c: &crate::ast::Expr, _a: &[crate::ast::Expr], span: Span) -> Ty {
-        self.err(span, "calls not yet supported") // implemented in Task 4
+    fn check_call(&mut self, callee: &crate::ast::Expr, args: &[crate::ast::Expr], span: Span) -> Ty {
+        use crate::ast::Expr;
+        match callee {
+            Expr::Ident(name, _) => self.check_named_call(name, args, span),
+            Expr::Member { object, name, .. } => self.check_method_call(object, name, args, span), // Task 6
+            other => {
+                for a in args {
+                    self.check_expr(a);
+                }
+                let _ = other;
+                self.err(span, "expression is not callable")
+            }
+        }
+    }
+
+    /// `name(args)` — a free function, enum-variant constructor (Task 5), or class
+    /// constructor (Task 6). Free-function case here.
+    fn check_named_call(&mut self, name: &str, args: &[crate::ast::Expr], span: Span) -> Ty {
+        if let Some(t) = self.try_variant_or_class_call(name, args, span) {
+            return t;
+        }
+        let sig = match self.funcs.get(name) {
+            Some(s) => (s.params.clone(), s.ret.clone()),
+            None => {
+                for a in args {
+                    self.check_expr(a);
+                }
+                return self.err(span, format!("unknown function `{name}`"));
+            }
+        };
+        self.check_args(name, &sig.0, args, span);
+        sig.1
+    }
+
+    /// Check call arguments against expected parameter types.
+    fn check_args(&mut self, name: &str, params: &[Ty], args: &[crate::ast::Expr], span: Span) {
+        if params.len() != args.len() {
+            self.err(span, format!("`{name}` expects {} argument(s), found {}", params.len(), args.len()));
+            for a in args {
+                self.check_expr(a);
+            }
+            return;
+        }
+        for (i, (param, arg)) in params.iter().zip(args).enumerate() {
+            let at = self.check_expr(arg);
+            if !Ty::assignable(&at, param) {
+                self.err(span, format!("`{name}` argument {} expects `{param}`, found `{at}`", i + 1));
+            }
+        }
+    }
+
+    /// Returns `Some(ret)` if `name` is an enum variant or class constructor.
+    fn try_variant_or_class_call(
+        &mut self,
+        _name: &str,
+        _args: &[crate::ast::Expr],
+        _span: Span,
+    ) -> Option<Ty> {
+        None // enum variants: Task 5; class constructors: Task 6
+    }
+
+    fn check_method_call(
+        &mut self,
+        _object: &crate::ast::Expr,
+        _name: &str,
+        _args: &[crate::ast::Expr],
+        span: Span,
+    ) -> Ty {
+        self.err(span, "method calls not yet supported") // Task 6
     }
     fn check_member(&mut self, _o: &crate::ast::Expr, _n: &str, span: Span) -> Ty {
         self.err(span, "member access not yet supported") // implemented in Task 6
@@ -485,5 +572,31 @@ mod tests {
     fn return_type_checked_against_signature() {
         let errs = errors_of("function f() -> int { return true; }");
         assert!(errs.iter().any(|e| e.message.contains("expected `int`")), "{errs:?}");
+    }
+
+    #[test]
+    fn function_call_arity_and_type_checked() {
+        assert!(errors_of("function inc(int n) -> int { return n + 1; } function main() { int x = inc(1); }").is_empty());
+        let bad_arity = errors_of("function inc(int n) -> int { return n; } function main() { int x = inc(1, 2); }");
+        assert!(bad_arity.iter().any(|e| e.message.contains("expects 1 argument")), "{bad_arity:?}");
+        let bad_type = errors_of("function inc(int n) -> int { return n; } function main() { int x = inc(true); }");
+        assert!(bad_type.iter().any(|e| e.message.contains("argument 1")), "{bad_type:?}");
+    }
+
+    #[test]
+    fn unknown_function_call_errors() {
+        let errs = errors_of("function main() { nope(); }");
+        assert!(errs.iter().any(|e| e.message.contains("unknown function")), "{errs:?}");
+    }
+
+    #[test]
+    fn duplicate_function_is_overloading_corner() {
+        let errs = errors_of("function f() {} function f(int n) {}");
+        assert!(errs.iter().any(|e| e.message.contains("overloading is not yet supported")), "{errs:?}");
+    }
+
+    #[test]
+    fn println_accepts_string() {
+        assert!(errors_of(r#"function main() { println("hi"); }"#).is_empty());
     }
 }
