@@ -108,11 +108,23 @@ impl<'a> Lexer<'a> {
         Ok(Token { kind: TokenKind::Str(value), span: Span { start, len: self.pos - start, line, col } })
     }
 
+    // NOTE: identifiers are ASCII-only by design for v0.1 (scan_ident uses
+    // is_ascii_alphabetic / is_ascii_alphanumeric). Unicode identifiers are out of scope.
     fn scan_ident(&mut self, start: usize, line: u32, col: u32) -> Token {
         while matches!(self.peek(), Some(b) if b == b'_' || b.is_ascii_alphanumeric()) { self.bump(); }
         let text = std::str::from_utf8(&self.src[start..self.pos]).unwrap();
         let kind = keyword(text).unwrap_or_else(|| TokenKind::Ident(text.to_string()));
         Token { kind, span: Span { start, len: self.pos - start, line, col } }
+    }
+
+    /// Decode the full UTF-8 char beginning at the current position. The source is always
+    /// valid UTF-8 (it came from `&str`), so a char boundary is guaranteed at `self.pos`.
+    /// Used only on the error path so diagnostics show the real char, not a mojibake byte.
+    fn current_char(&self) -> char {
+        std::str::from_utf8(&self.src[self.pos..])
+            .ok()
+            .and_then(|s| s.chars().next())
+            .unwrap_or(char::REPLACEMENT_CHARACTER)
     }
 }
 
@@ -210,7 +222,11 @@ pub fn lex(src: &str) -> Result<Vec<Token>, LexError> {
                 };
                 match kind {
                     Some(k) => { lx.bump(); out.push(single(k)); }
-                    None => return Err(LexError { message: format!("unexpected character {:?}", b as char), line, col }),
+                    None => {
+                        // Decode the full char (handles multi-byte UTF-8) for the message.
+                        let ch = lx.current_char();
+                        return Err(LexError { message: format!("unexpected character {:?}", ch), line, col });
+                    }
                 }
             }
         }
@@ -230,6 +246,22 @@ mod tests {
     fn empty_and_whitespace_yield_eof_only() {
         assert_eq!(kinds(""), vec![TokenKind::Eof]);
         assert_eq!(kinds("   \n\t \r\n"), vec![TokenKind::Eof]);
+    }
+
+    #[test]
+    fn span_tracks_across_newlines() {
+        // "a\nbb": ident "a" on line 1, ident "bb" on line 2 at col 1.
+        let toks = lex("a\nbb").unwrap();
+        // toks[0] = a, toks[1] = bb, toks[2] = Eof
+        assert_eq!(toks[0].span.line, 1);
+        assert_eq!(toks[0].span.col, 1);
+        assert_eq!(toks[0].span.start, 0);
+        assert_eq!(toks[0].span.len, 1);
+
+        assert_eq!(toks[1].span.line, 2);
+        assert_eq!(toks[1].span.col, 1);
+        assert_eq!(toks[1].span.start, 2); // byte 0='a', 1='\n', 2='b'
+        assert_eq!(toks[1].span.len, 2);
     }
 
     #[test]
@@ -343,6 +375,22 @@ mod tests {
         let e = lex("  @").unwrap_err();
         assert!(e.message.contains("unexpected character"));
         assert_eq!((e.line, e.col), (1, 3));
+    }
+
+    #[test]
+    fn non_ascii_outside_string_reports_decoded_char() {
+        // Identifiers are ASCII-only by design (v0.1), so a stray non-ASCII char is an
+        // error — but the message must show the real char, not a mojibake lead byte.
+        let e = lex("é").unwrap_err();
+        assert!(e.message.contains("unexpected character"));
+        assert!(e.message.contains('é'), "got: {}", e.message);
+        assert_eq!((e.line, e.col), (1, 1));
+
+        // Column must count one per char, not per byte: after the 2-byte "é",
+        // the '@' is at column 2.
+        let e = lex("é@").unwrap_err();
+        assert!(e.message.contains('é'), "got: {}", e.message);
+        assert_eq!((e.line, e.col), (1, 1));
     }
 
     #[test]
