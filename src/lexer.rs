@@ -53,6 +53,31 @@ impl<'a> Lexer<'a> {
         Token { kind, span: Span { start, len: self.pos - start, line, col } }
     }
 
+    fn scan_string(&mut self, start: usize, line: u32, col: u32) -> Result<Token, LexError> {
+        self.bump(); // opening quote
+        let mut value = String::new();
+        loop {
+            match self.bump() {
+                None => return Err(LexError { message: "unterminated string".into(), line, col }),
+                Some(b'"') => break,
+                Some(b'\\') => {
+                    match self.bump() {
+                        Some(b'n') => value.push('\n'),
+                        Some(b't') => value.push('\t'),
+                        Some(b'r') => value.push('\r'),
+                        Some(b'\\') => value.push('\\'),
+                        Some(b'"') => value.push('"'),
+                        Some(other) => return Err(LexError {
+                            message: format!("invalid escape \\{}", other as char), line: self.line, col: self.col }),
+                        None => return Err(LexError { message: "unterminated string".into(), line, col }),
+                    }
+                }
+                Some(other) => value.push(other as char),
+            }
+        }
+        Ok(Token { kind: TokenKind::Str(value), span: Span { start, len: self.pos - start, line, col } })
+    }
+
     fn scan_ident(&mut self, start: usize, line: u32, col: u32) -> Token {
         while matches!(self.peek(), Some(b) if b == b'_' || b.is_ascii_alphanumeric()) { self.bump(); }
         let text = std::str::from_utf8(&self.src[start..self.pos]).unwrap();
@@ -87,6 +112,12 @@ pub fn lex(src: &str) -> Result<Vec<Token>, LexError> {
                 return Ok(out);
             }
             Some(b) => {
+                if b == b'"' {
+                    let t = lx.scan_string(start, line, col)?;
+                    out.push(t);
+                    continue;
+                }
+
                 if b.is_ascii_digit() {
                     let t = lx.scan_number(start, line, col);
                     out.push(t);
@@ -204,5 +235,21 @@ mod tests {
         );
         assert_eq!(kinds("age myVar User _x"),
             vec![Ident("age".into()), Ident("myVar".into()), Ident("User".into()), Ident("_x".into()), Eof]);
+    }
+
+    #[test]
+    fn string_literals() {
+        use TokenKind::*;
+        assert_eq!(kinds("\"hello\""), vec![Str("hello".into()), Eof]);
+        // escapes
+        assert_eq!(kinds("\"a\\nb\\t\\\"c\""), vec![Str("a\nb\t\"c".into()), Eof]);
+        // interpolation body preserved verbatim (split happens in the parser)
+        assert_eq!(kinds("\"Hello {name}\""), vec![Str("Hello {name}".into()), Eof]);
+    }
+
+    #[test]
+    fn unterminated_string_errors() {
+        let err = lex("\"oops").unwrap_err();
+        assert!(err.message.contains("unterminated string"));
     }
 }
