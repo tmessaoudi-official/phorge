@@ -78,26 +78,33 @@ impl<'a> Lexer<'a> {
 
     fn scan_string(&mut self, start: usize, line: u32, col: u32) -> Result<Token, LexError> {
         self.bump(); // opening quote
-        let mut value = String::new();
+        // Accumulate the body as raw bytes: literal bytes (including multi-byte UTF-8
+        // sequences) are copied verbatim, escapes expand to their ASCII byte. The source
+        // is already valid UTF-8, so the final from_utf8 cannot fail.
+        let mut bytes: Vec<u8> = Vec::new();
         loop {
+            // Snapshot the position of this unit before consuming, so an invalid escape
+            // can report the column of the offending backslash.
+            let (el, ec) = (self.line, self.col);
             match self.bump() {
                 None => return Err(LexError { message: "unterminated string".into(), line, col }),
                 Some(b'"') => break,
                 Some(b'\\') => {
                     match self.bump() {
-                        Some(b'n') => value.push('\n'),
-                        Some(b't') => value.push('\t'),
-                        Some(b'r') => value.push('\r'),
-                        Some(b'\\') => value.push('\\'),
-                        Some(b'"') => value.push('"'),
+                        Some(b'n') => bytes.push(b'\n'),
+                        Some(b't') => bytes.push(b'\t'),
+                        Some(b'r') => bytes.push(b'\r'),
+                        Some(b'\\') => bytes.push(b'\\'),
+                        Some(b'"') => bytes.push(b'"'),
                         Some(other) => return Err(LexError {
-                            message: format!("invalid escape \\{}", other as char), line: self.line, col: self.col }),
+                            message: format!("invalid escape \\{}", other as char), line: el, col: ec }),
                         None => return Err(LexError { message: "unterminated string".into(), line, col }),
                     }
                 }
-                Some(other) => value.push(other as char),
+                Some(other) => bytes.push(other),
             }
         }
+        let value = String::from_utf8(bytes).expect("source string body is valid UTF-8");
         Ok(Token { kind: TokenKind::Str(value), span: Span { start, len: self.pos - start, line, col } })
     }
 
@@ -298,9 +305,44 @@ mod tests {
     }
 
     #[test]
+    fn utf8_string_body_preserved() {
+        use TokenKind::*;
+        assert_eq!(kinds("\"café\""), vec![Str("café".into()), Eof]);
+        assert_eq!(kinds("\"a 🎉 b\""), vec![Str("a 🎉 b".into()), Eof]);
+    }
+
+    #[test]
     fn unterminated_string_errors() {
         let err = lex("\"oops").unwrap_err();
         assert!(err.message.contains("unterminated string"));
+    }
+
+    #[test]
+    fn error_positions_are_accurate() {
+        // unterminated string: points at the opening quote
+        let e = lex("\"oops").unwrap_err();
+        assert!(e.message.contains("unterminated string"));
+        assert_eq!((e.line, e.col), (1, 1));
+
+        // invalid escape: points at the offending backslash, not one past it
+        let e = lex("\"ab\\q\"").unwrap_err();
+        assert!(e.message.contains("invalid escape"));
+        assert_eq!((e.line, e.col), (1, 4)); // " a b \  -> backslash at col 4
+
+        // invalid escape on a later line reports the right line/col
+        let e = lex("\"x\ny\\q\"").unwrap_err();
+        assert!(e.message.contains("invalid escape"));
+        assert_eq!((e.line, e.col), (2, 2)); // line 2: y(\)q  -> backslash at col 2
+
+        // unterminated block comment: points at the comment start
+        let e = lex("/* never ends").unwrap_err();
+        assert!(e.message.contains("unterminated block comment"));
+        assert_eq!((e.line, e.col), (1, 1));
+
+        // unexpected char
+        let e = lex("  @").unwrap_err();
+        assert!(e.message.contains("unexpected character"));
+        assert_eq!((e.line, e.col), (1, 3));
     }
 
     #[test]
