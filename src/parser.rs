@@ -1,6 +1,9 @@
 //! Recursive-descent + Pratt parser: turns the lexer's token stream into the AST.
 
-use crate::ast::{BinaryOp, Expr, MatchArm, Pattern, Stmt, StrPart, Type, UnaryOp};
+use crate::ast::{
+    BinaryOp, ClassDecl, ClassMember, CtorParam, EnumDecl, EnumVariant, Expr, FunctionDecl, Item,
+    MatchArm, Modifier, Param, Pattern, Program, Stmt, StrPart, Type, UnaryOp,
+};
 use crate::token::{Span, Token, TokenKind};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -535,12 +538,192 @@ impl Parser {
         self.pos = start;
         None
     }
+
+    /// Parse one top-level item: `import` / `function` / `enum` / `class`.
+    pub fn parse_item(&mut self) -> Result<Item, ParseError> {
+        let sp = self.peek_span();
+        match self.peek() {
+            TokenKind::Import => self.parse_import(sp),
+            TokenKind::Function => Ok(Item::Function(self.parse_function(Vec::new(), sp)?)),
+            TokenKind::Enum => Ok(Item::Enum(self.parse_enum(sp)?)),
+            TokenKind::Class => Ok(Item::Class(self.parse_class(sp)?)),
+            _ => Err(self.error("a top-level item (import, function, enum, or class)")),
+        }
+    }
+
+    /// Entry point: parse a whole program (zero or more top-level items) until EOF.
+    pub fn parse_program(&mut self) -> Result<Program, ParseError> {
+        let sp = self.peek_span();
+        let mut items = Vec::new();
+        while !self.check(&TokenKind::Eof) {
+            items.push(self.parse_item()?);
+        }
+        Ok(Program { items, span: sp })
+    }
+
+    /// `import a.b.c;` — dotted module path. Assumes current token is `import`.
+    fn parse_import(&mut self, sp: Span) -> Result<Item, ParseError> {
+        self.expect(&TokenKind::Import, "'import'")?;
+        let mut path = vec![self.expect_ident("a module path segment")?];
+        while self.eat(&TokenKind::Dot) {
+            path.push(self.expect_ident("a module path segment after '.'")?);
+        }
+        self.expect(&TokenKind::Semicolon, "';' after import")?;
+        Ok(Item::Import { path, span: sp })
+    }
+
+    /// `function name(params) [-> RetType] BLOCK`. `modifiers` are pre-parsed by the caller
+    /// (empty for a free function; populated for a method).
+    fn parse_function(
+        &mut self,
+        modifiers: Vec<Modifier>,
+        sp: Span,
+    ) -> Result<FunctionDecl, ParseError> {
+        self.expect(&TokenKind::Function, "'function'")?;
+        let name = self.expect_ident("a function name")?;
+        self.expect(&TokenKind::LParen, "'(' after function name")?;
+        let params = self.parse_params()?;
+        self.expect(&TokenKind::RParen, "')' to close parameters")?;
+        let ret = if self.eat(&TokenKind::Arrow) {
+            Some(self.parse_type()?)
+        } else {
+            None
+        };
+        let body = self.parse_block()?;
+        Ok(FunctionDecl { modifiers, name, params, ret, body, span: sp })
+    }
+
+    /// Comma-separated `Type name` parameters up to (not including) `)`.
+    /// Allows zero params; allows a trailing comma.
+    fn parse_params(&mut self) -> Result<Vec<Param>, ParseError> {
+        let mut params = Vec::new();
+        if self.check(&TokenKind::RParen) {
+            return Ok(params);
+        }
+        loop {
+            let sp = self.peek_span();
+            let ty = self.parse_type()?;
+            let name = self.expect_ident("a parameter name")?;
+            params.push(Param { ty, name, span: sp });
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
+            if self.check(&TokenKind::RParen) {
+                break; // trailing comma
+            }
+        }
+        Ok(params)
+    }
+
+    /// `enum Name { Variant[(Type field, …)], … }` — assumes current token is `enum`.
+    fn parse_enum(&mut self, sp: Span) -> Result<EnumDecl, ParseError> {
+        self.expect(&TokenKind::Enum, "'enum'")?;
+        let name = self.expect_ident("an enum name")?;
+        self.expect(&TokenKind::LBrace, "'{' to open enum body")?;
+        let mut variants = Vec::new();
+        while !self.check(&TokenKind::RBrace) && !self.check(&TokenKind::Eof) {
+            let vsp = self.peek_span();
+            let vname = self.expect_ident("a variant name")?;
+            let fields = if self.eat(&TokenKind::LParen) {
+                let f = self.parse_params()?;
+                self.expect(&TokenKind::RParen, "')' to close variant fields")?;
+                f
+            } else {
+                Vec::new()
+            };
+            variants.push(EnumVariant { name: vname, fields, span: vsp });
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
+        }
+        self.expect(&TokenKind::RBrace, "'}' to close enum")?;
+        Ok(EnumDecl { name, variants, span: sp })
+    }
+
+    /// `class Name { member* }` — assumes current token is `class`.
+    fn parse_class(&mut self, sp: Span) -> Result<ClassDecl, ParseError> {
+        self.expect(&TokenKind::Class, "'class'")?;
+        let name = self.expect_ident("a class name")?;
+        self.expect(&TokenKind::LBrace, "'{' to open class body")?;
+        let mut members = Vec::new();
+        while !self.check(&TokenKind::RBrace) && !self.check(&TokenKind::Eof) {
+            members.push(self.parse_class_member()?);
+        }
+        self.expect(&TokenKind::RBrace, "'}' to close class")?;
+        Ok(ClassDecl { name, members, span: sp })
+    }
+
+    /// One class member: a field, a constructor, or a method. Modifiers preceding
+    /// `constructor` are consumed and dropped (M1: constructors are implicitly public).
+    fn parse_class_member(&mut self) -> Result<ClassMember, ParseError> {
+        let sp = self.peek_span();
+        let modifiers = self.parse_modifiers();
+        match self.peek() {
+            TokenKind::Constructor => {
+                self.advance();
+                self.expect(&TokenKind::LParen, "'(' after 'constructor'")?;
+                let params = self.parse_ctor_params()?;
+                self.expect(&TokenKind::RParen, "')' to close constructor parameters")?;
+                let body = self.parse_block()?;
+                Ok(ClassMember::Constructor { params, body, span: sp })
+            }
+            TokenKind::Function => Ok(ClassMember::Method(self.parse_function(modifiers, sp)?)),
+            _ => {
+                // field: [modifiers] Type name ;
+                let ty = self.parse_type()?;
+                let name = self.expect_ident("a field name")?;
+                self.expect(&TokenKind::Semicolon, "';' after field declaration")?;
+                Ok(ClassMember::Field { modifiers, ty, name, span: sp })
+            }
+        }
+    }
+
+    /// Consume any run of visibility/binding modifiers.
+    fn parse_modifiers(&mut self) -> Vec<Modifier> {
+        let mut mods = Vec::new();
+        loop {
+            let m = match self.peek() {
+                TokenKind::Public => Modifier::Public,
+                TokenKind::Private => Modifier::Private,
+                TokenKind::Protected => Modifier::Protected,
+                TokenKind::Const => Modifier::Const,
+                TokenKind::Final => Modifier::Final,
+                _ => break,
+            };
+            self.advance();
+            mods.push(m);
+        }
+        mods
+    }
+
+    /// Constructor parameters: like normal params, but each may carry promotion modifiers
+    /// (`constructor(private string name)`). Allows zero; allows a trailing comma.
+    fn parse_ctor_params(&mut self) -> Result<Vec<CtorParam>, ParseError> {
+        let mut params = Vec::new();
+        if self.check(&TokenKind::RParen) {
+            return Ok(params);
+        }
+        loop {
+            let sp = self.peek_span();
+            let modifiers = self.parse_modifiers();
+            let ty = self.parse_type()?;
+            let name = self.expect_ident("a parameter name")?;
+            params.push(CtorParam { modifiers, ty, name, span: sp });
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
+            if self.check(&TokenKind::RParen) {
+                break; // trailing comma
+            }
+        }
+        Ok(params)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{Expr, Pattern, Stmt, StrPart, Type};
+    use crate::ast::{ClassMember, Expr, Item, Modifier, Pattern, Stmt, StrPart, Type};
     use crate::lexer::lex;
 
     /// Helper: lex `src` and build a parser over the tokens.
@@ -564,6 +747,11 @@ mod tests {
     /// Helper: parse `src` as a single statement.
     fn stmt(src: &str) -> Stmt {
         parser(src).parse_stmt().expect("parse ok")
+    }
+
+    /// Helper: parse `src` as a top-level item.
+    fn item(src: &str) -> Item {
+        parser(src).parse_item().expect("parse ok")
     }
 
     /// Render an expression to a fully-parenthesized string so precedence is visible.
@@ -940,5 +1128,112 @@ mod tests {
             }
             other => panic!("got {other:?}"),
         }
+    }
+
+    #[test]
+    fn parses_function_decl() {
+        match item("function area(Shape s) -> float { return s; }") {
+            Item::Function(f) => {
+                assert_eq!(f.name, "area");
+                assert_eq!(f.params.len(), 1);
+                assert_eq!(f.params[0].name, "s");
+                assert!(f.ret.is_some());
+                assert_eq!(f.body.len(), 1);
+                assert!(f.modifiers.is_empty());
+            }
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_function_no_ret_no_params() {
+        match item("function main() { println(1); }") {
+            Item::Function(f) => {
+                assert_eq!(f.name, "main");
+                assert!(f.params.is_empty());
+                assert!(f.ret.is_none());
+                assert_eq!(f.body.len(), 1);
+            }
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_enum_decl() {
+        let src = "enum Shape { Circle(float radius), Rect(float w, float h), Unit, }";
+        match item(src) {
+            Item::Enum(e) => {
+                assert_eq!(e.name, "Shape");
+                assert_eq!(e.variants.len(), 3);
+                assert_eq!(e.variants[0].name, "Circle");
+                assert_eq!(e.variants[0].fields.len(), 1);
+                assert_eq!(e.variants[1].fields.len(), 2);
+                assert!(e.variants[2].fields.is_empty()); // bare variant
+            }
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_class_decl() {
+        let src = "class Greeter { \
+                     private string name; \
+                     constructor(private string name) {} \
+                     function greet() -> string { return name; } \
+                   }";
+        match item(src) {
+            Item::Class(c) => {
+                assert_eq!(c.name, "Greeter");
+                assert_eq!(c.members.len(), 3);
+                match &c.members[0] {
+                    ClassMember::Field { modifiers, name, .. } => {
+                        assert_eq!(name, "name");
+                        assert_eq!(modifiers, &vec![Modifier::Private]);
+                    }
+                    other => panic!("member 0: {other:?}"),
+                }
+                match &c.members[1] {
+                    ClassMember::Constructor { params, .. } => {
+                        assert_eq!(params.len(), 1);
+                        assert_eq!(params[0].modifiers, vec![Modifier::Private]);
+                        assert_eq!(params[0].name, "name");
+                    }
+                    other => panic!("member 1: {other:?}"),
+                }
+                match &c.members[2] {
+                    ClassMember::Method(f) => assert_eq!(f.name, "greet"),
+                    other => panic!("member 2: {other:?}"),
+                }
+            }
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_import() {
+        match item("import std.io;") {
+            Item::Import { path, .. } => assert_eq!(path, vec!["std", "io"]),
+            other => panic!("got {other:?}"),
+        }
+        match item("import a;") {
+            Item::Import { path, .. } => assert_eq!(path, vec!["a"]),
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_program_multiple_items() {
+        let src = "import std.io; enum E { A, } function main() { return; }";
+        let prog = parser(src).parse_program().expect("parse ok");
+        assert_eq!(prog.items.len(), 3);
+        assert!(matches!(prog.items[0], Item::Import { .. }));
+        assert!(matches!(prog.items[1], Item::Enum(_)));
+        assert!(matches!(prog.items[2], Item::Function(_)));
+    }
+
+    #[test]
+    fn empty_program_parses() {
+        let prog = parser("").parse_program().expect("parse ok");
+        assert!(prog.items.is_empty());
     }
 }
