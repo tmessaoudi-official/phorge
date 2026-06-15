@@ -21,6 +21,8 @@ impl<'a> Lexer<'a> {
 
     fn peek(&self) -> Option<u8> { self.src.get(self.pos).copied() }
 
+    fn peek2(&self) -> Option<u8> { self.src.get(self.pos + 1).copied() }
+
     fn bump(&mut self) -> Option<u8> {
         let b = self.peek()?;
         self.pos += 1;
@@ -47,6 +49,27 @@ pub fn lex(src: &str) -> Result<Vec<Token>, LexError> {
                 return Ok(out);
             }
             Some(b) => {
+                // two-char operators take priority
+                let two = |k: TokenKind| Token { kind: k, span: Span { start, len: 2, line, col } };
+                let p2 = lx.peek2();
+                let matched_two = match (b, p2) {
+                    (b'=', Some(b'=')) => Some(TokenKind::EqEq),
+                    (b'!', Some(b'=')) => Some(TokenKind::NotEq),
+                    (b'<', Some(b'=')) => Some(TokenKind::Le),
+                    (b'>', Some(b'=')) => Some(TokenKind::Ge),
+                    (b'-', Some(b'>')) => Some(TokenKind::Arrow),
+                    (b'=', Some(b'>')) => Some(TokenKind::FatArrow),
+                    (b'|', Some(b'>')) => Some(TokenKind::Pipe),
+                    (b'&', Some(b'&')) => Some(TokenKind::AndAnd),
+                    (b'|', Some(b'|')) => Some(TokenKind::OrOr),
+                    _ => None,
+                };
+                if let Some(k) = matched_two {
+                    lx.bump(); lx.bump();
+                    out.push(two(k));
+                    continue;
+                }
+
                 let single = |k: TokenKind| Token { kind: k, span: Span { start, len: 1, line, col } };
                 let kind = match b {
                     b'.' => Some(TokenKind::Dot),
@@ -103,6 +126,15 @@ mod tests {
             vec![Dot, Semicolon, Comma, Colon, Question, LParen, RParen,
                  LBrace, RBrace, LBracket, RBracket, Lt, Gt, Eq, Bang,
                  Plus, Minus, Star, Slash, Percent, Eof]
+        );
+    }
+
+    #[test]
+    fn multi_char_operators() {
+        use TokenKind::*;
+        assert_eq!(
+            kinds("== != <= >= -> => |> && ||"),
+            vec![EqEq, NotEq, Le, Ge, Arrow, FatArrow, Pipe, AndAnd, OrOr, Eof]
         );
     }
 }
