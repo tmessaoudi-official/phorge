@@ -140,7 +140,7 @@ impl Checker {
             match item {
                 Item::Function(f) => self.collect_function(f),
                 Item::Enum(e) => self.collect_enum(e),
-                Item::Class(_) => {} // Task 6
+                Item::Class(c) => self.collect_class(c),
                 Item::Import { .. } => {} // module resolution deferred; prelude covers println
             }
         }
@@ -174,12 +174,82 @@ impl Checker {
         self.enums.get_mut(&e.name).unwrap().variants = variants;
     }
 
+    fn collect_class(&mut self, c: &crate::ast::ClassDecl) {
+        use crate::ast::ClassMember;
+        if self.classes.contains_key(&c.name) || self.enums.contains_key(&c.name) {
+            self.err(c.span, format!("type `{}` is already defined", c.name));
+            return;
+        }
+        // Register the name first so members can reference the class type itself.
+        self.classes.insert(
+            c.name.clone(),
+            ClassInfo { fields: HashMap::new(), methods: HashMap::new(), ctor: Vec::new() },
+        );
+        let mut fields = HashMap::new();
+        let mut methods = HashMap::new();
+        let mut ctor = Vec::new();
+        for m in &c.members {
+            match m {
+                // Constructor promotion is NOT modeled in M1 (§2): ctor params do not
+                // create fields. Fields come only from explicit field declarations.
+                ClassMember::Field { ty, name, .. } => {
+                    let fty = self.resolve_type(ty);
+                    fields.insert(name.clone(), fty);
+                }
+                ClassMember::Constructor { params, .. } => {
+                    ctor = params.iter().map(|p| self.resolve_type(&p.ty)).collect();
+                }
+                ClassMember::Method(f) => {
+                    let p = f.params.iter().map(|p| self.resolve_type(&p.ty)).collect();
+                    let ret = match &f.ret {
+                        Some(t) => self.resolve_type(t),
+                        None => Ty::Unit,
+                    };
+                    methods.insert(f.name.clone(), FnSig { params: p, ret });
+                }
+            }
+        }
+        let info = self.classes.get_mut(&c.name).unwrap();
+        info.fields = fields;
+        info.methods = methods;
+        info.ctor = ctor;
+    }
+
     /// Phase 2 — check every function/method body.
     fn check_program(&mut self, program: &Program) {
-        use crate::ast::Item;
+        use crate::ast::{ClassMember, Item};
         for item in &program.items {
-            if let Item::Function(f) = item {
-                self.check_function(f);
+            match item {
+                Item::Function(f) => self.check_function(f),
+                Item::Class(c) => {
+                    let prev = self.cur_class.replace(c.name.clone());
+                    for m in &c.members {
+                        match m {
+                            ClassMember::Method(f) => self.check_function(f),
+                            ClassMember::Constructor { params, body, .. } => {
+                                let prev_ret = std::mem::replace(&mut self.cur_ret, Ty::Unit);
+                                self.push_scope();
+                                // constructor params are in scope inside its body
+                                let ctor = self
+                                    .classes
+                                    .get(&c.name)
+                                    .map(|info| info.ctor.clone())
+                                    .unwrap_or_default();
+                                for (p, t) in params.iter().zip(ctor) {
+                                    self.declare(&p.name, t);
+                                }
+                                for s in body {
+                                    self.check_stmt(s);
+                                }
+                                self.pop_scope();
+                                self.cur_ret = prev_ret;
+                            }
+                            ClassMember::Field { .. } => {}
+                        }
+                    }
+                    self.cur_class = prev;
+                }
+                Item::Enum(_) | Item::Import { .. } => {}
             }
         }
     }
@@ -473,21 +543,72 @@ impl Checker {
             self.check_args(name, &fields, args, span);
             return Some(Ty::Named(enum_name));
         }
-        // class constructors are layered in by Task 6
+        // class constructor: `ClassName(args)`
+        if let Some(info) = self.classes.get(name) {
+            let ctor = info.ctor.clone();
+            self.check_args(name, &ctor, args, span);
+            return Some(Ty::Named(name.to_string()));
+        }
         None
     }
 
     fn check_method_call(
         &mut self,
-        _object: &crate::ast::Expr,
-        _name: &str,
-        _args: &[crate::ast::Expr],
+        object: &crate::ast::Expr,
+        name: &str,
+        args: &[crate::ast::Expr],
         span: Span,
     ) -> Ty {
-        self.err(span, "method calls not yet supported") // Task 6
+        let obj = self.check_expr(object);
+        match obj {
+            Ty::Named(cls) => {
+                let sig = self
+                    .classes
+                    .get(&cls)
+                    .and_then(|info| info.methods.get(name))
+                    .map(|s| (s.params.clone(), s.ret.clone()));
+                match sig {
+                    Some((params, ret)) => {
+                        self.check_args(name, &params, args, span);
+                        ret
+                    }
+                    None => {
+                        for a in args {
+                            self.check_expr(a);
+                        }
+                        self.err(span, format!("type `{cls}` has no method `{name}`"))
+                    }
+                }
+            }
+            Ty::Error => {
+                for a in args {
+                    self.check_expr(a);
+                }
+                Ty::Error
+            }
+            other => {
+                for a in args {
+                    self.check_expr(a);
+                }
+                self.err(span, format!("type `{other}` has no method `{name}`"))
+            }
+        }
     }
-    fn check_member(&mut self, _o: &crate::ast::Expr, _n: &str, span: Span) -> Ty {
-        self.err(span, "member access not yet supported") // implemented in Task 6
+    fn check_member(&mut self, object: &crate::ast::Expr, name: &str, span: Span) -> Ty {
+        let obj = self.check_expr(object);
+        match obj {
+            Ty::Named(cls) => {
+                if let Some(info) = self.classes.get(&cls) {
+                    if let Some(t) = info.fields.get(name) {
+                        return t.clone();
+                    }
+                    return self.err(span, format!("type `{cls}` has no field `{name}`"));
+                }
+                self.err(span, format!("type `{cls}` has no field `{name}`"))
+            }
+            Ty::Error => Ty::Error,
+            other => self.err(span, format!("type `{other}` has no field `{name}`")),
+        }
     }
     fn check_for(&mut self, stmt: &crate::ast::Stmt) {
         if let crate::ast::Stmt::For { ty, name, iter, body, span } = stmt {
@@ -714,5 +835,45 @@ mod tests {
     #[test]
     fn list_indexing_yields_element() {
         assert!(errors_of("function main() { List<int> xs = [1, 2]; int y = xs[0]; }").is_empty());
+    }
+
+    const GREETER: &str = "class Greeter { private string name; constructor(string name) {} function greet() -> string { return \"Hi\"; } }";
+
+    #[test]
+    fn constructor_call_and_method_call_ok() {
+        let src = format!("{GREETER} function main() {{ Greeter g = Greeter(\"Tak\"); string s = g.greet(); }}");
+        assert!(errors_of(&src).is_empty(), "{:?}", errors_of(&src));
+    }
+
+    #[test]
+    fn constructor_arg_type_checked() {
+        let src = format!("{GREETER} function main() {{ Greeter g = Greeter(123); }}");
+        let errs = errors_of(&src);
+        assert!(errs.iter().any(|e| e.message.contains("argument 1")), "{errs:?}");
+    }
+
+    #[test]
+    fn unknown_method_errors() {
+        let src = format!("{GREETER} function main() {{ Greeter g = Greeter(\"x\"); g.missing(); }}");
+        let errs = errors_of(&src);
+        assert!(errs.iter().any(|e| e.message.contains("no method `missing`")), "{errs:?}");
+    }
+
+    #[test]
+    fn field_access_typed() {
+        let src = "class Box { public int n; constructor(int n) {} } function main() { Box b = Box(1); int x = b.n; }";
+        assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    }
+
+    #[test]
+    fn bare_field_visible_in_method() {
+        let src = "class C { private string name; constructor(string name) {} function who() -> string { return name; } }";
+        assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    }
+
+    #[test]
+    fn this_outside_method_errors() {
+        let errs = errors_of("function main() { string s = this; }");
+        assert!(errs.iter().any(|e| e.message.contains("`this`")), "{errs:?}");
     }
 }
