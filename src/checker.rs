@@ -185,19 +185,36 @@ impl Checker {
             c.name.clone(),
             ClassInfo { fields: HashMap::new(), methods: HashMap::new(), ctor: Vec::new() },
         );
+        use crate::ast::Modifier;
         let mut fields = HashMap::new();
         let mut methods = HashMap::new();
         let mut ctor = Vec::new();
+        // Promoted ctor params (carrying a visibility modifier) also become fields,
+        // matching the evaluator's runtime promotion (EV-4). Deferred to after the
+        // member loop via `or_insert` so an explicit `Field` decl of the same name
+        // stays authoritative regardless of member order.
+        let mut promoted: Vec<(String, Ty)> = Vec::new();
         for m in &c.members {
             match m {
-                // Constructor promotion is NOT modeled in M1 (§2): ctor params do not
-                // create fields. Fields come only from explicit field declarations.
                 ClassMember::Field { ty, name, .. } => {
                     let fty = self.resolve_type(ty);
                     fields.insert(name.clone(), fty);
                 }
                 ClassMember::Constructor { params, .. } => {
-                    ctor = params.iter().map(|p| self.resolve_type(&p.ty)).collect();
+                    // Resolve each param type once; reuse for both the ctor signature
+                    // and field promotion to avoid duplicate "unknown type" errors.
+                    ctor = params
+                        .iter()
+                        .map(|p| {
+                            let ty = self.resolve_type(&p.ty);
+                            if p.modifiers.iter().any(|m| {
+                                matches!(m, Modifier::Public | Modifier::Private | Modifier::Protected)
+                            }) {
+                                promoted.push((p.name.clone(), ty.clone()));
+                            }
+                            ty
+                        })
+                        .collect();
                 }
                 ClassMember::Method(f) => {
                     let p = f.params.iter().map(|p| self.resolve_type(&p.ty)).collect();
@@ -208,6 +225,10 @@ impl Checker {
                     methods.insert(f.name.clone(), FnSig { params: p, ret });
                 }
             }
+        }
+        // Explicit field decls win: only insert a promoted field if not already declared.
+        for (name, ty) in promoted {
+            fields.entry(name).or_insert(ty);
         }
         let info = self.classes.get_mut(&c.name).unwrap();
         info.fields = fields;
@@ -1071,5 +1092,38 @@ mod tests {
         );
         let errs = errors_of(&src);
         assert!(errs.iter().any(|e| e.message.contains("no variant `Triangle`")), "{errs:?}");
+    }
+
+    #[test]
+    fn promoted_ctor_param_is_field() {
+        // Constructor promotion alone (no explicit `private int total;`) must type-check:
+        // the promoted param becomes an instance field, matching the evaluator (EV-4).
+        let errs = errors_of(
+            "class C { constructor(private int total) {} \
+               function add(int n) -> int { return total + n; } }",
+        );
+        assert!(errs.is_empty(), "promoted field should resolve: {errs:?}");
+    }
+
+    #[test]
+    fn explicit_field_decl_wins_over_promotion_type() {
+        // Explicit field decl is authoritative regardless of member order; a promoted
+        // param of the same name does not override its declared type.
+        let errs = errors_of(
+            "class C { private int total; constructor(private int total) {} \
+               function add(int n) -> int { return total + n; } }",
+        );
+        assert!(errs.is_empty(), "redundant explicit+promoted (matching type) is fine: {errs:?}");
+    }
+
+    #[test]
+    fn unmodified_ctor_param_is_not_a_field() {
+        // A plain ctor param (no visibility modifier) is NOT promoted, so referencing it
+        // bare in a method is still an unknown identifier — matches the evaluator.
+        let errs = errors_of(
+            "class C { constructor(int total) {} \
+               function add(int n) -> int { return total + n; } }",
+        );
+        assert!(errs.iter().any(|e| e.message.contains("unknown identifier")), "{errs:?}");
     }
 }

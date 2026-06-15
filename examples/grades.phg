@@ -1,0 +1,41 @@
+import std.io;
+
+enum Grade {
+    Pass(int score),
+    Fail(int score),
+}
+
+function classify(int score) -> Grade {
+    if (score >= 50) {
+        return Pass(score);
+    }
+    return Fail(score);
+}
+
+function describe(Grade g) -> string {
+    return match g {
+        Pass(s) => "PASS ({s})",
+        Fail(s) => "FAIL ({s})",
+    };
+}
+
+class Counter {
+    constructor(private int total) {}
+
+    function add(int n) -> int {
+        return total + n;
+    }
+}
+
+function main() {
+    Counter c = Counter(100);
+    int t = c.add(23);
+    println("counter total = {t}");
+
+    List<int> scores = [80, 30, 55];
+    for (int s in scores) {
+        Grade g = classify(s);
+        string line = describe(g);
+        println(line);
+    }
+}
