@@ -143,11 +143,28 @@ impl Transpiler {
         Ok(())
     }
 
-    // Stubs replaced in Task 4 (enums) / Task 5 (classes). Present so `emit_program`
-    // compiles; Task 2 tests contain no enums/classes so these are never reached.
-    fn emit_enum(&mut self, _e: &EnumDecl) -> Result<(), String> {
-        Err("transpile error: enums implemented in Task 4".into())
+    /// An enum with payload variants becomes an abstract base class plus one `final`
+    /// subclass per variant, with promoted public props for the payload fields.
+    fn emit_enum(&mut self, e: &EnumDecl) -> Result<(), String> {
+        self.line(&format!("abstract class {} {{}}", e.name));
+        for v in &e.variants {
+            self.line(&format!("final class {} extends {} {{", v.name, e.name));
+            self.indent += 1;
+            if !v.fields.is_empty() {
+                let props: Vec<String> = v
+                    .fields
+                    .iter()
+                    .map(|p| format!("public {} ${}", Self::emit_type(&p.ty), p.name))
+                    .collect();
+                self.line(&format!("public function __construct({}) {{}}", props.join(", ")));
+            }
+            self.indent -= 1;
+            self.line("}");
+        }
+        Ok(())
     }
+
+    // Stub replaced in Task 5 (classes). Present so `emit_program` compiles.
     fn emit_class(&mut self, _c: &ClassDecl) -> Result<(), String> {
         Err("transpile error: classes implemented in Task 5".into())
     }
@@ -284,9 +301,27 @@ impl Transpiler {
                 let a = if args.is_empty() { "\"\"".into() } else { self.emit_expr(&args[0])? };
                 return Ok(format!(r#"echo {a} . "\n""#)); // trailing ';' added by Stmt::Expr
             }
+            let argv = self.emit_args(args)?;
+            // Enum variant or class construction → `new`; mirrors the evaluator's dispatch.
+            if self.variants.contains(name) || self.classes.contains(name) {
+                return Ok(format!("new {name}({argv})"));
+            }
+            return Ok(format!("{name}({argv})")); // free function
         }
-        // Full free-fn / `new` / method dispatch lands in Tasks 4–5.
-        Err("transpile error: call dispatch implemented in Task 4".into())
+        if let Expr::Member { .. } = callee {
+            return self.emit_member_call(callee, args);
+        }
+        Err("transpile error: unsupported call target".into())
+    }
+
+    fn emit_args(&mut self, args: &[Expr]) -> Result<String, String> {
+        let parts: Result<Vec<_>, _> = args.iter().map(|a| self.emit_expr(a)).collect();
+        Ok(parts?.join(", "))
+    }
+
+    // Stub replaced in Task 5 (member access + method calls).
+    fn emit_member_call(&mut self, _callee: &Expr, _args: &[Expr]) -> Result<String, String> {
+        Err("transpile error: method calls implemented in Task 5".into())
     }
 
     fn binop(op: &BinaryOp) -> &'static str {
@@ -389,5 +424,32 @@ mod tests {
     fn println_becomes_echo() {
         let out = php("function main() { println(\"hi\"); }");
         assert!(out.contains(r#"echo "hi" . "\n";"#), "{out}");
+    }
+
+    const SHAPE: &str = "enum Shape { Circle(float radius), Rect(float w, float h), }";
+
+    #[test]
+    fn enum_emits_base_and_subclasses() {
+        let out = php(SHAPE);
+        assert!(out.contains("abstract class Shape {}"), "{out}");
+        assert!(out.contains("final class Circle extends Shape {"), "{out}");
+        assert!(out.contains("public function __construct(public float $radius) {}"), "{out}");
+        assert!(out.contains("final class Rect extends Shape {"), "{out}");
+        assert!(out.contains("public function __construct(public float $w, public float $h) {}"), "{out}");
+    }
+
+    #[test]
+    fn variant_construction_uses_new() {
+        let out = php(&format!("{SHAPE} function f() -> Shape {{ return Circle(2.0); }}"));
+        assert!(out.contains("return new Circle(2.0);"), "{out}");
+    }
+
+    #[test]
+    fn free_function_call_no_new() {
+        let out = php(
+            "function inc(int n) -> int { return n + 1; } \
+             function f() -> int { return inc(1); }",
+        );
+        assert!(out.contains("return inc(1);"), "{out}");
     }
 }
