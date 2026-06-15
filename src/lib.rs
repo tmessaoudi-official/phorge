@@ -6,4 +6,5 @@ pub mod types;
 pub mod value;
 pub mod checker;
 pub mod interpreter;
+pub mod transpile;
 pub mod cli;
