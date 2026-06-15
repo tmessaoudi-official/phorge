@@ -240,6 +240,7 @@ function main() {
 - Native-AOT target: compile-to-C vs LLVM (decide at v2).
 - Ownership/borrow-checker design (v2).
 - Standard library scope & naming (clean, consistent — large effort, v2 track).
+- **Source-position column semantics** for diagnostics/LSP: the M1 lexer counts columns per *byte*, so error columns after a multi-byte UTF-8 char on a line are offset by N. Decide the unit (UTF-16 code units for LSP, Unicode scalars, or graphemes) when building the diagnostics layer (Plan 3+), then make `bump()` column-counting match. Byte offsets in `Span.start`/`len` stay byte-based (correct for slicing).
 - Desktop/mobile UI story (Flutter's hard part is the rendering engine, not the language).
 - PHP→Phorge migration tool (separate sub-project).
 
