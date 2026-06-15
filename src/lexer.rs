@@ -52,6 +52,27 @@ impl<'a> Lexer<'a> {
         };
         Token { kind, span: Span { start, len: self.pos - start, line, col } }
     }
+
+    fn scan_ident(&mut self, start: usize, line: u32, col: u32) -> Token {
+        while matches!(self.peek(), Some(b) if b == b'_' || b.is_ascii_alphanumeric()) { self.bump(); }
+        let text = std::str::from_utf8(&self.src[start..self.pos]).unwrap();
+        let kind = keyword(text).unwrap_or_else(|| TokenKind::Ident(text.to_string()));
+        Token { kind, span: Span { start, len: self.pos - start, line, col } }
+    }
+}
+
+fn keyword(s: &str) -> Option<TokenKind> {
+    use TokenKind::*;
+    Some(match s {
+        "function" => Function, "class" => Class, "enum" => Enum,
+        "constructor" => Constructor, "trait" => Trait,
+        "const" => Const, "final" => Final,
+        "public" => Public, "private" => Private, "protected" => Protected,
+        "return" => Return, "if" => If, "else" => Else, "for" => For, "in" => In,
+        "match" => Match, "import" => Import, "this" => This,
+        "true" => True, "false" => False, "null" => Null, "new" => New,
+        _ => return None,
+    })
 }
 
 pub fn lex(src: &str) -> Result<Vec<Token>, LexError> {
@@ -68,6 +89,12 @@ pub fn lex(src: &str) -> Result<Vec<Token>, LexError> {
             Some(b) => {
                 if b.is_ascii_digit() {
                     let t = lx.scan_number(start, line, col);
+                    out.push(t);
+                    continue;
+                }
+
+                if b == b'_' || b.is_ascii_alphabetic() {
+                    let t = lx.scan_ident(start, line, col);
                     out.push(t);
                     continue;
                 }
@@ -166,5 +193,16 @@ mod tests {
         use TokenKind::*;
         assert_eq!(kinds("0 42 1000"), vec![Int(0), Int(42), Int(1000), Eof]);
         assert_eq!(kinds("3.14 0.5"), vec![Float(3.14), Float(0.5), Eof]);
+    }
+
+    #[test]
+    fn identifiers_and_keywords() {
+        use TokenKind::*;
+        assert_eq!(
+            kinds("function class enum constructor return match this true false null"),
+            vec![Function, Class, Enum, Constructor, Return, Match, This, True, False, Null, Eof]
+        );
+        assert_eq!(kinds("age myVar User _x"),
+            vec![Ident("age".into()), Ident("myVar".into()), Ident("User".into()), Ident("_x".into()), Eof]);
     }
 }
