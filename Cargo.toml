@@ -1,0 +1,12 @@
+[package]
+name = "phorge"
+version = "0.0.1"
+edition = "2021"
+
+[lib]
+name = "phorge"
+path = "src/lib.rs"
+
+[[bin]]
+name = "phorge"
+path = "src/main.rs"
