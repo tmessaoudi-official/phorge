@@ -53,6 +53,22 @@ impl<'a> Lexer<'a> {
         Token { kind, span: Span { start, len: self.pos - start, line, col } }
     }
 
+    fn skip_line_comment(&mut self) {
+        while let Some(b) = self.peek() { if b == b'\n' { break; } self.bump(); }
+    }
+
+    fn skip_block_comment(&mut self) -> Result<(), LexError> {
+        let (sl, sc) = (self.line, self.col);
+        self.bump(); self.bump(); // consume /*
+        loop {
+            match self.peek() {
+                None => return Err(LexError { message: "unterminated block comment".into(), line: sl, col: sc }),
+                Some(b'*') if self.peek2() == Some(b'/') => { self.bump(); self.bump(); return Ok(()); }
+                _ => { self.bump(); }
+            }
+        }
+    }
+
     fn scan_string(&mut self, start: usize, line: u32, col: u32) -> Result<Token, LexError> {
         self.bump(); // opening quote
         let mut value = String::new();
@@ -112,6 +128,9 @@ pub fn lex(src: &str) -> Result<Vec<Token>, LexError> {
                 return Ok(out);
             }
             Some(b) => {
+                if b == b'/' && lx.peek2() == Some(b'/') { lx.skip_line_comment(); continue; }
+                if b == b'/' && lx.peek2() == Some(b'*') { lx.skip_block_comment()?; continue; }
+
                 if b == b'"' {
                     let t = lx.scan_string(start, line, col)?;
                     out.push(t);
@@ -251,5 +270,12 @@ mod tests {
     fn unterminated_string_errors() {
         let err = lex("\"oops").unwrap_err();
         assert!(err.message.contains("unterminated string"));
+    }
+
+    #[test]
+    fn comments_are_skipped() {
+        use TokenKind::*;
+        assert_eq!(kinds("1 // line comment\n2"), vec![Int(1), Int(2), Eof]);
+        assert_eq!(kinds("1 /* block\ncomment */ 2"), vec![Int(1), Int(2), Eof]);
     }
 }
