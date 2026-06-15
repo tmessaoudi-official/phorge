@@ -14,7 +14,7 @@ The socle. Real Phorge programs run end-to-end (the frozen `Shape`/`area`/`match
 - **Delivered language surface:** static types, immutable-by-default bindings, functions, classes + constructor promotion, single-payload enums + exhaustive `match`, string interpolation, `List<T>` literals, `for…in`, checked int/float arithmetic.
 - **Not yet implemented** (designed in §3, rejected cleanly — never panics): null safety / `T?` / `Option`, exceptions (try/catch/throw), `Map`/`Set`/tuples, `|>`, `is`, method overloading, traits, value types/structs, operator overloading, property accessors, sized ints / `decimal`, `const`/`final` enforcement, real `import` resolution, concurrency.
 
-## M2 — Bytecode + VM — 🔄 IN PROGRESS (P1–P2 done)
+## M2 — Bytecode + VM — 🔄 IN PROGRESS (P1–P3 done)
 
 Design frozen: `docs/specs/2026-06-15-m2-bytecode-vm-design.md`. Bytecode compiler + stack
 VM + mark-sweep GC over the current language surface; tree-walker kept as a differential
@@ -27,8 +27,11 @@ oracle. Language enrichment = M3; single-binary bundling = M2.5.
   `for…in`, blocks) + `phorge runvm` (`src/cli.rs`) + the **differential harness**
   (`tests/differential.rs`): `runvm` stdout is byte-identical to `run`. Plan:
   `docs/plans/2026-06-15-m2-plan2-compiler-runvm.md`.
-- **P3 🔲 next** — function calls + call frames (`Call`/`Return`, `slot_base`) + recursion.
-- P4 classes/enums/`match` + arena · P5 mark-sweep collector · P6 strings + full sweep.
+- **P3 ✅** — user function calls + clox-style call frames (`Frame { func, ip, slot_base }`)
+  + `Op::Call`/`Op::Return` + recursion and mutual recursion (`src/compiler.rs` multi-function
+  compile → `BytecodeProgram`; `src/vm.rs` frame stack). `examples/fib.phg` runs on the VM,
+  byte-identical to the tree-walker. Plan: `docs/plans/2026-06-15-m2-plan3-functions-callframes.md`.
+- **P4 🔲 next** — classes/enums/`match` + arena allocation · P5 mark-sweep collector · P6 strings + full sweep.
 
 ## M2.5+ — Ecosystem — 🔲 PLANNED
 

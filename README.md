@@ -49,8 +49,9 @@ function main() {
 
 `runvm` is the M2 bytecode backend: identical output to `run`, executed on a stack VM
 instead of the tree-walker. The two are kept in lock-step by the differential test harness
-(`tests/differential.rs`). M2 P2 covers the `main`-only expression/statement surface;
-function calls, classes, enums and `match` land in later M2 steps.
+(`tests/differential.rs`). M2 P3 covers the full expression/statement surface plus
+user-defined function calls and recursion (`examples/fib.phg` runs on the VM); classes,
+enums and `match` land in later M2 steps.
 
 No arguments → usage on stderr, exit 2. Unreadable file → exit 1.
 
