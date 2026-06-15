@@ -1,16 +1,47 @@
+//! Phorge CLI: `phorge <run|check|parse|lex> <file>`. Thin dispatcher over the
+//! testable `phorge::cli` module.
+
 use std::process::exit;
+
+use phorge::cli;
+
+const USAGE: &str = "usage: phorge <run|check|parse|lex> <file>";
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    match args.get(1).map(String::as_str) {
-        Some("lex") => {
-            let path = args.get(2).unwrap_or_else(|| { eprintln!("usage: phorge lex <file>"); exit(2); });
-            let src = std::fs::read_to_string(path).unwrap_or_else(|e| { eprintln!("read error: {e}"); exit(1); });
-            match phorge::lexer::lex(&src) {
-                Ok(toks) => for t in toks { println!("{:?} @ {}:{}", t.kind, t.span.line, t.span.col); }
-                Err(e) => { eprintln!("lex error at {}:{}: {}", e.line, e.col, e.message); exit(1); }
-            }
+    let cmd = match args.get(1).map(String::as_str) {
+        Some(c @ ("run" | "check" | "parse" | "lex")) => c,
+        _ => {
+            eprintln!("{USAGE}");
+            exit(2);
         }
-        _ => { eprintln!("usage: phorge lex <file>"); exit(2); }
+    };
+    let file = match args.get(2) {
+        Some(f) => f,
+        None => {
+            eprintln!("{USAGE}");
+            exit(2);
+        }
+    };
+    let src = match std::fs::read_to_string(file) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("cannot read {file}: {e}");
+            exit(1);
+        }
+    };
+    let result = match cmd {
+        "run" => cli::cmd_run(&src),
+        "check" => cli::cmd_check(&src),
+        "parse" => cli::cmd_parse(&src),
+        "lex" => cli::cmd_lex(&src),
+        _ => unreachable!("validated above"),
+    };
+    match result {
+        Ok(text) => print!("{text}"),
+        Err(err) => {
+            eprintln!("{err}");
+            exit(1);
+        }
     }
 }

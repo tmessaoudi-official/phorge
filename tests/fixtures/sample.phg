@@ -1,0 +1,33 @@
+import std.io;
+
+enum Shape {
+    Circle(float radius),
+    Rect(float w, float h),
+}
+
+function area(Shape s) -> float {
+    return match s {
+        Circle(r)  => 3.14159 * r * r,
+        Rect(w, h) => w * h,
+    };
+}
+
+class Greeter {
+    private string name;
+
+    constructor(private string name) {}
+
+    function greet() -> string {
+        return "Hello {name}";
+    }
+}
+
+function main() {
+    Greeter g = Greeter("Tak");
+    println(g.greet());
+
+    List<Shape> shapes = [Circle(2.0), Rect(3.0, 4.0)];
+    for (Shape s in shapes) {
+        println("area = {area(s)}");
+    }
+}
