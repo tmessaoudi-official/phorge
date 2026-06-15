@@ -119,7 +119,12 @@ impl Parser {
             let sp = self.peek_span();
             self.advance(); // consume the operator
             let rhs = self.parse_binary(bp + 1)?;
-            lhs = Expr::Binary { op, lhs: Box::new(lhs), rhs: Box::new(rhs), span: sp };
+            lhs = Expr::Binary {
+                op,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+                span: sp,
+            };
         }
         Ok(lhs)
     }
@@ -135,7 +140,11 @@ impl Parser {
         if let Some(op) = op {
             self.advance();
             let expr = self.parse_unary()?;
-            Ok(Expr::Unary { op, expr: Box::new(expr), span: sp })
+            Ok(Expr::Unary {
+                op,
+                expr: Box::new(expr),
+                span: sp,
+            })
         } else {
             self.parse_postfix()
         }
@@ -156,19 +165,31 @@ impl Parser {
                         }
                         _ => return Err(self.error("a field or method name after '.'")),
                     };
-                    e = Expr::Member { object: Box::new(e), name, span: sp };
+                    e = Expr::Member {
+                        object: Box::new(e),
+                        name,
+                        span: sp,
+                    };
                 }
                 TokenKind::LParen => {
                     self.advance();
                     let args = self.parse_arg_list()?;
                     self.expect(&TokenKind::RParen, "')' to close arguments")?;
-                    e = Expr::Call { callee: Box::new(e), args, span: sp };
+                    e = Expr::Call {
+                        callee: Box::new(e),
+                        args,
+                        span: sp,
+                    };
                 }
                 TokenKind::LBracket => {
                     self.advance();
                     let index = self.parse_expr()?;
                     self.expect(&TokenKind::RBracket, "']' to close index")?;
-                    e = Expr::Index { object: Box::new(e), index: Box::new(index), span: sp };
+                    e = Expr::Index {
+                        object: Box::new(e),
+                        index: Box::new(index),
+                        span: sp,
+                    };
                 }
                 _ => break,
             }
@@ -279,10 +300,17 @@ impl Parser {
             }
             self.expect(&TokenKind::Gt, "'>' to close type arguments")?;
         }
-        let mut t = Type::Named { name, args, span: sp };
+        let mut t = Type::Named {
+            name,
+            args,
+            span: sp,
+        };
         // trailing `?` makes it optional; allow stacking (`T??` -> Optional(Optional))
         while self.eat(&TokenKind::Question) {
-            t = Type::Optional { inner: Box::new(t), span: sp };
+            t = Type::Optional {
+                inner: Box::new(t),
+                span: sp,
+            };
         }
         Ok(t)
     }
@@ -394,7 +422,11 @@ impl Parser {
                         }
                     }
                     self.expect(&TokenKind::RParen, "')' to close variant pattern")?;
-                    Ok(Pattern::Variant { name, fields, span: sp })
+                    Ok(Pattern::Variant {
+                        name,
+                        fields,
+                        span: sp,
+                    })
                 } else {
                     Ok(Pattern::Binding { name, span: sp })
                 }
@@ -414,13 +446,21 @@ impl Parser {
             let pattern = self.parse_pattern()?;
             self.expect(&TokenKind::FatArrow, "'=>' after match pattern")?;
             let body = self.parse_expr()?;
-            arms.push(MatchArm { pattern, body, span: arm_sp });
+            arms.push(MatchArm {
+                pattern,
+                body,
+                span: arm_sp,
+            });
             if !self.eat(&TokenKind::Comma) {
                 break;
             }
         }
         self.expect(&TokenKind::RBrace, "'}' to close match")?;
-        Ok(Expr::Match { scrutinee: Box::new(scrutinee), arms, span: sp })
+        Ok(Expr::Match {
+            scrutinee: Box::new(scrutinee),
+            arms,
+            span: sp,
+        })
     }
 
     /// Consume an identifier token, returning its name, or error with `what`.
@@ -491,7 +531,12 @@ impl Parser {
         } else {
             None
         };
-        Ok(Stmt::If { cond, then_block, else_block, span: sp })
+        Ok(Stmt::If {
+            cond,
+            then_block,
+            else_block,
+            span: sp,
+        })
     }
 
     /// `for (Type name in iter) BLOCK`
@@ -505,7 +550,13 @@ impl Parser {
         let iter = self.parse_expr()?;
         self.expect(&TokenKind::RParen, "')' after for-loop header")?;
         let body = self.parse_block()?;
-        Ok(Stmt::For { ty, name, iter, body, span: sp })
+        Ok(Stmt::For {
+            ty,
+            name,
+            iter,
+            body,
+            span: sp,
+        })
     }
 
     /// Disambiguate `Type name = expr;` (var-decl) from `expr;` (expression statement).
@@ -516,7 +567,12 @@ impl Parser {
         if let Some((ty, name)) = self.try_var_decl_header() {
             let init = self.parse_expr()?;
             self.expect(&TokenKind::Semicolon, "';' after variable declaration")?;
-            return Ok(Stmt::VarDecl { ty, name, init, span: sp });
+            return Ok(Stmt::VarDecl {
+                ty,
+                name,
+                init,
+                span: sp,
+            });
         }
         let expr = self.parse_expr()?;
         self.expect(&TokenKind::Semicolon, "';' after expression statement")?;
@@ -590,7 +646,14 @@ impl Parser {
             None
         };
         let body = self.parse_block()?;
-        Ok(FunctionDecl { modifiers, name, params, ret, body, span: sp })
+        Ok(FunctionDecl {
+            modifiers,
+            name,
+            params,
+            ret,
+            body,
+            span: sp,
+        })
     }
 
     /// Comma-separated `Type name` parameters up to (not including) `)`.
@@ -631,13 +694,21 @@ impl Parser {
             } else {
                 Vec::new()
             };
-            variants.push(EnumVariant { name: vname, fields, span: vsp });
+            variants.push(EnumVariant {
+                name: vname,
+                fields,
+                span: vsp,
+            });
             if !self.eat(&TokenKind::Comma) {
                 break;
             }
         }
         self.expect(&TokenKind::RBrace, "'}' to close enum")?;
-        Ok(EnumDecl { name, variants, span: sp })
+        Ok(EnumDecl {
+            name,
+            variants,
+            span: sp,
+        })
     }
 
     /// `class Name { member* }` — assumes current token is `class`.
@@ -650,7 +721,11 @@ impl Parser {
             members.push(self.parse_class_member()?);
         }
         self.expect(&TokenKind::RBrace, "'}' to close class")?;
-        Ok(ClassDecl { name, members, span: sp })
+        Ok(ClassDecl {
+            name,
+            members,
+            span: sp,
+        })
     }
 
     /// One class member: a field, a constructor, or a method. Modifiers preceding
@@ -665,7 +740,11 @@ impl Parser {
                 let params = self.parse_ctor_params()?;
                 self.expect(&TokenKind::RParen, "')' to close constructor parameters")?;
                 let body = self.parse_block()?;
-                Ok(ClassMember::Constructor { params, body, span: sp })
+                Ok(ClassMember::Constructor {
+                    params,
+                    body,
+                    span: sp,
+                })
             }
             TokenKind::Function => Ok(ClassMember::Method(self.parse_function(modifiers, sp)?)),
             _ => {
@@ -673,7 +752,12 @@ impl Parser {
                 let ty = self.parse_type()?;
                 let name = self.expect_ident("a field name")?;
                 self.expect(&TokenKind::Semicolon, "';' after field declaration")?;
-                Ok(ClassMember::Field { modifiers, ty, name, span: sp })
+                Ok(ClassMember::Field {
+                    modifiers,
+                    ty,
+                    name,
+                    span: sp,
+                })
             }
         }
     }
@@ -708,7 +792,12 @@ impl Parser {
             let modifiers = self.parse_modifiers();
             let ty = self.parse_type()?;
             let name = self.expect_ident("a parameter name")?;
-            params.push(CtorParam { modifiers, ty, name, span: sp });
+            params.push(CtorParam {
+                modifiers,
+                ty,
+                name,
+                span: sp,
+            });
             if !self.eat(&TokenKind::Comma) {
                 break;
             }
@@ -961,7 +1050,9 @@ mod tests {
             Expr::Str(parts, _) => {
                 assert_eq!(parts.len(), 2);
                 assert!(matches!(&parts[0], StrPart::Literal(s) if s == "Hello "));
-                assert!(matches!(&parts[1], StrPart::Expr(b) if matches!(**b, Expr::Ident(ref n,_) if n == "name")));
+                assert!(
+                    matches!(&parts[1], StrPart::Expr(b) if matches!(**b, Expr::Ident(ref n,_) if n == "name"))
+                );
             }
             other => panic!("got {other:?}"),
         }
@@ -1017,7 +1108,9 @@ mod tests {
         }
         // nested variant patterns
         match pat("Wrap(Circle(r))") {
-            Pattern::Variant { fields, .. } => assert!(matches!(&fields[0], Pattern::Variant { .. })),
+            Pattern::Variant { fields, .. } => {
+                assert!(matches!(&fields[0], Pattern::Variant { .. }))
+            }
             other => panic!("got {other:?}"),
         }
     }
@@ -1026,7 +1119,9 @@ mod tests {
     fn parses_match_expression() {
         let e = expr("match s { Circle(r) => r, Rect(w, h) => w, _ => 0 }");
         match e {
-            Expr::Match { scrutinee, arms, .. } => {
+            Expr::Match {
+                scrutinee, arms, ..
+            } => {
                 assert!(matches!(*scrutinee, Expr::Ident(ref n, _) if n == "s"));
                 assert_eq!(arms.len(), 3);
                 assert!(matches!(arms[0].pattern, Pattern::Variant { .. }));
@@ -1053,7 +1148,10 @@ mod tests {
     fn parses_return_stmt() {
         assert!(matches!(stmt("return;"), Stmt::Return { value: None, .. }));
         match stmt("return 1 + 2;") {
-            Stmt::Return { value: Some(Expr::Binary { .. }), .. } => {}
+            Stmt::Return {
+                value: Some(Expr::Binary { .. }),
+                ..
+            } => {}
             other => panic!("got {other:?}"),
         }
     }
@@ -1094,14 +1192,20 @@ mod tests {
     #[test]
     fn parses_if_else() {
         match stmt("if (a) { return 1; } else { return 2; }") {
-            Stmt::If { then_block, else_block: Some(eb), .. } => {
+            Stmt::If {
+                then_block,
+                else_block: Some(eb),
+                ..
+            } => {
                 assert_eq!(then_block.len(), 1);
                 assert_eq!(eb.len(), 1);
             }
             other => panic!("got {other:?}"),
         }
         match stmt("if (a) { return 1; }") {
-            Stmt::If { else_block: None, .. } => {}
+            Stmt::If {
+                else_block: None, ..
+            } => {}
             other => panic!("got {other:?}"),
         }
     }
@@ -1109,7 +1213,10 @@ mod tests {
     #[test]
     fn parses_else_if_chain() {
         match stmt("if (a) { return 1; } else if (b) { return 2; }") {
-            Stmt::If { else_block: Some(eb), .. } => {
+            Stmt::If {
+                else_block: Some(eb),
+                ..
+            } => {
                 assert_eq!(eb.len(), 1);
                 assert!(matches!(eb[0], Stmt::If { .. }));
             }
@@ -1120,7 +1227,13 @@ mod tests {
     #[test]
     fn parses_for_in() {
         match stmt("for (Shape s in shapes) { println(s); }") {
-            Stmt::For { ty, name, iter, body, .. } => {
+            Stmt::For {
+                ty,
+                name,
+                iter,
+                body,
+                ..
+            } => {
                 assert!(matches!(ty, Type::Named { ref name, .. } if name == "Shape"));
                 assert_eq!(name, "s");
                 assert!(matches!(iter, Expr::Ident(ref n, _) if n == "shapes"));
@@ -1186,7 +1299,9 @@ mod tests {
                 assert_eq!(c.name, "Greeter");
                 assert_eq!(c.members.len(), 3);
                 match &c.members[0] {
-                    ClassMember::Field { modifiers, name, .. } => {
+                    ClassMember::Field {
+                        modifiers, name, ..
+                    } => {
                         assert_eq!(name, "name");
                         assert_eq!(modifiers, &vec![Modifier::Private]);
                     }

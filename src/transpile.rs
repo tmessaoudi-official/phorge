@@ -56,8 +56,10 @@ impl Transpiler {
                 Item::Enum(e) => {
                     for v in &e.variants {
                         self.variants.insert(v.name.clone());
-                        self.variant_fields
-                            .insert(v.name.clone(), v.fields.iter().map(|p| p.name.clone()).collect());
+                        self.variant_fields.insert(
+                            v.name.clone(),
+                            v.fields.iter().map(|p| p.name.clone()).collect(),
+                        );
                     }
                 }
                 Item::Import { .. } => {}
@@ -135,7 +137,12 @@ impl Transpiler {
             .iter()
             .map(|p| format!("{} ${}", Self::emit_type(&p.ty), p.name))
             .collect();
-        self.line(&format!("function {}({}): {} {{", f.name, params.join(", "), Self::ret_hint(&f.ret)));
+        self.line(&format!(
+            "function {}({}): {} {{",
+            f.name,
+            params.join(", "),
+            Self::ret_hint(&f.ret)
+        ));
         self.indent += 1;
         self.push_scope();
         for p in &f.params {
@@ -163,7 +170,10 @@ impl Transpiler {
                     .iter()
                     .map(|p| format!("public {} ${}", Self::emit_type(&p.ty), p.name))
                     .collect();
-                self.line(&format!("public function __construct({}) {{}}", props.join(", ")));
+                self.line(&format!(
+                    "public function __construct({}) {{}}",
+                    props.join(", ")
+                ));
             }
             self.indent -= 1;
             self.line("}");
@@ -196,13 +206,22 @@ impl Transpiler {
         let prev = self.cur_class_fields.replace(fields);
         for m in &c.members {
             match m {
-                ClassMember::Field { modifiers, ty, name, .. } => {
+                ClassMember::Field {
+                    modifiers,
+                    ty,
+                    name,
+                    ..
+                } => {
                     // A field that is ALSO a promoted ctor param is declared by the
                     // promotion — emitting it again is a PHP "redeclare" fatal.
                     if promoted_names.contains(name) {
                         continue;
                     }
-                    self.line(&format!("{} {} ${name};", vis(modifiers), Self::emit_type(ty)));
+                    self.line(&format!(
+                        "{} {} ${name};",
+                        vis(modifiers),
+                        Self::emit_type(ty)
+                    ));
                 }
                 ClassMember::Constructor { params, body, .. } => {
                     let ps: Vec<String> = params
@@ -246,10 +265,21 @@ impl Transpiler {
         match s {
             // `match` is handled at statement granularity (return / var-decl-init position).
             // These specific arms must precede the generic VarDecl/Return arms.
-            Stmt::Return { value: Some(Expr::Match { scrutinee, arms, .. }), .. } => {
+            Stmt::Return {
+                value: Some(Expr::Match {
+                    scrutinee, arms, ..
+                }),
+                ..
+            } => {
                 self.emit_match(scrutinee, arms, MatchTarget::Return)?;
             }
-            Stmt::VarDecl { name, init: Expr::Match { scrutinee, arms, .. }, .. } => {
+            Stmt::VarDecl {
+                name,
+                init: Expr::Match {
+                    scrutinee, arms, ..
+                },
+                ..
+            } => {
                 self.declare(name);
                 self.emit_match(scrutinee, arms, MatchTarget::Assign(name.clone()))?;
             }
@@ -265,7 +295,12 @@ impl Transpiler {
                 }
                 None => self.line("return;"),
             },
-            Stmt::If { cond, then_block, else_block, .. } => {
+            Stmt::If {
+                cond,
+                then_block,
+                else_block,
+                ..
+            } => {
                 let c = self.emit_expr(cond)?;
                 self.line(&format!("if ({c}) {{"));
                 self.indent += 1;
@@ -287,7 +322,9 @@ impl Transpiler {
                 }
                 self.line("}");
             }
-            Stmt::For { name, iter, body, .. } => {
+            Stmt::For {
+                name, iter, body, ..
+            } => {
                 let it = self.emit_expr(iter)?;
                 self.line(&format!("foreach ({it} as ${name}) {{"));
                 self.indent += 1;
@@ -384,7 +421,11 @@ impl Transpiler {
     fn emit_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<String, String> {
         if let Expr::Ident(name, _) = callee {
             if name == "println" {
-                let a = if args.is_empty() { "\"\"".into() } else { self.emit_expr(&args[0])? };
+                let a = if args.is_empty() {
+                    "\"\"".into()
+                } else {
+                    self.emit_expr(&args[0])?
+                };
                 return Ok(format!(r#"echo {a} . "\n""#)); // trailing ';' added by Stmt::Expr
             }
             let argv = self.emit_args(args)?;
@@ -418,9 +459,12 @@ impl Transpiler {
     /// `return …;` or `$target = …;` depending on `target`. Payload vars bind positionally
     /// from the subclass's promoted props. A non-exhaustive chain ends with a defensive
     /// `throw` (the checker already guarantees exhaustiveness).
-    fn emit_match(&mut self, scrutinee: &Expr, arms: &[MatchArm], target: MatchTarget)
-        -> Result<(), String>
-    {
+    fn emit_match(
+        &mut self,
+        scrutinee: &Expr,
+        arms: &[MatchArm],
+        target: MatchTarget,
+    ) -> Result<(), String> {
         let subj = self.emit_expr(scrutinee)?;
         let yield_stmt = |t: &MatchTarget, body: &str| match t {
             MatchTarget::Return => format!("return {body};"),
@@ -429,7 +473,11 @@ impl Transpiler {
         let mut has_catch_all = false;
         for arm in arms {
             match &arm.pattern {
-                Pattern::Variant { name: vname, fields: pats, .. } => {
+                Pattern::Variant {
+                    name: vname,
+                    fields: pats,
+                    ..
+                } => {
                     let props = self.variant_fields.get(vname).cloned().unwrap_or_default();
                     self.push_scope();
                     let mut binds = String::new();
@@ -439,12 +487,17 @@ impl Transpiler {
                             _ => return Err(
                                 "transpile error: only simple variable patterns are supported in match payloads".into()),
                         };
-                        let prop = props.get(i).ok_or("transpile error: variant pattern arity mismatch")?;
+                        let prop = props
+                            .get(i)
+                            .ok_or("transpile error: variant pattern arity mismatch")?;
                         binds.push_str(&format!("${bind_name} = {subj}->{prop}; "));
                         self.declare(bind_name);
                     }
                     let body = self.emit_expr(&arm.body)?;
-                    self.line(&format!("if ({subj} instanceof {vname}) {{ {binds}{} }}", yield_stmt(&target, &body)));
+                    self.line(&format!(
+                        "if ({subj} instanceof {vname}) {{ {binds}{} }}",
+                        yield_stmt(&target, &body)
+                    ));
                     self.pop_scope();
                 }
                 Pattern::Wildcard(_) => {
@@ -458,10 +511,17 @@ impl Transpiler {
                     self.push_scope();
                     self.declare(name);
                     let body = self.emit_expr(&arm.body)?;
-                    self.line(&format!("{{ ${name} = {subj}; {} }}", yield_stmt(&target, &body)));
+                    self.line(&format!(
+                        "{{ ${name} = {subj}; {} }}",
+                        yield_stmt(&target, &body)
+                    ));
                     self.pop_scope();
                 }
-                _ => return Err("transpile error: literal patterns in match are not yet supported".into()),
+                _ => {
+                    return Err(
+                        "transpile error: literal patterns in match are not yet supported".into(),
+                    )
+                }
             }
         }
         if !has_catch_all {
@@ -493,7 +553,11 @@ impl Transpiler {
     fn resolve_ident(&self, name: &str) -> String {
         if self.is_local(name) {
             format!("${name}")
-        } else if self.cur_class_fields.as_ref().is_some_and(|f| f.contains(name)) {
+        } else if self
+            .cur_class_fields
+            .as_ref()
+            .is_some_and(|f| f.contains(name))
+        {
             format!("$this->{name}")
         } else {
             format!("${name}") // best-effort; the checker guarantees resolution
@@ -504,14 +568,20 @@ impl Transpiler {
 /// Escape a literal string chunk for embedding in a PHP double-quoted string.
 /// `$` is escaped so PHP does not attempt its own interpolation on emitted literals.
 fn php_escape(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"").replace('$', "\\$")
+    s.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('$', "\\$")
 }
 
 /// A ctor param is promoted (becomes a field) iff it carries a visibility modifier —
 /// matches the evaluator (EV-4) and the checker's `collect_class`.
 fn is_promoted(mods: &[Modifier]) -> bool {
-    mods.iter()
-        .any(|m| matches!(m, Modifier::Public | Modifier::Private | Modifier::Protected))
+    mods.iter().any(|m| {
+        matches!(
+            m,
+            Modifier::Public | Modifier::Private | Modifier::Protected
+        )
+    })
 }
 
 /// PHP visibility keyword for a member's modifiers (empty string = no keyword).
@@ -566,16 +636,17 @@ mod tests {
     #[test]
     fn if_and_for_and_unary() {
         // Phorge is immutable (no reassignment) — use fresh var decls inside branches.
-        let out = php(
-            "function f(int n) -> int { \
+        let out = php("function f(int n) -> int { \
                List<int> xs = [1, 2]; \
                for (int x in xs) { if (x > 0) { int a = -x; } else { bool b = !true; } } \
-               return n; }",
-        );
+               return n; }");
         assert!(out.contains("foreach ($xs as $x) {"), "{out}");
         assert!(out.contains("if ($x > 0) {"), "{out}");
         assert!(out.contains("} else {"), "{out}");
-        assert!(out.contains("$a = -$x;") && out.contains("$b = !true;"), "{out}");
+        assert!(
+            out.contains("$a = -$x;") && out.contains("$b = !true;"),
+            "{out}"
+        );
         assert!(out.contains("[1, 2]"), "{out}");
     }
 
@@ -613,34 +684,41 @@ mod tests {
         let out = php(SHAPE);
         assert!(out.contains("abstract class Shape {}"), "{out}");
         assert!(out.contains("final class Circle extends Shape {"), "{out}");
-        assert!(out.contains("public function __construct(public float $radius) {}"), "{out}");
+        assert!(
+            out.contains("public function __construct(public float $radius) {}"),
+            "{out}"
+        );
         assert!(out.contains("final class Rect extends Shape {"), "{out}");
-        assert!(out.contains("public function __construct(public float $w, public float $h) {}"), "{out}");
+        assert!(
+            out.contains("public function __construct(public float $w, public float $h) {}"),
+            "{out}"
+        );
     }
 
     #[test]
     fn variant_construction_uses_new() {
-        let out = php(&format!("{SHAPE} function f() -> Shape {{ return Circle(2.0); }}"));
+        let out = php(&format!(
+            "{SHAPE} function f() -> Shape {{ return Circle(2.0); }}"
+        ));
         assert!(out.contains("return new Circle(2.0);"), "{out}");
     }
 
     #[test]
     fn free_function_call_no_new() {
-        let out = php(
-            "function inc(int n) -> int { return n + 1; } \
-             function f() -> int { return inc(1); }",
-        );
+        let out = php("function inc(int n) -> int { return n + 1; } \
+             function f() -> int { return inc(1); }");
         assert!(out.contains("return inc(1);"), "{out}");
     }
 
     #[test]
     fn class_with_promotion_and_method() {
-        let out = php(
-            "class Greeter { constructor(private string name) {} \
-               function greet() -> string { return \"Hello {name}\"; } }",
-        );
+        let out = php("class Greeter { constructor(private string name) {} \
+               function greet() -> string { return \"Hello {name}\"; } }");
         assert!(out.contains("class Greeter {"), "{out}");
-        assert!(out.contains("function __construct(private string $name) {}"), "{out}");
+        assert!(
+            out.contains("function __construct(private string $name) {}"),
+            "{out}"
+        );
         assert!(out.contains("function greet(): string {"), "{out}");
         // bare field ref inside a method resolves to $this->name
         assert!(out.contains(r#"return "Hello " . ($this->name);"#), "{out}");
@@ -658,17 +736,21 @@ mod tests {
         // Declared both explicitly AND via promotion: emit only the promotion (PHP forbids
         // redeclaring a promoted property as a separate one — caught by the round-trip test).
         let out = php("class C { private int total; constructor(private int total) {} }");
-        assert!(out.contains("function __construct(private int $total) {}"), "{out}");
-        assert!(!out.contains("private int $total;"), "standalone redeclaration must be gone: {out}");
+        assert!(
+            out.contains("function __construct(private int $total) {}"),
+            "{out}"
+        );
+        assert!(
+            !out.contains("private int $total;"),
+            "standalone redeclaration must be gone: {out}"
+        );
     }
 
     #[test]
     fn member_access_and_method_call() {
-        let out = php(
-            "class Greeter { constructor(private string name) {} \
+        let out = php("class Greeter { constructor(private string name) {} \
                function greet() -> string { return name; } } \
-             function main() { Greeter g = Greeter(\"Tak\"); println(g.greet()); }",
-        );
+             function main() { Greeter g = Greeter(\"Tak\"); println(g.greet()); }");
         assert!(out.contains(r#"$g = new Greeter("Tak");"#), "{out}");
         assert!(out.contains("$g->greet()"), "{out}");
     }
@@ -683,7 +765,10 @@ mod tests {
         assert!(out.contains("$r = $s->radius;"), "{out}"); // positional: r <- field 0 (radius)
         assert!(out.contains("return 3.14159 * $r * $r;"), "{out}");
         assert!(out.contains("if ($s instanceof Rect) {"), "{out}");
-        assert!(out.contains("$w = $s->w;") && out.contains("$h = $s->h;"), "{out}");
+        assert!(
+            out.contains("$w = $s->w;") && out.contains("$h = $s->h;"),
+            "{out}"
+        );
         assert!(out.contains("throw new \\UnhandledMatchError();"), "{out}");
     }
 
@@ -693,7 +778,10 @@ mod tests {
             "{SHAPE} function f(Shape s) -> float {{ \
                float a = match s {{ Circle(r) => r, Rect(w, h) => w, }}; return a; }}"
         ));
-        assert!(out.contains("if ($s instanceof Circle) { $r = $s->radius; $a = $r; }"), "{out}");
+        assert!(
+            out.contains("if ($s instanceof Circle) { $r = $s->radius; $a = $r; }"),
+            "{out}"
+        );
         assert!(out.contains("if ($s instanceof Rect) {"), "{out}");
     }
 
@@ -714,6 +802,9 @@ mod tests {
                float a = id(match s {{ Circle(r) => r, Rect(w, h) => w, }}); return a; }}"
         ));
         let err = emit(&prog).unwrap_err();
-        assert!(err.contains("match in this position is not yet supported"), "{err}");
+        assert!(
+            err.contains("match in this position is not yet supported"),
+            "{err}"
+        );
     }
 }

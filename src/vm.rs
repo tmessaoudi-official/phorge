@@ -30,13 +30,22 @@ pub struct Vm<'a> {
 
 impl<'a> Vm<'a> {
     pub fn new(program: &'a BytecodeProgram) -> Self {
-        Self { program, stack: Vec::new(), frames: Vec::new(), out: String::new() }
+        Self {
+            program,
+            stack: Vec::new(),
+            frames: Vec::new(),
+            out: String::new(),
+        }
     }
 
     /// Execute the program from `main`, returning captured output (`Ok`) or a runtime
     /// error (`Err`).
     pub fn run(mut self) -> Result<String, String> {
-        self.frames.push(Frame { func: self.program.main, ip: 0, slot_base: 0 });
+        self.frames.push(Frame {
+            func: self.program.main,
+            ip: 0,
+            slot_base: 0,
+        });
         loop {
             let fr = self.frames.len() - 1;
             let func = self.frames[fr].func;
@@ -205,9 +214,7 @@ impl<'a> Vm<'a> {
                         }
                         match v.as_display() {
                             Some(t) => line.push_str(&t),
-                            None => {
-                                return Err(format!("println cannot print {}", v.type_name()))
-                            }
+                            None => return Err(format!("println cannot print {}", v.type_name())),
                         }
                     }
                     self.out.push_str(&line);
@@ -220,7 +227,11 @@ impl<'a> Vm<'a> {
                     }
                     let arity = self.program.functions[idx].arity;
                     let slot_base = self.stack.len() - arity;
-                    self.frames.push(Frame { func: idx, ip: 0, slot_base });
+                    self.frames.push(Frame {
+                        func: idx,
+                        ip: 0,
+                        slot_base,
+                    });
                 }
 
                 Op::Return => {
@@ -333,7 +344,11 @@ mod tests {
     /// Wrap a single hand-built chunk as `main` and run it.
     fn run_chunk(chunk: Chunk) -> Result<String, String> {
         let program = BytecodeProgram {
-            functions: vec![Function { name: "main".into(), arity: 0, chunk }],
+            functions: vec![Function {
+                name: "main".into(),
+                arity: 0,
+                chunk,
+            }],
             main: 0,
         };
         Vm::new(&program).run()
@@ -519,8 +534,16 @@ mod tests {
 
         let program = BytecodeProgram {
             functions: vec![
-                Function { name: "main".into(), arity: 0, chunk: m },
-                Function { name: "f".into(), arity: 1, chunk: f },
+                Function {
+                    name: "main".into(),
+                    arity: 0,
+                    chunk: m,
+                },
+                Function {
+                    name: "f".into(),
+                    arity: 1,
+                    chunk: f,
+                },
             ],
             main: 0,
         };

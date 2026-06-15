@@ -4,7 +4,11 @@ use crate::token::Span;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     /// `int`, `List<Shape>`, `Map<string, int>` — `args` empty for non-generic.
-    Named { name: String, args: Vec<Type>, span: Span },
+    Named {
+        name: String,
+        args: Vec<Type>,
+        span: Span,
+    },
     /// `T?`
     Optional { inner: Box<Type>, span: Span },
 }
@@ -15,14 +19,21 @@ pub enum Pattern {
     /// `_`
     Wildcard(Span),
     /// bare identifier — binds the scrutinee (catch-all)
-    Binding { name: String, span: Span },
+    Binding {
+        name: String,
+        span: Span,
+    },
     Int(i64, Span),
     Float(f64, Span),
     Str(String, Span),
     Bool(bool, Span),
     Null(Span),
     /// `Circle(r)`, `Rect(w, h)` — destructure an enum variant
-    Variant { name: String, fields: Vec<Pattern>, span: Span },
+    Variant {
+        name: String,
+        fields: Vec<Pattern>,
+        span: Span,
+    },
 }
 
 /// One segment of a (possibly interpolated) string literal.
@@ -145,14 +156,30 @@ pub struct CtorParam {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     /// `Type name = expr;`
-    VarDecl { ty: Type, name: String, init: Expr, span: Span },
+    VarDecl {
+        ty: Type,
+        name: String,
+        init: Expr,
+        span: Span,
+    },
     /// `return;` or `return expr;`
     Return { value: Option<Expr>, span: Span },
     /// `if (cond) { .. } [else { .. } | else if ..]` — else-branch is a block (an
     /// `else if` chain is stored as a single-statement block wrapping a nested `If`).
-    If { cond: Expr, then_block: Vec<Stmt>, else_block: Option<Vec<Stmt>>, span: Span },
+    If {
+        cond: Expr,
+        then_block: Vec<Stmt>,
+        else_block: Option<Vec<Stmt>>,
+        span: Span,
+    },
     /// `for (Type name in iter) { .. }`
-    For { ty: Type, name: String, iter: Expr, body: Vec<Stmt>, span: Span },
+    For {
+        ty: Type,
+        name: String,
+        iter: Expr,
+        body: Vec<Stmt>,
+        span: Span,
+    },
     /// `{ .. }`
     Block(Vec<Stmt>, Span),
     /// `expr;`
@@ -188,8 +215,17 @@ pub struct EnumDecl {
 /// A member of a class.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClassMember {
-    Field { modifiers: Vec<Modifier>, ty: Type, name: String, span: Span },
-    Constructor { params: Vec<CtorParam>, body: Vec<Stmt>, span: Span },
+    Field {
+        modifiers: Vec<Modifier>,
+        ty: Type,
+        name: String,
+        span: Span,
+    },
+    Constructor {
+        params: Vec<CtorParam>,
+        body: Vec<Stmt>,
+        span: Span,
+    },
     Method(FunctionDecl),
 }
 
@@ -204,7 +240,10 @@ pub struct ClassDecl {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Item {
     /// `import a.b.c;`
-    Import { path: Vec<String>, span: Span },
+    Import {
+        path: Vec<String>,
+        span: Span,
+    },
     Function(FunctionDecl),
     Enum(EnumDecl),
     Class(ClassDecl),
@@ -223,7 +262,12 @@ mod tests {
     use crate::token::Span;
 
     fn sp() -> Span {
-        Span { start: 0, len: 1, line: 1, col: 1 }
+        Span {
+            start: 0,
+            len: 1,
+            line: 1,
+            col: 1,
+        }
     }
 
     #[test]
@@ -244,7 +288,10 @@ mod tests {
     fn builds_variant_pattern() {
         let p = Pattern::Variant {
             name: "Circle".into(),
-            fields: vec![Pattern::Binding { name: "r".into(), span: sp() }],
+            fields: vec![Pattern::Binding {
+                name: "r".into(),
+                span: sp(),
+            }],
             span: sp(),
         };
         match p {
@@ -259,7 +306,11 @@ mod tests {
     #[test]
     fn builds_var_decl_stmt() {
         let s = Stmt::VarDecl {
-            ty: Type::Named { name: "int".into(), args: vec![], span: sp() },
+            ty: Type::Named {
+                name: "int".into(),
+                args: vec![],
+                span: sp(),
+            },
             name: "n".into(),
             init: Expr::Int(5, sp()),
             span: sp(),
@@ -276,11 +327,19 @@ mod tests {
             modifiers: vec![Modifier::Private],
             name: "area".into(),
             params: vec![Param {
-                ty: Type::Named { name: "Shape".into(), args: vec![], span: sp() },
+                ty: Type::Named {
+                    name: "Shape".into(),
+                    args: vec![],
+                    span: sp(),
+                },
                 name: "s".into(),
                 span: sp(),
             }],
-            ret: Some(Type::Named { name: "float".into(), args: vec![], span: sp() }),
+            ret: Some(Type::Named {
+                name: "float".into(),
+                args: vec![],
+                span: sp(),
+            }),
             body: vec![],
             span: sp(),
         };

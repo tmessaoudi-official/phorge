@@ -16,105 +16,196 @@ pub struct Lexer<'a> {
 
 impl<'a> Lexer<'a> {
     pub fn new(src: &'a str) -> Self {
-        Lexer { src: src.as_bytes(), pos: 0, line: 1, col: 1 }
+        Lexer {
+            src: src.as_bytes(),
+            pos: 0,
+            line: 1,
+            col: 1,
+        }
     }
 
-    fn peek(&self) -> Option<u8> { self.src.get(self.pos).copied() }
+    fn peek(&self) -> Option<u8> {
+        self.src.get(self.pos).copied()
+    }
 
-    fn peek2(&self) -> Option<u8> { self.src.get(self.pos + 1).copied() }
+    fn peek2(&self) -> Option<u8> {
+        self.src.get(self.pos + 1).copied()
+    }
 
     fn bump(&mut self) -> Option<u8> {
         let b = self.peek()?;
         self.pos += 1;
-        if b == b'\n' { self.line += 1; self.col = 1; } else { self.col += 1; }
+        if b == b'\n' {
+            self.line += 1;
+            self.col = 1;
+        } else {
+            self.col += 1;
+        }
         Some(b)
     }
 
     fn skip_whitespace(&mut self) {
         while let Some(b) = self.peek() {
-            if b == b' ' || b == b'\t' || b == b'\r' || b == b'\n' { self.bump(); } else { break; }
+            if b == b' ' || b == b'\t' || b == b'\r' || b == b'\n' {
+                self.bump();
+            } else {
+                break;
+            }
         }
     }
 
     fn scan_number(&mut self, start: usize, line: u32, col: u32) -> Result<Token, LexError> {
-        while matches!(self.peek(), Some(b) if b.is_ascii_digit()) { self.bump(); }
+        while matches!(self.peek(), Some(b) if b.is_ascii_digit()) {
+            self.bump();
+        }
         let mut is_float = false;
         if self.peek() == Some(b'.') && matches!(self.peek2(), Some(d) if d.is_ascii_digit()) {
             is_float = true;
             self.bump(); // consume '.'
-            while matches!(self.peek(), Some(b) if b.is_ascii_digit()) { self.bump(); }
+            while matches!(self.peek(), Some(b) if b.is_ascii_digit()) {
+                self.bump();
+            }
         }
         let text = std::str::from_utf8(&self.src[start..self.pos]).unwrap();
         let kind = if is_float {
             let f: f64 = text.parse().map_err(|_| LexError {
-                message: "float literal out of range".into(), line, col })?;
+                message: "float literal out of range".into(),
+                line,
+                col,
+            })?;
             if !f.is_finite() {
-                return Err(LexError { message: "float literal out of range".into(), line, col });
+                return Err(LexError {
+                    message: "float literal out of range".into(),
+                    line,
+                    col,
+                });
             }
             TokenKind::Float(f)
         } else {
             let i: i64 = text.parse().map_err(|_| LexError {
-                message: "integer literal out of range".into(), line, col })?;
+                message: "integer literal out of range".into(),
+                line,
+                col,
+            })?;
             TokenKind::Int(i)
         };
-        Ok(Token { kind, span: Span { start, len: self.pos - start, line, col } })
+        Ok(Token {
+            kind,
+            span: Span {
+                start,
+                len: self.pos - start,
+                line,
+                col,
+            },
+        })
     }
 
     fn skip_line_comment(&mut self) {
-        while let Some(b) = self.peek() { if b == b'\n' { break; } self.bump(); }
+        while let Some(b) = self.peek() {
+            if b == b'\n' {
+                break;
+            }
+            self.bump();
+        }
     }
 
     fn skip_block_comment(&mut self) -> Result<(), LexError> {
         let (sl, sc) = (self.line, self.col);
-        self.bump(); self.bump(); // consume /*
+        self.bump();
+        self.bump(); // consume /*
         loop {
             match self.peek() {
-                None => return Err(LexError { message: "unterminated block comment".into(), line: sl, col: sc }),
-                Some(b'*') if self.peek2() == Some(b'/') => { self.bump(); self.bump(); return Ok(()); }
-                _ => { self.bump(); }
+                None => {
+                    return Err(LexError {
+                        message: "unterminated block comment".into(),
+                        line: sl,
+                        col: sc,
+                    })
+                }
+                Some(b'*') if self.peek2() == Some(b'/') => {
+                    self.bump();
+                    self.bump();
+                    return Ok(());
+                }
+                _ => {
+                    self.bump();
+                }
             }
         }
     }
 
     fn scan_string(&mut self, start: usize, line: u32, col: u32) -> Result<Token, LexError> {
         self.bump(); // opening quote
-        // Accumulate the body as raw bytes: literal bytes (including multi-byte UTF-8
-        // sequences) are copied verbatim, escapes expand to their ASCII byte. The source
-        // is already valid UTF-8, so the final from_utf8 cannot fail.
+                     // Accumulate the body as raw bytes: literal bytes (including multi-byte UTF-8
+                     // sequences) are copied verbatim, escapes expand to their ASCII byte. The source
+                     // is already valid UTF-8, so the final from_utf8 cannot fail.
         let mut bytes: Vec<u8> = Vec::new();
         loop {
             // Snapshot the position of this unit before consuming, so an invalid escape
             // can report the column of the offending backslash.
             let (el, ec) = (self.line, self.col);
             match self.bump() {
-                None => return Err(LexError { message: "unterminated string".into(), line, col }),
-                Some(b'"') => break,
-                Some(b'\\') => {
-                    match self.bump() {
-                        Some(b'n') => bytes.push(b'\n'),
-                        Some(b't') => bytes.push(b'\t'),
-                        Some(b'r') => bytes.push(b'\r'),
-                        Some(b'\\') => bytes.push(b'\\'),
-                        Some(b'"') => bytes.push(b'"'),
-                        Some(other) => return Err(LexError {
-                            message: format!("invalid escape \\{}", other as char), line: el, col: ec }),
-                        None => return Err(LexError { message: "unterminated string".into(), line, col }),
-                    }
+                None => {
+                    return Err(LexError {
+                        message: "unterminated string".into(),
+                        line,
+                        col,
+                    })
                 }
+                Some(b'"') => break,
+                Some(b'\\') => match self.bump() {
+                    Some(b'n') => bytes.push(b'\n'),
+                    Some(b't') => bytes.push(b'\t'),
+                    Some(b'r') => bytes.push(b'\r'),
+                    Some(b'\\') => bytes.push(b'\\'),
+                    Some(b'"') => bytes.push(b'"'),
+                    Some(other) => {
+                        return Err(LexError {
+                            message: format!("invalid escape \\{}", other as char),
+                            line: el,
+                            col: ec,
+                        })
+                    }
+                    None => {
+                        return Err(LexError {
+                            message: "unterminated string".into(),
+                            line,
+                            col,
+                        })
+                    }
+                },
                 Some(other) => bytes.push(other),
             }
         }
         let value = String::from_utf8(bytes).expect("source string body is valid UTF-8");
-        Ok(Token { kind: TokenKind::Str(value), span: Span { start, len: self.pos - start, line, col } })
+        Ok(Token {
+            kind: TokenKind::Str(value),
+            span: Span {
+                start,
+                len: self.pos - start,
+                line,
+                col,
+            },
+        })
     }
 
     // NOTE: identifiers are ASCII-only by design for v0.1 (scan_ident uses
     // is_ascii_alphabetic / is_ascii_alphanumeric). Unicode identifiers are out of scope.
     fn scan_ident(&mut self, start: usize, line: u32, col: u32) -> Token {
-        while matches!(self.peek(), Some(b) if b == b'_' || b.is_ascii_alphanumeric()) { self.bump(); }
+        while matches!(self.peek(), Some(b) if b == b'_' || b.is_ascii_alphanumeric()) {
+            self.bump();
+        }
         let text = std::str::from_utf8(&self.src[start..self.pos]).unwrap();
         let kind = keyword(text).unwrap_or_else(|| TokenKind::Ident(text.to_string()));
-        Token { kind, span: Span { start, len: self.pos - start, line, col } }
+        Token {
+            kind,
+            span: Span {
+                start,
+                len: self.pos - start,
+                line,
+                col,
+            },
+        }
     }
 
     /// Decode the full UTF-8 char beginning at the current position. The source is always
@@ -131,13 +222,28 @@ impl<'a> Lexer<'a> {
 fn keyword(s: &str) -> Option<TokenKind> {
     use TokenKind::*;
     Some(match s {
-        "function" => Function, "class" => Class, "enum" => Enum,
-        "constructor" => Constructor, "trait" => Trait,
-        "const" => Const, "final" => Final,
-        "public" => Public, "private" => Private, "protected" => Protected,
-        "return" => Return, "if" => If, "else" => Else, "for" => For, "in" => In,
-        "match" => Match, "import" => Import, "this" => This,
-        "true" => True, "false" => False, "null" => Null, "new" => New,
+        "function" => Function,
+        "class" => Class,
+        "enum" => Enum,
+        "constructor" => Constructor,
+        "trait" => Trait,
+        "const" => Const,
+        "final" => Final,
+        "public" => Public,
+        "private" => Private,
+        "protected" => Protected,
+        "return" => Return,
+        "if" => If,
+        "else" => Else,
+        "for" => For,
+        "in" => In,
+        "match" => Match,
+        "import" => Import,
+        "this" => This,
+        "true" => True,
+        "false" => False,
+        "null" => Null,
+        "new" => New,
         "is" => Is,
         _ => return None,
     })
@@ -148,15 +254,31 @@ pub fn lex(src: &str) -> Result<Vec<Token>, LexError> {
     let mut out = Vec::new();
     loop {
         lx.skip_whitespace();
-        let line = lx.line; let col = lx.col; let start = lx.pos;
+        let line = lx.line;
+        let col = lx.col;
+        let start = lx.pos;
         match lx.peek() {
             None => {
-                out.push(Token { kind: TokenKind::Eof, span: Span { start, len: 0, line, col } });
+                out.push(Token {
+                    kind: TokenKind::Eof,
+                    span: Span {
+                        start,
+                        len: 0,
+                        line,
+                        col,
+                    },
+                });
                 return Ok(out);
             }
             Some(b) => {
-                if b == b'/' && lx.peek2() == Some(b'/') { lx.skip_line_comment(); continue; }
-                if b == b'/' && lx.peek2() == Some(b'*') { lx.skip_block_comment()?; continue; }
+                if b == b'/' && lx.peek2() == Some(b'/') {
+                    lx.skip_line_comment();
+                    continue;
+                }
+                if b == b'/' && lx.peek2() == Some(b'*') {
+                    lx.skip_block_comment()?;
+                    continue;
+                }
 
                 if b == b'"' {
                     let t = lx.scan_string(start, line, col)?;
@@ -177,7 +299,15 @@ pub fn lex(src: &str) -> Result<Vec<Token>, LexError> {
                 }
 
                 // two-char operators take priority
-                let two = |k: TokenKind| Token { kind: k, span: Span { start, len: 2, line, col } };
+                let two = |k: TokenKind| Token {
+                    kind: k,
+                    span: Span {
+                        start,
+                        len: 2,
+                        line,
+                        col,
+                    },
+                };
                 let p2 = lx.peek2();
                 let matched_two = match (b, p2) {
                     (b'=', Some(b'=')) => Some(TokenKind::EqEq),
@@ -192,12 +322,21 @@ pub fn lex(src: &str) -> Result<Vec<Token>, LexError> {
                     _ => None,
                 };
                 if let Some(k) = matched_two {
-                    lx.bump(); lx.bump();
+                    lx.bump();
+                    lx.bump();
                     out.push(two(k));
                     continue;
                 }
 
-                let single = |k: TokenKind| Token { kind: k, span: Span { start, len: 1, line, col } };
+                let single = |k: TokenKind| Token {
+                    kind: k,
+                    span: Span {
+                        start,
+                        len: 1,
+                        line,
+                        col,
+                    },
+                };
                 let kind = match b {
                     b'.' => Some(TokenKind::Dot),
                     b';' => Some(TokenKind::Semicolon),
@@ -222,11 +361,18 @@ pub fn lex(src: &str) -> Result<Vec<Token>, LexError> {
                     _ => None,
                 };
                 match kind {
-                    Some(k) => { lx.bump(); out.push(single(k)); }
+                    Some(k) => {
+                        lx.bump();
+                        out.push(single(k));
+                    }
                     None => {
                         // Decode the full char (handles multi-byte UTF-8) for the message.
                         let ch = lx.current_char();
-                        return Err(LexError { message: format!("unexpected character {:?}", ch), line, col });
+                        return Err(LexError {
+                            message: format!("unexpected character {:?}", ch),
+                            line,
+                            col,
+                        });
                     }
                 }
             }
@@ -270,9 +416,10 @@ mod tests {
         use TokenKind::*;
         assert_eq!(
             kinds(". ; , : ? ( ) { } [ ] < > = ! + - * / %"),
-            vec![Dot, Semicolon, Comma, Colon, Question, LParen, RParen,
-                 LBrace, RBrace, LBracket, RBracket, Lt, Gt, Eq, Bang,
-                 Plus, Minus, Star, Slash, Percent, Eof]
+            vec![
+                Dot, Semicolon, Comma, Colon, Question, LParen, RParen, LBrace, RBrace, LBracket,
+                RBracket, Lt, Gt, Eq, Bang, Plus, Minus, Star, Slash, Percent, Eof
+            ]
         );
     }
 
@@ -321,10 +468,30 @@ mod tests {
         use TokenKind::*;
         assert_eq!(
             kinds("function class enum constructor return match this true false null"),
-            vec![Function, Class, Enum, Constructor, Return, Match, This, True, False, Null, Eof]
+            vec![
+                Function,
+                Class,
+                Enum,
+                Constructor,
+                Return,
+                Match,
+                This,
+                True,
+                False,
+                Null,
+                Eof
+            ]
         );
-        assert_eq!(kinds("age myVar User _x"),
-            vec![Ident("age".into()), Ident("myVar".into()), Ident("User".into()), Ident("_x".into()), Eof]);
+        assert_eq!(
+            kinds("age myVar User _x"),
+            vec![
+                Ident("age".into()),
+                Ident("myVar".into()),
+                Ident("User".into()),
+                Ident("_x".into()),
+                Eof
+            ]
+        );
     }
 
     #[test]
@@ -340,9 +507,15 @@ mod tests {
         use TokenKind::*;
         assert_eq!(kinds("\"hello\""), vec![Str("hello".into()), Eof]);
         // escapes
-        assert_eq!(kinds("\"a\\nb\\t\\\"c\""), vec![Str("a\nb\t\"c".into()), Eof]);
+        assert_eq!(
+            kinds("\"a\\nb\\t\\\"c\""),
+            vec![Str("a\nb\t\"c".into()), Eof]
+        );
         // interpolation body preserved verbatim (split happens in the parser)
-        assert_eq!(kinds("\"Hello {name}\""), vec![Str("Hello {name}".into()), Eof]);
+        assert_eq!(
+            kinds("\"Hello {name}\""),
+            vec![Str("Hello {name}".into()), Eof]
+        );
     }
 
     #[test]

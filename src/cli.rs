@@ -13,8 +13,8 @@ use crate::vm::Vm;
 
 /// lex + parse, rendering the stage error to a single line.
 fn lex_parse(src: &str) -> Result<Program, String> {
-    let tokens = lex(src)
-        .map_err(|e| format!("lex error at {}:{}: {}", e.line, e.col, e.message))?;
+    let tokens =
+        lex(src).map_err(|e| format!("lex error at {}:{}: {}", e.line, e.col, e.message))?;
     Parser::new(tokens)
         .parse_program()
         .map_err(|e| format!("parse error at {}:{}: {}", e.line, e.col, e.message))
@@ -46,7 +46,9 @@ pub fn cmd_run(src: &str) -> Result<String, String> {
 pub fn cmd_runvm(src: &str) -> Result<String, String> {
     let prog = parse_checked(src)?;
     let program = compile(&prog).map_err(|e| format!("compile error: {e}"))?;
-    Vm::new(&program).run().map_err(|e| format!("runtime error: {e}"))
+    Vm::new(&program)
+        .run()
+        .map_err(|e| format!("runtime error: {e}"))
 }
 
 /// `check`: lex -> parse -> check; report success or the type errors.
@@ -115,13 +117,17 @@ function main() {
 
     #[test]
     fn run_executes_sample() {
-        assert_eq!(cmd_run(SAMPLE).unwrap(), "Hello Tak\narea = 12.56636\narea = 12\n");
+        assert_eq!(
+            cmd_run(SAMPLE).unwrap(),
+            "Hello Tak\narea = 12.56636\narea = 12\n"
+        );
     }
 
     #[test]
     fn run_reports_type_error_and_does_not_execute() {
         // `area` returns float; returning an int literal is a type error.
-        let src = r#"function area() -> float { return 1; } function main() { println("{area()}"); }"#;
+        let src =
+            r#"function area() -> float { return 1; } function main() { println("{area()}"); }"#;
         let err = cmd_run(src).unwrap_err();
         assert!(err.contains("type error"), "{err}");
     }
@@ -167,7 +173,10 @@ function main() {
         let php = cmd_transpile(SAMPLE).expect("transpile");
         assert!(php.starts_with("<?php\n"), "{php}");
         assert!(php.contains("abstract class Shape {}"), "{php}");
-        assert!(php.contains("function __construct(private string $name) {}"), "{php}");
+        assert!(
+            php.contains("function __construct(private string $name) {}"),
+            "{php}"
+        );
     }
 
     #[test]

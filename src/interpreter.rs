@@ -26,7 +26,9 @@ enum Signal {
 type R<T> = Result<T, Signal>;
 
 fn rt<T>(msg: impl Into<String>) -> R<T> {
-    Err(Signal::Runtime(RuntimeError { message: msg.into() }))
+    Err(Signal::Runtime(RuntimeError {
+        message: msg.into(),
+    }))
 }
 
 fn as_bool(v: &Value) -> R<bool> {
@@ -44,7 +46,9 @@ struct Frame {
 
 impl Frame {
     fn new() -> Self {
-        Frame { scopes: vec![HashMap::new()] }
+        Frame {
+            scopes: vec![HashMap::new()],
+        }
     }
     fn push(&mut self) {
         self.scopes.push(HashMap::new());
@@ -87,7 +91,11 @@ pub fn interpret(program: &Program) -> Result<String, RuntimeError> {
     interp.collect(program);
     let main = match interp.funcs.get("main") {
         Some(f) => f.clone(),
-        None => return Err(RuntimeError { message: "no `main` function".to_string() }),
+        None => {
+            return Err(RuntimeError {
+                message: "no `main` function".to_string(),
+            })
+        }
     };
     let names: Vec<String> = main.params.iter().map(|p| p.name.clone()).collect();
     match interp.run_call(&names, &main.body, vec![], None) {
@@ -171,7 +179,12 @@ impl Interp {
                 };
                 Err(Signal::Return(v))
             }
-            Stmt::If { cond, then_block, else_block, .. } => {
+            Stmt::If {
+                cond,
+                then_block,
+                else_block,
+                ..
+            } => {
                 if as_bool(&self.eval(cond)?)? {
                     self.exec_scoped(then_block)
                 } else if let Some(eb) = else_block {
@@ -180,12 +193,12 @@ impl Interp {
                     Ok(())
                 }
             }
-            Stmt::For { name, iter, body, .. } => {
+            Stmt::For {
+                name, iter, body, ..
+            } => {
                 let items = match self.eval(iter)? {
                     Value::List(items) => items,
-                    other => {
-                        return rt(format!("cannot iterate over {}", other.type_name()))
-                    }
+                    other => return rt(format!("cannot iterate over {}", other.type_name())),
                 };
                 for item in items {
                     self.frame.push();
@@ -226,19 +239,17 @@ impl Interp {
             Expr::Unary { op, expr, .. } => self.eval_unary(*op, expr),
             Expr::Binary { op, lhs, rhs, .. } => self.eval_binary(*op, lhs, rhs),
             Expr::Call { callee, args, .. } => self.eval_call(callee, args),
-            Expr::Member { object, name, .. } => {
-                match self.eval(object)? {
-                    Value::Instance(inst) => match inst.fields.get(name) {
-                        Some(v) => Ok(v.clone()),
-                        None => rt(format!("no field `{name}` on `{}`", inst.class)),
-                    },
-                    other => {
-                        rt(format!("cannot read `.{name}` on {}", other.type_name()))
-                    }
-                }
-            }
+            Expr::Member { object, name, .. } => match self.eval(object)? {
+                Value::Instance(inst) => match inst.fields.get(name) {
+                    Some(v) => Ok(v.clone()),
+                    None => rt(format!("no field `{name}` on `{}`", inst.class)),
+                },
+                other => rt(format!("cannot read `.{name}` on {}", other.type_name())),
+            },
             Expr::Index { .. } => rt("indexing is not yet supported in M1"),
-            Expr::Match { scrutinee, arms, .. } => self.eval_match(scrutinee, arms),
+            Expr::Match {
+                scrutinee, arms, ..
+            } => self.eval_match(scrutinee, arms),
         }
     }
 
@@ -394,7 +405,10 @@ impl Interp {
             ClassMember::Constructor { params, body, .. } => Some((params.clone(), body.clone())),
             _ => None,
         });
-        let mut inst = Instance { class: class_name.to_string(), fields: HashMap::new() };
+        let mut inst = Instance {
+            class: class_name.to_string(),
+            fields: HashMap::new(),
+        };
         let Some((params, body)) = ctor else {
             if !args.is_empty() {
                 return rt(format!("`{class_name}` has no constructor but got args"));
@@ -409,10 +423,12 @@ impl Interp {
             ));
         }
         for (p, a) in params.iter().zip(args.iter()) {
-            let promoted = p
-                .modifiers
-                .iter()
-                .any(|m| matches!(m, Modifier::Public | Modifier::Private | Modifier::Protected));
+            let promoted = p.modifiers.iter().any(|m| {
+                matches!(
+                    m,
+                    Modifier::Public | Modifier::Private | Modifier::Protected
+                )
+            });
             if promoted {
                 inst.fields.insert(p.name.clone(), a.clone());
             }
@@ -604,7 +620,10 @@ mod tests {
 
     #[test]
     fn float_arithmetic() {
-        assert_eq!(out(r#"function main() { println("{3.0 * 4.0}"); }"#), "12\n");
+        assert_eq!(
+            out(r#"function main() { println("{3.0 * 4.0}"); }"#),
+            "12\n"
+        );
     }
 
     #[test]
@@ -615,18 +634,30 @@ mod tests {
 
     #[test]
     fn comparison_and_logical_short_circuit() {
-        assert_eq!(out(r#"function main() { println("{1 < 2 && 3 >= 3}"); }"#), "true\n");
-        assert_eq!(out(r#"function main() { println("{1 > 2 || false}"); }"#), "false\n");
+        assert_eq!(
+            out(r#"function main() { println("{1 < 2 && 3 >= 3}"); }"#),
+            "true\n"
+        );
+        assert_eq!(
+            out(r#"function main() { println("{1 > 2 || false}"); }"#),
+            "false\n"
+        );
     }
 
     #[test]
     fn unary_negation_and_not() {
-        assert_eq!(out(r#"function main() { println("{-5}"); println("{!true}"); }"#), "-5\nfalse\n");
+        assert_eq!(
+            out(r#"function main() { println("{-5}"); println("{!true}"); }"#),
+            "-5\nfalse\n"
+        );
     }
 
     #[test]
     fn var_decl_and_use() {
-        assert_eq!(out(r#"function main() { int x = 10; println("{x + 5}"); }"#), "15\n");
+        assert_eq!(
+            out(r#"function main() { int x = 10; println("{x + 5}"); }"#),
+            "15\n"
+        );
     }
 
     #[test]
@@ -726,6 +757,10 @@ mod tests {
             function main() { C c = C(); println("{c}"); }
         "#;
         let e = run(src).unwrap_err();
-        assert!(e.message.contains("interpolate") || e.message.contains("print"), "{}", e.message);
+        assert!(
+            e.message.contains("interpolate") || e.message.contains("print"),
+            "{}",
+            e.message
+        );
     }
 }

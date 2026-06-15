@@ -8,7 +8,10 @@ use phorge::cli::{cmd_run, cmd_runvm};
 fn agree(src: &str) {
     let tree = cmd_run(src).expect("interpreter ok");
     let vm = cmd_runvm(src).expect("vm ok");
-    assert_eq!(tree, vm, "backend mismatch for:\n{src}\n  run={tree:?}\n  runvm={vm:?}");
+    assert_eq!(
+        tree, vm,
+        "backend mismatch for:\n{src}\n  run={tree:?}\n  runvm={vm:?}"
+    );
 }
 
 /// Programs spanning the whole P2 surface. Each must run identically on both backends.
@@ -96,11 +99,13 @@ fn examples_match_between_backends() {
     // `examples/hello.phg` (P2) and `examples/fib.phg` (P3 recursion) both run on the VM.
     // `examples/grades.phg` and the Shape/area sample use enums/classes/`match` (P4), so the
     // full examples sweep arrives in P6. This test documents the boundary explicitly.
-    agree(r#"import std.io;
+    agree(
+        r#"import std.io;
 
 function main() {
     println("Hello, Phorge!");
-}"#);
+}"#,
+    );
     let fib = std::fs::read_to_string("examples/fib.phg").expect("read examples/fib.phg");
     agree(&fib);
 }

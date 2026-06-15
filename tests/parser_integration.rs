@@ -13,7 +13,9 @@ fn parses_spec_sample_match_body() {
     // The body of `area(Shape s)` from the spec's sample program.
     let src = "match s { Circle(r) => 3.14159 * r * r, Rect(w, h) => w * h, }";
     match parse_expr(src) {
-        Expr::Match { scrutinee, arms, .. } => {
+        Expr::Match {
+            scrutinee, arms, ..
+        } => {
             assert!(matches!(*scrutinee, Expr::Ident(ref n, _) if n == "s"));
             assert_eq!(arms.len(), 2);
             // first arm: Circle(r) => 3.14159 * r * r

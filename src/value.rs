@@ -83,9 +83,7 @@ impl Value {
             (Bool(a), Bool(b)) => a == b,
             (Str(a), Str(b)) => a == b,
             (Unit, Unit) => true,
-            (List(a), List(b)) => {
-                a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.eq_val(y))
-            }
+            (List(a), List(b)) => a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.eq_val(y)),
             (Enum(a), Enum(b)) => {
                 a.ty == b.ty
                     && a.variant == b.variant
@@ -95,9 +93,9 @@ impl Value {
             (Instance(a), Instance(b)) => {
                 a.class == b.class
                     && a.fields.len() == b.fields.len()
-                    && a.fields.iter().all(|(k, v)| {
-                        b.fields.get(k).is_some_and(|bv| v.eq_val(bv))
-                    })
+                    && a.fields
+                        .iter()
+                        .all(|(k, v)| b.fields.get(k).is_some_and(|bv| v.eq_val(bv)))
             }
             _ => false,
         }
@@ -112,7 +110,10 @@ mod tests {
     fn as_display_renders_primitives() {
         assert_eq!(Value::Int(42).as_display().as_deref(), Some("42"));
         assert_eq!(Value::Float(12.0).as_display().as_deref(), Some("12"));
-        assert_eq!(Value::Float(12.56636).as_display().as_deref(), Some("12.56636"));
+        assert_eq!(
+            Value::Float(12.56636).as_display().as_deref(),
+            Some("12.56636")
+        );
         assert_eq!(Value::Bool(true).as_display().as_deref(), Some("true"));
         assert_eq!(Value::Str("hi".into()).as_display().as_deref(), Some("hi"));
     }

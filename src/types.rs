@@ -66,6 +66,9 @@ mod tests {
 
     #[test]
     fn display_renders_generics() {
-        assert_eq!(Ty::List(Box::new(Ty::Named("Shape".into()))).to_string(), "List<Shape>");
+        assert_eq!(
+            Ty::List(Box::new(Ty::Named("Shape".into()))).to_string(),
+            "List<Shape>"
+        );
     }
 }

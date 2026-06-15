@@ -69,7 +69,12 @@ pub fn compile(program: &Program) -> Result<BytecodeProgram, String> {
 
     let mut functions = Vec::with_capacity(order.len());
     for f in &order {
-        let mut c = Compiler { chunk: Chunk::new(), locals: Vec::new(), scope_depth: 0, fns: &fns };
+        let mut c = Compiler {
+            chunk: Chunk::new(),
+            locals: Vec::new(),
+            scope_depth: 0,
+            fns: &fns,
+        };
         for p in &f.params {
             c.add_local(&p.name, &type_name(&p.ty));
         }
@@ -79,7 +84,11 @@ pub fn compile(program: &Program) -> Result<BytecodeProgram, String> {
         }
         c.emit_const(Value::Unit, last_line);
         c.emit(Op::Return, last_line);
-        functions.push(Function { name: f.name.clone(), arity: f.params.len(), chunk: c.chunk });
+        functions.push(Function {
+            name: f.name.clone(),
+            arity: f.params.len(),
+            chunk: c.chunk,
+        });
     }
     Ok(BytecodeProgram { functions, main })
 }
@@ -212,10 +221,19 @@ impl<'a> Compiler<'a> {
                 self.end_scope(span.line);
                 Ok(())
             }
-            Stmt::If { cond, then_block, else_block, span } => {
-                self.compile_if(cond, then_block, else_block.as_deref(), span.line)
-            }
-            Stmt::For { ty, name, iter, body, span } => {
+            Stmt::If {
+                cond,
+                then_block,
+                else_block,
+                span,
+            } => self.compile_if(cond, then_block, else_block.as_deref(), span.line),
+            Stmt::For {
+                ty,
+                name,
+                iter,
+                body,
+                span,
+            } => {
                 let elem_ty = type_name(ty);
                 self.compile_for(name, &elem_ty, iter, body, span.line)
             }
@@ -503,18 +521,30 @@ mod tests {
 
     #[test]
     fn float_arithmetic_formats_like_interpreter() {
-        assert_eq!(out(r#"function main() { println("{3.0 * 4.0}"); }"#), "12\n");
+        assert_eq!(
+            out(r#"function main() { println("{3.0 * 4.0}"); }"#),
+            "12\n"
+        );
     }
 
     #[test]
     fn comparison_and_short_circuit() {
-        assert_eq!(out(r#"function main() { println("{1 < 2 && 3 >= 3}"); }"#), "true\n");
-        assert_eq!(out(r#"function main() { println("{1 > 2 || false}"); }"#), "false\n");
+        assert_eq!(
+            out(r#"function main() { println("{1 < 2 && 3 >= 3}"); }"#),
+            "true\n"
+        );
+        assert_eq!(
+            out(r#"function main() { println("{1 > 2 || false}"); }"#),
+            "false\n"
+        );
     }
 
     #[test]
     fn unary_negation_and_not() {
-        assert_eq!(out(r#"function main() { println("{-5}"); println("{!true}"); }"#), "-5\nfalse\n");
+        assert_eq!(
+            out(r#"function main() { println("{-5}"); println("{!true}"); }"#),
+            "-5\nfalse\n"
+        );
     }
 
     #[test]
@@ -554,7 +584,10 @@ mod tests {
 
     #[test]
     fn var_decl_and_use() {
-        assert_eq!(out(r#"function main() { int x = 10; println("{x + 5}"); }"#), "15\n");
+        assert_eq!(
+            out(r#"function main() { int x = 10; println("{x + 5}"); }"#),
+            "15\n"
+        );
     }
 
     #[test]

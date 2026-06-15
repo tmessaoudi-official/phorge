@@ -19,7 +19,11 @@ fn every_example_runs_clean() {
         .collect();
     phg.sort();
 
-    assert!(!phg.is_empty(), "no .phg files found under {}", dir.display());
+    assert!(
+        !phg.is_empty(),
+        "no .phg files found under {}",
+        dir.display()
+    );
 
     for file in &phg {
         let out = Command::new(BIN)

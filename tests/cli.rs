@@ -77,7 +77,11 @@ fn transpiled_php_runs_and_matches_interpreter() {
 
     let run = Command::new("php").arg(&path).output().expect("spawn php");
     let _ = std::fs::remove_file(&path);
-    assert!(run.status.success(), "php stderr: {}", String::from_utf8_lossy(&run.stderr));
+    assert!(
+        run.status.success(),
+        "php stderr: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
     assert_eq!(
         String::from_utf8_lossy(&run.stdout),
         "Hello Tak\narea = 12.56636\narea = 12\n"

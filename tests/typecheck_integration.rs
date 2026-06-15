@@ -55,14 +55,20 @@ fn sample_program_type_checks_clean() {
 fn non_exhaustive_match_in_full_program_errors() {
     let broken = SAMPLE.replace("        Rect(w, h) => w * h,\n", "");
     let errs = check_src(&broken).expect_err("should be non-exhaustive");
-    assert!(errs.iter().any(|e| e.message.contains("non-exhaustive")), "{errs:?}");
+    assert!(
+        errs.iter().any(|e| e.message.contains("non-exhaustive")),
+        "{errs:?}"
+    );
 }
 
 #[test]
 fn wrong_constructor_arg_in_full_program_errors() {
     let broken = SAMPLE.replace(r#"Greeter("Tak")"#, "Greeter(123)");
     let errs = check_src(&broken).expect_err("should be a type error");
-    assert!(errs.iter().any(|e| e.message.contains("argument 1")), "{errs:?}");
+    assert!(
+        errs.iter().any(|e| e.message.contains("argument 1")),
+        "{errs:?}"
+    );
 }
 
 #[test]

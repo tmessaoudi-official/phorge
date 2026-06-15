@@ -134,7 +134,11 @@ mod tests {
         let mut c = Chunk::new();
         c.emit(Op::Return, 1);
         let prog = BytecodeProgram {
-            functions: vec![Function { name: "main".into(), arity: 0, chunk: c }],
+            functions: vec![Function {
+                name: "main".into(),
+                arity: 0,
+                chunk: c,
+            }],
             main: 0,
         };
         assert_eq!(prog.functions[prog.main].name, "main");
