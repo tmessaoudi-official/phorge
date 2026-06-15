@@ -75,6 +75,11 @@ impl Transpiler {
                 Item::Class(c) => self.emit_class(c)?,
             }
         }
+        // The interpreter auto-invokes `main`; PHP does not. Emit the call so the output
+        // is a runnable program, not just definitions.
+        if self.funcs.contains("main") {
+            self.line("main();");
+        }
         Ok(())
     }
 
@@ -584,6 +589,15 @@ mod tests {
     fn println_becomes_echo() {
         let out = php("function main() { println(\"hi\"); }");
         assert!(out.contains(r#"echo "hi" . "\n";"#), "{out}");
+    }
+
+    #[test]
+    fn main_is_invoked_when_present() {
+        let out = php("function main() { println(\"hi\"); }");
+        assert!(out.trim_end().ends_with("main();"), "{out}");
+        // no main -> no call
+        let no_main = php("function helper() -> int { return 1; }");
+        assert!(!no_main.contains("main();"), "{no_main}");
     }
 
     const SHAPE: &str = "enum Shape { Circle(float radius), Rect(float w, float h), }";

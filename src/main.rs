@@ -5,12 +5,12 @@ use std::process::exit;
 
 use phorge::cli;
 
-const USAGE: &str = "usage: phorge <run|check|parse|lex> <file>";
+const USAGE: &str = "usage: phorge <run|check|parse|lex|transpile> <file>";
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let cmd = match args.get(1).map(String::as_str) {
-        Some(c @ ("run" | "check" | "parse" | "lex")) => c,
+        Some(c @ ("run" | "check" | "parse" | "lex" | "transpile")) => c,
         _ => {
             eprintln!("{USAGE}");
             exit(2);
@@ -35,6 +35,7 @@ fn main() {
         "check" => cli::cmd_check(&src),
         "parse" => cli::cmd_parse(&src),
         "lex" => cli::cmd_lex(&src),
+        "transpile" => cli::cmd_transpile(&src),
         _ => unreachable!("validated above"),
     };
     match result {

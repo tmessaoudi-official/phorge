@@ -62,6 +62,12 @@ pub fn cmd_lex(src: &str) -> Result<String, String> {
     Ok(out)
 }
 
+/// `transpile`: lex -> parse -> check (gate) -> emit PHP source.
+pub fn cmd_transpile(src: &str) -> Result<String, String> {
+    let prog = parse_checked(src)?;
+    crate::transpile::emit(&prog)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -144,5 +150,19 @@ function main() {
     fn lex_dumps_tokens() {
         let out = cmd_lex(r#"function main() {}"#).unwrap();
         assert!(out.contains("@ 1:1"), "{out}");
+    }
+
+    #[test]
+    fn cmd_transpile_emits_php_for_sample() {
+        let php = cmd_transpile(SAMPLE).expect("transpile");
+        assert!(php.starts_with("<?php\n"), "{php}");
+        assert!(php.contains("abstract class Shape {}"), "{php}");
+        assert!(php.contains("function __construct(private string $name) {}"), "{php}");
+    }
+
+    #[test]
+    fn cmd_transpile_rejects_ill_typed() {
+        let err = cmd_transpile(r#"function main() { int x = "no"; }"#).unwrap_err();
+        assert!(err.contains("type error"), "{err}");
     }
 }

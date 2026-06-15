@@ -40,3 +40,13 @@ fn check_clean_fixture_exits_0() {
     assert!(out.status.success());
     assert!(String::from_utf8_lossy(&out.stdout).contains("OK"));
 }
+
+#[test]
+fn transpile_sample_exits_0_with_php() {
+    let out = Command::new(BIN)
+        .args(["transpile", "tests/fixtures/sample.phg"])
+        .output()
+        .expect("spawn phorge");
+    assert!(out.status.success(), "exit {:?}", out.status.code());
+    assert!(String::from_utf8_lossy(&out.stdout).starts_with("<?php"));
+}
