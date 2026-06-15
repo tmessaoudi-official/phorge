@@ -1,6 +1,6 @@
 //! Recursive-descent + Pratt parser: turns the lexer's token stream into the AST.
 
-use crate::ast::{BinaryOp, Expr, MatchArm, Pattern, StrPart, Type, UnaryOp};
+use crate::ast::{BinaryOp, Expr, MatchArm, Pattern, Stmt, StrPart, Type, UnaryOp};
 use crate::token::{Span, Token, TokenKind};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -419,12 +419,128 @@ impl Parser {
         self.expect(&TokenKind::RBrace, "'}' to close match")?;
         Ok(Expr::Match { scrutinee: Box::new(scrutinee), arms, span: sp })
     }
+
+    /// Consume an identifier token, returning its name, or error with `what`.
+    fn expect_ident(&mut self, what: &str) -> Result<String, ParseError> {
+        match self.peek().clone() {
+            TokenKind::Ident(n) => {
+                self.advance();
+                Ok(n)
+            }
+            _ => Err(self.error(what)),
+        }
+    }
+
+    /// Parse one statement.
+    pub fn parse_stmt(&mut self) -> Result<Stmt, ParseError> {
+        match self.peek() {
+            TokenKind::Return => self.parse_return(),
+            TokenKind::If => self.parse_if(),
+            TokenKind::For => self.parse_for(),
+            TokenKind::LBrace => {
+                let sp = self.peek_span();
+                let body = self.parse_block()?;
+                Ok(Stmt::Block(body, sp))
+            }
+            _ => self.parse_var_decl_or_expr_stmt(),
+        }
+    }
+
+    /// `{ stmt* }` — consumes both braces, returns the inner statements.
+    fn parse_block(&mut self) -> Result<Vec<Stmt>, ParseError> {
+        self.expect(&TokenKind::LBrace, "'{'")?;
+        let mut stmts = Vec::new();
+        while !self.check(&TokenKind::RBrace) && !self.check(&TokenKind::Eof) {
+            stmts.push(self.parse_stmt()?);
+        }
+        self.expect(&TokenKind::RBrace, "'}' to close block")?;
+        Ok(stmts)
+    }
+
+    /// `return;` or `return expr;`
+    fn parse_return(&mut self) -> Result<Stmt, ParseError> {
+        let sp = self.peek_span();
+        self.expect(&TokenKind::Return, "'return'")?;
+        let value = if self.check(&TokenKind::Semicolon) {
+            None
+        } else {
+            Some(self.parse_expr()?)
+        };
+        self.expect(&TokenKind::Semicolon, "';' after return")?;
+        Ok(Stmt::Return { value, span: sp })
+    }
+
+    /// `if (cond) BLOCK [else BLOCK | else if …]`
+    fn parse_if(&mut self) -> Result<Stmt, ParseError> {
+        let sp = self.peek_span();
+        self.expect(&TokenKind::If, "'if'")?;
+        self.expect(&TokenKind::LParen, "'(' after 'if'")?;
+        let cond = self.parse_expr()?;
+        self.expect(&TokenKind::RParen, "')' after if condition")?;
+        let then_block = self.parse_block()?;
+        let else_block = if self.eat(&TokenKind::Else) {
+            if self.check(&TokenKind::If) {
+                // `else if …` — store the nested if as the sole statement of the else block
+                Some(vec![self.parse_if()?])
+            } else {
+                Some(self.parse_block()?)
+            }
+        } else {
+            None
+        };
+        Ok(Stmt::If { cond, then_block, else_block, span: sp })
+    }
+
+    /// `for (Type name in iter) BLOCK`
+    fn parse_for(&mut self) -> Result<Stmt, ParseError> {
+        let sp = self.peek_span();
+        self.expect(&TokenKind::For, "'for'")?;
+        self.expect(&TokenKind::LParen, "'(' after 'for'")?;
+        let ty = self.parse_type()?;
+        let name = self.expect_ident("a loop variable name")?;
+        self.expect(&TokenKind::In, "'in' in for-loop header")?;
+        let iter = self.parse_expr()?;
+        self.expect(&TokenKind::RParen, "')' after for-loop header")?;
+        let body = self.parse_block()?;
+        Ok(Stmt::For { ty, name, iter, body, span: sp })
+    }
+
+    /// Disambiguate `Type name = expr;` (var-decl) from `expr;` (expression statement).
+    /// A var-decl is committed only after a type, a name, and `=` parse successfully;
+    /// anything short of that rewinds the cursor and re-parses as an expression.
+    fn parse_var_decl_or_expr_stmt(&mut self) -> Result<Stmt, ParseError> {
+        let sp = self.peek_span();
+        if let Some((ty, name)) = self.try_var_decl_header() {
+            let init = self.parse_expr()?;
+            self.expect(&TokenKind::Semicolon, "';' after variable declaration")?;
+            return Ok(Stmt::VarDecl { ty, name, init, span: sp });
+        }
+        let expr = self.parse_expr()?;
+        self.expect(&TokenKind::Semicolon, "';' after expression statement")?;
+        Ok(Stmt::Expr(expr, sp))
+    }
+
+    /// Speculatively parse a var-decl header `Type name =`. Restores the cursor and
+    /// returns `None` on any failure so the caller can fall back to expression parsing.
+    fn try_var_decl_header(&mut self) -> Option<(Type, String)> {
+        let start = self.pos;
+        if let Ok(ty) = self.parse_type() {
+            if let TokenKind::Ident(name) = self.peek().clone() {
+                self.advance();
+                if self.eat(&TokenKind::Eq) {
+                    return Some((ty, name));
+                }
+            }
+        }
+        self.pos = start;
+        None
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{Expr, Pattern, StrPart, Type};
+    use crate::ast::{Expr, Pattern, Stmt, StrPart, Type};
     use crate::lexer::lex;
 
     /// Helper: lex `src` and build a parser over the tokens.
@@ -443,6 +559,11 @@ mod tests {
 
     fn pat(src: &str) -> Pattern {
         parser(src).parse_pattern().expect("parse ok")
+    }
+
+    /// Helper: parse `src` as a single statement.
+    fn stmt(src: &str) -> Stmt {
+        parser(src).parse_stmt().expect("parse ok")
     }
 
     /// Render an expression to a fully-parenthesized string so precedence is visible.
@@ -735,6 +856,87 @@ mod tests {
             Expr::Match { arms, .. } => {
                 assert_eq!(arms.len(), 2);
                 assert!(matches!(arms[0].body, Expr::Binary { .. }));
+            }
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_return_stmt() {
+        assert!(matches!(stmt("return;"), Stmt::Return { value: None, .. }));
+        match stmt("return 1 + 2;") {
+            Stmt::Return { value: Some(Expr::Binary { .. }), .. } => {}
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_expr_stmt() {
+        match stmt("println(x);") {
+            Stmt::Expr(Expr::Call { .. }, _) => {}
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_block_stmt() {
+        match stmt("{ return; return 1; }") {
+            Stmt::Block(body, _) => assert_eq!(body.len(), 2),
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_var_decl_stmt() {
+        match stmt("int n = 5;") {
+            Stmt::VarDecl { ty, name, init, .. } => {
+                assert!(matches!(ty, Type::Named { ref name, .. } if name == "int"));
+                assert_eq!(name, "n");
+                assert!(matches!(init, Expr::Int(5, _)));
+            }
+            other => panic!("got {other:?}"),
+        }
+        // generic-typed var-decl must not be mistaken for comparison
+        match stmt("List<Shape> shapes = items;") {
+            Stmt::VarDecl { name, .. } => assert_eq!(name, "shapes"),
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_if_else() {
+        match stmt("if (a) { return 1; } else { return 2; }") {
+            Stmt::If { then_block, else_block: Some(eb), .. } => {
+                assert_eq!(then_block.len(), 1);
+                assert_eq!(eb.len(), 1);
+            }
+            other => panic!("got {other:?}"),
+        }
+        match stmt("if (a) { return 1; }") {
+            Stmt::If { else_block: None, .. } => {}
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_else_if_chain() {
+        match stmt("if (a) { return 1; } else if (b) { return 2; }") {
+            Stmt::If { else_block: Some(eb), .. } => {
+                assert_eq!(eb.len(), 1);
+                assert!(matches!(eb[0], Stmt::If { .. }));
+            }
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_for_in() {
+        match stmt("for (Shape s in shapes) { println(s); }") {
+            Stmt::For { ty, name, iter, body, .. } => {
+                assert!(matches!(ty, Type::Named { ref name, .. } if name == "Shape"));
+                assert_eq!(name, "s");
+                assert!(matches!(iter, Expr::Ident(ref n, _) if n == "shapes"));
+                assert_eq!(body.len(), 1);
             }
             other => panic!("got {other:?}"),
         }
