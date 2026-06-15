@@ -5,9 +5,11 @@
 
 use crate::ast::Program;
 use crate::checker::check;
+use crate::compiler::compile;
 use crate::interpreter::interpret;
 use crate::lexer::lex;
 use crate::parser::Parser;
+use crate::vm::Vm;
 
 /// lex + parse, rendering the stage error to a single line.
 fn lex_parse(src: &str) -> Result<Program, String> {
@@ -37,6 +39,14 @@ fn parse_checked(src: &str) -> Result<Program, String> {
 pub fn cmd_run(src: &str) -> Result<String, String> {
     let prog = parse_checked(src)?;
     interpret(&prog).map_err(|e| format!("runtime error: {}", e.message))
+}
+
+/// `runvm`: lex -> parse -> check (gate) -> compile to bytecode -> VM -> captured stdout.
+/// The bytecode backend; must produce byte-identical output to `cmd_run` (differential).
+pub fn cmd_runvm(src: &str) -> Result<String, String> {
+    let prog = parse_checked(src)?;
+    let chunk = compile(&prog).map_err(|e| format!("compile error: {e}"))?;
+    Vm::new(&chunk).run().map_err(|e| format!("runtime error: {e}"))
 }
 
 /// `check`: lex -> parse -> check; report success or the type errors.
@@ -164,5 +174,24 @@ function main() {
     fn cmd_transpile_rejects_ill_typed() {
         let err = cmd_transpile(r#"function main() { int x = "no"; }"#).unwrap_err();
         assert!(err.contains("type error"), "{err}");
+    }
+
+    #[test]
+    fn runvm_matches_run_on_simple_program() {
+        let src = r#"function main() { int x = 21; println("{x + x}"); }"#;
+        assert_eq!(cmd_runvm(src).unwrap(), cmd_run(src).unwrap());
+        assert_eq!(cmd_runvm(src).unwrap(), "42\n");
+    }
+
+    #[test]
+    fn runvm_reports_type_error_via_the_gate() {
+        let err = cmd_runvm(r#"function main() { int x = "no"; }"#).unwrap_err();
+        assert!(err.contains("type error"), "{err}");
+    }
+
+    #[test]
+    fn runvm_reports_runtime_error_with_prefix() {
+        let err = cmd_runvm(r#"function main() { println("{1 / 0}"); }"#).unwrap_err();
+        assert!(err.contains("runtime error"), "{err}");
     }
 }

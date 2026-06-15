@@ -36,15 +36,21 @@ function main() {
 
 ## CLI
 
-`phorge <command> <file>` — five commands, each a stage of the pipeline:
+`phorge <command> <file>` — six commands, each a stage of the pipeline:
 
 | Command | Does | On error |
 |---|---|---|
-| `run` | lex → parse → type-check → interpret | exit 1, error on stderr |
+| `run` | lex → parse → type-check → interpret (tree-walker) | exit 1, error on stderr |
+| `runvm` | lex → parse → type-check → compile to bytecode → VM (M2) | exit 1, error on stderr |
 | `check` | lex → parse → type-check, report only | exit 1 on type error |
 | `parse` | lex → parse, dump the AST | exit 1 on parse error |
 | `lex` | dump the token stream | exit 1 on lex error |
 | `transpile` | type-check (gate) → emit PHP to stdout | exit 1 on type/transpile error |
+
+`runvm` is the M2 bytecode backend: identical output to `run`, executed on a stack VM
+instead of the tree-walker. The two are kept in lock-step by the differential test harness
+(`tests/differential.rs`). M2 P2 covers the `main`-only expression/statement surface;
+function calls, classes, enums and `match` land in later M2 steps.
 
 No arguments → usage on stderr, exit 2. Unreadable file → exit 1.
 

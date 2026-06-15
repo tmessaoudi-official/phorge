@@ -1,16 +1,16 @@
-//! Phorge CLI: `phorge <run|check|parse|lex> <file>`. Thin dispatcher over the
-//! testable `phorge::cli` module.
+//! Phorge CLI: `phorge <run|runvm|check|parse|lex|transpile> <file>`. Thin dispatcher
+//! over the testable `phorge::cli` module.
 
 use std::process::exit;
 
 use phorge::cli;
 
-const USAGE: &str = "usage: phorge <run|check|parse|lex|transpile> <file>";
+const USAGE: &str = "usage: phorge <run|runvm|check|parse|lex|transpile> <file>";
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let cmd = match args.get(1).map(String::as_str) {
-        Some(c @ ("run" | "check" | "parse" | "lex" | "transpile")) => c,
+        Some(c @ ("run" | "runvm" | "check" | "parse" | "lex" | "transpile")) => c,
         _ => {
             eprintln!("{USAGE}");
             exit(2);
@@ -32,6 +32,7 @@ fn main() {
     };
     let result = match cmd {
         "run" => cli::cmd_run(&src),
+        "runvm" => cli::cmd_runvm(&src),
         "check" => cli::cmd_check(&src),
         "parse" => cli::cmd_parse(&src),
         "lex" => cli::cmd_lex(&src),
