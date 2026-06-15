@@ -1,6 +1,5 @@
-function area(Shape s) -> float {
-    return match s {
-        Circle(r)  => 3.14159 * r * r,
-        Rect(w, h) => w * h,
-    };
+import std.io;
+
+function main() {
+    println("Hello, Phorge!");
 }

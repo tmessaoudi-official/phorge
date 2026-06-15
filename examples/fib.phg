@@ -1,0 +1,16 @@
+import std.io;
+
+// Recursion: classic Fibonacci. Phorge is immutable (no reassignment), so the
+// iterative form would need a fresh binding each step — recursion is the natural fit.
+function fib(int n) -> int {
+    if (n < 2) {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+
+function main() {
+    for (int i in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) {
+        println("fib({i}) = {fib(i)}");
+    }
+}

@@ -3,7 +3,7 @@ use phorge::token::TokenKind;
 
 #[test]
 fn tokenizes_sample_without_error() {
-    let src = std::fs::read_to_string("examples/hello.phg").unwrap();
+    let src = std::fs::read_to_string("tests/fixtures/sample.phg").unwrap();
     let toks = lex(&src).expect("sample must lex cleanly");
     // last token is always Eof
     assert!(matches!(toks.last().unwrap().kind, TokenKind::Eof));

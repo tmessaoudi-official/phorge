@@ -83,3 +83,54 @@ fn transpiled_php_runs_and_matches_interpreter() {
         "Hello Tak\narea = 12.56636\narea = 12\n"
     );
 }
+
+/// Write `src` to a uniquely-named temp file so parallel tests never collide.
+fn write_temp(name: &str, src: &str) -> std::path::PathBuf {
+    let path = std::env::temp_dir().join(format!("phorge_cli_{name}.phg"));
+    std::fs::write(&path, src).expect("write temp fixture");
+    path
+}
+
+#[test]
+fn parse_subcommand_dumps_ast_exit_0() {
+    let out = Command::new(BIN)
+        .args(["parse", "tests/fixtures/sample.phg"])
+        .output()
+        .expect("spawn phorge");
+    assert!(out.status.success(), "exit {:?}", out.status.code());
+    assert!(String::from_utf8_lossy(&out.stdout).contains("Program"));
+}
+
+#[test]
+fn lex_subcommand_dumps_tokens_exit_0() {
+    let out = Command::new(BIN)
+        .args(["lex", "tests/fixtures/sample.phg"])
+        .output()
+        .expect("spawn phorge");
+    assert!(out.status.success(), "exit {:?}", out.status.code());
+    assert!(String::from_utf8_lossy(&out.stdout).contains("@ 1:1"));
+}
+
+#[test]
+fn transpile_ill_typed_exits_1_with_type_error() {
+    let path = write_temp("ill_typed", r#"function main() { int x = "no"; }"#);
+    let out = Command::new(BIN)
+        .args(["transpile", path.to_str().unwrap()])
+        .output()
+        .expect("spawn phorge");
+    let _ = std::fs::remove_file(&path);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("type error"));
+}
+
+#[test]
+fn run_runtime_error_exits_1() {
+    let path = write_temp("runtime_err", r#"function main() { println("{1 / 0}"); }"#);
+    let out = Command::new(BIN)
+        .args(["run", path.to_str().unwrap()])
+        .output()
+        .expect("spawn phorge");
+    let _ = std::fs::remove_file(&path);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("runtime error"));
+}
