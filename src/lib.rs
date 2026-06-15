@@ -6,6 +6,7 @@ pub mod types;
 pub mod value;
 pub mod chunk;
 pub mod vm;
+pub mod compiler;
 pub mod checker;
 pub mod interpreter;
 pub mod transpile;
