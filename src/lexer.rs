@@ -242,7 +242,7 @@ mod tests {
     fn number_literals() {
         use TokenKind::*;
         assert_eq!(kinds("0 42 1000"), vec![Int(0), Int(42), Int(1000), Eof]);
-        assert_eq!(kinds("3.14 0.5"), vec![Float(3.14), Float(0.5), Eof]);
+        assert_eq!(kinds("3.5 0.5"), vec![Float(3.5), Float(0.5), Eof]);
     }
 
     #[test]
