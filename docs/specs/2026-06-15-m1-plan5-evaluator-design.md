@@ -26,7 +26,9 @@ Implement exactly what makes the §6 sample run, plus the obvious neighbours tha
 share a code path (all arithmetic/comparison/logical operators, recursion,
 if/for, every `match` pattern kind the parser emits). Deferred corners
 (`T?`/`null` values, `decimal`/sized-ints/`double`, `|>` pipe, Map/Set indexing,
-function overloading) are **not** implemented; if execution somehow reaches one
+function overloading, **nullary enum variants referenced bare** — e.g. `B` with no
+payload/parens, which parse as a plain identifier and are `undefined` to both the
+checker and the evaluator) are **not** implemented; if execution somehow reaches one
 (it shouldn't — the checker gates them), emit a `RuntimeError`
 "… not yet supported in M1", never a panic.
 
@@ -145,7 +147,9 @@ type EvalResult<T> = Result<T, Signal>;
 - `List(items)` → `Value::List` of evaluated items.
 - `Unary{Neg}` on Int/Float; `Unary{Not}` on Bool.
 - `Binary`: `Add/Sub/Mul/Div/Rem` on Int (Int result) or Float (Float result),
-  no mixing (checker forbids it); `Div`/`Rem` by zero → `RuntimeError`.
+  no mixing (checker forbids it); `Div`/`Rem` by zero → `RuntimeError`. Integer
+  ops are **checked** — overflow (incl. `i64::MIN` neg / `÷ -1`) → `RuntimeError`,
+  never a panic (types can't catch overflow).
   `Eq/NotEq/Is` → `Bool` by value equality; `Lt/Gt/Le/Ge` on Int/Float → `Bool`;
   `And/Or` short-circuit on `Bool`. `Pipe` → `RuntimeError` (deferred corner).
 - `Index` → `RuntimeError` (deferred corner; the sample never indexes).
