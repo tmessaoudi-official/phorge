@@ -12,8 +12,9 @@ pub fn emit(program: &Program) -> Result<String, String> {
     Ok(t.out)
 }
 
-// `#[allow(dead_code)]` is temporary scaffolding: the full state is declared up front but
-// only `out` is consumed in Task 1. Removed in Task 2 once functions/stmts/exprs land.
+// `#[allow(dead_code)]` is temporary scaffolding: `funcs`/`classes`/`variants`/
+// `variant_fields` are populated by `collect` but not *read* until call dispatch (Task 4)
+// and match binding (Task 6). Removed once every field is consumed.
 #[allow(dead_code)]
 struct Transpiler {
     funcs: HashSet<String>,
@@ -62,19 +63,227 @@ impl Transpiler {
         }
     }
 
-    fn emit_program(&mut self, _program: &Program) -> Result<(), String> {
+    fn emit_program(&mut self, program: &Program) -> Result<(), String> {
         self.out.push_str("<?php\n");
+        for item in &program.items {
+            match item {
+                Item::Import { .. } => {}
+                Item::Function(f) => self.emit_function(f, false)?,
+                Item::Enum(e) => self.emit_enum(e)?,
+                Item::Class(c) => self.emit_class(c)?,
+            }
+        }
         Ok(())
     }
 
-    /// Indentation-aware line writer (consumed from Task 2 onward).
-    #[allow(dead_code)]
+    /// Indentation-aware line writer.
     fn line(&mut self, s: &str) {
         for _ in 0..self.indent {
             self.out.push_str("    ");
         }
         self.out.push_str(s);
         self.out.push('\n');
+    }
+
+    fn push_scope(&mut self) {
+        self.locals.push(HashSet::new());
+    }
+    fn pop_scope(&mut self) {
+        self.locals.pop();
+    }
+    fn declare(&mut self, name: &str) {
+        if let Some(s) = self.locals.last_mut() {
+            s.insert(name.to_string());
+        }
+    }
+    fn is_local(&self, name: &str) -> bool {
+        self.locals.iter().any(|s| s.contains(name))
+    }
+
+    fn emit_type(ty: &Type) -> String {
+        match ty {
+            Type::Named { name, .. } => match name.as_str() {
+                "int" => "int".into(),
+                "float" => "float".into(),
+                "bool" => "bool".into(),
+                "string" => "string".into(),
+                "List" | "Map" | "Set" => "array".into(),
+                other => other.to_string(), // enum / class name
+            },
+            // Optional types are a deferred corner the checker already rejects; be defensive.
+            _ => "mixed".into(),
+        }
+    }
+
+    fn ret_hint(ret: &Option<Type>) -> String {
+        match ret {
+            Some(t) => Self::emit_type(t),
+            None => "void".into(),
+        }
+    }
+
+    fn emit_function(&mut self, f: &FunctionDecl, _is_method: bool) -> Result<(), String> {
+        let params: Vec<String> = f
+            .params
+            .iter()
+            .map(|p| format!("{} ${}", Self::emit_type(&p.ty), p.name))
+            .collect();
+        self.line(&format!("function {}({}): {} {{", f.name, params.join(", "), Self::ret_hint(&f.ret)));
+        self.indent += 1;
+        self.push_scope();
+        for p in &f.params {
+            self.declare(&p.name);
+        }
+        for s in &f.body {
+            self.emit_stmt(s)?;
+        }
+        self.pop_scope();
+        self.indent -= 1;
+        self.line("}");
+        Ok(())
+    }
+
+    // Stubs replaced in Task 4 (enums) / Task 5 (classes). Present so `emit_program`
+    // compiles; Task 2 tests contain no enums/classes so these are never reached.
+    fn emit_enum(&mut self, _e: &EnumDecl) -> Result<(), String> {
+        Err("transpile error: enums implemented in Task 4".into())
+    }
+    fn emit_class(&mut self, _c: &ClassDecl) -> Result<(), String> {
+        Err("transpile error: classes implemented in Task 5".into())
+    }
+
+    fn emit_stmt(&mut self, s: &Stmt) -> Result<(), String> {
+        match s {
+            Stmt::VarDecl { name, init, .. } => {
+                let e = self.emit_expr(init)?;
+                self.declare(name);
+                self.line(&format!("${name} = {e};"));
+            }
+            Stmt::Return { value, .. } => match value {
+                Some(e) => {
+                    let s = self.emit_expr(e)?;
+                    self.line(&format!("return {s};"));
+                }
+                None => self.line("return;"),
+            },
+            Stmt::If { cond, then_block, else_block, .. } => {
+                let c = self.emit_expr(cond)?;
+                self.line(&format!("if ({c}) {{"));
+                self.indent += 1;
+                self.push_scope();
+                for st in then_block {
+                    self.emit_stmt(st)?;
+                }
+                self.pop_scope();
+                self.indent -= 1;
+                if let Some(eb) = else_block {
+                    self.line("} else {");
+                    self.indent += 1;
+                    self.push_scope();
+                    for st in eb {
+                        self.emit_stmt(st)?;
+                    }
+                    self.pop_scope();
+                    self.indent -= 1;
+                }
+                self.line("}");
+            }
+            Stmt::For { name, iter, body, .. } => {
+                let it = self.emit_expr(iter)?;
+                self.line(&format!("foreach ({it} as ${name}) {{"));
+                self.indent += 1;
+                self.push_scope();
+                self.declare(name);
+                for st in body {
+                    self.emit_stmt(st)?;
+                }
+                self.pop_scope();
+                self.indent -= 1;
+                self.line("}");
+            }
+            Stmt::Block(stmts, _) => {
+                self.line("{");
+                self.indent += 1;
+                self.push_scope();
+                for st in stmts {
+                    self.emit_stmt(st)?;
+                }
+                self.pop_scope();
+                self.indent -= 1;
+                self.line("}");
+            }
+            Stmt::Expr(e, _) => {
+                let s = self.emit_expr(e)?;
+                self.line(&format!("{s};"));
+            }
+        }
+        Ok(())
+    }
+
+    fn emit_expr(&mut self, e: &Expr) -> Result<String, String> {
+        match e {
+            Expr::Int(n, _) => Ok(n.to_string()),
+            Expr::Float(x, _) => Ok(format!("{x:?}")), // 12.0 -> "12.0"
+            Expr::Bool(b, _) => Ok(if *b { "true".into() } else { "false".into() }),
+            Expr::Ident(name, _) => Ok(self.resolve_ident(name)),
+            Expr::This(_) => Ok("$this".into()),
+            Expr::Unary { op, expr, .. } => {
+                let inner = self.emit_expr(expr)?;
+                let sym = match op {
+                    UnaryOp::Neg => "-",
+                    UnaryOp::Not => "!",
+                };
+                Ok(format!("{sym}{inner}"))
+            }
+            Expr::Binary { op, lhs, rhs, .. } => {
+                if matches!(op, BinaryOp::Is | BinaryOp::Pipe) {
+                    return Err("transpile error: `is`/`|>` operators are not yet supported".into());
+                }
+                let l = self.emit_expr(lhs)?;
+                let r = self.emit_expr(rhs)?;
+                Ok(format!("{l} {} {r}", Self::binop(op)))
+            }
+            Expr::List(items, _) => {
+                let parts: Result<Vec<_>, _> = items.iter().map(|i| self.emit_expr(i)).collect();
+                Ok(format!("[{}]", parts?.join(", ")))
+            }
+            Expr::Null(_) => Err("transpile error: null is not yet supported".into()),
+            Expr::Index { .. } => Err("transpile error: indexing is not yet supported".into()),
+            // Implemented in Tasks 3–6:
+            Expr::Str(..) | Expr::Call { .. } | Expr::Member { .. } | Expr::Match { .. } => {
+                Err("transpile error: implemented in a later task".into())
+            }
+        }
+    }
+
+    fn binop(op: &BinaryOp) -> &'static str {
+        use BinaryOp::*;
+        match op {
+            Add => "+",
+            Sub => "-",
+            Mul => "*",
+            Div => "/",
+            Rem => "%",
+            Eq => "==",
+            NotEq => "!=",
+            Lt => "<",
+            Le => "<=",
+            Gt => ">",
+            Ge => ">=",
+            And => "&&",
+            Or => "||",
+            Is | Pipe => unreachable!("Is/Pipe handled before binop()"),
+        }
+    }
+
+    fn resolve_ident(&self, name: &str) -> String {
+        if self.is_local(name) {
+            format!("${name}")
+        } else if self.cur_class_fields.as_ref().is_some_and(|f| f.contains(name)) {
+            format!("$this->{name}")
+        } else {
+            format!("${name}") // best-effort; the checker guarantees resolution
+        }
     }
 }
 
@@ -93,5 +302,35 @@ mod tests {
     #[test]
     fn empty_program_emits_php_open_tag() {
         assert_eq!(php(""), "<?php\n");
+    }
+
+    #[test]
+    fn free_function_with_params_and_arithmetic() {
+        let out = php("function add(int a, int b) -> int { int c = a + b; return c; }");
+        assert!(out.contains("function add(int $a, int $b): int {"), "{out}");
+        assert!(out.contains("$c = $a + $b;"), "{out}");
+        assert!(out.contains("return $c;"), "{out}");
+    }
+
+    #[test]
+    fn no_return_type_is_void() {
+        let out = php("function f() { return; }");
+        assert!(out.contains("function f(): void {"), "{out}");
+    }
+
+    #[test]
+    fn if_and_for_and_unary() {
+        // Phorge is immutable (no reassignment) — use fresh var decls inside branches.
+        let out = php(
+            "function f(int n) -> int { \
+               List<int> xs = [1, 2]; \
+               for (int x in xs) { if (x > 0) { int a = -x; } else { bool b = !true; } } \
+               return n; }",
+        );
+        assert!(out.contains("foreach ($xs as $x) {"), "{out}");
+        assert!(out.contains("if ($x > 0) {"), "{out}");
+        assert!(out.contains("} else {"), "{out}");
+        assert!(out.contains("$a = -$x;") && out.contains("$b = !true;"), "{out}");
+        assert!(out.contains("[1, 2]"), "{out}");
     }
 }
