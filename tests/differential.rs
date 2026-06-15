@@ -48,14 +48,59 @@ fn p2_programs_match_between_backends() {
     }
 }
 
+/// P3 surface: user function calls, recursion, mutual recursion, void functions, returns in
+/// branches, nested calls, float-returning functions, and calls as statements. Each must run
+/// identically on both backends.
+const P3_PROGRAMS: &[&str] = &[
+    // single call used in interpolation
+    r#"function inc(int n) -> int { return n + 1; } function main() { println("{inc(41)}"); }"#,
+    // multiple params + call inside arithmetic
+    r#"function add(int a, int b) -> int { return a + b; }
+       function main() { println("{add(2, 3) * 10}"); }"#,
+    // recursion (classic fib)
+    r#"function fib(int n) -> int {
+           if (n < 2) { return n; }
+           return fib(n - 1) + fib(n - 2);
+       }
+       function main() { println("{fib(12)}"); }"#,
+    // return in a branch vs fall-through
+    r#"function sign(int n) -> int { if (n < 0) { return -1; } return 1; }
+       function main() { println("{sign(-9)}"); println("{sign(4)}"); }"#,
+    // mutual recursion (forward reference: isEven calls isOdd declared later)
+    r#"function isEven(int n) -> bool { if (n == 0) { return true; } return isOdd(n - 1); }
+       function isOdd(int n) -> bool { if (n == 0) { return false; } return isEven(n - 1); }
+       function main() { println("{isEven(10)}"); println("{isOdd(7)}"); }"#,
+    // nested calls
+    r#"function sq(int n) -> int { return n * n; }
+       function main() { println("{sq(sq(2))}"); }"#,
+    // float-returning function in float arithmetic
+    r#"function half(float x) -> float { return x / 2.0; }
+       function main() { println("{half(5.0) + 1.0}"); }"#,
+    // void function (no return type) called for its side effect
+    r#"function greet(string who) { println("hi, {who}"); }
+       function main() { greet("Phorge"); greet("world"); }"#,
+    // call used as a statement (return value discarded)
+    r#"function noisy(int n) -> int { println("got {n}"); return n; }
+       function main() { noisy(42); println("done"); }"#,
+];
+
 #[test]
-fn examples_that_are_p2_compatible_match() {
-    // `examples/hello.phg` is P2-compatible; `examples/fib.phg` and the Shape/area sample
-    // use user function calls / enums (P3/P4), so the full examples sweep arrives in P6.
-    // This test documents the boundary explicitly.
+fn p3_programs_match_between_backends() {
+    for src in P3_PROGRAMS {
+        agree(src);
+    }
+}
+
+#[test]
+fn examples_match_between_backends() {
+    // `examples/hello.phg` (P2) and `examples/fib.phg` (P3 recursion) both run on the VM.
+    // `examples/grades.phg` and the Shape/area sample use enums/classes/`match` (P4), so the
+    // full examples sweep arrives in P6. This test documents the boundary explicitly.
     agree(r#"import std.io;
 
 function main() {
     println("Hello, Phorge!");
 }"#);
+    let fib = std::fs::read_to_string("examples/fib.phg").expect("read examples/fib.phg");
+    agree(&fib);
 }
