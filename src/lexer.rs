@@ -138,6 +138,7 @@ fn keyword(s: &str) -> Option<TokenKind> {
         "return" => Return, "if" => If, "else" => Else, "for" => For, "in" => In,
         "match" => Match, "import" => Import, "this" => This,
         "true" => True, "false" => False, "null" => Null, "new" => New,
+        "is" => Is,
         _ => return None,
     })
 }
@@ -324,6 +325,14 @@ mod tests {
         );
         assert_eq!(kinds("age myVar User _x"),
             vec![Ident("age".into()), Ident("myVar".into()), Ident("User".into()), Ident("_x".into()), Eof]);
+    }
+
+    #[test]
+    fn is_keyword_is_recognized() {
+        use TokenKind::*;
+        assert_eq!(kinds("is"), vec![Is, Eof]);
+        // still an ident when part of a longer word
+        assert_eq!(kinds("island"), vec![Ident("island".into()), Eof]);
     }
 
     #[test]

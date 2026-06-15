@@ -17,7 +17,7 @@ pub enum TokenKind {
     Function, Class, Enum, Constructor, Trait,
     Const, Final, Public, Private, Protected,
     Return, If, Else, For, In, Match, Import,
-    This, True, False, Null, New,
+    This, True, False, Null, New, Is,
     // punctuation / operators
     Dot, Semicolon, Comma, Colon, Question, Arrow, FatArrow, Pipe,
     LParen, RParen, LBrace, RBrace, LBracket, RBracket,
