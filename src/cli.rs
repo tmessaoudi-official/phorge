@@ -45,8 +45,8 @@ pub fn cmd_run(src: &str) -> Result<String, String> {
 /// The bytecode backend; must produce byte-identical output to `cmd_run` (differential).
 pub fn cmd_runvm(src: &str) -> Result<String, String> {
     let prog = parse_checked(src)?;
-    let chunk = compile(&prog).map_err(|e| format!("compile error: {e}"))?;
-    Vm::new(&chunk).run().map_err(|e| format!("runtime error: {e}"))
+    let program = compile(&prog).map_err(|e| format!("compile error: {e}"))?;
+    Vm::new(&program).run().map_err(|e| format!("runtime error: {e}"))
 }
 
 /// `check`: lex -> parse -> check; report success or the type errors.

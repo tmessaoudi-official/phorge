@@ -6,30 +6,60 @@
 //! `interpreter`'s `RuntimeError.message`; the future `cmd_runvm` adds the prefix, keeping
 //! error parity with `cmd_run`.
 
-use crate::chunk::{Chunk, Op};
+use crate::chunk::{BytecodeProgram, Op};
 use crate::value::Value;
 
+/// Cap on call-frame depth. Exceeding it is a clean `"stack overflow"` runtime error rather
+/// than an OOM/abort (decision P3-4). Generous — real recursion is far shallower.
+const MAX_FRAMES: usize = 64 * 1024;
+
+/// A live call frame: which function, the instruction pointer into its chunk, and the index
+/// in the value stack where this frame's locals window begins (decision P3-1).
+struct Frame {
+    func: usize,
+    ip: usize,
+    slot_base: usize,
+}
+
 pub struct Vm<'a> {
-    chunk: &'a Chunk,
+    program: &'a BytecodeProgram,
     stack: Vec<Value>,
+    frames: Vec<Frame>,
     out: String,
 }
 
 impl<'a> Vm<'a> {
-    pub fn new(chunk: &'a Chunk) -> Self {
-        Self { chunk, stack: Vec::new(), out: String::new() }
+    pub fn new(program: &'a BytecodeProgram) -> Self {
+        Self { program, stack: Vec::new(), frames: Vec::new(), out: String::new() }
     }
 
-    /// Execute the chunk, returning captured output (`Ok`) or a runtime error (`Err`).
+    /// Execute the program from `main`, returning captured output (`Ok`) or a runtime
+    /// error (`Err`).
     pub fn run(mut self) -> Result<String, String> {
-        let mut ip = 0;
-        while ip < self.chunk.code.len() {
-            // Clone the op (cheap) so we don't hold a borrow of `self.chunk` across the
+        self.frames.push(Frame { func: self.program.main, ip: 0, slot_base: 0 });
+        loop {
+            let fr = self.frames.len() - 1;
+            let func = self.frames[fr].func;
+            let ip = self.frames[fr].ip;
+            let code = &self.program.functions[func].chunk.code;
+            if ip >= code.len() {
+                // The compiler emits a trailing `Return` for every function (P3-7); reaching
+                // the end without one is a compiler bug — treat as an implicit `Unit` return.
+                self.do_return(Value::Unit);
+                if self.frames.is_empty() {
+                    return Ok(self.out);
+                }
+                continue;
+            }
+            // Clone the op (cheap) so we don't hold a borrow of `self.program` across the
             // mutable stack operations below.
-            let op = self.chunk.code[ip].clone();
-            ip += 1;
+            let op = code[ip].clone();
+            self.frames[fr].ip += 1;
             match op {
-                Op::Const(i) => self.stack.push(self.chunk.consts[i].clone()),
+                Op::Const(i) => {
+                    let v = self.program.functions[func].chunk.consts[i].clone();
+                    self.stack.push(v);
+                }
 
                 Op::AddI => {
                     let (a, b) = self.pop2_int()?;
@@ -109,17 +139,19 @@ impl<'a> Vm<'a> {
                     self.pop();
                 }
                 Op::GetLocal(slot) => {
-                    let v = self.stack[slot].clone();
+                    let base = self.frames[fr].slot_base;
+                    let v = self.stack[base + slot].clone();
                     self.stack.push(v);
                 }
                 Op::SetLocal(slot) => {
+                    let base = self.frames[fr].slot_base;
                     let v = self.pop();
-                    self.stack[slot] = v;
+                    self.stack[base + slot] = v;
                 }
 
-                Op::Jump(target) => ip = target,
+                Op::Jump(target) => self.frames[fr].ip = target,
                 Op::JumpIfFalse(target) => match self.pop() {
-                    Value::Bool(false) => ip = target,
+                    Value::Bool(false) => self.frames[fr].ip = target,
                     Value::Bool(true) => {}
                     v => return Err(format!("expected bool, found {}", v.type_name())),
                 },
@@ -182,10 +214,35 @@ impl<'a> Vm<'a> {
                     self.out.push('\n');
                 }
 
-                Op::Return => return Ok(self.out),
+                Op::Call(idx) => {
+                    if self.frames.len() >= MAX_FRAMES {
+                        return Err("stack overflow".to_string());
+                    }
+                    let arity = self.program.functions[idx].arity;
+                    let slot_base = self.stack.len() - arity;
+                    self.frames.push(Frame { func: idx, ip: 0, slot_base });
+                }
+
+                Op::Return => {
+                    let rv = self.pop();
+                    self.do_return(rv);
+                    if self.frames.is_empty() {
+                        return Ok(self.out);
+                    }
+                }
             }
         }
-        Ok(self.out)
+    }
+
+    /// Unwind the current frame: truncate its locals window and pop it; if a caller remains,
+    /// push the return value onto the caller's stack (decision P3-2).
+    fn do_return(&mut self, rv: Value) {
+        let base = self.frames[self.frames.len() - 1].slot_base;
+        self.stack.truncate(base);
+        self.frames.pop();
+        if !self.frames.is_empty() {
+            self.stack.push(rv);
+        }
     }
 
     fn pop(&mut self) -> Value {
@@ -263,8 +320,24 @@ fn compare(op: &Op, a: &Value, b: &Value) -> Result<bool, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chunk::{Chunk, Op};
+    use crate::chunk::{BytecodeProgram, Chunk, Function, Op};
     use crate::value::Value;
+
+    /// Emit the standard function terminator: push `Unit`, then `Return` (P3-7).
+    fn term(c: &mut Chunk) {
+        let u = c.add_const(Value::Unit);
+        c.emit(Op::Const(u), 1);
+        c.emit(Op::Return, 1);
+    }
+
+    /// Wrap a single hand-built chunk as `main` and run it.
+    fn run_chunk(chunk: Chunk) -> Result<String, String> {
+        let program = BytecodeProgram {
+            functions: vec![Function { name: "main".into(), arity: 0, chunk }],
+            main: 0,
+        };
+        Vm::new(&program).run()
+    }
 
     /// Build a chunk for `2 * 3 + 4` then print it.
     fn arith_chunk() -> Chunk {
@@ -278,13 +351,13 @@ mod tests {
         c.emit(Op::Const(four), 1);
         c.emit(Op::AddI, 1);
         c.emit(Op::Print(1), 1);
-        c.emit(Op::Return, 1);
+        term(&mut c);
         c
     }
 
     #[test]
     fn runs_integer_arithmetic_and_prints() {
-        let out = Vm::new(&arith_chunk()).run().unwrap();
+        let out = run_chunk(arith_chunk()).unwrap();
         assert_eq!(out, "10\n");
     }
 
@@ -298,8 +371,8 @@ mod tests {
         c.emit(Op::Const(b), 1);
         c.emit(Op::AddF, 1);
         c.emit(Op::Print(1), 1);
-        c.emit(Op::Return, 1);
-        assert_eq!(Vm::new(&c).run().unwrap(), "4\n");
+        term(&mut c);
+        assert_eq!(run_chunk(c).unwrap(), "4\n");
     }
 
     #[test]
@@ -310,8 +383,8 @@ mod tests {
         c.emit(Op::Const(a), 1);
         c.emit(Op::Const(z), 1);
         c.emit(Op::DivI, 1);
-        c.emit(Op::Return, 1);
-        let err = Vm::new(&c).run().unwrap_err();
+        term(&mut c);
+        let err = run_chunk(c).unwrap_err();
         assert!(err.contains("division by zero"), "{err}");
     }
 
@@ -322,8 +395,8 @@ mod tests {
         c.emit(Op::Const(a), 1);
         c.emit(Op::Neg, 1);
         c.emit(Op::Print(1), 1);
-        c.emit(Op::Return, 1);
-        assert_eq!(Vm::new(&c).run().unwrap(), "-5\n");
+        term(&mut c);
+        assert_eq!(run_chunk(c).unwrap(), "-5\n");
     }
 
     #[test]
@@ -336,8 +409,8 @@ mod tests {
         c.emit(Op::Const(b), 1);
         c.emit(Op::Lt, 1);
         c.emit(Op::Print(1), 1);
-        c.emit(Op::Return, 1);
-        assert_eq!(Vm::new(&c).run().unwrap(), "true\n");
+        term(&mut c);
+        assert_eq!(run_chunk(c).unwrap(), "true\n");
     }
 
     #[test]
@@ -353,8 +426,8 @@ mod tests {
         c.emit(Op::SetLocal(0), 1);
         c.emit(Op::GetLocal(0), 1);
         c.emit(Op::Print(1), 1);
-        c.emit(Op::Return, 1);
-        assert_eq!(Vm::new(&c).run().unwrap(), "15\n");
+        term(&mut c);
+        assert_eq!(run_chunk(c).unwrap(), "15\n");
     }
 
     #[test]
@@ -374,11 +447,11 @@ mod tests {
         let else_target = c.code.len(); // 5
         c.emit(Op::Const(two), 1); // 5
         c.emit(Op::Print(1), 1); // 6
-        let end = c.code.len(); // 7
-        c.emit(Op::Return, 1); // 7
+        let end = c.code.len(); // 7 (start of the terminator)
+        term(&mut c); // 7..9
         c.code[jif] = Op::JumpIfFalse(else_target);
         c.code[jend] = Op::Jump(end);
-        assert_eq!(Vm::new(&c).run().unwrap(), "2\n");
+        assert_eq!(run_chunk(c).unwrap(), "2\n");
     }
 
     #[test]
@@ -391,8 +464,8 @@ mod tests {
         c.emit(Op::Const(seven), 1);
         c.emit(Op::Concat(2), 1);
         c.emit(Op::Print(1), 1);
-        c.emit(Op::Return, 1);
-        assert_eq!(Vm::new(&c).run().unwrap(), "x=7\n");
+        term(&mut c);
+        assert_eq!(run_chunk(c).unwrap(), "x=7\n");
     }
 
     #[test]
@@ -414,8 +487,8 @@ mod tests {
         c.emit(Op::Const(one), 1);
         c.emit(Op::Index, 1);
         c.emit(Op::Print(1), 1);
-        c.emit(Op::Return, 1);
-        assert_eq!(Vm::new(&c).run().unwrap(), "3\n20\n");
+        term(&mut c);
+        assert_eq!(run_chunk(c).unwrap(), "3\n20\n");
     }
 
     #[test]
@@ -426,7 +499,31 @@ mod tests {
         c.emit(Op::Const(a), 1);
         c.emit(Op::Const(b), 1);
         c.emit(Op::Print(2), 1);
-        c.emit(Op::Return, 1);
-        assert_eq!(Vm::new(&c).run().unwrap(), "a 1\n");
+        term(&mut c);
+        assert_eq!(run_chunk(c).unwrap(), "a 1\n");
+    }
+
+    #[test]
+    fn call_runs_a_second_function_and_returns() {
+        // main: push 7, Call(1), Print(1), term.   f(x): GetLocal(0), Return.
+        let mut m = Chunk::new();
+        let seven = m.add_const(Value::Int(7));
+        m.emit(Op::Const(seven), 1);
+        m.emit(Op::Call(1), 1);
+        m.emit(Op::Print(1), 1);
+        term(&mut m);
+
+        let mut f = Chunk::new();
+        f.emit(Op::GetLocal(0), 1); // the single arg
+        f.emit(Op::Return, 1);
+
+        let program = BytecodeProgram {
+            functions: vec![
+                Function { name: "main".into(), arity: 0, chunk: m },
+                Function { name: "f".into(), arity: 1, chunk: f },
+            ],
+            main: 0,
+        };
+        assert_eq!(Vm::new(&program).run().unwrap(), "7\n");
     }
 }

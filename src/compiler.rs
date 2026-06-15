@@ -8,9 +8,10 @@
 //! clean compile error until implemented. Lists are inline `Value::List` in P2; they
 //! migrate to the arena heap at P4.
 
-use crate::ast::{BinaryOp, Expr, Item, Program, Stmt, StrPart, Type, UnaryOp};
-use crate::chunk::{Chunk, Op};
+use crate::ast::{BinaryOp, Expr, FunctionDecl, Item, Program, Stmt, StrPart, Type, UnaryOp};
+use crate::chunk::{BytecodeProgram, Chunk, Function, Op};
 use crate::value::Value;
+use std::collections::HashMap;
 
 /// Numeric operand kind, inferred just enough to pick int- vs float-specialized
 /// arithmetic ops (decision P2-6).
@@ -28,31 +29,59 @@ struct Local {
     depth: u32,
 }
 
-struct Compiler {
+/// Per-function metadata gathered in the pre-pass: its index in `BytecodeProgram.functions`
+/// and its declared return-type name (for `num_ty` of a call result — decision P3-6).
+struct FnMeta {
+    index: usize,
+    ret: String,
+}
+
+struct Compiler<'a> {
     chunk: Chunk,
     locals: Vec<Local>,
     scope_depth: u32,
+    fns: &'a HashMap<String, FnMeta>,
 }
 
-/// Compile a whole program to a single `Chunk`. P2 compiles the body of `main`; other
-/// declarations are ignored (no user calls yet). The chunk ends in `Return`.
-pub fn compile(program: &Program) -> Result<Chunk, String> {
-    let main = program
-        .items
-        .iter()
-        .find_map(|it| match it {
-            Item::Function(f) if f.name == "main" => Some(f),
-            _ => None,
-        })
+/// Compile a whole program: a pre-pass indexes every top-level function (so calls — including
+/// forward references and recursion — resolve to a static index), then each function body is
+/// compiled into its own `Chunk`. Parameters occupy slots `0..arity` at the base of the frame
+/// window; every function ends with an implicit `Unit` return (P3-7).
+pub fn compile(program: &Program) -> Result<BytecodeProgram, String> {
+    let mut order: Vec<&FunctionDecl> = Vec::new();
+    let mut fns: HashMap<String, FnMeta> = HashMap::new();
+    for it in &program.items {
+        if let Item::Function(f) = it {
+            fns.insert(
+                f.name.clone(),
+                FnMeta {
+                    index: order.len(),
+                    ret: f.ret.as_ref().map_or_else(|| "unit".to_string(), type_name),
+                },
+            );
+            order.push(f);
+        }
+    }
+    let main = fns
+        .get("main")
+        .map(|m| m.index)
         .ok_or_else(|| "no `main` function".to_string())?;
 
-    let mut c = Compiler { chunk: Chunk::new(), locals: Vec::new(), scope_depth: 0 };
-    let last_line = main.span.line;
-    for s in &main.body {
-        c.stmt(s)?;
+    let mut functions = Vec::with_capacity(order.len());
+    for f in &order {
+        let mut c = Compiler { chunk: Chunk::new(), locals: Vec::new(), scope_depth: 0, fns: &fns };
+        for p in &f.params {
+            c.add_local(&p.name, &type_name(&p.ty));
+        }
+        let last_line = f.span.line;
+        for s in &f.body {
+            c.stmt(s)?;
+        }
+        c.emit_const(Value::Unit, last_line);
+        c.emit(Op::Return, last_line);
+        functions.push(Function { name: f.name.clone(), arity: f.params.len(), chunk: c.chunk });
     }
-    c.emit(Op::Return, last_line);
-    Ok(c.chunk)
+    Ok(BytecodeProgram { functions, main })
 }
 
 /// The declared type name of a `Type` annotation (the head identifier).
@@ -63,7 +92,7 @@ fn type_name(ty: &Type) -> String {
     }
 }
 
-impl Compiler {
+impl<'a> Compiler<'a> {
     fn emit(&mut self, op: Op, line: u32) {
         self.chunk.emit(op, line);
     }
@@ -138,6 +167,18 @@ impl Compiler {
             }
             Expr::Unary { expr, .. } => self.num_ty(expr),
             Expr::Binary { lhs, .. } => self.num_ty(lhs),
+            Expr::Call { callee, .. } => {
+                if let Expr::Ident(name, _) = &**callee {
+                    if let Some(meta) = self.fns.get(name) {
+                        return match meta.ret.as_str() {
+                            "int" => Ok(NumTy::Int),
+                            "float" => Ok(NumTy::Float),
+                            other => Err(format!("`{name}` returns `{other}`, not numeric")),
+                        };
+                    }
+                }
+                Err(format!("cannot infer numeric type of {e:?}"))
+            }
             other => Err(format!("cannot infer numeric type of {other:?}")),
         }
     }
@@ -156,10 +197,9 @@ impl Compiler {
                 Ok(())
             }
             Stmt::Return { value, span } => {
-                // P2 only `main`; `Return` ends the program (the VM discards the stack).
-                if let Some(e) = value {
-                    self.expr(e)?;
-                    self.emit(Op::Pop, span.line);
+                match value {
+                    Some(e) => self.expr(e)?,
+                    None => self.emit_const(Value::Unit, span.line),
                 }
                 self.emit(Op::Return, span.line);
                 Ok(())
@@ -339,8 +379,17 @@ impl Compiler {
                 self.emit_const(Value::Unit, line);
                 return Ok(());
             }
+            if let Some(meta) = self.fns.get(name) {
+                for a in args {
+                    self.expr(a)?;
+                }
+                self.emit(Op::Call(meta.index), line);
+                return Ok(());
+            }
+            // A non-function, non-`println` identifier call is an enum variant or class
+            // constructor — those land at P4.
             return Err(format!(
-                "calling `{name}` is not supported by the VM compiler yet (M2 P3)"
+                "calling `{name}` is not supported by the VM compiler yet (M2 P4)"
             ));
         }
         Err("method calls are not supported by the VM compiler yet (M2 P4)".into())
@@ -434,8 +483,8 @@ mod tests {
     fn run(src: &str) -> Result<String, String> {
         let tokens = lex(src).expect("lex ok");
         let prog = Parser::new(tokens).parse_program().expect("parse ok");
-        let chunk = compile(&prog)?;
-        Vm::new(&chunk).run()
+        let program = compile(&prog)?;
+        Vm::new(&program).run()
     }
 
     fn out(src: &str) -> String {
@@ -481,10 +530,26 @@ mod tests {
     }
 
     #[test]
-    fn user_call_is_rejected_cleanly() {
-        let src = r#"function f() -> int { return 1; } function main() { println("{f()}"); }"#;
+    fn user_function_call_runs() {
+        let src = r#"function inc(int n) -> int { return n + 1; } function main() { println("{inc(4)}"); }"#;
+        assert_eq!(out(src), "5\n");
+    }
+
+    #[test]
+    fn recursion_runs() {
+        let src = r#"function fib(int n) -> int {
+            if (n < 2) { return n; }
+            return fib(n - 1) + fib(n - 2);
+        } function main() { println("{fib(10)}"); }"#;
+        assert_eq!(out(src), "55\n");
+    }
+
+    #[test]
+    fn class_call_still_rejected_as_p4() {
+        // a name that is neither a function nor `println` is a variant/class → P4.
+        let src = r#"function main() { println("{Circle(2.0)}"); }"#;
         let e = run(src).unwrap_err();
-        assert!(e.contains("M2 P3"), "{e}");
+        assert!(e.contains("M2 P4"), "{e}");
     }
 
     #[test]

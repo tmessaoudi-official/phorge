@@ -55,7 +55,12 @@ pub enum Op {
     Len,
     /// Pop `n` values, space-join their `as_display`, append a line to output.
     Print(usize),
-    /// End execution, returning captured output.
+    /// Call `functions[idx]`: its args are already on top of the stack; the new frame's
+    /// local window opens at `stack.len() - functions[idx].arity` (decision P3-1, P3-3).
+    Call(usize),
+    /// Pop the return value, unwind the current frame (truncate its slot window), pop the
+    /// frame, push the return value onto the caller's stack. End execution when the last
+    /// (`main`) frame returns (decision P3-2).
     Return,
 }
 
@@ -86,6 +91,22 @@ impl Chunk {
     }
 }
 
+/// A compiled function: name, parameter count, and its own bytecode chunk. Each function
+/// owns its chunk so its jump targets and constant pool are self-contained (decision P3-1).
+#[derive(Debug, Clone)]
+pub struct Function {
+    pub name: String,
+    pub arity: usize,
+    pub chunk: Chunk,
+}
+
+/// A whole compiled program: every top-level function plus the index of `main`.
+#[derive(Debug, Clone)]
+pub struct BytecodeProgram {
+    pub functions: Vec<Function>,
+    pub main: usize,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -106,5 +127,17 @@ mod tests {
         c.emit(Op::Return, 2);
         assert_eq!(c.code.len(), 2);
         assert_eq!(c.lines, vec![1, 2]);
+    }
+
+    #[test]
+    fn bytecode_program_holds_functions_and_main_index() {
+        let mut c = Chunk::new();
+        c.emit(Op::Return, 1);
+        let prog = BytecodeProgram {
+            functions: vec![Function { name: "main".into(), arity: 0, chunk: c }],
+            main: 0,
+        };
+        assert_eq!(prog.functions[prog.main].name, "main");
+        assert_eq!(prog.functions[0].arity, 0);
     }
 }
