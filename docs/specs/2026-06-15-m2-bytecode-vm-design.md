@@ -45,7 +45,7 @@ source → lex → parse → check        (existing M1 front-end, unchanged)
 
 The compiler is a dedicated pass over the **type-checked** AST (decoupled; relies on the
 checker's guarantees but is *not* handed an annotated/typed AST — the checker validates without
-attaching types, so the compiler re-derives the little it needs via `num_ty`/`TyTag`) — **not** a
+attaching types, so the compiler re-derives the little it needs via `num_ty`/`CTy`) — **not** a
 clox-style fused parse+compile, because Phorge already
 has a separate parser/AST.
 
@@ -157,7 +157,7 @@ runtime binary (bun-compile style) to produce a standalone executable.
 | M2-3 | Bundling | Deferred to M2.5 (committed next slice) | Depends on a working VM; it is packaging, not VM learning; crisp M2 done-ness |
 | M2-4 | Heap / GC | Handle/arena heap + mark-sweep | Real tracing GC, no `unsafe`, idiomatic Rust |
 | M2-5 | Value representation | `enum Value` (tagged union) | Simple, safe; NaN-boxing parked for v2 |
-| M2-6 | Compiler structure | AST → bytecode emitter pass | Over the type-checked (un-annotated) AST; re-derives types via `num_ty`/`TyTag`; decoupled |
+| M2-6 | Compiler structure | AST → bytecode emitter pass | Over the type-checked (un-annotated) AST; re-derives types via `num_ty`/`CTy`; decoupled |
 | M2-7 | Instruction encoding | Typed `enum Instr` | Consistent with `enum Value`, no `unsafe`; same VM learning; raw bytes parked |
 | M2-8 | VM kind | Stack machine (clox-style frames) | Per language-spec §5; canonical learning target |
 | M2-9 | Concurrency / column-semantics | Parked out of M2 | Not in the current surface; revisit in M3 / LSP layer |

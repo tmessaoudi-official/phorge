@@ -66,9 +66,10 @@ output varies with the hash seed. Live example: the non-exhaustive-`match` error
 sorts the missing-variant list. New diagnostics that enumerate map keys must do the same.
 
 ## 9. The AST is untyped; backends re-derive types
-The checker validates **without annotating** the AST. Backends that need a type re-derive it (the
-compiler via `compiler::TyTag` + `num_ty`). Don't assume a node carries a resolved type — full
-typed-AST threading is deferred to P4.
+The checker validates **without annotating** the AST. Backends that need a type re-derive it
+structurally from the declared `Type` annotations — the compiler via `compiler::CTy` + `ctype`/
+`num_ty` (M2 Wave 4 made this class-aware: `CTy::Class(name)` carries an instance's class so
+`obj.field`/`obj.m()`/class-typed payloads resolve). Don't assume a node carries a resolved type.
 
 ## 10. The quality gate is a compile-time + pre-commit invariant
 `#![forbid(unsafe_code)]` on both crate roots; `[lints] warnings = "deny"` + `clippy.all = "deny"`

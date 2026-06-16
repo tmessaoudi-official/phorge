@@ -32,43 +32,47 @@ enum NumTy {
     Float,
 }
 
-/// The compiler's coarse view of a declared type — enough to pick int- vs float-specialized
-/// arithmetic and give `num_ty` an *exhaustive* match (no stringly-typed compare). The checker has
-/// already verified full types; threading its richer `types::Ty` here — so list-element and
-/// arbitrary-instance field types are recoverable — is the deferred Wave 4 fix. `num_ty` can
-/// classify a `this.field`/bare field operand (via the current class's `field_tags`), but still
-/// can't classify a field read on an *arbitrary* instance or a `List` element (the local doesn't
-/// carry its class), nor an `Index` operand — those remain the coarse-`TyTag` gap.
-#[derive(Clone, Copy, PartialEq)]
-enum TyTag {
+/// The compiler's class-aware view of a declared type (M2 Wave 4). Derived *structurally* from the
+/// AST's declared `Type` annotations — the checker has already verified full types, so the compiler
+/// only re-derives the little it needs: the numeric head (to pick int- vs float-specialized
+/// arithmetic) and, for an instance, *which class* it is. Knowing the class lets `ctype` walk
+/// `obj.field` / `c.method()` / a class-typed enum payload to the underlying numeric type — closing
+/// the pre-Wave-4 gap where a field read on an arbitrary instance or a method result was
+/// unclassifiable. `Other` stays the catch-all for everything non-numeric/non-class (bool, string,
+/// unit, list, map, set, optional) — the compiler only needs to *reject* those as arithmetic
+/// operands, not tell them apart. List-element indexing stays out of the M1 surface, so a `List`
+/// local's element type is never an operand and needs no variant.
+#[derive(Clone, PartialEq)]
+enum CTy {
     Int,
     Float,
-    /// Any non-numeric or composite type (bool, string, unit, list, map, set, named, optional).
-    /// The compiler only needs to *reject* these as arithmetic operands, not tell them apart.
+    /// A class instance, carrying its class name so `ctype` can resolve `obj.field` / `obj.m()`.
+    Class(String),
     Other,
 }
 
-/// A declared local: its name, its coarse type tag (for `num_ty`), and the lexical depth it lives
-/// at (for scope cleanup). Its stack slot is its index in `locals`.
+/// A declared local: its name, its class-aware type (for `num_ty`/`ctype`), and the lexical depth
+/// it lives at (for scope cleanup). Its stack slot is its index in `locals`.
 struct Local {
     name: String,
-    ty: TyTag,
+    ty: CTy,
     depth: u32,
 }
 
 /// Per-function metadata gathered in the pre-pass: its index in `BytecodeProgram.functions`
-/// and its declared return-type tag (for `num_ty` of a call result — decision P3-6).
+/// and its declared return type (for `ctype` of a call result — decision P3-6). A class return
+/// type lets `f().field` resolve.
 struct FnMeta {
     index: usize,
-    ret: TyTag,
+    ret: CTy,
 }
 
 /// Per-variant metadata gathered in the pre-pass: its index into the `enum_descs` table (for
-/// `MakeEnum`/`MatchTag`) and the coarse type tag of each payload field (so a payload binding
-/// used in arithmetic resolves through `num_ty`). Decision P4-2.
+/// `MakeEnum`/`MatchTag`) and the class-aware type of each payload field (so a payload binding —
+/// including a class-typed one — resolves through `ctype`). Decision P4-2.
 struct VariantMeta {
     index: usize,
-    field_tags: Vec<TyTag>,
+    field_tags: Vec<CTy>,
 }
 
 /// A `match`-arm payload binding: the name, the slot of the hidden `$match` scrutinee local, and
@@ -79,7 +83,7 @@ struct MatchBinding {
     name: String,
     match_slot: usize,
     path: Vec<usize>,
-    ty: TyTag,
+    ty: CTy,
 }
 
 struct Compiler<'a> {
@@ -105,10 +109,20 @@ struct Compiler<'a> {
     /// method, the post-promotion instance slot for a constructor. `None` in a free function.
     /// `Expr::This` and a bare field read both load from this slot (decision P4-5/P4-6).
     this_slot: Option<usize>,
-    /// Field name → coarse type tag of the *current* class (empty outside a method/ctor). Lets a
+    /// Field name → class-aware type of the *current* class (empty outside a method/ctor). Lets a
     /// bare field name (`total`, resolved as `this.total`) work as an arithmetic operand and lets
-    /// `expr` lower it to `GetLocal(this) + GetField` when it isn't a local/param/binding.
-    field_tags: &'a HashMap<String, TyTag>,
+    /// `expr` lower it to `GetLocal(this) + GetField` when it isn't a local/param/binding. This is
+    /// exactly `class_field_ctys[cur_class]`, kept as a direct ref for the bare-field path.
+    field_tags: &'a HashMap<String, CTy>,
+    /// Program-wide class name → (field name → type) table (M2 Wave 4). `ctype` walks it to resolve
+    /// a field read on an *arbitrary* instance (`p.x`, `a.inner.x`), not just `this`.
+    class_field_ctys: &'a HashMap<String, HashMap<String, CTy>>,
+    /// Program-wide `(class, method) → return type` table (M2 Wave 4). `ctype` reads it to resolve
+    /// a method-call result (`c.get() + 1`).
+    method_rets: &'a HashMap<(String, String), CTy>,
+    /// The class whose body is being compiled (a method or constructor), or `None` in a free
+    /// function. `ctype(This)` resolves to `Class(cur_class)`.
+    cur_class: Option<String>,
     /// Active `match`-arm bindings (a stack; innermost shadows). Populated while compiling an arm
     /// body, truncated after.
     match_bindings: Vec<MatchBinding>,
@@ -148,7 +162,7 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
                     f.name.clone(),
                     FnMeta {
                         index: order.len(),
-                        ret: f.ret.as_ref().map_or(TyTag::Other, type_tag),
+                        ret: f.ret.as_ref().map_or(CTy::Other, resolve_cty),
                     },
                 );
                 order.push(f);
@@ -159,7 +173,7 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
                         v.name.clone(),
                         VariantMeta {
                             index: enum_descs.len(),
-                            field_tags: v.fields.iter().map(|p| type_tag(&p.ty)).collect(),
+                            field_tags: v.fields.iter().map(|p| resolve_cty(&p.ty)).collect(),
                         },
                     );
                     enum_descs.push(EnumDesc {
@@ -191,7 +205,9 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
     let nclasses = class_decls.len();
     let mut classes: HashMap<String, usize> = HashMap::new();
     let mut class_descs: Vec<ClassDesc> = Vec::new();
-    let mut class_field_tags: Vec<HashMap<String, TyTag>> = Vec::new();
+    // Program-wide field-type table, keyed by class *name* so `ctype` can resolve a field read on
+    // any instance (not just `this`) — `obj.field` looks up `class_field_ctys[class_of(obj)][field]`.
+    let mut class_field_ctys: HashMap<String, HashMap<String, CTy>> = HashMap::new();
     let mut names: Vec<String> = Vec::new();
     let mut names_index: HashMap<String, usize> = HashMap::new();
     let mut intern = |name: &str, names: &mut Vec<String>| {
@@ -204,19 +220,19 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
         classes.insert(c.name.clone(), nfree + ci);
         let (params, _) = ctor_parts(c);
         let mut fields: Vec<String> = Vec::new();
-        let mut tags: HashMap<String, TyTag> = HashMap::new();
+        let mut tags: HashMap<String, CTy> = HashMap::new();
         for p in params {
             if is_promoted(p) {
                 fields.push(p.name.clone());
                 intern(&p.name, &mut names);
-                tags.insert(p.name.clone(), type_tag(&p.ty));
+                tags.insert(p.name.clone(), resolve_cty(&p.ty));
             }
         }
         for m in &c.members {
             match m {
                 ClassMember::Field { name, ty, .. } => {
                     intern(name, &mut names); // readable, but unpopulated by construction
-                    tags.insert(name.clone(), type_tag(ty));
+                    tags.insert(name.clone(), resolve_cty(ty));
                 }
                 ClassMember::Method(f) => intern(&f.name, &mut names),
                 ClassMember::Constructor { .. } => {}
@@ -226,19 +242,25 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             class: c.name.clone(),
             fields,
         });
-        class_field_tags.push(tags);
+        class_field_ctys.insert(c.name.clone(), tags);
     }
     // `intern`'s unique borrow of `names_index` ends at its last call above (NLL), so the
     // immutable `&names_index` borrows below are free.
 
-    // Methods follow the constructors in the index space; build the dispatch table in lockstep.
+    // Methods follow the constructors in the index space; build the dispatch table — and the
+    // `(class, method) → return type` table `ctype` reads for a method-call result — in lockstep.
     let mut methods: HashMap<(String, String), usize> = HashMap::new();
+    let mut method_rets: HashMap<(String, String), CTy> = HashMap::new();
     let mut methods_to_compile: Vec<(usize, &FunctionDecl)> = Vec::new();
     let mut next_idx = nfree + nclasses;
     for (ci, c) in class_decls.iter().enumerate() {
         for m in &c.members {
             if let ClassMember::Method(f) = m {
                 methods.insert((c.name.clone(), f.name.clone()), next_idx);
+                method_rets.insert(
+                    (c.name.clone(), f.name.clone()),
+                    f.ret.as_ref().map_or(CTy::Other, resolve_cty),
+                );
                 methods_to_compile.push((ci, f));
                 next_idx += 1;
             }
@@ -257,7 +279,7 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
     }
 
     // Free functions have no enclosing class, so no `this` and no field scope.
-    let empty_fields: HashMap<String, TyTag> = HashMap::new();
+    let empty_fields: HashMap<String, CTy> = HashMap::new();
     let mut functions = Vec::with_capacity(next_idx);
     for f in &order {
         let mut c = Compiler::new(
@@ -269,9 +291,11 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             &class_descs,
             &names_index,
             &empty_fields,
+            &class_field_ctys,
+            &method_rets,
         );
         for p in &f.params {
-            c.add_local(&p.name, type_tag(&p.ty));
+            c.add_local(&p.name, resolve_cty(&p.ty));
         }
         c.height = c.locals.len(); // params occupy slots `0..arity` (decision P3-1)
         let last_line = f.span.line;
@@ -297,12 +321,15 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             &classes,
             &class_descs,
             &names_index,
-            &class_field_tags[ci],
+            &class_field_ctys[&cd.name],
+            &class_field_ctys,
+            &method_rets,
         )?);
     }
     for (ci, f) in &methods_to_compile {
+        let class_name = &class_decls[*ci].name;
         functions.push(compile_method(
-            &class_decls[*ci].name,
+            class_name,
             f,
             &fns,
             &arities,
@@ -311,7 +338,9 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             &classes,
             &class_descs,
             &names_index,
-            &class_field_tags[*ci],
+            &class_field_ctys[class_name],
+            &class_field_ctys,
+            &method_rets,
         )?);
     }
 
@@ -364,7 +393,9 @@ fn compile_constructor<'a>(
     classes: &'a HashMap<String, usize>,
     class_descs: &'a [ClassDesc],
     names_index: &'a HashMap<String, usize>,
-    field_tags: &'a HashMap<String, TyTag>,
+    field_tags: &'a HashMap<String, CTy>,
+    class_field_ctys: &'a HashMap<String, HashMap<String, CTy>>,
+    method_rets: &'a HashMap<(String, String), CTy>,
 ) -> Result<Function, String> {
     let (params, body) = ctor_parts(c);
     let line = c.span.line;
@@ -377,9 +408,12 @@ fn compile_constructor<'a>(
         class_descs,
         names_index,
         field_tags,
+        class_field_ctys,
+        method_rets,
     );
+    comp.cur_class = Some(c.name.clone()); // `this` resolves to this class (ctype)
     for p in params {
-        comp.add_local(&p.name, type_tag(&p.ty));
+        comp.add_local(&p.name, resolve_cty(&p.ty));
     }
     comp.height = comp.locals.len();
     // Prologue: load promoted params in declaration order, then build the instance. `MakeInstance`
@@ -390,7 +424,7 @@ fn compile_constructor<'a>(
         }
     }
     comp.emit(Op::MakeInstance(desc_idx), line);
-    let inst_slot = comp.add_local("$this", TyTag::Other);
+    let inst_slot = comp.add_local("$this", CTy::Other);
     comp.this_slot = Some(inst_slot); // a ctor body may reference `this` / bare fields
                                       // Body: returns are redirected to the epilogue (the body cannot change the constructed value).
     comp.ctor_return_jumps = Some(Vec::new());
@@ -426,7 +460,9 @@ fn compile_method<'a>(
     classes: &'a HashMap<String, usize>,
     class_descs: &'a [ClassDesc],
     names_index: &'a HashMap<String, usize>,
-    field_tags: &'a HashMap<String, TyTag>,
+    field_tags: &'a HashMap<String, CTy>,
+    class_field_ctys: &'a HashMap<String, HashMap<String, CTy>>,
+    method_rets: &'a HashMap<(String, String), CTy>,
 ) -> Result<Function, String> {
     let mut comp = Compiler::new(
         fns,
@@ -437,10 +473,13 @@ fn compile_method<'a>(
         class_descs,
         names_index,
         field_tags,
+        class_field_ctys,
+        method_rets,
     );
-    comp.add_local("$this", TyTag::Other); // slot 0 = receiver
+    comp.cur_class = Some(class_name.to_string()); // `this` resolves to this class (ctype)
+    comp.add_local("$this", CTy::Other); // slot 0 = receiver
     for p in &f.params {
-        comp.add_local(&p.name, type_tag(&p.ty));
+        comp.add_local(&p.name, resolve_cty(&p.ty));
     }
     comp.this_slot = Some(0);
     comp.height = comp.locals.len();
@@ -457,17 +496,20 @@ fn compile_method<'a>(
     })
 }
 
-/// Classify a declared type annotation into the coarse `TyTag` the compiler reasons about. Only the
-/// numeric head names matter; everything else — including generics like `List<int>`, whose element
-/// type the compiler can't yet recover — collapses to `Other`.
-fn type_tag(ty: &Type) -> TyTag {
+/// Resolve a declared type annotation into the compiler's class-aware `CTy` (M2 Wave 4), derived
+/// purely structurally from the AST. The numeric heads map to `Int`/`Float`; the known
+/// primitive/container head names collapse to `Other` (their element types are never operands in
+/// the M1 surface); any *other* named type is a user-defined class, kept as `Class(name)` so a
+/// field/method read through it resolves. An `Optional` is `Other` (no `null` in M1).
+fn resolve_cty(ty: &Type) -> CTy {
     match ty {
         Type::Named { name, .. } => match name.as_str() {
-            "int" => TyTag::Int,
-            "float" => TyTag::Float,
-            _ => TyTag::Other,
+            "int" => CTy::Int,
+            "float" => CTy::Float,
+            "bool" | "string" | "void" | "List" | "Map" | "Set" => CTy::Other,
+            other => CTy::Class(other.to_string()),
         },
-        Type::Optional { .. } => TyTag::Other,
+        Type::Optional { .. } => CTy::Other,
     }
 }
 
@@ -484,7 +526,9 @@ impl<'a> Compiler<'a> {
         classes: &'a HashMap<String, usize>,
         class_descs: &'a [ClassDesc],
         names_index: &'a HashMap<String, usize>,
-        field_tags: &'a HashMap<String, TyTag>,
+        field_tags: &'a HashMap<String, CTy>,
+        class_field_ctys: &'a HashMap<String, HashMap<String, CTy>>,
+        method_rets: &'a HashMap<(String, String), CTy>,
     ) -> Self {
         Compiler {
             chunk: Chunk::new(),
@@ -499,6 +543,9 @@ impl<'a> Compiler<'a> {
             names_index,
             this_slot: None,
             field_tags,
+            class_field_ctys,
+            method_rets,
+            cur_class: None,
             match_bindings: Vec::new(),
             height: 0,
             ctor_return_jumps: None,
@@ -575,7 +622,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn add_local(&mut self, name: &str, ty: TyTag) -> usize {
+    fn add_local(&mut self, name: &str, ty: CTy) -> usize {
         self.locals.push(Local {
             name: name.to_string(),
             ty,
@@ -588,59 +635,96 @@ impl<'a> Compiler<'a> {
         self.locals.iter().rposition(|l| l.name == name)
     }
 
-    /// Infer whether an arithmetic expression is int- or float-typed (decision P2-6).
-    /// Only reached for operands of `+ - * / %`, which the checker guarantees are numeric.
+    /// Infer whether an arithmetic operand is int- or float-typed, to pick the specialized op
+    /// (decision P2-6). Only reached for operands of `+ - * / %`, which the checker guarantees are
+    /// numeric. The numeric projection of `ctype` (M2 Wave 4): `ctype` resolves the operand's full
+    /// class-aware type and `as_num` narrows it. The error wording matches the pre-Wave-4 paths (a
+    /// checker-unreachable surface — no test depends on it — kept faithful regardless).
     fn num_ty(&self, e: &Expr) -> Result<NumTy, String> {
+        let cty = self.ctype(e)?;
+        Self::as_num(&cty).ok_or_else(|| match e {
+            Expr::Ident(name, _) => format!("`{name}` is not numeric"),
+            Expr::Call { callee, .. } => match &**callee {
+                Expr::Ident(name, _) => format!("`{name}` does not return a numeric type"),
+                _ => format!("cannot infer numeric type of {e:?}"),
+            },
+            _ => format!("cannot infer numeric type of {e:?}"),
+        })
+    }
+
+    /// Resolve an expression's class-aware type (M2 Wave 4), mirroring `expr`'s resolution order so
+    /// a field read / method result / nested member / class-typed payload each resolve once,
+    /// recursively. Generalizes the old per-arm `num_ty`: an `Ident` resolves through a `match`-arm
+    /// binding, then a local, then a bare field of `this`; `This` is the current class; `Member`
+    /// walks the object's class to the field's type; a `Call` resolves to a function/constructor or
+    /// method return type. Anything it can name but isn't numeric/class collapses to `Other`; only a
+    /// genuinely unresolvable operand errors (the same surface that errored pre-Wave-4).
+    fn ctype(&self, e: &Expr) -> Result<CTy, String> {
         match e {
-            Expr::Int(..) => Ok(NumTy::Int),
-            Expr::Float(..) => Ok(NumTy::Float),
+            Expr::Int(..) => Ok(CTy::Int),
+            Expr::Float(..) => Ok(CTy::Float),
+            Expr::Bool(..) | Expr::Str(..) | Expr::List(..) => Ok(CTy::Other),
             Expr::Ident(name, _) => {
-                // Mirror `expr`'s resolution order: a `match`-arm binding shadows a local, which
-                // shadows a bare field of `this` (its declared type tag, for arithmetic).
-                let tag =
-                    if let Some(b) = self.match_bindings.iter().rev().find(|b| b.name == *name) {
-                        b.ty
-                    } else if let Some(s) = self.resolve_local(name) {
-                        self.locals[s].ty
-                    } else if let Some(&t) = self.field_tags.get(name) {
-                        t
-                    } else {
-                        return Err(format!("undefined variable `{name}`"));
-                    };
-                Self::as_num(tag).ok_or_else(|| format!("`{name}` is not numeric"))
+                if let Some(b) = self.match_bindings.iter().rev().find(|b| b.name == *name) {
+                    Ok(b.ty.clone())
+                } else if let Some(s) = self.resolve_local(name) {
+                    Ok(self.locals[s].ty.clone())
+                } else if let Some(t) = self.field_tags.get(name) {
+                    Ok(t.clone())
+                } else {
+                    Err(format!("undefined variable `{name}`"))
+                }
             }
-            Expr::Unary { expr, .. } => self.num_ty(expr),
-            Expr::Binary { lhs, .. } => self.num_ty(lhs),
-            // `this.field` inside a method/ctor: classify via the current class's field tags. A
-            // field read on an arbitrary instance stays unclassifiable (the coarse-`TyTag` gap —
-            // the local doesn't carry its class), so it falls through to the error below.
-            Expr::Member { object, name, .. } if matches!(&**object, Expr::This(_)) => self
-                .field_tags
-                .get(name)
-                .copied()
-                .and_then(Self::as_num)
-                .ok_or_else(|| format!("`{name}` is not numeric")),
-            Expr::Call { callee, .. } => {
-                if let Expr::Ident(name, _) = &**callee {
+            Expr::This(_) => match &self.cur_class {
+                Some(c) => Ok(CTy::Class(c.clone())),
+                None => Err("`this` used outside a method".into()),
+            },
+            Expr::Member { object, name, .. } => match self.ctype(object)? {
+                CTy::Class(cls) => self
+                    .class_field_ctys
+                    .get(&cls)
+                    .and_then(|fs| fs.get(name))
+                    .cloned()
+                    .ok_or_else(|| format!("no field `{name}` on `{cls}`")),
+                _ => Err(format!("cannot infer type of field `{name}`")),
+            },
+            Expr::Call { callee, .. } => match &**callee {
+                Expr::Ident(name, _) => {
                     if let Some(meta) = self.fns.get(name) {
-                        return Self::as_num(meta.ret)
-                            .ok_or_else(|| format!("`{name}` does not return a numeric type"));
+                        Ok(meta.ret.clone())
+                    } else if self.classes.contains_key(name) {
+                        Ok(CTy::Class(name.clone())) // a constructor returns its instance
+                    } else if self.variants.contains_key(name) {
+                        Ok(CTy::Other) // an enum value: not numeric, not a class we track fields of
+                    } else {
+                        Err(format!("cannot infer numeric type of {e:?}"))
                     }
                 }
-                Err(format!("cannot infer numeric type of {e:?}"))
-            }
+                // Method call: the return type is keyed on the receiver's runtime class.
+                Expr::Member { object, name, .. } => match self.ctype(object)? {
+                    CTy::Class(cls) => self
+                        .method_rets
+                        .get(&(cls.clone(), name.clone()))
+                        .cloned()
+                        .ok_or_else(|| format!("no method `{name}` on `{cls}`")),
+                    _ => Err(format!("cannot infer numeric type of {e:?}")),
+                },
+                _ => Err(format!("cannot infer numeric type of {e:?}")),
+            },
+            Expr::Unary { expr, .. } => self.ctype(expr),
+            Expr::Binary { lhs, .. } => self.ctype(lhs),
             other => Err(format!("cannot infer numeric type of {other:?}")),
         }
     }
 
-    /// Numeric refinement of a stored `TyTag` — the bridge from "what type the operand is" to
-    /// "which specialized arithmetic op." `None` for non-numeric tags (a defensive path: the
-    /// checker already guarantees arithmetic operands are numeric).
-    fn as_num(tag: TyTag) -> Option<NumTy> {
-        match tag {
-            TyTag::Int => Some(NumTy::Int),
-            TyTag::Float => Some(NumTy::Float),
-            TyTag::Other => None,
+    /// Numeric refinement of a `CTy` — the bridge from "what type the operand is" to "which
+    /// specialized arithmetic op." `None` for non-numeric types (a defensive path: the checker
+    /// already guarantees arithmetic operands are numeric).
+    fn as_num(ty: &CTy) -> Option<NumTy> {
+        match ty {
+            CTy::Int => Some(NumTy::Int),
+            CTy::Float => Some(NumTy::Float),
+            CTy::Class(_) | CTy::Other => None,
         }
     }
 
@@ -652,7 +736,7 @@ impl<'a> Compiler<'a> {
         match s {
             Stmt::VarDecl { ty, name, init, .. } => {
                 self.expr(init)?; // value stays on the stack as the new local's slot
-                self.add_local(name, type_tag(ty));
+                self.add_local(name, resolve_cty(ty));
                 Ok(())
             }
             Stmt::Expr(e, span) => {
@@ -705,7 +789,7 @@ impl<'a> Compiler<'a> {
                 iter,
                 body,
                 span,
-            } => self.compile_for(name, type_tag(ty), iter, body, span.line),
+            } => self.compile_for(name, resolve_cty(ty), iter, body, span.line),
         }
     }
 
@@ -971,16 +1055,16 @@ impl<'a> Compiler<'a> {
     fn compile_for(
         &mut self,
         name: &str,
-        elem_ty: TyTag,
+        elem_ty: CTy,
         iter: &Expr,
         body: &[Stmt],
         line: u32,
     ) -> Result<(), String> {
         self.begin_scope();
         self.expr(iter)?; // [list]
-        let s_list = self.add_local("$for_list", TyTag::Other);
+        let s_list = self.add_local("$for_list", CTy::Other);
         self.emit_const(Value::Int(0), line); // [list, 0]
-        let s_idx = self.add_local("$for_idx", TyTag::Int);
+        let s_idx = self.add_local("$for_idx", CTy::Int);
 
         let loop_start = self.here();
         self.emit(Op::GetLocal(s_idx), line);
@@ -1046,13 +1130,10 @@ impl<'a> Compiler<'a> {
         arms: &[MatchArm],
         line: u32,
     ) -> Result<(), String> {
-        // Coarse type of the scrutinee, for a catch-all binding used arithmetically (best-effort:
-        // non-numeric scrutinees collapse to `Other`, which `num_ty` rejects as an operand anyway).
-        let scrut_tag = match self.num_ty(scrutinee) {
-            Ok(NumTy::Int) => TyTag::Int,
-            Ok(NumTy::Float) => TyTag::Float,
-            Err(_) => TyTag::Other,
-        };
+        // Class-aware type of the scrutinee, for a catch-all binding's type (best-effort: an
+        // unresolvable scrutinee collapses to `Other`, which `as_num` rejects as an operand anyway).
+        // A class-typed scrutinee's catch-all binding keeps its class, so `x.field` resolves (Wave 4).
+        let scrut_cty = self.ctype(scrutinee).unwrap_or(CTy::Other);
         self.expr(scrutinee)?;
         let m_slot = self.height - 1; // scrutinee now on top: its base-relative slot
         let mut end_jumps = Vec::new();
@@ -1061,7 +1142,7 @@ impl<'a> Compiler<'a> {
             let mut skips = Vec::new();
             self.emit_pattern_test(&arm.pattern, m_slot, &[], &mut skips, line)?;
             let n_before = self.match_bindings.len();
-            self.register_bindings(&arm.pattern, m_slot, &[], scrut_tag)?;
+            self.register_bindings(&arm.pattern, m_slot, &[], scrut_cty.clone())?;
             self.expr(&arm.body)?; // -> [.., scrutinee, result]
             self.match_bindings.truncate(n_before);
             end_jumps.push(self.emit_jump(Op::Jump(0), line));
@@ -1150,13 +1231,14 @@ impl<'a> Compiler<'a> {
     }
 
     /// Register (emitting no code) every binding introduced by `pat`, so the arm body can
-    /// re-extract them. `cur_ty` is the coarse type of the value `pat` matches (for `num_ty`).
+    /// re-extract them. `cur_ty` is the class-aware type of the value `pat` matches (for `ctype`) —
+    /// a class-typed payload keeps its class, so `binding.field` resolves (Wave 4).
     fn register_bindings(
         &mut self,
         pat: &Pattern,
         m_slot: usize,
         path: &[usize],
-        cur_ty: TyTag,
+        cur_ty: CTy,
     ) -> Result<(), String> {
         match pat {
             Pattern::Binding { name, .. } => self.match_bindings.push(MatchBinding {
@@ -1175,7 +1257,7 @@ impl<'a> Compiler<'a> {
                 for (i, fp) in fields.iter().enumerate() {
                     let mut sub = path.to_vec();
                     sub.push(i);
-                    let ty = field_tags.get(i).copied().unwrap_or(TyTag::Other);
+                    let ty = field_tags.get(i).cloned().unwrap_or(CTy::Other);
                     self.register_bindings(fp, m_slot, &sub, ty)?;
                 }
             }

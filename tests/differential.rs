@@ -322,6 +322,41 @@ function main() {
     agree(&grades);
 }
 
+/// M2 Wave 4: class-aware operand types. Each program type-checks and runs on the interpreter, but
+/// the *coarse* pre-Wave-4 compiler rejected it at compile time — its `num_ty` could not see
+/// through a field read on an arbitrary instance, a method-call result, a nested `a.b.c`, a
+/// class-typed enum payload, or a free function returning an instance. The class-aware `ctype`
+/// resolver closes all five. Verified red (interpreter `Ok`, VM `compile error: cannot infer
+/// numeric type`) before the fix; both backends agree after it (measured 2026-06-16).
+const WAVE4_PROGRAMS: &[&str] = &[
+    // (A) field of an arbitrary instance local, used as an arithmetic operand
+    r#"class Point { constructor(public int x, public int y) {} }
+       function main() { Point p = Point(7, 4); println("{p.x + 1}"); }"#,
+    // (B) method-call result used arithmetically
+    r#"class C { constructor(public int x) {} function get() -> int { return this.x; } }
+       function main() { C c = C(5); println("{c.get() + 1}"); }"#,
+    // (C) nested field read `a.inner.x` — a class-typed field's field
+    r#"class Inner { constructor(public int x) {} }
+       class Outer { constructor(public Inner inner) {} }
+       function main() { Outer a = Outer(Inner(10)); println("{a.inner.x + 1}"); }"#,
+    // (D) a class-typed enum payload, bound in `match` and read arithmetically
+    r#"class Point { constructor(public int x) {} }
+       enum Opt { Some(Point p), Zero(int z), }
+       function f(Opt o) -> int { return match o { Some(p) => p.x + 1, Zero(z) => z, }; }
+       function main() { println("{f(Some(Point(41)))}"); println("{f(Zero(0))}"); }"#,
+    // (E) a free function returning an instance, then a field of the result, used arithmetically
+    r#"class Point { constructor(public int x) {} }
+       function mk() -> Point { return Point(3); }
+       function main() { println("{mk().x + 1}"); }"#,
+];
+
+#[test]
+fn wave4_programs_match_between_backends() {
+    for src in WAVE4_PROGRAMS {
+        agree(src);
+    }
+}
+
 /// Error-parity corpus (M2 P3.5 Wave 0): programs that must *fail identically* on both backends.
 /// `i64::MIN` is reached via `-9223372036854775807 - 1` because the bare literal `9223372036854775808`
 /// overflows `i64` at lex time. Negating it (`-x`) is the `Op::Neg` overflow that previously panicked

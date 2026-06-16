@@ -37,15 +37,19 @@ output-identity gated) — run it for a before/after number before any perf chan
 
 ## Active plan
 
-The M2 P3.5 hardening roadmap (`docs/plans/2026-06-16-m2-p3.5-hardening-roadmap.md`, Waves 0–3) is
-**complete**; Wave 4 is intentionally deferred. **M2 P4 is COMPLETE**
-(`docs/plans/2026-06-16-m2-p4-classes-enums-match.md`): P4a (enums + `match`), P4b (classes +
-constructor promotion + field reads), and P4c (methods + `this`) all landed — **`runvm` now covers
-the full M1 language surface** and `examples/grades.phg` runs byte-identically on both backends
-(VM ≈3.2×). The VM object model is value-native (reuses the shared `Value::Enum`/`Instance`).
-Remaining deferred work: **Wave 4** (thread the checker's richer `types::Ty` into the compiler so
-`num_ty` stops being coarse — recovers `List`-element and arbitrary-instance field types) and the
-**arena object model** (a bench-gated perf milestone, not a correctness requirement).
+The M2 P3.5 hardening roadmap (`docs/plans/2026-06-16-m2-p3.5-hardening-roadmap.md`, Waves 0–4) is
+**complete**. **M2 P4 is COMPLETE** (`docs/plans/2026-06-16-m2-p4-classes-enums-match.md`): P4a
+(enums + `match`), P4b (classes + constructor promotion + field reads), and P4c (methods + `this`)
+all landed — **`runvm` now covers the full M1 language surface** and `examples/grades.phg` runs
+byte-identically on both backends (VM ≈3.2×). The VM object model is value-native (reuses the shared
+`Value::Enum`/`Instance`). **M2 Wave 4 is COMPLETE**
+(`docs/plans/2026-06-16-m2-wave4-compiler-types.md`): the compiler's operand-type inference is now
+class-aware (`enum CTy { Int, Float, Class(String), Other }` + a recursive `ctype(&Expr)` resolver),
+so a field read on an arbitrary instance (`p.x + 1`), a method-call result (`c.get() + 1`), a nested
+`a.inner.x`, and a class-typed enum payload all compile and run byte-identically — closing the last
+known `run`↔`runvm` parity gaps. Remaining deferred work: the **arena object model** (a bench-gated
+perf milestone, not a correctness requirement). The only remaining coarse-type note is the
+deliberately out-of-M1-surface `Index` (`xs[i]` — rejected on both backends).
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing
 correctness rules — read before touching backends, value kernels, or the `Op` set) and

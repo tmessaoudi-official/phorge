@@ -6,6 +6,31 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### M2 Wave 4 — Class-aware compiler types (2026-06-16) — **closes the last `num_ty` parity gap**
+Makes the compiler's operand-type inference class-aware, so the VM no longer rejects checker-valid
+programs that read a field of an arbitrary instance, a method-call result, or a nested member as an
+arithmetic operand. `runvm` is now a faithful drop-in across the full checker-valid surface. See
+`docs/plans/2026-06-16-m2-wave4-compiler-types.md`.
+
+- **Changed**
+  - The compiler's coarse `enum TyTag { Int, Float, Other }` became `enum CTy { Int, Float,
+    Class(String), Other }` — an instance now carries *which class* it is, derived structurally from
+    the AST's declared `Type` annotations (`type_tag` → `resolve_cty`); the AST, the `Op` set, the
+    VM, and `value.rs` are untouched.
+  - `num_ty` is now the numeric projection (`as_num`) of a new recursive `ctype(&Expr)` resolver
+    that walks `Ident`/`This`/`Member`/`Call` to a class-aware type. New per-program tables —
+    `class_field_ctys` (class → field → type) and `method_rets` (`(class, method)` → return type) —
+    plus a `cur_class` on the compiler back the `Member`/method-call/`this` resolution. The
+    P4c-era `this.field`-only `num_ty` `Member` arm is subsumed by the general resolver.
+- **Parity**
+  - Five programs that ran on the interpreter but failed to *compile* on the VM now agree
+    byte-identically (`tests/differential.rs::WAVE4_PROGRAMS`): a field of an arbitrary instance
+    (`p.x + 1`), a method result (`c.get() + 1`), a nested field (`a.inner.x + 1`), a class-typed
+    enum payload bound in `match` (`Some(p) => p.x + 1`), and a free function returning an instance
+    (`mk().x + 1`).
+  - The only remaining coarse-type note is the deliberately out-of-M1-surface `Index` (`xs[i]`
+    arithmetic faults on both backends — M1 has no user indexing).
+
 ### M2 P4c — Methods + `this` on the VM (2026-06-16) — **M2 P4 complete**
 Brings instance methods and `this` to the bytecode VM. With this, **`runvm` covers the full M1
 language surface** and `examples/grades.phg` runs on both backends. See
@@ -26,8 +51,8 @@ language surface** and `examples/grades.phg` runs on both backends. See
   - Method existence is checker-enforced, so the VM's method-not-found fault is a defensive
     backstop (no `agree_err` case, like P4a's exhaustiveness).
   - `num_ty` now classifies a `this.field`/bare-field arithmetic operand (via the class's field
-    tags). A field read on an *arbitrary* instance or a `List` element remains the coarse-`TyTag`
-    gap (deferred to Wave 4); not exercised by the corpus.
+    tags). At this commit a field read on an *arbitrary* instance was still the coarse-`TyTag` gap;
+    **closed in M2 Wave 4** (see the Wave 4 entry above) by making the type class-aware (`CTy`).
 
 ### M2 P4b — Classes on the VM (2026-06-16)
 Brings class construction (with constructor promotion + body side effects) and field reads to the
@@ -50,11 +75,11 @@ bytecode VM. See `docs/plans/2026-06-16-m2-p4-classes-enums-match.md`.
     instance, so an early `return;` cannot change the result.
   - Reading an explicit (uninitialized) `Field` member type-checks but faults `no field` at
     runtime on **both** backends — construction populates only promoted ctor params.
-- **Known limitation (pre-existing coarse-type gap, deferred to Wave 4)**
-  - A field read used as the *direct left operand* of arithmetic (`p.x + …`) can't be classified
-    by the compiler's coarse `TyTag` (it can't recover field types yet — same gap as `Index`).
-    Field reads work everywhere else: interpolation, equality, call arguments, arithmetic
-    right-operand, or bound through a typed local first.
+- **Known limitation at this commit (coarse-type gap — since closed in M2 Wave 4)**
+  - A field read used as the *direct left operand* of arithmetic (`p.x + …`) couldn't be classified
+    by the compiler's coarse `TyTag`. Field reads worked everywhere else: interpolation, equality,
+    call arguments, arithmetic right-operand, or bound through a typed local first. **M2 Wave 4
+    closed this** by making the compiler's type class-aware (`CTy`); see the Wave 4 entry above.
   - `examples/grades.phg` still needs P4c (it calls an instance method).
 
 ### M2 P4a — Enums + `match` on the VM (2026-06-16)

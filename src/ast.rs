@@ -1,7 +1,7 @@
 //! Abstract syntax tree: the parser's output and the shared input to every backend (checker,
 //! tree-walking interpreter, bytecode compiler, PHP transpiler). Nodes are **untyped** — the
 //! checker validates without annotating, so each backend re-derives the types it needs (see
-//! `compiler::TyTag`). `token::Span` is carried on nodes for diagnostics.
+//! `compiler::CTy`). `token::Span` is carried on nodes for diagnostics.
 
 use crate::token::Span;
 
