@@ -1,0 +1,8 @@
+# Pin the toolchain so the manifest quality gate (`[lints] warnings = "deny"`, `clippy all =
+# "deny"`) is reproducible. A floating stable channel can introduce new lints that fail the build
+# out from under an already-green commit — the known fragility accepted in M2 P3.5 Wave 0.5.
+# Pinning neutralises it: a toolchain upgrade becomes a deliberate edit to this file, re-verified
+# against the suite, rather than a surprise CI/local break.
+[toolchain]
+channel = "1.96.0"
+components = ["rustfmt", "clippy"]

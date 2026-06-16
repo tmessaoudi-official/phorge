@@ -1,7 +1,13 @@
 [package]
 name = "phorge"
-version = "0.0.1"
+# M1 socle (interpreter + transpiler) + M2 P1–P3 (bytecode compiler + stack VM). Pre-1.0,
+# unpublished single binary: the version tracks milestone progress, not a release cadence.
+version = "0.2.0"
 edition = "2021"
+# Cargo floor for the `[lints]` table below (stabilised in Cargo 1.74); older Cargo silently
+# ignores `[lints]`, which would drop the warnings=deny / clippy=deny quality gate. The crate is
+# developed and verified on the toolchain pinned in `rust-toolchain.toml`.
+rust-version = "1.74"
 
 [lib]
 name = "phorge"

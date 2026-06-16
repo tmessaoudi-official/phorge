@@ -1,6 +1,8 @@
 //! Stack VM that executes a `Chunk`. See docs/specs/2026-06-15-m2-bytecode-vm-design.md (§6).
-//! P1: scalar arithmetic, negate, print, return. Output is captured into a String (mirrors
-//! `interpreter::interpret`) so the VM can be differential-tested against the tree-walker.
+//! P1–P3: scalar arithmetic/negate/print/return (P1); the full `main`-only expression and
+//! statement surface (P2); user calls, clox-style call frames, and recursion (P3). Output is
+//! captured into a String (mirrors `interpreter::interpret`) so the VM can be differential-tested
+//! against the tree-walker.
 //!
 //! `run` returns a unified runtime `Diagnostic` (M2 P3.5 Wave 2 Task 2.1): the per-op `exec_op`
 //! yields a bare fault body, and `run` attaches the source line from `Chunk.lines[ip]` so the

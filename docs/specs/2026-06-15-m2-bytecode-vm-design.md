@@ -80,6 +80,17 @@ VM. Raw-byte encoding is parked as a potential v2 perf pass. `consts` is the con
 
 (Final opcode list is refined during implementation; this is the design-level inventory.)
 
+**As-built errata (M2 P1–P3, authoritative source `src/chunk.rs`):** the implemented `Op` enum
+diverges from this design-level inventory —
+- Comparison/equality collapsed to runtime-generic `Eq`/`Ne`/`Lt`/`Gt`/`Le`/`Ge`; there is no
+  type-specialized `EqI/EqF/EqBool/EqStr`, and `NotEq` is `Ne` (decision P2-8).
+- No `Loop(off)` — loops use absolute `Jump(target)` (decision P2-2). `True`/`False` are folded
+  into `Const(idx)` over bool constants.
+- `for…in` lowers to `Len` + `Index` + `Jump` rather than a dedicated `IterNext`. `Pop` and `Len`
+  exist in the implementation but are absent above; `Print` carries an arg count (`Print(n)`).
+- Object/enum/match ops (`MakeInstance`, `GetField`, `CallMethod`, `MakeEnum`, `MatchTag`) remain
+  design-only — they land with M2 P4.
+
 ## 6. VM execution model
 
 - **Value stack** (`Vec<Value>`) — operands and locals.

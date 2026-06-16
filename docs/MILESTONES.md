@@ -10,7 +10,7 @@ The socle. Real Phorge programs run end-to-end (the frozen `Shape`/`area`/`match
 - **Pipeline:** lexer → parser → type-checker → tree-walking evaluator (`src/{lexer,parser,checker,interpreter}.rs`).
 - **CLI:** `phorge <run|check|parse|lex|transpile> <file>`.
 - **Phorge → PHP transpiler** (`src/transpile.rs`) — round-trip-verified against real PHP 8.6.
-- **Docs/tests:** `README.md`, 3 runnable `examples/*.phg` (guarded by `tests/examples.rs`), 162 tests green, clippy clean.
+- **Docs/tests:** `README.md`, 3 runnable `examples/*.phg` (guarded by `tests/examples.rs`), 162 tests green at the M1 tag (223 suite-wide today), clippy clean.
 - **Delivered language surface:** static types, immutable-by-default bindings, functions, classes + constructor promotion, single-payload enums + exhaustive `match`, string interpolation, `List<T>` literals, `for…in`, checked int/float arithmetic.
 - **Not yet implemented** (designed in §3, rejected cleanly — never panics): null safety / `T?` / `Option`, exceptions (try/catch/throw), `Map`/`Set`/tuples, `|>`, `is`, method overloading, traits, value types/structs, operator overloading, property accessors, sized ints / `decimal`, `const`/`final` enforcement, real `import` resolution, concurrency.
 
@@ -42,6 +42,11 @@ M3 language enrichment → M4 extension API + stdlib → M5 modules + git-based 
 concurrency (uncolored `spawn`+channels) + native HTTP server + Postgres → M7 tooling/
 connectors → M8 PHP→Phorge migration tool. Rejected: live PHP transpile, PHP C-ext FFI,
 dynamic `.so` plugins.
+
+> **As-built note (M2 P3.5):** no `Backend` trait exists yet — `grep 'trait ' src/` returns
+> nothing. The three pipelines (`cmd_run`, `cmd_runvm`, `cmd_transpile`) are free functions
+> dispatched by a string `match` in `src/main.rs`; the pluggable-backend trait is deferred to the
+> 4th backend (`phorge build`, M2.5) per the Rule of Three.
 
 ## v2 — Native + systems — 🔲 FUTURE
 

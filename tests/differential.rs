@@ -1,5 +1,5 @@
-//! Differential harness (M2 P2): the bytecode VM (`cmd_runvm`) must produce byte-identical
-//! stdout to the tree-walking interpreter (`cmd_run`) for every P2-surface program. This is
+//! Differential harness (M2 P3): the bytecode VM (`cmd_runvm`) must produce byte-identical
+//! stdout to the tree-walking interpreter (`cmd_run`) for every P1–P3-surface program. This is
 //! the M2 correctness spine (mirrors the transpiler round-trip-against-real-PHP technique).
 //!
 //! Parity covers *both* success and failure (M2 P3.5 Wave 0): `agree` checks the `Ok` output,

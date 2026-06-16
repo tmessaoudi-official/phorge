@@ -44,7 +44,7 @@ the stdlib and connectors ride on.
 
 | # | Decision | Choice |
 |---|---|---|
-| E-1 | Backends | Two (native VM + PHP-transpile) behind a clean `Backend` trait; **PHP backend optional/deactivatable** (feature-gated/pluggable) |
+| E-1 | Backends | Two (native VM + PHP-transpile) behind a clean `Backend` trait; **PHP backend optional/deactivatable** (feature-gated/pluggable). _As-built M2 P3.5: the trait is **planned, not yet present** (`grep 'trait ' src/` = 0) — today the three pipelines (`cmd_run`/`cmd_runvm`/`cmd_transpile`) are free functions dispatched by a string `match` in `main.rs`; the trait lands with the 4th backend (`phorge build`) per Rule of Three._ |
 | E-2 | PHP ecosystem | PHP backend for eco + native connectors for VM; migration = typed-subset batch. Reject live-transpile, C-ext FFI, dynamic `.so` |
 | E-3 | Package distribution | Git-based/decentralized first behind a `PackageSource` trait; central-registry-capable later with no rework |
 | E-4 | Ecosystem sequencing | Extension API + stdlib → module resolution → packages → connectors |

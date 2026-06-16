@@ -1,12 +1,13 @@
-//! AST → bytecode compiler (M2 P2). A dedicated pass over the type-checked AST,
+//! AST → bytecode compiler (M2 P1–P3). A dedicated pass over the type-checked AST,
 //! emitting a `Chunk` the VM executes. Mirrors the tree-walker's semantics so
 //! `runvm` output is byte-identical to `run` (the differential oracle).
 //!
 //! P2 scope: `main`-only programs — literals, arithmetic, comparison, logical
 //! short-circuit, unary, interpolation, `println`, list literals, locals, `if`/`else`,
-//! `for…in`, blocks. User calls (P3), classes/enums/`match`/`this`/member (P4) raise a
-//! clean compile error until implemented. Lists are inline `Value::List` in P2; they
-//! migrate to the arena heap at P4.
+//! `for…in`, blocks. P3 added user function calls + call frames + recursion (multi-function
+//! compile → `BytecodeProgram`). Classes/enums/`match`/`this`/member (P4) still raise a clean
+//! compile error until implemented. Lists are inline `Value::List` in P2; they migrate to the
+//! arena heap at P4.
 
 use crate::ast::{BinaryOp, Expr, FunctionDecl, Item, Program, Stmt, StrPart, Type, UnaryOp};
 use crate::chunk::{BytecodeProgram, Chunk, Function, Op};

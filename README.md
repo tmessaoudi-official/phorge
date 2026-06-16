@@ -3,9 +3,11 @@
 A small, statically-typed, PHP-inspired programming language implemented in Rust
 (std-only, no external crates).
 
-**Status — M1 complete:** a tree-walking interpreter (lexer → parser → type-checker →
-evaluator) plus a **Phorge → PHP transpiler**. The emitted PHP runs under a real `php`
-and produces byte-identical output to the interpreter.
+**Status — M1 complete; M2 P1–P3 in progress:** a tree-walking interpreter (lexer → parser →
+type-checker → evaluator) plus a **Phorge → PHP transpiler** (M1). M2 adds a bytecode compiler and
+stack VM (`phorge runvm`), byte-identical to the interpreter across the P1–P3 surface and
+differential-tested; `phorge bench` measures the VM against the tree-walker. The emitted PHP runs
+under a real `php` and produces byte-identical output to the interpreter.
 
 ## Build
 
@@ -36,7 +38,7 @@ function main() {
 
 ## CLI
 
-`phorge <command> <file>` — six commands, each a stage of the pipeline:
+`phorge <command> <file>` — seven commands, each a stage of the pipeline (plus `bench`):
 
 | Command | Does | On error |
 |---|---|---|
@@ -46,6 +48,7 @@ function main() {
 | `parse` | lex → parse, dump the AST | exit 1 on parse error |
 | `lex` | dump the token stream | exit 1 on lex error |
 | `transpile` | type-check (gate) → emit PHP to stdout | exit 1 on type/transpile error |
+| `bench` | median-of-N timing of both backends, output-identity gated (M2) | exit 1 if a backend faults or they disagree |
 
 `runvm` is the M2 bytecode backend: identical output to `run`, executed on a stack VM
 instead of the tree-walker. The two are kept in lock-step by the differential test harness

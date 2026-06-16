@@ -34,15 +34,19 @@ fn as_bool(v: &Value) -> R<bool> {
     }
 }
 
-/// One function/method call's block-scope stack (no closures in M1, so a frame
-/// captures no enclosing environment).
-struct Frame {
+/// The lexical block-scope stack of the *currently executing* call — a `Vec` of scopes
+/// (innermost last), pushed/popped as the tree-walker enters and leaves blocks. No closures in
+/// M1, so it captures no enclosing environment. NB despite the holding field being named `frame`,
+/// this is **not** a call frame: it is the opposite concept from `vm::Frame`
+/// (`{func, ip, slot_base}`, a reified call record). The tree-walker keeps its call records on the
+/// native Rust stack, so the only per-call state it reifies is this scope chain.
+struct CallScopes {
     scopes: Vec<HashMap<String, Value>>,
 }
 
-impl Frame {
+impl CallScopes {
     fn new() -> Self {
-        Frame {
+        CallScopes {
             scopes: vec![HashMap::new()],
         }
     }
@@ -68,7 +72,7 @@ pub struct Interp {
     classes: HashMap<String, ClassDecl>,
     /// variant name -> (enum name, arity)
     variants: HashMap<String, (String, usize)>,
-    frame: Frame,
+    frame: CallScopes,
     this: Option<Value>,
     out: String,
     /// Live call-frame depth, checked against [`crate::limits::MAX_CALL_DEPTH`] in `run_call`.
@@ -89,7 +93,7 @@ pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
         funcs: HashMap::new(),
         classes: HashMap::new(),
         variants: HashMap::new(),
-        frame: Frame::new(),
+        frame: CallScopes::new(),
         this: None,
         out: String::new(),
         depth: 0,
@@ -145,7 +149,7 @@ impl Interp {
             return rt("stack overflow");
         }
         self.depth += 1;
-        let saved_frame = std::mem::replace(&mut self.frame, Frame::new());
+        let saved_frame = std::mem::replace(&mut self.frame, CallScopes::new());
         let saved_this = std::mem::replace(&mut self.this, this);
         for (n, a) in names.iter().zip(args) {
             self.frame.declare(n, a);
