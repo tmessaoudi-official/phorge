@@ -5,12 +5,15 @@
 //! P2 scope: `main`-only programs — literals, arithmetic, comparison, logical
 //! short-circuit, unary, interpolation, `println`, list literals, locals, `if`/`else`,
 //! `for…in`, blocks. P3 added user function calls + call frames + recursion (multi-function
-//! compile → `BytecodeProgram`). Classes/enums/`match`/`this`/member (P4) still raise a clean
-//! compile error until implemented. Lists are inline `Value::List` in P2; they migrate to the
-//! arena heap at P4.
+//! compile → `BytecodeProgram`). P4a adds single-payload enums (`Variant(args)` construction)
+//! and exhaustive `match` (lowered to scrutinee-spill + per-arm tag/literal tests + payload
+//! re-extraction; decision P4-7). Classes/methods/`this`/member (P4b/P4c) still raise a clean
+//! compile error until implemented. Enums and lists are value-native `Value` (no heap; P4-1).
 
-use crate::ast::{BinaryOp, Expr, FunctionDecl, Item, Program, Stmt, StrPart, Type, UnaryOp};
-use crate::chunk::{BytecodeProgram, Chunk, Function, Op};
+use crate::ast::{
+    BinaryOp, Expr, FunctionDecl, Item, MatchArm, Pattern, Program, Stmt, StrPart, Type, UnaryOp,
+};
+use crate::chunk::{BytecodeProgram, Chunk, EnumDesc, Function, Op};
 use crate::diagnostic::Diagnostic;
 use crate::value::Value;
 use std::collections::HashMap;
@@ -52,11 +55,44 @@ struct FnMeta {
     ret: TyTag,
 }
 
+/// Per-variant metadata gathered in the pre-pass: its index into the `enum_descs` table (for
+/// `MakeEnum`/`MatchTag`) and the coarse type tag of each payload field (so a payload binding
+/// used in arithmetic resolves through `num_ty`). Decision P4-2.
+struct VariantMeta {
+    index: usize,
+    field_tags: Vec<TyTag>,
+}
+
+/// A `match`-arm payload binding: the name, the slot of the hidden `$match` scrutinee local, and
+/// the payload-index `path` from the scrutinee to the bound value. Bindings are *re-extracted* at
+/// each use (`GetLocal $match` + `GetEnumField` per path step) rather than stored as stack locals,
+/// which keeps arm bodies stack-neutral and sidesteps mid-expression slot bookkeeping (P4-7).
+struct MatchBinding {
+    name: String,
+    match_slot: usize,
+    path: Vec<usize>,
+    ty: TyTag,
+}
+
 struct Compiler<'a> {
     chunk: Chunk,
     locals: Vec<Local>,
     scope_depth: u32,
     fns: &'a HashMap<String, FnMeta>,
+    /// Function arities, indexed parallel to `BytecodeProgram.functions` — lets `stack_effect`
+    /// account for `Op::Call` (which pops `arity` args and pushes one result).
+    arities: &'a [usize],
+    /// Variant name → its descriptor metadata (construction + pattern dispatch).
+    variants: &'a HashMap<String, VariantMeta>,
+    /// The shared enum-descriptor table — `stack_effect` reads `MakeEnum`'s payload arity from it.
+    enum_descs: &'a [EnumDesc],
+    /// Active `match`-arm bindings (a stack; innermost shadows). Populated while compiling an arm
+    /// body, truncated after.
+    match_bindings: Vec<MatchBinding>,
+    /// Base-relative operand-stack height, tracked so `match` can spill its scrutinee to the
+    /// correct slot even mid-expression. Reset to `locals.len()` at each statement boundary and
+    /// fixed at `&&`/`||`/`match` control-flow merges; otherwise maintained by `emit`.
+    height: usize,
 }
 
 /// Compile a whole program: a pre-pass indexes every top-level function (so calls — including
@@ -72,22 +108,46 @@ pub fn compile(program: &Program) -> Result<BytecodeProgram, Diagnostic> {
 fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
     let mut order: Vec<&FunctionDecl> = Vec::new();
     let mut fns: HashMap<String, FnMeta> = HashMap::new();
+    // Enum pre-pass: one `EnumDesc` per variant of every declared enum, plus the variant-name →
+    // metadata map both construction and `match` resolve through (decision P4-2).
+    let mut enum_descs: Vec<EnumDesc> = Vec::new();
+    let mut variants: HashMap<String, VariantMeta> = HashMap::new();
     for it in &program.items {
-        if let Item::Function(f) = it {
-            fns.insert(
-                f.name.clone(),
-                FnMeta {
-                    index: order.len(),
-                    ret: f.ret.as_ref().map_or(TyTag::Other, type_tag),
-                },
-            );
-            order.push(f);
+        match it {
+            Item::Function(f) => {
+                fns.insert(
+                    f.name.clone(),
+                    FnMeta {
+                        index: order.len(),
+                        ret: f.ret.as_ref().map_or(TyTag::Other, type_tag),
+                    },
+                );
+                order.push(f);
+            }
+            Item::Enum(e) => {
+                for v in &e.variants {
+                    variants.insert(
+                        v.name.clone(),
+                        VariantMeta {
+                            index: enum_descs.len(),
+                            field_tags: v.fields.iter().map(|p| type_tag(&p.ty)).collect(),
+                        },
+                    );
+                    enum_descs.push(EnumDesc {
+                        ty: e.name.clone(),
+                        variant: v.name.clone(),
+                        arity: v.fields.len(),
+                    });
+                }
+            }
+            Item::Import { .. } | Item::Class(_) => {}
         }
     }
     let main = fns
         .get("main")
         .map(|m| m.index)
         .ok_or_else(|| "no `main` function".to_string())?;
+    let arities: Vec<usize> = order.iter().map(|f| f.params.len()).collect();
 
     let mut functions = Vec::with_capacity(order.len());
     for f in &order {
@@ -96,10 +156,16 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             locals: Vec::new(),
             scope_depth: 0,
             fns: &fns,
+            arities: &arities,
+            variants: &variants,
+            enum_descs: &enum_descs,
+            match_bindings: Vec::new(),
+            height: 0,
         };
         for p in &f.params {
             c.add_local(&p.name, type_tag(&p.ty));
         }
+        c.height = c.locals.len(); // params occupy slots `0..arity` (decision P3-1)
         let last_line = f.span.line;
         for s in &f.body {
             c.stmt(s)?;
@@ -112,7 +178,11 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             chunk: c.chunk,
         });
     }
-    Ok(BytecodeProgram { functions, main })
+    Ok(BytecodeProgram {
+        functions,
+        main,
+        enum_descs,
+    })
 }
 
 /// Classify a declared type annotation into the coarse `TyTag` the compiler reasons about. Only the
@@ -131,7 +201,31 @@ fn type_tag(ty: &Type) -> TyTag {
 
 impl<'a> Compiler<'a> {
     fn emit(&mut self, op: Op, line: u32) {
+        // Maintain the operand-stack height (saturating: control flow after a `Return`/`MatchFail`
+        // is dead code whose height is never read). Branch merges reset `height` explicitly.
+        let eff = self.stack_effect(&op);
+        self.height = self.height.saturating_add_signed(eff);
         self.chunk.emit(op, line);
+    }
+
+    /// Net operand-stack delta of one op (`pushes - pops`). Only consumed by `match` (to spill its
+    /// scrutinee to the right slot); kept exhaustive so a new op can't silently skew the height.
+    fn stack_effect(&self, op: &Op) -> isize {
+        match op {
+            Op::Const(_) | Op::GetLocal(_) => 1,
+            Op::AddI | Op::SubI | Op::MulI | Op::DivI | Op::RemI => -1,
+            Op::AddF | Op::SubF | Op::MulF | Op::DivF | Op::RemF => -1,
+            Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge => -1,
+            Op::Pop | Op::SetLocal(_) | Op::JumpIfFalse(_) | Op::Index => -1,
+            Op::Neg | Op::Not | Op::Len | Op::Jump(_) => 0,
+            Op::MatchTag(_) | Op::GetEnumField(_) => 0, // pop one, push one
+            Op::Concat(n) | Op::MakeList(n) => 1 - *n as isize,
+            Op::Print(n) => -(*n as isize),
+            Op::Call(idx) => 1 - self.arities[*idx] as isize,
+            Op::MakeEnum(idx) => 1 - self.enum_descs[*idx].arity as isize,
+            // Terminal (end/redirect the frame): height afterward is dead code, never read.
+            Op::Return | Op::MatchFail => 0,
+        }
     }
 
     fn emit_const(&mut self, v: Value, line: u32) {
@@ -192,10 +286,15 @@ impl<'a> Compiler<'a> {
             Expr::Int(..) => Ok(NumTy::Int),
             Expr::Float(..) => Ok(NumTy::Float),
             Expr::Ident(name, _) => {
-                let tag = self
-                    .resolve_local(name)
-                    .map(|s| self.locals[s].ty)
-                    .ok_or_else(|| format!("undefined variable `{name}`"))?;
+                // Mirror `expr`'s resolution order: a `match`-arm binding shadows a local.
+                let tag =
+                    if let Some(b) = self.match_bindings.iter().rev().find(|b| b.name == *name) {
+                        b.ty
+                    } else {
+                        self.resolve_local(name)
+                            .map(|s| self.locals[s].ty)
+                            .ok_or_else(|| format!("undefined variable `{name}`"))?
+                    };
                 Self::as_num(tag).ok_or_else(|| format!("`{name}` is not numeric"))
             }
             Expr::Unary { expr, .. } => self.num_ty(expr),
@@ -225,6 +324,10 @@ impl<'a> Compiler<'a> {
     }
 
     fn stmt(&mut self, s: &Stmt) -> Result<(), String> {
+        // Every statement begins with a clean operand stack (transients == 0), so the live operand
+        // height equals the live-locals count. Anchoring here keeps `match`'s scrutinee slot exact
+        // regardless of any height drift in preceding dead-code-after-`return`.
+        self.height = self.locals.len();
         match s {
             Stmt::VarDecl { ty, name, init, .. } => {
                 self.expr(init)?; // value stays on the stack as the new local's slot
@@ -275,10 +378,19 @@ impl<'a> Compiler<'a> {
             Expr::Bool(b, sp) => self.emit_const(Value::Bool(*b), sp.line),
             Expr::Str(parts, sp) => self.compile_str(parts, sp.line)?,
             Expr::Ident(name, sp) => {
-                let slot = self
-                    .resolve_local(name)
-                    .ok_or_else(|| format!("undefined variable `{name}`"))?;
-                self.emit(Op::GetLocal(slot), sp.line);
+                // A `match`-arm binding shadows locals: re-extract it from `$match` along its
+                // payload path (decision P4-7). Otherwise it's an ordinary local slot.
+                if let Some((slot, path)) = self.resolve_binding(name) {
+                    self.emit(Op::GetLocal(slot), sp.line);
+                    for i in path {
+                        self.emit(Op::GetEnumField(i), sp.line);
+                    }
+                } else {
+                    let slot = self
+                        .resolve_local(name)
+                        .ok_or_else(|| format!("undefined variable `{name}`"))?;
+                    self.emit(Op::GetLocal(slot), sp.line);
+                }
             }
             Expr::List(items, sp) => {
                 for it in items {
@@ -303,9 +415,11 @@ impl<'a> Compiler<'a> {
                 return Err("member access is not supported by the VM compiler yet (M2 P4)".into())
             }
             Expr::Index { .. } => return Err("indexing is not supported (M1 surface)".into()),
-            Expr::Match { .. } => {
-                return Err("`match` is not supported by the VM compiler yet (M2 P4)".into())
-            }
+            Expr::Match {
+                scrutinee,
+                arms,
+                span,
+            } => self.compile_match(scrutinee, arms, span.line)?,
         }
         Ok(())
     }
@@ -342,20 +456,24 @@ impl<'a> Compiler<'a> {
         match op {
             And => {
                 self.expr(lhs)?;
-                let l_false = self.emit_jump(Op::JumpIfFalse(0), line);
+                let l_false = self.emit_jump(Op::JumpIfFalse(0), line); // pops lhs
+                let h_merge = self.height; // both branches converge to one bool above this
                 self.expr(rhs)?;
                 let l_end = self.emit_jump(Op::Jump(0), line);
                 self.patch_jump(l_false);
+                self.height = h_merge; // false-path: reset before pushing the literal `false`
                 self.emit_const(Value::Bool(false), line);
                 self.patch_jump(l_end);
                 return Ok(());
             }
             Or => {
                 self.expr(lhs)?;
-                let l_rhs = self.emit_jump(Op::JumpIfFalse(0), line);
+                let l_rhs = self.emit_jump(Op::JumpIfFalse(0), line); // pops lhs
+                let h_merge = self.height;
                 self.emit_const(Value::Bool(true), line);
                 let l_end = self.emit_jump(Op::Jump(0), line);
                 self.patch_jump(l_rhs);
+                self.height = h_merge; // rhs-path: reset before evaluating rhs
                 self.expr(rhs)?;
                 self.patch_jump(l_end);
                 return Ok(());
@@ -432,8 +550,17 @@ impl<'a> Compiler<'a> {
                 self.emit(Op::Call(meta.index), line);
                 return Ok(());
             }
-            // A non-function, non-`println` identifier call is an enum variant or class
-            // constructor — those land at P4.
+            // An enum variant constructor: `Variant(args)` (or a bare `Variant`, args empty).
+            // The checker has already verified arity, so push the payload and tag it (P4-3).
+            if let Some(meta) = self.variants.get(name) {
+                let idx = meta.index;
+                for a in args {
+                    self.expr(a)?;
+                }
+                self.emit(Op::MakeEnum(idx), line);
+                return Ok(());
+            }
+            // A non-function, non-variant identifier call is a class constructor — that lands at P4b.
             return Err(format!(
                 "calling `{name}` is not supported by the VM compiler yet (M2 P4)"
             ));
@@ -514,6 +641,165 @@ impl<'a> Compiler<'a> {
 
         self.patch_jump(exit_jump);
         self.end_scope(line); // pops $for_idx, $for_list
+        Ok(())
+    }
+
+    /// Resolve a `match`-arm binding by name (innermost shadows). Returns the `$match` slot and the
+    /// payload path to re-extract, cloned so the caller can emit without holding a borrow on `self`.
+    fn resolve_binding(&self, name: &str) -> Option<(usize, Vec<usize>)> {
+        self.match_bindings
+            .iter()
+            .rev()
+            .find(|b| b.name == name)
+            .map(|b| (b.match_slot, b.path.clone()))
+    }
+
+    /// `match scrutinee { pat => body, … }` as an expression (decision P4-7). The scrutinee is
+    /// evaluated once and spilled to a hidden `$match` slot; each arm tests its pattern (skipping
+    /// to the next arm on mismatch), binds payloads by re-extraction, then leaves its body's single
+    /// value on the stack. A matched arm jumps past the rest to a collapse that overwrites the
+    /// scrutinee slot with the result — so the whole `match` leaves exactly one value.
+    fn compile_match(
+        &mut self,
+        scrutinee: &Expr,
+        arms: &[MatchArm],
+        line: u32,
+    ) -> Result<(), String> {
+        // Coarse type of the scrutinee, for a catch-all binding used arithmetically (best-effort:
+        // non-numeric scrutinees collapse to `Other`, which `num_ty` rejects as an operand anyway).
+        let scrut_tag = match self.num_ty(scrutinee) {
+            Ok(NumTy::Int) => TyTag::Int,
+            Ok(NumTy::Float) => TyTag::Float,
+            Err(_) => TyTag::Other,
+        };
+        self.expr(scrutinee)?;
+        let m_slot = self.height - 1; // scrutinee now on top: its base-relative slot
+        let mut end_jumps = Vec::new();
+        for arm in arms {
+            self.height = m_slot + 1; // each arm dispatches with just the scrutinee live
+            let mut skips = Vec::new();
+            self.emit_pattern_test(&arm.pattern, m_slot, &[], &mut skips, line)?;
+            let n_before = self.match_bindings.len();
+            self.register_bindings(&arm.pattern, m_slot, &[], scrut_tag)?;
+            self.expr(&arm.body)?; // -> [.., scrutinee, result]
+            self.match_bindings.truncate(n_before);
+            end_jumps.push(self.emit_jump(Op::Jump(0), line));
+            for j in skips {
+                self.patch_jump(j); // a mismatch lands at the next arm
+            }
+        }
+        self.emit(Op::MatchFail, line); // checker-unreachable backstop (EV-7 parity)
+        for j in end_jumps {
+            self.patch_jump(j); // matched arms converge here: [.., scrutinee, result]
+        }
+        self.height = m_slot + 2;
+        self.emit(Op::SetLocal(m_slot), line); // result overwrites scrutinee slot -> [.., result]
+        Ok(())
+    }
+
+    /// Emit the test for `pat` against the `$match` sub-value reached by `path`. On a mismatch the
+    /// emitted `JumpIfFalse`'s index is recorded in `skips` (the caller patches them to the next
+    /// arm). Wildcard and binding patterns always match, so they emit no test.
+    fn emit_pattern_test(
+        &mut self,
+        pat: &Pattern,
+        m_slot: usize,
+        path: &[usize],
+        skips: &mut Vec<usize>,
+        line: u32,
+    ) -> Result<(), String> {
+        match pat {
+            Pattern::Wildcard(_) | Pattern::Binding { .. } => {}
+            Pattern::Int(n, _) => self.emit_literal_test(m_slot, path, Value::Int(*n), skips, line),
+            Pattern::Float(x, _) => {
+                self.emit_literal_test(m_slot, path, Value::Float(*x), skips, line);
+            }
+            Pattern::Str(s, _) => {
+                self.emit_literal_test(m_slot, path, Value::Str(s.clone()), skips, line);
+            }
+            Pattern::Bool(b, _) => {
+                self.emit_literal_test(m_slot, path, Value::Bool(*b), skips, line);
+            }
+            Pattern::Null(_) => {
+                // No null values exist in M1, so a null pattern never matches (interpreter
+                // parity, `match_pattern`): an unconditional skip.
+                self.emit_const(Value::Bool(false), line);
+                skips.push(self.emit_jump(Op::JumpIfFalse(0), line));
+            }
+            Pattern::Variant { name, fields, .. } => {
+                let idx = self
+                    .variants
+                    .get(name)
+                    .ok_or_else(|| format!("unknown variant `{name}`"))?
+                    .index;
+                self.emit_load_path(m_slot, path, line);
+                self.emit(Op::MatchTag(idx), line);
+                skips.push(self.emit_jump(Op::JumpIfFalse(0), line));
+                for (i, fp) in fields.iter().enumerate() {
+                    let mut sub = path.to_vec();
+                    sub.push(i);
+                    self.emit_pattern_test(fp, m_slot, &sub, skips, line)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Load the `$match` sub-value at `path`, compare it to `lit`, and skip the arm on inequality.
+    fn emit_literal_test(
+        &mut self,
+        m_slot: usize,
+        path: &[usize],
+        lit: Value,
+        skips: &mut Vec<usize>,
+        line: u32,
+    ) {
+        self.emit_load_path(m_slot, path, line);
+        self.emit_const(lit, line);
+        self.emit(Op::Eq, line);
+        skips.push(self.emit_jump(Op::JumpIfFalse(0), line));
+    }
+
+    /// Push the sub-value of the `$match` scrutinee (slot `m_slot`) reached by `path`.
+    fn emit_load_path(&mut self, m_slot: usize, path: &[usize], line: u32) {
+        self.emit(Op::GetLocal(m_slot), line);
+        for &i in path {
+            self.emit(Op::GetEnumField(i), line);
+        }
+    }
+
+    /// Register (emitting no code) every binding introduced by `pat`, so the arm body can
+    /// re-extract them. `cur_ty` is the coarse type of the value `pat` matches (for `num_ty`).
+    fn register_bindings(
+        &mut self,
+        pat: &Pattern,
+        m_slot: usize,
+        path: &[usize],
+        cur_ty: TyTag,
+    ) -> Result<(), String> {
+        match pat {
+            Pattern::Binding { name, .. } => self.match_bindings.push(MatchBinding {
+                name: name.clone(),
+                match_slot: m_slot,
+                path: path.to_vec(),
+                ty: cur_ty,
+            }),
+            Pattern::Variant { name, fields, .. } => {
+                let field_tags = self
+                    .variants
+                    .get(name)
+                    .ok_or_else(|| format!("unknown variant `{name}`"))?
+                    .field_tags
+                    .clone();
+                for (i, fp) in fields.iter().enumerate() {
+                    let mut sub = path.to_vec();
+                    sub.push(i);
+                    let ty = field_tags.get(i).copied().unwrap_or(TyTag::Other);
+                    self.register_bindings(fp, m_slot, &sub, ty)?;
+                }
+            }
+            _ => {} // wildcard / literals bind nothing
+        }
         Ok(())
     }
 }
@@ -657,5 +943,42 @@ mod tests {
             println("done");
         }"#;
         assert_eq!(out(src), "11\n12\ndone\n");
+    }
+
+    #[test]
+    fn enum_construct_and_match_binds_payload() {
+        let src = r#"enum Grade { Pass(int s), Fail(int s), }
+            function d(Grade g) -> string { return match g { Pass(s) => "P{s}", Fail(s) => "F{s}", }; }
+            function main() { println(d(Pass(9))); println(d(Fail(3))); }"#;
+        assert_eq!(out(src), "P9\nF3\n");
+    }
+
+    #[test]
+    fn match_literal_arms_and_catch_all_binding() {
+        let src = r#"function f(int n) -> string { return match n { 0 => "z", 1 => "o", x => "m{x}", }; }
+            function main() { println(f(0)); println(f(1)); println(f(9)); }"#;
+        assert_eq!(out(src), "z\no\nm9\n");
+    }
+
+    #[test]
+    fn match_as_binary_operand_tracks_scrutinee_slot() {
+        // The lhs `1` is live on the operand stack when the `match` rhs compiles, so the scrutinee
+        // must spill to a transient-aware slot (not `locals.len()`).
+        let src = r#"function g(int n) -> int { return 1 + match n { 0 => 10, _ => 20 }; }
+            function main() { println("{g(0)}"); println("{g(5)}"); }"#;
+        assert_eq!(out(src), "11\n21\n");
+    }
+
+    #[test]
+    fn nested_match_reextracts_outer_binding() {
+        // Inner `match` compiles while the outer scrutinee occupies slot `locals.len()`; its own
+        // scrutinee must land one slot higher (height tracking), and the inner arm re-extracts the
+        // outer binding `b` from the outer scrutinee.
+        let src = r#"enum Pair { P(int a, int b), }
+            function f(Pair p) -> string {
+                return match p { P(a, b) => match a { 0 => "z b={b}", _ => "a={a} b={b}", }, };
+            }
+            function main() { println(f(P(0, 9))); println(f(P(5, 2))); }"#;
+        assert_eq!(out(src), "z b=9\na=5 b=2\n");
     }
 }

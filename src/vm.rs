@@ -13,7 +13,7 @@
 use crate::chunk::{BytecodeProgram, Op};
 use crate::diagnostic::Diagnostic;
 use crate::limits::MAX_CALL_DEPTH;
-use crate::value::Value;
+use crate::value::{EnumVal, Value};
 
 /// Whether the dispatch loop should fetch the next instruction or stop (the `main` frame
 /// returned). Lets the per-op `exec_op` signal completion without owning the run loop.
@@ -284,6 +284,40 @@ impl<'a> Vm<'a> {
                     return Ok(Flow::Done);
                 }
             }
+
+            // --- P4a: enums + match ---
+            Op::MakeEnum(idx) => {
+                // Clone the small descriptor (two `String`s) so the `&self.program` borrow ends
+                // before `split_off` takes `&mut self`.
+                let desc = self.program.enum_descs[idx].clone();
+                let payload = self.split_off(desc.arity);
+                self.stack.push(Value::Enum(Box::new(EnumVal {
+                    ty: desc.ty,
+                    variant: desc.variant,
+                    payload,
+                })));
+            }
+            Op::MatchTag(idx) => {
+                let want = self.program.enum_descs[idx].variant.clone();
+                // Pop the scrutinee copy the compiler pushed for this test (it reloads `$match`
+                // per arm), leaving just the bool for the following `JumpIfFalse`.
+                let matched = matches!(self.pop(), Value::Enum(ev) if ev.variant == want);
+                self.stack.push(Value::Bool(matched));
+            }
+            Op::GetEnumField(i) => match self.pop() {
+                Value::Enum(ev) => {
+                    let v = ev
+                        .payload
+                        .into_iter()
+                        .nth(i)
+                        .ok_or_else(|| format!("enum payload index {i} out of range"))?;
+                    self.stack.push(v);
+                }
+                v => return Err(format!("cannot extract enum field from {}", v.type_name())),
+            },
+            // Checker-unreachable backstop: the canonical fault, byte-identical to the
+            // interpreter's `eval_match` fall-through (the `agree_err` oracle classifies by body).
+            Op::MatchFail => return Err("non-exhaustive match at runtime".to_string()),
         }
         Ok(Flow::Next)
     }
@@ -419,6 +453,7 @@ mod tests {
                 chunk,
             }],
             main: 0,
+            enum_descs: Vec::new(),
         };
         Vm::new(&program).run().map_err(|d| d.to_string())
     }
@@ -639,7 +674,75 @@ mod tests {
                 },
             ],
             main: 0,
+            enum_descs: Vec::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "7\n");
+    }
+
+    #[test]
+    fn make_enum_then_match_tag_and_get_field() {
+        use crate::chunk::EnumDesc;
+        // descs[0] = Opt::Some(int) (arity 1). Build:
+        //   const 7; MakeEnum(0)          -> Some(7) becomes slot 0 (stays)
+        //   GetLocal(0); MatchTag(0)      -> true        ; print
+        //   GetLocal(0); GetEnumField(0)  -> 7           ; print
+        let mut c = Chunk::new();
+        let seven = c.add_const(Value::Int(7));
+        c.emit(Op::Const(seven), 1);
+        c.emit(Op::MakeEnum(0), 1);
+        c.emit(Op::GetLocal(0), 1);
+        c.emit(Op::MatchTag(0), 1);
+        c.emit(Op::Print(1), 1);
+        c.emit(Op::GetLocal(0), 1);
+        c.emit(Op::GetEnumField(0), 1);
+        c.emit(Op::Print(1), 1);
+        term(&mut c);
+        let program = BytecodeProgram {
+            functions: vec![Function {
+                name: "main".into(),
+                arity: 0,
+                chunk: c,
+            }],
+            main: 0,
+            enum_descs: vec![EnumDesc {
+                ty: "Opt".into(),
+                variant: "Some".into(),
+                arity: 1,
+            }],
+        };
+        assert_eq!(Vm::new(&program).run().unwrap(), "true\n7\n");
+    }
+
+    #[test]
+    fn match_tag_is_false_for_a_different_variant() {
+        use crate::chunk::EnumDesc;
+        // Build a `None` (desc 0), then test it against the `Some` tag (desc 1) -> false.
+        let mut c = Chunk::new();
+        c.emit(Op::MakeEnum(0), 1); // None (arity 0) -> slot 0
+        c.emit(Op::GetLocal(0), 1);
+        c.emit(Op::MatchTag(1), 1); // is it `Some`? -> false
+        c.emit(Op::Print(1), 1);
+        term(&mut c);
+        let program = BytecodeProgram {
+            functions: vec![Function {
+                name: "main".into(),
+                arity: 0,
+                chunk: c,
+            }],
+            main: 0,
+            enum_descs: vec![
+                EnumDesc {
+                    ty: "Opt".into(),
+                    variant: "None".into(),
+                    arity: 0,
+                },
+                EnumDesc {
+                    ty: "Opt".into(),
+                    variant: "Some".into(),
+                    arity: 1,
+                },
+            ],
+        };
+        assert_eq!(Vm::new(&program).run().unwrap(), "false\n");
     }
 }

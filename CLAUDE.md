@@ -28,17 +28,21 @@ Scope and limits:
 
 ## Toolchain & gate
 
-`export PATH=/stack/tools/cargo/bin:$PATH`. Baseline: 223 tests green, clippy clean (pedantic off).
+`export PATH=/stack/tools/cargo/bin:$PATH`. Baseline: 231 tests green, clippy clean (pedantic off).
 The differential harness (`tests/differential.rs`) is the correctness spine — `run` and `runvm`
-must stay byte-identical. Adding an `Op` variant requires the `src/vm.rs` match arm in the same
-commit (the dispatch match is exhaustive). `phorge bench <file>` measures the two backends
-(median-of-N, output-identity gated) — run it for a before/after number before any perf change.
+must stay byte-identical. Adding an `Op` variant requires the `src/vm.rs` match arm **and** the
+`src/chunk.rs` `validate`/`stack_effect` arms in the same commit (all three matches are
+exhaustive). `phorge bench <file>` measures the two backends (median-of-N, output-identity
+gated) — run it for a before/after number before any perf change.
 
 ## Active plan
 
 The M2 P3.5 hardening roadmap (`docs/plans/2026-06-16-m2-p3.5-hardening-roadmap.md`, Waves 0–3) is
-**complete**; Wave 4 is intentionally deferred to land *with* P4/P5. **Next: M2 P4** (classes/enums/
-`match` + arena) on the hardened compiler/VM seams.
+**complete**; Wave 4 is intentionally deferred to land *with* P4/P5. **M2 P4 is in progress**
+(`docs/plans/2026-06-16-m2-p4-classes-enums-match.md`): **P4a — enums + `match` — is DONE**;
+**next is P4b** (classes: construction + field reads), then P4c (methods + `this`). The VM object
+model is value-native (reuses the shared `Value::Enum`/`Instance`; the arena is a deferred,
+bench-gated perf milestone, not a P4 requirement).
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing
 correctness rules — read before touching backends, value kernels, or the `Op` set) and

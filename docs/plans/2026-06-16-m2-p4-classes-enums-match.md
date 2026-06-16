@@ -104,22 +104,34 @@ PATH=/stack/tools/cargo/bin:$PATH` (cargo 1.96, pinned in `rust-toolchain.toml`)
 Each wave is TDD-first (differential tests before the op work), ends green
 (`cargo test` + `cargo clippy --all-targets` + `cargo fmt --check`), and is one commit.
 
-### P4a — Enums + `match` (no objects)
+### P4a — Enums + `match` (no objects) ✅ DONE (2026-06-16)
 
-- [ ] **A1 (test):** add `tests/differential.rs` enum+`match` programs — bare + payload
-      variants, literal/`Wildcard`/`Binding`/`Variant` patterns, nested destructuring,
-      `match` in expression position; an `agree_err` case for a runtime non-exhaustive
-      fall-through (if reachable past the checker). They fail (compiler still errors on
-      `match`/variant calls).
-- [ ] **A2:** `chunk.rs` — add `Op::MakeEnum`, `MatchTag`, `GetEnumField`; add `EnumDesc` +
-      name pool to `BytecodeProgram`; extend `validate` (descriptor/name bounds). Stays green
-      (additive).
-- [ ] **A3:** `vm.rs` — `exec_op` arms for the three ops.
-- [ ] **A4:** `compiler.rs` — collect enum descriptors; resolve `Variant(args)`/bare `Variant`
-      calls to `MakeEnum`; `compile_match` per P4-7/P4-9. Remove the `match` + variant-call
-      stubs.
-- [ ] **A5:** run `examples/grades.phg` on both backends in the differential harness; whole
-      suite green; commit `feat(vm): enums + exhaustive match (M2 P4a)`.
+- [x] **A1 (test):** added `P4A_PROGRAMS` to `tests/differential.rs` — bare + payload variants,
+      literal/`Wildcard`/`Binding`/`Variant` patterns, payload destructuring, `match` in
+      return/var-decl/transient positions. *No `agree_err` case:* exhaustiveness is
+      checker-enforced, so a non-exhaustive `match` is rejected at the check stage on **both**
+      backends — there is no checker-passing program that reaches the runtime fall-through, so
+      none can be constructed. The runtime backstop (`MatchFail`) exists for defence-in-depth.
+- [x] **A2:** `chunk.rs` — added `Op::MakeEnum`/`MatchTag`/`GetEnumField` **and `Op::MatchFail`**
+      (a 7th op, amendment vs the original 6-op plan — needed for the checker-unreachable
+      non-exhaustive backstop, mirroring the interpreter's exact fault string for EV-7 parity).
+      Added `EnumDesc` + `enum_descs` to `BytecodeProgram`; extended `validate` (descriptor
+      bounds for `MakeEnum`/`MatchTag`; `GetEnumField`/`MatchFail` carry no static-bounded index).
+      One descriptor table indexed by variant (variant names are globally unique) — no separate
+      name pool was needed.
+- [x] **A3:** `vm.rs` — `exec_op` arms for the four ops.
+- [x] **A4:** `compiler.rs` — collect enum descriptors + `variants` map in the pre-pass; resolve
+      `Variant(args)`/bare `Variant` to `MakeEnum`; `compile_match` (scrutinee spill + per-arm
+      tests + payload re-extraction). Added **operand-height tracking** (`stack_effect` in
+      `emit`, reset per statement, fixed at `&&`/`||`/`match` merges) so `match` mid-expression
+      spills its scrutinee to the correct slot. Removed the `match` + variant-call stubs.
+- [x] **A5:** suite green (231 tests), clippy + fmt clean; committed.
+      **Correction:** `examples/grades.phg` is **not** unblocked by P4a — it contains a
+      `class Counter`, so it needs P4c. The grades example run moves to P4c.
+      **Lexer limitation found:** `match` cannot appear inside string interpolation (`"{match …}"`
+      does not lex — the interpolation lexer doesn't nest the `match` braces). Pre-existing,
+      shared by both backends (not a parity issue). Transient-context coverage instead uses
+      `match` as a binary operand and `match` nested in an arm body.
 
 ### P4b — Classes: construction + field reads
 

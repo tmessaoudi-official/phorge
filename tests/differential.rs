@@ -152,6 +152,69 @@ fn p3_programs_match_between_backends() {
     }
 }
 
+/// P4a surface: single-payload enums + exhaustive `match`. Construction (`Variant(args)` and
+/// bare `Variant`), `match` in both return and var-decl-init position, variant/literal/wildcard/
+/// binding patterns, and payload destructuring. Each must run identically on both backends.
+const P4A_PROGRAMS: &[&str] = &[
+    // payload enum, variant patterns binding the payload, `match` in return position
+    r#"enum Grade { Pass(int score), Fail(int score), }
+       function describe(Grade g) -> string {
+           return match g {
+               Pass(s) => "PASS ({s})",
+               Fail(s) => "FAIL ({s})",
+           };
+       }
+       function main() { println(describe(Pass(90))); println(describe(Fail(40))); }"#,
+    // bare (no-payload) variants, wildcard arm, `match` in var-decl-init position
+    r#"enum Color { Red, Green, Blue, }
+       function main() {
+           Color c = Green;
+           string name = match c { Red => "red", Green => "green", _ => "other", };
+           println(name);
+       }"#,
+    // literal int patterns + catch-all binding used in interpolation
+    r#"function label(int n) -> string {
+           return match n { 0 => "zero", 1 => "one", x => "many ({x})", };
+       }
+       function main() { println(label(0)); println(label(1)); println(label(7)); }"#,
+    // bool literal patterns
+    r#"function yn(bool b) -> string { return match b { true => "Y", false => "N", }; }
+       function main() { println(yn(true)); println(yn(false)); }"#,
+    // string literal patterns + wildcard
+    r#"function kind(string s) -> string {
+           return match s { "a" => "first", "b" => "second", _ => "rest", };
+       }
+       function main() { println(kind("a")); println(kind("b")); println(kind("z")); }"#,
+    // enum value flows through a local and equality (`==` on enums) before matching
+    r#"enum Dir { N, S, }
+       function main() {
+           Dir d = N;
+           println("{d == N}");
+           string t = match d { N => "north", S => "south", };
+           println(t);
+       }"#,
+    // `match` in a *transient* position: as the rhs of `+`, with the lhs already on the operand
+    // stack (exercises the compiler's operand-height tracking for the scrutinee slot).
+    r#"function g(int n) -> int { return 1 + match n { 0 => 10, _ => 20 }; }
+       function main() { println("{g(0)}"); println("{g(5)}"); }"#,
+    // nested `match` whose inner arm references the *outer* arm's binding (re-extraction across
+    // two live scrutinees — the hardest binding/height case in P4a).
+    r#"enum Pair { P(int a, int b), }
+       function f(Pair p) -> string {
+           return match p {
+               P(a, b) => match a { 0 => "first=zero b={b}", _ => "a={a} b={b}", },
+           };
+       }
+       function main() { println(f(P(0, 9))); println(f(P(5, 2))); }"#,
+];
+
+#[test]
+fn p4a_programs_match_between_backends() {
+    for src in P4A_PROGRAMS {
+        agree(src);
+    }
+}
+
 #[test]
 fn examples_match_between_backends() {
     // `examples/hello.phg` (P2) and `examples/fib.phg` (P3 recursion) both run on the VM.

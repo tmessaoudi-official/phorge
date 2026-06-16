@@ -1,9 +1,10 @@
 //! Bytecode chunk + instruction set for the M2 VM.
 //! See docs/specs/2026-06-15-m2-bytecode-vm-design.md (§4, §5).
 //! P2 scope: full M1 expression/statement surface for `main` (see
-//! docs/plans/2026-06-15-m2-plan2-compiler-runvm.md). Reuses `value::Value` (scalar
-//! formatting parity with the interpreter is free); lists are inline in P2 — the VM
-//! heap/handle object model arrives in P4.
+//! docs/plans/2026-06-15-m2-plan2-compiler-runvm.md). P4a adds single-payload enums + `match`.
+//! Reuses `value::Value` directly for scalars, lists, *and* enums/instances — the VM mirrors the
+//! interpreter's value-semantics object model (clone-on-use, no heap; decision P4-1). An arena is
+//! a deferred, bench-gated perf milestone, not a correctness requirement.
 
 use crate::value::Value;
 use std::collections::HashMap;
@@ -91,6 +92,21 @@ pub enum Op {
     /// frame, push the return value onto the caller's stack. End execution when the last
     /// (`main`) frame returns (decision P3-2).
     Return,
+    /// Construct an enum value from `enum_descs[idx]`: pop `desc.arity` payload values (in
+    /// source order — top of stack is the last field) and push `Value::Enum` (decision P4-3).
+    MakeEnum(usize),
+    /// Pop the scrutinee and push a `Bool`: whether it is a `Value::Enum` whose variant equals
+    /// `enum_descs[idx].variant`. Variant names are globally unique (the checker keys them by
+    /// name), so the variant string alone disambiguates. Used by `match` arm dispatch (P4-7).
+    MatchTag(usize),
+    /// Pop an enum value and push a clone of its payload element `i`. The compiler only emits
+    /// this for an index a preceding `MatchTag` already proved in range (P4-7); a defensive
+    /// runtime fault covers misuse (EV-7).
+    GetEnumField(usize),
+    /// Raise the canonical `"non-exhaustive match at runtime"` fault. The checker guarantees
+    /// `match` exhaustiveness, so the compiler plants this only as the fall-through after the
+    /// last arm; it mirrors the interpreter's identical fault if ever reached (EV-7 parity).
+    MatchFail,
 }
 
 /// A unit of compiled bytecode: instructions, a constant pool, and a per-instruction
@@ -146,11 +162,23 @@ pub struct Function {
     pub chunk: Chunk,
 }
 
-/// A whole compiled program: every top-level function plus the index of `main`.
+/// A static descriptor for one enum variant: its enum type, variant name, and payload arity.
+/// Built once in the compiler pre-pass (every variant of every declared enum) and indexed by
+/// `Op::MakeEnum`/`Op::MatchTag` — the enum analogue of the constant pool (decision P4-2).
+#[derive(Debug, Clone)]
+pub struct EnumDesc {
+    pub ty: String,
+    pub variant: String,
+    pub arity: usize,
+}
+
+/// A whole compiled program: every top-level function, the index of `main`, and the enum-variant
+/// descriptor table shared across all functions (decision P4-2).
 #[derive(Debug, Clone)]
 pub struct BytecodeProgram {
     pub functions: Vec<Function>,
     pub main: usize,
+    pub enum_descs: Vec<EnumDesc>,
 }
 
 impl BytecodeProgram {
@@ -161,8 +189,10 @@ impl BytecodeProgram {
     /// (`GetLocal`/`SetLocal`) can't be range-checked here — their bound is the runtime locals
     /// window, not anything static — so they stay covered by the VM's `frame_slot` debug-assert.
     ///
-    /// P4 adds index-carrying ops (`MakeInstance`, `GetField(idx)`, `MatchTag`) that multiply this
-    /// surface; extend the match below in lockstep (see memory `op-variant-match-coupling`).
+    /// P4a adds the index-carrying ops `MakeEnum`/`MatchTag` (into `enum_descs`); P4b/P4c add more
+    /// (`MakeInstance`, `GetField`, `CallMethod`). Each new index-carrying op extends the match
+    /// below in lockstep (see memory `op-variant-match-coupling`). `GetEnumField` carries a payload
+    /// index with no static bound (like a local slot) — it stays covered by the VM's runtime guard.
     pub fn validate(&self) -> Result<(), String> {
         let nfns = self.functions.len();
         if self.main >= nfns {
@@ -171,6 +201,7 @@ impl BytecodeProgram {
                 self.main
             ));
         }
+        let ndescs = self.enum_descs.len();
         for (fi, f) in self.functions.iter().enumerate() {
             let code_len = f.chunk.code.len();
             let const_len = f.chunk.consts.len();
@@ -182,6 +213,9 @@ impl BytecodeProgram {
                     Op::Call(idx) if *idx >= nfns => {
                         Some(format!("call target {idx} out of range ({nfns} functions)"))
                     }
+                    Op::MakeEnum(idx) | Op::MatchTag(idx) if *idx >= ndescs => Some(format!(
+                        "enum descriptor index {idx} out of range ({ndescs} descriptors)"
+                    )),
                     // Absolute targets; `== code_len` is the legal "fall off the end → implicit
                     // return" landing the run loop already handles, so only `>` is invalid.
                     Op::Jump(t) | Op::JumpIfFalse(t) if *t > code_len => Some(format!(
@@ -260,6 +294,7 @@ mod tests {
                 chunk: c,
             }],
             main: 0,
+            enum_descs: Vec::new(),
         };
         assert_eq!(prog.validate(), Ok(()));
     }
@@ -276,6 +311,7 @@ mod tests {
                 chunk: c,
             }],
             main: 0,
+            enum_descs: Vec::new(),
         };
         let err = prog.validate().unwrap_err();
         assert!(err.contains("invalid bytecode"), "{err}");
@@ -294,14 +330,34 @@ mod tests {
                 chunk: c,
             }],
             main: 0,
+            enum_descs: Vec::new(),
         };
         assert!(prog.validate().unwrap_err().contains("call target 7"));
 
         let bad_main = BytecodeProgram {
             functions: vec![],
             main: 0,
+            enum_descs: Vec::new(),
         };
         assert!(bad_main.validate().unwrap_err().contains("main index 0"));
+    }
+
+    #[test]
+    fn validate_rejects_out_of_range_enum_desc() {
+        let mut c = Chunk::new();
+        c.emit(Op::MakeEnum(3), 1); // no descriptors in the table
+        c.emit(Op::Return, 1);
+        let prog = BytecodeProgram {
+            functions: vec![Function {
+                name: "main".into(),
+                arity: 0,
+                chunk: c,
+            }],
+            main: 0,
+            enum_descs: Vec::new(),
+        };
+        let err = prog.validate().unwrap_err();
+        assert!(err.contains("enum descriptor index 3"), "{err}");
     }
 
     #[test]
@@ -315,6 +371,7 @@ mod tests {
                 chunk: c,
             }],
             main: 0,
+            enum_descs: Vec::new(),
         };
         assert_eq!(prog.functions[prog.main].name, "main");
         assert_eq!(prog.functions[0].arity, 0);
