@@ -6,6 +6,35 @@
 //! heap/handle object model arrives in P4.
 
 use crate::value::Value;
+use std::collections::HashMap;
+
+/// Hashable identity of an internable constant. `Value` can't derive `Hash`/`Eq` (it holds `f64`
+/// and composite types), so the constant pool dedups via this projection: floats by their bit
+/// pattern (`to_bits`), strings by content, the rest by value. Composite constants (`List`,
+/// instances, enums) are never interned — they have no key and always get a fresh slot.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum ConstKey {
+    Int(i64),
+    /// `f64::to_bits` — so `+0.0`/`-0.0` and distinct `NaN`s key apart, and equal floats dedup.
+    Float(u64),
+    Bool(bool),
+    Str(String),
+    Unit,
+}
+
+impl ConstKey {
+    /// The dedup key for a scalar constant, or `None` for a composite (never interned).
+    fn of(v: &Value) -> Option<ConstKey> {
+        Some(match v {
+            Value::Int(n) => ConstKey::Int(*n),
+            Value::Float(x) => ConstKey::Float(x.to_bits()),
+            Value::Bool(b) => ConstKey::Bool(*b),
+            Value::Str(s) => ConstKey::Str(s.clone()),
+            Value::Unit => ConstKey::Unit,
+            _ => return None,
+        })
+    }
+}
 
 /// One VM instruction. Typed operands — no raw-byte decode (decision M2-7).
 /// Jump targets are absolute instruction indices (decision P2-2).
@@ -71,6 +100,10 @@ pub struct Chunk {
     pub code: Vec<Op>,
     pub consts: Vec<Value>,
     pub lines: Vec<u32>,
+    /// Build-time interning table: scalar constant → its pool index, so `add_const` dedups
+    /// repeated literals instead of growing the pool per occurrence. Not part of the emitted
+    /// bytecode — it only steers `add_const` while a `Chunk` is under construction.
+    const_index: HashMap<ConstKey, usize>,
 }
 
 impl Chunk {
@@ -78,10 +111,23 @@ impl Chunk {
         Self::default()
     }
 
-    /// Intern a constant, returning its pool index.
+    /// Intern a constant, returning its pool index. A repeated scalar (same int / bit-equal float /
+    /// equal string / bool / unit) reuses its existing slot, so the pool grows with *distinct*
+    /// values, not occurrences — keeping the constant pool (and the future P4/P5 GC root set that
+    /// scans it) lean. Composite constants have no key and always get a fresh slot.
     pub fn add_const(&mut self, v: Value) -> usize {
-        self.consts.push(v);
-        self.consts.len() - 1
+        if let Some(key) = ConstKey::of(&v) {
+            if let Some(&idx) = self.const_index.get(&key) {
+                return idx;
+            }
+            let idx = self.consts.len();
+            self.const_index.insert(key, idx);
+            self.consts.push(v);
+            idx
+        } else {
+            self.consts.push(v);
+            self.consts.len() - 1
+        }
     }
 
     /// Append an instruction tagged with its source line.
@@ -165,6 +211,29 @@ mod tests {
         let mut c = Chunk::new();
         assert_eq!(c.add_const(Value::Int(1)), 0);
         assert_eq!(c.add_const(Value::Int(2)), 1);
+        assert_eq!(c.consts.len(), 2);
+    }
+
+    #[test]
+    fn add_const_interns_duplicate_scalars() {
+        let mut c = Chunk::new();
+        // Repeated scalars reuse their slot: the pool grows with distinct values, not occurrences.
+        assert_eq!(c.add_const(Value::Int(7)), 0);
+        assert_eq!(c.add_const(Value::Int(7)), 0); // same int → same index
+        assert_eq!(c.add_const(Value::Float(1.5)), 1);
+        assert_eq!(c.add_const(Value::Float(1.5)), 1); // bit-equal float → same index
+        assert_eq!(c.add_const(Value::Str("hi".into())), 2);
+        assert_eq!(c.add_const(Value::Str("hi".into())), 2); // equal string → same index
+        assert_eq!(c.add_const(Value::Int(8)), 3); // distinct value → new slot
+        assert_eq!(c.consts.len(), 4);
+    }
+
+    #[test]
+    fn add_const_does_not_intern_composites() {
+        let mut c = Chunk::new();
+        // Lists have no dedup key — each gets a fresh slot even if structurally equal.
+        assert_eq!(c.add_const(Value::List(vec![Value::Int(1)])), 0);
+        assert_eq!(c.add_const(Value::List(vec![Value::Int(1)])), 1);
         assert_eq!(c.consts.len(), 2);
     }
 
