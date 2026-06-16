@@ -58,6 +58,122 @@ pub fn build_host(src: &str, out: &std::path::Path) -> Result<String, String> {
     Ok(format!("built {}\n", out.display()))
 }
 
+/// The Phase-2 cross targets (macOS deferred — reader ships, stub does not).
+pub const PHASE2_TARGETS: &[&str] = &[
+    "x86_64-unknown-linux-musl",
+    "aarch64-unknown-linux-gnu",
+    "aarch64-unknown-linux-musl",
+    "x86_64-pc-windows-gnu",
+];
+
+/// Output filename for a target: `<stem>` (or `<stem>.exe` for windows).
+pub(crate) fn output_name(stem: &str, target: &str) -> String {
+    if target.contains("windows") {
+        format!("{stem}.exe")
+    } else {
+        stem.to_string()
+    }
+}
+
+/// Error if the rustup std for `target` is not installed (precise, actionable message).
+pub(crate) fn ensure_target_installed(target: &str) -> Result<(), String> {
+    let out = std::process::Command::new("rustup")
+        .args(["target", "list", "--installed"])
+        .output()
+        .map_err(|e| format!("cannot run rustup: {e}"))?;
+    let installed = String::from_utf8_lossy(&out.stdout);
+    if installed.lines().any(|l| l.trim() == target) {
+        Ok(())
+    } else {
+        Err(format!(
+            "target '{target}' not installed — run: rustup target add {target}"
+        ))
+    }
+}
+
+/// The host target triple, parsed from `rustc -vV`'s `host:` line. `None` if rustc is unavailable or
+/// the line is missing — callers fall back to a literal label so `--all` still names the artifact.
+pub(crate) fn host_triple() -> Option<String> {
+    let out = std::process::Command::new("rustc")
+        .arg("-vV")
+        .output()
+        .ok()?;
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .find_map(|l| l.strip_prefix("host: ").map(|t| t.trim().to_string()))
+}
+
+/// Reject apple/darwin targets in Phase 2: `embed_section` writes only the ELF/PE `.phorge` section,
+/// but a Mac binary self-reads via `__PHORGE,__source` — embedding into a Mac stub would silently
+/// yield a binary that can't find its source (INVARIANTS #1). Reject rather than emit a broken
+/// artifact (F7 / design §6, §8).
+fn reject_if_macos(target: &str) -> Result<(), String> {
+    if target.contains("apple") || target.contains("darwin") {
+        return Err(format!(
+            "target '{target}': macOS stub production is deferred — Phase 2 builds Linux + Windows \
+             only (the Mach-O reader ships, but the Mac stub + `__PHORGE,__source` embed do not). \
+             See design §8."
+        ));
+    }
+    Ok(())
+}
+
+/// Build for a single explicit target (cross-compile + embed).
+pub fn build_target(
+    input_path: &str,
+    src: &str,
+    target: &str,
+    out_path: Option<&str>,
+) -> Result<String, String> {
+    crate::cli::cmd_check(src)?;
+    reject_if_macos(target)?;
+    ensure_target_installed(target)?;
+    let stem = std::path::Path::new(input_path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| format!("cannot derive output name from {input_path}"))?;
+    let out = match out_path {
+        Some(p) => std::path::PathBuf::from(p),
+        None => std::path::PathBuf::from(output_name(stem, target)),
+    };
+    let stub = build_stub(target)?;
+    embed_section(&stub, &out, src)?;
+    Ok(format!("built {} ({target})\n", out.display()))
+}
+
+/// Build for host + all Phase-2 targets into `dist/`. `out_path` is ignored (per-target names).
+pub fn build_all(input_path: &str, src: &str, _out_path: Option<&str>) -> Result<String, String> {
+    crate::cli::cmd_check(src)?;
+    let stem = std::path::Path::new(input_path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| format!("cannot derive output name from {input_path}"))?;
+    std::fs::create_dir_all("dist").map_err(|e| format!("cannot create dist/: {e}"))?;
+    let mut report = String::new();
+    // host first — name it with the real host triple for a consistent <stem>-<triple> scheme (P2-10).
+    let host_label = host_triple().unwrap_or_else(|| "host".to_string());
+    let host_out = std::path::PathBuf::from(format!(
+        "dist/{}",
+        output_name(&format!("{stem}-{host_label}"), &host_label)
+    ));
+    build_host(src, &host_out)?;
+    report.push_str(&format!("built {} ({host_label})\n", host_out.display()));
+    for t in PHASE2_TARGETS {
+        ensure_target_installed(t)?;
+        let out =
+            std::path::PathBuf::from(format!("dist/{}", output_name(&format!("{stem}-{t}"), t)));
+        let stub = build_stub(t)?;
+        embed_section(&stub, &out, src)?;
+        report.push_str(&format!("built {} ({t})\n", out.display()));
+    }
+    Ok(report)
+}
+
+/// Cross-compile a phorge stub for `target` via cargo-zigbuild; cached. Wired in C4.
+pub(crate) fn build_stub(target: &str) -> Result<std::path::PathBuf, String> {
+    Err(format!("cross-build for {target} not yet implemented (C4)"))
+}
+
 /// FNV-1a-64 of a byte slice — a cache-key identity hash (NOT a security hash). std-only, ~10 lines.
 pub fn fnv1a_64(bytes: &[u8]) -> u64 {
     let mut hash: u64 = 0xCBF2_9CE4_8422_2325; // offset basis

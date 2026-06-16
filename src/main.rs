@@ -59,25 +59,54 @@ fn main() {
             }
         };
         let src = read_source_file(file);
-        let out = match args.get(3).map(String::as_str) {
-            None => None,
-            Some("-o") => match args.get(4).map(String::as_str) {
-                Some(v) => Some(v),
-                None => {
+        // Flags after `<file>`: optional -o <out>, optional (--target <triple> | --all), mutually
+        // exclusive. --sign is reserved for Phase 3; unknown flags / extra args → usage, exit 2.
+        let mut out: Option<&str> = None;
+        let mut target: Option<&str> = None;
+        let mut all = false;
+        let mut i = 3;
+        while i < args.len() {
+            match args[i].as_str() {
+                "-o" => {
+                    out = Some(args.get(i + 1).map(String::as_str).unwrap_or_else(|| {
+                        eprintln!("{USAGE}");
+                        exit(2);
+                    }));
+                    i += 2;
+                }
+                "--target" => {
+                    target = Some(args.get(i + 1).map(String::as_str).unwrap_or_else(|| {
+                        eprintln!("{USAGE}");
+                        exit(2);
+                    }));
+                    i += 2;
+                }
+                "--all" => {
+                    all = true;
+                    i += 1;
+                }
+                "--sign" => {
+                    eprintln!("signing is Phase 3");
+                    exit(2);
+                }
+                _ => {
                     eprintln!("{USAGE}");
                     exit(2);
                 }
-            },
-            Some(_) => {
-                eprintln!("{USAGE}");
-                exit(2);
             }
-        };
-        if args.len() > 5 {
-            eprintln!("{USAGE}");
+        }
+        if all && target.is_some() {
+            eprintln!("{USAGE}"); // --all and --target are mutually exclusive
             exit(2);
         }
-        match cli::cmd_build(file, &src, out) {
+        let res = if all {
+            phorge::bundle::cross::build_all(file, &src, out)
+        } else if let Some(t) = target {
+            phorge::bundle::cross::build_target(file, &src, t, out)
+        } else {
+            cli::cmd_build(file, &src, out)
+        };
+        match res {
             Ok(text) => {
                 print!("{text}");
                 return;

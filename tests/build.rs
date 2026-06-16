@@ -103,6 +103,59 @@ fn build_rejects_dangling_o_flag() {
 }
 
 #[test]
+fn build_rejects_target_and_all_together() {
+    let out = Command::new(BIN)
+        .args([
+            "build",
+            "examples/guide/operators.phg",
+            "--target",
+            "x86_64-unknown-linux-musl",
+            "--all",
+        ])
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+#[test]
+fn build_rejects_sign_flag_as_phase3() {
+    let out = Command::new(BIN)
+        .args(["build", "examples/guide/operators.phg", "--sign", "x"])
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("Phase 3"));
+}
+
+#[test]
+fn build_rejects_macos_target_as_deferred() {
+    // F7: an apple/darwin --target must error clearly (deferred), never silently emit a Mach-O with a
+    // mismatched `.phorge` section. The guard fires before rustup-target resolution, so this holds
+    // even without the apple target installed. build_target -> Err -> main exits 1.
+    let out = Command::new(BIN)
+        .args([
+            "build",
+            "examples/guide/operators.phg",
+            "--target",
+            "x86_64-apple-darwin",
+        ])
+        .output()
+        .expect("run");
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(String::from_utf8_lossy(&out.stderr).contains("deferred"));
+}
+
+#[test]
 fn build_rejects_unknown_trailing_arg() {
     // An unrecognized trailing argument must error, not be silently ignored (which would write a
     // default-named binary). Same temp-cwd + absolute-source isolation.
