@@ -6,8 +6,30 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
-_Nothing yet — next is M2.5 Phase 2 (cross-OS standalone builds: zig driver, PE/Mach-O reader arms,
-per-target stub fetch/cache)._
+### M2.5 Phase 2 (in progress)
+
+- `src/bundle.rs` split into a `bundle/` module: `container` (CRC-guarded payload, verbatim), per-format
+  readers `elf`/`pe`/`macho` (thin + fat), a magic-sniffing `section::find_section` dispatcher, and a
+  `cross` orchestration module (FNV-1a-64 + phorge-hash-keyed stub-cache path so far).
+- Hand-rolled, std-only **PE/COFF**, **Mach-O 64**, and **fat/universal** section readers with checked
+  arithmetic (EV-7: adversarial input → `None`, never a panic) + synthetic-fixture tests; wired into
+  `find_section` so a produced binary self-reads its own object format.
+- _Remaining:_ `phorge build --target/--all` cross-compile via cargo-zigbuild, the stub cache, and the
+  toolchain-gated cross-parity tests.
+
+## [0.4.0] — 2026-06-17
+
+CLI UX. The `phorge` binary now supports the conventional flags and flexible program input:
+
+- `-v` / `--version` — print `phorge <version>` and exit.
+- `-h` / `--help` — print a full usage banner (commands + source forms + options) and exit.
+- Program source for run-family commands (`run`/`runvm`/`check`/`parse`/`lex`/`transpile`/`bench`):
+  `<file>` | `-` (read from **stdin**) | `-e <code>` / `--eval <code>` (run **inline** source) |
+  `--` (treat the next arg as a file path even if it starts with `-`).
+
+Also lands the internal M2.5 Phase 2 `bundle/` refactor + object-format readers (above, no user-facing
+cross-build yet). `build` remains host-only and file-based. Built standalone binaries are unchanged:
+they run their embedded program and ignore argv.
 
 ## [0.3.0] — 2026-06-16
 
