@@ -119,7 +119,9 @@ impl<'a> Vm<'a> {
                 }
 
                 Op::Neg => match self.pop() {
-                    Value::Int(n) => self.stack.push(Value::Int(-n)),
+                    // `checked_neg` mirrors the interpreter (`interpreter.rs` `eval_unary`): negating
+                    // `i64::MIN` is a clean `"integer overflow"` runtime error, never a panic.
+                    Value::Int(n) => self.push_i(n.checked_neg())?,
                     Value::Float(x) => self.stack.push(Value::Float(-x)),
                     v => return Err(format!("cannot negate {}", v.type_name())),
                 },

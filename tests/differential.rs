@@ -1,16 +1,74 @@
 //! Differential harness (M2 P2): the bytecode VM (`cmd_runvm`) must produce byte-identical
 //! stdout to the tree-walking interpreter (`cmd_run`) for every P2-surface program. This is
 //! the M2 correctness spine (mirrors the transpiler round-trip-against-real-PHP technique).
+//!
+//! Parity covers *both* success and failure (M2 P3.5 Wave 0): `agree` checks the `Ok` output,
+//! `agree_err` checks that a failing program faults the *same way* on both backends. Faults are
+//! compared by semantic [`FaultKind`] rather than raw error text — the two backends share fault
+//! bodies (e.g. `"division by zero"`) but the CLI wraps them with stage-specific prefixes
+//! (`"runtime error:"` vs `"compile error:"`), so a raw `assert_eq!` would spuriously fail.
 
 use phorge::cli::{cmd_run, cmd_runvm};
 
-/// Assert the two backends agree.
+/// Assert the two backends agree on success output. Compares `Result` values structurally
+/// (never `.expect()`): in release builds an unchecked-arithmetic divergence surfaces as an
+/// `Err` rather than a panic, and a structural compare reports it as a clean mismatch.
 fn agree(src: &str) {
-    let tree = cmd_run(src).expect("interpreter ok");
-    let vm = cmd_runvm(src).expect("vm ok");
+    let tree = cmd_run(src);
+    let vm = cmd_runvm(src);
     assert_eq!(
         tree, vm,
         "backend mismatch for:\n{src}\n  run={tree:?}\n  runvm={vm:?}"
+    );
+}
+
+/// Semantic classification of a runtime fault, independent of the CLI's stage-specific prefix.
+/// Compared instead of raw error strings so backends that fault for the *same reason* at
+/// *different pipeline stages* still register as agreeing.
+#[derive(Debug, PartialEq, Eq)]
+enum FaultKind {
+    IntOverflow,
+    DivZero,
+    ModZero,
+    StackOverflow,
+    Unsupported,
+    /// Anything the corpus doesn't yet classify — carried verbatim so a mismatch stays legible.
+    Other(String),
+}
+
+/// Map a rendered error message to its [`FaultKind`] by matching on the fault *body*
+/// (substring), which ignores the `"runtime error:"` / `"compile error:"` / `"… at L:C:"`
+/// prefix the CLI prepends per pipeline stage.
+fn classify(err: &str) -> FaultKind {
+    if err.contains("integer overflow") {
+        FaultKind::IntOverflow
+    } else if err.contains("division by zero") {
+        FaultKind::DivZero
+    } else if err.contains("modulo by zero") {
+        FaultKind::ModZero
+    } else if err.contains("stack overflow") {
+        FaultKind::StackOverflow
+    } else if err.contains("unsupported") || err.contains("compile error") {
+        FaultKind::Unsupported
+    } else {
+        FaultKind::Other(err.to_string())
+    }
+}
+
+/// Assert both backends *fail*, and fail with the same [`FaultKind`]. A backend that returns
+/// `Ok` classifies to `None`, so an `Ok`-vs-`Err` divergence is flagged too.
+fn agree_err(src: &str) {
+    let tree = cmd_run(src);
+    let vm = cmd_runvm(src);
+    let tree_kind = tree.as_ref().err().map(|e| classify(e));
+    let vm_kind = vm.as_ref().err().map(|e| classify(e));
+    assert_eq!(
+        tree_kind, vm_kind,
+        "fault-kind mismatch for:\n{src}\n  run={tree:?}\n  runvm={vm:?}"
+    );
+    assert!(
+        tree_kind.is_some(),
+        "expected a fault but both backends succeeded for:\n{src}\n  run={tree:?}"
     );
 }
 
@@ -108,4 +166,27 @@ function main() {
     );
     let fib = std::fs::read_to_string("examples/fib.phg").expect("read examples/fib.phg");
     agree(&fib);
+}
+
+/// Error-parity corpus (M2 P3.5 Wave 0): programs that must *fail identically* on both backends.
+/// `i64::MIN` is reached via `-9223372036854775807 - 1` because the bare literal `9223372036854775808`
+/// overflows `i64` at lex time. Negating it (`-x`) is the `Op::Neg` overflow that previously panicked
+/// the VM while the interpreter reported a clean error. Deep-recursion (`StackOverflow`) and
+/// unsupported-construct cases join this corpus alongside their guards in Wave 0 Task 0.3.
+const ERR_PROGRAMS: &[&str] = &[
+    // integer overflow: negating i64::MIN
+    r#"function main() { int x = -9223372036854775807 - 1; println("{-x}"); }"#,
+    // integer overflow: i64::MAX + 1
+    r#"function main() { println("{9223372036854775807 + 1}"); }"#,
+    // division by zero
+    r#"function main() { int z = 0; println("{1 / z}"); }"#,
+    // modulo by zero
+    r#"function main() { int z = 0; println("{1 % z}"); }"#,
+];
+
+#[test]
+fn error_parity_between_backends() {
+    for src in ERR_PROGRAMS {
+        agree_err(src);
+    }
 }
