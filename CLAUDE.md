@@ -36,5 +36,10 @@ commit (the dispatch match is exhaustive). `phorge bench <file>` measures the tw
 
 ## Active plan
 
-`docs/plans/2026-06-16-m2-p3.5-hardening-roadmap.md` — the integrated hardening roadmap (P3.5,
-before M2 P4), merging the `/forge` + `/inspect --vision` findings against `docs/MILESTONES.md`.
+The M2 P3.5 hardening roadmap (`docs/plans/2026-06-16-m2-p3.5-hardening-roadmap.md`, Waves 0–3) is
+**complete**; Wave 4 is intentionally deferred to land *with* P4/P5. **Next: M2 P4** (classes/enums/
+`match` + arena) on the hardened compiler/VM seams.
+
+Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing
+correctness rules — read before touching backends, value kernels, or the `Op` set) and
+**`docs/ARCHITECTURE.md`** (pipeline + module map). `CHANGELOG.md` tracks milestone progress.
