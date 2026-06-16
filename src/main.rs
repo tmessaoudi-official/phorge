@@ -9,6 +9,21 @@ use phorge::cli;
 const USAGE: &str = "usage: phorge <run|runvm|check|parse|lex|transpile|bench> <file>";
 
 fn main() {
+    // Self-executing artifact: if this binary carries an embedded program, run it on the VM and
+    // exit before any CLI parsing. No payload -> fall through to the normal dispatcher.
+    if let Some(src) = phorge::bundle::embedded_source() {
+        match cli::cmd_runvm(&src) {
+            Ok(text) => {
+                print!("{text}");
+                exit(0);
+            }
+            Err(err) => {
+                eprintln!("{err}");
+                exit(1);
+            }
+        }
+    }
+
     let args: Vec<String> = std::env::args().collect();
     let cmd = match args.get(1).map(String::as_str) {
         Some(c @ ("run" | "runvm" | "check" | "parse" | "lex" | "transpile" | "bench")) => c,
