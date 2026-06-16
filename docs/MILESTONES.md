@@ -68,6 +68,30 @@ enrichment = M3; single-binary bundling = M2.5.
 > slot-indexed field layout (P5 Phase B) stays **bench-gated and unopened** — after P5a the object
 > path is within ~15% of the scalar baseline, so field access no longer dominates.
 
+## M2.5 — Standalone executables (`phorge build`) — 🔨 IN PROGRESS (Phase 1 complete)
+
+Single-binary bundling: `phorge build foo.phg` → a standalone executable that runs `foo.phg` on the
+VM with no Phorge install. Design (advisor-reviewed twice): payload = a **named section** (`.phorge`
+on ELF, `__PHORGE,__source` on Mach-O — never a raw overlay, which breaks Mach-O signing) holding a
+**versioned CRC-guarded container** (source→bytecode is a `payload_kind` flip, not a format break);
+distribution via a **stub registry** (CI builds/signs per-target stubs once per release; `phorge
+build` fetches+caches+`llvm-objcopy --add-section`s the payload); macOS signed+notarized **from
+Linux** via `rcodesign` (no Mac needed). std-only line = the produced binary + the hand-rolled
+section reader; build tooling (zig, llvm-tools, rcodesign, CI) is exempt. Spec:
+`docs/specs/2026-06-16-m2.5-phorge-build-design.md`.
+
+- **Phase 1 ✅ (2026-06-16)** — host `x86_64-linux-gnu`, no CI/signing:
+  `docs/plans/2026-06-16-m2.5-phase1-build-linux-gnu.md`. `src/bundle.rs` (CRC-32 + versioned
+  container + hand-rolled ELF64 reader + `embedded_source()`), the `main()` self-detect hook,
+  `cli::cmd_build` (copy `current_exe` + `llvm-objcopy --add-section .phorge=…`), and `tests/build.rs`
+  (built binary byte-identical to `runvm`). This is the **4th backend** the Rule-of-Three note below
+  anticipated — still a free-function path, no `Backend` trait yet.
+- **Phase 2 🔲** — cross-targets via zig as the C/linker driver; PE (Windows) + Mach-O (macOS)
+  reader arms added to `bundle.rs`; per-target stub fetch+cache (cache key **must** include the
+  phorge binary hash, else a stale stub runs an old VM and breaks the parity spine).
+- **Phase 3 🔲** — CI stub registry; final-artifact signing/notarization (opt-in `--sign`),
+  Windows Authenticode + macOS codesign/notarize via `rcodesign` from Linux.
+
 ## M2.5+ — Ecosystem — 🔲 PLANNED
 
 Full ecosystem strategy + ROI-ranked roadmap frozen in

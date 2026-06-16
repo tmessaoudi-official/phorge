@@ -71,9 +71,20 @@ example (and any added later) is byte-identity-gated automatically; `examples/RE
 living surface showcase. **Gotcha:** zero-payload enum variants need call form `V()` both to
 construct AND in a `match` pattern (bare `V =>` is a silent catch-all binding).
 
-**Next (locked sequence): M2.5 `phorge build`** — standalone executables for all OSes
-(cross-compilation) — **needs a brainstorm first**; then **M3** (grow the language: indexing, Map/Set,
-null/optionals, `|>`, exceptions, mutation — mutation finally motivates the real tracing GC).
+**M2.5 `phorge build` (standalone executables) — Phase 1 COMPLETE**
+(`docs/specs/2026-06-16-m2.5-phorge-build-design.md`, `docs/plans/2026-06-16-m2.5-phase1-build-linux-gnu.md`):
+`phorge build foo.phg` produces a standalone host (`x86_64-linux-gnu`) executable that runs on the VM
+with no Phorge install — `src/bundle.rs` embeds the program **source** in a `.phorge` ELF section
+(versioned CRC-guarded container + hand-rolled, zero-dep ELF64 reader), and `main()` self-detects +
+runs the payload at startup. `tests/build.rs` extends the parity spine to distribution (built binary
+byte-identical to `runvm`). v1 limits: host-only, argv ignored, no custom exit code, source
+recoverable. The design is the same section+container mechanism as the cross-OS end state.
+
+**Next (locked sequence): M2.5 Phase 2** — cross-targets via zig (the C/linker driver) + PE/Mach-O
+reader arms in `bundle.rs` + per-target stub fetch/cache (cache key **must** include the phorge
+binary hash); then **Phase 3** (CI stub registry + signing/notarization, `rcodesign` from Linux);
+then **M3** (grow the language: indexing, Map/Set, null/optionals, `|>`, exceptions, mutation —
+mutation finally motivates the real tracing GC).
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing
 correctness rules — read before touching backends, value kernels, or the `Op` set) and

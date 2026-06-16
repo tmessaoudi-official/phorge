@@ -6,6 +6,31 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### M2.5 Phase 1 — `phorge build` (x86_64-linux-gnu) (2026-06-16) — **distribution**
+`phorge build foo.phg` produces a standalone host executable that runs `foo.phg` on the VM with no
+Phorge install — by copying the running phorge binary, embedding the program **source** in a
+`.phorge` ELF section, and self-detecting + running that payload at startup. Same section+container
+mechanism as the cross-OS end state (design §7). See
+`docs/specs/2026-06-16-m2.5-phorge-build-design.md` + `docs/plans/2026-06-16-m2.5-phase1-build-linux-gnu.md`.
+
+- **Added**
+  - `src/bundle.rs` (std-only, zero new deps): a bitwise CRC-32, a versioned CRC-guarded payload
+    **container** (`magic | version | header_len | kind | comp | enc | flags | len | payload_crc32 |
+    header_crc32`), a hand-rolled **ELF64 section reader** (no `object`/`goblin` — it links into the
+    produced binary, so it must stay zero-dep), and `embedded_source()` (graceful `None` on every
+    malformed/tampered/absent input).
+  - `cli::cmd_build` — validates the program (no broken binary is ever emitted), copies `current_exe`,
+    and shells `llvm-objcopy --add-section .phorge=…` (override via `PHORGE_OBJCOPY`).
+  - `phorge build <file> [-o out]` CLI command; `main()` runs an embedded payload at startup before
+    any arg parsing.
+  - `tests/build.rs` — the parity spine extended to distribution: a built binary's output is
+    byte-identical to `runvm`; argv is ignored (v1); ill-typed programs fail with diagnostics and
+    emit no binary.
+- **Notes** (v1 limits) — host-only (`x86_64-linux-gnu`); the embedded program ignores argv and
+  cannot set a custom exit code; the source is recoverable from the artifact (not obfuscated).
+  Cross-targets (zig), PE/Mach-O reader arms + stub cache = Phase 2; CI stub registry + signing/
+  notarization (rcodesign-from-Linux) = Phase 3.
+
 ### Examples — full-coverage showcase (2026-06-16) — **docs/tests**
 A living example set covering the entire runnable language surface, plus the Phorge→PHP bridge. See
 `docs/specs/2026-06-16-examples-coverage-design.md` + `docs/plans/2026-06-16-examples-coverage.md`.
