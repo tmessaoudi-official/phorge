@@ -59,7 +59,21 @@ acyclic, so `Rc`/`Drop` reclaims completely (a tracing collector is deferred to 
 mutation could create cycles). **Phase B** (slot-indexed `Vec` field layout, replacing the
 per-instance `HashMap`) is **bench-gated and unopened** — after P5a the object path is within ~15% of
 scalar's advantage, so field access no longer dominates; the slab-arena was rejected (no locality
-evidence). Remaining M2 work is essentially the **M2 success-criteria sweep / M2.5 `phorge build`**.
+evidence).
+
+**M2 is now formally CLOSED** (`docs/MILESTONES.md`, `33c6b78`): all design §10 success criteria met
+(backends byte-identical, quality gate green; the mark-sweep GC criterion was revised — `Rc`/`Drop`
+reclaims the immutable+acyclic heap fully, tracing GC deferred to M3). A **full-coverage example set**
+also landed (`docs/specs/2026-06-16-examples-coverage-design.md`): four real-world programs
+(`examples/realworld/`), six focused guide programs (`examples/guide/`), and the Phorge→PHP transpile
+bridge (`examples/transpile/`) — `tests/differential.rs` now **globs `examples/**/*.phg`** so every
+example (and any added later) is byte-identity-gated automatically; `examples/README.md` is the
+living surface showcase. **Gotcha:** zero-payload enum variants need call form `V()` both to
+construct AND in a `match` pattern (bare `V =>` is a silent catch-all binding).
+
+**Next (locked sequence): M2.5 `phorge build`** — standalone executables for all OSes
+(cross-compilation) — **needs a brainstorm first**; then **M3** (grow the language: indexing, Map/Set,
+null/optionals, `|>`, exceptions, mutation — mutation finally motivates the real tracing GC).
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing
 correctness rules — read before touching backends, value kernels, or the `Op` set) and
