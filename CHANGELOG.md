@@ -26,6 +26,11 @@ mechanism as the cross-OS end state (design §7). See
   - `tests/build.rs` — the parity spine extended to distribution: a built binary's output is
     byte-identical to `runvm`; argv is ignored (v1); ill-typed programs fail with diagnostics and
     emit no binary.
+  - **Hardening (post-review):** the ELF64 reader uses fully-checked offset arithmetic — adversarial/
+    malformed input returns `None`, never overflow-panics under the debug/test profile
+    (regression-tested per EV-7); `phorge build` rejects a dangling `-o`, an unrecognized flag, or any
+    extra argument with a usage error (exit 2) instead of a silent default-named build. `docs/INVARIANTS.md`
+    #1 now records the build binary as the third `cmd_runvm` parity surface.
 - **Notes** (v1 limits) — host-only (`x86_64-linux-gnu`); the embedded program ignores argv and
   cannot set a custom exit code; the source is recoverable from the artifact (not obfuscated).
   Cross-targets (zig), PE/Mach-O reader arms + stub cache = Phase 2; CI stub registry + signing/
