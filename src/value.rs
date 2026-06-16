@@ -73,7 +73,7 @@ impl Value {
     }
 
     /// Render a *primitive* value for interpolation / `println`. `None` for a
-    /// composite value (the caller turns that into a `RuntimeError`). Floats use
+    /// composite value (the caller turns that into a runtime `Diagnostic`). Floats use
     /// Rust `{}` formatting (EV-6): `12.0` -> `"12"`.
     pub fn as_display(&self) -> Option<String> {
         match self {

@@ -7,6 +7,7 @@ pub mod checker;
 pub mod chunk;
 pub mod cli;
 pub mod compiler;
+pub mod diagnostic;
 pub mod interpreter;
 pub mod lexer;
 pub mod parser;

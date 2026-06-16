@@ -1,7 +1,7 @@
 //! M1 tree-walking evaluator. Walks the untyped AST against runtime `Value`s and
 //! executes `main`. The type-checker (`crate::checker`) is the gate; this stage
 //! assumes type-correct input and never panics on the faults types can't catch —
-//! those become `RuntimeError`. See design spec `2026-06-15-m1-plan5-evaluator-design.md`.
+//! those become a runtime `Diagnostic`. See design spec `2026-06-15-m1-plan5-evaluator-design.md`.
 
 use std::collections::HashMap;
 
@@ -9,26 +9,22 @@ use crate::ast::{
     BinaryOp, ClassDecl, ClassMember, Expr, FunctionDecl, Item, MatchArm, Modifier, Pattern,
     Program, Stmt, StrPart, UnaryOp,
 };
+use crate::diagnostic::Diagnostic;
 use crate::value::{EnumVal, Instance, Value};
 
-/// A runtime fault surfaced to the caller of `interpret`.
-#[derive(Debug)]
-pub struct RuntimeError {
-    pub message: String,
-}
-
-/// Non-local control flow threaded through `Result::Err` (EV-3).
+/// Non-local control flow threaded through `Result::Err` (EV-3). The runtime fault carries a
+/// unified [`Diagnostic`] (stage `Runtime`); the tree-walker tracks no source position, so the
+/// diagnostic has none (line 0) — the VM, which knows `Chunk.lines`, is the backend that locates
+/// runtime faults.
 enum Signal {
     Return(Value),
-    Runtime(RuntimeError),
+    Runtime(Diagnostic),
 }
 
 type R<T> = Result<T, Signal>;
 
 fn rt<T>(msg: impl Into<String>) -> R<T> {
-    Err(Signal::Runtime(RuntimeError {
-        message: msg.into(),
-    }))
+    Err(Signal::Runtime(Diagnostic::runtime(msg)))
 }
 
 fn as_bool(v: &Value) -> R<bool> {
@@ -88,7 +84,7 @@ pub struct Interp {
 /// the `run_call` depth guard (not a native abort) to be what stops it. That stack is supplied by
 /// the caller — `cli::cmd_run` runs the whole pipeline on a 256 MB worker thread — keeping this
 /// function a plain recursive walk.
-pub fn interpret(program: &Program) -> Result<String, RuntimeError> {
+pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
     let mut interp = Interp {
         funcs: HashMap::new(),
         classes: HashMap::new(),
@@ -101,11 +97,7 @@ pub fn interpret(program: &Program) -> Result<String, RuntimeError> {
     interp.collect(program);
     let main = match interp.funcs.get("main") {
         Some(f) => f.clone(),
-        None => {
-            return Err(RuntimeError {
-                message: "no `main` function".to_string(),
-            })
-        }
+        None => return Err(Diagnostic::runtime("no `main` function")),
     };
     let names: Vec<String> = main.params.iter().map(|p| p.name.clone()).collect();
     match interp.run_call(&names, &main.body, vec![], None) {
@@ -511,7 +503,7 @@ fn arith(op: BinaryOp, l: Value, r: Value) -> R<Value> {
     match (l, r) {
         (Value::Int(a), Value::Int(b)) => {
             // Checked ops via the single-sourced `value` kernels: overflow / div-zero / mod-zero are
-            // faults the type system can't catch, so they become a RuntimeError, never a panic
+            // faults the type system can't catch, so they become a Diagnostic, never a panic
             // (EV-7). The VM dispatches into the *same* kernels, so the fault path can't diverge.
             let v = match op {
                 Add => crate::value::int_add(a, b),
@@ -602,7 +594,7 @@ mod tests {
     use crate::parser::Parser;
 
     /// Lex + parse + interpret; return captured stdout or the runtime error.
-    fn run(src: &str) -> Result<String, RuntimeError> {
+    fn run(src: &str) -> Result<String, Diagnostic> {
         let tokens = lex(src).expect("lex ok");
         let prog = Parser::new(tokens).parse_program().expect("parse ok");
         interpret(&prog)

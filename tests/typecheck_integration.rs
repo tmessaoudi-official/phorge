@@ -39,7 +39,7 @@ function main() {
 }
 "#;
 
-fn check_src(src: &str) -> Result<(), Vec<phorge::checker::TypeError>> {
+fn check_src(src: &str) -> Result<(), Vec<phorge::diagnostic::Diagnostic>> {
     let tokens = lex(src).expect("lex ok");
     let prog = Parser::new(tokens).parse_program().expect("parse ok");
     check(&prog)

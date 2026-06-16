@@ -10,6 +10,7 @@
 
 use crate::ast::{BinaryOp, Expr, FunctionDecl, Item, Program, Stmt, StrPart, Type, UnaryOp};
 use crate::chunk::{BytecodeProgram, Chunk, Function, Op};
+use crate::diagnostic::Diagnostic;
 use crate::value::Value;
 use std::collections::HashMap;
 
@@ -61,7 +62,13 @@ struct Compiler<'a> {
 /// forward references and recursion — resolve to a static index), then each function body is
 /// compiled into its own `Chunk`. Parameters occupy slots `0..arity` at the base of the frame
 /// window; every function ends with an implicit `Unit` return (P3-7).
-pub fn compile(program: &Program) -> Result<BytecodeProgram, String> {
+pub fn compile(program: &Program) -> Result<BytecodeProgram, Diagnostic> {
+    // The compiler tracks no source position yet, so every fault becomes a position-less
+    // compile-stage `Diagnostic` (renders `compile error: …`, unchanged from before).
+    compile_program(program).map_err(Diagnostic::compile)
+}
+
+fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
     let mut order: Vec<&FunctionDecl> = Vec::new();
     let mut fns: HashMap<String, FnMeta> = HashMap::new();
     for it in &program.items {
@@ -521,8 +528,8 @@ mod tests {
     fn run(src: &str) -> Result<String, String> {
         let tokens = lex(src).expect("lex ok");
         let prog = Parser::new(tokens).parse_program().expect("parse ok");
-        let program = compile(&prog)?;
-        Vm::new(&program).run()
+        let program = compile(&prog).map_err(|d| d.to_string())?;
+        Vm::new(&program).run().map_err(|d| d.to_string())
     }
 
     fn out(src: &str) -> String {

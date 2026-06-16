@@ -28,13 +28,14 @@ fn on_deep_stack<T: Send>(f: impl FnOnce() -> T + Send) -> T {
     })
 }
 
-/// lex + parse, rendering the stage error to a single line.
+/// lex + parse, rendering the stage error to a single line. Every stage now returns a unified
+/// [`crate::diagnostic::Diagnostic`] that renders itself (stage prefix + position), so the CLI
+/// just calls `to_string()` rather than hand-formatting per stage.
 fn lex_parse(src: &str) -> Result<Program, String> {
-    let tokens =
-        lex(src).map_err(|e| format!("lex error at {}:{}: {}", e.line, e.col, e.message))?;
+    let tokens = lex(src).map_err(|e| e.to_string())?;
     Parser::new(tokens)
         .parse_program()
-        .map_err(|e| format!("parse error at {}:{}: {}", e.line, e.col, e.message))
+        .map_err(|e| e.to_string())
 }
 
 /// lex + parse + type-check (the gate). Renders every type error, one per line.
@@ -43,10 +44,7 @@ fn parse_checked(src: &str) -> Result<Program, String> {
     match check(&prog) {
         Ok(()) => Ok(prog),
         Err(errs) => {
-            let lines: Vec<String> = errs
-                .iter()
-                .map(|e| format!("type error at {}:{}: {}", e.line, e.col, e.message))
-                .collect();
+            let lines: Vec<String> = errs.iter().map(ToString::to_string).collect();
             Err(lines.join("\n"))
         }
     }
@@ -56,7 +54,7 @@ fn parse_checked(src: &str) -> Result<Program, String> {
 pub fn cmd_run(src: &str) -> Result<String, String> {
     on_deep_stack(|| {
         let prog = parse_checked(src)?;
-        interpret(&prog).map_err(|e| format!("runtime error: {}", e.message))
+        interpret(&prog).map_err(|e| e.to_string())
     })
 }
 
@@ -65,10 +63,8 @@ pub fn cmd_run(src: &str) -> Result<String, String> {
 pub fn cmd_runvm(src: &str) -> Result<String, String> {
     on_deep_stack(|| {
         let prog = parse_checked(src)?;
-        let program = compile(&prog).map_err(|e| format!("compile error: {e}"))?;
-        Vm::new(&program)
-            .run()
-            .map_err(|e| format!("runtime error: {e}"))
+        let program = compile(&prog).map_err(|e| e.to_string())?;
+        Vm::new(&program).run().map_err(|e| e.to_string())
     })
 }
 
@@ -90,8 +86,7 @@ pub fn cmd_parse(src: &str) -> Result<String, String> {
 
 /// `lex`: dump the token stream.
 pub fn cmd_lex(src: &str) -> Result<String, String> {
-    let tokens =
-        lex(src).map_err(|e| format!("lex error at {}:{}: {}", e.line, e.col, e.message))?;
+    let tokens = lex(src).map_err(|e| e.to_string())?;
     let mut out = String::new();
     for t in tokens {
         out.push_str(&format!("{:?} @ {}:{}\n", t.kind, t.span.line, t.span.col));
@@ -229,5 +224,30 @@ function main() {
     fn runvm_reports_runtime_error_with_prefix() {
         let err = cmd_runvm(r#"function main() { println("{1 / 0}"); }"#).unwrap_err();
         assert!(err.contains("runtime error"), "{err}");
+    }
+
+    #[test]
+    fn runvm_runtime_error_carries_source_line() {
+        // div-by-zero in a statement on line 3. The VM now locates the fault via `Chunk.lines`
+        // and renders `runtime error at 3: …`, while the canonical body ("division by zero")
+        // stays intact so the differential `agree_err` oracle still classifies it identically.
+        // NB: the division is *not* inside string interpolation — `split_interpolation`
+        // re-lexes interpolated sub-expressions with a fresh lexer that resets to line 1, so a
+        // fault inside `"{…}"` reports line 1 (a pre-existing interpolation-position limitation,
+        // orthogonal to this task — see the M2 P3.5 roadmap decisions log).
+        let src = "function main() {\n    int z = 0;\n    int x = 1 / z;\n    println(\"{x}\");\n}";
+        let err = cmd_runvm(src).unwrap_err();
+        assert!(err.contains("division by zero"), "{err}");
+        assert!(err.starts_with("runtime error at 3:"), "{err}");
+    }
+
+    #[test]
+    fn run_runtime_error_has_no_line() {
+        // The tree-walking interpreter tracks no source position, so its runtime errors keep
+        // the position-less `runtime error: …` form (deliberate asymmetry — documented).
+        let src = "function main() {\n    int z = 0;\n    int x = 1 / z;\n    println(\"{x}\");\n}";
+        let err = cmd_run(src).unwrap_err();
+        assert!(err.starts_with("runtime error: "), "{err}");
+        assert!(!err.contains(" at "), "{err}");
     }
 }

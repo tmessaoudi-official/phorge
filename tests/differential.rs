@@ -197,7 +197,7 @@ fn error_parity_between_backends() {
 
 /// Pathological nesting must fault *identically* on both backends (M2 P3.5 Wave 0, Task 0.4).
 /// The recursive-descent parser caps nesting depth, so deeply-nested parens / unary chains return
-/// a clean `ParseError` instead of a native stack overflow (SIGABRT). Both backends share the same
+/// a clean parse `Diagnostic` instead of a native stack overflow (SIGABRT). Both backends share the same
 /// parser, so the rendered fault is byte-identical. 5000 levels is well past the 512 limit. Built
 /// programmatically rather than as a string literal to keep the corpus readable.
 #[test]

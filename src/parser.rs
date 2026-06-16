@@ -4,21 +4,15 @@ use crate::ast::{
     BinaryOp, ClassDecl, ClassMember, CtorParam, EnumDecl, EnumVariant, Expr, FunctionDecl, Item,
     MatchArm, Modifier, Param, Pattern, Program, Stmt, StrPart, Type, UnaryOp,
 };
+use crate::diagnostic::{Diagnostic, Stage};
 use crate::token::{Span, Token, TokenKind};
 
 /// Cap on expression-nesting depth in the recursive descent. Past it, the parser returns a clean
-/// `ParseError` instead of overflowing the native stack (SIGABRT) — measured: nested parens abort
+/// `Diagnostic` instead of overflowing the native stack (SIGABRT) — measured: nested parens abort
 /// the parser around ~1750 levels on the default 12.2 MB stack. The parser runs on the *main*
 /// thread (unlike the interpreter's 256 MB worker), so this limit is its own, far below that
 /// ceiling; real source never nests beyond a few dozen. Centralised into `Limits` by Task 2.2.
 const MAX_NEST_DEPTH: usize = 512;
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ParseError {
-    pub message: String,
-    pub line: u32,
-    pub col: u32,
-}
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -74,8 +68,8 @@ impl Parser {
         }
     }
 
-    /// Consume a token of the expected kind or produce a ParseError.
-    fn expect(&mut self, kind: &TokenKind, what: &str) -> Result<Token, ParseError> {
+    /// Consume a token of the expected kind or produce a Diagnostic.
+    fn expect(&mut self, kind: &TokenKind, what: &str) -> Result<Token, Diagnostic> {
         if self.check(kind) {
             Ok(self.advance())
         } else {
@@ -83,10 +77,11 @@ impl Parser {
         }
     }
 
-    /// Build a ParseError at the current position.
-    fn error(&self, what: &str) -> ParseError {
+    /// Build a Diagnostic at the current position.
+    fn error(&self, what: &str) -> Diagnostic {
         let sp = self.peek_span();
-        ParseError {
+        Diagnostic {
+            stage: Stage::Parse,
             message: format!("expected {}, found {:?}", what, self.peek()),
             line: sp.line,
             col: sp.col,
@@ -94,7 +89,7 @@ impl Parser {
     }
 
     /// Entry point: parse a full expression (lowest precedence).
-    pub fn parse_expr(&mut self) -> Result<Expr, ParseError> {
+    pub fn parse_expr(&mut self) -> Result<Expr, Diagnostic> {
         self.parse_binary(0)
     }
 
@@ -125,7 +120,7 @@ impl Parser {
     /// Precedence-climbing: parse a unary, then fold infix operators whose
     /// binding power is >= `min_bp`. All our binary operators are left-associative,
     /// so the right operand is parsed with `bp + 1`.
-    fn parse_binary(&mut self, min_bp: u8) -> Result<Expr, ParseError> {
+    fn parse_binary(&mut self, min_bp: u8) -> Result<Expr, Diagnostic> {
         let mut lhs = self.parse_unary()?;
         while let Some((bp, op)) = Self::infix_op(self.peek()) {
             if bp < min_bp {
@@ -152,11 +147,12 @@ impl Parser {
     /// faults cleanly rather than overflowing the native stack. `depth` is balanced on both the `Ok`
     /// and `Err` paths (the result is captured before the decrement); the over-limit path aborts the
     /// whole parse, so leaving `depth` incremented there is harmless.
-    fn parse_unary(&mut self) -> Result<Expr, ParseError> {
+    fn parse_unary(&mut self) -> Result<Expr, Diagnostic> {
         self.depth += 1;
         if self.depth > MAX_NEST_DEPTH {
             let sp = self.peek_span();
-            return Err(ParseError {
+            return Err(Diagnostic {
+                stage: Stage::Parse,
                 message: format!("expression nests too deeply (limit {MAX_NEST_DEPTH})"),
                 line: sp.line,
                 col: sp.col,
@@ -183,7 +179,7 @@ impl Parser {
     }
 
     /// Parse a primary, then apply any chain of postfix operators.
-    fn parse_postfix(&mut self) -> Result<Expr, ParseError> {
+    fn parse_postfix(&mut self) -> Result<Expr, Diagnostic> {
         let mut e = self.parse_primary()?;
         loop {
             let sp = self.peek_span();
@@ -231,7 +227,7 @@ impl Parser {
 
     /// Comma-separated expressions until the closing delimiter (caller consumes the closer).
     /// Allows zero args; allows a trailing comma.
-    fn parse_arg_list(&mut self) -> Result<Vec<Expr>, ParseError> {
+    fn parse_arg_list(&mut self) -> Result<Vec<Expr>, Diagnostic> {
         let mut args = Vec::new();
         if self.check(&TokenKind::RParen) {
             return Ok(args);
@@ -249,7 +245,7 @@ impl Parser {
     }
 
     /// Lowest-level expression: a literal, identifier, `this`, string, list, match, or `( expr )`.
-    fn parse_primary(&mut self) -> Result<Expr, ParseError> {
+    fn parse_primary(&mut self) -> Result<Expr, Diagnostic> {
         let sp = self.peek_span();
         match self.peek().clone() {
             TokenKind::Int(n) => {
@@ -314,7 +310,7 @@ impl Parser {
     }
 
     /// Parse a type annotation: `Name`, `Name<T, U>`, or `T?`.
-    pub fn parse_type(&mut self) -> Result<Type, ParseError> {
+    pub fn parse_type(&mut self) -> Result<Type, Diagnostic> {
         let sp = self.peek_span();
         let name = match self.peek().clone() {
             TokenKind::Ident(n) => {
@@ -350,7 +346,7 @@ impl Parser {
     /// Split a string body into literal runs and `{expr}` interpolations.
     /// Each interpolation is re-lexed + re-parsed as a standalone expression.
     /// M1 limitation: literal braces (`{{`) are not supported.
-    fn split_interpolation(&self, body: &str, sp: Span) -> Result<Vec<StrPart>, ParseError> {
+    fn split_interpolation(&self, body: &str, sp: Span) -> Result<Vec<StrPart>, Diagnostic> {
         let mut parts = Vec::new();
         let mut literal = String::new();
         let mut chars = body.chars();
@@ -371,13 +367,15 @@ impl Parser {
                         inner.push(ic);
                     }
                     if !closed {
-                        return Err(ParseError {
+                        return Err(Diagnostic {
+                            stage: Stage::Parse,
                             message: "unterminated interpolation '{' in string".into(),
                             line: sp.line,
                             col: sp.col,
                         });
                     }
-                    let sub_tokens = crate::lexer::lex(&inner).map_err(|e| ParseError {
+                    let sub_tokens = crate::lexer::lex(&inner).map_err(|e| Diagnostic {
+                        stage: Stage::Parse,
                         message: format!("in interpolation: {}", e.message),
                         line: sp.line,
                         col: sp.col,
@@ -388,7 +386,8 @@ impl Parser {
                     parts.push(StrPart::Expr(Box::new(e)));
                 }
                 '}' => {
-                    return Err(ParseError {
+                    return Err(Diagnostic {
+                        stage: Stage::Parse,
                         message: "unexpected '}' in string (no matching '{')".into(),
                         line: sp.line,
                         col: sp.col,
@@ -408,7 +407,7 @@ impl Parser {
     }
 
     /// Parse a single pattern (used in `match` arms).
-    pub fn parse_pattern(&mut self) -> Result<Pattern, ParseError> {
+    pub fn parse_pattern(&mut self) -> Result<Pattern, Diagnostic> {
         let sp = self.peek_span();
         match self.peek().clone() {
             TokenKind::Int(n) => {
@@ -468,7 +467,7 @@ impl Parser {
     }
 
     /// `match EXPR { PAT => EXPR, ... }` — assumes the current token is `match`.
-    fn parse_match(&mut self, sp: Span) -> Result<Expr, ParseError> {
+    fn parse_match(&mut self, sp: Span) -> Result<Expr, Diagnostic> {
         self.expect(&TokenKind::Match, "'match'")?;
         let scrutinee = self.parse_expr()?;
         self.expect(&TokenKind::LBrace, "'{' to open match arms")?;
@@ -496,7 +495,7 @@ impl Parser {
     }
 
     /// Consume an identifier token, returning its name, or error with `what`.
-    fn expect_ident(&mut self, what: &str) -> Result<String, ParseError> {
+    fn expect_ident(&mut self, what: &str) -> Result<String, Diagnostic> {
         match self.peek().clone() {
             TokenKind::Ident(n) => {
                 self.advance();
@@ -507,7 +506,7 @@ impl Parser {
     }
 
     /// Parse one statement.
-    pub fn parse_stmt(&mut self) -> Result<Stmt, ParseError> {
+    pub fn parse_stmt(&mut self) -> Result<Stmt, Diagnostic> {
         match self.peek() {
             TokenKind::Return => self.parse_return(),
             TokenKind::If => self.parse_if(),
@@ -522,7 +521,7 @@ impl Parser {
     }
 
     /// `{ stmt* }` — consumes both braces, returns the inner statements.
-    fn parse_block(&mut self) -> Result<Vec<Stmt>, ParseError> {
+    fn parse_block(&mut self) -> Result<Vec<Stmt>, Diagnostic> {
         self.expect(&TokenKind::LBrace, "'{'")?;
         let mut stmts = Vec::new();
         while !self.check(&TokenKind::RBrace) && !self.check(&TokenKind::Eof) {
@@ -533,7 +532,7 @@ impl Parser {
     }
 
     /// `return;` or `return expr;`
-    fn parse_return(&mut self) -> Result<Stmt, ParseError> {
+    fn parse_return(&mut self) -> Result<Stmt, Diagnostic> {
         let sp = self.peek_span();
         self.expect(&TokenKind::Return, "'return'")?;
         let value = if self.check(&TokenKind::Semicolon) {
@@ -546,7 +545,7 @@ impl Parser {
     }
 
     /// `if (cond) BLOCK [else BLOCK | else if …]`
-    fn parse_if(&mut self) -> Result<Stmt, ParseError> {
+    fn parse_if(&mut self) -> Result<Stmt, Diagnostic> {
         let sp = self.peek_span();
         self.expect(&TokenKind::If, "'if'")?;
         self.expect(&TokenKind::LParen, "'(' after 'if'")?;
@@ -572,7 +571,7 @@ impl Parser {
     }
 
     /// `for (Type name in iter) BLOCK`
-    fn parse_for(&mut self) -> Result<Stmt, ParseError> {
+    fn parse_for(&mut self) -> Result<Stmt, Diagnostic> {
         let sp = self.peek_span();
         self.expect(&TokenKind::For, "'for'")?;
         self.expect(&TokenKind::LParen, "'(' after 'for'")?;
@@ -594,7 +593,7 @@ impl Parser {
     /// Disambiguate `Type name = expr;` (var-decl) from `expr;` (expression statement).
     /// A var-decl is committed only after a type, a name, and `=` parse successfully;
     /// anything short of that rewinds the cursor and re-parses as an expression.
-    fn parse_var_decl_or_expr_stmt(&mut self) -> Result<Stmt, ParseError> {
+    fn parse_var_decl_or_expr_stmt(&mut self) -> Result<Stmt, Diagnostic> {
         let sp = self.peek_span();
         if let Some((ty, name)) = self.try_var_decl_header() {
             let init = self.parse_expr()?;
@@ -628,7 +627,7 @@ impl Parser {
     }
 
     /// Parse one top-level item: `import` / `function` / `enum` / `class`.
-    pub fn parse_item(&mut self) -> Result<Item, ParseError> {
+    pub fn parse_item(&mut self) -> Result<Item, Diagnostic> {
         let sp = self.peek_span();
         match self.peek() {
             TokenKind::Import => self.parse_import(sp),
@@ -640,7 +639,7 @@ impl Parser {
     }
 
     /// Entry point: parse a whole program (zero or more top-level items) until EOF.
-    pub fn parse_program(&mut self) -> Result<Program, ParseError> {
+    pub fn parse_program(&mut self) -> Result<Program, Diagnostic> {
         let sp = self.peek_span();
         let mut items = Vec::new();
         while !self.check(&TokenKind::Eof) {
@@ -650,7 +649,7 @@ impl Parser {
     }
 
     /// `import a.b.c;` — dotted module path. Assumes current token is `import`.
-    fn parse_import(&mut self, sp: Span) -> Result<Item, ParseError> {
+    fn parse_import(&mut self, sp: Span) -> Result<Item, Diagnostic> {
         self.expect(&TokenKind::Import, "'import'")?;
         let mut path = vec![self.expect_ident("a module path segment")?];
         while self.eat(&TokenKind::Dot) {
@@ -666,7 +665,7 @@ impl Parser {
         &mut self,
         modifiers: Vec<Modifier>,
         sp: Span,
-    ) -> Result<FunctionDecl, ParseError> {
+    ) -> Result<FunctionDecl, Diagnostic> {
         self.expect(&TokenKind::Function, "'function'")?;
         let name = self.expect_ident("a function name")?;
         self.expect(&TokenKind::LParen, "'(' after function name")?;
@@ -690,7 +689,7 @@ impl Parser {
 
     /// Comma-separated `Type name` parameters up to (not including) `)`.
     /// Allows zero params; allows a trailing comma.
-    fn parse_params(&mut self) -> Result<Vec<Param>, ParseError> {
+    fn parse_params(&mut self) -> Result<Vec<Param>, Diagnostic> {
         let mut params = Vec::new();
         if self.check(&TokenKind::RParen) {
             return Ok(params);
@@ -711,7 +710,7 @@ impl Parser {
     }
 
     /// `enum Name { Variant[(Type field, …)], … }` — assumes current token is `enum`.
-    fn parse_enum(&mut self, sp: Span) -> Result<EnumDecl, ParseError> {
+    fn parse_enum(&mut self, sp: Span) -> Result<EnumDecl, Diagnostic> {
         self.expect(&TokenKind::Enum, "'enum'")?;
         let name = self.expect_ident("an enum name")?;
         self.expect(&TokenKind::LBrace, "'{' to open enum body")?;
@@ -744,7 +743,7 @@ impl Parser {
     }
 
     /// `class Name { member* }` — assumes current token is `class`.
-    fn parse_class(&mut self, sp: Span) -> Result<ClassDecl, ParseError> {
+    fn parse_class(&mut self, sp: Span) -> Result<ClassDecl, Diagnostic> {
         self.expect(&TokenKind::Class, "'class'")?;
         let name = self.expect_ident("a class name")?;
         self.expect(&TokenKind::LBrace, "'{' to open class body")?;
@@ -762,7 +761,7 @@ impl Parser {
 
     /// One class member: a field, a constructor, or a method. Modifiers preceding
     /// `constructor` are consumed and dropped (M1: constructors are implicitly public).
-    fn parse_class_member(&mut self) -> Result<ClassMember, ParseError> {
+    fn parse_class_member(&mut self) -> Result<ClassMember, Diagnostic> {
         let sp = self.peek_span();
         let modifiers = self.parse_modifiers();
         match self.peek() {
@@ -814,7 +813,7 @@ impl Parser {
 
     /// Constructor parameters: like normal params, but each may carry promotion modifiers
     /// (`constructor(private string name)`). Allows zero; allows a trailing comma.
-    fn parse_ctor_params(&mut self) -> Result<Vec<CtorParam>, ParseError> {
+    fn parse_ctor_params(&mut self) -> Result<Vec<CtorParam>, Diagnostic> {
         let mut params = Vec::new();
         if self.check(&TokenKind::RParen) {
             return Ok(params);

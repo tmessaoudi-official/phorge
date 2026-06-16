@@ -4,16 +4,9 @@
 use std::collections::HashMap;
 
 use crate::ast::Program;
+use crate::diagnostic::{Diagnostic, Stage};
 use crate::token::Span;
 use crate::types::Ty;
-
-/// A type error with source position. Mirrors `parser::ParseError`.
-#[derive(Debug, Clone, PartialEq)]
-pub struct TypeError {
-    pub message: String,
-    pub line: u32,
-    pub col: u32,
-}
 
 struct FnSig {
     params: Vec<Ty>,
@@ -48,7 +41,7 @@ pub struct Checker {
     classes: HashMap<String, ClassInfo>,
     /// lexical block scopes; last is innermost
     scopes: Vec<HashMap<String, Ty>>,
-    errors: Vec<TypeError>,
+    errors: Vec<Diagnostic>,
     /// return type of the function/method currently being checked
     cur_ret: Ty,
     /// class currently being checked (for `this` and bare field refs)
@@ -73,7 +66,8 @@ impl Checker {
 
     /// Record an error and return the poison type so callers can keep going.
     fn err(&mut self, span: Span, msg: impl Into<String>) -> Ty {
-        self.errors.push(TypeError {
+        self.errors.push(Diagnostic {
+            stage: Stage::Type,
             message: msg.into(),
             line: span.line,
             col: span.col,
@@ -951,7 +945,7 @@ impl Checker {
 
 /// Type-check a whole program. `Ok(())` means it is well-typed; otherwise every
 /// detected error is returned.
-pub fn check(program: &Program) -> Result<(), Vec<TypeError>> {
+pub fn check(program: &Program) -> Result<(), Vec<Diagnostic>> {
     let mut c = Checker::new();
     c.collect(program);
     c.check_program(program);
@@ -976,7 +970,7 @@ mod tests {
     }
 
     /// Type-check `src` and return the errors (empty == well-typed).
-    fn errors_of(src: &str) -> Vec<TypeError> {
+    fn errors_of(src: &str) -> Vec<Diagnostic> {
         match check(&prog(src)) {
             Ok(()) => Vec::new(),
             Err(e) => e,

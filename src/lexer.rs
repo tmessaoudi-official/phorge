@@ -1,11 +1,5 @@
+use crate::diagnostic::{Diagnostic, Stage};
 use crate::token::{Span, Token, TokenKind};
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct LexError {
-    pub message: String,
-    pub line: u32,
-    pub col: u32,
-}
 
 pub struct Lexer<'a> {
     src: &'a [u8],
@@ -54,7 +48,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn scan_number(&mut self, start: usize, line: u32, col: u32) -> Result<Token, LexError> {
+    fn scan_number(&mut self, start: usize, line: u32, col: u32) -> Result<Token, Diagnostic> {
         while matches!(self.peek(), Some(b) if b.is_ascii_digit()) {
             self.bump();
         }
@@ -68,13 +62,15 @@ impl<'a> Lexer<'a> {
         }
         let text = std::str::from_utf8(&self.src[start..self.pos]).unwrap();
         let kind = if is_float {
-            let f: f64 = text.parse().map_err(|_| LexError {
+            let f: f64 = text.parse().map_err(|_| Diagnostic {
+                stage: Stage::Lex,
                 message: "float literal out of range".into(),
                 line,
                 col,
             })?;
             if !f.is_finite() {
-                return Err(LexError {
+                return Err(Diagnostic {
+                    stage: Stage::Lex,
                     message: "float literal out of range".into(),
                     line,
                     col,
@@ -82,7 +78,8 @@ impl<'a> Lexer<'a> {
             }
             TokenKind::Float(f)
         } else {
-            let i: i64 = text.parse().map_err(|_| LexError {
+            let i: i64 = text.parse().map_err(|_| Diagnostic {
+                stage: Stage::Lex,
                 message: "integer literal out of range".into(),
                 line,
                 col,
@@ -109,14 +106,15 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn skip_block_comment(&mut self) -> Result<(), LexError> {
+    fn skip_block_comment(&mut self) -> Result<(), Diagnostic> {
         let (sl, sc) = (self.line, self.col);
         self.bump();
         self.bump(); // consume /*
         loop {
             match self.peek() {
                 None => {
-                    return Err(LexError {
+                    return Err(Diagnostic {
+                        stage: Stage::Lex,
                         message: "unterminated block comment".into(),
                         line: sl,
                         col: sc,
@@ -134,7 +132,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn scan_string(&mut self, start: usize, line: u32, col: u32) -> Result<Token, LexError> {
+    fn scan_string(&mut self, start: usize, line: u32, col: u32) -> Result<Token, Diagnostic> {
         self.bump(); // opening quote
                      // Accumulate the body as raw bytes: literal bytes (including multi-byte UTF-8
                      // sequences) are copied verbatim, escapes expand to their ASCII byte. The source
@@ -146,7 +144,8 @@ impl<'a> Lexer<'a> {
             let (el, ec) = (self.line, self.col);
             match self.bump() {
                 None => {
-                    return Err(LexError {
+                    return Err(Diagnostic {
+                        stage: Stage::Lex,
                         message: "unterminated string".into(),
                         line,
                         col,
@@ -160,14 +159,16 @@ impl<'a> Lexer<'a> {
                     Some(b'\\') => bytes.push(b'\\'),
                     Some(b'"') => bytes.push(b'"'),
                     Some(other) => {
-                        return Err(LexError {
+                        return Err(Diagnostic {
+                            stage: Stage::Lex,
                             message: format!("invalid escape \\{}", other as char),
                             line: el,
                             col: ec,
                         })
                     }
                     None => {
-                        return Err(LexError {
+                        return Err(Diagnostic {
+                            stage: Stage::Lex,
                             message: "unterminated string".into(),
                             line,
                             col,
@@ -249,7 +250,7 @@ fn keyword(s: &str) -> Option<TokenKind> {
     })
 }
 
-pub fn lex(src: &str) -> Result<Vec<Token>, LexError> {
+pub fn lex(src: &str) -> Result<Vec<Token>, Diagnostic> {
     let mut lx = Lexer::new(src);
     let mut out = Vec::new();
     loop {
@@ -368,7 +369,8 @@ pub fn lex(src: &str) -> Result<Vec<Token>, LexError> {
                     None => {
                         // Decode the full char (handles multi-byte UTF-8) for the message.
                         let ch = lx.current_char();
-                        return Err(LexError {
+                        return Err(Diagnostic {
+                            stage: Stage::Lex,
                             message: format!("unexpected character {:?}", ch),
                             line,
                             col,
@@ -447,7 +449,7 @@ mod tests {
 
     #[test]
     fn integer_overflow_is_error_not_panic() {
-        // 26-digit literal exceeds i64::MAX; must yield LexError, never panic.
+        // 26-digit literal exceeds i64::MAX; must yield Diagnostic, never panic.
         let err = lex("99999999999999999999999999").unwrap_err();
         assert!(err.message.contains("out of range"), "got: {}", err.message);
         assert_eq!(err.line, 1);

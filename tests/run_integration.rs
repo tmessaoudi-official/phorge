@@ -39,7 +39,7 @@ function main() {
 }
 "#;
 
-fn run(src: &str) -> Result<String, phorge::interpreter::RuntimeError> {
+fn run(src: &str) -> Result<String, phorge::diagnostic::Diagnostic> {
     let tokens = lex(src).expect("lex ok");
     let prog = Parser::new(tokens).parse_program().expect("parse ok");
     interpret(&prog)

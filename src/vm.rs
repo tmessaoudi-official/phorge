@@ -2,12 +2,22 @@
 //! P1: scalar arithmetic, negate, print, return. Output is captured into a String (mirrors
 //! `interpreter::interpret`) so the VM can be differential-tested against the tree-walker.
 //!
-//! `Err` carries the bare runtime-error message (no "runtime error:" prefix), matching
-//! `interpreter`'s `RuntimeError.message`; the future `cmd_runvm` adds the prefix, keeping
-//! error parity with `cmd_run`.
+//! `run` returns a unified runtime `Diagnostic` (M2 P3.5 Wave 2 Task 2.1): the per-op `exec_op`
+//! yields a bare fault body, and `run` attaches the source line from `Chunk.lines[ip]` so the
+//! fault renders `runtime error at <line>: <body>`. The canonical body (`"division by zero"`,
+//! `"integer overflow"`, …) is preserved verbatim, keeping error parity with the interpreter
+//! (the `agree_err` oracle classifies by body, tolerating the VM-only line prefix).
 
 use crate::chunk::{BytecodeProgram, Op};
+use crate::diagnostic::Diagnostic;
 use crate::value::{Value, MAX_CALL_DEPTH};
+
+/// Whether the dispatch loop should fetch the next instruction or stop (the `main` frame
+/// returned). Lets the per-op `exec_op` signal completion without owning the run loop.
+enum Flow {
+    Next,
+    Done,
+}
 
 // Call-frame depth is capped by the shared `value::MAX_CALL_DEPTH` (same limit the interpreter
 // enforces, keeping the backends parity-identical). Exceeding it is a clean `"stack overflow"`
@@ -40,10 +50,11 @@ impl<'a> Vm<'a> {
 
     /// Execute the program from `main`, returning captured output (`Ok`) or a runtime
     /// error (`Err`).
-    pub fn run(mut self) -> Result<String, String> {
+    pub fn run(mut self) -> Result<String, Diagnostic> {
         // Fail fast on malformed bytecode (a compiler bug) with a clean error instead of a panic
         // mid-execution — keeps the no-crash contract (EV-7). See `BytecodeProgram::validate`.
-        self.program.validate()?;
+        // Bytecode-validation faults have no source line, so they surface position-less.
+        self.program.validate().map_err(Diagnostic::runtime)?;
         self.frames.push(Frame {
             func: self.program.main,
             ip: 0,
@@ -67,187 +78,211 @@ impl<'a> Vm<'a> {
             // mutable stack operations below.
             let op = code[ip].clone();
             self.frames[fr].ip += 1;
-            match op {
-                Op::Const(i) => {
-                    let v = self.program.functions[func].chunk.consts[i].clone();
-                    self.stack.push(v);
-                }
-
-                // Arithmetic dispatches into the single-sourced `value` kernels — the interpreter
-                // calls the *same* functions, so the checked-op / div-zero / overflow fault path
-                // is structurally identical across both backends (the Wave 0 `Op::Neg` divergence
-                // class can no longer reopen).
-                Op::AddI => {
-                    let (a, b) = self.pop2_int()?;
-                    self.push_i(crate::value::int_add(a, b))?;
-                }
-                Op::SubI => {
-                    let (a, b) = self.pop2_int()?;
-                    self.push_i(crate::value::int_sub(a, b))?;
-                }
-                Op::MulI => {
-                    let (a, b) = self.pop2_int()?;
-                    self.push_i(crate::value::int_mul(a, b))?;
-                }
-                Op::DivI => {
-                    let (a, b) = self.pop2_int()?;
-                    self.push_i(crate::value::int_div(a, b))?;
-                }
-                Op::RemI => {
-                    let (a, b) = self.pop2_int()?;
-                    self.push_i(crate::value::int_rem(a, b))?;
-                }
-
-                Op::AddF => {
-                    let (a, b) = self.pop2_float()?;
-                    self.stack.push(Value::Float(crate::value::float_add(a, b)));
-                }
-                Op::SubF => {
-                    let (a, b) = self.pop2_float()?;
-                    self.stack.push(Value::Float(crate::value::float_sub(a, b)));
-                }
-                Op::MulF => {
-                    let (a, b) = self.pop2_float()?;
-                    self.stack.push(Value::Float(crate::value::float_mul(a, b)));
-                }
-                Op::DivF => {
-                    let (a, b) = self.pop2_float()?;
-                    self.stack.push(Value::Float(crate::value::float_div(a, b)));
-                }
-                Op::RemF => {
-                    let (a, b) = self.pop2_float()?;
-                    self.stack.push(Value::Float(crate::value::float_rem(a, b)));
-                }
-
-                Op::Neg => match self.pop() {
-                    // `value::int_neg` is shared with the interpreter (`eval_unary`): negating
-                    // `i64::MIN` is a clean `"integer overflow"` runtime error, never a panic.
-                    Value::Int(n) => self.push_i(crate::value::int_neg(n))?,
-                    Value::Float(x) => self.stack.push(Value::Float(-x)),
-                    v => return Err(format!("cannot negate {}", v.type_name())),
-                },
-                Op::Not => match self.pop() {
-                    Value::Bool(b) => self.stack.push(Value::Bool(!b)),
-                    v => return Err(format!("cannot apply ! to {}", v.type_name())),
-                },
-
-                Op::Eq => {
-                    let b = self.pop();
-                    let a = self.pop();
-                    self.stack.push(Value::Bool(a.eq_val(&b)));
-                }
-                Op::Ne => {
-                    let b = self.pop();
-                    let a = self.pop();
-                    self.stack.push(Value::Bool(!a.eq_val(&b)));
-                }
-                Op::Lt | Op::Gt | Op::Le | Op::Ge => {
-                    let b = self.pop();
-                    let a = self.pop();
-                    self.stack.push(Value::Bool(compare(&op, &a, &b)?));
-                }
-
-                Op::Pop => {
-                    self.pop();
-                }
-                Op::GetLocal(slot) => {
-                    let base = self.frames[fr].slot_base;
-                    let idx = self.frame_slot(base, slot);
-                    let v = self.stack[idx].clone();
-                    self.stack.push(v);
-                }
-                Op::SetLocal(slot) => {
-                    let base = self.frames[fr].slot_base;
-                    let v = self.pop();
-                    let idx = self.frame_slot(base, slot);
-                    self.stack[idx] = v;
-                }
-
-                Op::Jump(target) => self.frames[fr].ip = target,
-                Op::JumpIfFalse(target) => match self.pop() {
-                    Value::Bool(false) => self.frames[fr].ip = target,
-                    Value::Bool(true) => {}
-                    v => return Err(format!("expected bool, found {}", v.type_name())),
-                },
-
-                Op::Concat(n) => {
-                    let parts = self.split_off(n);
-                    let mut s = String::new();
-                    for v in &parts {
-                        match v.as_display() {
-                            Some(t) => s.push_str(&t),
-                            None => {
-                                return Err(format!(
-                                    "cannot interpolate {} into a string",
-                                    v.type_name()
-                                ))
-                            }
-                        }
-                    }
-                    self.stack.push(Value::Str(s));
-                }
-                Op::MakeList(n) => {
-                    let items = self.split_off(n);
-                    self.stack.push(Value::List(items));
-                }
-                Op::Index => {
-                    let idx = match self.pop() {
-                        Value::Int(n) => n,
-                        v => return Err(format!("expected int index, found {}", v.type_name())),
-                    };
-                    let list = match self.pop() {
-                        Value::List(xs) => xs,
-                        v => return Err(format!("cannot index {}", v.type_name())),
-                    };
-                    let i = usize::try_from(idx)
-                        .ok()
-                        .filter(|i| *i < list.len())
-                        .ok_or_else(|| "list index out of range".to_string())?;
-                    self.stack.push(list[i].clone());
-                }
-                Op::Len => match self.pop() {
-                    Value::List(xs) => self.stack.push(Value::Int(xs.len() as i64)),
-                    v => return Err(format!("cannot take length of {}", v.type_name())),
-                },
-
-                Op::Print(n) => {
-                    let parts = self.split_off(n);
-                    let mut line = String::new();
-                    for (i, v) in parts.iter().enumerate() {
-                        if i > 0 {
-                            line.push(' ');
-                        }
-                        match v.as_display() {
-                            Some(t) => line.push_str(&t),
-                            None => return Err(format!("println cannot print {}", v.type_name())),
-                        }
-                    }
-                    self.out.push_str(&line);
-                    self.out.push('\n');
-                }
-
-                Op::Call(idx) => {
-                    if self.frames.len() >= MAX_CALL_DEPTH {
-                        return Err("stack overflow".to_string());
-                    }
-                    let arity = self.program.functions[idx].arity;
-                    let slot_base = self.pop_n_start(arity);
-                    self.frames.push(Frame {
-                        func: idx,
-                        ip: 0,
-                        slot_base,
-                    });
-                }
-
-                Op::Return => {
-                    let rv = self.pop();
-                    self.do_return(rv);
-                    if self.frames.is_empty() {
-                        return Ok(self.out);
-                    }
+            // `ip` is the *pre-increment* index — the op that actually executes. On a fault,
+            // locate it via this function's `Chunk.lines[ip]` and surface a positioned runtime
+            // `Diagnostic`. (The tree-walker can't supply a line — a deliberate backend
+            // asymmetry the `agree_err` oracle tolerates: it classifies by fault body, not text.)
+            match self.exec_op(op, fr, func) {
+                Ok(Flow::Next) => {}
+                Ok(Flow::Done) => return Ok(self.out),
+                Err(msg) => {
+                    let line = self.program.functions[func]
+                        .chunk
+                        .lines
+                        .get(ip)
+                        .copied()
+                        .unwrap_or(0);
+                    return Err(Diagnostic::runtime_at_line(msg, line));
                 }
             }
         }
+    }
+
+    /// Execute one instruction in the current frame (`fr` = top of `frames`, in function `func`).
+    /// Returns `Flow::Done` once `main` returns (program complete), `Flow::Next` otherwise. A
+    /// fault carries only its body string; `run` attaches the source position from `Chunk.lines`.
+    fn exec_op(&mut self, op: Op, fr: usize, func: usize) -> Result<Flow, String> {
+        match op {
+            Op::Const(i) => {
+                let v = self.program.functions[func].chunk.consts[i].clone();
+                self.stack.push(v);
+            }
+
+            // Arithmetic dispatches into the single-sourced `value` kernels — the interpreter
+            // calls the *same* functions, so the checked-op / div-zero / overflow fault path
+            // is structurally identical across both backends (the Wave 0 `Op::Neg` divergence
+            // class can no longer reopen).
+            Op::AddI => {
+                let (a, b) = self.pop2_int()?;
+                self.push_i(crate::value::int_add(a, b))?;
+            }
+            Op::SubI => {
+                let (a, b) = self.pop2_int()?;
+                self.push_i(crate::value::int_sub(a, b))?;
+            }
+            Op::MulI => {
+                let (a, b) = self.pop2_int()?;
+                self.push_i(crate::value::int_mul(a, b))?;
+            }
+            Op::DivI => {
+                let (a, b) = self.pop2_int()?;
+                self.push_i(crate::value::int_div(a, b))?;
+            }
+            Op::RemI => {
+                let (a, b) = self.pop2_int()?;
+                self.push_i(crate::value::int_rem(a, b))?;
+            }
+
+            Op::AddF => {
+                let (a, b) = self.pop2_float()?;
+                self.stack.push(Value::Float(crate::value::float_add(a, b)));
+            }
+            Op::SubF => {
+                let (a, b) = self.pop2_float()?;
+                self.stack.push(Value::Float(crate::value::float_sub(a, b)));
+            }
+            Op::MulF => {
+                let (a, b) = self.pop2_float()?;
+                self.stack.push(Value::Float(crate::value::float_mul(a, b)));
+            }
+            Op::DivF => {
+                let (a, b) = self.pop2_float()?;
+                self.stack.push(Value::Float(crate::value::float_div(a, b)));
+            }
+            Op::RemF => {
+                let (a, b) = self.pop2_float()?;
+                self.stack.push(Value::Float(crate::value::float_rem(a, b)));
+            }
+
+            Op::Neg => match self.pop() {
+                // `value::int_neg` is shared with the interpreter (`eval_unary`): negating
+                // `i64::MIN` is a clean `"integer overflow"` runtime error, never a panic.
+                Value::Int(n) => self.push_i(crate::value::int_neg(n))?,
+                Value::Float(x) => self.stack.push(Value::Float(-x)),
+                v => return Err(format!("cannot negate {}", v.type_name())),
+            },
+            Op::Not => match self.pop() {
+                Value::Bool(b) => self.stack.push(Value::Bool(!b)),
+                v => return Err(format!("cannot apply ! to {}", v.type_name())),
+            },
+
+            Op::Eq => {
+                let b = self.pop();
+                let a = self.pop();
+                self.stack.push(Value::Bool(a.eq_val(&b)));
+            }
+            Op::Ne => {
+                let b = self.pop();
+                let a = self.pop();
+                self.stack.push(Value::Bool(!a.eq_val(&b)));
+            }
+            Op::Lt | Op::Gt | Op::Le | Op::Ge => {
+                let b = self.pop();
+                let a = self.pop();
+                self.stack.push(Value::Bool(compare(&op, &a, &b)?));
+            }
+
+            Op::Pop => {
+                self.pop();
+            }
+            Op::GetLocal(slot) => {
+                let base = self.frames[fr].slot_base;
+                let idx = self.frame_slot(base, slot);
+                let v = self.stack[idx].clone();
+                self.stack.push(v);
+            }
+            Op::SetLocal(slot) => {
+                let base = self.frames[fr].slot_base;
+                let v = self.pop();
+                let idx = self.frame_slot(base, slot);
+                self.stack[idx] = v;
+            }
+
+            Op::Jump(target) => self.frames[fr].ip = target,
+            Op::JumpIfFalse(target) => match self.pop() {
+                Value::Bool(false) => self.frames[fr].ip = target,
+                Value::Bool(true) => {}
+                v => return Err(format!("expected bool, found {}", v.type_name())),
+            },
+
+            Op::Concat(n) => {
+                let parts = self.split_off(n);
+                let mut s = String::new();
+                for v in &parts {
+                    match v.as_display() {
+                        Some(t) => s.push_str(&t),
+                        None => {
+                            return Err(format!(
+                                "cannot interpolate {} into a string",
+                                v.type_name()
+                            ))
+                        }
+                    }
+                }
+                self.stack.push(Value::Str(s));
+            }
+            Op::MakeList(n) => {
+                let items = self.split_off(n);
+                self.stack.push(Value::List(items));
+            }
+            Op::Index => {
+                let idx = match self.pop() {
+                    Value::Int(n) => n,
+                    v => return Err(format!("expected int index, found {}", v.type_name())),
+                };
+                let list = match self.pop() {
+                    Value::List(xs) => xs,
+                    v => return Err(format!("cannot index {}", v.type_name())),
+                };
+                let i = usize::try_from(idx)
+                    .ok()
+                    .filter(|i| *i < list.len())
+                    .ok_or_else(|| "list index out of range".to_string())?;
+                self.stack.push(list[i].clone());
+            }
+            Op::Len => match self.pop() {
+                Value::List(xs) => self.stack.push(Value::Int(xs.len() as i64)),
+                v => return Err(format!("cannot take length of {}", v.type_name())),
+            },
+
+            Op::Print(n) => {
+                let parts = self.split_off(n);
+                let mut line = String::new();
+                for (i, v) in parts.iter().enumerate() {
+                    if i > 0 {
+                        line.push(' ');
+                    }
+                    match v.as_display() {
+                        Some(t) => line.push_str(&t),
+                        None => return Err(format!("println cannot print {}", v.type_name())),
+                    }
+                }
+                self.out.push_str(&line);
+                self.out.push('\n');
+            }
+
+            Op::Call(idx) => {
+                if self.frames.len() >= MAX_CALL_DEPTH {
+                    return Err("stack overflow".to_string());
+                }
+                let arity = self.program.functions[idx].arity;
+                let slot_base = self.pop_n_start(arity);
+                self.frames.push(Frame {
+                    func: idx,
+                    ip: 0,
+                    slot_base,
+                });
+            }
+
+            Op::Return => {
+                let rv = self.pop();
+                self.do_return(rv);
+                if self.frames.is_empty() {
+                    return Ok(Flow::Done);
+                }
+            }
+        }
+        Ok(Flow::Next)
     }
 
     /// Unwind the current frame: truncate its locals window and pop it; if a caller remains,
@@ -371,7 +406,8 @@ mod tests {
         c.emit(Op::Return, 1);
     }
 
-    /// Wrap a single hand-built chunk as `main` and run it.
+    /// Wrap a single hand-built chunk as `main` and run it. Renders the runtime `Diagnostic` to a
+    /// string so the existing `.contains(...)` assertions on fault bodies keep working.
     fn run_chunk(chunk: Chunk) -> Result<String, String> {
         let program = BytecodeProgram {
             functions: vec![Function {
@@ -381,7 +417,7 @@ mod tests {
             }],
             main: 0,
         };
-        Vm::new(&program).run()
+        Vm::new(&program).run().map_err(|d| d.to_string())
     }
 
     /// Build a chunk for `2 * 3 + 4` then print it.
