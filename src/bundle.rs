@@ -76,6 +76,63 @@ pub fn decode_container(blob: &[u8]) -> Option<Vec<u8>> {
     Some(payload.to_vec())
 }
 
+/// Find a named section's bytes in an ELF64 little-endian image (the only Phase-1 format). Returns
+/// `None` on any malformed/unsupported input (too short, not ELF, 32-bit, big-endian, OOB offset).
+/// Hand-rolled — no object-parsing crate may link into the produced binary.
+fn elf_find_section<'a>(bytes: &'a [u8], name: &str) -> Option<&'a [u8]> {
+    // e_ident: 0x7f 'E' 'L' 'F', EI_CLASS=2 (ELF64), EI_DATA=1 (little-endian).
+    if bytes.len() < 64 || bytes[0..4] != *b"\x7fELF" || bytes[4] != 2 || bytes[5] != 1 {
+        return None;
+    }
+    let u16at = |o: usize| -> Option<u16> {
+        Some(u16::from_le_bytes(bytes.get(o..o + 2)?.try_into().ok()?))
+    };
+    let u32at = |o: usize| -> Option<u32> {
+        Some(u32::from_le_bytes(bytes.get(o..o + 4)?.try_into().ok()?))
+    };
+    let u64at = |o: usize| -> Option<u64> {
+        Some(u64::from_le_bytes(bytes.get(o..o + 8)?.try_into().ok()?))
+    };
+
+    let e_shoff = u64at(0x28)? as usize; // section header table file offset
+    let e_shentsize = u16at(0x3A)? as usize; // per-entry size (64 for ELF64)
+    let e_shnum = u16at(0x3C)? as usize;
+    let e_shstrndx = u16at(0x3E)? as usize;
+    if e_shentsize < 64 {
+        return None;
+    }
+
+    // Section-name string table (the section header at index e_shstrndx).
+    let strtab_hdr = e_shoff.checked_add(e_shstrndx.checked_mul(e_shentsize)?)?;
+    let strtab_off = u64at(strtab_hdr + 24)? as usize; // sh_offset
+    let strtab_size = u64at(strtab_hdr + 32)? as usize; // sh_size
+    let strtab = bytes.get(strtab_off..strtab_off.checked_add(strtab_size)?)?;
+
+    for i in 0..e_shnum {
+        let sh = e_shoff.checked_add(i.checked_mul(e_shentsize)?)?;
+        let sh_name = u32at(sh)? as usize; // offset into strtab
+        let rest = strtab.get(sh_name..)?;
+        let nul = rest.iter().position(|&b| b == 0)?;
+        if std::str::from_utf8(&rest[..nul]).ok()? == name {
+            let off = u64at(sh + 24)? as usize; // sh_offset
+            let sz = u64at(sh + 32)? as usize; // sh_size
+            return bytes.get(off..off.checked_add(sz)?);
+        }
+    }
+    None
+}
+
+/// If this executable carries an embedded `.phorge` payload, return its source. Any failure — no
+/// payload, unreadable `current_exe`, malformed ELF, bad CRC — returns `None`, so the caller falls
+/// through to normal CLI dispatch. Never panics.
+pub fn embedded_source() -> Option<String> {
+    let exe = std::env::current_exe().ok()?;
+    let bytes = std::fs::read(exe).ok()?;
+    let section = elf_find_section(&bytes, SECTION_NAME)?;
+    let payload = decode_container(section)?;
+    String::from_utf8(payload).ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,5 +186,39 @@ mod tests {
         blob[9] = 0;
         // header_crc now stale -> rejected (also future-version guard would catch it)
         assert_eq!(decode_container(&blob), None);
+    }
+
+    #[test]
+    fn elf_reader_finds_added_section() {
+        // Use the compiled test binary itself as a real ELF64 to objcopy into.
+        let exe = std::env::current_exe().expect("current_exe");
+        let tmp = std::env::temp_dir().join("phorge_bundle_reader_test");
+        let payload = std::env::temp_dir().join("phorge_bundle_reader_payload");
+        let src = b"function main() { println(\"x\"); }";
+        std::fs::write(&payload, encode_container(src)).unwrap();
+        let objcopy = std::env::var("PHORGE_OBJCOPY").unwrap_or_else(|_| "llvm-objcopy".into());
+        let status = std::process::Command::new(&objcopy)
+            .args([
+                "--add-section",
+                &format!(".phorge={}", payload.display()),
+                "--set-section-flags",
+                ".phorge=noload,readonly",
+            ])
+            .arg(&exe)
+            .arg(&tmp)
+            .status();
+        let _ = std::fs::remove_file(&payload);
+        match status {
+            Ok(s) if s.success() => {}
+            _ => {
+                eprintln!("skipping: {objcopy} unavailable");
+                let _ = std::fs::remove_file(&tmp);
+                return;
+            }
+        }
+        let bytes = std::fs::read(&tmp).unwrap();
+        let _ = std::fs::remove_file(&tmp);
+        let section = elf_find_section(&bytes, SECTION_NAME).expect("section found");
+        assert_eq!(decode_container(section).as_deref(), Some(&src[..]));
     }
 }
