@@ -6,7 +6,8 @@ use std::process::exit;
 
 use phorge::cli;
 
-const USAGE: &str = "usage: phorge <run|runvm|check|parse|lex|transpile|bench> <file>";
+const USAGE: &str =
+    "usage: phorge <run|runvm|check|parse|lex|transpile|bench|build> <file> [-o out]";
 
 fn main() {
     // Self-executing artifact: if this binary carries an embedded program, run it on the VM and
@@ -26,7 +27,9 @@ fn main() {
 
     let args: Vec<String> = std::env::args().collect();
     let cmd = match args.get(1).map(String::as_str) {
-        Some(c @ ("run" | "runvm" | "check" | "parse" | "lex" | "transpile" | "bench")) => c,
+        Some(
+            c @ ("run" | "runvm" | "check" | "parse" | "lex" | "transpile" | "bench" | "build"),
+        ) => c,
         _ => {
             eprintln!("{USAGE}");
             exit(2);
@@ -46,6 +49,27 @@ fn main() {
             exit(1);
         }
     };
+    // `build` is special: it consumes an optional `-o <out>` and writes a binary instead of
+    // printing program output. Handle it before the generic print-the-result path.
+    if cmd == "build" {
+        let out = args.get(3).and_then(|f| {
+            if f == "-o" {
+                args.get(4).map(String::as_str)
+            } else {
+                None
+            }
+        });
+        match cli::cmd_build(file, &src, out) {
+            Ok(text) => {
+                print!("{text}");
+                return;
+            }
+            Err(err) => {
+                eprintln!("{err}");
+                exit(1);
+            }
+        }
+    }
     let result = match cmd {
         "run" => cli::cmd_run(&src),
         "runvm" => cli::cmd_runvm(&src),

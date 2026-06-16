@@ -78,6 +78,67 @@ pub fn cmd_check(src: &str) -> Result<String, String> {
     })
 }
 
+/// Build a standalone executable for the host (x86_64-linux-gnu) from `src`. `input_path` names the
+/// source (used to derive the default output name); `out_path` overrides it. Validates the program
+/// first (never emits a broken binary), then copies this phorge binary and embeds `src` as a
+/// `.phorge` section via `llvm-objcopy`. Returns a one-line success message.
+pub fn cmd_build(input_path: &str, src: &str, out_path: Option<&str>) -> Result<String, String> {
+    // 1. Validate: reuse the checker pipeline; surface its diagnostics, emit nothing on failure.
+    cmd_check(src)?;
+
+    // 2. Resolve output path: explicit -o, else ./<input-stem>.
+    let out = match out_path {
+        Some(p) => std::path::PathBuf::from(p),
+        None => {
+            let stem = std::path::Path::new(input_path)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .ok_or_else(|| format!("cannot derive output name from {input_path}"))?;
+            std::path::PathBuf::from(stem)
+        }
+    };
+
+    // 3. The stub is this running phorge binary (Phase 1: host target only).
+    let stub = std::env::current_exe().map_err(|e| format!("cannot locate phorge binary: {e}"))?;
+
+    // 4. Write the payload container to a temp file for objcopy.
+    let payload = std::env::temp_dir().join(format!("phorge-build-{}.bin", std::process::id()));
+    std::fs::write(&payload, crate::bundle::encode_container(src.as_bytes()))
+        .map_err(|e| format!("cannot write payload: {e}"))?;
+
+    // 5. objcopy: copy the stub to `out` with the `.phorge` section added.
+    let objcopy = std::env::var("PHORGE_OBJCOPY").unwrap_or_else(|_| "llvm-objcopy".into());
+    let status = std::process::Command::new(&objcopy)
+        .args([
+            "--add-section",
+            &format!(".phorge={}", payload.display()),
+            "--set-section-flags",
+            ".phorge=noload,readonly",
+        ])
+        .arg(&stub)
+        .arg(&out)
+        .status();
+    let _ = std::fs::remove_file(&payload);
+    match status {
+        Ok(s) if s.success() => {}
+        Ok(s) => return Err(format!("{objcopy} failed with status {s}")),
+        Err(e) => return Err(format!("cannot run {objcopy}: {e}")),
+    }
+
+    // 6. Make it executable (unix).
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(meta) = std::fs::metadata(&out) {
+            let mut perm = meta.permissions();
+            perm.set_mode(perm.mode() | 0o111);
+            let _ = std::fs::set_permissions(&out, perm);
+        }
+    }
+
+    Ok(format!("built {}\n", out.display()))
+}
+
 /// `parse`: lex -> parse; dump the AST.
 pub fn cmd_parse(src: &str) -> Result<String, String> {
     on_deep_stack(|| {
