@@ -21,19 +21,33 @@ enum NumTy {
     Float,
 }
 
-/// A declared local: its name, the declared type name (for `num_ty`), and the lexical
-/// depth it lives at (for scope cleanup). Its stack slot is its index in `locals`.
+/// The compiler's coarse view of a declared type — enough to pick int- vs float-specialized
+/// arithmetic and give `num_ty` an *exhaustive* match (no stringly-typed compare). The checker has
+/// already verified full types; threading its richer `types::Ty` here — so list-element and field
+/// types are recoverable — is the deferred Wave 4 fix. That gap is exactly why `num_ty` can't yet
+/// classify `Index`/`Member` operands (also surface-guarded until P4).
+#[derive(Clone, Copy, PartialEq)]
+enum TyTag {
+    Int,
+    Float,
+    /// Any non-numeric or composite type (bool, string, unit, list, map, set, named, optional).
+    /// The compiler only needs to *reject* these as arithmetic operands, not tell them apart.
+    Other,
+}
+
+/// A declared local: its name, its coarse type tag (for `num_ty`), and the lexical depth it lives
+/// at (for scope cleanup). Its stack slot is its index in `locals`.
 struct Local {
     name: String,
-    ty: String,
+    ty: TyTag,
     depth: u32,
 }
 
 /// Per-function metadata gathered in the pre-pass: its index in `BytecodeProgram.functions`
-/// and its declared return-type name (for `num_ty` of a call result — decision P3-6).
+/// and its declared return-type tag (for `num_ty` of a call result — decision P3-6).
 struct FnMeta {
     index: usize,
-    ret: String,
+    ret: TyTag,
 }
 
 struct Compiler<'a> {
@@ -56,7 +70,7 @@ pub fn compile(program: &Program) -> Result<BytecodeProgram, String> {
                 f.name.clone(),
                 FnMeta {
                     index: order.len(),
-                    ret: f.ret.as_ref().map_or_else(|| "unit".to_string(), type_name),
+                    ret: f.ret.as_ref().map_or(TyTag::Other, type_tag),
                 },
             );
             order.push(f);
@@ -76,7 +90,7 @@ pub fn compile(program: &Program) -> Result<BytecodeProgram, String> {
             fns: &fns,
         };
         for p in &f.params {
-            c.add_local(&p.name, &type_name(&p.ty));
+            c.add_local(&p.name, type_tag(&p.ty));
         }
         let last_line = f.span.line;
         for s in &f.body {
@@ -93,11 +107,17 @@ pub fn compile(program: &Program) -> Result<BytecodeProgram, String> {
     Ok(BytecodeProgram { functions, main })
 }
 
-/// The declared type name of a `Type` annotation (the head identifier).
-fn type_name(ty: &Type) -> String {
+/// Classify a declared type annotation into the coarse `TyTag` the compiler reasons about. Only the
+/// numeric head names matter; everything else — including generics like `List<int>`, whose element
+/// type the compiler can't yet recover — collapses to `Other`.
+fn type_tag(ty: &Type) -> TyTag {
     match ty {
-        Type::Named { name, .. } => name.clone(),
-        Type::Optional { .. } => "optional".to_string(),
+        Type::Named { name, .. } => match name.as_str() {
+            "int" => TyTag::Int,
+            "float" => TyTag::Float,
+            _ => TyTag::Other,
+        },
+        Type::Optional { .. } => TyTag::Other,
     }
 }
 
@@ -144,10 +164,10 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn add_local(&mut self, name: &str, ty: &str) -> usize {
+    fn add_local(&mut self, name: &str, ty: TyTag) -> usize {
         self.locals.push(Local {
             name: name.to_string(),
-            ty: ty.to_string(),
+            ty,
             depth: self.scope_depth,
         });
         self.locals.len() - 1
@@ -164,26 +184,19 @@ impl<'a> Compiler<'a> {
             Expr::Int(..) => Ok(NumTy::Int),
             Expr::Float(..) => Ok(NumTy::Float),
             Expr::Ident(name, _) => {
-                let l = self
+                let tag = self
                     .resolve_local(name)
-                    .map(|s| self.locals[s].ty.as_str())
+                    .map(|s| self.locals[s].ty)
                     .ok_or_else(|| format!("undefined variable `{name}`"))?;
-                match l {
-                    "int" => Ok(NumTy::Int),
-                    "float" => Ok(NumTy::Float),
-                    other => Err(format!("`{name}` is `{other}`, not numeric")),
-                }
+                Self::as_num(tag).ok_or_else(|| format!("`{name}` is not numeric"))
             }
             Expr::Unary { expr, .. } => self.num_ty(expr),
             Expr::Binary { lhs, .. } => self.num_ty(lhs),
             Expr::Call { callee, .. } => {
                 if let Expr::Ident(name, _) = &**callee {
                     if let Some(meta) = self.fns.get(name) {
-                        return match meta.ret.as_str() {
-                            "int" => Ok(NumTy::Int),
-                            "float" => Ok(NumTy::Float),
-                            other => Err(format!("`{name}` returns `{other}`, not numeric")),
-                        };
+                        return Self::as_num(meta.ret)
+                            .ok_or_else(|| format!("`{name}` does not return a numeric type"));
                     }
                 }
                 Err(format!("cannot infer numeric type of {e:?}"))
@@ -192,12 +205,22 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    /// Numeric refinement of a stored `TyTag` — the bridge from "what type the operand is" to
+    /// "which specialized arithmetic op." `None` for non-numeric tags (a defensive path: the
+    /// checker already guarantees arithmetic operands are numeric).
+    fn as_num(tag: TyTag) -> Option<NumTy> {
+        match tag {
+            TyTag::Int => Some(NumTy::Int),
+            TyTag::Float => Some(NumTy::Float),
+            TyTag::Other => None,
+        }
+    }
+
     fn stmt(&mut self, s: &Stmt) -> Result<(), String> {
         match s {
             Stmt::VarDecl { ty, name, init, .. } => {
                 self.expr(init)?; // value stays on the stack as the new local's slot
-                let tyname = type_name(ty);
-                self.add_local(name, &tyname);
+                self.add_local(name, type_tag(ty));
                 Ok(())
             }
             Stmt::Expr(e, span) => {
@@ -233,10 +256,7 @@ impl<'a> Compiler<'a> {
                 iter,
                 body,
                 span,
-            } => {
-                let elem_ty = type_name(ty);
-                self.compile_for(name, &elem_ty, iter, body, span.line)
-            }
+            } => self.compile_for(name, type_tag(ty), iter, body, span.line),
         }
     }
 
@@ -445,16 +465,16 @@ impl<'a> Compiler<'a> {
     fn compile_for(
         &mut self,
         name: &str,
-        elem_ty: &str,
+        elem_ty: TyTag,
         iter: &Expr,
         body: &[Stmt],
         line: u32,
     ) -> Result<(), String> {
         self.begin_scope();
         self.expr(iter)?; // [list]
-        let s_list = self.add_local("$for_list", "list");
+        let s_list = self.add_local("$for_list", TyTag::Other);
         self.emit_const(Value::Int(0), line); // [list, 0]
-        let s_idx = self.add_local("$for_idx", "int");
+        let s_idx = self.add_local("$for_idx", TyTag::Int);
 
         let loop_start = self.here();
         self.emit(Op::GetLocal(s_idx), line);
