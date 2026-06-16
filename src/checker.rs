@@ -5,6 +5,7 @@ use std::collections::HashMap;
 
 use crate::ast::Program;
 use crate::diagnostic::{Diagnostic, Stage};
+use crate::limits::MAX_EXPR_DEPTH;
 use crate::token::Span;
 use crate::types::Ty;
 
@@ -24,16 +25,6 @@ struct ClassInfo {
     /// constructor parameter types, for `ClassName(args)` calls
     ctor: Vec<Ty>,
 }
-
-/// Cap on expression-tree depth walked by `check_expr`. The parser's `MAX_NEST_DEPTH` bounds
-/// *nesting* (parens, unary chains), but a long left-associative chain like `1+1+…` is built
-/// *iteratively* and so escapes that limit — yet still produces a deeply left-leaning AST that
-/// every recursive walker (checker, interpreter, compiler) descends. The checker is the gate both
-/// backends share, so bounding depth here faults such input cleanly (identically on `run`/`runvm`)
-/// instead of letting a downstream walker overflow its stack. Measured: a chain overflows the
-/// 256 MB pipeline thread around ~50–100k terms, so this sits well below with margin. Real code
-/// never approaches it. Centralised into `Limits` by Task 2.2.
-const MAX_EXPR_DEPTH: usize = 10_000;
 
 pub struct Checker {
     funcs: HashMap<String, FnSig>,

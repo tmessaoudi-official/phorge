@@ -71,7 +71,7 @@ pub struct Interp {
     frame: Frame,
     this: Option<Value>,
     out: String,
-    /// Live call-frame depth, checked against [`crate::value::MAX_CALL_DEPTH`] in `run_call`.
+    /// Live call-frame depth, checked against [`crate::limits::MAX_CALL_DEPTH`] in `run_call`.
     /// Converts unbounded recursion into a clean `"stack overflow"` fault instead of a native
     /// stack abort — and uses the *same* limit as the VM, keeping the backends parity-identical.
     depth: usize,
@@ -141,7 +141,7 @@ impl Interp {
         // Mirror the VM's frame cap: past the shared limit, fault cleanly instead of letting
         // native recursion abort the process. Checked before incrementing, so the guard path
         // leaves `depth` untouched and every non-guard exit below decrements exactly once.
-        if self.depth >= crate::value::MAX_CALL_DEPTH {
+        if self.depth >= crate::limits::MAX_CALL_DEPTH {
             return rt("stack overflow");
         }
         self.depth += 1;

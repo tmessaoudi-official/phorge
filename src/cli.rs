@@ -14,7 +14,7 @@ use crate::vm::Vm;
 /// Run a pipeline closure on a worker thread with a large (256 MB) stack. The lexer is iterative,
 /// but the parser, checker, compiler, and tree-walking interpreter all recurse on the native stack
 /// in proportion to expression/call nesting. A generous, *known* stack makes the explicit depth
-/// limits (`parser::MAX_NEST_DEPTH`, `value::MAX_CALL_DEPTH`) — not Rust's ambient frame budget —
+/// limits (`limits::MAX_NEST_DEPTH`, `limits::MAX_CALL_DEPTH`) — not Rust's ambient frame budget —
 /// the thing that bounds recursion, so adversarial-but-bounded input faults cleanly instead of
 /// aborting, identically whether called from the CLI's main thread or a 2 MB test thread.
 fn on_deep_stack<T: Send>(f: impl FnOnce() -> T + Send) -> T {

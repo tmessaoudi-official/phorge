@@ -5,14 +5,8 @@ use crate::ast::{
     MatchArm, Modifier, Param, Pattern, Program, Stmt, StrPart, Type, UnaryOp,
 };
 use crate::diagnostic::{Diagnostic, Stage};
+use crate::limits::MAX_NEST_DEPTH;
 use crate::token::{Span, Token, TokenKind};
-
-/// Cap on expression-nesting depth in the recursive descent. Past it, the parser returns a clean
-/// `Diagnostic` instead of overflowing the native stack (SIGABRT) — measured: nested parens abort
-/// the parser around ~1750 levels on the default 12.2 MB stack. The parser runs on the *main*
-/// thread (unlike the interpreter's 256 MB worker), so this limit is its own, far below that
-/// ceiling; real source never nests beyond a few dozen. Centralised into `Limits` by Task 2.2.
-const MAX_NEST_DEPTH: usize = 512;
 
 pub struct Parser {
     tokens: Vec<Token>,

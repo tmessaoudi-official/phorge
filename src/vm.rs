@@ -10,7 +10,8 @@
 
 use crate::chunk::{BytecodeProgram, Op};
 use crate::diagnostic::Diagnostic;
-use crate::value::{Value, MAX_CALL_DEPTH};
+use crate::limits::MAX_CALL_DEPTH;
+use crate::value::Value;
 
 /// Whether the dispatch loop should fetch the next instruction or stop (the `main` frame
 /// returned). Lets the per-op `exec_op` signal completion without owning the run loop.
@@ -19,7 +20,7 @@ enum Flow {
     Done,
 }
 
-// Call-frame depth is capped by the shared `value::MAX_CALL_DEPTH` (same limit the interpreter
+// Call-frame depth is capped by the shared `limits::MAX_CALL_DEPTH` (same limit the interpreter
 // enforces, keeping the backends parity-identical). Exceeding it is a clean `"stack overflow"`
 // runtime error rather than an OOM/abort (decision P3-4).
 
