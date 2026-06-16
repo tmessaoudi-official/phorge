@@ -851,8 +851,12 @@ impl Checker {
             match &scrut {
                 Ty::Named(enum_name) if self.enums.contains_key(enum_name) => {
                     let all: Vec<String> = self.enums[enum_name].variants.keys().cloned().collect();
-                    let missing: Vec<String> =
+                    let mut missing: Vec<String> =
                         all.into_iter().filter(|v| !covered.contains(v)).collect();
+                    // `variants` is a HashMap, so `keys()` order is nondeterministic — sort the
+                    // missing list so the error message is stable across runs (otherwise it's an
+                    // intermittent test/diff hazard).
+                    missing.sort();
                     if !missing.is_empty() {
                         self.err(
                             span,
@@ -1298,6 +1302,23 @@ mod tests {
         assert!(
             errs.iter()
                 .any(|e| e.message.contains("non-exhaustive") && e.message.contains("Rect")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn non_exhaustive_match_lists_missing_variants_sorted() {
+        // Variants declared out of alphabetical order; covering the middle one leaves Gamma+Beta
+        // missing. The list must render sorted ("Beta, Gamma") regardless of the HashMap key order,
+        // so the error message is deterministic across runs (no intermittent test/diff hazard).
+        let src = "enum E { Gamma(int x), Alpha(int x), Beta(int x) } \
+                   function f(E e) -> int { return match e { Alpha(x) => x, }; } \
+                   function main() {}";
+        let errs = errors_of(src);
+        assert!(
+            errs.iter().any(|e| e
+                .message
+                .contains("non-exhaustive match: missing Beta, Gamma")),
             "{errs:?}"
         );
     }
