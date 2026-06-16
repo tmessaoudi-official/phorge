@@ -14,7 +14,8 @@ pub fn find_section(bytes: &[u8]) -> Option<&[u8]> {
         [b'M', b'Z', _, _] => pe::pe_find_section(bytes, ELF_PE_SECTION),
         // MH_MAGIC_64 = 0xFEEDFACF, little-endian on disk → CF FA ED FE.
         [0xCF, 0xFA, 0xED, 0xFE] => macho::macho_find_section(bytes, MACHO_SEG, MACHO_SECT),
-        // fat/universal arm is wired in B3.
+        // FAT_MAGIC = 0xCAFEBABE, big-endian on disk → CA FE BA BE.
+        [0xCA, 0xFE, 0xBA, 0xBE] => macho::fat_find_section(bytes, MACHO_SEG, MACHO_SECT),
         _ => None,
     }
 }

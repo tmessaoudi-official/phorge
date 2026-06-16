@@ -54,6 +54,31 @@ pub(crate) fn macho_find_section<'a>(bytes: &'a [u8], seg: &str, sect: &str) -> 
     None
 }
 
+const FAT_MAGIC: u32 = 0xCAFE_BABE; // big-endian on disk
+
+/// Find a (segment, section) inside a fat/universal binary by scanning each slice's thin Mach-O.
+pub(crate) fn fat_find_section<'a>(bytes: &'a [u8], seg: &str, sect: &str) -> Option<&'a [u8]> {
+    let u32be = |o: usize| -> Option<u32> {
+        Some(u32::from_be_bytes(
+            bytes.get(o..o.checked_add(4)?)?.try_into().ok()?,
+        ))
+    };
+    if bytes.len() < 8 || u32be(0)? != FAT_MAGIC {
+        return None;
+    }
+    let nfat = u32be(4)? as usize;
+    for i in 0..nfat {
+        let arch = 8usize.checked_add(i.checked_mul(20)?)?;
+        let off = u32be(arch.checked_add(8)?)? as usize;
+        let size = u32be(arch.checked_add(12)?)? as usize;
+        let slice = bytes.get(off..off.checked_add(size)?)?;
+        if let Some(found) = macho_find_section(slice, seg, sect) {
+            return Some(found);
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,5 +148,44 @@ mod tests {
         let mut img2 = macho_with_section("__PHORGE", "__source", b"x");
         img2[0..4].copy_from_slice(&0xCFFA_EDFEu32.to_le_bytes());
         assert_eq!(macho_find_section(&img2, "__PHORGE", "__source"), None);
+    }
+
+    /// Minimal fat binary: big-endian fat_header (nfat_arch=1) + one fat_arch pointing at a Mach-O slice.
+    fn fat_wrapping(macho: &[u8]) -> Vec<u8> {
+        let mut v = Vec::new();
+        v.extend_from_slice(&0xCAFE_BABEu32.to_be_bytes()); // FAT_MAGIC (big-endian)
+        v.extend_from_slice(&1u32.to_be_bytes()); // nfat_arch
+                                                  // fat_arch (20 bytes, BE): cputype, cpusubtype, offset, size, align
+        v.extend_from_slice(&0x0100_0007u32.to_be_bytes()); // cputype
+        v.extend_from_slice(&0u32.to_be_bytes()); // cpusubtype
+        let offset_at = v.len();
+        v.extend_from_slice(&0u32.to_be_bytes()); // offset (patched)
+        v.extend_from_slice(&(macho.len() as u32).to_be_bytes()); // size
+        v.extend_from_slice(&0u32.to_be_bytes()); // align
+        let off = v.len() as u32;
+        v[offset_at..offset_at + 4].copy_from_slice(&off.to_be_bytes());
+        v.extend_from_slice(macho);
+        v
+    }
+
+    #[test]
+    fn fat_reader_finds_section_in_slice() {
+        let thin = macho_with_section("__PHORGE", "__source", b"fat-payload");
+        let fat = fat_wrapping(&thin);
+        assert_eq!(
+            fat_find_section(&fat, "__PHORGE", "__source"),
+            Some(&b"fat-payload"[..])
+        );
+    }
+
+    #[test]
+    fn fat_reader_rejects_malformed_without_panic() {
+        assert_eq!(fat_find_section(b"", "__PHORGE", "__source"), None);
+        // offset beyond EOF -> slice .get() returns None.
+        let thin = macho_with_section("__PHORGE", "__source", b"x");
+        let mut fat = fat_wrapping(&thin);
+        let offset_at = 8 + 8; // fat_header(8) + cputype(4)+cpusubtype(4)
+        fat[offset_at..offset_at + 4].copy_from_slice(&u32::MAX.to_be_bytes());
+        assert_eq!(fat_find_section(&fat, "__PHORGE", "__source"), None);
     }
 }
