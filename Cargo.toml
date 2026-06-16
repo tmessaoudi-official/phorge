@@ -10,3 +10,14 @@ path = "src/lib.rs"
 [[bin]]
 name = "phorge"
 path = "src/main.rs"
+
+# Quality gate (M2 P3.5 Wave 0, Task 0.5): clippy-clean and warning-free become a *compile* gate,
+# not just a CI nicety. Solo dev controls the toolchain, so the known fragility of denying warnings
+# in the manifest (a newer rustc/clippy can introduce warnings that then fail the build) is accepted.
+# Pedantic stays opt-in (not in `clippy::all`). `unsafe` is forbidden via `#![forbid(unsafe_code)]`
+# on the crate roots.
+[lints.rust]
+warnings = "deny"
+
+[lints.clippy]
+all = "deny"

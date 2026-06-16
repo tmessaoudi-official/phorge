@@ -1,5 +1,6 @@
 //! Phorge CLI: `phorge <run|runvm|check|parse|lex|transpile> <file>`. Thin dispatcher
 //! over the testable `phorge::cli` module.
+#![forbid(unsafe_code)]
 
 use std::process::exit;
 

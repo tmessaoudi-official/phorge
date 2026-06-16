@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Phorge pre-commit gate (M2 P3.5 Wave 0, Task 0.5). Tracked in-repo and wired up with
+#   git config core.hooksPath scripts/git-hooks
+# Zero external dependencies — just the cargo toolchain. Blocks a commit unless formatting,
+# clippy (all lints denied, matching Cargo.toml), and the full test suite all pass.
+set -euo pipefail
+
+# The toolchain lives outside the default PATH on this machine; prepend it only if cargo is
+# not already reachable (keeps the hook working under git's reduced environment).
+command -v cargo >/dev/null 2>&1 || export PATH="/stack/tools/cargo/bin:$PATH"
+
+echo "[pre-commit] cargo fmt --check"
+cargo fmt --check
+
+echo "[pre-commit] cargo clippy --all-targets -- -D warnings"
+cargo clippy --all-targets -- -D warnings
+
+echo "[pre-commit] cargo test"
+cargo test --quiet
+
+echo "[pre-commit] OK"

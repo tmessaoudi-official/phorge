@@ -1,3 +1,7 @@
+// No `unsafe` anywhere in Phorge — locked in as a compile-time invariant (M2 P3.5 Wave 0, Task 0.5).
+// Also forecloses the computed-goto VM dispatch the roadmap deliberately defers.
+#![forbid(unsafe_code)]
+
 pub mod ast;
 pub mod checker;
 pub mod chunk;
