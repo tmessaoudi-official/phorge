@@ -28,10 +28,11 @@ Scope and limits:
 
 ## Toolchain & gate
 
-`export PATH=/stack/tools/cargo/bin:$PATH`. Baseline: 220 tests green, clippy clean (pedantic off).
+`export PATH=/stack/tools/cargo/bin:$PATH`. Baseline: 223 tests green, clippy clean (pedantic off).
 The differential harness (`tests/differential.rs`) is the correctness spine — `run` and `runvm`
 must stay byte-identical. Adding an `Op` variant requires the `src/vm.rs` match arm in the same
-commit (the dispatch match is exhaustive).
+commit (the dispatch match is exhaustive). `phorge bench <file>` measures the two backends
+(median-of-N, output-identity gated) — run it for a before/after number before any perf change.
 
 ## Active plan
 

@@ -3,6 +3,8 @@
 //! is `fn(&str) -> Result<String, String>`: `Ok` is text to print verbatim
 //! (newline-terminated where appropriate), `Err` is a rendered error message.
 
+use std::time::{Duration, Instant};
+
 use crate::ast::Program;
 use crate::checker::check;
 use crate::compiler::compile;
@@ -99,6 +101,123 @@ pub fn cmd_transpile(src: &str) -> Result<String, String> {
     on_deep_stack(|| {
         let prog = parse_checked(src)?;
         crate::transpile::emit(&prog)
+    })
+}
+
+/// Default sample count for `phorge bench`. Odd, so the median is a real observed sample rather
+/// than an average of two; large enough to damp scheduler jitter on the small M2 corpus without
+/// making the CLI feel slow.
+const BENCH_DEFAULT_ITERS: usize = 101;
+
+/// `bench`: *measure* the M2 thesis ("the VM executes faster than the tree-walker") instead of
+/// asserting it. Parses+checks once, then reports median-of-N wall-clock for the front-end
+/// (parse+check), the one-time bytecode compile, and each backend's execution phase, plus a
+/// speedup verdict. Establishes the baseline that turns every later perf claim (Copy-on-`Op`,
+/// deep-copy elimination, hot-path micro-perf) from Speculative into Verified — no perf-motivated
+/// change should ship without a before/after number from this harness.
+pub fn cmd_bench(src: &str) -> Result<String, String> {
+    bench_report(src, BENCH_DEFAULT_ITERS)
+}
+
+/// Median wall-clock of `f` over `iters` samples after one untimed warmup. Generic over the
+/// closure's `Ok` value so the same path times the interpreter (`String`), the VM (`String`), and
+/// the compiler (`BytecodeProgram`). Propagates the first error — a faulting program can't be
+/// benchmarked. The warmup pays one-time allocation/cache costs outside the measured window.
+fn median_of<T>(
+    iters: usize,
+    mut f: impl FnMut() -> Result<T, String>,
+) -> Result<Duration, String> {
+    f()?; // warmup (untimed)
+    let mut samples: Vec<Duration> = Vec::with_capacity(iters);
+    for _ in 0..iters {
+        let t0 = Instant::now();
+        f()?;
+        samples.push(t0.elapsed());
+    }
+    samples.sort_unstable();
+    Ok(samples[samples.len() / 2])
+}
+
+/// Adaptive duration rendering (ns / µs / ms) so a fast and a slow stage stay legible in the same
+/// report instead of a fixed unit truncating one of them to `0.000`.
+fn fmt_dur(d: Duration) -> String {
+    let ns = d.as_nanos();
+    if ns < 1_000 {
+        format!("{ns} ns")
+    } else if ns < 1_000_000 {
+        format!("{:.3} µs", ns as f64 / 1_000.0)
+    } else {
+        format!("{:.3} ms", ns as f64 / 1_000_000.0)
+    }
+}
+
+/// The bench engine (separated from [`cmd_bench`] so tests can pass a small `iters`). Runs on the
+/// deep-stack worker like every other pipeline command.
+fn bench_report(src: &str, iters: usize) -> Result<String, String> {
+    on_deep_stack(|| {
+        let prog = parse_checked(src)?;
+        let program = compile(&prog).map_err(|e| e.to_string())?;
+
+        // Output-identity gate: comparing the speed of two backends that *disagree* is
+        // meaningless. This is the differential harness's parity contract, enforced here at run
+        // time before any timing — if it ever fails, the divergence (not the timing) is the news.
+        let tw_out = interpret(&prog).map_err(|e| e.to_string())?;
+        let vm_out = Vm::new(&program).run().map_err(|e| e.to_string())?;
+        if tw_out != vm_out {
+            return Err(format!(
+                "bench aborted: backends disagree — tree-walk produced {} bytes, vm {} bytes; \
+                 fix parity (see the differential harness) before benchmarking",
+                tw_out.len(),
+                vm_out.len()
+            ));
+        }
+
+        let front = median_of(iters, || parse_checked(src))?;
+        let comp = median_of(iters, || compile(&prog).map_err(|e| e.to_string()))?;
+        let tw = median_of(iters, || interpret(&prog).map_err(|e| e.to_string()))?;
+        let vm = median_of(iters, || Vm::new(&program).run().map_err(|e| e.to_string()))?;
+
+        // Branch on integer nanos (no float equality); convert to f64 only for the ratio display.
+        let tw_ns = tw.as_nanos();
+        let vm_ns = vm.as_nanos();
+        let verdict = if tw_ns == 0 || vm_ns == 0 {
+            "verdict: backend execution too fast to measure at this sample size — \
+             use a heavier corpus"
+                .to_string()
+        } else if vm_ns <= tw_ns {
+            format!(
+                "verdict: vm run is {:.2}× faster than tree-walk run ({} → {})",
+                tw_ns as f64 / vm_ns as f64,
+                fmt_dur(tw),
+                fmt_dur(vm)
+            )
+        } else {
+            format!(
+                "verdict: tree-walk run is {:.2}× faster than vm run ({} → {})",
+                vm_ns as f64 / tw_ns as f64,
+                fmt_dur(vm),
+                fmt_dur(tw)
+            )
+        };
+
+        let mut out = String::new();
+        out.push_str(&format!(
+            "phorge bench — median of {iters} (warmup 1, std Instant)\n"
+        ));
+        out.push_str(&format!(
+            "output: {} bytes, identical on both backends\n\n",
+            tw_out.len()
+        ));
+        out.push_str(&format!("  parse+check   {}\n", fmt_dur(front)));
+        out.push_str(&format!(
+            "  compile       {}  (one-time, vm only)\n",
+            fmt_dur(comp)
+        ));
+        out.push_str(&format!("  tree-walk run {}\n", fmt_dur(tw)));
+        out.push_str(&format!("  vm run        {}\n\n", fmt_dur(vm)));
+        out.push_str(&verdict);
+        out.push('\n');
+        Ok(out)
     })
 }
 
@@ -249,5 +368,33 @@ function main() {
         let err = cmd_run(src).unwrap_err();
         assert!(err.starts_with("runtime error: "), "{err}");
         assert!(!err.contains(" at "), "{err}");
+    }
+
+    #[test]
+    fn bench_reports_both_backends_with_identical_output() {
+        // Small iteration count keeps the test fast; the report must name both backends, confirm
+        // output identity (and the byte count it asserted), and end in a verdict comparing them.
+        let src = r#"function main() { int x = 21; println("{x + x}"); }"#;
+        let out = bench_report(src, 5).expect("bench");
+        assert!(out.contains("tree-walk run"), "{out}");
+        assert!(out.contains("vm run"), "{out}");
+        assert!(out.contains("identical on both backends"), "{out}");
+        assert!(out.contains("verdict:"), "{out}");
+        // Output is "42\n" = 3 bytes — the report states the byte count it asserted identical.
+        assert!(out.contains("3 bytes"), "{out}");
+    }
+
+    #[test]
+    fn bench_propagates_type_error_without_timing() {
+        // A program that fails the gate can't be benchmarked — the error surfaces, no timing runs.
+        let err = bench_report(r#"function main() { int x = "no"; }"#, 5).unwrap_err();
+        assert!(err.contains("type error"), "{err}");
+    }
+
+    #[test]
+    fn bench_default_entry_uses_101_samples() {
+        // The public entry runs the default-N path end to end (smoke test of `cmd_bench`).
+        let out = cmd_bench(r#"function main() { println("hi"); }"#).expect("bench");
+        assert!(out.starts_with("phorge bench — median of 101"), "{out}");
     }
 }
