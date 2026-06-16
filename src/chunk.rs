@@ -319,8 +319,8 @@ mod tests {
     fn add_const_does_not_intern_composites() {
         let mut c = Chunk::new();
         // Lists have no dedup key — each gets a fresh slot even if structurally equal.
-        assert_eq!(c.add_const(Value::List(vec![Value::Int(1)])), 0);
-        assert_eq!(c.add_const(Value::List(vec![Value::Int(1)])), 1);
+        assert_eq!(c.add_const(Value::List(vec![Value::Int(1)].into())), 0);
+        assert_eq!(c.add_const(Value::List(vec![Value::Int(1)].into())), 1);
         assert_eq!(c.consts.len(), 2);
     }
 

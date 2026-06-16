@@ -15,6 +15,7 @@ use crate::diagnostic::Diagnostic;
 use crate::limits::MAX_CALL_DEPTH;
 use crate::value::{EnumVal, Instance, Value};
 use std::collections::HashMap;
+use std::rc::Rc;
 
 /// Whether the dispatch loop should fetch the next instruction or stop (the `main` frame
 /// returned). Lets the per-op `exec_op` signal completion without owning the run loop.
@@ -227,7 +228,7 @@ impl<'a> Vm<'a> {
             }
             Op::MakeList(n) => {
                 let items = self.split_off(n);
-                self.stack.push(Value::List(items));
+                self.stack.push(Value::List(Rc::new(items)));
             }
             Op::Index => {
                 let idx = match self.pop() {
@@ -292,7 +293,7 @@ impl<'a> Vm<'a> {
                 // before `split_off` takes `&mut self`.
                 let desc = self.program.enum_descs[idx].clone();
                 let payload = self.split_off(desc.arity);
-                self.stack.push(Value::Enum(Box::new(EnumVal {
+                self.stack.push(Value::Enum(Rc::new(EnumVal {
                     ty: desc.ty,
                     variant: desc.variant,
                     payload,
@@ -307,10 +308,12 @@ impl<'a> Vm<'a> {
             }
             Op::GetEnumField(i) => match self.pop() {
                 Value::Enum(ev) => {
+                    // Clone the element out of the shared payload (can't move out of an `Rc`); the
+                    // element is itself `Rc`-shared if compound, so this stays an O(1) bump (P5a).
                     let v = ev
                         .payload
-                        .into_iter()
-                        .nth(i)
+                        .get(i)
+                        .cloned()
                         .ok_or_else(|| format!("enum payload index {i} out of range"))?;
                     self.stack.push(v);
                 }
@@ -327,7 +330,7 @@ impl<'a> Vm<'a> {
                 let desc = self.program.class_descs[idx].clone();
                 let values = self.split_off(desc.fields.len());
                 let fields: HashMap<String, Value> = desc.fields.into_iter().zip(values).collect();
-                self.stack.push(Value::Instance(Box::new(Instance {
+                self.stack.push(Value::Instance(Rc::new(Instance {
                     class: desc.class,
                     fields,
                 })));

@@ -11,6 +11,7 @@ use crate::ast::{
 };
 use crate::diagnostic::Diagnostic;
 use crate::value::{EnumVal, Instance, Value};
+use std::rc::Rc;
 
 /// Non-local control flow threaded through `Result::Err` (EV-3). The runtime fault carries a
 /// unified [`Diagnostic`] (stage `Runtime`); the tree-walker tracks no source position, so the
@@ -214,9 +215,9 @@ impl Interp {
                     Value::List(items) => items,
                     other => return rt(format!("cannot iterate over {}", other.type_name())),
                 };
-                for item in items {
+                for item in items.iter() {
                     self.frame.push_scope();
-                    self.frame.declare(name, item);
+                    self.frame.declare(name, item.clone());
                     let r = self.exec_stmts(body);
                     self.frame.pop_scope();
                     r?;
@@ -248,7 +249,7 @@ impl Interp {
                 for it in items {
                     out.push(self.eval(it)?);
                 }
-                Ok(Value::List(out))
+                Ok(Value::List(Rc::new(out)))
             }
             Expr::Unary { op, expr, .. } => self.eval_unary(*op, expr),
             Expr::Binary { op, lhs, rhs, .. } => self.eval_binary(*op, lhs, rhs),
@@ -368,7 +369,7 @@ impl Interp {
                         argv.len()
                     ));
                 }
-                return Ok(Value::Enum(Box::new(EnumVal {
+                return Ok(Value::Enum(Rc::new(EnumVal {
                     ty: enum_name,
                     variant: name.clone(),
                     payload: argv,
@@ -427,7 +428,7 @@ impl Interp {
             if !args.is_empty() {
                 return rt(format!("`{class_name}` has no constructor but got args"));
             }
-            return Ok(Value::Instance(Box::new(inst)));
+            return Ok(Value::Instance(Rc::new(inst)));
         };
         if args.len() != params.len() {
             return rt(format!(
@@ -451,9 +452,12 @@ impl Interp {
         // body cannot mutate fields (no reassignment), so the promoted instance is
         // the result regardless of the body's return.
         let names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
-        let this = Value::Instance(Box::new(inst.clone()));
-        self.run_call(&names, &body, args, Some(this))?;
-        Ok(Value::Instance(Box::new(inst)))
+        // Share one `Rc` between the `this` receiver and the returned instance (M2 P5a): the body
+        // can't mutate fields (immutable), so both observe the same value — a refcount bump, not a
+        // deep `HashMap` clone of the whole instance.
+        let rc = Rc::new(inst);
+        self.run_call(&names, &body, args, Some(Value::Instance(rc.clone())))?;
+        Ok(Value::Instance(rc))
     }
 
     fn call_method(&mut self, recv: Value, name: &str, args: Vec<Value>) -> R<Value> {

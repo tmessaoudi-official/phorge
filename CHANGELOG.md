@@ -6,6 +6,31 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### M2 P5a — `Rc`-shared heap objects (2026-06-16) — **object-path perf**
+Makes compound heap objects *shared* instead of *deep-cloned*. The M1 heap is immutable + acyclic
+(no reassignment, no field mutation, args evaluated before the instance exists), so `Rc` is both
+sufficient and complete for reclamation — `Drop` frees everything, no cycle can leak, no tracing
+collector is needed (that stays deferred to M3). See
+`docs/specs/2026-06-16-m2-p5-object-model-design.md` + `docs/plans/2026-06-16-m2-p5a-rc-shared-heap.md`.
+
+- **Changed**
+  - `Value::Instance(Rc<Instance>)`, `Value::Enum(Rc<EnumVal>)`, `Value::List(Rc<Vec<Value>>)`
+    (were `Box`/`Vec`). Cloning a `Value` — the `Op::GetLocal` hot path and every interpreter
+    var-read — is now an O(1) refcount bump instead of a deep `HashMap`/`Vec` copy. The constructor
+    now shares one `Rc` between the `this` receiver and the returned instance (no double build).
+  - Three move-out sites adjusted (can't move out of an `Rc`): `vm.rs` `GetEnumField`
+    (`into_iter().nth` → `.get().cloned()`), the interpreter's list `for` (iterate by ref + clone),
+    and the ctor double-build (folded into one shared `Rc`). No `Op`/bytecode/AST/checker change.
+- **Perf** (`phorge bench`, median of 101, `fib(28)`)
+  - Object-heavy VM run **1537 ms → 634 ms (2.4× faster)**; the VM's advantage over the tree-walker
+    recovered from **4.73× → 9.35×**, essentially on par with the scalar baseline (10.92×) — i.e.
+    the object-path penalty (deep-clone-on-load) is largely eliminated.
+  - **Phase B deferred (bench-gated, not opened):** slot-indexed `Vec` field layout. With the object
+    path now ~within scalar's advantage, field access (HashMap lookup) is no longer dominating, so
+    there is no evidence to justify the larger interpreter-touching change.
+- **Parity** — behavior-preserving refactor; the full differential suite + examples sweep stay
+  byte-identical (244 tests green), clippy + fmt clean, `#![forbid(unsafe_code)]` intact.
+
 ### M2 Wave 4 — Class-aware compiler types (2026-06-16) — **closes the last `num_ty` parity gap**
 Makes the compiler's operand-type inference class-aware, so the VM no longer rejects checker-valid
 programs that read a field of an arbitrary instance, a method-call result, or a nested member as an

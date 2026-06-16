@@ -1,9 +1,13 @@
-//! Runtime values for the M1 tree-walking evaluator. Owned + `Clone` (no `Rc`):
-//! M1 has no reassignment or post-construction mutation (Plan 3), so shared
-//! mutability is unneeded. See design spec EV-1.
+//! Runtime values for both backends. The M1 heap is **immutable + acyclic**: no reassignment, no
+//! post-construction field mutation, and a constructor's args are fully evaluated before the
+//! instance exists (EV-1). So compound objects are *shared* via `Rc`, not deep-cloned (M2 P5a):
+//! cloning a `Value` (the `Op::GetLocal` hot path + every interpreter var-read) is a refcount bump,
+//! and `Drop` reclaims correctly — no cycle can leak, so no tracing collector is needed (that is
+//! deferred to M3, when mutation could create cycles). See `docs/specs/2026-06-16-m2-p5-object-model-design.md`.
 
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -12,12 +16,13 @@ pub enum Value {
     Bool(bool),
     Str(String),
     Unit,
-    List(Vec<Value>),
+    /// Shared (M2 P5a): cloning a list value is a refcount bump, not a deep element copy.
+    List(Rc<Vec<Value>>),
     /// Constructible in principle; the M1 sample never builds or indexes one.
     Map(HashMap<HKey, Value>),
     Set(HashSet<HKey>),
-    Instance(Box<Instance>),
-    Enum(Box<EnumVal>),
+    Instance(Rc<Instance>),
+    Enum(Rc<EnumVal>),
 }
 
 #[derive(Debug, Clone)]
@@ -84,7 +89,9 @@ impl Value {
             (Bool(a), Bool(b)) => a == b,
             (Str(a), Str(b)) => a == b,
             (Unit, Unit) => true,
-            (List(a), List(b)) => a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.eq_val(y)),
+            (List(a), List(b)) => {
+                a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| x.eq_val(y))
+            }
             (Enum(a), Enum(b)) => {
                 a.ty == b.ty
                     && a.variant == b.variant
@@ -248,7 +255,7 @@ mod tests {
 
     #[test]
     fn as_display_is_none_for_composite() {
-        let inst = Value::Instance(Box::new(Instance {
+        let inst = Value::Instance(Rc::new(Instance {
             class: "Greeter".into(),
             fields: HashMap::new(),
         }));
@@ -260,7 +267,7 @@ mod tests {
         assert!(Value::Int(1).eq_val(&Value::Int(1)));
         assert!(!Value::Int(1).eq_val(&Value::Int(2)));
         assert!(!Value::Int(1).eq_val(&Value::Float(1.0))); // no cross-type eq
-        let a = Value::Enum(Box::new(EnumVal {
+        let a = Value::Enum(Rc::new(EnumVal {
             ty: "Shape".into(),
             variant: "Circle".into(),
             payload: vec![Value::Float(2.0)],
@@ -272,6 +279,6 @@ mod tests {
     #[test]
     fn type_name_is_stable() {
         assert_eq!(Value::Unit.type_name(), "unit");
-        assert_eq!(Value::List(vec![]).type_name(), "list");
+        assert_eq!(Value::List(Rc::new(vec![])).type_name(), "list");
     }
 }

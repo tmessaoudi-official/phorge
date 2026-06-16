@@ -47,22 +47,21 @@ change.
 
 ## Phasing — one TDD-safe, parity-gated, bench-measured commit
 
-- [ ] **A0 (baseline bench):** record the *current* object-heavy number — `phorge bench
-      /tmp/w4/bench_obj.phg` (and `bench_scalar.phg`) — into the commit message / CHANGELOG. (Today:
-      object VM 1537 ms, 4.73×; scalar VM 156 ms, 11.57×.)
-- [ ] **A1:** `src/value.rs` — swap the three `Value` variants to `Rc<…>`; add `use std::rc::Rc`.
-      Confirm `eq_val`/`as_display`/`type_name`/the `value.rs` unit tests compile + pass unchanged.
-- [ ] **A2:** fix the construct sites (`Rc::new`) and the three move-out extract sites in `vm.rs` +
-      `interpreter.rs` (list-for, enum-field, ctor double-build). `cargo build` clean.
-- [ ] **A3:** `cargo test` green (244), incl. the full differential suite + examples sweep
-      (byte-identical parity is the safety net for this behavior-preserving refactor).
-      `cargo clippy --all-targets` + `cargo fmt --check` clean.
-- [ ] **A4 (after bench):** record the *new* object-heavy number; compute the speedup. Update
-      `CHANGELOG.md` (P5 Phase A entry with before/after) and `CLAUDE.md`/`docs/INVARIANTS.md` (heap
-      objects are now `Rc`-shared; GC still deferred to M3). Commit `perf(vm): Rc-share heap objects
-      — refcount instead of deep-clone-on-load (M2 P5a)`.
-- [ ] **A5 (decide Phase B):** from the A4 bench, decide whether field access still dominates →
-      whether to open the bench-gated Phase B (slot-indexed `Vec` fields). Record the call.
+- [x] **A0 (baseline bench):** object VM 1537 ms (4.73×); scalar VM 156 ms (11.57×).
+- [x] **A1:** `src/value.rs` — three `Value` variants → `Rc<…>` + `use std::rc::Rc`;
+      `eq_val` list-zip fixed to `.zip(b.iter())`; `value.rs` unit tests adjusted (`Rc::new`). Green.
+- [x] **A2:** construct sites → `Rc::new` (vm `MakeList`/`MakeEnum`/`MakeInstance`; interp list/enum/
+      ctor); three move-out sites fixed (vm `GetEnumField` `.get().cloned()`, interp list-`for`
+      `.iter()`+clone, ctor double-build folded into one shared `Rc`); `chunk.rs` test `.into()`.
+      `cargo build` clean.
+- [x] **A3:** `cargo test` green (244, full differential + examples sweep byte-identical);
+      `cargo clippy --all-targets` clean; `cargo fmt --check` clean.
+- [x] **A4:** **object VM 1537 ms → 634 ms (2.4×)**; advantage **4.73× → 9.35×** (≈ scalar's
+      10.92×). `CHANGELOG.md`/`CLAUDE.md` updated; INVARIANTS.md had no stale value-model claim.
+      Commit: `perf(vm): Rc-share heap objects — refcount instead of deep-clone-on-load (M2 P5a)`.
+- [x] **A5 (Phase B decision): DO NOT open Phase B.** Post-P5a the object-path advantage (9.35×) is
+      within ~15% of scalar (10.92×), so field access (HashMap lookup) no longer dominates — no
+      evidence justifies the larger interpreter-touching slot-indexed-field change. Stays bench-gated.
 
 ## Acceptance criteria
 
