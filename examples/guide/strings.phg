@@ -1,0 +1,18 @@
+import std.io;
+
+function greet(string who) -> string {
+    return "Hello, {who}!";
+}
+
+function main() {
+    string name = "Phorge";
+    int n = 3;
+    float pi = 3.14;
+    println("name = {name}, n = {n}, pi = {pi}");
+    println("n + 1 = {n + 1}");
+    println(greet(name));
+
+    // bind first — the interpolation sub-lexer does not nest string literals inside {…}
+    string w = "world";
+    println("nested call: {greet(w)}");
+}

@@ -1,0 +1,37 @@
+import std.io;
+
+// Variant patterns (with bindings) over a payload + zero-payload enum.
+// Zero-payload variants use call form `JNull()` to construct AND to match —
+// a bare `JNull =>` arm would be a catch-all binding, not a variant pattern.
+enum Json {
+    JNull,
+    JBool(bool b),
+    JNum(int n),
+    JStr(string s),
+}
+
+function show(Json j) -> string {
+    return match j {
+        JNull()  => "null",
+        JBool(b) => "bool {b}",
+        JNum(n)  => "num {n}",
+        JStr(s)  => "str {s}",
+    };
+}
+
+// Literal pattern + binding pattern (catch-all) over a primitive scrutinee.
+function sign(int n) -> string {
+    return match n {
+        0 => "zero",
+        x => "nonzero {x}",
+    };
+}
+
+function main() {
+    List<Json> vals = [JNull(), JBool(true), JNum(42), JStr("hi")];
+    for (Json j in vals) {
+        println(show(j));
+    }
+    println(sign(0));
+    println(sign(7));
+}

@@ -1,0 +1,26 @@
+import std.io;
+
+// Arithmetic, comparison, logical, and unary operators.
+// Integer arithmetic is overflow-checked (a real overflow faults cleanly on both backends).
+
+function main() {
+    int a = 7;
+    int b = 3;
+    println("a + b = {a + b}");
+    println("a - b = {a - b}");
+    println("a * b = {a * b}");
+    println("a / b = {a / b}");   // integer division
+    println("a % b = {a % b}");
+
+    float x = 7.0;
+    float y = 2.0;
+    println("x / y = {x / y}");   // float division
+
+    println("a < b   = {a < b}");
+    println("a == 7  = {a == 7}");
+    println("a != b  = {a != b}");
+    println("and     = {(a > b) && (x > y)}");
+    println("or      = {(a < b) || (x > y)}");
+    println("not     = {!(a < b)}");
+    println("neg     = {-a}");
+}
