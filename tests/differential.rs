@@ -194,3 +194,31 @@ fn error_parity_between_backends() {
         agree_err(src);
     }
 }
+
+/// Pathological nesting must fault *identically* on both backends (M2 P3.5 Wave 0, Task 0.4).
+/// The recursive-descent parser caps nesting depth, so deeply-nested parens / unary chains return
+/// a clean `ParseError` instead of a native stack overflow (SIGABRT). Both backends share the same
+/// parser, so the rendered fault is byte-identical. 5000 levels is well past the 512 limit. Built
+/// programmatically rather than as a string literal to keep the corpus readable.
+#[test]
+fn deep_nesting_faults_identically() {
+    let parens = format!(
+        "function main() {{ int x = {}1{}; println(\"{{x}}\"); }}",
+        "(".repeat(5000),
+        ")".repeat(5000),
+    );
+    agree_err(&parens);
+    let unary = format!(
+        "function main() {{ bool b = {}true; println(\"{{b}}\"); }}",
+        "!".repeat(5000),
+    );
+    agree_err(&unary);
+    // A long left-associative chain is built *iteratively*, so it escapes the parser's nesting
+    // limit but produces a deeply left-leaning AST. The checker's depth guard (the gate both
+    // backends share) must fault it identically rather than letting a walker overflow its stack.
+    let chain = format!(
+        "function main() {{ int x = 1{}; println(\"{{x}}\"); }}",
+        "+1".repeat(20_000),
+    );
+    agree_err(&chain);
+}

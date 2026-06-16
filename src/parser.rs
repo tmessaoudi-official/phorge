@@ -6,6 +6,13 @@ use crate::ast::{
 };
 use crate::token::{Span, Token, TokenKind};
 
+/// Cap on expression-nesting depth in the recursive descent. Past it, the parser returns a clean
+/// `ParseError` instead of overflowing the native stack (SIGABRT) — measured: nested parens abort
+/// the parser around ~1750 levels on the default 12.2 MB stack. The parser runs on the *main*
+/// thread (unlike the interpreter's 256 MB worker), so this limit is its own, far below that
+/// ceiling; real source never nests beyond a few dozen. Centralised into `Limits` by Task 2.2.
+const MAX_NEST_DEPTH: usize = 512;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParseError {
     pub message: String,
@@ -16,12 +23,20 @@ pub struct ParseError {
 pub struct Parser {
     tokens: Vec<Token>,
     pos: usize,
+    /// Live expression-nesting depth, checked against [`MAX_NEST_DEPTH`] in `parse_unary` — the
+    /// one function every nesting vector (parens, unary chains, index/list/arg re-entry) passes
+    /// through exactly once per level.
+    depth: usize,
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
         // The lexer always terminates the stream with Eof, so `tokens` is non-empty.
-        Parser { tokens, pos: 0 }
+        Parser {
+            tokens,
+            pos: 0,
+            depth: 0,
+        }
     }
 
     /// The kind of the current token. At/after the end, this is `Eof`.
@@ -130,24 +145,41 @@ impl Parser {
     }
 
     /// Prefix unary operators: `-expr`, `!expr`. Right-associative by recursion.
+    ///
+    /// Every nesting vector — parens (`parse_primary` → `parse_expr`), unary chains (self-recursion
+    /// here), and index/list/arg re-entry — routes through this function exactly once per level, so
+    /// the depth guard here bounds all of them with a single counter. Past [`MAX_NEST_DEPTH`] it
+    /// faults cleanly rather than overflowing the native stack. `depth` is balanced on both the `Ok`
+    /// and `Err` paths (the result is captured before the decrement); the over-limit path aborts the
+    /// whole parse, so leaving `depth` incremented there is harmless.
     fn parse_unary(&mut self) -> Result<Expr, ParseError> {
+        self.depth += 1;
+        if self.depth > MAX_NEST_DEPTH {
+            let sp = self.peek_span();
+            return Err(ParseError {
+                message: format!("expression nests too deeply (limit {MAX_NEST_DEPTH})"),
+                line: sp.line,
+                col: sp.col,
+            });
+        }
         let sp = self.peek_span();
         let op = match self.peek() {
             TokenKind::Minus => Some(UnaryOp::Neg),
             TokenKind::Bang => Some(UnaryOp::Not),
             _ => None,
         };
-        if let Some(op) = op {
+        let result = if let Some(op) = op {
             self.advance();
-            let expr = self.parse_unary()?;
-            Ok(Expr::Unary {
+            self.parse_unary().map(|expr| Expr::Unary {
                 op,
                 expr: Box::new(expr),
                 span: sp,
             })
         } else {
             self.parse_postfix()
-        }
+        };
+        self.depth -= 1;
+        result
     }
 
     /// Parse a primary, then apply any chain of postfix operators.

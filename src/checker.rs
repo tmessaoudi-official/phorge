@@ -32,6 +32,16 @@ struct ClassInfo {
     ctor: Vec<Ty>,
 }
 
+/// Cap on expression-tree depth walked by `check_expr`. The parser's `MAX_NEST_DEPTH` bounds
+/// *nesting* (parens, unary chains), but a long left-associative chain like `1+1+…` is built
+/// *iteratively* and so escapes that limit — yet still produces a deeply left-leaning AST that
+/// every recursive walker (checker, interpreter, compiler) descends. The checker is the gate both
+/// backends share, so bounding depth here faults such input cleanly (identically on `run`/`runvm`)
+/// instead of letting a downstream walker overflow its stack. Measured: a chain overflows the
+/// 256 MB pipeline thread around ~50–100k terms, so this sits well below with margin. Real code
+/// never approaches it. Centralised into `Limits` by Task 2.2.
+const MAX_EXPR_DEPTH: usize = 10_000;
+
 pub struct Checker {
     funcs: HashMap<String, FnSig>,
     enums: HashMap<String, EnumInfo>,
@@ -43,6 +53,8 @@ pub struct Checker {
     cur_ret: Ty,
     /// class currently being checked (for `this` and bare field refs)
     cur_class: Option<String>,
+    /// live `check_expr` recursion depth, bounded by [`MAX_EXPR_DEPTH`]
+    depth: usize,
 }
 
 impl Checker {
@@ -55,6 +67,7 @@ impl Checker {
             errors: Vec::new(),
             cur_ret: Ty::Unit,
             cur_class: None,
+            depth: 0,
         }
     }
 
@@ -409,7 +422,25 @@ impl Checker {
     }
 
     // ---- expressions ----
+    /// Depth-guarded entry to expression checking. Every recursive descent (`check_binary`,
+    /// `check_call`, … all call back through here) is bounded by [`MAX_EXPR_DEPTH`], so a
+    /// pathologically deep AST faults cleanly instead of overflowing the walker's stack. `depth`
+    /// is balanced on every path (the result is captured before the decrement).
     fn check_expr(&mut self, expr: &crate::ast::Expr) -> Ty {
+        self.depth += 1;
+        let ty = if self.depth > MAX_EXPR_DEPTH {
+            self.err(
+                Self::expr_span(expr),
+                format!("expression nests too deeply (limit {MAX_EXPR_DEPTH})"),
+            )
+        } else {
+            self.check_expr_inner(expr)
+        };
+        self.depth -= 1;
+        ty
+    }
+
+    fn check_expr_inner(&mut self, expr: &crate::ast::Expr) -> Ty {
         use crate::ast::Expr;
         match expr {
             Expr::Int(_, _) => Ty::Int,

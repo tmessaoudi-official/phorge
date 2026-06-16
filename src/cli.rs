@@ -11,6 +11,23 @@ use crate::lexer::lex;
 use crate::parser::Parser;
 use crate::vm::Vm;
 
+/// Run a pipeline closure on a worker thread with a large (256 MB) stack. The lexer is iterative,
+/// but the parser, checker, compiler, and tree-walking interpreter all recurse on the native stack
+/// in proportion to expression/call nesting. A generous, *known* stack makes the explicit depth
+/// limits (`parser::MAX_NEST_DEPTH`, `value::MAX_CALL_DEPTH`) — not Rust's ambient frame budget —
+/// the thing that bounds recursion, so adversarial-but-bounded input faults cleanly instead of
+/// aborting, identically whether called from the CLI's main thread or a 2 MB test thread.
+fn on_deep_stack<T: Send>(f: impl FnOnce() -> T + Send) -> T {
+    std::thread::scope(|s| {
+        std::thread::Builder::new()
+            .stack_size(256 * 1024 * 1024)
+            .spawn_scoped(s, f)
+            .expect("spawn pipeline worker thread")
+            .join()
+            .expect("pipeline worker thread panicked")
+    })
+}
+
 /// lex + parse, rendering the stage error to a single line.
 fn lex_parse(src: &str) -> Result<Program, String> {
     let tokens =
@@ -37,30 +54,38 @@ fn parse_checked(src: &str) -> Result<Program, String> {
 
 /// `run`: lex -> parse -> check (gate) -> interpret -> captured stdout.
 pub fn cmd_run(src: &str) -> Result<String, String> {
-    let prog = parse_checked(src)?;
-    interpret(&prog).map_err(|e| format!("runtime error: {}", e.message))
+    on_deep_stack(|| {
+        let prog = parse_checked(src)?;
+        interpret(&prog).map_err(|e| format!("runtime error: {}", e.message))
+    })
 }
 
 /// `runvm`: lex -> parse -> check (gate) -> compile to bytecode -> VM -> captured stdout.
 /// The bytecode backend; must produce byte-identical output to `cmd_run` (differential).
 pub fn cmd_runvm(src: &str) -> Result<String, String> {
-    let prog = parse_checked(src)?;
-    let program = compile(&prog).map_err(|e| format!("compile error: {e}"))?;
-    Vm::new(&program)
-        .run()
-        .map_err(|e| format!("runtime error: {e}"))
+    on_deep_stack(|| {
+        let prog = parse_checked(src)?;
+        let program = compile(&prog).map_err(|e| format!("compile error: {e}"))?;
+        Vm::new(&program)
+            .run()
+            .map_err(|e| format!("runtime error: {e}"))
+    })
 }
 
 /// `check`: lex -> parse -> check; report success or the type errors.
 pub fn cmd_check(src: &str) -> Result<String, String> {
-    parse_checked(src)?;
-    Ok("OK (type-checks clean)\n".to_string())
+    on_deep_stack(|| {
+        parse_checked(src)?;
+        Ok("OK (type-checks clean)\n".to_string())
+    })
 }
 
 /// `parse`: lex -> parse; dump the AST.
 pub fn cmd_parse(src: &str) -> Result<String, String> {
-    let prog = lex_parse(src)?;
-    Ok(format!("{prog:#?}\n"))
+    on_deep_stack(|| {
+        let prog = lex_parse(src)?;
+        Ok(format!("{prog:#?}\n"))
+    })
 }
 
 /// `lex`: dump the token stream.
@@ -76,8 +101,10 @@ pub fn cmd_lex(src: &str) -> Result<String, String> {
 
 /// `transpile`: lex -> parse -> check (gate) -> emit PHP source.
 pub fn cmd_transpile(src: &str) -> Result<String, String> {
-    let prog = parse_checked(src)?;
-    crate::transpile::emit(&prog)
+    on_deep_stack(|| {
+        let prog = parse_checked(src)?;
+        crate::transpile::emit(&prog)
+    })
 }
 
 #[cfg(test)]

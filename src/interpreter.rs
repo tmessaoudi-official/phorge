@@ -83,21 +83,12 @@ pub struct Interp {
 
 /// Run a whole program: collect declarations, locate `main`, call it, and return
 /// the captured stdout buffer (the Plan 6 CLI prints it to real stdout).
+///
+/// The tree-walker recurses on the native Rust stack, so deep recursion needs a generous stack for
+/// the `run_call` depth guard (not a native abort) to be what stops it. That stack is supplied by
+/// the caller — `cli::cmd_run` runs the whole pipeline on a 256 MB worker thread — keeping this
+/// function a plain recursive walk.
 pub fn interpret(program: &Program) -> Result<String, RuntimeError> {
-    // The tree-walker recurses on the native Rust stack, so deep recursion would overflow it
-    // (SIGABRT) long before `MAX_CALL_DEPTH`. Run the work on a thread with a generous stack so
-    // the depth guard in `run_call` — not a native abort — is what stops unbounded recursion.
-    std::thread::scope(|s| {
-        std::thread::Builder::new()
-            .stack_size(256 * 1024 * 1024)
-            .spawn_scoped(s, || interpret_inner(program))
-            .expect("spawn interpreter thread")
-            .join()
-            .expect("interpreter thread panicked")
-    })
-}
-
-fn interpret_inner(program: &Program) -> Result<String, RuntimeError> {
     let mut interp = Interp {
         funcs: HashMap::new(),
         classes: HashMap::new(),
