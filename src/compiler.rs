@@ -9,9 +9,11 @@
 //! and exhaustive `match` (lowered to scrutinee-spill + per-arm tag/literal tests + payload
 //! re-extraction; decision P4-7). P4b adds classes: each constructor compiles to a synthetic
 //! function (promoted-field `MakeInstance` + body with the instance in scope), `ClassName(args)`
-//! resolves to a `Call` into it, and `obj.field` lowers to `GetField` (decisions P4-4/P4-5).
-//! Methods/`this` (P4c) still raise a clean compile error until implemented. Enums, instances, and
-//! lists are value-native `Value` (no heap; P4-1).
+//! resolves to a `Call` into it, and `obj.field` lowers to `GetField` (decisions P4-4/P4-5). P4c
+//! adds methods + `this`: each method compiles to a function with the receiver at slot 0,
+//! `obj.m(args)` lowers to `CallMethod` (runtime dispatch on the receiver's class), and `this` /
+//! bare field reads resolve against the receiver (decision P4-6). The compiler now covers the full
+//! M1 surface. Enums, instances, and lists are value-native `Value` (no heap; P4-1).
 
 use crate::ast::{
     BinaryOp, ClassDecl, ClassMember, CtorParam, Expr, FunctionDecl, Item, MatchArm, Modifier,
@@ -32,9 +34,11 @@ enum NumTy {
 
 /// The compiler's coarse view of a declared type — enough to pick int- vs float-specialized
 /// arithmetic and give `num_ty` an *exhaustive* match (no stringly-typed compare). The checker has
-/// already verified full types; threading its richer `types::Ty` here — so list-element and field
-/// types are recoverable — is the deferred Wave 4 fix. That gap is exactly why `num_ty` can't yet
-/// classify `Index`/`Member` operands (also surface-guarded until P4).
+/// already verified full types; threading its richer `types::Ty` here — so list-element and
+/// arbitrary-instance field types are recoverable — is the deferred Wave 4 fix. `num_ty` can
+/// classify a `this.field`/bare field operand (via the current class's `field_tags`), but still
+/// can't classify a field read on an *arbitrary* instance or a `List` element (the local doesn't
+/// carry its class), nor an `Index` operand — those remain the coarse-`TyTag` gap.
 #[derive(Clone, Copy, PartialEq)]
 enum TyTag {
     Int,
@@ -94,9 +98,17 @@ struct Compiler<'a> {
     classes: &'a HashMap<String, usize>,
     /// The shared class-descriptor table — `stack_effect` reads `MakeInstance`'s field count from it.
     class_descs: &'a [ClassDesc],
-    /// Field/member name → its index in `BytecodeProgram.names` (for `GetField`). Pre-built from
-    /// every declared field name (promoted + explicit) so member lowering is a lookup, not a mutation.
+    /// Field/member name → its index in `BytecodeProgram.names` (for `GetField`/`CallMethod`).
+    /// Pre-built from every declared field + method name so member lowering is a lookup, not a mutation.
     names_index: &'a HashMap<String, usize>,
+    /// In a method or constructor body, the local slot holding the receiver (`this`): `0` for a
+    /// method, the post-promotion instance slot for a constructor. `None` in a free function.
+    /// `Expr::This` and a bare field read both load from this slot (decision P4-5/P4-6).
+    this_slot: Option<usize>,
+    /// Field name → coarse type tag of the *current* class (empty outside a method/ctor). Lets a
+    /// bare field name (`total`, resolved as `this.total`) work as an arithmetic operand and lets
+    /// `expr` lower it to `GetLocal(this) + GetField` when it isn't a local/param/binding.
+    field_tags: &'a HashMap<String, TyTag>,
     /// Active `match`-arm bindings (a stack; innermost shadows). Populated while compiling an arm
     /// body, truncated after.
     match_bindings: Vec<MatchBinding>,
@@ -166,15 +178,20 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
         .map(|m| m.index)
         .ok_or_else(|| "no `main` function".to_string())?;
 
-    // Class pre-pass (decision P4-2/P4-4): each class gets a synthetic constructor function placed
-    // *after* all free functions (so free-function indices — and `main` — stay put). `class_descs`
-    // lists the promoted fields a `MakeInstance` populates (mirroring the interpreter's runtime
-    // promotion); the `names` pool interns every readable field name (promoted *and* explicit) so
-    // `obj.field` lowers to a `GetField(name_idx)`. Explicit `Field` members are named but absent
-    // from `class_descs.fields` — like the interpreter they are unpopulated, so reading one faults.
+    // Class pre-pass (decision P4-2/P4-4/P4-6). Function indices are laid out as
+    // `[free fns | constructors | methods]` so free-function indices — and `main` — stay put.
+    // `class_descs` lists the promoted fields a `MakeInstance` populates (mirroring the
+    // interpreter's runtime promotion); the `names` pool interns every readable field name AND
+    // every method name (so `obj.field`/`obj.m()` lower to a name-pool index); `class_field_tags`
+    // records each class's field types for bare-field (`this.field`) resolution; `methods` is the
+    // `(class, method) → fn index` dispatch table `Op::CallMethod` reads at runtime. Explicit
+    // `Field` members are named but absent from `class_descs.fields` — like the interpreter they
+    // are unpopulated, so reading one faults.
     let nfree = order.len();
+    let nclasses = class_decls.len();
     let mut classes: HashMap<String, usize> = HashMap::new();
     let mut class_descs: Vec<ClassDesc> = Vec::new();
+    let mut class_field_tags: Vec<HashMap<String, TyTag>> = Vec::new();
     let mut names: Vec<String> = Vec::new();
     let mut names_index: HashMap<String, usize> = HashMap::new();
     let mut intern = |name: &str, names: &mut Vec<String>| {
@@ -187,33 +204,61 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
         classes.insert(c.name.clone(), nfree + ci);
         let (params, _) = ctor_parts(c);
         let mut fields: Vec<String> = Vec::new();
+        let mut tags: HashMap<String, TyTag> = HashMap::new();
         for p in params {
             if is_promoted(p) {
                 fields.push(p.name.clone());
                 intern(&p.name, &mut names);
+                tags.insert(p.name.clone(), type_tag(&p.ty));
             }
         }
         for m in &c.members {
-            if let ClassMember::Field { name, .. } = m {
-                intern(name, &mut names); // readable, but unpopulated by construction
+            match m {
+                ClassMember::Field { name, ty, .. } => {
+                    intern(name, &mut names); // readable, but unpopulated by construction
+                    tags.insert(name.clone(), type_tag(ty));
+                }
+                ClassMember::Method(f) => intern(&f.name, &mut names),
+                ClassMember::Constructor { .. } => {}
             }
         }
         class_descs.push(ClassDesc {
             class: c.name.clone(),
             fields,
         });
+        class_field_tags.push(tags);
     }
     // `intern`'s unique borrow of `names_index` ends at its last call above (NLL), so the
     // immutable `&names_index` borrows below are free.
 
-    // Arities for *every* function index — free functions then synthetic constructors — so
-    // `stack_effect` can size an `Op::Call` into a constructor as well as a free function.
+    // Methods follow the constructors in the index space; build the dispatch table in lockstep.
+    let mut methods: HashMap<(String, String), usize> = HashMap::new();
+    let mut methods_to_compile: Vec<(usize, &FunctionDecl)> = Vec::new();
+    let mut next_idx = nfree + nclasses;
+    for (ci, c) in class_decls.iter().enumerate() {
+        for m in &c.members {
+            if let ClassMember::Method(f) = m {
+                methods.insert((c.name.clone(), f.name.clone()), next_idx);
+                methods_to_compile.push((ci, f));
+                next_idx += 1;
+            }
+        }
+    }
+
+    // Arities for *every* function index — free fns, constructors, then methods (`this` + params)
+    // — so `stack_effect` can size an `Op::Call` into a constructor (methods dispatch via
+    // `CallMethod`, whose arg count is in the op, so their arity entries are for completeness).
     let mut arities: Vec<usize> = order.iter().map(|f| f.params.len()).collect();
     for c in &class_decls {
         arities.push(ctor_parts(c).0.len());
     }
+    for (_, f) in &methods_to_compile {
+        arities.push(1 + f.params.len());
+    }
 
-    let mut functions = Vec::with_capacity(nfree + class_decls.len());
+    // Free functions have no enclosing class, so no `this` and no field scope.
+    let empty_fields: HashMap<String, TyTag> = HashMap::new();
+    let mut functions = Vec::with_capacity(next_idx);
     for f in &order {
         let mut c = Compiler::new(
             &fns,
@@ -223,6 +268,7 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             &classes,
             &class_descs,
             &names_index,
+            &empty_fields,
         );
         for p in &f.params {
             c.add_local(&p.name, type_tag(&p.ty));
@@ -251,6 +297,21 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             &classes,
             &class_descs,
             &names_index,
+            &class_field_tags[ci],
+        )?);
+    }
+    for (ci, f) in &methods_to_compile {
+        functions.push(compile_method(
+            &class_decls[*ci].name,
+            f,
+            &fns,
+            &arities,
+            &variants,
+            &enum_descs,
+            &classes,
+            &class_descs,
+            &names_index,
+            &class_field_tags[*ci],
         )?);
     }
 
@@ -260,6 +321,7 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
         enum_descs,
         class_descs,
         names,
+        methods,
     })
 }
 
@@ -302,6 +364,7 @@ fn compile_constructor<'a>(
     classes: &'a HashMap<String, usize>,
     class_descs: &'a [ClassDesc],
     names_index: &'a HashMap<String, usize>,
+    field_tags: &'a HashMap<String, TyTag>,
 ) -> Result<Function, String> {
     let (params, body) = ctor_parts(c);
     let line = c.span.line;
@@ -313,6 +376,7 @@ fn compile_constructor<'a>(
         classes,
         class_descs,
         names_index,
+        field_tags,
     );
     for p in params {
         comp.add_local(&p.name, type_tag(&p.ty));
@@ -327,7 +391,8 @@ fn compile_constructor<'a>(
     }
     comp.emit(Op::MakeInstance(desc_idx), line);
     let inst_slot = comp.add_local("$this", TyTag::Other);
-    // Body: returns are redirected to the epilogue (the body cannot change the constructed value).
+    comp.this_slot = Some(inst_slot); // a ctor body may reference `this` / bare fields
+                                      // Body: returns are redirected to the epilogue (the body cannot change the constructed value).
     comp.ctor_return_jumps = Some(Vec::new());
     for s in body {
         comp.stmt(s)?;
@@ -342,6 +407,52 @@ fn compile_constructor<'a>(
     Ok(Function {
         name: format!("{}::new", c.name),
         arity: params.len(),
+        chunk: comp.chunk,
+    })
+}
+
+/// Compile one instance method as a function (decision P4-6). Layout: slot 0 is the receiver
+/// (`this`), slots `1..=nparams` are the params; the body runs with `this` and the class's field
+/// scope live; an implicit `Unit` return terminates it (P3-7). The frame is opened by
+/// `Op::CallMethod`, which places the receiver at slot 0.
+#[allow(clippy::too_many_arguments)]
+fn compile_method<'a>(
+    class_name: &str,
+    f: &FunctionDecl,
+    fns: &'a HashMap<String, FnMeta>,
+    arities: &'a [usize],
+    variants: &'a HashMap<String, VariantMeta>,
+    enum_descs: &'a [EnumDesc],
+    classes: &'a HashMap<String, usize>,
+    class_descs: &'a [ClassDesc],
+    names_index: &'a HashMap<String, usize>,
+    field_tags: &'a HashMap<String, TyTag>,
+) -> Result<Function, String> {
+    let mut comp = Compiler::new(
+        fns,
+        arities,
+        variants,
+        enum_descs,
+        classes,
+        class_descs,
+        names_index,
+        field_tags,
+    );
+    comp.add_local("$this", TyTag::Other); // slot 0 = receiver
+    for p in &f.params {
+        comp.add_local(&p.name, type_tag(&p.ty));
+    }
+    comp.this_slot = Some(0);
+    comp.height = comp.locals.len();
+    let last_line = f.span.line;
+    for s in &f.body {
+        comp.stmt(s)?;
+    }
+    comp.emit_const(Value::Unit, last_line);
+    comp.emit(Op::Return, last_line);
+    Ok(Function {
+        name: format!("{class_name}::{}", f.name),
+        arity: 1 + f.params.len(),
         chunk: comp.chunk,
     })
 }
@@ -373,6 +484,7 @@ impl<'a> Compiler<'a> {
         classes: &'a HashMap<String, usize>,
         class_descs: &'a [ClassDesc],
         names_index: &'a HashMap<String, usize>,
+        field_tags: &'a HashMap<String, TyTag>,
     ) -> Self {
         Compiler {
             chunk: Chunk::new(),
@@ -385,6 +497,8 @@ impl<'a> Compiler<'a> {
             classes,
             class_descs,
             names_index,
+            this_slot: None,
+            field_tags,
             match_bindings: Vec::new(),
             height: 0,
             ctor_return_jumps: None,
@@ -416,6 +530,8 @@ impl<'a> Compiler<'a> {
             Op::MakeEnum(idx) => 1 - self.enum_descs[*idx].arity as isize,
             Op::MakeInstance(idx) => 1 - self.class_descs[*idx].fields.len() as isize,
             Op::GetField(_) => 0, // pop instance, push field value
+            // Pops the receiver + `argc` args, pushes one result.
+            Op::CallMethod(_, argc) => -(*argc as isize),
             // Terminal (end/redirect the frame): height afterward is dead code, never read.
             Op::Return | Op::MatchFail => 0,
         }
@@ -479,19 +595,31 @@ impl<'a> Compiler<'a> {
             Expr::Int(..) => Ok(NumTy::Int),
             Expr::Float(..) => Ok(NumTy::Float),
             Expr::Ident(name, _) => {
-                // Mirror `expr`'s resolution order: a `match`-arm binding shadows a local.
+                // Mirror `expr`'s resolution order: a `match`-arm binding shadows a local, which
+                // shadows a bare field of `this` (its declared type tag, for arithmetic).
                 let tag =
                     if let Some(b) = self.match_bindings.iter().rev().find(|b| b.name == *name) {
                         b.ty
+                    } else if let Some(s) = self.resolve_local(name) {
+                        self.locals[s].ty
+                    } else if let Some(&t) = self.field_tags.get(name) {
+                        t
                     } else {
-                        self.resolve_local(name)
-                            .map(|s| self.locals[s].ty)
-                            .ok_or_else(|| format!("undefined variable `{name}`"))?
+                        return Err(format!("undefined variable `{name}`"));
                     };
                 Self::as_num(tag).ok_or_else(|| format!("`{name}` is not numeric"))
             }
             Expr::Unary { expr, .. } => self.num_ty(expr),
             Expr::Binary { lhs, .. } => self.num_ty(lhs),
+            // `this.field` inside a method/ctor: classify via the current class's field tags. A
+            // field read on an arbitrary instance stays unclassifiable (the coarse-`TyTag` gap —
+            // the local doesn't carry its class), so it falls through to the error below.
+            Expr::Member { object, name, .. } if matches!(&**object, Expr::This(_)) => self
+                .field_tags
+                .get(name)
+                .copied()
+                .and_then(Self::as_num)
+                .ok_or_else(|| format!("`{name}` is not numeric")),
             Expr::Call { callee, .. } => {
                 if let Expr::Ident(name, _) = &**callee {
                     if let Some(meta) = self.fns.get(name) {
@@ -588,18 +716,25 @@ impl<'a> Compiler<'a> {
             Expr::Bool(b, sp) => self.emit_const(Value::Bool(*b), sp.line),
             Expr::Str(parts, sp) => self.compile_str(parts, sp.line)?,
             Expr::Ident(name, sp) => {
-                // A `match`-arm binding shadows locals: re-extract it from `$match` along its
-                // payload path (decision P4-7). Otherwise it's an ordinary local slot.
+                // Resolution order mirrors the interpreter's `eval_ident`: a `match`-arm binding
+                // (re-extracted from `$match` along its payload path; P4-7) shadows a local/param,
+                // which shadows a bare field of `this` (a method/ctor body, lowered to
+                // `this.field`). An unresolved name is a compiler bug (the checker ran first).
                 if let Some((slot, path)) = self.resolve_binding(name) {
                     self.emit(Op::GetLocal(slot), sp.line);
                     for i in path {
                         self.emit(Op::GetEnumField(i), sp.line);
                     }
-                } else {
-                    let slot = self
-                        .resolve_local(name)
-                        .ok_or_else(|| format!("undefined variable `{name}`"))?;
+                } else if let Some(slot) = self.resolve_local(name) {
                     self.emit(Op::GetLocal(slot), sp.line);
+                } else if let (Some(this), true) =
+                    (self.this_slot, self.field_tags.contains_key(name))
+                {
+                    let idx = self.field_name_index(name)?;
+                    self.emit(Op::GetLocal(this), sp.line);
+                    self.emit(Op::GetField(idx), sp.line);
+                } else {
+                    return Err(format!("undefined variable `{name}`"));
                 }
             }
             Expr::List(items, sp) => {
@@ -618,9 +753,12 @@ impl<'a> Compiler<'a> {
             Expr::Binary { op, lhs, rhs, span } => self.compile_binary(*op, lhs, rhs, span.line)?,
             Expr::Call { callee, args, span } => self.compile_call(callee, args, span.line)?,
             Expr::Null(_) => return Err("null is not supported (M1 surface)".into()),
-            Expr::This(_) => {
-                return Err("`this` is not supported by the VM compiler yet (M2 P4)".into())
-            }
+            Expr::This(sp) => match self.this_slot {
+                // `this` is the receiver local: slot 0 in a method, the instance slot in a ctor.
+                Some(slot) => self.emit(Op::GetLocal(slot), sp.line),
+                // Checker-unreachable (`this` outside a method/ctor); mirrors the interpreter.
+                None => return Err("`this` used outside a method".into()),
+            },
             Expr::Member { object, name, span } => {
                 // Field read: evaluate the object, then look its field up at runtime by name
                 // (decision P4-5). Runtime lookup keeps the compiler untyped; the fault on a miss
@@ -787,7 +925,18 @@ impl<'a> Compiler<'a> {
             // Unreachable for checker-validated programs; mirrors `interpreter::eval_call`'s wording.
             return Err(format!("`{name}` is not a function, variant, or class"));
         }
-        Err("method calls are not supported by the VM compiler yet (M2 P4)".into())
+        // Method call `object.name(args)`: evaluate the receiver, then the args, and dispatch by
+        // name at runtime off the receiver's class (decision P4-6).
+        if let Expr::Member { object, name, .. } = callee {
+            self.expr(object)?;
+            for a in args {
+                self.expr(a)?;
+            }
+            let idx = self.field_name_index(name)?;
+            self.emit(Op::CallMethod(idx, args.len()), line);
+            return Ok(());
+        }
+        Err("unsupported call target".into())
     }
 
     fn compile_if(
@@ -1150,6 +1299,31 @@ mod tests {
         let src = r#"class C { constructor(public int x) { if (x > 0) { return; } println("np"); } }
             function main() { C a = C(5); println("{a.x}"); C b = C(0); println("{b.x}"); }"#;
         assert_eq!(out(src), "5\nnp\n0\n");
+    }
+
+    #[test]
+    fn method_reads_bare_field_and_dispatches() {
+        // `total` in the method body resolves to `this.total`; `c.add(23)` dispatches on the class.
+        let src = r#"class Counter { constructor(private int total) {} function add(int n) -> int { return total + n; } }
+            function main() { Counter c = Counter(100); println("{c.add(23)}"); }"#;
+        assert_eq!(out(src), "123\n");
+    }
+
+    #[test]
+    fn method_calls_method_via_this() {
+        let src = r#"class C { constructor(public int x) {}
+                function dbl() -> int { return this.x + this.x; }
+                function quad() -> int { int d = this.dbl(); return d + d; } }
+            function main() { C c = C(5); println("{c.quad()}"); }"#;
+        assert_eq!(out(src), "20\n");
+    }
+
+    #[test]
+    fn method_recursion_through_this() {
+        let src = r#"class F { constructor(public int base) {}
+                function fact(int n) -> int { if (n <= 1) { return 1; } return n * this.fact(n - 1); } }
+            function main() { F f = F(0); println("{f.fact(5)}"); }"#;
+        assert_eq!(out(src), "120\n");
     }
 
     #[test]

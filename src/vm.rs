@@ -344,6 +344,34 @@ impl<'a> Vm<'a> {
                     v => return Err(format!("cannot read `.{name}` on {}", v.type_name())),
                 }
             }
+
+            // --- P4c: methods + `this` ---
+            Op::CallMethod(name_idx, argc) => {
+                if self.frames.len() >= MAX_CALL_DEPTH {
+                    return Err("stack overflow".to_string());
+                }
+                let mname = self.program.names[name_idx].clone();
+                // The receiver sits just below the `argc` args; its slot becomes the new frame's
+                // slot 0 (`this`), with the args at slots 1..=argc (decision P4-6).
+                let slot_base = self.pop_n_start(argc + 1);
+                let class = match &self.stack[slot_base] {
+                    Value::Instance(inst) => inst.class.clone(),
+                    v => return Err(format!("cannot call `.{mname}()` on {}", v.type_name())),
+                };
+                // Dynamic dispatch off the receiver's runtime class. Method existence is
+                // checker-enforced, so the miss is a defensive backstop (interpreter parity).
+                let key = (class, mname);
+                let func = *self
+                    .program
+                    .methods
+                    .get(&key)
+                    .ok_or_else(|| format!("no method `{}` on `{}`", key.1, key.0))?;
+                self.frames.push(Frame {
+                    func,
+                    ip: 0,
+                    slot_base,
+                });
+            }
         }
         Ok(Flow::Next)
     }
@@ -482,6 +510,7 @@ mod tests {
             enum_descs: Vec::new(),
             class_descs: Vec::new(),
             names: Vec::new(),
+            methods: HashMap::new(),
         };
         Vm::new(&program).run().map_err(|d| d.to_string())
     }
@@ -705,6 +734,7 @@ mod tests {
             enum_descs: Vec::new(),
             class_descs: Vec::new(),
             names: Vec::new(),
+            methods: HashMap::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "7\n");
     }
@@ -741,6 +771,7 @@ mod tests {
             }],
             class_descs: Vec::new(),
             names: Vec::new(),
+            methods: HashMap::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "true\n7\n");
     }
@@ -776,6 +807,7 @@ mod tests {
             ],
             class_descs: Vec::new(),
             names: Vec::new(),
+            methods: HashMap::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "false\n");
     }
@@ -807,6 +839,7 @@ mod tests {
                 fields: vec!["x".into(), "y".into()],
             }],
             names: vec!["x".into()],
+            methods: HashMap::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "3\n");
     }
@@ -834,6 +867,7 @@ mod tests {
                 fields: Vec::new(),
             }],
             names: vec!["tag".into()],
+            methods: HashMap::new(),
         };
         let err = Vm::new(&program).run().unwrap_err().to_string();
         assert!(err.contains("no field `tag` on `Empty`"), "{err}");

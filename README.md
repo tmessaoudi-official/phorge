@@ -5,8 +5,8 @@ A small, statically-typed, PHP-inspired programming language implemented in Rust
 
 **Status — M1 complete; M2 P1–P3 in progress:** a tree-walking interpreter (lexer → parser →
 type-checker → evaluator) plus a **Phorge → PHP transpiler** (M1). M2 adds a bytecode compiler and
-stack VM (`phorge runvm`), byte-identical to the interpreter across the P1–P3 surface and
-differential-tested; `phorge bench` measures the VM against the tree-walker. The emitted PHP runs
+stack VM (`phorge runvm`), byte-identical to the interpreter across the full M1 surface (M2 P4)
+and differential-tested; `phorge bench` measures the VM against the tree-walker. The emitted PHP runs
 under a real `php` and produces byte-identical output to the interpreter.
 
 ## Build
@@ -52,9 +52,11 @@ function main() {
 
 `runvm` is the M2 bytecode backend: identical output to `run`, executed on a stack VM
 instead of the tree-walker. The two are kept in lock-step by the differential test harness
-(`tests/differential.rs`). M2 P3 covers the full expression/statement surface plus
-user-defined function calls and recursion (`examples/fib.phg` runs on the VM); classes,
-enums and `match` land in later M2 steps.
+(`tests/differential.rs`). As of **M2 P4**, the VM covers the **full M1 language surface** —
+expressions/statements, functions + recursion, single-payload enums + exhaustive `match`, and
+classes (constructor promotion, field reads, instance methods + `this`). `examples/fib.phg` and
+`examples/grades.phg` both run byte-identically on the VM; `phorge bench` shows it outpacing the
+tree-walker.
 
 No arguments → usage on stderr, exit 2. Unreadable file → exit 1.
 

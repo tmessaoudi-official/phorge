@@ -273,11 +273,42 @@ fn p4b_field_miss_faults_identically() {
     );
 }
 
+/// P4c: instance methods + `this`. Method dispatch is on the receiver's runtime class; a method
+/// body reads fields by bare name (resolved against the current class) or via `this`. Each must run
+/// identically on both backends. (No `agree_err` case: like P4a's exhaustiveness, method existence
+/// is checker-enforced, so the VM's method-not-found fault is a checker-unreachable backstop.)
+const P4C_PROGRAMS: &[&str] = &[
+    // a method reads a *bare* field (`total` resolves to `this.total`) + a param
+    r#"class Counter { constructor(private int total) {} function add(int n) -> int { return total + n; } }
+       function main() { Counter c = Counter(100); println("{c.add(23)}"); }"#,
+    // a method calls another method via `this`, and reads a field via `this.`
+    r#"class C { constructor(public int x) {}
+           function dbl() -> int { return this.x + this.x; }
+           function quad() -> int { int d = this.dbl(); return d + d; } }
+       function main() { C c = C(5); println("{c.quad()}"); }"#,
+    // mixed bare-field + explicit-`this` field reads in one expression
+    r#"class P { constructor(public int x, public int y) {} function sum() -> int { return x + this.y; } }
+       function main() { P p = P(3, 4); println("{p.sum()}"); }"#,
+    // recursion *through* a method (`this.fact(n - 1)`)
+    r#"class F { constructor(public int base) {}
+           function fact(int n) -> int { if (n <= 1) { return 1; } return n * this.fact(n - 1); } }
+       function main() { F f = F(0); println("{f.fact(5)}"); }"#,
+    // a void (no-return) method invoked as a statement, twice (side effects + Unit result)
+    r#"class Logger { constructor(public string tag) {} function log() { println("log {tag}"); } }
+       function main() { Logger l = Logger("X"); l.log(); l.log(); }"#,
+];
+
+#[test]
+fn p4c_programs_match_between_backends() {
+    for src in P4C_PROGRAMS {
+        agree(src);
+    }
+}
+
 #[test]
 fn examples_match_between_backends() {
-    // `examples/hello.phg` (P2) and `examples/fib.phg` (P3 recursion) both run on the VM.
-    // `examples/grades.phg` and the Shape/area sample use enums/classes/`match` (P4), so the
-    // full examples sweep arrives in P6. This test documents the boundary explicitly.
+    // `examples/hello.phg` (P2), `examples/fib.phg` (P3 recursion), and `examples/grades.phg`
+    // (P4: enums + `match` + a class with a method) all run identically on both backends now.
     agree(
         r#"import std.io;
 
@@ -287,6 +318,8 @@ function main() {
     );
     let fib = std::fs::read_to_string("examples/fib.phg").expect("read examples/fib.phg");
     agree(&fib);
+    let grades = std::fs::read_to_string("examples/grades.phg").expect("read examples/grades.phg");
+    agree(&grades);
 }
 
 /// Error-parity corpus (M2 P3.5 Wave 0): programs that must *fail identically* on both backends.

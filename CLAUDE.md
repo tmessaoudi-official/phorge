@@ -28,7 +28,7 @@ Scope and limits:
 
 ## Toolchain & gate
 
-`export PATH=/stack/tools/cargo/bin:$PATH`. Baseline: 239 tests green, clippy clean (pedantic off).
+`export PATH=/stack/tools/cargo/bin:$PATH`. Baseline: 243 tests green, clippy clean (pedantic off).
 The differential harness (`tests/differential.rs`) is the correctness spine — `run` and `runvm`
 must stay byte-identical. Adding an `Op` variant requires extending three exhaustive matches in
 the same commit: `src/vm.rs` `exec_op`, `src/chunk.rs` `BytecodeProgram::validate`, and
@@ -38,12 +38,14 @@ output-identity gated) — run it for a before/after number before any perf chan
 ## Active plan
 
 The M2 P3.5 hardening roadmap (`docs/plans/2026-06-16-m2-p3.5-hardening-roadmap.md`, Waves 0–3) is
-**complete**; Wave 4 is intentionally deferred to land *with* P4/P5. **M2 P4 is in progress**
-(`docs/plans/2026-06-16-m2-p4-classes-enums-match.md`): **P4a — enums + `match` — and P4b —
-classes (construction + constructor promotion + field reads) — are DONE**; **next is P4c**
-(methods + `this`; `examples/grades.phg` runs on the VM there — it calls an instance method). The
-VM object model is value-native (reuses the shared `Value::Enum`/`Instance`; the arena is a
-deferred, bench-gated perf milestone, not a P4 requirement).
+**complete**; Wave 4 is intentionally deferred. **M2 P4 is COMPLETE**
+(`docs/plans/2026-06-16-m2-p4-classes-enums-match.md`): P4a (enums + `match`), P4b (classes +
+constructor promotion + field reads), and P4c (methods + `this`) all landed — **`runvm` now covers
+the full M1 language surface** and `examples/grades.phg` runs byte-identically on both backends
+(VM ≈3.2×). The VM object model is value-native (reuses the shared `Value::Enum`/`Instance`).
+Remaining deferred work: **Wave 4** (thread the checker's richer `types::Ty` into the compiler so
+`num_ty` stops being coarse — recovers `List`-element and arbitrary-instance field types) and the
+**arena object model** (a bench-gated perf milestone, not a correctness requirement).
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing
 correctness rules — read before touching backends, value kernels, or the `Op` set) and

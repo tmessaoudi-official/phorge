@@ -2,7 +2,7 @@
 //! See docs/specs/2026-06-15-m2-bytecode-vm-design.md (§4, §5).
 //! P2 scope: full M1 expression/statement surface for `main` (see
 //! docs/plans/2026-06-15-m2-plan2-compiler-runvm.md). P4a adds single-payload enums + `match`;
-//! P4b adds classes (construction + constructor promotion + field reads).
+//! P4b adds classes (construction + constructor promotion + field reads); P4c adds methods + `this`.
 //! Reuses `value::Value` directly for scalars, lists, *and* enums/instances — the VM mirrors the
 //! interpreter's value-semantics object model (clone-on-use, no heap; decision P4-1). An arena is
 //! a deferred, bench-gated perf milestone, not a correctness requirement.
@@ -117,6 +117,13 @@ pub enum Op {
     /// (a checker-valid but uninitialized explicit `Field` member) faults
     /// `no field \`{name}\` on \`{class}\`` — byte-identical to the interpreter (decision P4-5).
     GetField(usize),
+    /// Call an instance method `(name_idx, argc)`: the receiver and its `argc` args sit on the
+    /// stack as `[.., receiver, arg0 … arg_{argc-1}]`. At runtime, resolve
+    /// `(receiver.class, names[name_idx])` through `BytecodeProgram.methods` to a function index and
+    /// open a frame whose slot 0 is the receiver (`this`) and slots `1..=argc` are the args
+    /// (decision P4-6). Method existence is checker-enforced; the resolution-miss fault is a
+    /// defensive backstop (byte-identical to the interpreter).
+    CallMethod(usize, usize),
 }
 
 /// A unit of compiled bytecode: instructions, a constant pool, and a per-instruction
@@ -193,10 +200,11 @@ pub struct ClassDesc {
     pub fields: Vec<String>,
 }
 
-/// A whole compiled program: every top-level function (free functions then synthetic
-/// constructors), the index of `main`, and the program-level descriptor tables shared across all
-/// functions — enum-variant descriptors, class descriptors, and an interned member/field-name pool
-/// indexed by `Op::GetField` (decision P4-2).
+/// A whole compiled program: every top-level function (free functions, then synthetic
+/// constructors, then methods), the index of `main`, and the program-level descriptor tables
+/// shared across all functions — enum-variant descriptors, class descriptors, an interned
+/// member/field-name pool indexed by `Op::GetField`, and the `(class, method) → function index`
+/// dispatch table read by `Op::CallMethod` (decision P4-2/P4-6).
 #[derive(Debug, Clone)]
 pub struct BytecodeProgram {
     pub functions: Vec<Function>,
@@ -204,6 +212,7 @@ pub struct BytecodeProgram {
     pub enum_descs: Vec<EnumDesc>,
     pub class_descs: Vec<ClassDesc>,
     pub names: Vec<String>,
+    pub methods: HashMap<(String, String), usize>,
 }
 
 impl BytecodeProgram {
@@ -214,11 +223,12 @@ impl BytecodeProgram {
     /// (`GetLocal`/`SetLocal`) can't be range-checked here — their bound is the runtime locals
     /// window, not anything static — so they stay covered by the VM's `frame_slot` debug-assert.
     ///
-    /// P4a added the index-carrying ops `MakeEnum`/`MatchTag` (into `enum_descs`); P4b adds
+    /// P4a added the index-carrying ops `MakeEnum`/`MatchTag` (into `enum_descs`); P4b added
     /// `MakeInstance` (into `class_descs`) and `GetField` (into the `names` pool); P4c adds
-    /// `CallMethod`. Each new index-carrying op extends the match below in lockstep (see memory
-    /// `op-variant-match-coupling`). `GetEnumField` carries a payload index with no static bound
-    /// (like a local slot) — it stays covered by the VM's runtime guard.
+    /// `CallMethod` (name into the `names` pool; its function target is resolved at runtime via the
+    /// method table, range-checked after the per-op loop). Each new index-carrying op extends the
+    /// match below in lockstep (see memory `op-variant-match-coupling`). `GetEnumField` carries a
+    /// payload index with no static bound (like a local slot) — covered by the VM's runtime guard.
     pub fn validate(&self) -> Result<(), String> {
         let nfns = self.functions.len();
         if self.main >= nfns {
@@ -247,7 +257,7 @@ impl BytecodeProgram {
                     Op::MakeInstance(idx) if *idx >= nclasses => Some(format!(
                         "class descriptor index {idx} out of range ({nclasses} descriptors)"
                     )),
-                    Op::GetField(idx) if *idx >= nnames => Some(format!(
+                    Op::GetField(idx) | Op::CallMethod(idx, _) if *idx >= nnames => Some(format!(
                         "field-name index {idx} out of range (name pool has {nnames})"
                     )),
                     // Absolute targets; `== code_len` is the legal "fall off the end → implicit
@@ -263,6 +273,15 @@ impl BytecodeProgram {
                         f.name
                     ));
                 }
+            }
+        }
+        // `Op::CallMethod` resolves its target through the method table at runtime (the function
+        // index isn't in the op), so range-check every dispatch target here instead.
+        for ((class, method), &idx) in &self.methods {
+            if idx >= nfns {
+                return Err(format!(
+                    "invalid bytecode: method `{class}::{method}` target {idx} out of range ({nfns} functions)"
+                ));
             }
         }
         Ok(())
@@ -331,6 +350,7 @@ mod tests {
             enum_descs: Vec::new(),
             class_descs: Vec::new(),
             names: Vec::new(),
+            methods: HashMap::new(),
         };
         assert_eq!(prog.validate(), Ok(()));
     }
@@ -350,6 +370,7 @@ mod tests {
             enum_descs: Vec::new(),
             class_descs: Vec::new(),
             names: Vec::new(),
+            methods: HashMap::new(),
         };
         let err = prog.validate().unwrap_err();
         assert!(err.contains("invalid bytecode"), "{err}");
@@ -371,6 +392,7 @@ mod tests {
             enum_descs: Vec::new(),
             class_descs: Vec::new(),
             names: Vec::new(),
+            methods: HashMap::new(),
         };
         assert!(prog.validate().unwrap_err().contains("call target 7"));
 
@@ -380,6 +402,7 @@ mod tests {
             enum_descs: Vec::new(),
             class_descs: Vec::new(),
             names: Vec::new(),
+            methods: HashMap::new(),
         };
         assert!(bad_main.validate().unwrap_err().contains("main index 0"));
     }
@@ -399,6 +422,7 @@ mod tests {
             enum_descs: Vec::new(),
             class_descs: Vec::new(),
             names: Vec::new(),
+            methods: HashMap::new(),
         };
         let err = prog.validate().unwrap_err();
         assert!(err.contains("enum descriptor index 3"), "{err}");
@@ -419,6 +443,7 @@ mod tests {
             enum_descs: Vec::new(),
             class_descs: Vec::new(),
             names: Vec::new(),
+            methods: HashMap::new(),
         };
         assert!(prog
             .validate()
@@ -438,6 +463,7 @@ mod tests {
             enum_descs: Vec::new(),
             class_descs: Vec::new(),
             names: Vec::new(),
+            methods: HashMap::new(),
         };
         assert!(prog2.validate().unwrap_err().contains("field-name index 5"));
     }
@@ -456,6 +482,7 @@ mod tests {
             enum_descs: Vec::new(),
             class_descs: Vec::new(),
             names: Vec::new(),
+            methods: HashMap::new(),
         };
         assert_eq!(prog.functions[prog.main].name, "main");
         assert_eq!(prog.functions[0].arity, 0);

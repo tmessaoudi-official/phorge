@@ -167,19 +167,33 @@ Each wave is TDD-first (differential tests before the op work), ends green
         operand* of arithmetic isn't classifiable by the coarse `TyTag` (can't recover field types
         yet — same gap as `Index`). Not in the corpus; field reads work in every other position.
 
-### P4c — Methods + `this`
+### P4c — Methods + `this` ✅ DONE (2026-06-16)
 
-- [ ] **C1 (test):** differential programs — instance methods reading fields, method calling
-      another method, `this` in a method, recursion through a method.
-- [ ] **C2:** `chunk.rs` — `Op::CallMethod(name_idx, argc)`; extend `ClassDesc`/name pool with
-      `(class, method)` → fn index; `validate` arm.
-- [ ] **C3:** `vm.rs` — runtime method resolution off the receiver's `class`; frame push with
-      receiver as slot 0; defensive method-not-found fault.
-- [ ] **C4:** `compiler.rs` — compile methods as functions with `this` at slot 0; `Expr::This`
-      → `GetLocal 0`; `compile_member` method-call path → `CallMethod`. Remove the remaining
-      `Expr::This` + method-call stubs.
-- [ ] **C5:** suite green; the five P4 stubs are all gone; commit
-      `feat(vm): methods + this (M2 P4c)`.
+- [x] **C1 (test):** added `P4C_PROGRAMS` to `tests/differential.rs` (bare-field method, method→method
+      via `this`, mixed bare/`this.` field reads, recursion through `this.fact`, void method as a
+      statement) **and** added `examples/grades.phg` to the examples sweep. No `agree_err` case:
+      method existence is checker-enforced (the VM's method-not-found fault is a checker-unreachable
+      backstop, like P4a's exhaustiveness).
+- [x] **C2:** `chunk.rs` — `Op::CallMethod(name_idx, argc)`; a program-level
+      `methods: HashMap<(class, method), fn idx>` dispatch table (rather than threading it through
+      `ClassDesc`); `validate` checks `CallMethod`'s name-pool index and every dispatch target.
+- [x] **C3:** `vm.rs` — `CallMethod` resolves the receiver's runtime class against `methods`, opens
+      a frame with the receiver at slot 0 (args at `1..=argc`); defensive `no method`/`cannot call`
+      faults byte-identical to the interpreter.
+- [x] **C4:** `compiler.rs` — methods compile to functions (`compile_method`, receiver at slot 0);
+      `obj.m(args)` → `CallMethod`; `Expr::This` → `GetLocal(this_slot)`; a bare field name in a
+      method/ctor body resolves to `this.field` (`this_slot` + `field_tags`); `num_ty` classifies a
+      `this.field` arithmetic operand. Removed the last two stubs (`Expr::This`, method calls). A
+      ctor body can now use `this` too (`this_slot` set to the instance slot).
+- [x] **C5:** suite green (243 tests), clippy + fmt clean; committed.
+      **As-built notes:**
+      - **Function index layout** is `[free fns | constructors | methods]`; the method dispatch
+        table maps `(class, method)` to the method's index in that space.
+      - **`num_ty(Member)` gap narrowed:** `this.field`/bare-field operands are now classifiable;
+        a field read on an *arbitrary* instance or a `List` element stays the coarse-`TyTag` gap
+        (Wave 4). Not in the corpus.
+      - `grep "(M2 P4)"` in `compiler.rs`/`vm.rs` is clean; `phorge bench examples/grades.phg` runs
+        (VM ≈3.2× the tree-walker, output identical).
 
 ---
 

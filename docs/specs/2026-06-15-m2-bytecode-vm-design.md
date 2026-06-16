@@ -88,8 +88,14 @@ diverges from this design-level inventory —
   into `Const(idx)` over bool constants.
 - `for…in` lowers to `Len` + `Index` + `Jump` rather than a dedicated `IterNext`. `Pop` and `Len`
   exist in the implementation but are absent above; `Print` carries an arg count (`Print(n)`).
-- Object/enum/match ops (`MakeInstance`, `GetField`, `CallMethod`, `MakeEnum`, `MatchTag`) remain
-  design-only — they land with M2 P4.
+- Object/enum/match ops landed in **M2 P4** as `MakeEnum`/`MatchTag`/`GetEnumField`/`MatchFail`
+  (P4a), `MakeInstance`/`GetField` (P4b), and `CallMethod` (P4c). **Object-model erratum (decision
+  P4-1, authoritative):** instances and enum values are **value-native** — the VM reuses the
+  shared `value::Value` (`Instance`/`EnumVal`) directly on the operand stack, clone-on-use,
+  mirroring the interpreter. There is **no arena and no heap handle** (so §6's "referenced by heap
+  handle" and §7's arena/`Vec<Obj>` are superseded for P4): the language has no field mutation, so
+  value semantics are parity-correct, and an arena/handle model is a *perf* change deferred to a
+  bench-gated P5 milestone (`docs/INVARIANTS.md` bench-before-perf), not a correctness requirement.
 
 ## 6. VM execution model
 

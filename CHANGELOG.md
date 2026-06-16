@@ -6,7 +6,30 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
-### M2 P4b — Classes on the VM (in progress, 2026-06-16)
+### M2 P4c — Methods + `this` on the VM (2026-06-16) — **M2 P4 complete**
+Brings instance methods and `this` to the bytecode VM. With this, **`runvm` covers the full M1
+language surface** and `examples/grades.phg` runs on both backends. See
+`docs/plans/2026-06-16-m2-p4-classes-enums-match.md`.
+
+- **Added**
+  - `Op::CallMethod(name_idx, argc)` — runtime method dispatch off the receiver instance's class,
+    via a program-level `(class, method) → function index` table; the frame opens with the
+    receiver at slot 0 (`this`).
+  - Methods compile to functions (receiver at slot 0, params at `1..=argc`); `this` and bare field
+    reads inside a method/ctor body resolve against the receiver.
+  - `examples/grades.phg` joined the differential examples sweep; `phorge bench examples/grades.phg`
+    runs (VM ≈3.2× the tree-walker on it).
+- **Removed**
+  - The last two `(M2 P4)` compile-error stubs (`Expr::This`, method calls) — `grep "M2 P4"` in
+    `compiler.rs`/`vm.rs` is now clean.
+- **Parity notes**
+  - Method existence is checker-enforced, so the VM's method-not-found fault is a defensive
+    backstop (no `agree_err` case, like P4a's exhaustiveness).
+  - `num_ty` now classifies a `this.field`/bare-field arithmetic operand (via the class's field
+    tags). A field read on an *arbitrary* instance or a `List` element remains the coarse-`TyTag`
+    gap (deferred to Wave 4); not exercised by the corpus.
+
+### M2 P4b — Classes on the VM (2026-06-16)
 Brings class construction (with constructor promotion + body side effects) and field reads to the
 bytecode VM. See `docs/plans/2026-06-16-m2-p4-classes-enums-match.md`.
 
@@ -34,7 +57,7 @@ bytecode VM. See `docs/plans/2026-06-16-m2-p4-classes-enums-match.md`.
     right-operand, or bound through a typed local first.
   - `examples/grades.phg` still needs P4c (it calls an instance method).
 
-### M2 P4a — Enums + `match` on the VM (in progress, 2026-06-16)
+### M2 P4a — Enums + `match` on the VM (2026-06-16)
 Brings single-payload enums and exhaustive `match` to the bytecode VM (already in the
 interpreter since M1). See `docs/plans/2026-06-16-m2-p4-classes-enums-match.md`.
 
