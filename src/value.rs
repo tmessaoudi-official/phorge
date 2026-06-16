@@ -2,6 +2,7 @@
 //! M1 has no reassignment or post-construction mutation (Plan 3), so shared
 //! mutability is unneeded. See design spec EV-1.
 
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
 /// Maximum call-frame depth, enforced **identically by both backends** — the interpreter's
@@ -114,9 +115,136 @@ impl Value {
     }
 }
 
+// --- Arithmetic & comparison kernels (single-sourced; both backends call these) ---
+//
+// The `Op::Neg` parity bug (M2 P3.5 Wave 0) was possible because integer arithmetic lived in two
+// hand-kept-identical copies, one per backend. These kernels are the *one* implementation both the
+// tree-walker (`interpreter::arith`/`eval_unary`/`compare`) and the VM (`vm.rs` arith arms +
+// `compare`) dispatch into, so the two can no longer drift. They return the bare fault *body*
+// (`String`); each backend wraps it in its own error type. Floats can't fault (NaN/inf are valid
+// `f64`); only integer overflow and integer division/modulo by zero are faults. The op→bool / op→fn
+// projection stays in each backend — their op enums (`BinaryOp` vs `Op`) differ, so only the
+// arithmetic and the fault strings are shared, not the dispatch.
+
+/// Canonical fault body for integer `x / 0`. Single-sourced so `run` ≡ `runvm` in the fault path.
+pub const FAULT_DIV_ZERO: &str = "division by zero";
+/// Canonical fault body for integer `x % 0`.
+pub const FAULT_MOD_ZERO: &str = "modulo by zero";
+/// Canonical fault body for any integer op whose result leaves `i64` range
+/// (`MAX + 1`, `MIN - 1`, `MIN * -1`, `MIN / -1`, `MIN % -1`, `-MIN`).
+pub const FAULT_INT_OVERFLOW: &str = "integer overflow";
+
+/// Checked integer addition; overflow is a clean fault, never a panic (EV-7).
+pub fn int_add(a: i64, b: i64) -> Result<i64, String> {
+    a.checked_add(b)
+        .ok_or_else(|| FAULT_INT_OVERFLOW.to_string())
+}
+/// Checked integer subtraction.
+pub fn int_sub(a: i64, b: i64) -> Result<i64, String> {
+    a.checked_sub(b)
+        .ok_or_else(|| FAULT_INT_OVERFLOW.to_string())
+}
+/// Checked integer multiplication.
+pub fn int_mul(a: i64, b: i64) -> Result<i64, String> {
+    a.checked_mul(b)
+        .ok_or_else(|| FAULT_INT_OVERFLOW.to_string())
+}
+/// Checked integer division. `b == 0` is `FAULT_DIV_ZERO`; `i64::MIN / -1` overflows.
+pub fn int_div(a: i64, b: i64) -> Result<i64, String> {
+    if b == 0 {
+        return Err(FAULT_DIV_ZERO.to_string());
+    }
+    a.checked_div(b)
+        .ok_or_else(|| FAULT_INT_OVERFLOW.to_string())
+}
+/// Checked integer remainder. `b == 0` is `FAULT_MOD_ZERO`; `i64::MIN % -1` overflows.
+pub fn int_rem(a: i64, b: i64) -> Result<i64, String> {
+    if b == 0 {
+        return Err(FAULT_MOD_ZERO.to_string());
+    }
+    a.checked_rem(b)
+        .ok_or_else(|| FAULT_INT_OVERFLOW.to_string())
+}
+/// Checked integer negation. `-i64::MIN` overflows (the exact Wave 0 P0 case).
+pub fn int_neg(n: i64) -> Result<i64, String> {
+    n.checked_neg()
+        .ok_or_else(|| FAULT_INT_OVERFLOW.to_string())
+}
+
+/// Float addition. Floats never fault — NaN/inf are valid `f64`.
+pub fn float_add(a: f64, b: f64) -> f64 {
+    a + b
+}
+/// Float subtraction.
+pub fn float_sub(a: f64, b: f64) -> f64 {
+    a - b
+}
+/// Float multiplication.
+pub fn float_mul(a: f64, b: f64) -> f64 {
+    a * b
+}
+/// Float division (`b == 0.0` yields `inf`/`NaN`, not a fault).
+pub fn float_div(a: f64, b: f64) -> f64 {
+    a / b
+}
+/// Float remainder.
+pub fn float_rem(a: f64, b: f64) -> f64 {
+    a % b
+}
+
+/// Ordering probe for `< > <= >=`. `Ok(None)` is the NaN case (every ordered comparison of NaN is
+/// `false`); `Err` is a non-comparable operand pairing. The op→bool projection stays backend-local
+/// (the op enums differ); only the ordering and the comparability fault are shared.
+pub fn compare_ord(a: &Value, b: &Value) -> Result<Option<Ordering>, String> {
+    match (a, b) {
+        (Value::Int(x), Value::Int(y)) => Ok(x.partial_cmp(y)),
+        (Value::Float(x), Value::Float(y)) => Ok(x.partial_cmp(y)),
+        _ => Err(format!(
+            "cannot compare {} and {}",
+            a.type_name(),
+            b.type_name()
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn int_kernels_fault_and_overflow() {
+        assert_eq!(int_add(2, 3), Ok(5));
+        assert_eq!(int_add(i64::MAX, 1), Err(FAULT_INT_OVERFLOW.to_string()));
+        assert_eq!(int_sub(i64::MIN, 1), Err(FAULT_INT_OVERFLOW.to_string()));
+        assert_eq!(int_mul(i64::MAX, 2), Err(FAULT_INT_OVERFLOW.to_string()));
+        assert_eq!(int_div(7, 2), Ok(3));
+        assert_eq!(int_div(1, 0), Err(FAULT_DIV_ZERO.to_string()));
+        assert_eq!(int_div(i64::MIN, -1), Err(FAULT_INT_OVERFLOW.to_string()));
+        assert_eq!(int_rem(7, 3), Ok(1));
+        assert_eq!(int_rem(1, 0), Err(FAULT_MOD_ZERO.to_string()));
+        assert_eq!(int_neg(5), Ok(-5));
+        assert_eq!(int_neg(i64::MIN), Err(FAULT_INT_OVERFLOW.to_string()));
+    }
+
+    #[test]
+    fn compare_ord_matches_both_backends() {
+        assert_eq!(
+            compare_ord(&Value::Int(1), &Value::Int(2)),
+            Ok(Some(Ordering::Less))
+        );
+        assert_eq!(
+            compare_ord(&Value::Float(2.0), &Value::Float(2.0)),
+            Ok(Some(Ordering::Equal))
+        );
+        // NaN: comparable type, but no ordering -> Ok(None) (callers project to `false`).
+        assert_eq!(
+            compare_ord(&Value::Float(f64::NAN), &Value::Float(1.0)),
+            Ok(None)
+        );
+        // Mixed/non-numeric operands are a comparability fault.
+        assert!(compare_ord(&Value::Int(1), &Value::Float(1.0)).is_err());
+        assert!(compare_ord(&Value::Bool(true), &Value::Bool(false)).is_err());
+    }
 
     #[test]
     fn as_display_renders_primitives() {

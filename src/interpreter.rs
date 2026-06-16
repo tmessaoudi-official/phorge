@@ -309,9 +309,9 @@ impl Interp {
     fn eval_unary(&mut self, op: UnaryOp, expr: &Expr) -> R<Value> {
         let v = self.eval(expr)?;
         match (op, v) {
-            (UnaryOp::Neg, Value::Int(n)) => match n.checked_neg() {
-                Some(v) => Ok(Value::Int(v)),
-                None => rt("integer overflow"),
+            (UnaryOp::Neg, Value::Int(n)) => match crate::value::int_neg(n) {
+                Ok(v) => Ok(Value::Int(v)),
+                Err(msg) => rt(msg),
             },
             (UnaryOp::Neg, Value::Float(x)) => Ok(Value::Float(-x)),
             (UnaryOp::Not, Value::Bool(b)) => Ok(Value::Bool(!b)),
@@ -510,38 +510,29 @@ fn arith(op: BinaryOp, l: Value, r: Value) -> R<Value> {
     use BinaryOp::*;
     match (l, r) {
         (Value::Int(a), Value::Int(b)) => {
-            // Checked ops: overflow is a fault the type system can't catch, so it
-            // becomes a RuntimeError rather than a panic (EV-7 / no-panic principle).
+            // Checked ops via the single-sourced `value` kernels: overflow / div-zero / mod-zero are
+            // faults the type system can't catch, so they become a RuntimeError, never a panic
+            // (EV-7). The VM dispatches into the *same* kernels, so the fault path can't diverge.
             let v = match op {
-                Add => a.checked_add(b),
-                Sub => a.checked_sub(b),
-                Mul => a.checked_mul(b),
-                Div => {
-                    if b == 0 {
-                        return rt("division by zero");
-                    }
-                    a.checked_div(b)
-                }
-                Rem => {
-                    if b == 0 {
-                        return rt("modulo by zero");
-                    }
-                    a.checked_rem(b)
-                }
+                Add => crate::value::int_add(a, b),
+                Sub => crate::value::int_sub(a, b),
+                Mul => crate::value::int_mul(a, b),
+                Div => crate::value::int_div(a, b),
+                Rem => crate::value::int_rem(a, b),
                 _ => unreachable!("arith only called with +-*/%"),
             };
             match v {
-                Some(n) => Ok(Value::Int(n)),
-                None => rt("integer overflow"),
+                Ok(n) => Ok(Value::Int(n)),
+                Err(msg) => rt(msg),
             }
         }
         (Value::Float(a), Value::Float(b)) => {
             let v = match op {
-                Add => a + b,
-                Sub => a - b,
-                Mul => a * b,
-                Div => a / b,
-                Rem => a % b,
+                Add => crate::value::float_add(a, b),
+                Sub => crate::value::float_sub(a, b),
+                Mul => crate::value::float_mul(a, b),
+                Div => crate::value::float_div(a, b),
+                Rem => crate::value::float_rem(a, b),
                 _ => unreachable!("arith only called with +-*/%"),
             };
             Ok(Value::Float(v))
@@ -556,16 +547,11 @@ fn arith(op: BinaryOp, l: Value, r: Value) -> R<Value> {
 
 fn compare(op: BinaryOp, l: Value, r: Value) -> R<Value> {
     use BinaryOp::*;
-    let ord = match (&l, &r) {
-        (Value::Int(a), Value::Int(b)) => a.partial_cmp(b),
-        (Value::Float(a), Value::Float(b)) => a.partial_cmp(b),
-        _ => {
-            return rt(format!(
-                "cannot compare {} and {}",
-                l.type_name(),
-                r.type_name()
-            ))
-        }
+    // The ordering + comparability fault is single-sourced in `value::compare_ord` (the VM calls the
+    // same fn); only the op→bool projection below is backend-local (the op enums differ).
+    let ord = match crate::value::compare_ord(&l, &r) {
+        Ok(o) => o,
+        Err(msg) => return rt(msg),
     };
     let res = match ord {
         Some(o) => match op {

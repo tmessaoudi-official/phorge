@@ -70,58 +70,56 @@ impl<'a> Vm<'a> {
                     self.stack.push(v);
                 }
 
+                // Arithmetic dispatches into the single-sourced `value` kernels — the interpreter
+                // calls the *same* functions, so the checked-op / div-zero / overflow fault path
+                // is structurally identical across both backends (the Wave 0 `Op::Neg` divergence
+                // class can no longer reopen).
                 Op::AddI => {
                     let (a, b) = self.pop2_int()?;
-                    self.push_i(a.checked_add(b))?;
+                    self.push_i(crate::value::int_add(a, b))?;
                 }
                 Op::SubI => {
                     let (a, b) = self.pop2_int()?;
-                    self.push_i(a.checked_sub(b))?;
+                    self.push_i(crate::value::int_sub(a, b))?;
                 }
                 Op::MulI => {
                     let (a, b) = self.pop2_int()?;
-                    self.push_i(a.checked_mul(b))?;
+                    self.push_i(crate::value::int_mul(a, b))?;
                 }
                 Op::DivI => {
                     let (a, b) = self.pop2_int()?;
-                    if b == 0 {
-                        return Err("division by zero".to_string());
-                    }
-                    self.push_i(a.checked_div(b))?;
+                    self.push_i(crate::value::int_div(a, b))?;
                 }
                 Op::RemI => {
                     let (a, b) = self.pop2_int()?;
-                    if b == 0 {
-                        return Err("modulo by zero".to_string());
-                    }
-                    self.push_i(a.checked_rem(b))?;
+                    self.push_i(crate::value::int_rem(a, b))?;
                 }
 
                 Op::AddF => {
                     let (a, b) = self.pop2_float()?;
-                    self.stack.push(Value::Float(a + b));
+                    self.stack.push(Value::Float(crate::value::float_add(a, b)));
                 }
                 Op::SubF => {
                     let (a, b) = self.pop2_float()?;
-                    self.stack.push(Value::Float(a - b));
+                    self.stack.push(Value::Float(crate::value::float_sub(a, b)));
                 }
                 Op::MulF => {
                     let (a, b) = self.pop2_float()?;
-                    self.stack.push(Value::Float(a * b));
+                    self.stack.push(Value::Float(crate::value::float_mul(a, b)));
                 }
                 Op::DivF => {
                     let (a, b) = self.pop2_float()?;
-                    self.stack.push(Value::Float(a / b));
+                    self.stack.push(Value::Float(crate::value::float_div(a, b)));
                 }
                 Op::RemF => {
                     let (a, b) = self.pop2_float()?;
-                    self.stack.push(Value::Float(a % b));
+                    self.stack.push(Value::Float(crate::value::float_rem(a, b)));
                 }
 
                 Op::Neg => match self.pop() {
-                    // `checked_neg` mirrors the interpreter (`interpreter.rs` `eval_unary`): negating
+                    // `value::int_neg` is shared with the interpreter (`eval_unary`): negating
                     // `i64::MIN` is a clean `"integer overflow"` runtime error, never a panic.
-                    Value::Int(n) => self.push_i(n.checked_neg())?,
+                    Value::Int(n) => self.push_i(crate::value::int_neg(n))?,
                     Value::Float(x) => self.stack.push(Value::Float(-x)),
                     v => return Err(format!("cannot negate {}", v.type_name())),
                 },
@@ -296,29 +294,20 @@ impl<'a> Vm<'a> {
         }
     }
 
-    fn push_i(&mut self, r: Option<i64>) -> Result<(), String> {
-        let n = r.ok_or_else(|| "integer overflow".to_string())?;
-        self.stack.push(Value::Int(n));
+    /// Push the result of a checked integer kernel, propagating its fault body (e.g.
+    /// `"integer overflow"`) verbatim — the fault string is single-sourced in `value`.
+    fn push_i(&mut self, r: Result<i64, String>) -> Result<(), String> {
+        self.stack.push(Value::Int(r?));
         Ok(())
     }
 }
 
-/// Ordering comparison for `Lt`/`Gt`/`Le`/`Ge` on int or float operands. Mirrors
-/// `interpreter::compare`: NaN and mixed/non-numeric operands behave identically.
+/// Ordering comparison for `Lt`/`Gt`/`Le`/`Ge` on int or float operands. The ordering and the
+/// comparability fault are single-sourced in `value::compare_ord` (the interpreter calls the same
+/// fn); only the `Op`→bool projection below is VM-local. NaN compares `false`.
 fn compare(op: &Op, a: &Value, b: &Value) -> Result<bool, String> {
     use std::cmp::Ordering;
-    let ord = match (a, b) {
-        (Value::Int(x), Value::Int(y)) => x.partial_cmp(y),
-        (Value::Float(x), Value::Float(y)) => x.partial_cmp(y),
-        _ => {
-            return Err(format!(
-                "cannot compare {} and {}",
-                a.type_name(),
-                b.type_name()
-            ))
-        }
-    };
-    Ok(match ord {
+    Ok(match crate::value::compare_ord(a, b)? {
         Some(o) => match op {
             Op::Lt => o == Ordering::Less,
             Op::Gt => o == Ordering::Greater,
