@@ -6,6 +6,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+_Nothing yet — next is M2.5 Phase 2 (cross-OS standalone builds: zig driver, PE/Mach-O reader arms,
+per-target stub fetch/cache)._
+
+## [0.3.0] — 2026-06-16
+
+First tagged POC. Usable end-to-end on `x86_64-linux-gnu`: the full M1 language on two
+byte-identical backends (`run` interpreter + `runvm` bytecode VM), a Phorge→PHP transpiler, and
+`phorge build` producing a standalone native Linux executable. Bundles all post-M2-P3 work — the
+P3.5 hardening pass, M2 P4 (classes/enums/match/methods), Wave 4 (class-aware compiler types), P5a
+(`Rc`-shared heap), the full-coverage example set, and M2.5 Phase 1 (standalone build). Known v1
+limits: `build` is host-only; the artifact ignores argv and always exits 0; the language has no
+indexing/`Map`/`Set`/optionals/`|>`/exceptions/mutation (all M3).
+
 ### M2.5 Phase 1 — `phorge build` (x86_64-linux-gnu) (2026-06-16) — **distribution**
 `phorge build foo.phg` produces a standalone host executable that runs `foo.phg` on the VM with no
 Phorge install — by copying the running phorge binary, embedding the program **source** in a
