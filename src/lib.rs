@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 pub mod ast;
+pub mod bundle;
 pub mod checker;
 pub mod chunk;
 pub mod cli;
