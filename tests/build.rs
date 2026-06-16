@@ -81,3 +81,43 @@ fn build_rejects_ill_typed_program() {
     );
     let _ = std::fs::remove_file(&out_bin);
 }
+
+#[test]
+fn build_rejects_dangling_o_flag() {
+    // `build f.phg -o` with no value must be a usage error (exit 2), not a silent default-named
+    // build. Run in a temp cwd with an absolute source so a buggy default build can't pollute the repo.
+    let cwd = std::env::temp_dir().join(format!("phorge_argtest_o_{}", std::process::id()));
+    std::fs::create_dir_all(&cwd).unwrap();
+    let src = std::fs::canonicalize("examples/hello.phg").unwrap();
+    let out = Command::new(BIN)
+        .current_dir(&cwd)
+        .args(["build", src.to_str().unwrap(), "-o"])
+        .output()
+        .expect("spawn build");
+    let _ = std::fs::remove_dir_all(&cwd);
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "dangling -o must be a usage error"
+    );
+}
+
+#[test]
+fn build_rejects_unknown_trailing_arg() {
+    // An unrecognized trailing argument must error, not be silently ignored (which would write a
+    // default-named binary). Same temp-cwd + absolute-source isolation.
+    let cwd = std::env::temp_dir().join(format!("phorge_argtest_x_{}", std::process::id()));
+    std::fs::create_dir_all(&cwd).unwrap();
+    let src = std::fs::canonicalize("examples/hello.phg").unwrap();
+    let out = Command::new(BIN)
+        .current_dir(&cwd)
+        .args(["build", src.to_str().unwrap(), "--bogus"])
+        .output()
+        .expect("spawn build");
+    let _ = std::fs::remove_dir_all(&cwd);
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "unknown trailing arg must be a usage error"
+    );
+}

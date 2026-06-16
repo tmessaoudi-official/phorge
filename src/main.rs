@@ -50,15 +50,28 @@ fn main() {
         }
     };
     // `build` is special: it consumes an optional `-o <out>` and writes a binary instead of
-    // printing program output. Handle it before the generic print-the-result path.
+    // printing program output. Handle it before the generic print-the-result path. Accept ONLY an
+    // optional `-o <out>`; a dangling `-o`, an unrecognized trailing arg, or any extra argument is a
+    // usage error (exit 2) — never a silent default-named build.
     if cmd == "build" {
-        let out = args.get(3).and_then(|f| {
-            if f == "-o" {
-                args.get(4).map(String::as_str)
-            } else {
-                None
+        let out = match args.get(3).map(String::as_str) {
+            None => None,
+            Some("-o") => match args.get(4).map(String::as_str) {
+                Some(v) => Some(v),
+                None => {
+                    eprintln!("{USAGE}");
+                    exit(2);
+                }
+            },
+            Some(_) => {
+                eprintln!("{USAGE}");
+                exit(2);
             }
-        });
+        };
+        if args.len() > 5 {
+            eprintln!("{USAGE}");
+            exit(2);
+        }
         match cli::cmd_build(file, &src, out) {
             Ok(text) => {
                 print!("{text}");
