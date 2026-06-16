@@ -15,6 +15,12 @@ central correctness contract.
   adds per-stage prefixes and the VM adds a source-line prefix the interpreter lacks).
 - **Why it bites:** the original `Op::Neg` P0 (negating `i64::MIN`) hid in the gap that existed
   before `agree_err` — the Ok-only oracle never saw divergent *crashes*.
+- **Third surface (M2.5 `phorge build`):** a standalone binary runs its **embedded source** through
+  `cli::cmd_runvm` at startup (the self-detect hook in `src/main.rs`), so its output MUST equal
+  `phorge runvm <file>`. **Enforced by** `tests/build.rs::built_binary_matches_runvm`. The startup
+  hook must keep dispatching through `cmd_runvm` (never `cmd_run`) and must not transform the source
+  before execution — otherwise the distribution layer silently drifts off the spine while the
+  differential suite (which never builds a binary) stays green.
 
 ## 2. The interpreter is the reference oracle
 When the VM and the interpreter disagree, the **interpreter is right by definition** — it is the
