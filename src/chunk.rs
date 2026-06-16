@@ -1,7 +1,8 @@
 //! Bytecode chunk + instruction set for the M2 VM.
 //! See docs/specs/2026-06-15-m2-bytecode-vm-design.md (§4, §5).
 //! P2 scope: full M1 expression/statement surface for `main` (see
-//! docs/plans/2026-06-15-m2-plan2-compiler-runvm.md). P4a adds single-payload enums + `match`.
+//! docs/plans/2026-06-15-m2-plan2-compiler-runvm.md). P4a adds single-payload enums + `match`;
+//! P4b adds classes (construction + constructor promotion + field reads).
 //! Reuses `value::Value` directly for scalars, lists, *and* enums/instances — the VM mirrors the
 //! interpreter's value-semantics object model (clone-on-use, no heap; decision P4-1). An arena is
 //! a deferred, bench-gated perf milestone, not a correctness requirement.
@@ -107,6 +108,15 @@ pub enum Op {
     /// `match` exhaustiveness, so the compiler plants this only as the fall-through after the
     /// last arm; it mirrors the interpreter's identical fault if ever reached (EV-7 parity).
     MatchFail,
+    /// Construct a class instance from `class_descs[idx]`: pop `desc.fields.len()` promoted-field
+    /// values (in declaration order — top of stack is the last field), zip them with
+    /// `desc.fields`, and push a `Value::Instance`. Emitted only inside a synthetic constructor
+    /// function, after its promoted params have been loaded (decision P4-4).
+    MakeInstance(usize),
+    /// Pop an instance and push a clone of its field named `names[idx]`. A read of an absent field
+    /// (a checker-valid but uninitialized explicit `Field` member) faults
+    /// `no field \`{name}\` on \`{class}\`` — byte-identical to the interpreter (decision P4-5).
+    GetField(usize),
 }
 
 /// A unit of compiled bytecode: instructions, a constant pool, and a per-instruction
@@ -172,13 +182,28 @@ pub struct EnumDesc {
     pub arity: usize,
 }
 
-/// A whole compiled program: every top-level function, the index of `main`, and the enum-variant
-/// descriptor table shared across all functions (decision P4-2).
+/// A static descriptor for one class: its name and the ordered list of promoted-field names a
+/// constructor populates. Built once in the compiler pre-pass and indexed by `Op::MakeInstance`
+/// (decision P4-2/P4-4). Explicit (non-promoted) `Field` members are *not* listed here — like the
+/// interpreter, construction populates only promoted ctor params; reading an explicit field is a
+/// runtime `no field` fault.
+#[derive(Debug, Clone)]
+pub struct ClassDesc {
+    pub class: String,
+    pub fields: Vec<String>,
+}
+
+/// A whole compiled program: every top-level function (free functions then synthetic
+/// constructors), the index of `main`, and the program-level descriptor tables shared across all
+/// functions — enum-variant descriptors, class descriptors, and an interned member/field-name pool
+/// indexed by `Op::GetField` (decision P4-2).
 #[derive(Debug, Clone)]
 pub struct BytecodeProgram {
     pub functions: Vec<Function>,
     pub main: usize,
     pub enum_descs: Vec<EnumDesc>,
+    pub class_descs: Vec<ClassDesc>,
+    pub names: Vec<String>,
 }
 
 impl BytecodeProgram {
@@ -189,10 +214,11 @@ impl BytecodeProgram {
     /// (`GetLocal`/`SetLocal`) can't be range-checked here — their bound is the runtime locals
     /// window, not anything static — so they stay covered by the VM's `frame_slot` debug-assert.
     ///
-    /// P4a adds the index-carrying ops `MakeEnum`/`MatchTag` (into `enum_descs`); P4b/P4c add more
-    /// (`MakeInstance`, `GetField`, `CallMethod`). Each new index-carrying op extends the match
-    /// below in lockstep (see memory `op-variant-match-coupling`). `GetEnumField` carries a payload
-    /// index with no static bound (like a local slot) — it stays covered by the VM's runtime guard.
+    /// P4a added the index-carrying ops `MakeEnum`/`MatchTag` (into `enum_descs`); P4b adds
+    /// `MakeInstance` (into `class_descs`) and `GetField` (into the `names` pool); P4c adds
+    /// `CallMethod`. Each new index-carrying op extends the match below in lockstep (see memory
+    /// `op-variant-match-coupling`). `GetEnumField` carries a payload index with no static bound
+    /// (like a local slot) — it stays covered by the VM's runtime guard.
     pub fn validate(&self) -> Result<(), String> {
         let nfns = self.functions.len();
         if self.main >= nfns {
@@ -202,6 +228,8 @@ impl BytecodeProgram {
             ));
         }
         let ndescs = self.enum_descs.len();
+        let nclasses = self.class_descs.len();
+        let nnames = self.names.len();
         for (fi, f) in self.functions.iter().enumerate() {
             let code_len = f.chunk.code.len();
             let const_len = f.chunk.consts.len();
@@ -215,6 +243,12 @@ impl BytecodeProgram {
                     }
                     Op::MakeEnum(idx) | Op::MatchTag(idx) if *idx >= ndescs => Some(format!(
                         "enum descriptor index {idx} out of range ({ndescs} descriptors)"
+                    )),
+                    Op::MakeInstance(idx) if *idx >= nclasses => Some(format!(
+                        "class descriptor index {idx} out of range ({nclasses} descriptors)"
+                    )),
+                    Op::GetField(idx) if *idx >= nnames => Some(format!(
+                        "field-name index {idx} out of range (name pool has {nnames})"
                     )),
                     // Absolute targets; `== code_len` is the legal "fall off the end → implicit
                     // return" landing the run loop already handles, so only `>` is invalid.
@@ -295,6 +329,8 @@ mod tests {
             }],
             main: 0,
             enum_descs: Vec::new(),
+            class_descs: Vec::new(),
+            names: Vec::new(),
         };
         assert_eq!(prog.validate(), Ok(()));
     }
@@ -312,6 +348,8 @@ mod tests {
             }],
             main: 0,
             enum_descs: Vec::new(),
+            class_descs: Vec::new(),
+            names: Vec::new(),
         };
         let err = prog.validate().unwrap_err();
         assert!(err.contains("invalid bytecode"), "{err}");
@@ -331,6 +369,8 @@ mod tests {
             }],
             main: 0,
             enum_descs: Vec::new(),
+            class_descs: Vec::new(),
+            names: Vec::new(),
         };
         assert!(prog.validate().unwrap_err().contains("call target 7"));
 
@@ -338,6 +378,8 @@ mod tests {
             functions: vec![],
             main: 0,
             enum_descs: Vec::new(),
+            class_descs: Vec::new(),
+            names: Vec::new(),
         };
         assert!(bad_main.validate().unwrap_err().contains("main index 0"));
     }
@@ -355,9 +397,49 @@ mod tests {
             }],
             main: 0,
             enum_descs: Vec::new(),
+            class_descs: Vec::new(),
+            names: Vec::new(),
         };
         let err = prog.validate().unwrap_err();
         assert!(err.contains("enum descriptor index 3"), "{err}");
+    }
+
+    #[test]
+    fn validate_rejects_out_of_range_class_and_field() {
+        let mut c = Chunk::new();
+        c.emit(Op::MakeInstance(2), 1); // no class descriptors
+        c.emit(Op::Return, 1);
+        let prog = BytecodeProgram {
+            functions: vec![Function {
+                name: "main".into(),
+                arity: 0,
+                chunk: c,
+            }],
+            main: 0,
+            enum_descs: Vec::new(),
+            class_descs: Vec::new(),
+            names: Vec::new(),
+        };
+        assert!(prog
+            .validate()
+            .unwrap_err()
+            .contains("class descriptor index 2"));
+
+        let mut c2 = Chunk::new();
+        c2.emit(Op::GetField(5), 1); // empty name pool
+        c2.emit(Op::Return, 1);
+        let prog2 = BytecodeProgram {
+            functions: vec![Function {
+                name: "main".into(),
+                arity: 0,
+                chunk: c2,
+            }],
+            main: 0,
+            enum_descs: Vec::new(),
+            class_descs: Vec::new(),
+            names: Vec::new(),
+        };
+        assert!(prog2.validate().unwrap_err().contains("field-name index 5"));
     }
 
     #[test]
@@ -372,6 +454,8 @@ mod tests {
             }],
             main: 0,
             enum_descs: Vec::new(),
+            class_descs: Vec::new(),
+            names: Vec::new(),
         };
         assert_eq!(prog.functions[prog.main].name, "main");
         assert_eq!(prog.functions[0].arity, 0);

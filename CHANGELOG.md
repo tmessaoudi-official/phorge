@@ -6,6 +6,34 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### M2 P4b — Classes on the VM (in progress, 2026-06-16)
+Brings class construction (with constructor promotion + body side effects) and field reads to the
+bytecode VM. See `docs/plans/2026-06-16-m2-p4-classes-enums-match.md`.
+
+- **Added**
+  - `Op::MakeInstance` (build a `Value::Instance` from promoted-field values) and `Op::GetField`
+    (runtime field lookup, with a `no field` fault byte-identical to the interpreter).
+  - A program-level `ClassDesc` table (per-class promoted-field names) and an interned
+    field-name pool, both validated by `BytecodeProgram::validate`.
+  - Each constructor compiles to a synthetic `<Class>::new` function: it promotes its params into
+    fields via `MakeInstance`, runs the body for side effects with the instance in scope, and
+    returns the instance. `ClassName(args)` resolves to a `Call` into it.
+- **Object model**
+  - Instances are value-native: the VM reuses the shared `Value::Instance`, clone-on-use,
+    mirroring the interpreter (decision P4-1). No arena.
+- **Parity notes**
+  - A ctor body's `return` is discarded and the promoted instance is always returned (interpreter
+    parity): the synthetic ctor redirects body `return`s to an epilogue that loads + returns the
+    instance, so an early `return;` cannot change the result.
+  - Reading an explicit (uninitialized) `Field` member type-checks but faults `no field` at
+    runtime on **both** backends — construction populates only promoted ctor params.
+- **Known limitation (pre-existing coarse-type gap, deferred to Wave 4)**
+  - A field read used as the *direct left operand* of arithmetic (`p.x + …`) can't be classified
+    by the compiler's coarse `TyTag` (it can't recover field types yet — same gap as `Index`).
+    Field reads work everywhere else: interpolation, equality, call arguments, arithmetic
+    right-operand, or bound through a typed local first.
+  - `examples/grades.phg` still needs P4c (it calls an instance method).
+
 ### M2 P4a — Enums + `match` on the VM (in progress, 2026-06-16)
 Brings single-payload enums and exhaustive `match` to the bytecode VM (already in the
 interpreter since M1). See `docs/plans/2026-06-16-m2-p4-classes-enums-match.md`.

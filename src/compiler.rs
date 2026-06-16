@@ -7,13 +7,17 @@
 //! `for…in`, blocks. P3 added user function calls + call frames + recursion (multi-function
 //! compile → `BytecodeProgram`). P4a adds single-payload enums (`Variant(args)` construction)
 //! and exhaustive `match` (lowered to scrutinee-spill + per-arm tag/literal tests + payload
-//! re-extraction; decision P4-7). Classes/methods/`this`/member (P4b/P4c) still raise a clean
-//! compile error until implemented. Enums and lists are value-native `Value` (no heap; P4-1).
+//! re-extraction; decision P4-7). P4b adds classes: each constructor compiles to a synthetic
+//! function (promoted-field `MakeInstance` + body with the instance in scope), `ClassName(args)`
+//! resolves to a `Call` into it, and `obj.field` lowers to `GetField` (decisions P4-4/P4-5).
+//! Methods/`this` (P4c) still raise a clean compile error until implemented. Enums, instances, and
+//! lists are value-native `Value` (no heap; P4-1).
 
 use crate::ast::{
-    BinaryOp, Expr, FunctionDecl, Item, MatchArm, Pattern, Program, Stmt, StrPart, Type, UnaryOp,
+    BinaryOp, ClassDecl, ClassMember, CtorParam, Expr, FunctionDecl, Item, MatchArm, Modifier,
+    Pattern, Program, Stmt, StrPart, Type, UnaryOp,
 };
-use crate::chunk::{BytecodeProgram, Chunk, EnumDesc, Function, Op};
+use crate::chunk::{BytecodeProgram, Chunk, ClassDesc, EnumDesc, Function, Op};
 use crate::diagnostic::Diagnostic;
 use crate::value::Value;
 use std::collections::HashMap;
@@ -86,9 +90,21 @@ struct Compiler<'a> {
     variants: &'a HashMap<String, VariantMeta>,
     /// The shared enum-descriptor table — `stack_effect` reads `MakeEnum`'s payload arity from it.
     enum_descs: &'a [EnumDesc],
+    /// Class name → the index of its synthetic constructor function (for `ClassName(args)`).
+    classes: &'a HashMap<String, usize>,
+    /// The shared class-descriptor table — `stack_effect` reads `MakeInstance`'s field count from it.
+    class_descs: &'a [ClassDesc],
+    /// Field/member name → its index in `BytecodeProgram.names` (for `GetField`). Pre-built from
+    /// every declared field name (promoted + explicit) so member lowering is a lookup, not a mutation.
+    names_index: &'a HashMap<String, usize>,
     /// Active `match`-arm bindings (a stack; innermost shadows). Populated while compiling an arm
     /// body, truncated after.
     match_bindings: Vec<MatchBinding>,
+    /// When compiling a synthetic constructor body, holds the code indices of the body's `return`
+    /// statements (redirected to the ctor epilogue instead of an `Op::Return`). `None` outside a
+    /// ctor body. The interpreter discards a ctor body's return and always yields the promoted
+    /// instance (`construct`); the epilogue mirrors that exactly (decision P4-4).
+    ctor_return_jumps: Option<Vec<usize>>,
     /// Base-relative operand-stack height, tracked so `match` can spill its scrutinee to the
     /// correct slot even mid-expression. Reset to `locals.len()` at each statement boundary and
     /// fixed at `&&`/`||`/`match` control-flow merges; otherwise maintained by `emit`.
@@ -112,6 +128,7 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
     // metadata map both construction and `match` resolve through (decision P4-2).
     let mut enum_descs: Vec<EnumDesc> = Vec::new();
     let mut variants: HashMap<String, VariantMeta> = HashMap::new();
+    let mut class_decls: Vec<&ClassDecl> = Vec::new();
     for it in &program.items {
         match it {
             Item::Function(f) => {
@@ -140,28 +157,73 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
                     });
                 }
             }
-            Item::Import { .. } | Item::Class(_) => {}
+            Item::Class(c) => class_decls.push(c),
+            Item::Import { .. } => {}
         }
     }
     let main = fns
         .get("main")
         .map(|m| m.index)
         .ok_or_else(|| "no `main` function".to_string())?;
-    let arities: Vec<usize> = order.iter().map(|f| f.params.len()).collect();
 
-    let mut functions = Vec::with_capacity(order.len());
+    // Class pre-pass (decision P4-2/P4-4): each class gets a synthetic constructor function placed
+    // *after* all free functions (so free-function indices — and `main` — stay put). `class_descs`
+    // lists the promoted fields a `MakeInstance` populates (mirroring the interpreter's runtime
+    // promotion); the `names` pool interns every readable field name (promoted *and* explicit) so
+    // `obj.field` lowers to a `GetField(name_idx)`. Explicit `Field` members are named but absent
+    // from `class_descs.fields` — like the interpreter they are unpopulated, so reading one faults.
+    let nfree = order.len();
+    let mut classes: HashMap<String, usize> = HashMap::new();
+    let mut class_descs: Vec<ClassDesc> = Vec::new();
+    let mut names: Vec<String> = Vec::new();
+    let mut names_index: HashMap<String, usize> = HashMap::new();
+    let mut intern = |name: &str, names: &mut Vec<String>| {
+        if !names_index.contains_key(name) {
+            names_index.insert(name.to_string(), names.len());
+            names.push(name.to_string());
+        }
+    };
+    for (ci, c) in class_decls.iter().enumerate() {
+        classes.insert(c.name.clone(), nfree + ci);
+        let (params, _) = ctor_parts(c);
+        let mut fields: Vec<String> = Vec::new();
+        for p in params {
+            if is_promoted(p) {
+                fields.push(p.name.clone());
+                intern(&p.name, &mut names);
+            }
+        }
+        for m in &c.members {
+            if let ClassMember::Field { name, .. } = m {
+                intern(name, &mut names); // readable, but unpopulated by construction
+            }
+        }
+        class_descs.push(ClassDesc {
+            class: c.name.clone(),
+            fields,
+        });
+    }
+    // `intern`'s unique borrow of `names_index` ends at its last call above (NLL), so the
+    // immutable `&names_index` borrows below are free.
+
+    // Arities for *every* function index — free functions then synthetic constructors — so
+    // `stack_effect` can size an `Op::Call` into a constructor as well as a free function.
+    let mut arities: Vec<usize> = order.iter().map(|f| f.params.len()).collect();
+    for c in &class_decls {
+        arities.push(ctor_parts(c).0.len());
+    }
+
+    let mut functions = Vec::with_capacity(nfree + class_decls.len());
     for f in &order {
-        let mut c = Compiler {
-            chunk: Chunk::new(),
-            locals: Vec::new(),
-            scope_depth: 0,
-            fns: &fns,
-            arities: &arities,
-            variants: &variants,
-            enum_descs: &enum_descs,
-            match_bindings: Vec::new(),
-            height: 0,
-        };
+        let mut c = Compiler::new(
+            &fns,
+            &arities,
+            &variants,
+            &enum_descs,
+            &classes,
+            &class_descs,
+            &names_index,
+        );
         for p in &f.params {
             c.add_local(&p.name, type_tag(&p.ty));
         }
@@ -178,10 +240,109 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             chunk: c.chunk,
         });
     }
+    for (ci, cd) in class_decls.iter().enumerate() {
+        functions.push(compile_constructor(
+            cd,
+            ci,
+            &fns,
+            &arities,
+            &variants,
+            &enum_descs,
+            &classes,
+            &class_descs,
+            &names_index,
+        )?);
+    }
+
     Ok(BytecodeProgram {
         functions,
         main,
         enum_descs,
+        class_descs,
+        names,
+    })
+}
+
+/// The constructor's `(params, body)`, or `(&[], &[])` for a class with no explicit constructor
+/// (which still builds an empty instance — interpreter parity).
+fn ctor_parts(c: &ClassDecl) -> (&[CtorParam], &[Stmt]) {
+    for m in &c.members {
+        if let ClassMember::Constructor { params, body, .. } = m {
+            return (params, body);
+        }
+    }
+    (&[], &[])
+}
+
+/// A ctor param is *promoted* to a field iff it carries a visibility modifier (matching
+/// `interpreter::construct` / the checker's promotion rule).
+fn is_promoted(p: &CtorParam) -> bool {
+    p.modifiers.iter().any(|m| {
+        matches!(
+            m,
+            Modifier::Public | Modifier::Private | Modifier::Protected
+        )
+    })
+}
+
+/// Compile one class's synthetic constructor `<Class>::new` (decision P4-4). Layout: ctor params
+/// occupy slots `0..nparams`; the prologue loads the promoted params and `MakeInstance` builds the
+/// instance into slot `nparams`; the body runs for side effects with the instance live; the
+/// epilogue loads and returns that instance. The body's own `return`s are redirected to the
+/// epilogue (never an `Op::Return`), so — exactly like the interpreter — a ctor body cannot change
+/// the result: the promoted instance is always returned.
+#[allow(clippy::too_many_arguments)]
+fn compile_constructor<'a>(
+    c: &ClassDecl,
+    desc_idx: usize,
+    fns: &'a HashMap<String, FnMeta>,
+    arities: &'a [usize],
+    variants: &'a HashMap<String, VariantMeta>,
+    enum_descs: &'a [EnumDesc],
+    classes: &'a HashMap<String, usize>,
+    class_descs: &'a [ClassDesc],
+    names_index: &'a HashMap<String, usize>,
+) -> Result<Function, String> {
+    let (params, body) = ctor_parts(c);
+    let line = c.span.line;
+    let mut comp = Compiler::new(
+        fns,
+        arities,
+        variants,
+        enum_descs,
+        classes,
+        class_descs,
+        names_index,
+    );
+    for p in params {
+        comp.add_local(&p.name, type_tag(&p.ty));
+    }
+    comp.height = comp.locals.len();
+    // Prologue: load promoted params in declaration order, then build the instance. `MakeInstance`
+    // pops exactly those values (matching `class_descs[desc_idx].fields`), so the order lines up.
+    for (slot, p) in params.iter().enumerate() {
+        if is_promoted(p) {
+            comp.emit(Op::GetLocal(slot), line);
+        }
+    }
+    comp.emit(Op::MakeInstance(desc_idx), line);
+    let inst_slot = comp.add_local("$this", TyTag::Other);
+    // Body: returns are redirected to the epilogue (the body cannot change the constructed value).
+    comp.ctor_return_jumps = Some(Vec::new());
+    for s in body {
+        comp.stmt(s)?;
+    }
+    let jumps = comp.ctor_return_jumps.take().unwrap_or_default();
+    // Epilogue: every redirected `return` and the natural fall-through converge here.
+    for j in jumps {
+        comp.patch_jump(j);
+    }
+    comp.emit(Op::GetLocal(inst_slot), line);
+    comp.emit(Op::Return, line);
+    Ok(Function {
+        name: format!("{}::new", c.name),
+        arity: params.len(),
+        chunk: comp.chunk,
     })
 }
 
@@ -200,6 +361,36 @@ fn type_tag(ty: &Type) -> TyTag {
 }
 
 impl<'a> Compiler<'a> {
+    /// A fresh compiler for one function body, sharing the program-level tables (function/variant/
+    /// class indices, descriptor tables, name pool). Locals/chunk/height start empty; the caller
+    /// seeds params and (for constructors) toggles `ctor_return_jumps`.
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        fns: &'a HashMap<String, FnMeta>,
+        arities: &'a [usize],
+        variants: &'a HashMap<String, VariantMeta>,
+        enum_descs: &'a [EnumDesc],
+        classes: &'a HashMap<String, usize>,
+        class_descs: &'a [ClassDesc],
+        names_index: &'a HashMap<String, usize>,
+    ) -> Self {
+        Compiler {
+            chunk: Chunk::new(),
+            locals: Vec::new(),
+            scope_depth: 0,
+            fns,
+            arities,
+            variants,
+            enum_descs,
+            classes,
+            class_descs,
+            names_index,
+            match_bindings: Vec::new(),
+            height: 0,
+            ctor_return_jumps: None,
+        }
+    }
+
     fn emit(&mut self, op: Op, line: u32) {
         // Maintain the operand-stack height (saturating: control flow after a `Return`/`MatchFail`
         // is dead code whose height is never read). Branch merges reset `height` explicitly.
@@ -223,6 +414,8 @@ impl<'a> Compiler<'a> {
             Op::Print(n) => -(*n as isize),
             Op::Call(idx) => 1 - self.arities[*idx] as isize,
             Op::MakeEnum(idx) => 1 - self.enum_descs[*idx].arity as isize,
+            Op::MakeInstance(idx) => 1 - self.class_descs[*idx].fields.len() as isize,
+            Op::GetField(_) => 0, // pop instance, push field value
             // Terminal (end/redirect the frame): height afterward is dead code, never read.
             Op::Return | Op::MatchFail => 0,
         }
@@ -340,6 +533,23 @@ impl<'a> Compiler<'a> {
                 Ok(())
             }
             Stmt::Return { value, span } => {
+                // Inside a synthetic constructor body, a `return` does not yield the body's value:
+                // the interpreter discards it and always returns the promoted instance
+                // (`construct`). So evaluate any operand for its side effects, drop it, and jump to
+                // the ctor epilogue (which loads + returns the instance). The checker pins a ctor
+                // body's return type to `Unit`, so `value` is `None` or a unit-typed expression.
+                if self.ctor_return_jumps.is_some() {
+                    if let Some(e) = value {
+                        self.expr(e)?;
+                        self.emit(Op::Pop, span.line);
+                    }
+                    let j = self.emit_jump(Op::Jump(0), span.line);
+                    self.ctor_return_jumps
+                        .as_mut()
+                        .expect("ctor_return_jumps is Some")
+                        .push(j);
+                    return Ok(());
+                }
                 match value {
                     Some(e) => self.expr(e)?,
                     None => self.emit_const(Value::Unit, span.line),
@@ -411,8 +621,13 @@ impl<'a> Compiler<'a> {
             Expr::This(_) => {
                 return Err("`this` is not supported by the VM compiler yet (M2 P4)".into())
             }
-            Expr::Member { .. } => {
-                return Err("member access is not supported by the VM compiler yet (M2 P4)".into())
+            Expr::Member { object, name, span } => {
+                // Field read: evaluate the object, then look its field up at runtime by name
+                // (decision P4-5). Runtime lookup keeps the compiler untyped; the fault on a miss
+                // is byte-identical to the interpreter's.
+                self.expr(object)?;
+                let idx = self.field_name_index(name)?;
+                self.emit(Op::GetField(idx), span.line);
             }
             Expr::Index { .. } => return Err("indexing is not supported (M1 surface)".into()),
             Expr::Match {
@@ -560,10 +775,17 @@ impl<'a> Compiler<'a> {
                 self.emit(Op::MakeEnum(idx), line);
                 return Ok(());
             }
-            // A non-function, non-variant identifier call is a class constructor — that lands at P4b.
-            return Err(format!(
-                "calling `{name}` is not supported by the VM compiler yet (M2 P4)"
-            ));
+            // A class constructor: `ClassName(args)` calls the synthetic `<Class>::new`, which
+            // promotes its params into fields and returns the instance (decision P4-4).
+            if let Some(&ctor_idx) = self.classes.get(name) {
+                for a in args {
+                    self.expr(a)?;
+                }
+                self.emit(Op::Call(ctor_idx), line);
+                return Ok(());
+            }
+            // Unreachable for checker-validated programs; mirrors `interpreter::eval_call`'s wording.
+            return Err(format!("`{name}` is not a function, variant, or class"));
         }
         Err("method calls are not supported by the VM compiler yet (M2 P4)".into())
     }
@@ -642,6 +864,16 @@ impl<'a> Compiler<'a> {
         self.patch_jump(exit_jump);
         self.end_scope(line); // pops $for_idx, $for_list
         Ok(())
+    }
+
+    /// Resolve a field/member name to its index in the program's `names` pool (for `GetField`). The
+    /// pool is pre-built from every declared field name, so a checker-valid read always resolves;
+    /// an unknown name would be a compiler bug.
+    fn field_name_index(&self, name: &str) -> Result<usize, String> {
+        self.names_index
+            .get(name)
+            .copied()
+            .ok_or_else(|| format!("unknown field `{name}`"))
     }
 
     /// Resolve a `match`-arm binding by name (innermost shadows). Returns the `$match` slot and the
@@ -889,11 +1121,35 @@ mod tests {
     }
 
     #[test]
-    fn class_call_still_rejected_as_p4() {
-        // a name that is neither a function nor `println` is a variant/class → P4.
+    fn undefined_call_target_rejected() {
+        // A name that is neither a function, `println`, a variant, nor a declared class is rejected
+        // with the interpreter's wording (checker-unreachable; defensive compiler path).
         let src = r#"function main() { println("{Circle(2.0)}"); }"#;
         let e = run(src).unwrap_err();
-        assert!(e.contains("M2 P4"), "{e}");
+        assert!(e.contains("not a function, variant, or class"), "{e}");
+    }
+
+    #[test]
+    fn class_construction_and_field_read() {
+        let src = r#"class Point { constructor(public int x, public int y) {} }
+            function main() { Point p = Point(3, 4); println("{p.x},{p.y}"); }"#;
+        assert_eq!(out(src), "3,4\n");
+    }
+
+    #[test]
+    fn constructor_body_runs_for_side_effects() {
+        // The promoted instance is the result; the body's `println` is a side effect.
+        let src = r#"class Greeter { constructor(public string name) { println("made {name}"); } }
+            function main() { Greeter g = Greeter("Ada"); println("hi {g.name}"); }"#;
+        assert_eq!(out(src), "made Ada\nhi Ada\n");
+    }
+
+    #[test]
+    fn constructor_early_return_still_yields_instance() {
+        // A bare `return;` exits the body early but the promoted instance is still returned.
+        let src = r#"class C { constructor(public int x) { if (x > 0) { return; } println("np"); } }
+            function main() { C a = C(5); println("{a.x}"); C b = C(0); println("{b.x}"); }"#;
+        assert_eq!(out(src), "5\nnp\n0\n");
     }
 
     #[test]

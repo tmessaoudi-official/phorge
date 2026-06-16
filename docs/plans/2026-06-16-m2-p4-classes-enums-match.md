@@ -133,18 +133,39 @@ Each wave is TDD-first (differential tests before the op work), ends green
       shared by both backends (not a parity issue). Transient-context coverage instead uses
       `match` as a binary operand and `match` nested in an arm body.
 
-### P4b — Classes: construction + field reads
+### P4b — Classes: construction + field reads ✅ DONE (2026-06-16)
 
-- [ ] **B1 (test):** differential programs — class with promoted fields, field reads in
-      interpolation/arithmetic, an `agree_err` `no field` case.
-- [ ] **B2:** `chunk.rs` — `Op::MakeInstance`, `GetField`; `ClassDesc` (promoted-field names,
-      ctor fn index); `validate` arms.
-- [ ] **B3:** `vm.rs` — `MakeInstance` (pop promoted fields → `Value::Instance`), `GetField`
-      (runtime lookup + parity fault).
-- [ ] **B4:** `compiler.rs` — compile each constructor as a synthetic function (`MakeInstance`
-      + body with `this`); resolve `ClassName(args)` to `Call` into it; `compile_member` field
-      read. Remove the `Expr::Member` + class-ctor-call stubs (method-call stub stays).
-- [ ] **B5:** suite green; commit `feat(vm): classes — construction + field reads (M2 P4b)`.
+- [x] **B1 (test):** added `P4B_PROGRAMS` to `tests/differential.rs` (8 agree-path programs: promoted
+      fields, field reads in interpolation, field-via-typed-local arithmetic, side-effecting ctor
+      body, no-ctor empty instance, structural instance equality, promoted-vs-bare param, field as a
+      call arg, early-`return` ctor) **and** a real `agree_err` `no field` case — reachable because
+      an explicit (uninitialized) `Field` member type-checks but is unpopulated by construction (a
+      runtime fault on both backends, unlike P4a's checker-enforced exhaustiveness). Added a
+      `FaultKind::NoField` classifier (by `"no field"` body substring, tolerating the VM line prefix).
+- [x] **B2:** `chunk.rs` — added `Op::MakeInstance`/`GetField`; `ClassDesc { class, fields }`
+      (promoted-field names); a program-level `names` field-name pool on `BytecodeProgram`; extended
+      `validate` (class-descriptor bounds for `MakeInstance`; name-pool bounds for `GetField`).
+- [x] **B3:** `vm.rs` — `exec_op` arms for both ops; `GetField`'s `no field`/`cannot read` faults
+      byte-identical to the interpreter (`Expr::Member`).
+- [x] **B4:** `compiler.rs` — class pre-pass builds `ClassDesc`s + the name pool; each constructor
+      compiles to a synthetic `<Class>::new` (indexed *after* all free functions, so free/`main`
+      indices are unchanged) via a `compile_constructor` helper: promoted-param `MakeInstance`
+      prologue → body → epilogue that loads + returns the instance. `ClassName(args)` resolves to a
+      `Call` into it; `Expr::Member` lowers to `GetField`. Removed the member + class-ctor-call stubs
+      (the `this`/method-call stubs stay for P4c). Added `Compiler::new` to share the program tables.
+- [x] **B5:** suite green (239 tests), clippy + fmt clean; committed.
+      **As-built notes:**
+      - **Ctor body `return` redirect:** the checker pins a ctor body's return type to `Unit`, and
+        `interpreter::construct` discards the body's return and always yields the promoted instance.
+        The synthetic ctor mirrors this by redirecting body `return`s to the epilogue (never an
+        `Op::Return`), so an early `return;` cannot change the constructed value. A new
+        `ctor_return_jumps` compiler field carries the redirect.
+      - **`this` deferred to P4c:** the `Expr::This` stub stays — P4b ctor bodies reference promoted
+        params by name (resolved as locals), not via `this`. `examples/grades.phg` runs at P4c (it
+        calls an instance method).
+      - **`num_ty(Member)` gap (pre-existing, Wave 4):** a field read used as the *direct left
+        operand* of arithmetic isn't classifiable by the coarse `TyTag` (can't recover field types
+        yet — same gap as `Index`). Not in the corpus; field reads work in every other position.
 
 ### P4c — Methods + `this`
 

@@ -32,6 +32,11 @@ enum FaultKind {
     ModZero,
     StackOverflow,
     Unsupported,
+    /// Reading a field absent from an instance — a checker-valid, runtime-reachable fault when an
+    /// explicit (uninitialized) `Field` member is read (construction only populates promoted ctor
+    /// params). Classified by body substring so the VM's line prefix doesn't split it from the
+    /// interpreter's prefix-less rendering (M2 P4b).
+    NoField,
     /// Anything the corpus doesn't yet classify — carried verbatim so a mismatch stays legible.
     Other(String),
 }
@@ -48,6 +53,8 @@ fn classify(err: &str) -> FaultKind {
         FaultKind::ModZero
     } else if err.contains("stack overflow") {
         FaultKind::StackOverflow
+    } else if err.contains("no field") {
+        FaultKind::NoField
     } else if err.contains("unsupported") || err.contains("compile error") {
         FaultKind::Unsupported
     } else {
@@ -213,6 +220,57 @@ fn p4a_programs_match_between_backends() {
     for src in P4A_PROGRAMS {
         agree(src);
     }
+}
+
+/// P4b: classes — construction (incl. constructor promotion + body side effects) and field reads.
+/// Each must run identically on both backends.
+const P4B_PROGRAMS: &[&str] = &[
+    // promoted fields; field reads in interpolation
+    r#"class Point { constructor(public int x, public int y) {} }
+       function main() { Point p = Point(3, 4); println("{p.x},{p.y}"); }"#,
+    // field read flowing through a typed local, then used as an arithmetic operand
+    r#"class Point { constructor(public int x, public int y) {} }
+       function main() { Point p = Point(3, 4); int s = p.x; println("{s + p.y}"); }"#,
+    // constructor *body* runs for side effects (a `println` in the ctor), using a promoted param
+    r#"class Greeter { constructor(public string name) { println("made {name}"); } }
+       function main() { Greeter g = Greeter("Ada"); println("hello {g.name}"); }"#,
+    // a no-constructor class builds an empty instance; structural instance equality
+    r#"class Empty {}
+       function main() { Empty a = Empty(); Empty b = Empty(); println("{a == b}"); }"#,
+    // instance equality is structural over fields (same class + equal fields)
+    r#"class P { constructor(public int x) {} }
+       function main() { P a = P(1); P b = P(1); P c = P(2); println("{a == b} {a == c}"); }"#,
+    // only *promoted* params become fields (the bare `seed` param is not a field)
+    r#"class Acc { constructor(public int total, int seed) {} }
+       function main() { Acc a = Acc(10, 99); println("{a.total}"); }"#,
+    // a field read as a call argument
+    r#"class Box { constructor(public int v) {} }
+       function dbl(int n) -> int { return n * 2; }
+       function main() { Box b = Box(21); println("{dbl(b.v)}"); }"#,
+    // a bare `return;` in the ctor body is an early exit, but the promoted instance is *still*
+    // returned (interpreter parity) — exercises the synthetic ctor's epilogue redirect.
+    r#"class C { constructor(public int x) { if (x > 0) { return; } println("nonpos"); } }
+       function main() { C a = C(5); println("{a.x}"); C b = C(0); println("{b.x}"); }"#,
+];
+
+#[test]
+fn p4b_programs_match_between_backends() {
+    for src in P4B_PROGRAMS {
+        agree(src);
+    }
+}
+
+/// P4b error parity: reading an explicit (uninitialized) `Field` member type-checks — the checker
+/// registers it as a field — but construction only populates *promoted* ctor params, so the read
+/// faults `no field` identically on both backends at *runtime* (not at the check stage). This is
+/// the field-read analogue of the runtime backstop; it is genuinely reachable (unlike P4a's
+/// checker-enforced exhaustiveness), so it gets a real `agree_err` case.
+#[test]
+fn p4b_field_miss_faults_identically() {
+    agree_err(
+        r#"class Box { public int tag; constructor(public int x) {} }
+           function main() { Box b = Box(5); println("{b.tag}"); }"#,
+    );
 }
 
 #[test]

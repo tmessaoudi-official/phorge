@@ -13,7 +13,8 @@
 use crate::chunk::{BytecodeProgram, Op};
 use crate::diagnostic::Diagnostic;
 use crate::limits::MAX_CALL_DEPTH;
-use crate::value::{EnumVal, Value};
+use crate::value::{EnumVal, Instance, Value};
+use std::collections::HashMap;
 
 /// Whether the dispatch loop should fetch the next instruction or stop (the `main` frame
 /// returned). Lets the per-op `exec_op` signal completion without owning the run loop.
@@ -318,6 +319,31 @@ impl<'a> Vm<'a> {
             // Checker-unreachable backstop: the canonical fault, byte-identical to the
             // interpreter's `eval_match` fall-through (the `agree_err` oracle classifies by body).
             Op::MatchFail => return Err("non-exhaustive match at runtime".to_string()),
+
+            // --- P4b: classes ---
+            Op::MakeInstance(idx) => {
+                // Clone the descriptor's class + field names so the `&self.program` borrow ends
+                // before `split_off` takes `&mut self` (mirrors `MakeEnum`).
+                let desc = self.program.class_descs[idx].clone();
+                let values = self.split_off(desc.fields.len());
+                let fields: HashMap<String, Value> = desc.fields.into_iter().zip(values).collect();
+                self.stack.push(Value::Instance(Box::new(Instance {
+                    class: desc.class,
+                    fields,
+                })));
+            }
+            Op::GetField(idx) => {
+                let name = self.program.names[idx].clone();
+                match self.pop() {
+                    Value::Instance(inst) => match inst.fields.get(&name) {
+                        Some(v) => self.stack.push(v.clone()),
+                        // Byte-identical to the interpreter (`Expr::Member`): a checker-valid but
+                        // unpopulated explicit `Field` read faults here at runtime.
+                        None => return Err(format!("no field `{name}` on `{}`", inst.class)),
+                    },
+                    v => return Err(format!("cannot read `.{name}` on {}", v.type_name())),
+                }
+            }
         }
         Ok(Flow::Next)
     }
@@ -454,6 +480,8 @@ mod tests {
             }],
             main: 0,
             enum_descs: Vec::new(),
+            class_descs: Vec::new(),
+            names: Vec::new(),
         };
         Vm::new(&program).run().map_err(|d| d.to_string())
     }
@@ -675,6 +703,8 @@ mod tests {
             ],
             main: 0,
             enum_descs: Vec::new(),
+            class_descs: Vec::new(),
+            names: Vec::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "7\n");
     }
@@ -709,6 +739,8 @@ mod tests {
                 variant: "Some".into(),
                 arity: 1,
             }],
+            class_descs: Vec::new(),
+            names: Vec::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "true\n7\n");
     }
@@ -742,7 +774,68 @@ mod tests {
                     arity: 1,
                 },
             ],
+            class_descs: Vec::new(),
+            names: Vec::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "false\n");
+    }
+
+    #[test]
+    fn make_instance_then_get_field() {
+        use crate::chunk::ClassDesc;
+        // class Point { x, y }: build Point(3, 4) into slot 0, then read `.x` (names[0]) -> 3.
+        let mut c = Chunk::new();
+        let three = c.add_const(Value::Int(3));
+        let four = c.add_const(Value::Int(4));
+        c.emit(Op::Const(three), 1);
+        c.emit(Op::Const(four), 1);
+        c.emit(Op::MakeInstance(0), 1); // [Point{x:3,y:4}] becomes slot 0
+        c.emit(Op::GetLocal(0), 1);
+        c.emit(Op::GetField(0), 1); // names[0] == "x"
+        c.emit(Op::Print(1), 1);
+        term(&mut c);
+        let program = BytecodeProgram {
+            functions: vec![Function {
+                name: "main".into(),
+                arity: 0,
+                chunk: c,
+            }],
+            main: 0,
+            enum_descs: Vec::new(),
+            class_descs: vec![ClassDesc {
+                class: "Point".into(),
+                fields: vec!["x".into(), "y".into()],
+            }],
+            names: vec!["x".into()],
+        };
+        assert_eq!(Vm::new(&program).run().unwrap(), "3\n");
+    }
+
+    #[test]
+    fn get_field_absent_faults_like_interpreter() {
+        use crate::chunk::ClassDesc;
+        // Empty instance, read missing field `tag` (names[0]) -> `no field` fault (parity).
+        let mut c = Chunk::new();
+        c.emit(Op::MakeInstance(0), 1); // [Empty{}] slot 0
+        c.emit(Op::GetLocal(0), 1);
+        c.emit(Op::GetField(0), 1);
+        c.emit(Op::Print(1), 1);
+        term(&mut c);
+        let program = BytecodeProgram {
+            functions: vec![Function {
+                name: "main".into(),
+                arity: 0,
+                chunk: c,
+            }],
+            main: 0,
+            enum_descs: Vec::new(),
+            class_descs: vec![ClassDesc {
+                class: "Empty".into(),
+                fields: Vec::new(),
+            }],
+            names: vec!["tag".into()],
+        };
+        let err = Vm::new(&program).run().unwrap_err().to_string();
+        assert!(err.contains("no field `tag` on `Empty`"), "{err}");
     }
 }
