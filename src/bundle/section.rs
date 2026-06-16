@@ -19,3 +19,43 @@ pub fn find_section(bytes: &[u8]) -> Option<&[u8]> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bundle::container::encode_container;
+
+    #[test]
+    fn dispatch_unknown_magic_is_none() {
+        assert_eq!(find_section(b"\0\0\0\0not an exe"), None);
+        assert_eq!(find_section(b""), None);
+    }
+
+    #[test]
+    fn dispatch_routes_pe_to_pe_reader() {
+        // An MZ image carrying a `.phorge` section with a real container: find_section must sniff PE,
+        // route to the PE reader, and return the raw container that decodes back to the source.
+        let payload = encode_container(b"function main() { println(\"pe\"); }");
+        let mut img = vec![0u8; 0x40];
+        img[0] = b'M';
+        img[1] = b'Z';
+        img[0x3C..0x40].copy_from_slice(&0x40u32.to_le_bytes());
+        img.extend_from_slice(b"PE\0\0");
+        let mut coff = [0u8; 20];
+        coff[2..4].copy_from_slice(&1u16.to_le_bytes());
+        img.extend_from_slice(&coff);
+        let sh_off = img.len();
+        let mut sh = [0u8; 40];
+        sh[..7].copy_from_slice(b".phorge");
+        img.extend_from_slice(&sh);
+        let ptr = img.len() as u32;
+        img[sh_off + 16..sh_off + 20].copy_from_slice(&(payload.len() as u32).to_le_bytes());
+        img[sh_off + 20..sh_off + 24].copy_from_slice(&ptr.to_le_bytes());
+        img.extend_from_slice(&payload);
+        let got = find_section(&img).expect("section");
+        assert_eq!(
+            crate::bundle::container::decode_container(got).as_deref(),
+            Some(&b"function main() { println(\"pe\"); }"[..])
+        );
+    }
+}
