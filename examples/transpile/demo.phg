@@ -1,0 +1,26 @@
+import std.io;
+
+// This program is also in the byte-identity sweep. `phorge transpile` turns it into
+// runnable PHP 8.x — the only Phorge↔PHP-ecosystem path (output, not input).
+
+enum Shape {
+    Circle(float r),
+    Square(float side),
+}
+
+class Named {
+    constructor(private string label) {}
+    function label_of() -> string { return label; }
+}
+
+function area(Shape s) -> float {
+    return match s {
+        Circle(r)    => 3.14159 * r * r,
+        Square(side) => side * side,
+    };
+}
+
+function main() {
+    Named n = Named("demo");
+    println("{n.label_of()}: circle area = {area(Circle(2.0))}");
+}

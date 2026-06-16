@@ -51,6 +51,28 @@ fn transpile_sample_exits_0_with_php() {
     assert!(String::from_utf8_lossy(&out.stdout).starts_with("<?php"));
 }
 
+/// The committed `examples/transpile/demo.php` must equal freshly-generated output, so transpiler
+/// drift fails the suite (regenerate with `phorge transpile examples/transpile/demo.phg > …`).
+#[test]
+fn transpile_demo_matches_committed_php() {
+    let expected =
+        std::fs::read_to_string("examples/transpile/demo.php").expect("read committed demo.php");
+    let out = Command::new(BIN)
+        .args(["transpile", "examples/transpile/demo.phg"])
+        .output()
+        .expect("spawn phorge");
+    assert!(
+        out.status.success(),
+        "transpile exit {:?}",
+        out.status.code()
+    );
+    let actual = String::from_utf8(out.stdout).expect("utf-8 php");
+    assert_eq!(
+        actual, expected,
+        "generated PHP drifted from examples/transpile/demo.php — regenerate it"
+    );
+}
+
 /// The strongest correctness signal: the emitted PHP, run by a real `php`, prints exactly
 /// what the interpreter prints. Self-skips (passes) if `php` is not on PATH.
 #[test]

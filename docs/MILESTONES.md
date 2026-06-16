@@ -1,7 +1,9 @@
 # Phorge Milestones
 
 Living status doc. Frozen design lives in `docs/specs/2026-06-15-phorge-language-design.md`
-(§5 = roadmap). Per-milestone plans live in `docs/plans/`.
+(§5 = roadmap). Per-milestone plans live in `docs/plans/`. `examples/README.md` is the living
+showcase of the runnable language surface (every example byte-identical on both backends + the
+Phorge→PHP transpile bridge).
 
 ## M1 — Tree-walking interpreter + transpiler — ✅ COMPLETE (2026-06-15, `9da6e56`)
 

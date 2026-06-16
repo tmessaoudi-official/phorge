@@ -6,6 +6,26 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Examples — full-coverage showcase (2026-06-16) — **docs/tests**
+A living example set covering the entire runnable language surface, plus the Phorge→PHP bridge. See
+`docs/specs/2026-06-16-examples-coverage-design.md` + `docs/plans/2026-06-16-examples-coverage.md`.
+
+- **Added**
+  - Four real-world programs (`examples/realworld/{ledger,library,shop,rpg}.phg`) and six focused
+    guide programs (`examples/guide/{operators,control-flow,collections,classes,enums-match,strings}.phg`),
+    each exercising a different slice of the surface; an `examples/README.md` index + coverage matrix.
+  - `examples/transpile/{demo.phg,demo.php,README.md}` — the Phorge→PHP transpile bridge (the only
+    PHP-ecosystem path: output, not input), with a `tests/cli.rs::transpile_demo_matches_committed_php`
+    snapshot test that fails on transpiler drift.
+- **Changed**
+  - `tests/differential.rs` now **globs `examples/**/*.phg`** instead of listing examples explicitly,
+    so every current and future example is byte-identity-gated with no test edit.
+- **Notes** (honest boundary, documented in `examples/README.md`)
+  - Zero-payload enum variants need call form `V()` to construct **and** in a `match` pattern — a
+    bare `V =>` arm is a catch-all binding (a silent logic bug both backends agree on).
+  - `import` is decorative (no module resolution until M5); `null`/`T?`/`Map`/`Set`/`|>`/exceptions
+    /traits/overloading remain M3+ and are deliberately absent.
+
 ### M2 P5a — `Rc`-shared heap objects (2026-06-16) — **object-path perf**
 Makes compound heap objects *shared* instead of *deep-cloned*. The M1 heap is immutable + acyclic
 (no reassignment, no field mutation, args evaluated before the instance exists), so `Rc` is both
