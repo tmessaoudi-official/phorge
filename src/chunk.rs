@@ -107,6 +107,54 @@ pub struct BytecodeProgram {
     pub main: usize,
 }
 
+impl BytecodeProgram {
+    /// Check that every index-carrying instruction references something in range, before the VM
+    /// executes a single op. An out-of-range `Const`/`Call`/jump is always a *compiler* bug, never
+    /// user error — but surfacing it as a clean `Err` (rather than a bare `index out of bounds`
+    /// panic, or a silent wrong read) keeps the VM's no-crash contract (EV-7). Slot operands
+    /// (`GetLocal`/`SetLocal`) can't be range-checked here — their bound is the runtime locals
+    /// window, not anything static — so they stay covered by the VM's `frame_slot` debug-assert.
+    ///
+    /// P4 adds index-carrying ops (`MakeInstance`, `GetField(idx)`, `MatchTag`) that multiply this
+    /// surface; extend the match below in lockstep (see memory `op-variant-match-coupling`).
+    pub fn validate(&self) -> Result<(), String> {
+        let nfns = self.functions.len();
+        if self.main >= nfns {
+            return Err(format!(
+                "invalid bytecode: main index {} out of range ({nfns} functions)",
+                self.main
+            ));
+        }
+        for (fi, f) in self.functions.iter().enumerate() {
+            let code_len = f.chunk.code.len();
+            let const_len = f.chunk.consts.len();
+            for (ip, op) in f.chunk.code.iter().enumerate() {
+                let problem = match op {
+                    Op::Const(i) if *i >= const_len => Some(format!(
+                        "const index {i} out of range (pool has {const_len})"
+                    )),
+                    Op::Call(idx) if *idx >= nfns => {
+                        Some(format!("call target {idx} out of range ({nfns} functions)"))
+                    }
+                    // Absolute targets; `== code_len` is the legal "fall off the end → implicit
+                    // return" landing the run loop already handles, so only `>` is invalid.
+                    Op::Jump(t) | Op::JumpIfFalse(t) if *t > code_len => Some(format!(
+                        "jump target {t} out of range (code len {code_len})"
+                    )),
+                    _ => None,
+                };
+                if let Some(what) = problem {
+                    return Err(format!(
+                        "invalid bytecode in fn `{}` (#{fi}) at ip {ip}: {what}",
+                        f.name
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,6 +175,64 @@ mod tests {
         c.emit(Op::Return, 2);
         assert_eq!(c.code.len(), 2);
         assert_eq!(c.lines, vec![1, 2]);
+    }
+
+    #[test]
+    fn validate_accepts_a_well_formed_program() {
+        let mut c = Chunk::new();
+        let k = c.add_const(Value::Int(1));
+        c.emit(Op::Const(k), 1);
+        c.emit(Op::Jump(2), 1); // == code_len after the next emit: legal "fall off → return"
+        c.emit(Op::Return, 1);
+        let prog = BytecodeProgram {
+            functions: vec![Function {
+                name: "main".into(),
+                arity: 0,
+                chunk: c,
+            }],
+            main: 0,
+        };
+        assert_eq!(prog.validate(), Ok(()));
+    }
+
+    #[test]
+    fn validate_rejects_out_of_range_const() {
+        let mut c = Chunk::new(); // empty const pool
+        c.emit(Op::Const(99), 1);
+        c.emit(Op::Return, 1);
+        let prog = BytecodeProgram {
+            functions: vec![Function {
+                name: "main".into(),
+                arity: 0,
+                chunk: c,
+            }],
+            main: 0,
+        };
+        let err = prog.validate().unwrap_err();
+        assert!(err.contains("invalid bytecode"), "{err}");
+        assert!(err.contains("const index 99"), "{err}");
+    }
+
+    #[test]
+    fn validate_rejects_out_of_range_call_and_bad_main() {
+        let mut c = Chunk::new();
+        c.emit(Op::Call(7), 1); // only 1 function exists
+        c.emit(Op::Return, 1);
+        let prog = BytecodeProgram {
+            functions: vec![Function {
+                name: "main".into(),
+                arity: 0,
+                chunk: c,
+            }],
+            main: 0,
+        };
+        assert!(prog.validate().unwrap_err().contains("call target 7"));
+
+        let bad_main = BytecodeProgram {
+            functions: vec![],
+            main: 0,
+        };
+        assert!(bad_main.validate().unwrap_err().contains("main index 0"));
     }
 
     #[test]

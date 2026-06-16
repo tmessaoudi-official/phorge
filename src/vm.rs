@@ -41,6 +41,9 @@ impl<'a> Vm<'a> {
     /// Execute the program from `main`, returning captured output (`Ok`) or a runtime
     /// error (`Err`).
     pub fn run(mut self) -> Result<String, String> {
+        // Fail fast on malformed bytecode (a compiler bug) with a clean error instead of a panic
+        // mid-execution — keeps the no-crash contract (EV-7). See `BytecodeProgram::validate`.
+        self.program.validate()?;
         self.frames.push(Frame {
             func: self.program.main,
             ip: 0,
@@ -149,13 +152,15 @@ impl<'a> Vm<'a> {
                 }
                 Op::GetLocal(slot) => {
                     let base = self.frames[fr].slot_base;
-                    let v = self.stack[base + slot].clone();
+                    let idx = self.frame_slot(base, slot);
+                    let v = self.stack[idx].clone();
                     self.stack.push(v);
                 }
                 Op::SetLocal(slot) => {
                     let base = self.frames[fr].slot_base;
                     let v = self.pop();
-                    self.stack[base + slot] = v;
+                    let idx = self.frame_slot(base, slot);
+                    self.stack[idx] = v;
                 }
 
                 Op::Jump(target) => self.frames[fr].ip = target,
@@ -226,7 +231,7 @@ impl<'a> Vm<'a> {
                         return Err("stack overflow".to_string());
                     }
                     let arity = self.program.functions[idx].arity;
-                    let slot_base = self.stack.len() - arity;
+                    let slot_base = self.pop_n_start(arity);
                     self.frames.push(Frame {
                         func: idx,
                         ip: 0,
@@ -249,6 +254,12 @@ impl<'a> Vm<'a> {
     /// push the return value onto the caller's stack (decision P3-2).
     fn do_return(&mut self, rv: Value) {
         let base = self.frames[self.frames.len() - 1].slot_base;
+        debug_assert!(
+            base <= self.stack.len(),
+            "vm return base {base} > stack len {} (func {})",
+            self.stack.len(),
+            self.frames.last().map_or(usize::MAX, |f| f.func)
+        );
         self.stack.truncate(base);
         self.frames.pop();
         if !self.frames.is_empty() {
@@ -260,10 +271,38 @@ impl<'a> Vm<'a> {
         self.stack.pop().expect("vm stack underflow (compiler bug)")
     }
 
+    /// Start index for popping the top `n` values. Real work in every build (`len - n`); the
+    /// debug-only guard turns a compiler-bug underflow (which would wrap and then panic with a
+    /// bare `index out of bounds`) into a labelled stack-desync assert. The compiler guarantees
+    /// `n <= stack.len()`.
+    fn pop_n_start(&self, n: usize) -> usize {
+        debug_assert!(
+            n <= self.stack.len(),
+            "vm stack underflow: need {n} values, stack has {} (func {})",
+            self.stack.len(),
+            self.frames.last().map_or(usize::MAX, |f| f.func)
+        );
+        self.stack.len() - n
+    }
+
+    /// Absolute stack index of local `slot` within the frame whose window opens at `base`. The
+    /// debug-only guard catches a slot outside the live locals window — the desync most likely to
+    /// be introduced once P4/P5 mutate the stack as a GC root set — before the raw index panics.
+    fn frame_slot(&self, base: usize, slot: usize) -> usize {
+        let idx = base + slot;
+        debug_assert!(
+            idx < self.stack.len(),
+            "vm local out of range: base {base} + slot {slot} = {idx} >= stack len {} (func {})",
+            self.stack.len(),
+            self.frames.last().map_or(usize::MAX, |f| f.func)
+        );
+        idx
+    }
+
     /// Pop the top `n` values, returning them in stack order (bottom-most first).
     /// The compiler guarantees `n <= stack.len()`.
     fn split_off(&mut self, n: usize) -> Vec<Value> {
-        let start = self.stack.len() - n;
+        let start = self.pop_n_start(n);
         self.stack.split_off(start)
     }
 
@@ -359,6 +398,30 @@ mod tests {
         c.emit(Op::Print(1), 1);
         term(&mut c);
         c
+    }
+
+    #[test]
+    fn run_rejects_invalid_bytecode_before_executing() {
+        // Out-of-range const: `validate()` (run's first action) must fault cleanly, not panic.
+        let mut c = Chunk::new();
+        c.emit(Op::Const(42), 1); // empty const pool
+        c.emit(Op::Return, 1);
+        let err = run_chunk(c).unwrap_err();
+        assert!(err.contains("invalid bytecode"), "{err}");
+        assert!(err.contains("const index 42"), "{err}");
+    }
+
+    // Debug-only: `debug_assert!` is a no-op in release, so this `should_panic` test only holds
+    // under `cfg(debug_assertions)`. A `GetLocal` past the (empty) main locals window passes
+    // `validate()` — slots aren't statically checkable — and trips `frame_slot`'s guard.
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "vm local out of range")]
+    fn getlocal_past_window_trips_debug_assert() {
+        let mut c = Chunk::new();
+        c.emit(Op::GetLocal(5), 1);
+        c.emit(Op::Return, 1);
+        let _ = run_chunk(c);
     }
 
     #[test]
