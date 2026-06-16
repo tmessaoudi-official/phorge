@@ -5,6 +5,7 @@ pub mod container;
 pub mod cross;
 mod elf;
 mod macho;
+mod pe;
 pub mod section;
 
 pub use container::encode_container;

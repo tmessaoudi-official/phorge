@@ -1,6 +1,6 @@
 //! Magic-sniffing dispatcher: locate the phorge payload section in an executable image of any
 //! supported object format. Unknown/malformed magic → None (caller falls through to the CLI).
-use crate::bundle::elf;
+use crate::bundle::{elf, pe};
 
 /// Canonical phorge payload identifiers. ELF + PE use a named section; Mach-O uses segment+section.
 pub const ELF_PE_SECTION: &str = ".phorge";
@@ -11,7 +11,8 @@ pub const MACHO_SECT: &str = "__source";
 pub fn find_section(bytes: &[u8]) -> Option<&[u8]> {
     match bytes.get(0..4)? {
         [0x7F, b'E', b'L', b'F'] => elf::elf_find_section(bytes, ELF_PE_SECTION),
-        // PE/COFF (Windows), Mach-O, and fat arms are wired in Wave B.
+        [b'M', b'Z', _, _] => pe::pe_find_section(bytes, ELF_PE_SECTION),
+        // Mach-O and fat arms are wired in B2/B3.
         _ => None,
     }
 }
