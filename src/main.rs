@@ -6,8 +6,8 @@ use std::process::exit;
 
 use phorge::cli;
 
-const USAGE: &str =
-    "usage: phorge <run|runvm|check|parse|lex|transpile|bench|build> <file> [-o out]";
+const USAGE: &str = "usage: phorge <run|runvm|check|parse|lex|transpile|bench|build> \
+                     <file | - | -e code> [-o out]   (phorge -h for help, -v for version)";
 
 fn main() {
     // Self-executing artifact: if this binary carries an embedded program, run it on the VM and
@@ -47,25 +47,18 @@ fn main() {
             exit(2);
         }
     };
-    let file = match args.get(2) {
-        Some(f) => f,
-        None => {
-            eprintln!("{USAGE}");
-            exit(2);
-        }
-    };
-    let src = match std::fs::read_to_string(file) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("cannot read {file}: {e}");
-            exit(1);
-        }
-    };
-    // `build` is special: it consumes an optional `-o <out>` and writes a binary instead of
-    // printing program output. Handle it before the generic print-the-result path. Accept ONLY an
-    // optional `-o <out>`; a dangling `-o`, an unrecognized trailing arg, or any extra argument is a
-    // usage error (exit 2) — never a silent default-named build.
+    // `build` keeps file-only source handling (Phase 1; cross targets extend it in Wave C). It
+    // consumes an optional `-o <out>`; a dangling `-o`, an unrecognized trailing arg, or any extra
+    // argument is a usage error (exit 2) — never a silent default-named build.
     if cmd == "build" {
+        let file = match args.get(2) {
+            Some(f) => f,
+            None => {
+                eprintln!("{USAGE}");
+                exit(2);
+            }
+        };
+        let src = read_source_file(file);
         let out = match args.get(3).map(String::as_str) {
             None => None,
             Some("-o") => match args.get(4).map(String::as_str) {
@@ -95,6 +88,16 @@ fn main() {
             }
         }
     }
+    // Run-family: resolve the source — <file> | - (stdin) | -e/--eval <code> | -- <file>.
+    let src = match cli::resolve_source(&args[2..]) {
+        Some(cli::SourceSpec::File(path)) => read_source_file(&path),
+        Some(cli::SourceSpec::Stdin) => read_stdin(),
+        Some(cli::SourceSpec::Inline(code)) => code,
+        None => {
+            eprintln!("{USAGE}");
+            exit(2);
+        }
+    };
     let result = match cmd {
         "run" => cli::cmd_run(&src),
         "runvm" => cli::cmd_runvm(&src),
@@ -112,4 +115,26 @@ fn main() {
             exit(1);
         }
     }
+}
+
+/// Read a program from a file path, exiting 1 with a message on failure.
+fn read_source_file(path: &str) -> String {
+    match std::fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("cannot read {path}: {e}");
+            exit(1);
+        }
+    }
+}
+
+/// Read a program from standard input, exiting 1 with a message on failure.
+fn read_stdin() -> String {
+    use std::io::Read;
+    let mut s = String::new();
+    if let Err(e) = std::io::stdin().read_to_string(&mut s) {
+        eprintln!("cannot read stdin: {e}");
+        exit(1);
+    }
+    s
 }

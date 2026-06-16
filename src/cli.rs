@@ -45,6 +45,31 @@ pub fn help_text() -> String {
     )
 }
 
+/// Where a command reads its program from, resolved from the args after the subcommand.
+#[derive(Debug, PartialEq, Eq)]
+pub enum SourceSpec {
+    /// Read the program from this file path.
+    File(String),
+    /// Read the program from standard input.
+    Stdin,
+    /// Run this inline program text directly.
+    Inline(String),
+}
+
+/// Resolve the program source from the args following the subcommand (`args[2..]`):
+/// `<file>` | `-` (stdin) | `-e <code>` / `--eval <code>` | `-- <file>`. Returns `None` on a usage
+/// error (missing source, dangling `-e`, an unknown leading-`-` arg, or extra positionals) — the
+/// caller prints usage and exits 2.
+pub fn resolve_source(rest: &[String]) -> Option<SourceSpec> {
+    match rest {
+        [flag, code] if flag == "-e" || flag == "--eval" => Some(SourceSpec::Inline(code.clone())),
+        [sep, path] if sep == "--" => Some(SourceSpec::File(path.clone())),
+        [one] if one == "-" => Some(SourceSpec::Stdin),
+        [one] if !one.starts_with('-') => Some(SourceSpec::File(one.clone())),
+        _ => None,
+    }
+}
+
 /// Run a pipeline closure on a worker thread with a large (256 MB) stack. The lexer is iterative,
 /// but the parser, checker, compiler, and tree-walking interpreter all recurse on the native stack
 /// in proportion to expression/call nesting. A generous, *known* stack makes the explicit depth
@@ -348,6 +373,40 @@ function main() {
     }
 }
 "#;
+
+    fn rest(parts: &[&str]) -> Vec<String> {
+        parts.iter().map(|s| (*s).to_string()).collect()
+    }
+
+    #[test]
+    fn resolve_source_handles_all_forms() {
+        assert_eq!(
+            resolve_source(&rest(&["prog.phg"])),
+            Some(SourceSpec::File("prog.phg".into()))
+        );
+        assert_eq!(resolve_source(&rest(&["-"])), Some(SourceSpec::Stdin));
+        assert_eq!(
+            resolve_source(&rest(&["-e", "x"])),
+            Some(SourceSpec::Inline("x".into()))
+        );
+        assert_eq!(
+            resolve_source(&rest(&["--eval", "y"])),
+            Some(SourceSpec::Inline("y".into()))
+        );
+        // `--` lets a path start with '-'.
+        assert_eq!(
+            resolve_source(&rest(&["--", "-weird.phg"])),
+            Some(SourceSpec::File("-weird.phg".into()))
+        );
+    }
+
+    #[test]
+    fn resolve_source_rejects_bad_forms() {
+        assert_eq!(resolve_source(&rest(&[])), None); // missing source
+        assert_eq!(resolve_source(&rest(&["-e"])), None); // -e without code
+        assert_eq!(resolve_source(&rest(&["-x"])), None); // unknown flag (use -- to pass it)
+        assert_eq!(resolve_source(&rest(&["a", "b"])), None); // too many positionals
+    }
 
     #[test]
     fn run_executes_sample() {

@@ -138,6 +138,51 @@ fn transpiled_php_runs_and_matches_interpreter() {
     );
 }
 
+#[test]
+fn run_reads_program_from_stdin() {
+    use std::io::Write;
+    use std::process::Stdio;
+    let mut child = Command::new(BIN)
+        .args(["run", "-"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("spawn phorge");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(br#"function main() { println("{1 + 2}"); }"#)
+        .unwrap();
+    let out = child.wait_with_output().expect("wait");
+    assert!(out.status.success(), "exit {:?}", out.status.code());
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "3\n");
+}
+
+#[test]
+fn run_eval_inline_code() {
+    for flag in ["-e", "--eval"] {
+        let out = Command::new(BIN)
+            .args(["run", flag, r#"function main() { println("{2 * 3}"); }"#])
+            .output()
+            .expect("spawn phorge");
+        assert!(out.status.success(), "{flag} exit {:?}", out.status.code());
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "6\n");
+    }
+}
+
+#[test]
+fn run_double_dash_then_path_is_a_file() {
+    let path = write_temp("dashdash", r#"function main() { println("ok"); }"#);
+    let out = Command::new(BIN)
+        .args(["run", "--", path.to_str().unwrap()])
+        .output()
+        .expect("spawn phorge");
+    let _ = std::fs::remove_file(&path);
+    assert!(out.status.success(), "exit {:?}", out.status.code());
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "ok\n");
+}
+
 /// Write `src` to a uniquely-named temp file so parallel tests never collide.
 fn write_temp(name: &str, src: &str) -> std::path::PathBuf {
     let path = std::env::temp_dir().join(format!("phorge_cli_{name}.phg"));
