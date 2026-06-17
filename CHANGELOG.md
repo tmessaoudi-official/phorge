@@ -26,8 +26,27 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 - New guide example `examples/guide/inference.phg` (auto byte-identity-gated by the differential
   harness).
 
-_Next: M3 S1 (indexing `xs[i]`, ranges `0..n`, expression `if`), then S2 (null-safety: `T?`, `??`,
-`?.`). M2.5 Phase 3 (CI stub registry; opt-in `--sign`) remains parked._
+### M3 slice S1 — core ergonomics
+
+- **List indexing `xs[i]`** — un-rejected in both backends (the checker already typed it), reusing the
+  bounds-checked `Op::Index`. An out-of-range read is a clean `list index out of range` runtime fault,
+  byte-identical across `run`/`runvm` (classified `FaultKind::IndexOob` in the differential harness).
+  Transpiles to `$xs[$i]`.
+- **Integer ranges `a..b` / `a..=b`** — exclusive / inclusive integer ranges, materialized to a
+  `List<int>` by the one new `Op::MakeRange(bool)` (which extends the three coupled matches —
+  `vm::exec_op`, `compiler::stack_effect`; `chunk::validate` needs no arm: no static index). Both
+  backends build the list via Rust's native `start..end` / `start..=end` (no counter overflow), so
+  `for (int i in 0..n)` works unchanged. The lexer adds `..` / `..=` (longest-match). Transpiles to PHP
+  `range()`; a non-int bound is `E-RANGE-TYPE` (a `phorge explain` entry).
+- **Expression `if`** — `if (c) { e } else { e }` in value position (`var x = if (c) { 1 } else { 2 };`).
+  Parens + a mandatory `else`; single-expression arms. Disambiguated from the statement `if` by parse
+  position; lowers to the existing branch ops (no new `Op`); transpiles to a PHP ternary.
+- New guide example `examples/guide/ergonomics.phg` (indexing + ranges + expression `if`),
+  auto byte-identity-gated and round-tripped through real PHP.
+- **S1.4 (smart-cast narrowing) deferred to S2** — it only narrows optionals (`T?`), which arrive in S2.
+
+_Next: M3 S2 (null-safety: `T?`, `??`, `?.`, `if (var x = opt)`, checked `opt!`, and S1.4 smart-cast —
+PHP-native nullable, no new `Op`). M2.5 Phase 3 (CI stub registry; opt-in `--sign`) remains parked._
 
 ## [0.4.0] — 2026-06-17
 

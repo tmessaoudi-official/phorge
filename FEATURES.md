@@ -23,7 +23,9 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Checked arithmetic | ✅ | int overflow & div-by-zero → clean runtime error, never a panic |
 | Local type inference: `var x = …;` | ✅ | inferred from the initializer; still fully static + immutable |
 | Type aliases: `type Name = T;` | ✅ | compile-time only, erased in the PHP output |
-| Indexing `xs[i]` | 🔲 M3 | rejected cleanly today |
+| Indexing `xs[i]` | ✅ | bounds-checked; out-of-range → clean runtime fault, never a panic |
+| Integer ranges `a..b` / `a..=b` | ✅ | materialize to `List<int>`; mainly `for (int i in 0..n)` |
+| Expression `if` | ✅ | `var x = if (c) { 1 } else { 2 };` (value position; `else` required) |
 | `Map` / `Set` / tuples | 🔲 M3 | |
 | Null safety / optionals (`T?`) | 🔲 M3 | |
 | Pipe operator `\|>` | 🔲 M3 | |

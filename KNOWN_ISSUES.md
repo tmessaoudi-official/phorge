@@ -10,7 +10,6 @@ parse error, non-zero exit) — never a crash.
 These are designed but not in the current surface; using them produces a clean compile-time error,
 not a panic:
 
-- Indexing (`xs[i]`)
 - `Map` / `Set` / tuples
 - Null safety / optionals (`T?`, `null`)
 - The pipe operator (`|>`) and the `is` operator
@@ -50,6 +49,15 @@ not a panic:
   construct **and** in a `match` pattern. A bare `V =>` arm is parsed as a catch-all *binding*, not a
   variant match — so it silently matches everything. Always use `V()` in patterns for nullary
   variants.
+- **Transpiled ranges differ from Phorge for an empty/reversed range.** A Phorge range `a..b` with
+  `a >= b` is *empty*; the emitted PHP uses `range($a, $b - 1)`, and PHP's `range()` *descends* when
+  the start exceeds the end rather than yielding `[]`. This is a transpile-only caveat — the Phorge
+  backends (`run`/`runvm`) treat an empty range as empty and stay byte-identical; only the
+  PHP-transpiled output diverges, and only for empty/reversed ranges. Use ascending, non-empty ranges
+  when round-tripping through PHP. (Parallel to the indexing-OOB transpile note.)
+- **Smart-cast narrowing arrives with optionals (S2).** Flow-sensitive narrowing (e.g. an optional
+  `T?` proven non-null inside `if (var x = opt)`) is part of the null-safety slice; until then there
+  are no optionals to narrow.
 
 ## Reporting
 

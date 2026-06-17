@@ -172,6 +172,10 @@ not). See [ROADMAP.md](ROADMAP.md) for Phase 2/3 details.
 - **`match`** — exhaustiveness-checked pattern matching over enum variants.
 - **String interpolation** — `"area = {area(s)}"`.
 - **`for ... in`** over lists — `for (int s in [80, 30, 55]) { ... }`.
+- **Indexing** — `xs[i]` reads a list element by position; an out-of-range read is a clean runtime
+  fault, never a silent wrong value.
+- **Integer ranges** — `0..n` (exclusive) and `0..=n` (inclusive), mainly for `for (int i in 0..n)`.
+- **Expression `if`** — `if (c) { e } else { e }` yields a value: `var x = if (c) { 1 } else { 2 };`.
 - **Checked arithmetic** — int overflow and division-by-zero are clean runtime errors, never panics.
 - **Sharp diagnostics** — type errors underline the offending span with a caret, suggest the nearest
   in-scope name on a typo, and carry a stable code you can look up with `phorge explain <CODE>`.

@@ -113,9 +113,20 @@ cycle/duplicate/built-in-shadow-checked in the checker, then expanded out of the
 `checker::expand_aliases` so the interpreter/VM/transpiler — and the PHP output — are alias-free);
 sharper diagnostics (caret-underlined span + did-you-mean hints + stable codes, `Diagnostic`
 construction centralized through `Diagnostic::new`, front-end-only so runtime parity is untouched); and
-`phorge explain <CODE>`. **Next: M3 S1** — indexing `xs[i]`, ranges `0..n`/`0..=n` (one new
-`Op::MakeRange`), expression `if`, smart-cast narrowing; then **S2** (null-safety: `T?`, `??`, `?.`,
-`if (var x = opt)`, checked `opt!` — PHP-native nullable, **no new `Op`**). **Parked:** M2.5 Phase 3
+`phorge explain <CODE>`. **Slice S1 (core ergonomics) is COMPLETE**
+(`docs/plans/2026-06-17-m3-s1-ergonomics.md`): list indexing `xs[i]` (un-rejected in both backends —
+the checker already typed it — reusing the bounds-checked `Op::Index`; OOB → byte-identical
+`"list index out of range"` fault, classified `FaultKind::IndexOob` in the differential harness);
+integer ranges `a..b`/`a..=b` (the one new `Op::MakeRange(bool)`, extending the three coupled matches;
+both backends materialize a `List<int>` via native Rust ranges, so `for (int i in 0..n)` works
+unchanged; transpiles to PHP `range()`); and expression `if` (`if (c) { e } else { e }` in value
+position — parens + mandatory `else`, single-expression arms; lowers via the existing branch ops like
+`&&`/`||`, transpiles to a PHP ternary). All three are byte-identical on `run`/`runvm` **and**
+round-tripped through real PHP; `examples/guide/ergonomics.phg` showcases them. **S1.4 (smart-cast
+narrowing) is deferred to S2** — its only described surface (`if (var x = opt)` + null-excluding
+`match` arms) operates on optionals (`T?`), which arrive in S2, so there is no exercisable behavior to
+test in S1. **Next: M3 S2** — null-safety (`T?`, `??`, `?.`, `if (var x = opt)`, checked `opt!`, and
+S1.4 smart-cast) — PHP-native nullable, **no new `Op`**. **Parked:** M2.5 Phase 3
 (CI stub registry + opt-in `--sign`), resumable after the M3 slices —
 `docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
 
