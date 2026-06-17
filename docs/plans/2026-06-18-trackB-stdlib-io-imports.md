@@ -11,6 +11,16 @@ registration: checker signature + interpreter impl + VM impl + PHP-emit mapping)
 byte-identity-gated example set.
 
 ## Decisions Log
+- [2026-06-18] AGREED (NAMESPACE RESHAPE → `docs/specs/2026-06-18-m3-namespace-system-design.md`):
+  everything is namespaced ("nothing in the wind"), default behavior. **Go-style module-qualified**
+  (reject Java `System.out.println` object-path — breaks the PHP transpile contract). Reserved
+  **`core.`** root for the stdlib; jargon-free leaves **`console`** (was io) + **`file`** (was fs) +
+  math/text/list/json/time. **`println` → `core.console.println`**; bare global retired. **User code
+  mandatorily packaged** (stricter than PHP/TS by choice; emits idiomatic PHP `namespace`s) — leaning
+  explicit `package a.b;` + strict folder=path, final syntax deferred ("decide later"). Task 1 is
+  **reshaped**: the native registry is keyed by `(module, name)` and `import core.console` becomes
+  load-bearing. Open fork before Wave 1: call-site form — full-path `core.console.println` vs
+  **leaf-qualified** `import core.console; console.println(...)` (recommended).
 - [2026-06-18] AGREED (L-1): build D→B→A. (D = `bench --vs-php`, shipped `b3ba602`.)
 - [2026-06-18] AGREED (L-2): std-only stdlib now; URL/network deferred to M6; determinism (not the
   dependency) gates examples.

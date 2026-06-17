@@ -152,11 +152,35 @@ benchmark. Locked: **build order D→B→A**; **URL/network deferred to M6** (Ru
 breaks zero-dep, *and* network is non-deterministic → breaks the byte-identical spine; determinism, not
 the dependency, gates examples); **rich std-only stdlib now**; multiple inheritance = traits/mixins at
 S5 (rejected as MI, D-L3). **Track D DONE** — `phorge bench --vs-php` (3-way interpreter/VM/PHP, VM ≈3.2×
-faster than a debug PHP 8.6 on the workload). **ACTIVE: Track B** (std-only stdlib + I/O + real
-`import std.*`) — plan `docs/plans/2026-06-18-trackB-stdlib-io-imports.md`. **Resume at Task 1: the
-`NativeModule` foundation** (registry + dual+ registration; `Op::Print`→`Op::CallNative`; migrate
-`println`). Then Track A (S3 lambdas/pipeline). **Parked:** M2.5 Phase 3 (CI stub registry + `--sign`) —
-`docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
+faster than a debug PHP 8.6 on the workload).
+
+**NAMESPACE RESHAPE (designed 2026-06-18, `docs/specs/2026-06-18-m3-namespace-system-design.md`):** the
+developer chose **everything namespaced, "nothing in the wind", as the default** — no free-floating
+globals. Locked: **Go-style module-qualified** calls (the Java `System.out.println` object-path was
+rejected — no idiomatic PHP target, breaks D-L9); **reserved `core.` root** for the stdlib; jargon-free
+leaf modules **`console`** (was io) + **`file`** (was fs) + `math`/`text`/`list`/`json`/`time`; **`println`
+→ `console.println` after `import core.console;`** (the bare global is RETIRED); **leaf-qualified call
+sites** (root in the import, leaf at the call — Go's `import "fmt"` → `fmt.Println`); **explicit import
+required** even for stdlib; **user code mandatorily packaged** (stricter than PHP/TS by choice, emits real
+PHP `namespace`s — leaning explicit `package a.b;` + strict folder=path, final syntax deferred). Native
+registry is keyed by `(module, name)`; `import core.console` becomes load-bearing.
+
+**ACTIVE: Track B, Wave 1 — namespaced native foundation** (reshaped Task 1) — plan
+`docs/plans/2026-06-18-trackB-stdlib-io-imports.md`, design spec above. **Resume by building Wave 1:**
+`src/native.rs` registry keyed by `(module,name)` + `OnceLock` (Vec<Ty> not const) + `const
+CONSOLE_PRINTLN=0`; `Op::Print`→`Op::CallNative(idx,argc)` (3 coupled matches: `vm::exec_op`,
+`compiler::stack_effect`, `chunk::validate`; `CallNative` pushes the result so drop the old
+`emit_const(Unit)`); shared `eval: fn(&[Value], &mut String)->Result<Value,String>` (threads the out
+buffer; both backends own `out: String`); all 4 backends collect the import map (leaf→`core.*` path) and
+resolve a `Member`-call whose head Ident is an imported qualifier to a native (else existing
+field/method path); checker rejects bare `println` (unknown fn) + a local shadowing an imported
+qualifier; transpile emits each native's `php` mapping (println→`echo {a} . "\n"`); disasm `annotate`
+gains a `CallNative` arm + the disasm test asserts `CallNative` not `Print`. **MIGRATION (large, part of
+Wave 1):** ~**216 inline `println(` test programs** across `src/*.rs` + `tests/*.rs`, **21 `.phg`
+examples** (all currently `import std.io;`), + `tests/fixtures/sample.phg` — each needs `import
+core.console;` and `println`→`console.println`. Then Wave 2 (`core.file`/`math`/`text`/`list`/`json`),
+Wave 3 (user packages). Then Track A (S3 lambdas/pipeline). **Parked:** M2.5 Phase 3 (CI stub registry +
+`--sign`) — `docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing
 correctness rules — read before touching backends, value kernels, or the `Op` set) and
