@@ -37,7 +37,8 @@ if-let lower to existing `SetLocal`/`GetLocal` + a null-test (`Eq` vs a `null` c
 ## Progress
 - [x] Task 1 — foundation (`Value::Null`, `Ty::Optional`/`Ty::Null`, non-null discipline) — `4ab9e36`
 - [x] Task 2 — `??` null-coalesce (scratch-local lowering, no new `Op`) — `35b2b23`
-- [ ] Task 3 — `?.` safe access · Task 4 — `if (var x = opt)` · Task 5 — `opt!` · Task 6 — `match` over `T?` · Task 7 — example + docs
+- [x] Task 3 — `?.` safe access (nullsafe field + method, short-circuit, `E-OPT-USE`) — `f6266b2`
+- [ ] Task 4 — `if (var x = opt)` · Task 5 — `opt!` · Task 6 — `match` over `T?` · Task 7 — example + docs
 
 ## File Structure
 
