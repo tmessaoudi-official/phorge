@@ -83,6 +83,24 @@ impl Checker {
         Ty::Error
     }
 
+    /// Assignment-failure diagnostic. Recognizes the optional-misuse case (a `T?` used where a
+    /// non-optional `T` is required) and attaches `E-OPT-ASSIGN` + an unwrap hint; otherwise the
+    /// generic type-mismatch message.
+    fn err_assign(&mut self, span: Span, actual: &Ty, declared: &Ty) {
+        let optional_misuse =
+            matches!(actual, Ty::Optional(_) | Ty::Null) && !matches!(declared, Ty::Optional(_));
+        if optional_misuse {
+            self.err_coded(
+                span,
+                format!("cannot use `{actual}` where non-optional `{declared}` is required"),
+                "E-OPT-ASSIGN",
+                Some("unwrap it first with `??`, `?.`, `if (var …)`, or `!`".into()),
+            );
+        } else {
+            self.err(span, format!("expected `{declared}`, found `{actual}`"));
+        }
+    }
+
     /// Every name currently visible — block-scope locals + top-level functions + (inside a method)
     /// the current class's fields — used to suggest the nearest match on an unknown identifier.
     fn in_scope_names(&self) -> Vec<String> {
@@ -115,9 +133,7 @@ impl Checker {
     fn resolve_type(&mut self, ty: &crate::ast::Type) -> Ty {
         use crate::ast::Type;
         match ty {
-            Type::Optional { span, .. } => {
-                self.err(*span, "optional types are not yet supported in M1")
-            }
+            Type::Optional { inner, .. } => Ty::Optional(Box::new(self.resolve_type(inner))),
             // `var` is intercepted in `check_stmt`; reaching here means it was written somewhere it
             // is not allowed (a parameter, field, or return type).
             Type::Infer(span) => self.err(
@@ -443,16 +459,25 @@ impl Checker {
             } => {
                 let actual = self.check_expr(init);
                 let declared = match ty {
-                    crate::ast::Type::Infer(_) => {
-                        // `var`: the binding takes the initializer's type. If the init itself
-                        // failed to check (`Ty::Error` — e.g. `var x = null;`, rejected at the
-                        // init), propagate the error without emitting a second diagnostic.
-                        actual.clone()
+                    crate::ast::Type::Infer(infer_span) => {
+                        // `var` binds the initializer's type — but a bare `null` (type `Ty::Null`)
+                        // has no inferable element type and needs an explicit annotation, e.g.
+                        // `int? x = null;` (S0.2 / S2).
+                        if matches!(actual, Ty::Null) {
+                            self.err_coded(
+                                *infer_span,
+                                "cannot infer a type from `null`",
+                                "E-INFER-NULL",
+                                Some("annotate the optional, e.g. `int? x = null;`".into()),
+                            )
+                        } else {
+                            actual.clone()
+                        }
                     }
                     _ => {
                         let declared = self.resolve_type(ty);
                         if !Ty::assignable(&actual, &declared) {
-                            self.err(*span, format!("expected `{declared}`, found `{actual}`"));
+                            self.err_assign(*span, &actual, &declared);
                         }
                         declared
                     }
@@ -466,7 +491,7 @@ impl Checker {
                 };
                 let want = self.cur_ret.clone();
                 if !Ty::assignable(&actual, &want) {
-                    self.err(*span, format!("expected `{want}`, found `{actual}`"));
+                    self.err_assign(*span, &actual, &want);
                 }
             }
             Stmt::If {
@@ -517,9 +542,7 @@ impl Checker {
             Expr::Int(_, _) => Ty::Int,
             Expr::Float(_, _) => Ty::Float,
             Expr::Bool(_, _) => Ty::Bool,
-            Expr::Null(span) => {
-                self.err(*span, "null / optional values are not yet supported in M1")
-            }
+            Expr::Null(_) => Ty::Null,
             Expr::Str(parts, _) => self.check_str(parts), // Task 7
             Expr::Ident(name, span) => match self.lookup(name) {
                 Some(t) => t,
@@ -1337,6 +1360,24 @@ mod tests {
     }
 
     #[test]
+    fn optional_binding_and_null_discipline() {
+        // an optional binding accepts `null` and a widened non-null `T`
+        assert!(errors_of("function main() { int? x = null; }").is_empty());
+        assert!(errors_of("function main() { int? y = 5; }").is_empty());
+        // `null` / `T?` cannot flow into a non-optional `T`
+        let e1 = errors_of("function main() { int x = null; }");
+        assert!(
+            e1.iter().any(|d| d.code == Some("E-OPT-ASSIGN")),
+            "got {e1:?}"
+        );
+        let e2 = errors_of("function main() { int? x = null; int y = x; }");
+        assert!(
+            e2.iter().any(|d| d.code == Some("E-OPT-ASSIGN")),
+            "got {e2:?}"
+        );
+    }
+
+    #[test]
     fn empty_program_checks_ok() {
         assert!(errors_of("").is_empty());
     }
@@ -1359,8 +1400,12 @@ mod tests {
 
     #[test]
     fn var_from_null_is_rejected() {
-        // `null` has no inferable element type in M1 (optionals arrive in S2).
-        assert!(!errors_of("function main() { var x = null; }").is_empty());
+        // A bare `null` has no inferable element type — `var x = null` needs `T? x = null;`.
+        let errs = errors_of("function main() { var x = null; }");
+        assert!(
+            errs.iter().any(|d| d.code == Some("E-INFER-NULL")),
+            "got {errs:?}"
+        );
     }
 
     #[test]
@@ -1490,13 +1535,9 @@ mod tests {
     }
 
     #[test]
-    fn optional_type_is_deferred_corner() {
-        let errs = errors_of("function main() { int? n = 0; }");
-        assert!(
-            errs.iter()
-                .any(|e| e.message.contains("optional types are not yet supported")),
-            "{errs:?}"
-        );
+    fn optional_type_is_now_supported() {
+        // `T?` was deferred in M1; M3 S2 makes it a real type (here a widened `0 : int?`).
+        assert!(errors_of("function main() { int? n = 0; }").is_empty());
     }
 
     #[test]

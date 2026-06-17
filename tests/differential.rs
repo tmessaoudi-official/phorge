@@ -538,3 +538,13 @@ fn deep_nesting_faults_identically() {
     );
     agree_err(&chain);
 }
+
+#[test]
+fn s2_null_and_optional_bind_and_run_on_both_backends() {
+    // Task 1 foundation: `null` is a real runtime value and a non-null `T` widens to `T?`.
+    // (Observing the null *value* needs the unwrap operators from later S2 tasks.) The exact-output
+    // assertion is deliberate: `agree` alone passes vacuously if both backends share a rejection.
+    let src = "function main() { int? x = null; int? y = 5; println(\"optionals ok\"); }";
+    assert_eq!(cmd_run(src).as_deref(), Ok("optionals ok\n"));
+    agree(src); // run ≡ runvm
+}

@@ -16,6 +16,9 @@ pub enum Value {
     Bool(bool),
     Str(String),
     Unit,
+    /// `null` — the sole inhabitant of an absent optional (`T?`). A non-optional `T` never holds it
+    /// (the checker's non-null discipline); PHP-native, erases to PHP `null` (M3 S2).
+    Null,
     /// Shared (M2 P5a): cloning a list value is a refcount bump, not a deep element copy.
     List(Rc<Vec<Value>>),
     /// Constructible in principle; the M1 sample never builds or indexes one.
@@ -57,6 +60,7 @@ impl Value {
             Value::Bool(_) => "bool",
             Value::Str(_) => "string",
             Value::Unit => "unit",
+            Value::Null => "null",
             Value::List(_) => "list",
             Value::Map(_) => "map",
             Value::Set(_) => "set",
@@ -105,6 +109,7 @@ impl Value {
                         .iter()
                         .all(|(k, v)| b.fields.get(k).is_some_and(|bv| v.eq_val(bv)))
             }
+            (Null, Null) => true,
             _ => false,
         }
     }
@@ -267,6 +272,8 @@ mod tests {
         assert!(Value::Int(1).eq_val(&Value::Int(1)));
         assert!(!Value::Int(1).eq_val(&Value::Int(2)));
         assert!(!Value::Int(1).eq_val(&Value::Float(1.0))); // no cross-type eq
+        assert!(Value::Null.eq_val(&Value::Null)); // null == null
+        assert!(!Value::Null.eq_val(&Value::Int(0))); // null != a non-null value
         let a = Value::Enum(Rc::new(EnumVal {
             ty: "Shape".into(),
             variant: "Circle".into(),

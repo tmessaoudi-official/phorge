@@ -143,8 +143,8 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-INFER-NULL" => {
             "E-INFER-NULL — `var` cannot infer a type from `null` alone.\n\n\
-             `null` has no element type on its own, so `var x = null;` is rejected. Give the\n\
-             binding an explicit type instead (optionals arrive in a later slice).\n"
+             `null` has no element type on its own, so `var x = null;` is rejected. Annotate the\n\
+             optional instead, e.g. `int? x = null;`.\n"
         }
         "E-ALIAS-CYCLE" => {
             "E-ALIAS-CYCLE — a `type` alias refers to itself.\n\n\
@@ -157,6 +157,12 @@ pub fn explain_text(code: &str) -> Option<String> {
              `List<int>` (its role this slice is `for (int i in 0..n)`). Use integer bounds, or\n\
              build a `List` explicitly if you need other element types.\n"
         }
+        "E-OPT-ASSIGN" => {
+            "E-OPT-ASSIGN — an optional `T?` was used where a non-optional `T` is required.\n\n\
+             A non-optional value can never be `null`, so a `T?` cannot flow into a `T` binding,\n\
+             parameter, field, or return without handling absence first. Unwrap it with `??`\n\
+             (default), `?.` (safe access), `if (var x = opt) { … }`, or `opt!` (checked).\n"
+        }
         _ => return None,
     };
     Some(body.to_string())
@@ -167,7 +173,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE)"
+             (known: E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN)"
         )
     })
 }

@@ -240,7 +240,7 @@ impl Interp {
             Expr::Int(n, _) => Ok(Value::Int(*n)),
             Expr::Float(x, _) => Ok(Value::Float(*x)),
             Expr::Bool(b, _) => Ok(Value::Bool(*b)),
-            Expr::Null(_) => rt("null values are not supported in M1"),
+            Expr::Null(_) => Ok(Value::Null),
             Expr::Str(parts, _) => self.eval_str(parts),
             Expr::Ident(name, _) => self.eval_ident(name),
             Expr::This(_) => match &self.this {

@@ -387,7 +387,7 @@ impl Transpiler {
                 let parts: Result<Vec<_>, _> = items.iter().map(|i| self.emit_expr(i)).collect();
                 Ok(format!("[{}]", parts?.join(", ")))
             }
-            Expr::Null(_) => Err("transpile error: null is not yet supported".into()),
+            Expr::Null(_) => Ok("null".into()),
             Expr::Index { object, index, .. } => {
                 let o = self.emit_expr(object)?;
                 let i = self.emit_expr(index)?;

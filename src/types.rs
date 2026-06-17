@@ -14,6 +14,12 @@ pub enum Ty {
     List(Box<Ty>),
     Map(Box<Ty>, Box<Ty>),
     Set(Box<Ty>),
+    /// `T?` — an optional: holds a `T` or `null`. The non-null guarantee lives in
+    /// `assignable` (a non-optional `T` can never hold `null`).
+    Optional(Box<Ty>),
+    /// The type of the bare `null` literal: assignable to any `T?` and to nothing else. Lets
+    /// `null` flow into an optional with no element type, while `var x = null;` stays an error.
+    Null,
     /// Poison type: a failed sub-expression yields this. Assignable both ways so a
     /// single error does not cascade into many.
     Error,
@@ -22,8 +28,23 @@ pub enum Ty {
 impl Ty {
     /// `from` may be used where `to` is expected. `Error` unifies with anything to
     /// suppress cascade errors. No numeric widening (spec §3: no implicit coercion).
+    /// Optionals are covariant and non-null-disciplined: a non-optional `T` widens to
+    /// `T?` (and `U?` -> `T?` when `U` -> `T`), but a `T?` never widens to a
+    /// non-optional `T` — it must be unwrapped (`??`/`?.`/`if (var …)`/`!`).
     pub fn assignable(from: &Ty, to: &Ty) -> bool {
-        *from == Ty::Error || *to == Ty::Error || from == to
+        if *from == Ty::Error || *to == Ty::Error {
+            return true;
+        }
+        match (from, to) {
+            // A bare `null` fits any optional (and itself); nothing else accepts it.
+            (Ty::Null, Ty::Optional(_) | Ty::Null) => true,
+            (Ty::Null, _) => false,
+            // `U? -> T?` when `U -> T`; a non-optional `T -> T?` (covariant widening).
+            (Ty::Optional(f), Ty::Optional(t)) => Ty::assignable(f, t),
+            (other, Ty::Optional(t)) => Ty::assignable(other, t),
+            // A `T?` never widens to a non-optional `T` — it must be unwrapped.
+            _ => from == to,
+        }
     }
 }
 
@@ -39,6 +60,8 @@ impl fmt::Display for Ty {
             Ty::List(e) => write!(f, "List<{e}>"),
             Ty::Map(k, v) => write!(f, "Map<{k}, {v}>"),
             Ty::Set(e) => write!(f, "Set<{e}>"),
+            Ty::Optional(e) => write!(f, "{e}?"),
+            Ty::Null => write!(f, "null"),
             Ty::Error => write!(f, "<error>"),
         }
     }
@@ -62,6 +85,23 @@ mod tests {
             &Ty::List(Box::new(Ty::Int)),
             &Ty::List(Box::new(Ty::Float))
         ));
+    }
+
+    #[test]
+    fn optional_assignability() {
+        let int_opt = Ty::Optional(Box::new(Ty::Int));
+        assert!(Ty::assignable(&Ty::Int, &int_opt)); // T -> T? (widen)
+        assert!(!Ty::assignable(&int_opt, &Ty::Int)); // T? -/-> T (must unwrap)
+        assert!(Ty::assignable(&int_opt, &int_opt)); // T? -> T?
+        assert!(!Ty::assignable(
+            &Ty::Optional(Box::new(Ty::Int)),
+            &Ty::Optional(Box::new(Ty::Float))
+        ));
+        assert_eq!(int_opt.to_string(), "int?"); // Display
+                                                 // the bare-`null` type fits any optional and nothing else
+        assert!(Ty::assignable(&Ty::Null, &int_opt)); // null -> int?
+        assert!(!Ty::assignable(&Ty::Null, &Ty::Int)); // null -/-> int
+        assert_eq!(Ty::Null.to_string(), "null");
     }
 
     #[test]

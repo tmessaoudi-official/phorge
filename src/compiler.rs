@@ -882,7 +882,7 @@ impl<'a> Compiler<'a> {
             }
             Expr::Binary { op, lhs, rhs, span } => self.compile_binary(*op, lhs, rhs, span.line)?,
             Expr::Call { callee, args, span } => self.compile_call(callee, args, span.line)?,
-            Expr::Null(_) => return Err("null is not supported (M1 surface)".into()),
+            Expr::Null(sp) => self.emit_const(Value::Null, sp.line),
             Expr::This(sp) => match self.this_slot {
                 // `this` is the receiver local: slot 0 in a method, the instance slot in a ctor.
                 Some(slot) => self.emit(Op::GetLocal(slot), sp.line),
