@@ -21,6 +21,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/classes.phg` | constructor promotion, methods, `this`, composition, a method call on a field |
 | `guide/enums-match.phg` | payload + zero-payload variants; literal, binding, and variant patterns |
 | `guide/strings.phg` | string interpolation |
+| `bench/workload.phg` | a **profiling** workload (CPU recursion + heap allocation) for `phorge bench`/`disasm` — see `bench/README.md` |
 | `transpile/demo.phg` | the **Phorge → PHP** bridge — see `transpile/README.md` |
 
 ## Coverage matrix (the runnable surface)

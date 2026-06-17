@@ -100,6 +100,14 @@ section reader; build tooling (zig, llvm-tools, rcodesign, CI) is exempt. Spec:
 - **Phase 3 🔲** — CI stub registry; final-artifact signing/notarization (opt-in `--sign`),
   Windows Authenticode + macOS codesign/notarize via `rcodesign` from Linux.
 
+### Tooling (v0.4.0) — profiling + introspection
+
+- `phorge bench` reports **memory** (cold-execution peak-RSS growth + process `VmHWM`/`VmRSS`) next to
+  its timing, via a std-only Linux `/proc` sampler (`src/mem.rs`); non-Linux prints "unavailable".
+- `phorge disasm <source>` dumps the compiled bytecode (per-function listings + descriptor tables).
+- `examples/bench/workload.phg` (+ `examples/bench/README.md`) is the profiling showcase, auto
+  byte-identity-gated like every example.
+
 ## M2.5+ — Ecosystem — 🔲 PLANNED
 
 Full ecosystem strategy + ROI-ranked roadmap frozen in

@@ -12,13 +12,25 @@ enrichment (indexing, `Map`/`Set`, optionals, `|>`, exceptions, mutation + a tra
 
 ## [0.4.0] — 2026-06-17
 
-The first fully-documented release: CLI UX, cross-OS standalone builds, and a complete OSS doc set.
+The first fully-documented release: CLI UX, profiling, a disassembler, cross-OS standalone builds,
+and a complete OSS doc set.
+
+### Profiling & introspection
+
+- `phorge bench` now reports **memory** alongside timing: peak-RSS growth of one cold execution plus
+  the process `VmHWM`/`VmRSS`, via a std-only, Linux-only `src/mem.rs` (`/proc/self/status` +
+  `/proc/self/clear_refs`). Non-Linux hosts print `memory: unavailable on this platform`.
+- `phorge disasm <source>` — print the compiled bytecode: per-function instruction listings (index,
+  source line, op, and a resolved annotation for index-carrying ops) plus the program-level
+  enum/class/method descriptor tables.
+- New profiling example `examples/bench/workload.phg` (CPU recursion + heap allocation) with
+  `examples/bench/README.md` documenting how the time and memory numbers are collected.
 
 ### CLI UX
 
 - `-v` / `--version` — print `phorge <version>` and exit; `-h` / `--help` — full usage banner.
 - Flexible program source for the run-family commands
-  (`run`/`runvm`/`check`/`parse`/`lex`/`transpile`/`bench`): `<file>` | `-` (read from **stdin**) |
+  (`run`/`runvm`/`check`/`parse`/`lex`/`transpile`/`disasm`/`bench`): `<file>` | `-` (read from **stdin**) |
   `-e <code>` / `--eval <code>` (run **inline** source) | `--` (next arg is a path even if it starts
   with `-`).
 
