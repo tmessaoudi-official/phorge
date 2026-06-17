@@ -28,12 +28,20 @@ Scope and limits:
 
 ## Toolchain & gate
 
-`export PATH=/stack/tools/cargo/bin:$PATH`. Baseline: 243 tests green, clippy clean (pedantic off).
+`export PATH=/stack/tools/cargo/bin:$PATH`. Baseline: 332 tests green, clippy clean (pedantic off).
 The differential harness (`tests/differential.rs`) is the correctness spine — `run` and `runvm`
 must stay byte-identical. Adding an `Op` variant requires extending three exhaustive matches in
 the same commit: `src/vm.rs` `exec_op`, `src/chunk.rs` `BytecodeProgram::validate`, and
 `src/compiler.rs` `stack_effect`. `phorge bench <file>` measures the two backends (median-of-N,
 output-identity gated) — run it for a before/after number before any perf change.
+
+**Examples ship with features** (developer rule, 2026-06-17): every shipped feature lands with a
+runnable example under `examples/` (auto-gated by the `tests/differential.rs` glob, so it must run
+byte-identically on both backends) and an `examples/README.md` entry (index + coverage matrix), in
+the **same change** as the feature. CLI/tooling features that aren't a single program (e.g.
+`phorge build`, `explain`) get a walkthrough README + a small companion `.phg` (see `examples/build/`,
+`examples/cli/`). Faults can't be a runnable example (every example must produce identical *Ok*
+output) — capture them in a README instead.
 
 ## Active plan
 
