@@ -40,14 +40,18 @@ enum NumTy {
 /// the pre-Wave-4 gap where a field read on an arbitrary instance or a method result was
 /// unclassifiable. `Other` stays the catch-all for everything non-numeric/non-class (bool, string,
 /// unit, list, map, set, optional) — the compiler only needs to *reject* those as arithmetic
-/// operands, not tell them apart. List-element indexing stays out of the M1 surface, so a `List`
-/// local's element type is never an operand and needs no variant.
+/// operands, not tell them apart — except a **list**, whose element type *is* reachable as an
+/// operand via indexing (`xs[i] + 1`, since M3 S1.1), so `List(elem)` carries it; everything else
+/// non-numeric/non-class (bool, string, unit, map, set, optional) stays `Other`.
 #[derive(Clone, PartialEq)]
 enum CTy {
     Int,
     Float,
     /// A class instance, carrying its class name so `ctype` can resolve `obj.field` / `obj.m()`.
     Class(String),
+    /// A `List<elem>`, carrying its element type so `ctype(Index)` (`xs[i]`) resolves to the element
+    /// — which can be an arithmetic operand since M3 S1.1 (e.g. `xs[0] + 1` → `AddI`).
+    List(Box<CTy>),
     Other,
 }
 
@@ -506,10 +510,13 @@ fn compile_method<'a>(
 /// field/method read through it resolves. An `Optional` is `Other` (no `null` in M1).
 fn resolve_cty(ty: &Type) -> CTy {
     match ty {
-        Type::Named { name, .. } => match name.as_str() {
+        Type::Named { name, args, .. } => match name.as_str() {
             "int" => CTy::Int,
             "float" => CTy::Float,
-            "bool" | "string" | "void" | "List" | "Map" | "Set" => CTy::Other,
+            // Track the element type so `xs[i]` can be an arithmetic operand (M3 S1.1); a bare
+            // `List` (no arg) defaults its element to `Other`.
+            "List" => CTy::List(Box::new(args.first().map_or(CTy::Other, resolve_cty))),
+            "bool" | "string" | "void" | "Map" | "Set" => CTy::Other,
             other => CTy::Class(other.to_string()),
         },
         Type::Optional { .. } => CTy::Other,
@@ -668,7 +675,21 @@ impl<'a> Compiler<'a> {
         match e {
             Expr::Int(..) => Ok(CTy::Int),
             Expr::Float(..) => Ok(CTy::Float),
-            Expr::Bool(..) | Expr::Str(..) | Expr::List(..) => Ok(CTy::Other),
+            Expr::Bool(..) | Expr::Str(..) => Ok(CTy::Other),
+            // A list literal's element type comes from its first element (empty → `Other`), so an
+            // index into it (`[1, 2, 3][0] + 1`) resolves as an operand (M3 S1.1).
+            Expr::List(elems, _) => Ok(CTy::List(Box::new(
+                elems
+                    .first()
+                    .and_then(|el| self.ctype(el).ok())
+                    .unwrap_or(CTy::Other),
+            ))),
+            // `xs[i]` resolves to the list's element type (so `xs[0] + 1` specializes); a non-list
+            // receiver collapses to `Other` (checker-unreachable as an arithmetic operand).
+            Expr::Index { object, .. } => match self.ctype(object)? {
+                CTy::List(elem) => Ok(*elem),
+                _ => Ok(CTy::Other),
+            },
             Expr::Ident(name, _) => {
                 if let Some(b) = self.match_bindings.iter().rev().find(|b| b.name == *name) {
                     Ok(b.ty.clone())
@@ -724,9 +745,9 @@ impl<'a> Compiler<'a> {
                 Some(arm) => self.ctype(&arm.body),
                 None => Ok(CTy::Other),
             },
-            // A range is a `List<int>` — never a numeric/class operand (the checker rejects
-            // arithmetic on it); `Other` is the correct non-numeric classification.
-            Expr::Range { .. } => Ok(CTy::Other),
+            // A range materializes to `List<int>`, so its compile-type is `List(Int)` — carrying the
+            // element type lets `(0..n)[i] + 1` (or a range bound to a `var`, then indexed) specialize.
+            Expr::Range { .. } => Ok(CTy::List(Box::new(CTy::Int))),
             // Both `if` branches share a type (checker-guaranteed); infer it from the then-branch so
             // `var x = if (c) { 1 } else { 2 }` specializes arithmetic on `x` (like `Match`).
             Expr::If { then_expr, .. } => self.ctype(then_expr),
@@ -741,7 +762,7 @@ impl<'a> Compiler<'a> {
         match ty {
             CTy::Int => Some(NumTy::Int),
             CTy::Float => Some(NumTy::Float),
-            CTy::Class(_) | CTy::Other => None,
+            CTy::Class(_) | CTy::Other | CTy::List(_) => None,
         }
     }
 

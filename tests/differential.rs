@@ -177,6 +177,18 @@ fn s1_index_oob_faults_identically() {
     agree_err(r#"function main() { List<int> xs = [1, 2]; println("{xs[5]}"); }"#);
 }
 
+/// An index *result* used as an arithmetic operand (`xs[0] + 1`). The compiler must know the list's
+/// element type to pick `AddI`/`AddF` — so `CTy` tracks `List<elem>` and `ctype(Index)` unwraps it.
+/// (Regression guard: un-rejecting indexing without this made the VM compile-reject `xs[0] + 1`
+/// while the interpreter accepted it.)
+#[test]
+fn s1_index_result_in_arithmetic_is_byte_identical() {
+    agree(r#"function main() { List<int> xs = [10, 20]; println("{xs[0] + 1}"); }"#);
+    agree(r#"function main() { List<float> fs = [1.5, 2.5]; println("{fs[0] + fs[1]}"); }"#);
+    // index result of a range-materialized list, used arithmetically
+    agree(r#"function main() { var xs = 0..5; println("{xs[2] * 10}"); }"#);
+}
+
 /// M3 S1.2 — integer ranges `a..b` (exclusive) / `a..=b` (inclusive), materialized to `List<int>`
 /// via the one new `Op::MakeRange`. The compiler/interpreter must build the *same* list (same order,
 /// same emptiness rule) so `for…in` over a range is byte-identical on both backends.
