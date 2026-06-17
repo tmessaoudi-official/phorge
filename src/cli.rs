@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use crate::ast::Program;
 use crate::checker::check;
+use crate::chunk::{BytecodeProgram, Chunk, Op};
 use crate::compiler::compile;
 use crate::interpreter::interpret;
 use crate::lexer::lex;
@@ -32,7 +33,8 @@ pub fn help_text() -> String {
          parse      print the AST\n  \
          lex        print the token stream\n  \
          transpile  emit PHP\n  \
-         bench      benchmark run vs runvm\n  \
+         disasm     print the compiled bytecode\n  \
+         bench      benchmark run vs runvm (time + memory)\n  \
          build      compile to a standalone executable (-o <out>)\n\n\
          source:\n  \
          <file>     read the program from a file\n  \
@@ -179,6 +181,88 @@ pub fn cmd_transpile(src: &str) -> Result<String, String> {
         let prog = parse_checked(src)?;
         crate::transpile::emit(&prog)
     })
+}
+
+/// `disasm`: lex -> parse -> check (gate) -> compile -> dump the bytecode the VM will execute.
+/// A read-only window onto the backend: per-function instruction listings and the program-level
+/// descriptor tables. The op mnemonic is `Op`'s own `Debug`, *not* a hand-written match — so a new
+/// `Op` variant appears here automatically with no second match surface to drift out of lockstep
+/// (see memory `op-variant-match-coupling`); the per-op annotation is display-only with a `_`
+/// fall-through, so an un-annotated new op simply shows no comment rather than failing to compile.
+pub fn cmd_disasm(src: &str) -> Result<String, String> {
+    on_deep_stack(|| {
+        let prog = parse_checked(src)?;
+        let program = compile(&prog).map_err(|e| e.to_string())?;
+        Ok(disasm_program(&program))
+    })
+}
+
+/// Resolve a human-readable annotation for an index-carrying op (the value a `Const` loads, the
+/// callee of a `Call`, the field/method/variant/class a member op names). Display-only: the `_`
+/// arm covers every op that needs no comment, so this never has to track the full `Op` set.
+fn annotate(op: &Op, chunk: &Chunk, p: &BytecodeProgram) -> Option<String> {
+    match op {
+        Op::Const(i) => chunk.consts.get(*i).map(|v| format!("{v:?}")),
+        Op::Call(idx) => p
+            .functions
+            .get(*idx)
+            .map(|f| format!("-> {}/{}", f.name, f.arity)),
+        Op::GetField(i) => p.names.get(*i).map(|n| format!(".{n}")),
+        Op::CallMethod(i, argc) => p.names.get(*i).map(|n| format!(".{n}(argc={argc})")),
+        Op::MakeEnum(i) | Op::MatchTag(i) => p
+            .enum_descs
+            .get(*i)
+            .map(|d| format!("{}::{}", d.ty, d.variant)),
+        Op::GetEnumField(i) => Some(format!("payload #{i}")),
+        Op::MakeInstance(i) => p.class_descs.get(*i).map(|d| d.class.clone()),
+        _ => None,
+    }
+}
+
+/// Format a whole [`BytecodeProgram`] as a disassembly listing. Descriptor tables are emitted only
+/// when non-empty; the method table is sorted (HashMap iteration order is non-deterministic —
+/// invariant #8) so the output is stable across runs.
+fn disasm_program(p: &BytecodeProgram) -> String {
+    let mut out = format!(
+        "phorge disasm — {} function(s), main = #{}\n",
+        p.functions.len(),
+        p.main
+    );
+    if !p.enum_descs.is_empty() {
+        out.push_str("\nenum descriptors:\n");
+        for (i, d) in p.enum_descs.iter().enumerate() {
+            out.push_str(&format!("  #{i} {}::{}/{}\n", d.ty, d.variant, d.arity));
+        }
+    }
+    if !p.class_descs.is_empty() {
+        out.push_str("\nclass descriptors:\n");
+        for (i, d) in p.class_descs.iter().enumerate() {
+            out.push_str(&format!(
+                "  #{i} {} {{ {} }}\n",
+                d.class,
+                d.fields.join(", ")
+            ));
+        }
+    }
+    if !p.methods.is_empty() {
+        out.push_str("\nmethods:\n");
+        let mut entries: Vec<_> = p.methods.iter().collect();
+        entries.sort();
+        for ((class, name), idx) in entries {
+            out.push_str(&format!("  {class}::{name} -> #{idx}\n"));
+        }
+    }
+    for (fi, f) in p.functions.iter().enumerate() {
+        out.push_str(&format!("\nfn #{fi} {}/{}:\n", f.name, f.arity));
+        for (ip, op) in f.chunk.code.iter().enumerate() {
+            let line = f.chunk.lines.get(ip).copied().unwrap_or(0);
+            match annotate(op, &f.chunk, p) {
+                Some(a) => out.push_str(&format!("  {ip:>4}  L{line:<4} {op:?}  ; {a}\n")),
+                None => out.push_str(&format!("  {ip:>4}  L{line:<4} {op:?}\n")),
+            }
+        }
+    }
+    out
 }
 
 /// Default sample count for `phorge bench`. Odd, so the median is a real observed sample rather
@@ -563,6 +647,27 @@ function main() {
         let src = r#"function main() { println("hi"); }"#;
         let out = bench_report(src, 5).expect("bench");
         assert!(out.contains("memory"), "{out}");
+    }
+
+    #[test]
+    fn disasm_dumps_bytecode_with_mnemonics_and_annotations() {
+        // The disassembler names the function, prints the type-specialized int-add op, the print
+        // op, and annotates a constant load with its value.
+        let out =
+            cmd_disasm(r#"function main() { int x = 1 + 2; println("{x}"); }"#).expect("disasm");
+        assert!(out.contains("fn #"), "{out}");
+        assert!(out.contains("main/0"), "{out}");
+        assert!(out.contains("AddI"), "{out}");
+        assert!(out.contains("Print"), "{out}");
+        // Const loads carry a `; <value>` annotation resolved from the pool.
+        assert!(out.contains("Const(") && out.contains("; "), "{out}");
+    }
+
+    #[test]
+    fn disasm_propagates_type_error() {
+        // A program that fails the gate can't be disassembled — the type error surfaces instead.
+        let err = cmd_disasm(r#"function main() { int x = "no"; }"#).unwrap_err();
+        assert!(err.contains("type error"), "{err}");
     }
 
     #[test]

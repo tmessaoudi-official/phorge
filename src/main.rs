@@ -1,4 +1,4 @@
-//! Phorge CLI: `phorge <run|runvm|check|parse|lex|transpile|bench> <file>`. Thin dispatcher
+//! Phorge CLI: `phorge <run|runvm|check|parse|lex|transpile|disasm|bench> <file>`. Thin dispatcher
 //! over the testable `phorge::cli` module.
 #![forbid(unsafe_code)]
 
@@ -6,7 +6,7 @@ use std::process::exit;
 
 use phorge::cli;
 
-const USAGE: &str = "usage: phorge <run|runvm|check|parse|lex|transpile|bench|build> \
+const USAGE: &str = "usage: phorge <run|runvm|check|parse|lex|transpile|disasm|bench|build> \
                      <file | - | -e code> [-o out]   (phorge -h for help, -v for version)";
 
 fn main() {
@@ -40,7 +40,8 @@ fn main() {
     }
     let cmd = match args.get(1).map(String::as_str) {
         Some(
-            c @ ("run" | "runvm" | "check" | "parse" | "lex" | "transpile" | "bench" | "build"),
+            c @ ("run" | "runvm" | "check" | "parse" | "lex" | "transpile" | "disasm" | "bench"
+            | "build"),
         ) => c,
         _ => {
             eprintln!("{USAGE}");
@@ -134,6 +135,7 @@ fn main() {
         "parse" => cli::cmd_parse(&src),
         "lex" => cli::cmd_lex(&src),
         "transpile" => cli::cmd_transpile(&src),
+        "disasm" => cli::cmd_disasm(&src),
         "bench" => cli::cmd_bench(&src),
         _ => unreachable!("validated above"),
     };
