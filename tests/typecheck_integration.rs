@@ -42,7 +42,9 @@ function main() {
 fn check_src(src: &str) -> Result<(), Vec<phorge::diagnostic::Diagnostic>> {
     let tokens = lex(src).expect("lex ok");
     let prog = Parser::new(tokens).parse_program().expect("parse ok");
-    check(&prog)
+    // `check` now returns the non-fatal warnings on success (M3 S2.5); this harness only cares
+    // about the error/clean contract, so collapse `Ok(warnings)` to `Ok(())`.
+    check(&prog).map(|_warnings| ())
 }
 
 #[test]

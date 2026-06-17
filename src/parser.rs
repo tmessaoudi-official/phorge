@@ -237,6 +237,16 @@ impl Parser {
                         span: sp,
                     };
                 }
+                // Postfix `!` is the force-unwrap (M3 S2.5). It can only appear here, after a
+                // primary/postfix expr; prefix `!x` (logical not) is handled in `parse_unary`, and
+                // `!=` lexes as a single `NotEq`, so there is no ambiguity.
+                TokenKind::Bang => {
+                    self.advance();
+                    e = Expr::Force {
+                        inner: Box::new(e),
+                        span: sp,
+                    };
+                }
                 _ => break,
             }
         }
@@ -1420,6 +1430,29 @@ mod tests {
         // a plain condition has no binding
         match stmt("if (a) { return 1; }") {
             Stmt::If { bind: None, .. } => {}
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_force_unwrap() {
+        // postfix `!` is a force-unwrap; prefix `!` stays a logical-not unary
+        match expr("o!") {
+            Expr::Force { .. } => {}
+            other => panic!("got {other:?}"),
+        }
+        match expr("!b") {
+            Expr::Unary {
+                op: UnaryOp::Not, ..
+            } => {}
+            other => panic!("got {other:?}"),
+        }
+        // `a != b` must remain a single NotEq comparison, never `a` `!` `= b`
+        match expr("a != b") {
+            Expr::Binary {
+                op: BinaryOp::NotEq,
+                ..
+            } => {}
             other => panic!("got {other:?}"),
         }
     }

@@ -43,6 +43,11 @@ enum FaultKind {
     /// (M3 S1.1). Without this arm an OOB program would fall to `Other(full_string)` and the line
     /// prefix would spuriously fail `agree_err`.
     IndexOob,
+    /// `opt!` force-unwrap of a `null` value — a checker-allowed, runtime-reachable fault (the
+    /// checker permits `!` but warns; absence is only known at runtime). Classified by body
+    /// substring so the VM's `Op::Fault(ForceUnwrapNull)` and the interpreter's `rt(..)` agree (M3
+    /// S2.5).
+    ForceUnwrap,
     /// Anything the corpus doesn't yet classify — carried verbatim so a mismatch stays legible.
     Other(String),
 }
@@ -61,6 +66,8 @@ fn classify(err: &str) -> FaultKind {
         FaultKind::StackOverflow
     } else if err.contains("list index out of range") {
         FaultKind::IndexOob
+    } else if err.contains("force-unwrap of null") {
+        FaultKind::ForceUnwrap
     } else if err.contains("no field") {
         FaultKind::NoField
     } else if err.contains("unsupported") || err.contains("compile error") {
@@ -599,4 +606,24 @@ fn s2_if_let_is_byte_identical() {
         "function main() { int? o = 41; if (var x = o) { println(\"{x + 1}\"); } else { println(\"none\"); } }";
     assert_eq!(cmd_run(arith).as_deref(), Ok("42\n"));
     agree(arith);
+}
+
+#[test]
+fn s2_force_unwrap_is_byte_identical() {
+    // `opt!` on a present optional yields the inner value, identically on both backends.
+    let present = "function main() { int? o = 5; println(\"{o!}\"); }";
+    assert_eq!(cmd_run(present).as_deref(), Ok("5\n"));
+    agree(present);
+    // The unwrapped value is a real arithmetic operand: `o! + 1` must specialize identically
+    // (guards the run↔runvm operand-type gap — see the cty-tracks-operand-types invariant).
+    let arith = "function main() { int? o = 41; println(\"{o! + 1}\"); }";
+    assert_eq!(cmd_run(arith).as_deref(), Ok("42\n"));
+    agree(arith);
+}
+
+#[test]
+fn s2_force_unwrap_null_faults_identically() {
+    // `opt!` on null is a clean fault with the SAME FaultKind on both backends (no crash, no UB).
+    let src = "function main() { int? o = null; int x = o!; }";
+    agree_err(src); // FaultKind::ForceUnwrap on both
 }

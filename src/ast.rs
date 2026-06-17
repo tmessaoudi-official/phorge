@@ -130,6 +130,13 @@ pub enum Expr {
         index: Box<Expr>,
         span: Span,
     },
+    /// `inner!` — checked force-unwrap of an optional `T?` to `T` (M3 S2.5). The checker requires
+    /// `inner: T?` and lints every use (`W-FORCE-UNWRAP`); at runtime a `null` inner is a clean,
+    /// byte-identical fault on both backends rather than a crash.
+    Force {
+        inner: Box<Expr>,
+        span: Span,
+    },
     Match {
         scrutinee: Box<Expr>,
         arms: Vec<MatchArm>,

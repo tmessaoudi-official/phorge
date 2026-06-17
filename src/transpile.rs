@@ -21,6 +21,9 @@ struct Transpiler {
     indent: usize,
     locals: Vec<HashSet<String>>,
     cur_class_fields: Option<HashSet<String>>,
+    /// Set when an `opt!` force-unwrap is emitted, so the `__phorge_unwrap` helper is defined once
+    /// per file (PHP hoists top-level function declarations, so its position is immaterial).
+    uses_force: bool,
 }
 
 /// Where a `match` expression's arm values flow: a `return` or an assignment to `$name`.
@@ -40,6 +43,7 @@ impl Transpiler {
             indent: 0,
             locals: Vec::new(),
             cur_class_fields: None,
+            uses_force: false,
         }
     }
 
@@ -85,6 +89,18 @@ impl Transpiler {
         // is a runnable program, not just definitions.
         if self.funcs.contains("main") {
             self.line("main();");
+        }
+        // The `opt!` runtime helper, defined once when used. PHP hoists top-level function
+        // declarations, so emitting it after `main();` is still callable from any body (M3 S2.5).
+        if self.uses_force {
+            self.line("function __phorge_unwrap($v) {");
+            self.indent += 1;
+            self.line(
+                "if ($v === null) { throw new \\RuntimeException(\"force-unwrap of null\"); }",
+            );
+            self.line("return $v;");
+            self.indent -= 1;
+            self.line("}");
         }
         Ok(())
     }
@@ -414,6 +430,14 @@ impl Transpiler {
                 let o = self.emit_expr(object)?;
                 let arrow = if *safe { "?->" } else { "->" };
                 Ok(format!("{o}{arrow}{name}"))
+            }
+            // `inner!` → a once-per-file helper that throws on null, else returns the value (M3
+            // S2.5). The null-fault message differs from the Phorge backends' (no name/line) — a
+            // documented transpile-only divergence (KNOWN_ISSUES); the present-value case is exact.
+            Expr::Force { inner, .. } => {
+                let v = self.emit_expr(inner)?;
+                self.uses_force = true;
+                Ok(format!("__phorge_unwrap({v})"))
             }
             // Implemented in Task 6:
             Expr::Match { .. } => {

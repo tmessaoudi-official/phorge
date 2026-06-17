@@ -38,6 +38,28 @@ impl ConstKey {
     }
 }
 
+/// Which fixed runtime fault an [`Op::Fault`] raises. The message lives here (single-sourced) so the
+/// VM and the tree-walking interpreter stay byte-identical — the `agree_err` oracle classifies
+/// faults by body substring (M3 S2.5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FaultMsg {
+    /// Non-exhaustive `match` fall-through (checker-unreachable backstop).
+    NonExhaustiveMatch,
+    /// `opt!` force-unwrap of a `null` value.
+    ForceUnwrapNull,
+}
+
+impl FaultMsg {
+    /// The fault body. Must match the interpreter's `rt(..)` text for each fault so both backends
+    /// classify to the same `FaultKind`.
+    pub fn message(self) -> &'static str {
+        match self {
+            FaultMsg::NonExhaustiveMatch => "non-exhaustive match at runtime",
+            FaultMsg::ForceUnwrapNull => "force-unwrap of null",
+        }
+    }
+}
+
 /// One VM instruction. Typed operands — no raw-byte decode (decision M2-7).
 /// Jump targets are absolute instruction indices (decision P2-2).
 #[derive(Debug, Clone, PartialEq)]
@@ -111,10 +133,13 @@ pub enum Op {
     /// this for an index a preceding `MatchTag` already proved in range (P4-7); a defensive
     /// runtime fault covers misuse (EV-7).
     GetEnumField(usize),
-    /// Raise the canonical `"non-exhaustive match at runtime"` fault. The checker guarantees
-    /// `match` exhaustiveness, so the compiler plants this only as the fall-through after the
-    /// last arm; it mirrors the interpreter's identical fault if ever reached (EV-7 parity).
-    MatchFail,
+    /// Abort with a fixed runtime-fault message selected by [`FaultMsg`]. Generalizes the former
+    /// `MatchFail` (M3 S2.5): both the `match` exhaustiveness backstop and `opt!`-on-null lower to
+    /// this one op, so S2 adds **no new `Op` variant**. The message text lives in the handler (not
+    /// the const pool), keeping both backends byte-identical (the `agree_err` oracle classifies
+    /// faults by body substring). Carries no static index, so — like `MakeRange` — it needs no
+    /// `validate` arm.
+    Fault(FaultMsg),
     /// Construct a class instance from `class_descs[idx]`: pop `desc.fields.len()` promoted-field
     /// values (in declaration order — top of stack is the last field), zip them with
     /// `desc.fields`, and push a `Value::Instance`. Emitted only inside a synthetic constructor

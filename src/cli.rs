@@ -175,6 +175,18 @@ pub fn explain_text(code: &str) -> Option<String> {
              the then-block. A scrutinee that is already non-optional has nothing to narrow — use a\n\
              plain `if (cond)` for a boolean test, or make the scrutinee a `T?`.\n"
         }
+        "E-OPT-UNWRAP" => {
+            "E-OPT-UNWRAP — force-unwrap `!` was applied to a non-optional value.\n\n\
+             `opt!` asserts that an optional `T?` is non-null and unwraps it to `T` (faulting at\n\
+             runtime if it is null). A value that is already a non-optional `T` has nothing to\n\
+             unwrap — remove the `!`.\n"
+        }
+        "W-FORCE-UNWRAP" => {
+            "W-FORCE-UNWRAP — a force-unwrap `!` may fault at runtime (lint).\n\n\
+             `opt!` aborts the program if the optional is null. This is a deliberate guardrail: it\n\
+             flags every `!` so you can prefer a total alternative — `??` (default value), `?.`\n\
+             (safe access), or `if (var x = opt) { … }` (narrow) — where null is a real possibility.\n"
+        }
         _ => return None,
     };
     Some(body.to_string())
@@ -185,7 +197,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE)"
+             (known: E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP)"
         )
     })
 }
@@ -247,8 +259,14 @@ fn parse_checked(src: &str) -> Result<Program, String> {
     let prog = lex_parse(src)?;
     match check(&prog) {
         // De-alias the program so every backend sees alias-free types (aliases are front-end
-        // sugar; the checker validated them, including cycles + built-in shadowing).
-        Ok(()) => Ok(crate::checker::expand_aliases(&prog)),
+        // sugar; the checker validated them, including cycles + built-in shadowing). Non-fatal
+        // warnings (the lint channel, M3 S2.5) render to stderr and never gate the build.
+        Ok(warnings) => {
+            for w in &warnings {
+                eprintln!("warning: {}", w.render(src));
+            }
+            Ok(crate::checker::expand_aliases(&prog))
+        }
         Err(errs) => {
             let lines: Vec<String> = errs.iter().map(|e| e.render(src)).collect();
             Err(lines.join("\n"))

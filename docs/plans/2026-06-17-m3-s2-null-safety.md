@@ -37,6 +37,18 @@ if-let lower to existing `SetLocal`/`GetLocal` + a null-test (`Eq` vs a `null` c
   `CTy` (was `Other`), so an if-let binding's `x + 1` specializes; checker-safe because a bare `T?`
   is never an arithmetic/member/index operand (all narrowing sites produce the inner). No new `Op`:
   if-let lowers to `GetLocal; Const null; Ne; JumpIfFalse` with the scrutinee slot as the binding.
+- [2026-06-17] AGREED (Task 5 — warning channel): W-FORCE-UNWRAP is the first non-fatal lint. Channel
+  convention (AskUserQuestion): **stderr, non-fatal, all commands** (rustc/clippy-style). Checker
+  collects `warnings: Vec<Diagnostic>`; `check()` returns `Ok(warnings)` on success; the shared
+  `parse_checked` funnel renders them to stderr on every command; exit code unaffected; stdout (and
+  differential byte-identity) stays clean. Reusable for all future Phorge lints.
+- [2026-06-17] AGREED (Task 5 — fault op): generalized `Op::MatchFail` (payloadless) →
+  `Op::Fault(FaultMsg)` carrying a `Copy` discriminant ({NonExhaustiveMatch, ForceUnwrapNull}); the
+  message is single-sourced on `FaultMsg::message()`. Honors S2-OPS **no new `Op` variant** (variant
+  count unchanged; like `MakeRange(bool)` it needs no `validate` arm). `opt!`-on-null lowers to
+  `GetLocal; Const null; Eq; JumpIfFalse ok; Fault(ForceUnwrapNull); ok:` — both backends fault with
+  body `"force-unwrap of null"` → `FaultKind::ForceUnwrap`. PHP transpile uses a once-per-file
+  `__phorge_unwrap($v)` helper (null-message detail is a documented transpile divergence).
 
 ---
 
@@ -46,7 +58,10 @@ if-let lower to existing `SetLocal`/`GetLocal` + a null-test (`Eq` vs a `null` c
 - [x] Task 3 — `?.` safe access (nullsafe field + method, short-circuit, `E-OPT-USE`) — `f6266b2`
 - [x] Task 4 — `if (var x = opt)` binding + smart-cast (`bind: Option<String>`, `resolve_cty`
   optional→inner, no new `Op`, `E-IF-LET-TYPE`, PHP round-trip) — committed below
-- [ ] Task 5 — `opt!` · Task 6 — `match` over `T?` · Task 7 — example + docs
+- [x] Task 5 — `opt!` checked force-unwrap + `W-FORCE-UNWRAP` lint (`Expr::Force`, postfix `!`,
+  `E-OPT-UNWRAP`, warning channel, `MatchFail`→`Fault(FaultMsg)` generalization, `FaultKind::ForceUnwrap`
+  parity, `__phorge_unwrap` PHP helper) — committed below
+- [ ] Task 6 — `match` over `T?` · Task 7 — example + docs
 
 ## File Structure
 

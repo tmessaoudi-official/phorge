@@ -332,9 +332,10 @@ impl<'a> Vm<'a> {
                 }
                 v => return Err(format!("cannot extract enum field from {}", v.type_name())),
             },
-            // Checker-unreachable backstop: the canonical fault, byte-identical to the
-            // interpreter's `eval_match` fall-through (the `agree_err` oracle classifies by body).
-            Op::MatchFail => return Err("non-exhaustive match at runtime".to_string()),
+            // A fixed runtime fault (match-exhaustiveness backstop or `opt!`-on-null), byte-identical
+            // to the interpreter's fault for the same cause (the `agree_err` oracle classifies by
+            // body). The message is single-sourced on `FaultMsg` (M3 S2.5).
+            Op::Fault(m) => return Err(m.message().to_string()),
 
             // --- P4b: classes ---
             Op::MakeInstance(idx) => {

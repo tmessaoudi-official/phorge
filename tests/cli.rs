@@ -243,6 +243,54 @@ fn if_let_transpiles_and_runs_in_php() {
     assert_eq!(String::from_utf8_lossy(&run.stdout), "got 5\nnone\n");
 }
 
+/// `opt!` transpiles to a `__phorge_unwrap()` helper call; on a present optional it returns the
+/// value and runs identically under real PHP. Self-skips (passes) if `php` is not on PATH.
+#[test]
+fn force_unwrap_transpiles_and_runs_in_php() {
+    let have_php = Command::new("php")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !have_php {
+        eprintln!("skipping opt! round-trip: php not on PATH");
+        return;
+    }
+    let src = "import std.io;\n\
+               function main() {\n\
+               \x20   int? o = 7;\n\
+               \x20   println(\"{o!}\");\n\
+               }\n";
+    let dir = std::env::temp_dir().join("phorge_rt_force");
+    std::fs::create_dir_all(&dir).unwrap();
+    let phg = dir.join("force.phg");
+    std::fs::write(&phg, src).unwrap();
+    let php = Command::new(BIN)
+        .arg("transpile")
+        .arg(&phg)
+        .output()
+        .expect("spawn transpile");
+    assert!(
+        php.status.success(),
+        "transpile stderr: {}",
+        String::from_utf8_lossy(&php.stderr)
+    );
+    let php_path = dir.join("force.php");
+    std::fs::write(&php_path, &php.stdout).unwrap();
+    let run = Command::new("php")
+        .arg(&php_path)
+        .output()
+        .expect("spawn php");
+    let _ = std::fs::remove_file(&phg);
+    let _ = std::fs::remove_file(&php_path);
+    assert!(
+        run.status.success(),
+        "php stderr: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "7\n");
+}
+
 #[test]
 fn run_reads_program_from_stdin() {
     use std::io::Write;

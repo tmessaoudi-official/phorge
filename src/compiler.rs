@@ -19,7 +19,7 @@ use crate::ast::{
     BinaryOp, ClassDecl, ClassMember, CtorParam, Expr, FunctionDecl, Item, MatchArm, Modifier,
     Pattern, Program, Stmt, StrPart, Type, UnaryOp,
 };
-use crate::chunk::{BytecodeProgram, Chunk, ClassDesc, EnumDesc, Function, Op};
+use crate::chunk::{BytecodeProgram, Chunk, ClassDesc, EnumDesc, FaultMsg, Function, Op};
 use crate::diagnostic::Diagnostic;
 use crate::value::Value;
 use std::collections::HashMap;
@@ -596,7 +596,7 @@ impl<'a> Compiler<'a> {
             // Pops the receiver + `argc` args, pushes one result.
             Op::CallMethod(_, argc) => -(*argc as isize),
             // Terminal (end/redirect the frame): height afterward is dead code, never read.
-            Op::Return | Op::MatchFail => 0,
+            Op::Return | Op::Fault(_) => 0,
         }
     }
 
@@ -743,6 +743,9 @@ impl<'a> Compiler<'a> {
             },
             Expr::Unary { expr, .. } => self.ctype(expr),
             Expr::Binary { lhs, .. } => self.ctype(lhs),
+            // `inner!` unwraps `T?` to `T`; its operand type is the inner's (so `o! + 1` specializes
+            // — `resolve_cty(Optional)` already yields the inner `CTy`). M3 S2.5.
+            Expr::Force { inner, .. } => self.ctype(inner),
             // A `match` value's type is its arms' shared type (checker-guaranteed); infer it from
             // the first arm's body so `var x = match … { … }` specializes like an explicit local.
             Expr::Match { arms, .. } => match arms.first() {
@@ -933,6 +936,7 @@ impl<'a> Compiler<'a> {
                 self.expr(index)?;
                 self.emit(Op::Index, span.line);
             }
+            Expr::Force { inner, span } => self.compile_force(inner, span.line)?,
             Expr::Match {
                 scrutinee,
                 arms,
@@ -1194,6 +1198,24 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
+    /// `inner!` checked force-unwrap (M3 S2.5). Evaluate the inner; a non-consuming null-test keeps
+    /// the value when present, else raises `Op::Fault(ForceUnwrapNull)` — byte-identical to the
+    /// interpreter's `"force-unwrap of null"` fault. No new `Op` (the fault op is the generalized
+    /// `MatchFail`). The scratch slot's `CTy` is the inner type so `o! + 1` still specializes.
+    fn compile_force(&mut self, inner: &Expr, line: u32) -> Result<(), String> {
+        self.expr(inner)?; // [opt] — stays as the result when non-null
+        let inner_cty = self.ctype(inner).unwrap_or(CTy::Other);
+        let slot = self.add_local("$force", inner_cty);
+        self.emit(Op::GetLocal(slot), line); // [opt, opt]
+        self.emit_const(Value::Null, line); // [opt, opt, null]
+        self.emit(Op::Eq, line); // [opt, opt == null]
+        let ok = self.emit_jump(Op::JumpIfFalse(0), line); // [opt]; non-null → keep, skip the fault
+        self.emit(Op::Fault(FaultMsg::ForceUnwrapNull), line); // null → clean fault (terminal)
+        self.patch_jump(ok);
+        self.locals.pop(); // unregister $force; the unwrapped value stays on the stack
+        Ok(())
+    }
+
     fn compile_if(
         &mut self,
         cond: &Expr,
@@ -1365,7 +1387,7 @@ impl<'a> Compiler<'a> {
                 self.patch_jump(j); // a mismatch lands at the next arm
             }
         }
-        self.emit(Op::MatchFail, line); // checker-unreachable backstop (EV-7 parity)
+        self.emit(Op::Fault(FaultMsg::NonExhaustiveMatch), line); // checker-unreachable backstop (EV-7 parity)
         for j in end_jumps {
             self.patch_jump(j); // matched arms converge here: [.., scrutinee, result]
         }

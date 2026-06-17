@@ -33,6 +33,9 @@ pub struct Checker {
     /// lexical block scopes; last is innermost
     scopes: Vec<HashMap<String, Ty>>,
     errors: Vec<Diagnostic>,
+    /// Non-fatal lints (e.g. `W-FORCE-UNWRAP`). Surfaced to stderr by the CLI but never fail the
+    /// build — the first member of Phorge's warning channel (M3 S2.5).
+    warnings: Vec<Diagnostic>,
     /// return type of the function/method currently being checked
     cur_ret: Ty,
     /// class currently being checked (for `this` and bare field refs)
@@ -53,6 +56,7 @@ impl Checker {
             classes: HashMap::new(),
             scopes: Vec::new(),
             errors: Vec::new(),
+            warnings: Vec::new(),
             cur_ret: Ty::Unit,
             cur_class: None,
             depth: 0,
@@ -81,6 +85,20 @@ impl Checker {
         d.hint = hint;
         self.errors.push(d);
         Ty::Error
+    }
+
+    /// Record a non-fatal lint (the warning channel — M3 S2.5). Unlike [`err_coded`] this does not
+    /// poison a type; it is collected separately and surfaced to stderr without failing the build.
+    fn warn_coded(
+        &mut self,
+        span: Span,
+        msg: impl Into<String>,
+        code: &'static str,
+        hint: Option<String>,
+    ) {
+        let mut d = Diagnostic::new(Stage::Type, msg, span.line, span.col).with_code(code);
+        d.hint = hint;
+        self.warnings.push(d);
     }
 
     /// Assignment-failure diagnostic. Recognizes the optional-misuse case (a `T?` used where a
@@ -599,6 +617,7 @@ impl Checker {
                 index,
                 span,
             } => self.check_index(object, index, *span), // Task 5
+            Expr::Force { inner, span } => self.check_force(inner, *span),
             Expr::Match {
                 scrutinee,
                 arms,
@@ -754,6 +773,7 @@ impl Checker {
             | Expr::Call { span, .. }
             | Expr::Member { span, .. }
             | Expr::Index { span, .. }
+            | Expr::Force { span, .. }
             | Expr::Match { span, .. }
             | Expr::Range { span, .. }
             | Expr::If { span, .. } => *span,
@@ -1044,6 +1064,29 @@ impl Checker {
             field_ty
         }
     }
+    /// `opt!` checked force-unwrap (M3 S2.5): `T?` → `T`. Every use is linted (`W-FORCE-UNWRAP`) to
+    /// nudge toward `??`/`?.`/if-let; force-unwrapping a non-optional is `E-OPT-UNWRAP`.
+    fn check_force(&mut self, inner: &crate::ast::Expr, span: Span) -> Ty {
+        let t = self.check_expr(inner);
+        match t {
+            Ty::Error => Ty::Error,
+            Ty::Optional(inner_ty) => {
+                self.warn_coded(
+                    span,
+                    "force-unwrap `!` asserts an optional is non-null and faults at runtime if it is null",
+                    "W-FORCE-UNWRAP",
+                    Some("prefer `??` (default), `?.` (safe access), or `if (var x = opt)` to handle null without a possible fault".into()),
+                );
+                *inner_ty
+            }
+            other => self.err_coded(
+                span,
+                format!("force-unwrap `!` requires an optional `T?`, found non-optional `{other}`"),
+                "E-OPT-UNWRAP",
+                Some("`!` unwraps a `T?` to `T`; a non-optional value is already non-null".into()),
+            ),
+        }
+    }
     /// `E-OPT-USE`: a plain `.`/`.m()` was used on an optional (or `null`) receiver, which could
     /// dereference null. Steers the developer to `?.`, `??`, or a checked unwrap `!`.
     fn err_opt_use(&mut self, span: Span, name: &str, recv: &Ty, verb: &str) -> Ty {
@@ -1234,12 +1277,15 @@ impl Checker {
 
 /// Type-check a whole program. `Ok(())` means it is well-typed; otherwise every
 /// detected error is returned.
-pub fn check(program: &Program) -> Result<(), Vec<Diagnostic>> {
+/// Type-check `program`. On success returns the collected non-fatal warnings (the warning channel,
+/// M3 S2.5) — possibly empty; on failure returns the errors. Warnings never gate the build: the CLI
+/// renders them to stderr and proceeds.
+pub fn check(program: &Program) -> Result<Vec<Diagnostic>, Vec<Diagnostic>> {
     let mut c = Checker::new();
     c.collect(program);
     c.check_program(program);
     if c.errors.is_empty() {
-        Ok(())
+        Ok(c.warnings)
     } else {
         Err(c.errors)
     }
@@ -1475,9 +1521,14 @@ mod tests {
     /// Type-check `src` and return the errors (empty == well-typed).
     fn errors_of(src: &str) -> Vec<Diagnostic> {
         match check(&prog(src)) {
-            Ok(()) => Vec::new(),
+            Ok(_warnings) => Vec::new(),
             Err(e) => e,
         }
+    }
+
+    /// Type-check `src` and return the non-fatal warnings (empty unless a lint fired).
+    fn warnings_of(src: &str) -> Vec<Diagnostic> {
+        check(&prog(src)).unwrap_or_default()
     }
 
     #[test]
@@ -1521,6 +1572,24 @@ mod tests {
         assert!(
             e3.iter().any(|d| d.code == Some("E-IF-LET-TYPE")),
             "got {e3:?}"
+        );
+    }
+
+    #[test]
+    fn force_unwrap_typing_and_lint() {
+        // `opt!` unwraps `T?` to `T`; the program type-checks and emits the W-FORCE-UNWRAP lint
+        let src = "function main() { int? o = 5; int x = o!; }";
+        assert!(errors_of(src).is_empty(), "got {:?}", errors_of(src));
+        let w = warnings_of(src);
+        assert!(
+            w.iter().any(|d| d.code == Some("W-FORCE-UNWRAP")),
+            "expected W-FORCE-UNWRAP, got {w:?}"
+        );
+        // force-unwrapping a non-optional is an error (nothing to unwrap)
+        let e = errors_of("function main() { int n = 3; int x = n!; }");
+        assert!(
+            e.iter().any(|d| d.code == Some("E-OPT-UNWRAP")),
+            "got {e:?}"
         );
     }
 

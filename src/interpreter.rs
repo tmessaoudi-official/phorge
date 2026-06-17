@@ -309,6 +309,17 @@ impl Interp {
                     None => rt("list index out of range"),
                 }
             }
+            Expr::Force { inner, .. } => {
+                // `inner!`: a present optional unwraps to its value; a `null` is a clean fault whose
+                // body matches the VM's `Op::Fault(ForceUnwrapNull)`, so `agree_err` classifies both
+                // as the same `FaultKind` (D-L8 / error-parity).
+                let v = self.eval(inner)?;
+                if matches!(v, Value::Null) {
+                    rt("force-unwrap of null")
+                } else {
+                    Ok(v)
+                }
+            }
             Expr::Match {
                 scrutinee, arms, ..
             } => self.eval_match(scrutinee, arms),
