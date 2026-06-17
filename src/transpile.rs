@@ -421,6 +421,19 @@ impl Transpiler {
                     format!("range({s}, {e} - 1)")
                 })
             }
+            // Expression `if` → a PHP ternary (the idiomatic conditional expression, the TS→JS
+            // analogue); parenthesized so it composes safely inside any larger expression.
+            Expr::If {
+                cond,
+                then_expr,
+                else_expr,
+                ..
+            } => {
+                let c = self.emit_expr(cond)?;
+                let t = self.emit_expr(then_expr)?;
+                let e = self.emit_expr(else_expr)?;
+                Ok(format!("({c} ? {t} : {e})"))
+            }
         }
     }
 
@@ -689,6 +702,12 @@ mod tests {
         assert!(out.contains("range(0, 3 - 1)"), "{out}");
         let inc = php(r#"function main() { for (int i in 1..=3) { println("{i}"); } }"#);
         assert!(inc.contains("range(1, 3)"), "{inc}");
+    }
+
+    #[test]
+    fn expression_if_emits_ternary() {
+        let out = php("function pick(bool b) -> int { return if (b) { 1 } else { 2 }; }");
+        assert!(out.contains("($b ? 1 : 2)"), "{out}");
     }
 
     #[test]

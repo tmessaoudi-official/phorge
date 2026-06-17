@@ -297,6 +297,7 @@ impl Parser {
                 Ok(Expr::Str(parts, sp))
             }
             TokenKind::Match => self.parse_match(sp),
+            TokenKind::If => self.parse_if_expr(sp),
             TokenKind::LParen => {
                 self.advance();
                 let inner = self.parse_expr()?;
@@ -507,6 +508,33 @@ impl Parser {
         Ok(Expr::Match {
             scrutinee: Box::new(scrutinee),
             arms,
+            span: sp,
+        })
+    }
+
+    /// `if (cond) { e } else { e }` in **expression** position — parens and a single-expression
+    /// body per arm, with a mandatory `else` (the value must come from somewhere). Reached only via
+    /// `parse_primary`; a top-level `if` statement is matched first by `parse_stmt`, so the two
+    /// never collide. Mirrors statement-`if`'s `if (cond)` shape for intra-language consistency.
+    fn parse_if_expr(&mut self, sp: Span) -> Result<Expr, Diagnostic> {
+        self.expect(&TokenKind::If, "'if'")?;
+        self.expect(&TokenKind::LParen, "'(' after 'if'")?;
+        let cond = self.parse_expr()?;
+        self.expect(&TokenKind::RParen, "')' after if condition")?;
+        self.expect(&TokenKind::LBrace, "'{' to open the then-branch")?;
+        let then_expr = self.parse_expr()?;
+        self.expect(&TokenKind::RBrace, "'}' to close the then-branch")?;
+        self.expect(
+            &TokenKind::Else,
+            "'else' (an expression `if` must have an else branch)",
+        )?;
+        self.expect(&TokenKind::LBrace, "'{' to open the else-branch")?;
+        let else_expr = self.parse_expr()?;
+        self.expect(&TokenKind::RBrace, "'}' to close the else-branch")?;
+        Ok(Expr::If {
+            cond: Box::new(cond),
+            then_expr: Box::new(then_expr),
+            else_expr: Box::new(else_expr),
             span: sp,
         })
     }
@@ -1235,6 +1263,17 @@ mod tests {
             Expr::Range { end, .. } => assert!(matches!(*end, Expr::Binary { .. })),
             other => panic!("got {other:?}"),
         }
+    }
+
+    #[test]
+    fn parses_expression_if() {
+        match expr("if (true) { 1 } else { 2 }") {
+            Expr::If { .. } => {}
+            other => panic!("got {other:?}"),
+        }
+        // a missing else is a parse error in expression position
+        let mut p = parser("if (true) { 1 }");
+        assert!(p.parse_expr().is_err());
     }
 
     #[test]

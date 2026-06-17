@@ -195,6 +195,26 @@ fn s1_ranges_are_byte_identical() {
     );
 }
 
+/// M3 S1.3 — expression `if` (`if (c) { e } else { e }`) in value position. No new `Op` — it lowers
+/// to the existing branch ops (like `&&`/`||`/`match`), so both backends leave the same single value
+/// on the stack and must agree.
+#[test]
+fn s1_expression_if_is_byte_identical() {
+    // value-position in a `var` initializer, then used arithmetically (specialization parity)
+    agree(r#"function main() { var x = if (1 < 2) { 10 } else { 20 }; println("{x + x}"); }"#);
+    // in return position, both branches taken across two calls
+    agree(
+        r#"function pick(bool b) -> int { return if (b) { 1 } else { 2 }; }
+           function main() { println("{pick(true)} {pick(false)}"); }"#,
+    );
+    // as a call argument (string-typed branches), inside a range loop
+    agree(
+        r#"function main() { for (int i in 0..3) { println(if (i == 1) { "one" } else { "x" }); } }"#,
+    );
+    // nested / float branches
+    agree(r#"function main() { float r = if (true) { 1.5 } else { 2.5 }; println("{r * 2.0}"); }"#);
+}
+
 /// P3 surface: user function calls, recursion, mutual recursion, void functions, returns in
 /// branches, nested calls, float-returning functions, and calls as statements. Each must run
 /// identically on both backends.

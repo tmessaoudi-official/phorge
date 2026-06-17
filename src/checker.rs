@@ -558,6 +558,12 @@ impl Checker {
             Expr::Range {
                 start, end, span, ..
             } => self.check_range(start, end, *span),
+            Expr::If {
+                cond,
+                then_expr,
+                else_expr,
+                span,
+            } => self.check_if_expr(cond, then_expr, else_expr, *span),
         }
     }
 
@@ -676,7 +682,8 @@ impl Checker {
             | Expr::Member { span, .. }
             | Expr::Index { span, .. }
             | Expr::Match { span, .. }
-            | Expr::Range { span, .. } => *span,
+            | Expr::Range { span, .. }
+            | Expr::If { span, .. } => *span,
         }
     }
     fn check_list(&mut self, elems: &[crate::ast::Expr], span: Span) -> Ty {
@@ -732,6 +739,34 @@ impl Checker {
             );
         }
         Ty::List(Box::new(Ty::Int))
+    }
+    /// Expression `if`: the condition must be `bool` and both arms must share one type `T`, which is
+    /// the expression's type. (`else` is mandatory at the parser, so there is no missing-else case
+    /// here.) Mirrors `check_match`'s arm-unification rule (M3 S1.3).
+    fn check_if_expr(
+        &mut self,
+        cond: &crate::ast::Expr,
+        then_e: &crate::ast::Expr,
+        else_e: &crate::ast::Expr,
+        span: Span,
+    ) -> Ty {
+        let c = self.check_expr(cond);
+        if !Ty::assignable(&c, &Ty::Bool) {
+            self.err(span, format!("`if` condition must be `bool`, found `{c}`"));
+        }
+        let t = self.check_expr(then_e);
+        let e = self.check_expr(else_e);
+        if t != Ty::Error && e != Ty::Error && !Ty::assignable(&e, &t) && !Ty::assignable(&t, &e) {
+            self.err(
+                span,
+                format!("`if` branches must share one type; found `{t}` and `{e}`"),
+            );
+        }
+        if t == Ty::Error {
+            e
+        } else {
+            t
+        }
     }
     fn check_call(
         &mut self,
@@ -1659,6 +1694,34 @@ mod tests {
             errs.iter()
                 .any(|e| e.message.contains("range bounds must be `int`")
                     && e.code == Some("E-RANGE-TYPE")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn expression_if_unifies_branch_types() {
+        assert!(
+            errors_of("function main() { var x = if (1 < 2) { 10 } else { 20 }; int y = x; }")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn expression_if_branch_type_mismatch_errors() {
+        let errs = errors_of("function main() { var x = if (true) { 1 } else { false }; }");
+        assert!(
+            errs.iter()
+                .any(|e| e.message.contains("branches must share one type")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn expression_if_condition_must_be_bool() {
+        let errs = errors_of("function main() { var x = if (3) { 1 } else { 2 }; }");
+        assert!(
+            errs.iter()
+                .any(|e| e.message.contains("condition must be `bool`")),
             "{errs:?}"
         );
     }

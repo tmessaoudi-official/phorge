@@ -310,6 +310,18 @@ impl Interp {
                 };
                 Ok(Value::List(Rc::new(list)))
             }
+            Expr::If {
+                cond,
+                then_expr,
+                else_expr,
+                ..
+            } => {
+                if as_bool(&self.eval(cond)?)? {
+                    self.eval(then_expr)
+                } else {
+                    self.eval(else_expr)
+                }
+            }
         }
     }
 
@@ -818,6 +830,18 @@ mod tests {
         assert_eq!(
             out(r#"function main() { for (int i in 5..2) { println("{i}"); } println("done"); }"#),
             "done\n"
+        );
+    }
+
+    #[test]
+    fn expression_if_picks_branch_value() {
+        assert_eq!(
+            out(r#"function main() { var x = if (1 < 2) { 7 } else { 9 }; println("{x}"); }"#),
+            "7\n"
+        );
+        assert_eq!(
+            out(r#"function main() { var x = if (1 > 2) { 7 } else { 9 }; println("{x}"); }"#),
+            "9\n"
         );
     }
 

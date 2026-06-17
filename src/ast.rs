@@ -138,6 +138,15 @@ pub enum Expr {
         inclusive: bool,
         span: Span,
     },
+    /// `if (cond) { then } else { else }` in **expression** position: both arms are single
+    /// expressions and `else` is mandatory (the value flows out). Distinct from the statement
+    /// `Stmt::If`; the parser picks expr-vs-stmt by position (M3 S1.3).
+    If {
+        cond: Box<Expr>,
+        then_expr: Box<Expr>,
+        else_expr: Box<Expr>,
+        span: Span,
+    },
 }
 
 /// A function/method parameter: `Type name`.

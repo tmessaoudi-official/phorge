@@ -727,6 +727,9 @@ impl<'a> Compiler<'a> {
             // A range is a `List<int>` — never a numeric/class operand (the checker rejects
             // arithmetic on it); `Other` is the correct non-numeric classification.
             Expr::Range { .. } => Ok(CTy::Other),
+            // Both `if` branches share a type (checker-guaranteed); infer it from the then-branch so
+            // `var x = if (c) { 1 } else { 2 }` specializes arithmetic on `x` (like `Match`).
+            Expr::If { then_expr, .. } => self.ctype(then_expr),
             other => Err(format!("cannot infer numeric type of {other:?}")),
         }
     }
@@ -899,6 +902,24 @@ impl<'a> Compiler<'a> {
                 self.expr(start)?;
                 self.expr(end)?;
                 self.emit(Op::MakeRange(*inclusive), span.line);
+            }
+            Expr::If {
+                cond,
+                then_expr,
+                else_expr,
+                span,
+            } => {
+                // Lower like `&&`/`||`: branch on the cond, each arm leaves exactly one value, and
+                // the merge height is reset so both arms agree on the single result slot.
+                self.expr(cond)?;
+                let else_j = self.emit_jump(Op::JumpIfFalse(0), span.line); // pops cond
+                let h_merge = self.height; // both arms converge to one value above this
+                self.expr(then_expr)?;
+                let end_j = self.emit_jump(Op::Jump(0), span.line);
+                self.patch_jump(else_j);
+                self.height = h_merge; // else path starts at the merge height
+                self.expr(else_expr)?;
+                self.patch_jump(end_j);
             }
         }
         Ok(())
@@ -1523,6 +1544,21 @@ mod tests {
         assert_eq!(
             out(r#"function main() { for (int i in 2..=4) { println("{i}"); } }"#),
             "2\n3\n4\n"
+        );
+    }
+
+    #[test]
+    fn expression_if_on_vm() {
+        // value-position if, then arithmetic on the result (height-merge + ctype specialization)
+        assert_eq!(
+            out(r#"function main() { var x = if (true) { 10 } else { 20 }; println("{x + x}"); }"#),
+            "20\n"
+        );
+        assert_eq!(
+            out(
+                r#"function main() { var x = if (false) { 10 } else { 20 }; println("{x + 1}"); }"#
+            ),
+            "21\n"
         );
     }
 
