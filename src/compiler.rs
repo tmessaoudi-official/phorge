@@ -1420,10 +1420,9 @@ impl<'a> Compiler<'a> {
                 self.emit_literal_test(m_slot, path, Value::Bool(*b), skips, line);
             }
             Pattern::Null(_) => {
-                // No null values exist in M1, so a null pattern never matches (interpreter
-                // parity, `match_pattern`): an unconditional skip.
-                self.emit_const(Value::Bool(false), line);
-                skips.push(self.emit_jump(Op::JumpIfFalse(0), line));
+                // M3 S2.6: the arm matches iff the scrutinee is `null` — a literal `Eq null` test
+                // (interpreter parity, `match_pattern`). `eq_val` defines `(Null, Null) => true`.
+                self.emit_literal_test(m_slot, path, Value::Null, skips, line);
             }
             Pattern::Variant { name, fields, .. } => {
                 let idx = self

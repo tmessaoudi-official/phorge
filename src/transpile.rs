@@ -600,6 +600,16 @@ impl Transpiler {
                     ));
                     self.pop_scope();
                 }
+                // `null` arm over an optional scrutinee (M3 S2.6) → a `=== null` guard. Correct in
+                // return position (the first matching arm exits); see the sequential-`if` model used
+                // by the variant arms above.
+                Pattern::Null(_) => {
+                    let body = self.emit_expr(&arm.body)?;
+                    self.line(&format!(
+                        "if ({subj} === null) {{ {} }}",
+                        yield_stmt(&target, &body)
+                    ));
+                }
                 _ => {
                     return Err(
                         "transpile error: literal patterns in match are not yet supported".into(),

@@ -689,7 +689,7 @@ fn match_pattern(pat: &Pattern, value: &Value, out: &mut Vec<(String, Value)>) -
         Pattern::Float(x, _) => matches!(value, Value::Float(v) if v == x),
         Pattern::Str(s, _) => matches!(value, Value::Str(v) if v == s),
         Pattern::Bool(b, _) => matches!(value, Value::Bool(v) if v == b),
-        Pattern::Null(_) => false, // no null values in M1
+        Pattern::Null(_) => matches!(value, Value::Null), // M3 S2.6: `null` arm over a `T?`
         Pattern::Variant { name, fields, .. } => {
             if let Value::Enum(ev) = value {
                 if &ev.variant == name && ev.payload.len() == fields.len() {

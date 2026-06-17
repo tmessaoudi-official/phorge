@@ -61,7 +61,10 @@ if-let lower to existing `SetLocal`/`GetLocal` + a null-test (`Eq` vs a `null` c
 - [x] Task 5 — `opt!` checked force-unwrap + `W-FORCE-UNWRAP` lint (`Expr::Force`, postfix `!`,
   `E-OPT-UNWRAP`, warning channel, `MatchFail`→`Fault(FaultMsg)` generalization, `FaultKind::ForceUnwrap`
   parity, `__phorge_unwrap` PHP helper) — committed below
-- [ ] Task 6 — `match` over `T?` · Task 7 — example + docs
+- [x] Task 6 — `match` over `T?` with null-arm narrowing (`Pattern::Null` un-rejected on optional
+  scrutinee across all 4 backends; catch-all binding narrows to inner `T` after a prior `null` arm;
+  `emit_literal_test(Null)` lowering; PHP `=== null` guard) — committed below
+- [ ] Task 7 — example + docs
 
 ## File Structure
 

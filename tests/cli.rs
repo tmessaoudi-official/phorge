@@ -291,6 +291,59 @@ fn force_unwrap_transpiles_and_runs_in_php() {
     assert_eq!(String::from_utf8_lossy(&run.stdout), "7\n");
 }
 
+/// `match` over an optional (null arm + narrowing binding) transpiles to a `=== null` guard plus a
+/// binding arm and runs identically under real PHP (return position). Self-skips if `php` absent.
+#[test]
+fn match_over_optional_transpiles_and_runs_in_php() {
+    let have_php = Command::new("php")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !have_php {
+        eprintln!("skipping match-T? round-trip: php not on PATH");
+        return;
+    }
+    let src = "import std.io;\n\
+               function f(int? o) -> int {\n\
+               \x20   return match o { null => -1, v => v + 1 };\n\
+               }\n\
+               function main() {\n\
+               \x20   int? a = null;\n\
+               \x20   int? b = 7;\n\
+               \x20   println(\"{f(a)}\");\n\
+               \x20   println(\"{f(b)}\");\n\
+               }\n";
+    let dir = std::env::temp_dir().join("phorge_rt_matchopt");
+    std::fs::create_dir_all(&dir).unwrap();
+    let phg = dir.join("matchopt.phg");
+    std::fs::write(&phg, src).unwrap();
+    let php = Command::new(BIN)
+        .arg("transpile")
+        .arg(&phg)
+        .output()
+        .expect("spawn transpile");
+    assert!(
+        php.status.success(),
+        "transpile stderr: {}",
+        String::from_utf8_lossy(&php.stderr)
+    );
+    let php_path = dir.join("matchopt.php");
+    std::fs::write(&php_path, &php.stdout).unwrap();
+    let run = Command::new("php")
+        .arg(&php_path)
+        .output()
+        .expect("spawn php");
+    let _ = std::fs::remove_file(&phg);
+    let _ = std::fs::remove_file(&php_path);
+    assert!(
+        run.status.success(),
+        "php stderr: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "-1\n8\n");
+}
+
 #[test]
 fn run_reads_program_from_stdin() {
     use std::io::Write;

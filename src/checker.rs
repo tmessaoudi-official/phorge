@@ -1154,6 +1154,10 @@ impl Checker {
         let mut result: Option<Ty> = None;
         let mut covered: Vec<String> = Vec::new();
         let mut has_catch_all = false;
+        // Once a `null` arm has matched, a later catch-all binding over a `T?` scrutinee sees only
+        // the non-null inner — the smart-cast that makes `match opt { null => …, v => … }` bind
+        // `v: T` (M3 S2.6 / S1.4). Tracks whether a prior arm covered `null`.
+        let mut null_seen = false;
 
         for arm in arms {
             if matches!(arm.pattern, Pattern::Wildcard(_) | Pattern::Binding { .. }) {
@@ -1162,11 +1166,20 @@ impl Checker {
             if let Pattern::Variant { name, .. } = &arm.pattern {
                 covered.push(name.clone());
             }
+            // The type a catch-all binding sees: narrowed to the inner `T` when a preceding `null`
+            // arm already handled absence; otherwise the scrutinee type unchanged.
+            let arm_scrut = match (&scrut, null_seen) {
+                (Ty::Optional(inner), true) => (**inner).clone(),
+                _ => scrut.clone(),
+            };
             // each arm gets its own scope for pattern bindings
             self.push_scope();
-            self.check_pattern(&arm.pattern, &scrut);
+            self.check_pattern(&arm.pattern, &arm_scrut);
             let body_ty = self.check_expr(&arm.body);
             self.pop_scope();
+            if matches!(arm.pattern, Pattern::Null(_)) {
+                null_seen = true;
+            }
 
             match &result {
                 None => result = Some(body_ty),
@@ -1226,10 +1239,15 @@ impl Checker {
             Pattern::Str(_, span) => self.expect_prim(scrut, &Ty::String, *span),
             Pattern::Bool(_, span) => self.expect_prim(scrut, &Ty::Bool, *span),
             Pattern::Null(span) => {
-                self.err(
-                    *span,
-                    "null patterns / optionals are not yet supported in M1",
-                );
+                // A `null` pattern is only meaningful against an optional scrutinee (M3 S2.6).
+                if !matches!(scrut, Ty::Optional(_) | Ty::Null | Ty::Error) {
+                    self.err(
+                        *span,
+                        format!(
+                            "`null` pattern requires an optional `T?` scrutinee, found `{scrut}`"
+                        ),
+                    );
+                }
             }
             Pattern::Variant { name, fields, span } => {
                 let enum_name = match scrut {
@@ -1572,6 +1590,28 @@ mod tests {
         assert!(
             e3.iter().any(|d| d.code == Some("E-IF-LET-TYPE")),
             "got {e3:?}"
+        );
+    }
+
+    #[test]
+    fn match_over_optional() {
+        // null arm + catch-all binding is exhaustive for `T?`, and the binding narrows to inner `T`
+        // (so it can be used as a non-optional — here as an `int` arithmetic operand)
+        assert!(errors_of(
+            "function f(int? o) -> int { return match o { null => -1, v => v + 1 }; }"
+        )
+        .is_empty());
+        // a `null` pattern requires an optional scrutinee
+        let e1 = errors_of("function main() { int n = 3; int x = match n { null => 0, v => v }; }");
+        assert!(
+            e1.iter().any(|d| d.message.contains("`null` pattern")),
+            "got {e1:?}"
+        );
+        // a `null` arm alone (no catch-all for the non-null case) is non-exhaustive
+        let e2 = errors_of("function f(int? o) -> int { return match o { null => -1 }; }");
+        assert!(
+            e2.iter().any(|d| d.message.contains("non-exhaustive")),
+            "got {e2:?}"
         );
     }
 

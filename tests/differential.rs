@@ -627,3 +627,13 @@ fn s2_force_unwrap_null_faults_identically() {
     let src = "function main() { int? o = null; int x = o!; }";
     agree_err(src); // FaultKind::ForceUnwrap on both
 }
+
+#[test]
+fn s2_match_over_optional_is_byte_identical() {
+    // `match opt { null => …, v => … }`: the null arm fires on null, the binding arm narrows `v` to
+    // the non-null inner `int` (used here as an arithmetic operand — guards the operand-type gap).
+    let src = "function f(int? o) -> int { return match o { null => -1, v => v + 1 }; } \
+               function main() { int? a = null; int? b = 7; println(\"{f(a)}\"); println(\"{f(b)}\"); }";
+    assert_eq!(cmd_run(src).as_deref(), Ok("-1\n8\n"));
+    agree(src);
+}
