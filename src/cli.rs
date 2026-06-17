@@ -168,10 +168,10 @@ fn on_deep_stack<T: Send>(f: impl FnOnce() -> T + Send) -> T {
 /// [`crate::diagnostic::Diagnostic`] that renders itself (stage prefix + position), so the CLI
 /// just calls `to_string()` rather than hand-formatting per stage.
 fn lex_parse(src: &str) -> Result<Program, String> {
-    let tokens = lex(src).map_err(|e| e.to_string())?;
+    let tokens = lex(src).map_err(|e| e.render(src))?;
     Parser::new(tokens)
         .parse_program()
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.render(src))
 }
 
 /// lex + parse + type-check (the gate). Renders every type error, one per line.
@@ -182,7 +182,7 @@ fn parse_checked(src: &str) -> Result<Program, String> {
         // sugar; the checker validated them, including cycles + built-in shadowing).
         Ok(()) => Ok(crate::checker::expand_aliases(&prog)),
         Err(errs) => {
-            let lines: Vec<String> = errs.iter().map(ToString::to_string).collect();
+            let lines: Vec<String> = errs.iter().map(|e| e.render(src)).collect();
             Err(lines.join("\n"))
         }
     }

@@ -66,27 +66,21 @@ impl<'a> Lexer<'a> {
         }
         let text = std::str::from_utf8(&self.src[start..self.pos]).unwrap();
         let kind = if is_float {
-            let f: f64 = text.parse().map_err(|_| Diagnostic {
-                stage: Stage::Lex,
-                message: "float literal out of range".into(),
-                line,
-                col,
+            let f: f64 = text.parse().map_err(|_| {
+                Diagnostic::new(Stage::Lex, "float literal out of range", line, col)
             })?;
             if !f.is_finite() {
-                return Err(Diagnostic {
-                    stage: Stage::Lex,
-                    message: "float literal out of range".into(),
+                return Err(Diagnostic::new(
+                    Stage::Lex,
+                    "float literal out of range",
                     line,
                     col,
-                });
+                ));
             }
             TokenKind::Float(f)
         } else {
-            let i: i64 = text.parse().map_err(|_| Diagnostic {
-                stage: Stage::Lex,
-                message: "integer literal out of range".into(),
-                line,
-                col,
+            let i: i64 = text.parse().map_err(|_| {
+                Diagnostic::new(Stage::Lex, "integer literal out of range", line, col)
             })?;
             TokenKind::Int(i)
         };
@@ -117,12 +111,12 @@ impl<'a> Lexer<'a> {
         loop {
             match self.peek() {
                 None => {
-                    return Err(Diagnostic {
-                        stage: Stage::Lex,
-                        message: "unterminated block comment".into(),
-                        line: sl,
-                        col: sc,
-                    })
+                    return Err(Diagnostic::new(
+                        Stage::Lex,
+                        "unterminated block comment",
+                        sl,
+                        sc,
+                    ))
                 }
                 Some(b'*') if self.peek2() == Some(b'/') => {
                     self.bump();
@@ -148,12 +142,12 @@ impl<'a> Lexer<'a> {
             let (el, ec) = (self.line, self.col);
             match self.bump() {
                 None => {
-                    return Err(Diagnostic {
-                        stage: Stage::Lex,
-                        message: "unterminated string".into(),
+                    return Err(Diagnostic::new(
+                        Stage::Lex,
+                        "unterminated string",
                         line,
                         col,
-                    })
+                    ))
                 }
                 Some(b'"') => break,
                 Some(b'\\') => match self.bump() {
@@ -163,20 +157,20 @@ impl<'a> Lexer<'a> {
                     Some(b'\\') => bytes.push(b'\\'),
                     Some(b'"') => bytes.push(b'"'),
                     Some(other) => {
-                        return Err(Diagnostic {
-                            stage: Stage::Lex,
-                            message: format!("invalid escape \\{}", other as char),
-                            line: el,
-                            col: ec,
-                        })
+                        return Err(Diagnostic::new(
+                            Stage::Lex,
+                            format!("invalid escape \\{}", other as char),
+                            el,
+                            ec,
+                        ))
                     }
                     None => {
-                        return Err(Diagnostic {
-                            stage: Stage::Lex,
-                            message: "unterminated string".into(),
+                        return Err(Diagnostic::new(
+                            Stage::Lex,
+                            "unterminated string",
                             line,
                             col,
-                        })
+                        ))
                     }
                 },
                 Some(other) => bytes.push(other),
@@ -375,12 +369,12 @@ pub fn lex(src: &str) -> Result<Vec<Token>, Diagnostic> {
                     None => {
                         // Decode the full char (handles multi-byte UTF-8) for the message.
                         let ch = lx.current_char();
-                        return Err(Diagnostic {
-                            stage: Stage::Lex,
-                            message: format!("unexpected character {:?}", ch),
+                        return Err(Diagnostic::new(
+                            Stage::Lex,
+                            format!("unexpected character {ch:?}"),
                             line,
                             col,
-                        });
+                        ));
                     }
                 }
             }

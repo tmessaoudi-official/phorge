@@ -74,12 +74,12 @@ impl Parser {
     /// Build a Diagnostic at the current position.
     fn error(&self, what: &str) -> Diagnostic {
         let sp = self.peek_span();
-        Diagnostic {
-            stage: Stage::Parse,
-            message: format!("expected {}, found {:?}", what, self.peek()),
-            line: sp.line,
-            col: sp.col,
-        }
+        Diagnostic::new(
+            Stage::Parse,
+            format!("expected {}, found {:?}", what, self.peek()),
+            sp.line,
+            sp.col,
+        )
     }
 
     /// Entry point: parse a full expression (lowest precedence).
@@ -145,12 +145,12 @@ impl Parser {
         self.depth += 1;
         if self.depth > MAX_NEST_DEPTH {
             let sp = self.peek_span();
-            return Err(Diagnostic {
-                stage: Stage::Parse,
-                message: format!("expression nests too deeply (limit {MAX_NEST_DEPTH})"),
-                line: sp.line,
-                col: sp.col,
-            });
+            return Err(Diagnostic::new(
+                Stage::Parse,
+                format!("expression nests too deeply (limit {MAX_NEST_DEPTH})"),
+                sp.line,
+                sp.col,
+            ));
         }
         let sp = self.peek_span();
         let op = match self.peek() {
@@ -361,18 +361,20 @@ impl Parser {
                         inner.push(ic);
                     }
                     if !closed {
-                        return Err(Diagnostic {
-                            stage: Stage::Parse,
-                            message: "unterminated interpolation '{' in string".into(),
-                            line: sp.line,
-                            col: sp.col,
-                        });
+                        return Err(Diagnostic::new(
+                            Stage::Parse,
+                            "unterminated interpolation '{' in string",
+                            sp.line,
+                            sp.col,
+                        ));
                     }
-                    let sub_tokens = crate::lexer::lex(&inner).map_err(|e| Diagnostic {
-                        stage: Stage::Parse,
-                        message: format!("in interpolation: {}", e.message),
-                        line: sp.line,
-                        col: sp.col,
+                    let sub_tokens = crate::lexer::lex(&inner).map_err(|e| {
+                        Diagnostic::new(
+                            Stage::Parse,
+                            format!("in interpolation: {}", e.message),
+                            sp.line,
+                            sp.col,
+                        )
                     })?;
                     let mut sub = Parser::new(sub_tokens);
                     let e = sub.parse_expr()?;
@@ -380,12 +382,12 @@ impl Parser {
                     parts.push(StrPart::Expr(Box::new(e)));
                 }
                 '}' => {
-                    return Err(Diagnostic {
-                        stage: Stage::Parse,
-                        message: "unexpected '}' in string (no matching '{')".into(),
-                        line: sp.line,
-                        col: sp.col,
-                    });
+                    return Err(Diagnostic::new(
+                        Stage::Parse,
+                        "unexpected '}' in string (no matching '{')",
+                        sp.line,
+                        sp.col,
+                    ));
                 }
                 _ => literal.push(c),
             }

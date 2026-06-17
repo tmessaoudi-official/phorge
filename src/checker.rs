@@ -63,13 +63,51 @@ impl Checker {
 
     /// Record an error and return the poison type so callers can keep going.
     fn err(&mut self, span: Span, msg: impl Into<String>) -> Ty {
-        self.errors.push(Diagnostic {
-            stage: Stage::Type,
-            message: msg.into(),
-            line: span.line,
-            col: span.col,
-        });
+        self.errors
+            .push(Diagnostic::new(Stage::Type, msg, span.line, span.col));
         Ty::Error
+    }
+
+    /// Like [`Self::err`] but attaches a stable diagnostic `code` (for `phorge explain`) and an
+    /// optional hint.
+    fn err_coded(
+        &mut self,
+        span: Span,
+        msg: impl Into<String>,
+        code: &'static str,
+        hint: Option<String>,
+    ) -> Ty {
+        let mut d = Diagnostic::new(Stage::Type, msg, span.line, span.col).with_code(code);
+        d.hint = hint;
+        self.errors.push(d);
+        Ty::Error
+    }
+
+    /// Every name currently visible — block-scope locals + top-level functions + (inside a method)
+    /// the current class's fields — used to suggest the nearest match on an unknown identifier.
+    fn in_scope_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = Vec::new();
+        for scope in &self.scopes {
+            names.extend(scope.keys().cloned());
+        }
+        names.extend(self.funcs.keys().cloned());
+        if let Some(cls) = &self.cur_class {
+            if let Some(info) = self.classes.get(cls) {
+                names.extend(info.fields.keys().cloned());
+            }
+        }
+        names
+    }
+
+    /// The closest candidate to `name` within a small edit distance (≤ 2), if any — the
+    /// "did you mean `…`?" suggestion.
+    fn nearest_name(&self, name: &str, candidates: &[String]) -> Option<String> {
+        candidates
+            .iter()
+            .map(|c| (levenshtein(name, c), c))
+            .filter(|(d, _)| *d > 0 && *d <= 2)
+            .min_by_key(|(d, _)| *d)
+            .map(|(_, c)| c.clone())
     }
 
     /// Resolve an AST type annotation to an internal `Ty`. Records and poisons on
@@ -122,7 +160,12 @@ impl Checker {
                     } else if self.enums.contains_key(other) || self.classes.contains_key(other) {
                         Ty::Named(other.to_string())
                     } else {
-                        self.err(*span, format!("unknown type `{other}`"))
+                        self.err_coded(
+                            *span,
+                            format!("unknown type `{other}`"),
+                            "E-UNKNOWN-TYPE",
+                            None,
+                        )
                     }
                 }
             },
@@ -480,7 +523,18 @@ impl Checker {
             Expr::Str(parts, _) => self.check_str(parts), // Task 7
             Expr::Ident(name, span) => match self.lookup(name) {
                 Some(t) => t,
-                None => self.err(*span, format!("unknown identifier `{name}`")),
+                None => {
+                    let cands = self.in_scope_names();
+                    let hint = self
+                        .nearest_name(name, &cands)
+                        .map(|c| format!("did you mean `{c}`?"));
+                    self.err_coded(
+                        *span,
+                        format!("unknown identifier `{name}`"),
+                        "E-UNKNOWN-IDENT",
+                        hint,
+                    )
+                }
             },
             Expr::This(span) => match &self.cur_class {
                 Some(c) => Ty::Named(c.clone()),
@@ -994,6 +1048,24 @@ pub fn check(program: &Program) -> Result<(), Vec<Diagnostic>> {
     }
 }
 
+/// Classic two-row Levenshtein edit distance (ASCII-oriented; M1 identifiers are ASCII), used to
+/// suggest the nearest in-scope name for an unknown identifier.
+fn levenshtein(a: &str, b: &str) -> usize {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    let mut cur = vec![0usize; b.len() + 1];
+    for (i, ca) in a.iter().enumerate() {
+        cur[0] = i + 1;
+        for (j, cb) in b.iter().enumerate() {
+            let cost = usize::from(ca != cb);
+            cur[j + 1] = (prev[j + 1] + 1).min(cur[j] + 1).min(prev[j] + cost);
+        }
+        std::mem::swap(&mut prev, &mut cur);
+    }
+    prev[b.len()]
+}
+
 /// True for the built-in type names `resolve_type` handles directly — a `type` alias may not
 /// shadow them (else the checker and the backend expansion would disagree; see `collect`).
 fn is_builtin_type_name(name: &str) -> bool {
@@ -1258,6 +1330,32 @@ mod tests {
             errs.iter().any(|e| e.message.contains("duplicate")),
             "{errs:?}"
         );
+    }
+
+    #[test]
+    fn unknown_identifier_suggests_the_nearest_in_scope_name() {
+        // `cont` is one edit from the in-scope `count` → the diagnostic carries a code + hint.
+        let errs = errors_of("function main() { int count = 0; println(\"{cont}\"); }");
+        let d = errs
+            .iter()
+            .find(|e| e.message.contains("unknown identifier"))
+            .expect("an unknown-identifier error");
+        assert_eq!(d.code, Some("E-UNKNOWN-IDENT"));
+        assert!(
+            d.hint.as_deref().unwrap_or("").contains("count"),
+            "hint: {:?}",
+            d.hint
+        );
+    }
+
+    #[test]
+    fn unknown_type_carries_a_code() {
+        let errs = errors_of("function main() { Nope n = 0; }");
+        let d = errs
+            .iter()
+            .find(|e| e.message.contains("unknown type"))
+            .expect("an unknown-type error");
+        assert_eq!(d.code, Some("E-UNKNOWN-TYPE"));
     }
 
     #[test]

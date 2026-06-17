@@ -47,6 +47,10 @@ pub struct Diagnostic {
     pub message: String,
     pub line: u32,
     pub col: u32,
+    /// Stable machine code (e.g. `E-UNKNOWN-IDENT`) keyed by `phorge explain`; `None` if uncoded.
+    pub code: Option<&'static str>,
+    /// An optional one-line suggestion ("did you mean `…`?").
+    pub hint: Option<String>,
 }
 
 impl Diagnostic {
@@ -57,7 +61,55 @@ impl Diagnostic {
             message: message.into(),
             line,
             col,
+            code: None,
+            hint: None,
         }
+    }
+
+    /// Attach a stable diagnostic code (consumed by `phorge explain`).
+    #[must_use]
+    pub fn with_code(mut self, code: &'static str) -> Self {
+        self.code = Some(code);
+        self
+    }
+
+    /// Attach a one-line hint shown beneath the diagnostic.
+    #[must_use]
+    pub fn with_hint(mut self, hint: impl Into<String>) -> Self {
+        self.hint = Some(hint.into());
+        self
+    }
+
+    /// Render with the offending source line and a caret under the column, plus the code and hint
+    /// when present. Falls back to the plain [`Display`] form when no position is known (`line == 0`
+    /// — the tree-walking interpreter and the compiler track none).
+    pub fn render(&self, src: &str) -> String {
+        let mut s = self.to_string();
+        if self.line > 0 {
+            if let Some(line_text) = src.lines().nth((self.line - 1) as usize) {
+                s.push('\n');
+                s.push_str(line_text);
+                if self.col > 0 {
+                    s.push('\n');
+                    // Indent the caret to the column, preserving tabs so it lines up regardless of
+                    // the terminal's tab width.
+                    let pad: String = line_text
+                        .chars()
+                        .take((self.col - 1) as usize)
+                        .map(|c| if c == '\t' { '\t' } else { ' ' })
+                        .collect();
+                    s.push_str(&pad);
+                    s.push('^');
+                }
+            }
+        }
+        if let Some(code) = self.code {
+            s.push_str(&format!("\n  [{code}]"));
+        }
+        if let Some(hint) = &self.hint {
+            s.push_str(&format!("\n  hint: {hint}"));
+        }
+        s
     }
 
     /// Build a front-end diagnostic from a token [`Span`] (uses its `line`/`col`).
@@ -144,5 +196,31 @@ mod tests {
         let d = Diagnostic::at(Stage::Lex, span, "bad token");
         assert_eq!((d.line, d.col), (5, 9));
         assert_eq!(d.to_string(), "lex error at 5:9: bad token");
+    }
+
+    #[test]
+    fn render_underlines_the_offending_span_and_appends_hint_and_code() {
+        let src = "function main() {\n    foo;\n}";
+        let d = Diagnostic::new(Stage::Type, "unknown identifier `foo`", 2, 5)
+            .with_code("E-UNKNOWN-IDENT")
+            .with_hint("did you mean `for`?");
+        let r = d.render(src);
+        assert!(
+            r.starts_with("type error at 2:5: unknown identifier `foo`"),
+            "{r}"
+        );
+        assert!(r.contains("    foo;"), "missing source line:\n{r}");
+        assert!(r.contains("    ^"), "missing caret:\n{r}");
+        assert!(r.contains("[E-UNKNOWN-IDENT]"), "missing code:\n{r}");
+        assert!(
+            r.contains("hint: did you mean `for`?"),
+            "missing hint:\n{r}"
+        );
+    }
+
+    #[test]
+    fn render_without_position_is_just_the_display_line() {
+        let d = Diagnostic::runtime("division by zero");
+        assert_eq!(d.render("whatever"), "runtime error: division by zero");
     }
 }
