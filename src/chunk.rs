@@ -113,8 +113,13 @@ pub enum Op {
     /// Carries no static index, so — like `GetEnumField` — it needs no `validate` arm (decision
     /// S1-R, M3 S1.2).
     MakeRange(bool),
-    /// Pop `n` values, space-join their `as_display`, append a line to output.
-    Print(usize),
+    /// Call the native (built-in) function at `native::registry()[idx]` with the top `argc` values
+    /// as its arguments (source order): pop them, run the native's shared `eval` (which may append
+    /// to the program output), and push its return value. The migrated former `Op::Print`
+    /// (`console.println` is `CallNative(native::CONSOLE_PRINTLN, 1)`); the namespaced stdlib's one
+    /// runtime entry point (M3 Wave 1). Pushes a result, so it carries a `validate` arm (the index
+    /// is bounded by the registry length).
+    CallNative(usize, usize),
     /// Call `functions[idx]`: its args are already on top of the stack; the new frame's
     /// local window opens at `stack.len() - functions[idx].arity` (decision P3-1, P3-3).
     Call(usize),
@@ -258,7 +263,8 @@ impl BytecodeProgram {
     /// P4a added the index-carrying ops `MakeEnum`/`MatchTag` (into `enum_descs`); P4b added
     /// `MakeInstance` (into `class_descs`) and `GetField` (into the `names` pool); P4c adds
     /// `CallMethod` (name into the `names` pool; its function target is resolved at runtime via the
-    /// method table, range-checked after the per-op loop). Each new index-carrying op extends the
+    /// method table, range-checked after the per-op loop). M3 Wave 1 adds `CallNative` (index into
+    /// `native::registry()`). Each new index-carrying op extends the
     /// match below in lockstep (see memory `op-variant-match-coupling`). `GetEnumField` carries a
     /// payload index with no static bound (like a local slot) — covered by the VM's runtime guard;
     /// M3 S1.2's `MakeRange(bool)` carries a flag, not an index, so it likewise needs no arm here.
@@ -273,6 +279,7 @@ impl BytecodeProgram {
         let ndescs = self.enum_descs.len();
         let nclasses = self.class_descs.len();
         let nnames = self.names.len();
+        let nnatives = crate::native::registry().len();
         for (fi, f) in self.functions.iter().enumerate() {
             let code_len = f.chunk.code.len();
             let const_len = f.chunk.consts.len();
@@ -292,6 +299,9 @@ impl BytecodeProgram {
                     )),
                     Op::GetField(idx) | Op::CallMethod(idx, _) if *idx >= nnames => Some(format!(
                         "field-name index {idx} out of range (name pool has {nnames})"
+                    )),
+                    Op::CallNative(idx, _) if *idx >= nnatives => Some(format!(
+                        "native index {idx} out of range (registry has {nnatives})"
                     )),
                     // Absolute targets; `== code_len` is the legal "fall off the end → implicit
                     // return" landing the run loop already handles, so only `>` is invalid.
@@ -499,6 +509,26 @@ mod tests {
             methods: HashMap::new(),
         };
         assert!(prog2.validate().unwrap_err().contains("field-name index 5"));
+    }
+
+    #[test]
+    fn validate_rejects_out_of_range_native() {
+        let mut c = Chunk::new();
+        c.emit(Op::CallNative(9999, 1), 1); // far past the registry length
+        c.emit(Op::Return, 1);
+        let prog = BytecodeProgram {
+            functions: vec![Function {
+                name: "main".into(),
+                arity: 0,
+                chunk: c,
+            }],
+            main: 0,
+            enum_descs: Vec::new(),
+            class_descs: Vec::new(),
+            names: Vec::new(),
+            methods: HashMap::new(),
+        };
+        assert!(prog.validate().unwrap_err().contains("native index 9999"));
     }
 
     #[test]

@@ -1,4 +1,4 @@
-import std.io;
+import core.console;
 
 class Point {
     constructor(private int x, private int y) {}
@@ -8,18 +8,18 @@ class Point {
 function main() {
     List<int> nums = [10, 20, 30];
     for (int n in nums) {
-        println("n = {n}");
+        console.println("n = {n}");
     }
 
     List<List<int>> grid = [[1, 2], [3, 4]];
     for (List<int> row in grid) {
         for (int v in row) {
-            println("v = {v}");
+            console.println("v = {v}");
         }
     }
 
     List<Point> pts = [Point(0, 0), Point(1, 2)];
     for (Point p in pts) {
-        println(p.show());
+        console.println(p.show());
     }
 }

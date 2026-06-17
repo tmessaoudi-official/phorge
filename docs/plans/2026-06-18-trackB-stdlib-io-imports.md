@@ -42,7 +42,12 @@ byte-identity-gated example set.
   both backends read identical bytes → byte-identical. `read_file` returns `string?` (null on missing).
 
 ## Progress
-- [ ] Task 1 — `NativeModule` foundation: registry + `Op::CallNative`; migrate `println`; retire `Op::Print`
+- [x] Task 1 / **Wave 1** — namespaced native foundation: `src/native.rs` registry keyed by
+  `(module,name)` (`OnceLock`, pinned `CONSOLE_PRINTLN`); `Op::Print`→`Op::CallNative`; import-driven
+  resolution in all four backends; `import core.console;` + `console.println` (global `println`
+  retired); `E-SHADOW-IMPORT` guard; full call-site migration + example `is_ok` hardening. 367 tests
+  green, clippy + fmt clean, real-PHP round-tripped. *(Reshaped from the original Task 1 per the
+  namespace design.)*
 - [ ] Task 2 — `std.fs`: `read_file(string) -> string?`, `write_file`, `exists` (std::fs ↔ PHP)
 - [ ] Task 3 — real `import std.*` resolution (prelude vs import-gated decision)
 - [ ] Task 4 — `std.math` (`abs`/`min`/`max`/`pow`/`sqrt`/…), `std.string` (`len`/`upper`/`split`/…)

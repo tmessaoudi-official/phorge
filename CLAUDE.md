@@ -165,22 +165,27 @@ required** even for stdlib; **user code mandatorily packaged** (stricter than PH
 PHP `namespace`s — leaning explicit `package a.b;` + strict folder=path, final syntax deferred). Native
 registry is keyed by `(module, name)`; `import core.console` becomes load-bearing.
 
-**ACTIVE: Track B, Wave 1 — namespaced native foundation** (reshaped Task 1) — plan
-`docs/plans/2026-06-18-trackB-stdlib-io-imports.md`, design spec above. **Resume by building Wave 1:**
-`src/native.rs` registry keyed by `(module,name)` + `OnceLock` (Vec<Ty> not const) + `const
-CONSOLE_PRINTLN=0`; `Op::Print`→`Op::CallNative(idx,argc)` (3 coupled matches: `vm::exec_op`,
-`compiler::stack_effect`, `chunk::validate`; `CallNative` pushes the result so drop the old
-`emit_const(Unit)`); shared `eval: fn(&[Value], &mut String)->Result<Value,String>` (threads the out
-buffer; both backends own `out: String`); all 4 backends collect the import map (leaf→`core.*` path) and
-resolve a `Member`-call whose head Ident is an imported qualifier to a native (else existing
-field/method path); checker rejects bare `println` (unknown fn) + a local shadowing an imported
-qualifier; transpile emits each native's `php` mapping (println→`echo {a} . "\n"`); disasm `annotate`
-gains a `CallNative` arm + the disasm test asserts `CallNative` not `Print`. **MIGRATION (large, part of
-Wave 1):** ~**216 inline `println(` test programs** across `src/*.rs` + `tests/*.rs`, **21 `.phg`
-examples** (all currently `import std.io;`), + `tests/fixtures/sample.phg` — each needs `import
-core.console;` and `println`→`console.println`. Then Wave 2 (`core.file`/`math`/`text`/`list`/`json`),
-Wave 3 (user packages). Then Track A (S3 lambdas/pipeline). **Parked:** M2.5 Phase 3 (CI stub registry +
-`--sign`) — `docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
+**Track B Wave 1 — namespaced native foundation — COMPLETE** (reshaped Task 1) — plan
+`docs/plans/2026-06-18-trackB-stdlib-io-imports.md`, design spec above. Landed: `src/native.rs`
+registry keyed by `(module,name)` (`OnceLock`, pinned `const CONSOLE_PRINTLN=0`, single-sourcing each
+native's checker sig + shared `eval: fn(&[Value], &mut String)->Result<Value,String>` + `php` mapping);
+`Op::Print`→`Op::CallNative(idx,argc)` (3 coupled matches + a `validate` native-index bound; pushes the
+result, no `emit_const(Unit)`); import-driven resolution in all four backends (interpreter+compiler
+resolve a `Member`-call's head qualifier **locals-first then `index_of_by_leaf`**; checker+transpiler use
+the import map — only they lack scope tracking); the **global `println` is RETIRED** (bare `println` →
+unknown fn) and `console.println` requires `import core.console;`; an **`E-SHADOW-IMPORT`** guard keeps a
+value binding from shadowing an imported qualifier (else transpiler vs run-backends diverge); the example
+differential test now also asserts each example **runs** (`Ok`), not just that backends agree. Full
+migration done (all `.phg`, fixtures, ~189 inline test programs via `tools/wave1_migrate.py`). 367 tests
+green, clippy + fmt clean, real-PHP round-tripped.
+
+**NEXT: Track B Wave 2 — stdlib breadth.** Add registry entries (each a `(module,name)` with shared
+`eval` + `php` erasure) for `core.file` (fixture-gated `read`/`write`/`exists`, std::fs ↔ PHP
+`file_get_contents`/…), `core.math`, `core.text`, `core.list`, `core.json`. Determinism gates examples
+(file examples read a committed fixture; clock/env/unseeded-random are excluded from the differential
+glob). Then Wave 3 (user packages: `package` decl + strict folder=path + PHP `namespace` emission; final
+syntax deferred — design O-B). Then Track A (S3 lambdas/pipeline). **Parked:** M2.5 Phase 3 (CI stub
+registry + `--sign`) — `docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing
 correctness rules — read before touching backends, value kernels, or the `Op` set) and

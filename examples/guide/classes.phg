@@ -1,4 +1,4 @@
-import std.io;
+import core.console;
 
 class Engine {
     constructor(private int power) {}
@@ -16,5 +16,5 @@ class Car {
 
 function main() {
     Car c = Car("Phorge", Engine(250));
-    println("{c.make_of()} has {c.horsepower()} hp");
+    console.println("{c.make_of()} has {c.horsepower()} hp");
 }

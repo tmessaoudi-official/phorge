@@ -1,4 +1,4 @@
-import std.io;
+import core.console;
 
 // A focused profiling workload for `phorge bench` and `phorge disasm`. It mixes the two cost
 // centers the M2 backends care about: CPU-bound recursion (large call volume) and heap allocation
@@ -40,13 +40,13 @@ function main() {
     // CPU-bound: ~8k calls at depth ~18. (`bench` runs the whole program 101× — kept modest so a
     // casual `phorge bench` stays a few seconds, not a minute. The VM's speedup ratio is
     // n-independent, so a smaller n shows the same advantage.)
-    println("fib(18) = {fib(18)}");
+    console.println("fib(18) = {fib(18)}");
 
     // Allocation-bound: 1000 live Cells at peak, 1000 method calls.
-    println("chain(1000) = {allocate_chain(1000)}");
+    console.println("chain(1000) = {allocate_chain(1000)}");
 
     // Object iteration: a method call + field read per element of a list literal.
     for (Cell c in [Cell(3), Cell(4), Cell(5)]) {
-        println("cell^2 = {c.squared()}");
+        console.println("cell^2 = {c.squared()}");
     }
 }

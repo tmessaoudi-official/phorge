@@ -1,4 +1,4 @@
-import std.io;
+import core.console;
 
 // recursion
 function fact(int n) -> int {
@@ -25,12 +25,12 @@ function is_odd(int n) -> bool {
 
 function main() {
     if (fact(5) > 100) {
-        println("5! is big: {fact(5)}");
+        console.println("5! is big: {fact(5)}");
     } else {
-        println("5! is small");
+        console.println("5! is small");
     }
 
     for (int i in [0, 1, 2, 3, 4]) {
-        println("is_even({i}) = {is_even(i)}");
+        console.println("is_even({i}) = {is_even(i)}");
     }
 }

@@ -1347,7 +1347,7 @@ mod tests {
 
     #[test]
     fn parses_expr_stmt() {
-        match stmt("println(x);") {
+        match stmt("console.println(x);") {
             Stmt::Expr(Expr::Call { .. }, _) => {}
             other => panic!("got {other:?}"),
         }
@@ -1459,7 +1459,7 @@ mod tests {
 
     #[test]
     fn parses_for_in() {
-        match stmt("for (Shape s in shapes) { println(s); }") {
+        match stmt("for (Shape s in shapes) { console.println(s); }") {
             Stmt::For {
                 ty,
                 name,
@@ -1493,7 +1493,7 @@ mod tests {
 
     #[test]
     fn parses_function_no_ret_no_params() {
-        match item("function main() { println(1); }") {
+        match item("function main() { console.println(1); }") {
             Item::Function(f) => {
                 assert_eq!(f.name, "main");
                 assert!(f.params.is_empty());
@@ -1559,8 +1559,8 @@ mod tests {
 
     #[test]
     fn parses_import() {
-        match item("import std.io;") {
-            Item::Import { path, .. } => assert_eq!(path, vec!["std", "io"]),
+        match item("import core.console;") {
+            Item::Import { path, .. } => assert_eq!(path, vec!["core", "console"]),
             other => panic!("got {other:?}"),
         }
         match item("import a;") {
@@ -1571,7 +1571,7 @@ mod tests {
 
     #[test]
     fn parses_program_multiple_items() {
-        let src = "import std.io; enum E { A, } function main() { return; }";
+        let src = "import core.console; enum E { A, } function main() { return; }";
         let prog = parser(src).parse_program().expect("parse ok");
         assert_eq!(prog.items.len(), 3);
         assert!(matches!(prog.items[0], Item::Import { .. }));

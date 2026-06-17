@@ -1,4 +1,4 @@
-import std.io;
+import core.console;
 
 // Variant patterns (with bindings) over a payload + zero-payload enum.
 // Zero-payload variants use call form `JNull()` to construct AND to match —
@@ -30,8 +30,8 @@ function sign(int n) -> string {
 function main() {
     List<Json> vals = [JNull(), JBool(true), JNum(42), JStr("hi")];
     for (Json j in vals) {
-        println(show(j));
+        console.println(show(j));
     }
-    println(sign(0));
-    println(sign(7));
+    console.println(sign(0));
+    console.println(sign(7));
 }

@@ -4,7 +4,7 @@ use phorge::parser::Parser;
 
 /// The complete sample program from the language design spec (§6), verbatim.
 const SAMPLE: &str = r#"
-import std.io;
+import core.console;
 
 enum Shape {
     Circle(float radius),
@@ -30,11 +30,11 @@ class Greeter {
 
 function main() {
     Greeter g = Greeter("Tak");
-    println(g.greet());
+    console.println(g.greet());
 
     List<Shape> shapes = [Circle(2.0), Rect(3.0, 4.0)];
     for (Shape s in shapes) {
-        println("area = {area(s)}");
+        console.println("area = {area(s)}");
     }
 }
 "#;
@@ -59,6 +59,8 @@ fn program_without_main_errors() {
 
 #[test]
 fn division_by_zero_does_not_panic() {
-    let e = run(r#"function main() { println("{1 / 0}"); }"#).unwrap_err();
+    let e = run(r#"import core.console;
+function main() { console.println("{1 / 0}"); }"#)
+    .unwrap_err();
     assert!(e.message.contains("division by zero"), "{}", e.message);
 }

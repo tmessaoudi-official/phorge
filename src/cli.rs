@@ -58,15 +58,15 @@ pub fn help_for(cmd: &str) -> String {
                   usage:\n  phorge run <file | - | -e code> [--]\n\n\
                   examples:\n  \
                   phorge run hello.phg\n  \
-                  phorge run -e 'function main() { println(\"hi\"); }'\n  \
-                  echo 'function main(){println(\"hi\");}' | phorge run -\n"
+                  phorge run -e 'function main() { console.println(\"hi\"); }'\n  \
+                  echo 'function main(){console.println(\"hi\");}' | phorge run -\n"
         }
         "runvm" => {
             "runvm — run the program on the bytecode VM (byte-identical to `run`).\n\n\
                     usage:\n  phorge runvm <file | - | -e code>\n\n\
                     examples:\n  \
                     phorge runvm hello.phg\n  \
-                    phorge runvm -e 'function main() { println(\"{2 + 2}\"); }'\n"
+                    phorge runvm -e 'function main() { console.println(\"{2 + 2}\"); }'\n"
         }
         "check" => {
             "check — type-check only; print OK or the type errors, run nothing.\n\n\
@@ -160,6 +160,14 @@ pub fn explain_text(code: &str) -> Option<String> {
              Both bounds of `a..b` / `a..=b` must be `int`; the range materializes to a\n\
              `List<int>` (its role this slice is `for (int i in 0..n)`). Use integer bounds, or\n\
              build a `List` explicitly if you need other element types.\n"
+        }
+        "E-SHADOW-IMPORT" => {
+            "E-SHADOW-IMPORT — a local binding shadows an imported module qualifier.\n\n\
+             Everything is namespaced (\"nothing in the wind\"): after `import core.console;` the\n\
+             name `console` is a module qualifier, so a value binding (variable, parameter, loop or\n\
+             match binding) of the same name would make `console.x()` ambiguous — the run backends\n\
+             would read a method call, the transpiler a native. Rename the binding, or drop the\n\
+             matching import.\n"
         }
         "E-OPT-ASSIGN" => {
             "E-OPT-ASSIGN — an optional `T?` was used where a non-optional `T` is required.\n\n\
@@ -375,6 +383,9 @@ fn annotate(op: &Op, chunk: &Chunk, p: &BytecodeProgram) -> Option<String> {
             .map(|f| format!("-> {}/{}", f.name, f.arity)),
         Op::GetField(i) => p.names.get(*i).map(|n| format!(".{n}")),
         Op::CallMethod(i, argc) => p.names.get(*i).map(|n| format!(".{n}(argc={argc})")),
+        Op::CallNative(i, argc) => crate::native::registry()
+            .get(*i)
+            .map(|n| format!("-> {}.{}(argc={argc})", n.module, n.name)),
         Op::MakeEnum(i) | Op::MatchTag(i) => p
             .enum_descs
             .get(*i)
@@ -733,7 +744,7 @@ mod tests {
     use super::*;
 
     const SAMPLE: &str = r#"
-import std.io;
+import core.console;
 
 enum Shape {
     Circle(float radius),
@@ -755,10 +766,10 @@ class Greeter {
 
 function main() {
     Greeter g = Greeter("Tak");
-    println(g.greet());
+    console.println(g.greet());
     List<Shape> shapes = [Circle(2.0), Rect(3.0, 4.0)];
     for (Shape s in shapes) {
-        println("area = {area(s)}");
+        console.println("area = {area(s)}");
     }
 }
 "#;
@@ -808,15 +819,19 @@ function main() {
     #[test]
     fn run_reports_type_error_and_does_not_execute() {
         // `area` returns float; returning an int literal is a type error.
-        let src =
-            r#"function area() -> float { return 1; } function main() { println("{area()}"); }"#;
+        let src = r#"import core.console;
+function area() -> float { return 1; } function main() { console.println("{area()}"); }"#;
         let err = cmd_run(src).unwrap_err();
         assert!(err.contains("type error"), "{err}");
     }
 
     #[test]
     fn run_reports_runtime_error() {
-        let err = cmd_run(r#"function main() { println("{1 / 0}"); }"#).unwrap_err();
+        let err = cmd_run(
+            r#"import core.console;
+function main() { console.println("{1 / 0}"); }"#,
+        )
+        .unwrap_err();
         assert!(err.contains("runtime error"), "{err}");
     }
 
@@ -869,7 +884,8 @@ function main() {
 
     #[test]
     fn runvm_matches_run_on_simple_program() {
-        let src = r#"function main() { int x = 21; println("{x + x}"); }"#;
+        let src = r#"import core.console;
+function main() { int x = 21; console.println("{x + x}"); }"#;
         assert_eq!(cmd_runvm(src).unwrap(), cmd_run(src).unwrap());
         assert_eq!(cmd_runvm(src).unwrap(), "42\n");
     }
@@ -882,7 +898,11 @@ function main() {
 
     #[test]
     fn runvm_reports_runtime_error_with_prefix() {
-        let err = cmd_runvm(r#"function main() { println("{1 / 0}"); }"#).unwrap_err();
+        let err = cmd_runvm(
+            r#"import core.console;
+function main() { console.println("{1 / 0}"); }"#,
+        )
+        .unwrap_err();
         assert!(err.contains("runtime error"), "{err}");
     }
 
@@ -895,7 +915,7 @@ function main() {
         // re-lexes interpolated sub-expressions with a fresh lexer that resets to line 1, so a
         // fault inside `"{…}"` reports line 1 (a pre-existing interpolation-position limitation,
         // orthogonal to this task — see the M2 P3.5 roadmap decisions log).
-        let src = "function main() {\n    int z = 0;\n    int x = 1 / z;\n    println(\"{x}\");\n}";
+        let src = "import core.console; function main() {\n    int z = 0;\n    int x = 1 / z;\n    console.println(\"{x}\");\n}";
         let err = cmd_runvm(src).unwrap_err();
         assert!(err.contains("division by zero"), "{err}");
         assert!(err.starts_with("runtime error at 3:"), "{err}");
@@ -905,7 +925,7 @@ function main() {
     fn run_runtime_error_has_no_line() {
         // The tree-walking interpreter tracks no source position, so its runtime errors keep
         // the position-less `runtime error: …` form (deliberate asymmetry — documented).
-        let src = "function main() {\n    int z = 0;\n    int x = 1 / z;\n    println(\"{x}\");\n}";
+        let src = "import core.console; function main() {\n    int z = 0;\n    int x = 1 / z;\n    console.println(\"{x}\");\n}";
         let err = cmd_run(src).unwrap_err();
         assert!(err.starts_with("runtime error: "), "{err}");
         assert!(!err.contains(" at "), "{err}");
@@ -915,7 +935,8 @@ function main() {
     fn bench_reports_both_backends_with_identical_output() {
         // Small iteration count keeps the test fast; the report must name both backends, confirm
         // output identity (and the byte count it asserted), and end in a verdict comparing them.
-        let src = r#"function main() { int x = 21; println("{x + x}"); }"#;
+        let src = r#"import core.console;
+function main() { int x = 21; console.println("{x + x}"); }"#;
         let out = bench_report(src, 5).expect("bench");
         assert!(out.contains("tree-walk run"), "{out}");
         assert!(out.contains("vm run"), "{out}");
@@ -929,7 +950,8 @@ function main() {
     fn bench_vs_php_emits_a_php_section() {
         // `--vs-php` always emits a "vs PHP" section — either the comparison (php present) or a
         // graceful skip note (php absent). Both start with "vs PHP", so the test is host-agnostic.
-        let src = r#"function main() { int x = 21; println("{x + x}"); }"#;
+        let src = r#"import core.console;
+function main() { int x = 21; console.println("{x + x}"); }"#;
         let out = bench_report_opts(src, 3, true).expect("bench");
         assert!(out.contains("vs PHP"), "{out}");
         // The standard report is still present.
@@ -941,23 +963,35 @@ function main() {
         // Beyond timing, the report carries a memory block. The header is printed unconditionally
         // (the per-phase numbers are present on Linux, "unavailable" elsewhere), so asserting the
         // header keeps the test platform-independent.
-        let src = r#"function main() { println("hi"); }"#;
+        let src = r#"import core.console;
+function main() { console.println("hi"); }"#;
         let out = bench_report(src, 5).expect("bench");
         assert!(out.contains("memory"), "{out}");
     }
 
     #[test]
     fn disasm_dumps_bytecode_with_mnemonics_and_annotations() {
-        // The disassembler names the function, prints the type-specialized int-add op, the print
-        // op, and annotates a constant load with its value.
-        let out =
-            cmd_disasm(r#"function main() { int x = 1 + 2; println("{x}"); }"#).expect("disasm");
+        // The disassembler names the function, prints the type-specialized int-add op, the native
+        // call op (the migrated former `Print`), and annotates a constant load with its value.
+        let out = cmd_disasm(
+            r#"import core.console; function main() { int x = 1 + 2; console.println("{x}"); }"#,
+        )
+        .expect("disasm");
         assert!(out.contains("fn #"), "{out}");
         assert!(out.contains("main/0"), "{out}");
         assert!(out.contains("AddI"), "{out}");
-        assert!(out.contains("Print"), "{out}");
+        // `console.println` lowers to `Op::CallNative`, annotated with the resolved native path.
+        assert!(out.contains("CallNative"), "{out}");
+        assert!(out.contains("core.console.println"), "{out}");
         // Const loads carry a `; <value>` annotation resolved from the pool.
         assert!(out.contains("Const(") && out.contains("; "), "{out}");
+    }
+
+    #[test]
+    fn explain_covers_shadow_import_code() {
+        // The M3 Wave 1 shadowing diagnostic is self-documenting via `phorge explain`.
+        let body = explain_text("E-SHADOW-IMPORT").expect("E-SHADOW-IMPORT has an explanation");
+        assert!(body.contains("module qualifier"), "{body}");
     }
 
     #[test]
@@ -977,7 +1011,11 @@ function main() {
     #[test]
     fn bench_default_entry_uses_101_samples() {
         // The public entry runs the default-N path end to end (smoke test of `cmd_bench`).
-        let out = cmd_bench(r#"function main() { println("hi"); }"#).expect("bench");
+        let out = cmd_bench(
+            r#"import core.console;
+function main() { console.println("hi"); }"#,
+        )
+        .expect("bench");
         assert!(out.starts_with("phorge bench — median of 101"), "{out}");
     }
 
@@ -996,7 +1034,10 @@ function main() {
     #[test]
     fn var_transpiles_to_plain_php_assignment() {
         // `var` is erased; PHP locals are untyped, so it emits a bare `$x = …;`.
-        let php = cmd_transpile("function main() { var x = 1; println(\"{x}\"); }").unwrap();
+        let php = cmd_transpile(
+            "import core.console; function main() { var x = 1; console.println(\"{x}\"); }",
+        )
+        .unwrap();
         assert!(php.contains("$x = 1;"), "{php}");
     }
 

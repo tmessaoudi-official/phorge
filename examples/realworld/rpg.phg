@@ -1,4 +1,4 @@
-import std.io;
+import core.console;
 
 // A turn-based RPG. Characters are immutable: `act` returns a new Character.
 
@@ -35,10 +35,10 @@ function main() {
     Character hero = Character("Hero", 30);
     Character hurt = hero.act(Attack(12));
     Character healed = hurt.act(Heal(5));
-    println("{healed.name_of()} hp = {healed.hp_of()}");
+    console.println("{healed.name_of()} hp = {healed.hp_of()}");
 
     List<Action> turns = [Attack(12), Heal(5), Defend()];
     for (Action a in turns) {
-        println(resolve(a));
+        console.println(resolve(a));
     }
 }

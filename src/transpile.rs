@@ -21,6 +21,11 @@ struct Transpiler {
     indent: usize,
     locals: Vec<HashSet<String>>,
     cur_class_fields: Option<HashSet<String>>,
+    /// Active import map (leaf qualifier → full dotted module path) — how a namespaced native call
+    /// `console.println(x)` is distinguished from a method call on a value (M3 Wave 1). The
+    /// transpiler tracks no variable scope, so unlike the interpreter/compiler it cannot use a
+    /// locals-first heuristic; the import map is the authority.
+    imports: HashMap<String, String>,
     /// Set when an `opt!` force-unwrap is emitted, so the `__phorge_unwrap` helper is defined once
     /// per file (PHP hoists top-level function declarations, so its position is immaterial).
     uses_force: bool,
@@ -43,6 +48,7 @@ impl Transpiler {
             indent: 0,
             locals: Vec::new(),
             cur_class_fields: None,
+            imports: HashMap::new(),
             uses_force: false,
         }
     }
@@ -66,7 +72,11 @@ impl Transpiler {
                         );
                     }
                 }
-                Item::Import { .. } => {}
+                Item::Import { path, .. } => {
+                    if let Some(leaf) = path.last() {
+                        self.imports.insert(leaf.clone(), path.join("."));
+                    }
+                }
                 // Aliases are expanded out of the AST before transpiling; arm only for exhaustiveness.
                 Item::TypeAlias { .. } => {}
             }
@@ -499,14 +509,6 @@ impl Transpiler {
 
     fn emit_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<String, String> {
         if let Expr::Ident(name, _) = callee {
-            if name == "println" {
-                let a = if args.is_empty() {
-                    "\"\"".into()
-                } else {
-                    self.emit_expr(&args[0])?
-                };
-                return Ok(format!(r#"echo {a} . "\n""#)); // trailing ';' added by Stmt::Expr
-            }
             let argv = self.emit_args(args)?;
             // Enum variant or class construction → `new`; mirrors the evaluator's dispatch.
             if self.variants.contains(name) || self.classes.contains(name) {
@@ -530,6 +532,25 @@ impl Transpiler {
             object, name, safe, ..
         } = callee
         {
+            // Namespaced native call: `console.println(x)` → the native's PHP erasure (M3 Wave 1).
+            // Resolved through the import map (the transpiler has no variable scope to tell a
+            // qualifier from a value; the checker rejects a local shadowing an imported qualifier,
+            // so a same-spelled value receiver is impossible).
+            if !*safe {
+                if let Expr::Ident(q, _) = &**object {
+                    if let Some(idx) = self
+                        .imports
+                        .get(q)
+                        .and_then(|m| crate::native::index_of(m, name))
+                    {
+                        let argv: Vec<String> = args
+                            .iter()
+                            .map(|a| self.emit_expr(a))
+                            .collect::<Result<_, _>>()?;
+                        return Ok((crate::native::registry()[idx].php)(&argv));
+                    }
+                }
+            }
             let o = self.emit_expr(object)?;
             let a = self.emit_args(args)?;
             let arrow = if *safe { "?->" } else { "->" };
@@ -754,9 +775,11 @@ mod tests {
     #[test]
     fn ranges_emit_php_range() {
         // PHP `range` is inclusive, so exclusive `0..3` emits `range(0, 3 - 1)`.
-        let out = php(r#"function main() { for (int i in 0..3) { println("{i}"); } }"#);
+        let out = php(r#"import core.console;
+function main() { for (int i in 0..3) { console.println("{i}"); } }"#);
         assert!(out.contains("range(0, 3 - 1)"), "{out}");
-        let inc = php(r#"function main() { for (int i in 1..=3) { println("{i}"); } }"#);
+        let inc = php(r#"import core.console;
+function main() { for (int i in 1..=3) { console.println("{i}"); } }"#);
         assert!(inc.contains("range(1, 3)"), "{inc}");
     }
 
@@ -780,13 +803,13 @@ mod tests {
 
     #[test]
     fn println_becomes_echo() {
-        let out = php("function main() { println(\"hi\"); }");
+        let out = php("import core.console; function main() { console.println(\"hi\"); }");
         assert!(out.contains(r#"echo "hi" . "\n";"#), "{out}");
     }
 
     #[test]
     fn main_is_invoked_when_present() {
-        let out = php("function main() { println(\"hi\"); }");
+        let out = php("import core.console; function main() { console.println(\"hi\"); }");
         assert!(out.trim_end().ends_with("main();"), "{out}");
         // no main -> no call
         let no_main = php("function helper() -> int { return 1; }");
@@ -864,9 +887,11 @@ mod tests {
 
     #[test]
     fn member_access_and_method_call() {
-        let out = php("class Greeter { constructor(private string name) {} \
+        let out = php(
+            "import core.console; class Greeter { constructor(private string name) {} \
                function greet() -> string { return name; } } \
-             function main() { Greeter g = Greeter(\"Tak\"); println(g.greet()); }");
+             function main() { Greeter g = Greeter(\"Tak\"); console.println(g.greet()); }",
+        );
         assert!(out.contains(r#"$g = new Greeter("Tak");"#), "{out}");
         assert!(out.contains("$g->greet()"), "{out}");
     }

@@ -1,5 +1,5 @@
-import std.io;
+import core.console;
 
 function main() {
-    println("Hello, Phorge!");
+    console.println("Hello, Phorge!");
 }

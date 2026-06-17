@@ -447,6 +447,27 @@ impl Interp {
             object, name, safe, ..
         } = callee
         {
+            // Namespaced native call: `console.println(x)` — a member call whose head is an imported
+            // module qualifier, not a value (M3 Wave 1). Locals-first: an identifier bound as a
+            // variable is a method receiver; only an *unbound* identifier can be a qualifier, and the
+            // checker has already enforced the import + native, so `index_of_by_leaf` is unambiguous.
+            // The native's `eval` is shared verbatim with the VM (structural parity).
+            if !*safe {
+                if let Expr::Ident(q, _) = &**object {
+                    if self.frame.lookup(q).is_none() {
+                        if let Some(idx) = crate::native::index_of_by_leaf(q, name) {
+                            let argv = self.eval_args(args)?;
+                            // The native reports failures as a plain `String` (the backend-shared
+                            // contract); lift it into the interpreter's runtime `Signal`.
+                            return match (crate::native::registry()[idx].eval)(&argv, &mut self.out)
+                            {
+                                Ok(v) => Ok(v),
+                                Err(msg) => rt(msg),
+                            };
+                        }
+                    }
+                }
+            }
             let recv = self.eval(object)?;
             if *safe && matches!(recv, Value::Null) {
                 // `o?.m(args)` on a null receiver short-circuits: args are NOT evaluated.
@@ -457,9 +478,6 @@ impl Interp {
         }
         if let Expr::Ident(name, _) = callee {
             let argv = self.eval_args(args)?;
-            if name == "println" {
-                return self.builtin_println(argv);
-            }
             if let Some(f) = self.funcs.get(name).cloned() {
                 if argv.len() != f.params.len() {
                     return rt(format!(
@@ -498,22 +516,6 @@ impl Interp {
             out.push(self.eval(a)?);
         }
         Ok(out)
-    }
-
-    fn builtin_println(&mut self, args: Vec<Value>) -> R<Value> {
-        let mut line = String::new();
-        for (i, a) in args.iter().enumerate() {
-            if i > 0 {
-                line.push(' ');
-            }
-            match a.as_display() {
-                Some(t) => line.push_str(&t),
-                None => return rt(format!("println cannot print {}", a.type_name())),
-            }
-        }
-        self.out.push_str(&line);
-        self.out.push('\n');
-        Ok(Value::Unit)
     }
 
     /// Construct a class instance. Applies constructor *promotion* at runtime
@@ -723,36 +725,49 @@ mod tests {
 
     #[test]
     fn prints_a_literal_string() {
-        assert_eq!(out(r#"function main() { println("hi"); }"#), "hi\n");
+        assert_eq!(
+            out(r#"import core.console;
+function main() { console.println("hi"); }"#),
+            "hi\n"
+        );
     }
 
     #[test]
     fn integer_arithmetic_in_interpolation() {
-        assert_eq!(out(r#"function main() { println("{1 + 2 * 3}"); }"#), "7\n");
+        assert_eq!(
+            out(r#"import core.console;
+function main() { console.println("{1 + 2 * 3}"); }"#),
+            "7\n"
+        );
     }
 
     #[test]
     fn float_arithmetic() {
         assert_eq!(
-            out(r#"function main() { println("{3.0 * 4.0}"); }"#),
+            out(r#"import core.console;
+function main() { console.println("{3.0 * 4.0}"); }"#),
             "12\n"
         );
     }
 
     #[test]
     fn division_by_zero_is_runtime_error() {
-        let e = run(r#"function main() { println("{1 / 0}"); }"#).unwrap_err();
+        let e = run(r#"import core.console;
+function main() { console.println("{1 / 0}"); }"#)
+        .unwrap_err();
         assert!(e.message.contains("division by zero"), "{}", e.message);
     }
 
     #[test]
     fn comparison_and_logical_short_circuit() {
         assert_eq!(
-            out(r#"function main() { println("{1 < 2 && 3 >= 3}"); }"#),
+            out(r#"import core.console;
+function main() { console.println("{1 < 2 && 3 >= 3}"); }"#),
             "true\n"
         );
         assert_eq!(
-            out(r#"function main() { println("{1 > 2 || false}"); }"#),
+            out(r#"import core.console;
+function main() { console.println("{1 > 2 || false}"); }"#),
             "false\n"
         );
     }
@@ -760,7 +775,8 @@ mod tests {
     #[test]
     fn unary_negation_and_not() {
         assert_eq!(
-            out(r#"function main() { println("{-5}"); println("{!true}"); }"#),
+            out(r#"import core.console;
+function main() { console.println("{-5}"); console.println("{!true}"); }"#),
             "-5\nfalse\n"
         );
     }
@@ -768,41 +784,46 @@ mod tests {
     #[test]
     fn var_decl_and_use() {
         assert_eq!(
-            out(r#"function main() { int x = 10; println("{x + 5}"); }"#),
+            out(r#"import core.console;
+function main() { int x = 10; console.println("{x + 5}"); }"#),
             "15\n"
         );
     }
 
     #[test]
     fn if_else_picks_branch() {
-        let src = r#"function main() { if (1 < 2) { println("yes"); } else { println("no"); } }"#;
+        let src = r#"import core.console;
+function main() { if (1 < 2) { console.println("yes"); } else { console.println("no"); } }"#;
         assert_eq!(out(src), "yes\n");
     }
 
     #[test]
     fn function_call_and_return() {
-        let src = r#"
+        let src = r#"import core.console;
+
             function dbl(int n) -> int { return n * 2; }
-            function main() { println("{dbl(21)}"); }
+            function main() { console.println("{dbl(21)}"); }
         "#;
         assert_eq!(out(src), "42\n");
     }
 
     #[test]
     fn recursion_works() {
-        let src = r#"
+        let src = r#"import core.console;
+
             function fac(int n) -> int {
                 if (n <= 1) { return 1; }
                 return n * fac(n - 1);
             }
-            function main() { println("{fac(5)}"); }
+            function main() { console.println("{fac(5)}"); }
         "#;
         assert_eq!(out(src), "120\n");
     }
 
     #[test]
     fn enum_variant_and_match() {
-        let src = r#"
+        let src = r#"import core.console;
+
             enum Shape { Circle(float r), Rect(float w, float h), }
             function area(Shape s) -> float {
                 return match s {
@@ -810,7 +831,7 @@ mod tests {
                     Rect(w, h) => w * h,
                 };
             }
-            function main() { println("{area(Rect(3.0, 4.0))}"); }
+            function main() { console.println("{area(Rect(3.0, 4.0))}"); }
         "#;
         assert_eq!(out(src), "12\n");
     }
@@ -818,33 +839,36 @@ mod tests {
     #[test]
     fn match_wildcard_is_catch_all() {
         // The `_` arm catches the Rect case (sample-faithful: payload variants).
-        let src = r#"
+        let src = r#"import core.console;
+
             enum Shape { Circle(float r), Rect(float w, float h), }
             function kind(Shape s) -> int { return match s { Circle(r) => 1, _ => 2, }; }
-            function main() { println("{kind(Rect(1.0, 2.0))}"); }
+            function main() { console.println("{kind(Rect(1.0, 2.0))}"); }
         "#;
         assert_eq!(out(src), "2\n");
     }
 
     #[test]
     fn class_construction_promotion_and_method() {
-        let src = r#"
+        let src = r#"import core.console;
+
             class Greeter {
                 private string name;
                 constructor(private string name) {}
                 function greet() -> string { return "Hi {name}"; }
             }
-            function main() { Greeter g = Greeter("Tak"); println(g.greet()); }
+            function main() { Greeter g = Greeter("Tak"); console.println(g.greet()); }
         "#;
         assert_eq!(out(src), "Hi Tak\n");
     }
 
     #[test]
     fn for_loop_over_list() {
-        let src = r#"
+        let src = r#"import core.console;
+
             function main() {
                 List<int> xs = [1, 2, 3];
-                for (int x in xs) { println("{x}"); }
+                for (int x in xs) { console.println("{x}"); }
             }
         "#;
         assert_eq!(out(src), "1\n2\n3\n");
@@ -853,14 +877,17 @@ mod tests {
     #[test]
     fn indexing_reads_elements() {
         assert_eq!(
-            out(r#"function main() { List<int> xs = [7, 8, 9]; println("{xs[0]} {xs[2]}"); }"#),
+            out(r#"import core.console;
+function main() { List<int> xs = [7, 8, 9]; console.println("{xs[0]} {xs[2]}"); }"#),
             "7 9\n"
         );
     }
 
     #[test]
     fn indexing_out_of_range_is_runtime_error() {
-        let e = run(r#"function main() { List<int> xs = [1]; println("{xs[3]}"); }"#).unwrap_err();
+        let e = run(r#"import core.console;
+function main() { List<int> xs = [1]; console.println("{xs[3]}"); }"#)
+        .unwrap_err();
         assert!(
             e.message.contains("list index out of range"),
             "{}",
@@ -871,16 +898,19 @@ mod tests {
     #[test]
     fn ranges_iterate_like_lists() {
         assert_eq!(
-            out(r#"function main() { for (int i in 0..3) { println("{i}"); } }"#),
+            out(r#"import core.console;
+function main() { for (int i in 0..3) { console.println("{i}"); } }"#),
             "0\n1\n2\n"
         );
         assert_eq!(
-            out(r#"function main() { for (int i in 1..=3) { println("{i}"); } }"#),
+            out(r#"import core.console;
+function main() { for (int i in 1..=3) { console.println("{i}"); } }"#),
             "1\n2\n3\n"
         );
         // empty range (start >= end): body never runs
         assert_eq!(
-            out(r#"function main() { for (int i in 5..2) { println("{i}"); } println("done"); }"#),
+            out(r#"import core.console;
+function main() { for (int i in 5..2) { console.println("{i}"); } console.println("done"); }"#),
             "done\n"
         );
     }
@@ -888,18 +918,21 @@ mod tests {
     #[test]
     fn expression_if_picks_branch_value() {
         assert_eq!(
-            out(r#"function main() { var x = if (1 < 2) { 7 } else { 9 }; println("{x}"); }"#),
+            out(r#"import core.console;
+function main() { var x = if (1 < 2) { 7 } else { 9 }; console.println("{x}"); }"#),
             "7\n"
         );
         assert_eq!(
-            out(r#"function main() { var x = if (1 > 2) { 7 } else { 9 }; println("{x}"); }"#),
+            out(r#"import core.console;
+function main() { var x = if (1 > 2) { 7 } else { 9 }; console.println("{x}"); }"#),
             "9\n"
         );
     }
 
     #[test]
     fn integer_overflow_is_runtime_error_not_panic() {
-        let src = r#"function main() { println("{9223372036854775807 + 1}"); }"#;
+        let src = r#"import core.console;
+function main() { console.println("{9223372036854775807 + 1}"); }"#;
         let e = run(src).unwrap_err();
         assert!(e.message.contains("overflow"), "{}", e.message);
     }
@@ -912,9 +945,10 @@ mod tests {
 
     #[test]
     fn interpolating_an_object_errors() {
-        let src = r#"
+        let src = r#"import core.console;
+
             class C { constructor() {} }
-            function main() { C c = C(); println("{c}"); }
+            function main() { C c = C(); console.println("{c}"); }
         "#;
         let e = run(src).unwrap_err();
         assert!(

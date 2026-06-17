@@ -1,4 +1,4 @@
-import std.io;
+import core.console;
 
 // A self-contained program built into a standalone executable with `phorge build`.
 // The produced binary embeds this source (in a CRC-guarded `.phorge` object-file
@@ -12,8 +12,8 @@ function fib(int n) -> int {
 }
 
 function main() {
-    println("phorge standalone build");
+    console.println("phorge standalone build");
     for (int i in 0..10) {
-        println("fib({i}) = {fib(i)}");
+        console.println("fib({i}) = {fib(i)}");
     }
 }

@@ -1,10 +1,10 @@
-import std.io;
+import core.console;
 
 // A tiny program used by ../cli/README.md to demonstrate the phorge CLI:
 // source forms (file / stdin / inline), inspection (check / parse / lex),
 // the diagnostic dictionary (explain), and clean compile/runtime faults.
 function main() {
     int n = 6;
-    println("phorge CLI demo");
-    println("n doubled = {n * 2}");
+    console.println("phorge CLI demo");
+    console.println("n doubled = {n * 2}");
 }

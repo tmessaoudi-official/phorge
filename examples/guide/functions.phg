@@ -1,4 +1,4 @@
-import std.io;
+import core.console;
 
 // Functions in Phorge: typed parameters and a return type.
 // A function with no `-> T` (like `main`) returns nothing.
@@ -25,20 +25,20 @@ function up_to(int n) -> List<int> {
 
 // No return type: this function just prints.
 function banner(string title) {
-    println("== {title} ==");
+    console.println("== {title} ==");
 }
 
 function main() {
     banner("functions");
-    println("add(2, 3) = {add(2, 3)}");
-    println(greet("phorge"));
-    println(shout("phorge"));
+    console.println("add(2, 3) = {add(2, 3)}");
+    console.println(greet("phorge"));
+    console.println(shout("phorge"));
 
     // Call results feed directly into other expressions.
     int total = add(add(1, 2), add(3, 4));
-    println("nested add = {total}");
+    console.println("nested add = {total}");
 
     for (int i in up_to(4)) {
-        println("i = {i}");
+        console.println("i = {i}");
     }
 }

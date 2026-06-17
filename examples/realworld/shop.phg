@@ -1,4 +1,4 @@
-import std.io;
+import core.console;
 
 // A shopping cart with per-item discounts.
 
@@ -37,7 +37,7 @@ function main() {
         Item("Gizmo", 1500, Flat(300)),
     ];
     for (Item it in cart) {
-        println("{it.name_of()} = {it.price()}c");
+        console.println("{it.name_of()} = {it.price()}c");
     }
-    println("5x Widget = {bulk(1000, 5)}c");
+    console.println("5x Widget = {bulk(1000, 5)}c");
 }

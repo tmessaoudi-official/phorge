@@ -1,4 +1,4 @@
-import std.io;
+import core.console;
 
 // `type` alias: a domain-specific name for a primitive. It is compile-time only — the checker
 // resolves `Celsius` to `int`, and it is fully erased from the transpiled PHP.
@@ -19,5 +19,5 @@ function main() {
     var lo = freezing();
     var hi = boiling();
     var range = hi - lo;
-    println("{label}: {lo} to {hi} ({range} degrees)");
+    console.println("{label}: {lo} to {hi} ({range} degrees)");
 }

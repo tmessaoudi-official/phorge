@@ -8,8 +8,8 @@ byte-identity sweep). Run `phorge <command> --help` for per-command help with wo
 
 ```bash
 phorge run demo.phg                                              # a file
-echo 'function main() { println("from stdin"); }' | phorge run -   # stdin
-phorge run -e 'function main() { println("inline program"); }'     # inline
+echo 'function main() { console.println("from stdin"); }' | phorge run -   # stdin
+phorge run -e 'function main() { console.println("inline program"); }'     # inline
 ```
 
 ```
@@ -59,9 +59,9 @@ Front-end errors carry a caret-underlined span, a stable code, and a did-you-mea
 name is in scope:
 
 ```
-$ phorge run -e 'function main() { int count = 1; int y = conut + 1; println("{y}"); }'
+$ phorge run -e 'function main() { int count = 1; int y = conut + 1; console.println("{y}"); }'
 type error at 1:42: unknown identifier `conut`
-function main() { int count = 1; int y = conut + 1; println("{y}"); }
+function main() { int count = 1; int y = conut + 1; console.println("{y}"); }
                                          ^
   [E-UNKNOWN-IDENT]
   hint: did you mean `count`?

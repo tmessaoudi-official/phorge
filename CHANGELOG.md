@@ -69,7 +69,30 @@ nullable runtime). `T?` is the existing `null` value at runtime; the guarantee l
   message), serving both match-exhaustiveness and `opt!`-on-null.
 - New guide example `examples/guide/null-safety.phg`, auto byte-identity-gated + PHP round-tripped.
 
-_Next: M3 S3+ (the language-growth slices). M2.5 Phase 3 (CI stub registry; opt-in `--sign`) remains parked._
+### M3 Track B Wave 1 — namespaced native foundation
+
+- **Everything is namespaced — "nothing in the wind".** The free global `println` is retired. A
+  program now `import core.console;` and calls `console.println(...)`. Stdlib modules are reserved
+  under the `core.*` root; the root lives in the import and the leaf qualifies the call (Go's
+  `import "fmt"` → `fmt.Println`). Explicit import is required even for the stdlib.
+- **`native` registry** (`src/native.rs`) — each built-in single-sources its four facets in one
+  entry keyed by `(module, name)`: checker signature (`params`/`ret`), a runtime `eval` shared
+  verbatim by the interpreter *and* the VM (structural parity, like the value kernels), and a PHP
+  emission mapping (`console.println` → `echo … . "\n"`). Built once via `OnceLock`.
+- **`Op::Print` → `Op::CallNative(idx, argc)`** — the migrated former print op now indexes the
+  registry and pushes the native's result (extends the three coupled `Op` matches + a `validate`
+  bound on the native index). No separate `Const(Unit)`.
+- **Import-driven resolution across all four backends** — a member call `console.println(x)` whose
+  head is an imported module qualifier dispatches to the native: the interpreter and compiler resolve
+  locals-first then by leaf (they track scope); the checker and transpiler use the import map.
+- **Shadowing guard** — a value binding may not shadow an imported module qualifier (`E-SHADOW-IMPORT`),
+  keeping the import-map-driven transpiler consistent with the locals-first run backends.
+- Migrated every `println` call site — all examples, fixtures, and inline test programs — to
+  `import core.console;` + `console.println`. The example differential test now also asserts each
+  example *runs* (`Ok`), not merely that the backends agree (closing a vacuous-green gap).
+
+_Next: Track B Wave 2 (`core.file`/`math`/`text`/`list`/`json`), then Wave 3 (user packages). M2.5
+Phase 3 (CI stub registry; opt-in `--sign`) remains parked._
 
 ## [0.4.0] — 2026-06-17
 

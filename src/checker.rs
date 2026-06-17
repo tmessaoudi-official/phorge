@@ -46,6 +46,10 @@ pub struct Checker {
     aliases: HashMap<String, crate::ast::Type>,
     /// alias names currently being expanded — detects `type A = B; type B = A;` cycles.
     alias_stack: Vec<String>,
+    /// Active import map (leaf qualifier → full dotted module path; see [`crate::native::import_map`]).
+    /// Drives namespaced native-call resolution (`console.println`) and the shadowing guard that
+    /// keeps an imported qualifier disjoint from every value binding (M3 Wave 1).
+    imports: HashMap<String, String>,
 }
 
 impl Checker {
@@ -62,6 +66,7 @@ impl Checker {
             depth: 0,
             aliases: HashMap::new(),
             alias_stack: Vec::new(),
+            imports: HashMap::new(),
         }
     }
 
@@ -226,27 +231,19 @@ impl Checker {
         }
     }
 
-    /// Register builtin functions available without explicit user definition.
-    fn register_prelude(&mut self) {
-        self.funcs.insert(
-            "println".into(),
-            FnSig {
-                params: vec![Ty::String],
-                ret: Ty::Unit,
-            },
-        );
-    }
-
-    /// Phase 1 — hoist all top-level declarations and the builtin prelude.
+    /// Phase 1 — hoist all top-level declarations and the active import map. There is no longer a
+    /// builtin prelude: every callable is namespaced ("nothing in the wind"), so even `println` must
+    /// be reached as `console.println` after `import core.console;` (M3 Wave 1). A bare `println(…)`
+    /// now resolves as an unknown function.
     fn collect(&mut self, program: &Program) {
         use crate::ast::Item;
-        self.register_prelude();
+        self.imports = crate::native::import_map(&program.items);
         for item in &program.items {
             match item {
                 Item::Function(f) => self.collect_function(f),
                 Item::Enum(e) => self.collect_enum(e),
                 Item::Class(c) => self.collect_class(c),
-                Item::Import { .. } => {} // module resolution deferred; prelude covers println
+                Item::Import { .. } => {} // import map already built above; nothing per-item to hoist
                 Item::TypeAlias { name, ty, span } => {
                     if is_builtin_type_name(name) {
                         // Aliasing a built-in would make the checker (primitive wins) and the
@@ -391,7 +388,7 @@ impl Checker {
                                     .map(|info| info.ctor.clone())
                                     .unwrap_or_default();
                                 for (p, t) in params.iter().zip(ctor) {
-                                    self.declare(&p.name, t);
+                                    self.declare(&p.name, t, p.span);
                                 }
                                 for s in body {
                                     self.check_stmt(s);
@@ -419,7 +416,7 @@ impl Checker {
         self.push_scope();
         for p in &f.params {
             let pty = self.resolve_type(&p.ty);
-            self.declare(&p.name, pty);
+            self.declare(&p.name, pty, p.span);
         }
         for s in &f.body {
             self.check_stmt(s);
@@ -435,7 +432,21 @@ impl Checker {
     fn pop_scope(&mut self) {
         self.scopes.pop();
     }
-    fn declare(&mut self, name: &str, ty: Ty) {
+    fn declare(&mut self, name: &str, ty: Ty, span: Span) {
+        // A value binding may not shadow an imported module qualifier: were `console` both a local
+        // and `import core.console;`, the run backends (locals-first) would treat `console.x()` as a
+        // method call while the transpiler (import-map-driven) would emit the native — a silent
+        // divergence. Forbidding the overlap keeps all four backends consistent (M3 Wave 1).
+        if self.imports.contains_key(name) {
+            self.err_coded(
+                span,
+                format!("`{name}` shadows the imported module qualifier `{name}`"),
+                "E-SHADOW-IMPORT",
+                Some(format!(
+                    "rename the binding, or remove the matching `import …{name};`"
+                )),
+            );
+        }
         if let Some(top) = self.scopes.last_mut() {
             top.insert(name.to_string(), ty);
         }
@@ -500,7 +511,7 @@ impl Checker {
                         declared
                     }
                 };
-                self.declare(name, declared);
+                self.declare(name, declared, *span);
             }
             Stmt::Return { value, span } => {
                 let actual = match value {
@@ -535,7 +546,7 @@ impl Checker {
                         ),
                     };
                     self.push_scope();
-                    self.declare(name, inner);
+                    self.declare(name, inner, *span);
                     self.check_block(then_block);
                     self.pop_scope();
                 } else {
@@ -872,7 +883,23 @@ impl Checker {
             Expr::Ident(name, _) => self.check_named_call(name, args, span),
             Expr::Member {
                 object, name, safe, ..
-            } => self.check_method_call(object, name, args, *safe, span),
+            } => {
+                // Namespaced native call: `console.println(x)` — head is an imported module
+                // qualifier. The shadowing guard keeps an imported qualifier disjoint from every
+                // value binding, so membership in the import map is decisive (no scope check).
+                if !*safe {
+                    if let Expr::Ident(q, _) = &**object {
+                        if let Some(idx) = self
+                            .imports
+                            .get(q)
+                            .and_then(|m| crate::native::index_of(m, name))
+                        {
+                            return self.check_native_call(idx, args, span);
+                        }
+                    }
+                }
+                self.check_method_call(object, name, args, *safe, span)
+            }
             other => {
                 for a in args {
                     self.check_expr(a);
@@ -900,6 +927,17 @@ impl Checker {
         };
         self.check_args(name, &sig.0, args, span);
         sig.1
+    }
+
+    /// `console.println(args)` — a namespaced native call resolved through the import map (M3
+    /// Wave 1). The native single-sources its signature, so checking is the same arg/arity pass as a
+    /// free function; the leaf-qualified label (`console.println`) drives the error messages.
+    fn check_native_call(&mut self, idx: usize, args: &[crate::ast::Expr], span: Span) -> Ty {
+        let n = &crate::native::registry()[idx];
+        let leaf = n.module.rsplit('.').next().unwrap_or(n.module);
+        let label = format!("{leaf}.{}", n.name);
+        self.check_args(&label, &n.params, args, span);
+        n.ret.clone()
     }
 
     /// Check call arguments against expected parameter types.
@@ -1135,7 +1173,7 @@ impl Checker {
                 );
             }
             self.push_scope();
-            self.declare(name, declared);
+            self.declare(name, declared, *span);
             for s in body {
                 self.check_stmt(s);
             }
@@ -1233,7 +1271,7 @@ impl Checker {
         use crate::ast::Pattern;
         match pat {
             Pattern::Wildcard(_) => {}
-            Pattern::Binding { name, .. } => self.declare(name, scrut.clone()),
+            Pattern::Binding { name, span } => self.declare(name, scrut.clone(), *span),
             Pattern::Int(_, span) => self.expect_prim(scrut, &Ty::Int, *span),
             Pattern::Float(_, span) => self.expect_prim(scrut, &Ty::Float, *span),
             Pattern::Str(_, span) => self.expect_prim(scrut, &Ty::String, *span),
@@ -1727,7 +1765,9 @@ mod tests {
     #[test]
     fn unknown_identifier_suggests_the_nearest_in_scope_name() {
         // `cont` is one edit from the in-scope `count` → the diagnostic carries a code + hint.
-        let errs = errors_of("function main() { int count = 0; println(\"{cont}\"); }");
+        let errs = errors_of(
+            "import core.console; function main() { int count = 0; console.println(\"{cont}\"); }",
+        );
         let d = errs
             .iter()
             .find(|e| e.message.contains("unknown identifier"))
@@ -1955,7 +1995,57 @@ mod tests {
 
     #[test]
     fn println_accepts_string() {
-        assert!(errors_of(r#"function main() { println("hi"); }"#).is_empty());
+        assert!(errors_of(
+            r#"import core.console;
+function main() { console.println("hi"); }"#
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn console_println_rejects_non_string() {
+        // The native's signature is `(string)`, so an `int` argument is a type error (M3 Wave 1).
+        let errs = errors_of(
+            r#"import core.console;
+function main() { console.println(42); }"#,
+        );
+        assert!(
+            errs.iter().any(|e| e.message.contains("console.println")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn bare_println_is_unknown_function() {
+        // The global `println` is retired: a bare call now resolves as an unknown free function.
+        let errs = errors_of(r#"function main() { println("hi"); }"#);
+        assert!(
+            errs.iter()
+                .any(|e| e.message.contains("unknown function") && e.message.contains("println")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn console_println_without_import_errors() {
+        // "nothing in the wind": without `import core.console;`, the qualifier is unbound, so the
+        // member call cannot resolve to the native and is an error.
+        let errs = errors_of(r#"function main() { console.println("hi"); }"#);
+        assert!(!errs.is_empty(), "expected an error without the import");
+    }
+
+    #[test]
+    fn local_shadowing_imported_qualifier_errors() {
+        // A value binding may not shadow an imported module qualifier (keeps all backends
+        // consistent — see `declare`). Coded `E-SHADOW-IMPORT`.
+        let errs = errors_of(
+            r#"import core.console;
+function main() { int console = 0; console.println("{console}"); }"#,
+        );
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-SHADOW-IMPORT")),
+            "{errs:?}"
+        );
     }
 
     const SHAPE: &str = "enum Shape { Circle(float radius), Rect(float w, float h), }";

@@ -13,6 +13,7 @@ pub mod interpreter;
 pub mod lexer;
 pub mod limits;
 pub mod mem;
+pub mod native;
 pub mod parser;
 pub mod token;
 pub mod transpile;

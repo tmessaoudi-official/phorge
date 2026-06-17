@@ -263,20 +263,13 @@ impl<'a> Vm<'a> {
                 self.stack.push(Value::List(Rc::new(list)));
             }
 
-            Op::Print(n) => {
-                let parts = self.split_off(n);
-                let mut line = String::new();
-                for (i, v) in parts.iter().enumerate() {
-                    if i > 0 {
-                        line.push(' ');
-                    }
-                    match v.as_display() {
-                        Some(t) => line.push_str(&t),
-                        None => return Err(format!("println cannot print {}", v.type_name())),
-                    }
-                }
-                self.out.push_str(&line);
-                self.out.push('\n');
+            Op::CallNative(idx, argc) => {
+                // The native's `eval` is shared verbatim with the interpreter (structural parity).
+                // `validate` has already bounded `idx`; the args sit on top in source order.
+                let args = self.split_off(argc);
+                let native = &crate::native::registry()[idx];
+                let result = (native.eval)(&args, &mut self.out)?;
+                self.stack.push(result);
             }
 
             Op::Call(idx) => {
@@ -543,7 +536,7 @@ mod tests {
         c.emit(Op::MulI, 1);
         c.emit(Op::Const(four), 1);
         c.emit(Op::AddI, 1);
-        c.emit(Op::Print(1), 1);
+        c.emit(Op::CallNative(crate::native::CONSOLE_PRINTLN, 1), 1);
         term(&mut c);
         c
     }
@@ -587,7 +580,7 @@ mod tests {
         c.emit(Op::Const(a), 1);
         c.emit(Op::Const(b), 1);
         c.emit(Op::AddF, 1);
-        c.emit(Op::Print(1), 1);
+        c.emit(Op::CallNative(crate::native::CONSOLE_PRINTLN, 1), 1);
         term(&mut c);
         assert_eq!(run_chunk(c).unwrap(), "4\n");
     }
@@ -611,7 +604,7 @@ mod tests {
         let a = c.add_const(Value::Int(5));
         c.emit(Op::Const(a), 1);
         c.emit(Op::Neg, 1);
-        c.emit(Op::Print(1), 1);
+        c.emit(Op::CallNative(crate::native::CONSOLE_PRINTLN, 1), 1);
         term(&mut c);
         assert_eq!(run_chunk(c).unwrap(), "-5\n");
     }
@@ -625,7 +618,7 @@ mod tests {
         c.emit(Op::Const(a), 1);
         c.emit(Op::Const(b), 1);
         c.emit(Op::Lt, 1);
-        c.emit(Op::Print(1), 1);
+        c.emit(Op::CallNative(crate::native::CONSOLE_PRINTLN, 1), 1);
         term(&mut c);
         assert_eq!(run_chunk(c).unwrap(), "true\n");
     }
@@ -642,7 +635,7 @@ mod tests {
         c.emit(Op::AddI, 1);
         c.emit(Op::SetLocal(0), 1);
         c.emit(Op::GetLocal(0), 1);
-        c.emit(Op::Print(1), 1);
+        c.emit(Op::CallNative(crate::native::CONSOLE_PRINTLN, 1), 1);
         term(&mut c);
         assert_eq!(run_chunk(c).unwrap(), "15\n");
     }
@@ -658,12 +651,12 @@ mod tests {
         let jif = c.code.len();
         c.emit(Op::JumpIfFalse(0), 1); // 1 (patched below)
         c.emit(Op::Const(one), 1); // 2
-        c.emit(Op::Print(1), 1); // 3
+        c.emit(Op::CallNative(crate::native::CONSOLE_PRINTLN, 1), 1); // 3
         let jend = c.code.len();
         c.emit(Op::Jump(0), 1); // 4 (patched below)
         let else_target = c.code.len(); // 5
         c.emit(Op::Const(two), 1); // 5
-        c.emit(Op::Print(1), 1); // 6
+        c.emit(Op::CallNative(crate::native::CONSOLE_PRINTLN, 1), 1); // 6
         let end = c.code.len(); // 7 (start of the terminator)
         term(&mut c); // 7..9
         c.code[jif] = Op::JumpIfFalse(else_target);
@@ -680,7 +673,7 @@ mod tests {
         c.emit(Op::Const(pre), 1);
         c.emit(Op::Const(seven), 1);
         c.emit(Op::Concat(2), 1);
-        c.emit(Op::Print(1), 1);
+        c.emit(Op::CallNative(crate::native::CONSOLE_PRINTLN, 1), 1);
         term(&mut c);
         assert_eq!(run_chunk(c).unwrap(), "x=7\n");
     }
@@ -699,11 +692,11 @@ mod tests {
         c.emit(Op::MakeList(3), 1); // slot 0 = list
         c.emit(Op::GetLocal(0), 1);
         c.emit(Op::Len, 1);
-        c.emit(Op::Print(1), 1);
+        c.emit(Op::CallNative(crate::native::CONSOLE_PRINTLN, 1), 1);
         c.emit(Op::GetLocal(0), 1);
         c.emit(Op::Const(one), 1);
         c.emit(Op::Index, 1);
-        c.emit(Op::Print(1), 1);
+        c.emit(Op::CallNative(crate::native::CONSOLE_PRINTLN, 1), 1);
         term(&mut c);
         assert_eq!(run_chunk(c).unwrap(), "3\n20\n");
     }
@@ -715,7 +708,7 @@ mod tests {
         let b = c.add_const(Value::Int(1));
         c.emit(Op::Const(a), 1);
         c.emit(Op::Const(b), 1);
-        c.emit(Op::Print(2), 1);
+        c.emit(Op::CallNative(crate::native::CONSOLE_PRINTLN, 2), 1);
         term(&mut c);
         assert_eq!(run_chunk(c).unwrap(), "a 1\n");
     }
@@ -727,7 +720,7 @@ mod tests {
         let seven = m.add_const(Value::Int(7));
         m.emit(Op::Const(seven), 1);
         m.emit(Op::Call(1), 1);
-        m.emit(Op::Print(1), 1);
+        m.emit(Op::CallNative(crate::native::CONSOLE_PRINTLN, 1), 1);
         term(&mut m);
 
         let mut f = Chunk::new();
@@ -769,10 +762,10 @@ mod tests {
         c.emit(Op::MakeEnum(0), 1);
         c.emit(Op::GetLocal(0), 1);
         c.emit(Op::MatchTag(0), 1);
-        c.emit(Op::Print(1), 1);
+        c.emit(Op::CallNative(crate::native::CONSOLE_PRINTLN, 1), 1);
         c.emit(Op::GetLocal(0), 1);
         c.emit(Op::GetEnumField(0), 1);
-        c.emit(Op::Print(1), 1);
+        c.emit(Op::CallNative(crate::native::CONSOLE_PRINTLN, 1), 1);
         term(&mut c);
         let program = BytecodeProgram {
             functions: vec![Function {
@@ -801,7 +794,7 @@ mod tests {
         c.emit(Op::MakeEnum(0), 1); // None (arity 0) -> slot 0
         c.emit(Op::GetLocal(0), 1);
         c.emit(Op::MatchTag(1), 1); // is it `Some`? -> false
-        c.emit(Op::Print(1), 1);
+        c.emit(Op::CallNative(crate::native::CONSOLE_PRINTLN, 1), 1);
         term(&mut c);
         let program = BytecodeProgram {
             functions: vec![Function {
@@ -841,7 +834,7 @@ mod tests {
         c.emit(Op::MakeInstance(0), 1); // [Point{x:3,y:4}] becomes slot 0
         c.emit(Op::GetLocal(0), 1);
         c.emit(Op::GetField(0), 1); // names[0] == "x"
-        c.emit(Op::Print(1), 1);
+        c.emit(Op::CallNative(crate::native::CONSOLE_PRINTLN, 1), 1);
         term(&mut c);
         let program = BytecodeProgram {
             functions: vec![Function {
@@ -869,7 +862,7 @@ mod tests {
         c.emit(Op::MakeInstance(0), 1); // [Empty{}] slot 0
         c.emit(Op::GetLocal(0), 1);
         c.emit(Op::GetField(0), 1);
-        c.emit(Op::Print(1), 1);
+        c.emit(Op::CallNative(crate::native::CONSOLE_PRINTLN, 1), 1);
         term(&mut c);
         let program = BytecodeProgram {
             functions: vec![Function {

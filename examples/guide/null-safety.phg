@@ -1,4 +1,4 @@
-import std.io;
+import core.console;
 
 // M3 S2 "null safety": optionals `T?`, `??`, `?.`, `if (var x = opt)`, `opt!`, and `match` over
 // `T?`. A non-optional `T` can never hold `null` — the checker enforces it (TypeScript
@@ -23,30 +23,30 @@ function main() {
     int? none = null;
 
     // `??` supplies a default when the left side is null (and skips it otherwise).
-    println("coalesce: {some ?? -1} {none ?? -1}");
+    console.println("coalesce: {some ?? -1} {none ?? -1}");
 
     // `?.` reads through a present receiver and short-circuits a null one to `null`.
     Box? box = Box(42);
     Box? nobox = null;
-    println("safe: {(box?.get()) ?? -1} {(nobox?.get()) ?? -1}");
+    console.println("safe: {(box?.get()) ?? -1} {(nobox?.get()) ?? -1}");
 
     // `if (var x = opt)` binds the non-null inner inside the then-block only (smart-cast to `int`).
     if (var x = some) {
-        println("if-let: got {x}");
+        console.println("if-let: got {x}");
     } else {
-        println("if-let: none");
+        console.println("if-let: none");
     }
     if (var y = none) {
-        println("if-let: got {y}");
+        console.println("if-let: got {y}");
     } else {
-        println("if-let: none");
+        console.println("if-let: none");
     }
 
     // `opt!` force-unwraps a known-present optional to `int` (it would fault on null — never used on
     // a value that can be null; the `W-FORCE-UNWRAP` lint flags every use). `x` is then a real `int`.
     int forced = some!;
-    println("force: {forced + 1}");
+    console.println("force: {forced + 1}");
 
     // `match` over `T?` with null-arm narrowing.
-    println("match: {describe(some)} / {describe(none)}");
+    console.println("match: {describe(some)} / {describe(none)}");
 }

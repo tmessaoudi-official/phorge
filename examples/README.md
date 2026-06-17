@@ -8,7 +8,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 
 | Example | What it shows |
 |---|---|
-| `hello.phg` | the minimal program — `println` |
+| `hello.phg` | the minimal program — `import core.console;` + `console.println` |
 | `fib.phg` | recursion, `for…in`, `List<int>` |
 | `grades.phg` | enums + `match`, a class with a method, `List`, `for…in` |
 | `realworld/ledger.phg` | bank accounts: classes + methods + `this`, payload enum + `match`, recursion (compound interest), integer-cents arithmetic, immutability (`apply` returns a fresh `Account`) |
@@ -45,7 +45,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | indexing `xs[i]`, ranges `0..n` / `0..=n`, expression `if` | `guide/ergonomics` |
 | null safety: `T?`, `??`, `?.`, `if (var x = opt)`, `opt!`, `match` over `T?` | `guide/null-safety` |
 | `var` local type inference, `type` aliases | `guide/inference` |
-| `println(string)` (the only builtin) | every example |
+| `console.println(string)` (after `import core.console;`) | every example |
 | Phorge → PHP transpile | `transpile/demo` |
 | standalone executable (`phorge build`) | `build/app` |
 | CLI: source forms, inspection (`check`/`parse`/`lex`), diagnostics, `explain` | `cli/demo` |
@@ -55,8 +55,11 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 - **Zero-payload enum variants use call form `V()` everywhere** — to construct (`Defend()`) *and* in
   a `match` arm (`Defend() =>`). A bare `Defend =>` arm is a catch-all *binding*, not a variant
   pattern, so it silently swallows every case.
-- **`import` is decorative today.** `import std.io;` parses but resolves nothing — there is no
-  multi-file module system yet (planned for **M5**). The `println` builtin is always available.
+- **`import core.console;` is load-bearing (M3 Wave 1).** Everything is namespaced — "nothing in the
+  wind" — so there is no free global `println`: a program must `import core.console;` and call
+  `console.println(...)`. Stdlib modules are reserved under `core.*`; the root lives in the import and
+  the leaf qualifies the call (Go's `import "fmt"` → `fmt.Println`). *File-based* `import` of user
+  `.phg` modules is still a later milestone.
 
 ## Not yet supported (intentionally absent here)
 

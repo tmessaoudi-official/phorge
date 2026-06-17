@@ -41,6 +41,7 @@ limits in `limits.rs`, not Rust's ambient stack, bound recursion (invariant #6).
 | `vm.rs` | stack VM; `exec_op` dispatch; reified call `Frame { func, ip, slot_base }` |
 | `transpile.rs` | AST → PHP source |
 | `value.rs` | `Value` + single-sourced arith/compare kernels (both backends) |
+| `native.rs` | namespaced stdlib registry keyed by `(module,name)` (`console.println`, …); single-sources each native's checker sig + shared `eval` + PHP emission; target of `import core.*` + `Op::CallNative` |
 | `diagnostic.rs` | unified `Diagnostic { stage, message, line, col }` |
 | `limits.rs` | recursion/nesting caps + numeric-width policy |
 | `mem.rs` | std-only Linux `/proc` RSS sampler (`VmRSS`/`VmHWM` + `clear_refs` peak reset) for `bench` |

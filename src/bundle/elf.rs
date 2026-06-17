@@ -68,7 +68,7 @@ mod tests {
         let exe = std::env::current_exe().expect("current_exe");
         let tmp = std::env::temp_dir().join("phorge_bundle_reader_test");
         let payload = std::env::temp_dir().join("phorge_bundle_reader_payload");
-        let src = b"function main() { println(\"x\"); }";
+        let src = b"import core.console; function main() { console.println(\"x\"); }";
         std::fs::write(&payload, encode_container(src)).unwrap();
         let objcopy = std::env::var("PHORGE_OBJCOPY").unwrap_or_else(|_| "llvm-objcopy".into());
         let status = std::process::Command::new(&objcopy)

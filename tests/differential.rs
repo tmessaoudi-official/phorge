@@ -97,30 +97,47 @@ fn agree_err(src: &str) {
 /// Programs spanning the whole P2 surface. Each must run identically on both backends.
 const P2_PROGRAMS: &[&str] = &[
     // literals + interpolation
-    r#"function main() { println("hello"); }"#,
-    r#"function main() { println("{42}"); println("{3.14}"); println("{true}"); }"#,
+    r#"import core.console;
+function main() { console.println("hello"); }"#,
+    r#"import core.console;
+function main() { console.println("{42}"); console.println("{3.14}"); console.println("{true}"); }"#,
     // int + float arithmetic (formatting parity: 12.0 -> "12")
-    r#"function main() { println("{1 + 2 * 3 - 4}"); }"#,
-    r#"function main() { println("{2.0 * 3.0}"); println("{7.5 / 2.5}"); }"#,
-    r#"function main() { println("{7 % 3}"); println("{7.5 % 2.0}"); }"#,
+    r#"import core.console;
+function main() { console.println("{1 + 2 * 3 - 4}"); }"#,
+    r#"import core.console;
+function main() { console.println("{2.0 * 3.0}"); console.println("{7.5 / 2.5}"); }"#,
+    r#"import core.console;
+function main() { console.println("{7 % 3}"); console.println("{7.5 % 2.0}"); }"#,
     // comparison + equality + logical short-circuit
-    r#"function main() { println("{1 < 2}"); println("{2 <= 2}"); println("{3 > 4}"); }"#,
-    r#"function main() { println("{1 == 1}"); println("{1 != 2}"); }"#,
-    r#"function main() { println("{1 < 2 && 2 < 3}"); println("{1 > 2 || 3 > 2}"); }"#,
+    r#"import core.console;
+function main() { console.println("{1 < 2}"); console.println("{2 <= 2}"); console.println("{3 > 4}"); }"#,
+    r#"import core.console;
+function main() { console.println("{1 == 1}"); console.println("{1 != 2}"); }"#,
+    r#"import core.console;
+function main() { console.println("{1 < 2 && 2 < 3}"); console.println("{1 > 2 || 3 > 2}"); }"#,
     // unary
-    r#"function main() { println("{-5}"); println("{!false}"); }"#,
+    r#"import core.console;
+function main() { console.println("{-5}"); console.println("{!false}"); }"#,
     // locals (int + float + string + bool)
-    r#"function main() { int x = 10; float y = 2.5; println("{x}"); println("{y}"); }"#,
-    r#"function main() { string s = "hi"; bool b = true; println("{s}"); println("{b}"); }"#,
-    r#"function main() { int a = 3; int b = 4; println("{a * a + b * b}"); }"#,
+    r#"import core.console;
+function main() { int x = 10; float y = 2.5; console.println("{x}"); console.println("{y}"); }"#,
+    r#"import core.console;
+function main() { string s = "hi"; bool b = true; console.println("{s}"); console.println("{b}"); }"#,
+    r#"import core.console;
+function main() { int a = 3; int b = 4; console.println("{a * a + b * b}"); }"#,
     // if / else
-    r#"function main() { if (1 < 2) { println("a"); } else { println("b"); } }"#,
-    r#"function main() { int n = 5; if (n > 3) { println("big"); } println("end"); }"#,
+    r#"import core.console;
+function main() { if (1 < 2) { console.println("a"); } else { console.println("b"); } }"#,
+    r#"import core.console;
+function main() { int n = 5; if (n > 3) { console.println("big"); } console.println("end"); }"#,
     // for-in over list literals
-    r#"function main() { List<int> xs = [1, 2, 3]; for (int x in xs) { println("{x}"); } }"#,
-    r#"function main() { for (float f in [1.5, 2.5]) { println("{f * 2.0}"); } }"#,
+    r#"import core.console;
+function main() { List<int> xs = [1, 2, 3]; for (int x in xs) { console.println("{x}"); } }"#,
+    r#"import core.console;
+function main() { for (float f in [1.5, 2.5]) { console.println("{f * 2.0}"); } }"#,
     // nested blocks + for body locals
-    r#"function main() { for (int x in [10, 20]) { int y = x + 1; println("{y}"); } }"#,
+    r#"import core.console;
+function main() { for (int x in [10, 20]) { int y = x + 1; console.println("{y}"); } }"#,
     // NB: `println` is single-arg only (the checker enforces it) — no multi-arg case here.
 ];
 
@@ -136,10 +153,11 @@ fn p2_programs_match_between_backends() {
 #[test]
 fn s0_var_inference_is_byte_identical() {
     agree(
-        r#"function main() {
+        r#"import core.console;
+function main() {
             var x = 21;
             var s = "n=";
-            println("{s}{x + x}");
+            console.println("{s}{x + x}");
         }"#,
     );
 }
@@ -149,11 +167,12 @@ fn s0_var_inference_is_byte_identical() {
 #[test]
 fn s0_var_inference_from_call_and_match_inits() {
     agree(
-        r#"function dbl(int n) -> int { return n * 2; }
+        r#"import core.console;
+function dbl(int n) -> int { return n * 2; }
         function main() {
             var a = dbl(10);
             var b = match a { 20 => 100, n => n };
-            println("{a + b}");
+            console.println("{a + b}");
         }"#,
     );
 }
@@ -163,9 +182,10 @@ fn s0_var_inference_from_call_and_match_inits() {
 #[test]
 fn s0_type_alias_is_byte_identical() {
     agree(
-        r#"type Count = int;
+        r#"import core.console;
+type Count = int;
         function tally(Count n) -> Count { return n + 1; }
-        function main() { println("{tally(41)}"); }"#,
+        function main() { console.println("{tally(41)}"); }"#,
     );
 }
 
@@ -174,14 +194,23 @@ fn s0_type_alias_is_byte_identical() {
 /// (the VM's bounds check + the interpreter's must agree — `FaultKind::IndexOob`).
 #[test]
 fn s1_indexing_is_byte_identical() {
-    agree(r#"function main() { List<int> xs = [10, 20, 30]; println("{xs[0]} {xs[2]}"); }"#);
+    agree(
+        r#"import core.console;
+function main() { List<int> xs = [10, 20, 30]; console.println("{xs[0]} {xs[2]}"); }"#,
+    );
     // an index expression on a list literal, with the index coming from a loop variable
-    agree(r#"function main() { for (int i in [0, 1, 2]) { println("{[5, 6, 7][i]}"); } }"#);
+    agree(
+        r#"import core.console;
+function main() { for (int i in [0, 1, 2]) { console.println("{[5, 6, 7][i]}"); } }"#,
+    );
 }
 
 #[test]
 fn s1_index_oob_faults_identically() {
-    agree_err(r#"function main() { List<int> xs = [1, 2]; println("{xs[5]}"); }"#);
+    agree_err(
+        r#"import core.console;
+function main() { List<int> xs = [1, 2]; console.println("{xs[5]}"); }"#,
+    );
 }
 
 /// An index *result* used as an arithmetic operand (`xs[0] + 1`). The compiler must know the list's
@@ -190,10 +219,19 @@ fn s1_index_oob_faults_identically() {
 /// while the interpreter accepted it.)
 #[test]
 fn s1_index_result_in_arithmetic_is_byte_identical() {
-    agree(r#"function main() { List<int> xs = [10, 20]; println("{xs[0] + 1}"); }"#);
-    agree(r#"function main() { List<float> fs = [1.5, 2.5]; println("{fs[0] + fs[1]}"); }"#);
+    agree(
+        r#"import core.console;
+function main() { List<int> xs = [10, 20]; console.println("{xs[0] + 1}"); }"#,
+    );
+    agree(
+        r#"import core.console;
+function main() { List<float> fs = [1.5, 2.5]; console.println("{fs[0] + fs[1]}"); }"#,
+    );
     // index result of a range-materialized list, used arithmetically
-    agree(r#"function main() { var xs = 0..5; println("{xs[2] * 10}"); }"#);
+    agree(
+        r#"import core.console;
+function main() { var xs = 0..5; console.println("{xs[2] * 10}"); }"#,
+    );
 }
 
 /// M3 S1.2 — integer ranges `a..b` (exclusive) / `a..=b` (inclusive), materialized to `List<int>`
@@ -201,16 +239,32 @@ fn s1_index_result_in_arithmetic_is_byte_identical() {
 /// same emptiness rule) so `for…in` over a range is byte-identical on both backends.
 #[test]
 fn s1_ranges_are_byte_identical() {
-    agree(r#"function main() { for (int i in 0..3) { println("{i}"); } }"#); // 0,1,2
-    agree(r#"function main() { for (int i in 1..=3) { println("{i}"); } }"#); // 1,2,3
-                                                                              // empty range (start >= end): the body never runs on either backend
-    agree(r#"function main() { for (int i in 5..5) { println("{i}"); } println("done"); }"#);
-    agree(r#"function main() { for (int i in 5..2) { println("{i}"); } println("empty"); }"#);
+    agree(
+        r#"import core.console;
+function main() { for (int i in 0..3) { console.println("{i}"); } }"#,
+    ); // 0,1,2
+    agree(
+        r#"import core.console;
+function main() { for (int i in 1..=3) { console.println("{i}"); } }"#,
+    ); // 1,2,3
+       // empty range (start >= end): the body never runs on either backend
+    agree(
+        r#"import core.console;
+function main() { for (int i in 5..5) { console.println("{i}"); } console.println("done"); }"#,
+    );
+    agree(
+        r#"import core.console;
+function main() { for (int i in 5..2) { console.println("{i}"); } console.println("empty"); }"#,
+    );
     // a range bound to a `var` (typed `List<int>`), then iterated
-    agree(r#"function main() { var xs = 0..3; for (int i in xs) { println("{i + 1}"); } }"#);
+    agree(
+        r#"import core.console;
+function main() { var xs = 0..3; for (int i in xs) { console.println("{i + 1}"); } }"#,
+    );
     // range bounds from expressions
     agree(
-        r#"function lo() -> int { return 2; } function main() { for (int i in lo()..lo() + 3) { println("{i}"); } }"#,
+        r#"import core.console;
+function lo() -> int { return 2; } function main() { for (int i in lo()..lo() + 3) { console.println("{i}"); } }"#,
     );
 }
 
@@ -220,18 +274,26 @@ fn s1_ranges_are_byte_identical() {
 #[test]
 fn s1_expression_if_is_byte_identical() {
     // value-position in a `var` initializer, then used arithmetically (specialization parity)
-    agree(r#"function main() { var x = if (1 < 2) { 10 } else { 20 }; println("{x + x}"); }"#);
+    agree(
+        r#"import core.console;
+function main() { var x = if (1 < 2) { 10 } else { 20 }; console.println("{x + x}"); }"#,
+    );
     // in return position, both branches taken across two calls
     agree(
-        r#"function pick(bool b) -> int { return if (b) { 1 } else { 2 }; }
-           function main() { println("{pick(true)} {pick(false)}"); }"#,
+        r#"import core.console;
+function pick(bool b) -> int { return if (b) { 1 } else { 2 }; }
+           function main() { console.println("{pick(true)} {pick(false)}"); }"#,
     );
     // as a call argument (string-typed branches), inside a range loop
     agree(
-        r#"function main() { for (int i in 0..3) { println(if (i == 1) { "one" } else { "x" }); } }"#,
+        r#"import core.console;
+function main() { for (int i in 0..3) { console.println(if (i == 1) { "one" } else { "x" }); } }"#,
     );
     // nested / float branches
-    agree(r#"function main() { float r = if (true) { 1.5 } else { 2.5 }; println("{r * 2.0}"); }"#);
+    agree(
+        r#"import core.console;
+function main() { float r = if (true) { 1.5 } else { 2.5 }; console.println("{r * 2.0}"); }"#,
+    );
 }
 
 /// P3 surface: user function calls, recursion, mutual recursion, void functions, returns in
@@ -239,35 +301,44 @@ fn s1_expression_if_is_byte_identical() {
 /// identically on both backends.
 const P3_PROGRAMS: &[&str] = &[
     // single call used in interpolation
-    r#"function inc(int n) -> int { return n + 1; } function main() { println("{inc(41)}"); }"#,
+    r#"import core.console;
+function inc(int n) -> int { return n + 1; } function main() { console.println("{inc(41)}"); }"#,
     // multiple params + call inside arithmetic
-    r#"function add(int a, int b) -> int { return a + b; }
-       function main() { println("{add(2, 3) * 10}"); }"#,
+    r#"import core.console;
+function add(int a, int b) -> int { return a + b; }
+       function main() { console.println("{add(2, 3) * 10}"); }"#,
     // recursion (classic fib)
-    r#"function fib(int n) -> int {
+    r#"import core.console;
+function fib(int n) -> int {
            if (n < 2) { return n; }
            return fib(n - 1) + fib(n - 2);
        }
-       function main() { println("{fib(12)}"); }"#,
+       function main() { console.println("{fib(12)}"); }"#,
     // return in a branch vs fall-through
-    r#"function sign(int n) -> int { if (n < 0) { return -1; } return 1; }
-       function main() { println("{sign(-9)}"); println("{sign(4)}"); }"#,
+    r#"import core.console;
+function sign(int n) -> int { if (n < 0) { return -1; } return 1; }
+       function main() { console.println("{sign(-9)}"); console.println("{sign(4)}"); }"#,
     // mutual recursion (forward reference: isEven calls isOdd declared later)
-    r#"function isEven(int n) -> bool { if (n == 0) { return true; } return isOdd(n - 1); }
+    r#"import core.console;
+function isEven(int n) -> bool { if (n == 0) { return true; } return isOdd(n - 1); }
        function isOdd(int n) -> bool { if (n == 0) { return false; } return isEven(n - 1); }
-       function main() { println("{isEven(10)}"); println("{isOdd(7)}"); }"#,
+       function main() { console.println("{isEven(10)}"); console.println("{isOdd(7)}"); }"#,
     // nested calls
-    r#"function sq(int n) -> int { return n * n; }
-       function main() { println("{sq(sq(2))}"); }"#,
+    r#"import core.console;
+function sq(int n) -> int { return n * n; }
+       function main() { console.println("{sq(sq(2))}"); }"#,
     // float-returning function in float arithmetic
-    r#"function half(float x) -> float { return x / 2.0; }
-       function main() { println("{half(5.0) + 1.0}"); }"#,
+    r#"import core.console;
+function half(float x) -> float { return x / 2.0; }
+       function main() { console.println("{half(5.0) + 1.0}"); }"#,
     // void function (no return type) called for its side effect
-    r#"function greet(string who) { println("hi, {who}"); }
+    r#"import core.console;
+function greet(string who) { console.println("hi, {who}"); }
        function main() { greet("Phorge"); greet("world"); }"#,
     // call used as a statement (return value discarded)
-    r#"function noisy(int n) -> int { println("got {n}"); return n; }
-       function main() { noisy(42); println("done"); }"#,
+    r#"import core.console;
+function noisy(int n) -> int { console.println("got {n}"); return n; }
+       function main() { noisy(42); console.println("done"); }"#,
 ];
 
 #[test]
@@ -282,55 +353,63 @@ fn p3_programs_match_between_backends() {
 /// binding patterns, and payload destructuring. Each must run identically on both backends.
 const P4A_PROGRAMS: &[&str] = &[
     // payload enum, variant patterns binding the payload, `match` in return position
-    r#"enum Grade { Pass(int score), Fail(int score), }
+    r#"import core.console;
+enum Grade { Pass(int score), Fail(int score), }
        function describe(Grade g) -> string {
            return match g {
                Pass(s) => "PASS ({s})",
                Fail(s) => "FAIL ({s})",
            };
        }
-       function main() { println(describe(Pass(90))); println(describe(Fail(40))); }"#,
+       function main() { console.println(describe(Pass(90))); console.println(describe(Fail(40))); }"#,
     // bare (no-payload) variants, wildcard arm, `match` in var-decl-init position
-    r#"enum Color { Red, Green, Blue, }
+    r#"import core.console;
+enum Color { Red, Green, Blue, }
        function main() {
            Color c = Green;
            string name = match c { Red => "red", Green => "green", _ => "other", };
-           println(name);
+           console.println(name);
        }"#,
     // literal int patterns + catch-all binding used in interpolation
-    r#"function label(int n) -> string {
+    r#"import core.console;
+function label(int n) -> string {
            return match n { 0 => "zero", 1 => "one", x => "many ({x})", };
        }
-       function main() { println(label(0)); println(label(1)); println(label(7)); }"#,
+       function main() { console.println(label(0)); console.println(label(1)); console.println(label(7)); }"#,
     // bool literal patterns
-    r#"function yn(bool b) -> string { return match b { true => "Y", false => "N", }; }
-       function main() { println(yn(true)); println(yn(false)); }"#,
+    r#"import core.console;
+function yn(bool b) -> string { return match b { true => "Y", false => "N", }; }
+       function main() { console.println(yn(true)); console.println(yn(false)); }"#,
     // string literal patterns + wildcard
-    r#"function kind(string s) -> string {
+    r#"import core.console;
+function kind(string s) -> string {
            return match s { "a" => "first", "b" => "second", _ => "rest", };
        }
-       function main() { println(kind("a")); println(kind("b")); println(kind("z")); }"#,
+       function main() { console.println(kind("a")); console.println(kind("b")); console.println(kind("z")); }"#,
     // enum value flows through a local and equality (`==` on enums) before matching
-    r#"enum Dir { N, S, }
+    r#"import core.console;
+enum Dir { N, S, }
        function main() {
            Dir d = N;
-           println("{d == N}");
+           console.println("{d == N}");
            string t = match d { N => "north", S => "south", };
-           println(t);
+           console.println(t);
        }"#,
     // `match` in a *transient* position: as the rhs of `+`, with the lhs already on the operand
     // stack (exercises the compiler's operand-height tracking for the scrutinee slot).
-    r#"function g(int n) -> int { return 1 + match n { 0 => 10, _ => 20 }; }
-       function main() { println("{g(0)}"); println("{g(5)}"); }"#,
+    r#"import core.console;
+function g(int n) -> int { return 1 + match n { 0 => 10, _ => 20 }; }
+       function main() { console.println("{g(0)}"); console.println("{g(5)}"); }"#,
     // nested `match` whose inner arm references the *outer* arm's binding (re-extraction across
     // two live scrutinees — the hardest binding/height case in P4a).
-    r#"enum Pair { P(int a, int b), }
+    r#"import core.console;
+enum Pair { P(int a, int b), }
        function f(Pair p) -> string {
            return match p {
                P(a, b) => match a { 0 => "first=zero b={b}", _ => "a={a} b={b}", },
            };
        }
-       function main() { println(f(P(0, 9))); println(f(P(5, 2))); }"#,
+       function main() { console.println(f(P(0, 9))); console.println(f(P(5, 2))); }"#,
 ];
 
 #[test]
@@ -344,31 +423,39 @@ fn p4a_programs_match_between_backends() {
 /// Each must run identically on both backends.
 const P4B_PROGRAMS: &[&str] = &[
     // promoted fields; field reads in interpolation
-    r#"class Point { constructor(public int x, public int y) {} }
-       function main() { Point p = Point(3, 4); println("{p.x},{p.y}"); }"#,
+    r#"import core.console;
+class Point { constructor(public int x, public int y) {} }
+       function main() { Point p = Point(3, 4); console.println("{p.x},{p.y}"); }"#,
     // field read flowing through a typed local, then used as an arithmetic operand
-    r#"class Point { constructor(public int x, public int y) {} }
-       function main() { Point p = Point(3, 4); int s = p.x; println("{s + p.y}"); }"#,
+    r#"import core.console;
+class Point { constructor(public int x, public int y) {} }
+       function main() { Point p = Point(3, 4); int s = p.x; console.println("{s + p.y}"); }"#,
     // constructor *body* runs for side effects (a `println` in the ctor), using a promoted param
-    r#"class Greeter { constructor(public string name) { println("made {name}"); } }
-       function main() { Greeter g = Greeter("Ada"); println("hello {g.name}"); }"#,
+    r#"import core.console;
+class Greeter { constructor(public string name) { console.println("made {name}"); } }
+       function main() { Greeter g = Greeter("Ada"); console.println("hello {g.name}"); }"#,
     // a no-constructor class builds an empty instance; structural instance equality
-    r#"class Empty {}
-       function main() { Empty a = Empty(); Empty b = Empty(); println("{a == b}"); }"#,
+    r#"import core.console;
+class Empty {}
+       function main() { Empty a = Empty(); Empty b = Empty(); console.println("{a == b}"); }"#,
     // instance equality is structural over fields (same class + equal fields)
-    r#"class P { constructor(public int x) {} }
-       function main() { P a = P(1); P b = P(1); P c = P(2); println("{a == b} {a == c}"); }"#,
+    r#"import core.console;
+class P { constructor(public int x) {} }
+       function main() { P a = P(1); P b = P(1); P c = P(2); console.println("{a == b} {a == c}"); }"#,
     // only *promoted* params become fields (the bare `seed` param is not a field)
-    r#"class Acc { constructor(public int total, int seed) {} }
-       function main() { Acc a = Acc(10, 99); println("{a.total}"); }"#,
+    r#"import core.console;
+class Acc { constructor(public int total, int seed) {} }
+       function main() { Acc a = Acc(10, 99); console.println("{a.total}"); }"#,
     // a field read as a call argument
-    r#"class Box { constructor(public int v) {} }
+    r#"import core.console;
+class Box { constructor(public int v) {} }
        function dbl(int n) -> int { return n * 2; }
-       function main() { Box b = Box(21); println("{dbl(b.v)}"); }"#,
+       function main() { Box b = Box(21); console.println("{dbl(b.v)}"); }"#,
     // a bare `return;` in the ctor body is an early exit, but the promoted instance is *still*
     // returned (interpreter parity) — exercises the synthetic ctor's epilogue redirect.
-    r#"class C { constructor(public int x) { if (x > 0) { return; } println("nonpos"); } }
-       function main() { C a = C(5); println("{a.x}"); C b = C(0); println("{b.x}"); }"#,
+    r#"import core.console;
+class C { constructor(public int x) { if (x > 0) { return; } console.println("nonpos"); } }
+       function main() { C a = C(5); console.println("{a.x}"); C b = C(0); console.println("{b.x}"); }"#,
 ];
 
 #[test]
@@ -386,8 +473,9 @@ fn p4b_programs_match_between_backends() {
 #[test]
 fn p4b_field_miss_faults_identically() {
     agree_err(
-        r#"class Box { public int tag; constructor(public int x) {} }
-           function main() { Box b = Box(5); println("{b.tag}"); }"#,
+        r#"import core.console;
+class Box { public int tag; constructor(public int x) {} }
+           function main() { Box b = Box(5); console.println("{b.tag}"); }"#,
     );
 }
 
@@ -397,22 +485,27 @@ fn p4b_field_miss_faults_identically() {
 /// is checker-enforced, so the VM's method-not-found fault is a checker-unreachable backstop.)
 const P4C_PROGRAMS: &[&str] = &[
     // a method reads a *bare* field (`total` resolves to `this.total`) + a param
-    r#"class Counter { constructor(private int total) {} function add(int n) -> int { return total + n; } }
-       function main() { Counter c = Counter(100); println("{c.add(23)}"); }"#,
+    r#"import core.console;
+class Counter { constructor(private int total) {} function add(int n) -> int { return total + n; } }
+       function main() { Counter c = Counter(100); console.println("{c.add(23)}"); }"#,
     // a method calls another method via `this`, and reads a field via `this.`
-    r#"class C { constructor(public int x) {}
+    r#"import core.console;
+class C { constructor(public int x) {}
            function dbl() -> int { return this.x + this.x; }
            function quad() -> int { int d = this.dbl(); return d + d; } }
-       function main() { C c = C(5); println("{c.quad()}"); }"#,
+       function main() { C c = C(5); console.println("{c.quad()}"); }"#,
     // mixed bare-field + explicit-`this` field reads in one expression
-    r#"class P { constructor(public int x, public int y) {} function sum() -> int { return x + this.y; } }
-       function main() { P p = P(3, 4); println("{p.sum()}"); }"#,
+    r#"import core.console;
+class P { constructor(public int x, public int y) {} function sum() -> int { return x + this.y; } }
+       function main() { P p = P(3, 4); console.println("{p.sum()}"); }"#,
     // recursion *through* a method (`this.fact(n - 1)`)
-    r#"class F { constructor(public int base) {}
+    r#"import core.console;
+class F { constructor(public int base) {}
            function fact(int n) -> int { if (n <= 1) { return 1; } return n * this.fact(n - 1); } }
-       function main() { F f = F(0); println("{f.fact(5)}"); }"#,
+       function main() { F f = F(0); console.println("{f.fact(5)}"); }"#,
     // a void (no-return) method invoked as a statement, twice (side effects + Unit result)
-    r#"class Logger { constructor(public string tag) {} function log() { println("log {tag}"); } }
+    r#"import core.console;
+class Logger { constructor(public string tag) {} function log() { console.println("log {tag}"); } }
        function main() { Logger l = Logger("X"); l.log(); l.log(); }"#,
 ];
 
@@ -452,8 +545,27 @@ fn all_examples_match_between_backends() {
         eprintln!("differential: {}", path.display()); // names the file if agree() panics
         let src = std::fs::read_to_string(path)
             .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
+        // Every example must *run* (produce identical Ok output) — not merely agree. `agree` alone
+        // is vacuously green when both backends fail identically (e.g. a broken import), which would
+        // hide a malformed example; assert success explicitly so a regression surfaces loudly.
+        assert!(
+            cmd_run(&src).is_ok(),
+            "example {} must run successfully, got {:?}",
+            path.display(),
+            cmd_run(&src)
+        );
         agree(&src);
     }
+}
+
+/// The namespaced stdlib's first native: `console.println` must lower + run byte-identically on both
+/// backends after `import core.console;` (M3 Wave 1, the migrated former global `println`).
+#[test]
+fn namespaced_console_println_matches_between_backends() {
+    agree(
+        r#"import core.console;
+             function main() { console.println("hello"); console.println("{2 + 2}"); }"#,
+    );
 }
 
 /// M2 Wave 4: class-aware operand types. Each program type-checks and runs on the interpreter, but
@@ -464,24 +576,29 @@ fn all_examples_match_between_backends() {
 /// numeric type`) before the fix; both backends agree after it (measured 2026-06-16).
 const WAVE4_PROGRAMS: &[&str] = &[
     // (A) field of an arbitrary instance local, used as an arithmetic operand
-    r#"class Point { constructor(public int x, public int y) {} }
-       function main() { Point p = Point(7, 4); println("{p.x + 1}"); }"#,
+    r#"import core.console;
+class Point { constructor(public int x, public int y) {} }
+       function main() { Point p = Point(7, 4); console.println("{p.x + 1}"); }"#,
     // (B) method-call result used arithmetically
-    r#"class C { constructor(public int x) {} function get() -> int { return this.x; } }
-       function main() { C c = C(5); println("{c.get() + 1}"); }"#,
+    r#"import core.console;
+class C { constructor(public int x) {} function get() -> int { return this.x; } }
+       function main() { C c = C(5); console.println("{c.get() + 1}"); }"#,
     // (C) nested field read `a.inner.x` — a class-typed field's field
-    r#"class Inner { constructor(public int x) {} }
+    r#"import core.console;
+class Inner { constructor(public int x) {} }
        class Outer { constructor(public Inner inner) {} }
-       function main() { Outer a = Outer(Inner(10)); println("{a.inner.x + 1}"); }"#,
+       function main() { Outer a = Outer(Inner(10)); console.println("{a.inner.x + 1}"); }"#,
     // (D) a class-typed enum payload, bound in `match` and read arithmetically
-    r#"class Point { constructor(public int x) {} }
+    r#"import core.console;
+class Point { constructor(public int x) {} }
        enum Opt { Some(Point p), Zero(int z), }
        function f(Opt o) -> int { return match o { Some(p) => p.x + 1, Zero(z) => z, }; }
-       function main() { println("{f(Some(Point(41)))}"); println("{f(Zero(0))}"); }"#,
+       function main() { console.println("{f(Some(Point(41)))}"); console.println("{f(Zero(0))}"); }"#,
     // (E) a free function returning an instance, then a field of the result, used arithmetically
-    r#"class Point { constructor(public int x) {} }
+    r#"import core.console;
+class Point { constructor(public int x) {} }
        function mk() -> Point { return Point(3); }
-       function main() { println("{mk().x + 1}"); }"#,
+       function main() { console.println("{mk().x + 1}"); }"#,
 ];
 
 #[test]
@@ -498,17 +615,22 @@ fn wave4_programs_match_between_backends() {
 /// unsupported-construct cases join this corpus alongside their guards in Wave 0 Task 0.3.
 const ERR_PROGRAMS: &[&str] = &[
     // integer overflow: negating i64::MIN
-    r#"function main() { int x = -9223372036854775807 - 1; println("{-x}"); }"#,
+    r#"import core.console;
+function main() { int x = -9223372036854775807 - 1; console.println("{-x}"); }"#,
     // integer overflow: i64::MAX + 1
-    r#"function main() { println("{9223372036854775807 + 1}"); }"#,
+    r#"import core.console;
+function main() { console.println("{9223372036854775807 + 1}"); }"#,
     // division by zero
-    r#"function main() { int z = 0; println("{1 / z}"); }"#,
+    r#"import core.console;
+function main() { int z = 0; console.println("{1 / z}"); }"#,
     // modulo by zero
-    r#"function main() { int z = 0; println("{1 % z}"); }"#,
+    r#"import core.console;
+function main() { int z = 0; console.println("{1 % z}"); }"#,
     // unbounded recursion: trips the shared `MAX_CALL_DEPTH` guard on both backends.
     // Before Task 0.3 the interpreter recursed on the native stack and SIGABRTed (exit 134)
     // while the VM cleanly reported "stack overflow" — a parity divergence in the fault path.
-    r#"function rec(int n) -> int { return rec(n) + 1; } function main() { println("{rec(0)}"); }"#,
+    r#"import core.console;
+function rec(int n) -> int { return rec(n) + 1; } function main() { console.println("{rec(0)}"); }"#,
 ];
 
 #[test]
@@ -526,13 +648,13 @@ fn error_parity_between_backends() {
 #[test]
 fn deep_nesting_faults_identically() {
     let parens = format!(
-        "function main() {{ int x = {}1{}; println(\"{{x}}\"); }}",
+        "import core.console; function main() {{ int x = {}1{}; console.println(\"{{x}}\"); }}",
         "(".repeat(5000),
         ")".repeat(5000),
     );
     agree_err(&parens);
     let unary = format!(
-        "function main() {{ bool b = {}true; println(\"{{b}}\"); }}",
+        "import core.console; function main() {{ bool b = {}true; console.println(\"{{b}}\"); }}",
         "!".repeat(5000),
     );
     agree_err(&unary);
@@ -540,7 +662,7 @@ fn deep_nesting_faults_identically() {
     // limit but produces a deeply left-leaning AST. The checker's depth guard (the gate both
     // backends share) must fault it identically rather than letting a walker overflow its stack.
     let chain = format!(
-        "function main() {{ int x = 1{}; println(\"{{x}}\"); }}",
+        "import core.console; function main() {{ int x = 1{}; console.println(\"{{x}}\"); }}",
         "+1".repeat(20_000),
     );
     agree_err(&chain);
@@ -551,7 +673,7 @@ fn s2_null_and_optional_bind_and_run_on_both_backends() {
     // Task 1 foundation: `null` is a real runtime value and a non-null `T` widens to `T?`.
     // (Observing the null *value* needs the unwrap operators from later S2 tasks.) The exact-output
     // assertion is deliberate: `agree` alone passes vacuously if both backends share a rejection.
-    let src = "function main() { int? x = null; int? y = 5; println(\"optionals ok\"); }";
+    let src = "import core.console; function main() { int? x = null; int? y = 5; console.println(\"optionals ok\"); }";
     assert_eq!(cmd_run(src).as_deref(), Ok("optionals ok\n"));
     agree(src); // run ≡ runvm
 }
@@ -559,11 +681,11 @@ fn s2_null_and_optional_bind_and_run_on_both_backends() {
 #[test]
 fn s2_coalesce_is_byte_identical() {
     // `??`: a null lhs falls through to the default; a present value is kept.
-    let src = "function main() { int? x = null; println(\"{x ?? 7}\"); int? y = 9; println(\"{y ?? 0}\"); }";
+    let src = "import core.console; function main() { int? x = null; console.println(\"{x ?? 7}\"); int? y = 9; console.println(\"{y ?? 0}\"); }";
     assert_eq!(cmd_run(src).as_deref(), Ok("7\n9\n"));
     agree(src);
     // Short-circuit: the default (a printing call) must not run when the lhs is non-null.
-    let sc = "function side() -> int { println(\"SIDE\"); return 0; } function main() { int? y = 9; println(\"{y ?? side()}\"); }";
+    let sc = "import core.console; function side() -> int { console.println(\"SIDE\"); return 0; } function main() { int? y = 9; console.println(\"{y ?? side()}\"); }";
     assert_eq!(cmd_run(sc).as_deref(), Ok("9\n"));
     agree(sc);
 }
@@ -574,16 +696,16 @@ fn s2_safe_access_is_byte_identical() {
     // the receiver is present. Field read and method call both go through `?.`.
     let cls = "class Box { constructor(private int v) {} function v_of() -> int { return v; } function plus(int n) -> int { return v + n; } }";
     let field = cls.to_string()
-        + " function main() { Box? a = null; println(\"{(a?.v) ?? -1}\"); Box? b = Box(7); println(\"{(b?.v) ?? -1}\"); }";
+        + "import core.console;  function main() { Box? a = null; console.println(\"{(a?.v) ?? -1}\"); Box? b = Box(7); console.println(\"{(b?.v) ?? -1}\"); }";
     assert_eq!(cmd_run(&field).as_deref(), Ok("-1\n7\n"));
     agree(&field);
     let method = cls.to_string()
-        + " function main() { Box? a = null; println(\"{(a?.v_of()) ?? -1}\"); Box? b = Box(9); println(\"{(b?.v_of()) ?? -1}\"); }";
+        + "import core.console;  function main() { Box? a = null; console.println(\"{(a?.v_of()) ?? -1}\"); Box? b = Box(9); console.println(\"{(b?.v_of()) ?? -1}\"); }";
     assert_eq!(cmd_run(&method).as_deref(), Ok("-1\n9\n"));
     agree(&method);
     // short-circuit: a safe call on a null receiver must NOT evaluate its arguments (no "SIDE").
     let sc = cls.to_string()
-        + " function side() -> int { println(\"SIDE\"); return 0; } function main() { Box? a = null; println(\"{(a?.plus(side())) ?? -1}\"); }";
+        + "import core.console;  function side() -> int { console.println(\"SIDE\"); return 0; } function main() { Box? a = null; console.println(\"{(a?.plus(side())) ?? -1}\"); }";
     assert_eq!(cmd_run(&sc).as_deref(), Ok("-1\n"));
     agree(&sc);
 }
@@ -593,17 +715,17 @@ fn s2_if_let_is_byte_identical() {
     // `if (var x = opt)`: the then-branch runs (with `x` bound to the non-null inner) only when the
     // optional is present; otherwise the else-branch runs.
     let present =
-        "function main() { int? o = 5; if (var x = o) { println(\"got {x}\"); } else { println(\"none\"); } }";
+        "import core.console; function main() { int? o = 5; if (var x = o) { console.println(\"got {x}\"); } else { console.println(\"none\"); } }";
     assert_eq!(cmd_run(present).as_deref(), Ok("got 5\n"));
     agree(present);
     let absent =
-        "function main() { int? o = null; if (var x = o) { println(\"got {x}\"); } else { println(\"none\"); } }";
+        "import core.console; function main() { int? o = null; if (var x = o) { console.println(\"got {x}\"); } else { console.println(\"none\"); } }";
     assert_eq!(cmd_run(absent).as_deref(), Ok("none\n"));
     agree(absent);
     // The smart-cast inner is a real arithmetic operand: `x + 1` must specialize identically on both
     // backends (guards the run↔runvm operand-type gap — see the cty-tracks-operand-types invariant).
     let arith =
-        "function main() { int? o = 41; if (var x = o) { println(\"{x + 1}\"); } else { println(\"none\"); } }";
+        "import core.console; function main() { int? o = 41; if (var x = o) { console.println(\"{x + 1}\"); } else { console.println(\"none\"); } }";
     assert_eq!(cmd_run(arith).as_deref(), Ok("42\n"));
     agree(arith);
 }
@@ -611,12 +733,13 @@ fn s2_if_let_is_byte_identical() {
 #[test]
 fn s2_force_unwrap_is_byte_identical() {
     // `opt!` on a present optional yields the inner value, identically on both backends.
-    let present = "function main() { int? o = 5; println(\"{o!}\"); }";
+    let present = "import core.console; function main() { int? o = 5; console.println(\"{o!}\"); }";
     assert_eq!(cmd_run(present).as_deref(), Ok("5\n"));
     agree(present);
     // The unwrapped value is a real arithmetic operand: `o! + 1` must specialize identically
     // (guards the run↔runvm operand-type gap — see the cty-tracks-operand-types invariant).
-    let arith = "function main() { int? o = 41; println(\"{o! + 1}\"); }";
+    let arith =
+        "import core.console; function main() { int? o = 41; console.println(\"{o! + 1}\"); }";
     assert_eq!(cmd_run(arith).as_deref(), Ok("42\n"));
     agree(arith);
 }
@@ -634,23 +757,23 @@ fn s2_multiple_null_ops_in_one_expr_are_byte_identical() {
     // that slot is the receiver's frame position (`height-1`), so live transients from an earlier
     // segment must not shift it. The interpreter is the oracle; the VM must match (not fault).
     let two_coalesce =
-        "function main() { int? a = 5; int? b = null; println(\"{a ?? -1} {b ?? -1}\"); }";
+        "import core.console; function main() { int? a = 5; int? b = null; console.println(\"{a ?? -1} {b ?? -1}\"); }";
     assert_eq!(cmd_run(two_coalesce).as_deref(), Ok("5 -1\n"));
     agree(two_coalesce);
 
-    let two_force = "function main() { int? a = 1; int? b = 2; println(\"{a!} {b!}\"); }";
+    let two_force = "import core.console; function main() { int? a = 1; int? b = 2; console.println(\"{a!} {b!}\"); }";
     assert_eq!(cmd_run(two_force).as_deref(), Ok("1 2\n"));
     agree(two_force);
 
     let cls = "class Box { constructor(private int v) {} function get() -> int { return v; } }";
     let two_safe = cls.to_string()
-        + " function main() { Box? a = Box(7); Box? b = null; println(\"{(a?.get()) ?? -1} {(b?.get()) ?? -1}\"); }";
+        + "import core.console;  function main() { Box? a = Box(7); Box? b = null; console.println(\"{(a?.get()) ?? -1} {(b?.get()) ?? -1}\"); }";
     assert_eq!(cmd_run(&two_safe).as_deref(), Ok("7 -1\n"));
     agree(&two_safe);
 
     // Mixed + nested: a coalesce whose default is itself a safe-access-coalesce, beside a force.
     let mixed = cls.to_string()
-        + " function main() { Box? a = null; int? b = 9; println(\"{(a?.get()) ?? (b ?? 0)} {b!}\"); }";
+        + "import core.console;  function main() { Box? a = null; int? b = 9; console.println(\"{(a?.get()) ?? (b ?? 0)} {b!}\"); }";
     assert_eq!(cmd_run(&mixed).as_deref(), Ok("9 9\n"));
     agree(&mixed);
 }
@@ -659,8 +782,8 @@ fn s2_multiple_null_ops_in_one_expr_are_byte_identical() {
 fn s2_match_over_optional_is_byte_identical() {
     // `match opt { null => …, v => … }`: the null arm fires on null, the binding arm narrows `v` to
     // the non-null inner `int` (used here as an arithmetic operand — guards the operand-type gap).
-    let src = "function f(int? o) -> int { return match o { null => -1, v => v + 1 }; } \
-               function main() { int? a = null; int? b = 7; println(\"{f(a)}\"); println(\"{f(b)}\"); }";
+    let src = "import core.console; function f(int? o) -> int { return match o { null => -1, v => v + 1 }; } \
+               function main() { int? a = null; int? b = 7; console.println(\"{f(a)}\"); console.println(\"{f(b)}\"); }";
     assert_eq!(cmd_run(src).as_deref(), Ok("-1\n8\n"));
     agree(src);
 }

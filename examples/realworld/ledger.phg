@@ -1,4 +1,4 @@
-import std.io;
+import core.console;
 
 // A bank ledger. Phorge values are immutable, so `apply` returns a *new* Account
 // rather than mutating in place — state evolves by binding fresh names.
@@ -46,12 +46,12 @@ function main() {
     Account a2 = a1.apply(Withdraw(200));
     Account a3 = a2.apply(Transfer(100, "Bob"));
 
-    println("{a3.owner_name()} balance = {a3.balance()}c");
+    console.println("{a3.owner_name()} balance = {a3.balance()}c");
 
     List<Tx> log = [Deposit(500), Withdraw(200), Transfer(100, "Bob")];
     for (Tx t in log) {
-        println(describe(t));
+        console.println(describe(t));
     }
 
-    println("1000c after 3y at 5% = {grow(1000, 3)}c");
+    console.println("1000c after 3y at 5% = {grow(1000, 3)}c");
 }

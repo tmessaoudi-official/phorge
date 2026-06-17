@@ -1,4 +1,4 @@
-import std.io;
+import core.console;
 
 // A library catalogue. Note zero-payload variants (`Available`, `Lost`) are
 // *constructed* with call form — `Available()` — but matched bare.
@@ -36,7 +36,7 @@ function main() {
         Book("SICP", Lost()),
     ];
     for (Book b in shelf) {
-        println("{b.title_of()}: {describe(b.status_of())}");
+        console.println("{b.title_of()}: {describe(b.status_of())}");
     }
-    println("late fee for 3.0 days = {fee(3.0)}c");
+    console.println("late fee for 3.0 days = {fee(3.0)}c");
 }
