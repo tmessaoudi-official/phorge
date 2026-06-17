@@ -264,7 +264,26 @@ impl Interp {
                 },
                 other => rt(format!("cannot read `.{name}` on {}", other.type_name())),
             },
-            Expr::Index { .. } => rt("indexing is not yet supported in M1"),
+            Expr::Index { object, index, .. } => {
+                // Evaluate the object before the index (matches the compiler's emit order and the
+                // VM's pop order, so any side effects fire in the same sequence — byte-identity).
+                let obj = self.eval(object)?;
+                let idx = self.eval(index)?;
+                let i = match idx {
+                    Value::Int(n) => n,
+                    v => return rt(format!("expected int index, found {}", v.type_name())),
+                };
+                let list = match obj {
+                    Value::List(xs) => xs,
+                    v => return rt(format!("cannot index {}", v.type_name())),
+                };
+                // Bounds-checked: an out-of-range read is a clean fault with the *same* body the VM
+                // emits (`vm.rs` `Op::Index`), so `agree_err` classifies both as `IndexOob` (D-L8).
+                match usize::try_from(i).ok().filter(|i| *i < list.len()) {
+                    Some(i) => Ok(list[i].clone()),
+                    None => rt("list index out of range"),
+                }
+            }
             Expr::Match {
                 scrutinee, arms, ..
             } => self.eval_match(scrutinee, arms),
@@ -742,6 +761,24 @@ mod tests {
             }
         "#;
         assert_eq!(out(src), "1\n2\n3\n");
+    }
+
+    #[test]
+    fn indexing_reads_elements() {
+        assert_eq!(
+            out(r#"function main() { List<int> xs = [7, 8, 9]; println("{xs[0]} {xs[2]}"); }"#),
+            "7 9\n"
+        );
+    }
+
+    #[test]
+    fn indexing_out_of_range_is_runtime_error() {
+        let e = run(r#"function main() { List<int> xs = [1]; println("{xs[3]}"); }"#).unwrap_err();
+        assert!(
+            e.message.contains("list index out of range"),
+            "{}",
+            e.message
+        );
     }
 
     #[test]

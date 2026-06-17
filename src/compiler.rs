@@ -870,7 +870,17 @@ impl<'a> Compiler<'a> {
                 let idx = self.field_name_index(name)?;
                 self.emit(Op::GetField(idx), span.line);
             }
-            Expr::Index { .. } => return Err("indexing is not supported (M1 surface)".into()),
+            Expr::Index {
+                object,
+                index,
+                span,
+            } => {
+                // Push the list, then the index; `Op::Index` pops index-then-list and pushes the
+                // bounds-checked element clone (the same op `compile_for` already uses).
+                self.expr(object)?;
+                self.expr(index)?;
+                self.emit(Op::Index, span.line);
+            }
             Expr::Match {
                 scrutinee,
                 arms,
@@ -1463,6 +1473,20 @@ mod tests {
     fn for_loop_over_list() {
         let src = r#"function main() { List<int> xs = [1, 2, 3]; for (int x in xs) { println("{x}"); } }"#;
         assert_eq!(out(src), "1\n2\n3\n");
+    }
+
+    #[test]
+    fn indexing_reads_element() {
+        assert_eq!(
+            out(r#"function main() { List<int> xs = [7, 8, 9]; println("{xs[1]}"); }"#),
+            "8\n"
+        );
+    }
+
+    #[test]
+    fn indexing_out_of_range_faults() {
+        let e = run(r#"function main() { List<int> xs = [1]; println("{xs[3]}"); }"#).unwrap_err();
+        assert!(e.contains("list index out of range"), "{e}");
     }
 
     #[test]

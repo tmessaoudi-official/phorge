@@ -37,6 +37,12 @@ enum FaultKind {
     /// params). Classified by body substring so the VM's line prefix doesn't split it from the
     /// interpreter's prefix-less rendering (M2 P4b).
     NoField,
+    /// A list index outside `0..len` — a checker-valid, runtime-reachable fault (the checker proves
+    /// the index is an `int`, never that it is in range). Classified by body substring so the VM's
+    /// `runtime error at N:` line prefix doesn't split it from the interpreter's prefix-less render
+    /// (M3 S1.1). Without this arm an OOB program would fall to `Other(full_string)` and the line
+    /// prefix would spuriously fail `agree_err`.
+    IndexOob,
     /// Anything the corpus doesn't yet classify — carried verbatim so a mismatch stays legible.
     Other(String),
 }
@@ -53,6 +59,8 @@ fn classify(err: &str) -> FaultKind {
         FaultKind::ModZero
     } else if err.contains("stack overflow") {
         FaultKind::StackOverflow
+    } else if err.contains("list index out of range") {
+        FaultKind::IndexOob
     } else if err.contains("no field") {
         FaultKind::NoField
     } else if err.contains("unsupported") || err.contains("compile error") {
@@ -152,6 +160,21 @@ fn s0_type_alias_is_byte_identical() {
         function tally(Count n) -> Count { return n + 1; }
         function main() { println("{tally(41)}"); }"#,
     );
+}
+
+/// M3 S1.1 — list indexing `xs[i]`. The checker already typed it; the backends were un-rejected
+/// this slice. Reads must be byte-identical, and an out-of-range read must *fault* identically
+/// (the VM's bounds check + the interpreter's must agree — `FaultKind::IndexOob`).
+#[test]
+fn s1_indexing_is_byte_identical() {
+    agree(r#"function main() { List<int> xs = [10, 20, 30]; println("{xs[0]} {xs[2]}"); }"#);
+    // an index expression on a list literal, with the index coming from a loop variable
+    agree(r#"function main() { for (int i in [0, 1, 2]) { println("{[5, 6, 7][i]}"); } }"#);
+}
+
+#[test]
+fn s1_index_oob_faults_identically() {
+    agree_err(r#"function main() { List<int> xs = [1, 2]; println("{xs[5]}"); }"#);
 }
 
 /// P3 surface: user function calls, recursion, mutual recursion, void functions, returns in

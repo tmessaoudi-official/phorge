@@ -388,7 +388,11 @@ impl Transpiler {
                 Ok(format!("[{}]", parts?.join(", ")))
             }
             Expr::Null(_) => Err("transpile error: null is not yet supported".into()),
-            Expr::Index { .. } => Err("transpile error: indexing is not yet supported".into()),
+            Expr::Index { object, index, .. } => {
+                let o = self.emit_expr(object)?;
+                let i = self.emit_expr(index)?;
+                Ok(format!("{o}[{i}]"))
+            }
             Expr::Str(parts, _) => self.emit_string(parts),
             Expr::Call { callee, args, .. } => self.emit_call(callee, args),
             Expr::Member { object, name, .. } => {
@@ -652,6 +656,12 @@ mod tests {
             "{out}"
         );
         assert!(out.contains("[1, 2]"), "{out}");
+    }
+
+    #[test]
+    fn indexing_emits_php_subscript() {
+        let out = php("function at(List<int> xs, int i) -> int { return xs[i]; }");
+        assert!(out.contains("$xs[$i]"), "{out}");
     }
 
     #[test]
