@@ -19,14 +19,40 @@ globs `examples/**/*.phg`).
 ## Running it
 
 ```sh
-phorge bench  examples/bench/workload.phg   # per-phase wall-clock + memory
-phorge disasm examples/bench/workload.phg   # the bytecode the VM executes
-phorge run    examples/bench/workload.phg   # tree-walking interpreter
-phorge runvm  examples/bench/workload.phg   # bytecode VM
+phorge bench  examples/bench/workload.phg            # per-phase wall-clock + memory
+phorge bench --vs-php examples/bench/workload.phg    # + a 3-way comparison against transpiled PHP
+phorge disasm examples/bench/workload.phg            # the bytecode the VM executes
+phorge run    examples/bench/workload.phg            # tree-walking interpreter
+phorge runvm  examples/bench/workload.phg            # bytecode VM
 ```
 
 `bench` runs the whole program **101×** (median of 101, one untimed warmup), so it takes several
 seconds — that's the sampling cost, not the program's runtime.
+
+## `--vs-php` — who's the winner?
+
+`phorge bench --vs-php <file>` adds a head-to-head against the **PHP backend**: it transpiles the
+program to PHP, runs it once to **gate output identity** (a transpile divergence aborts the
+comparison — it's a bug report, not a timing result), then median-times `php <file>` the same way.
+The report gains a `vs PHP` section naming the faster of the Phorge VM and PHP. Requires `php` on
+PATH; absent it, the section is a graceful skip note.
+
+A representative run on this workload (`fib(18)` + 1000-instance allocation):
+
+```
+  tree-walk run 89.078 ms
+  vm run        11.910 ms
+verdict: vm run is 7.48× faster than tree-walk run
+
+vs PHP — PHP 8.6.0-dev (cli)
+  php run       38.519 ms  (spawns a process per sample)
+  winner: Phorge (vm) — 3.23× faster than PHP (38.519 ms → 11.910 ms)
+```
+
+**Read it honestly:** this is the Rust bytecode VM vs the PHP interpreter on the *same algorithm* —
+informative, but apples-to-oranges (different runtimes). The PHP timing includes process spawn and
+depends on whether opcache/JIT is enabled in your `php.ini` (the figure above is a debug PHP build, so
+a tuned PHP would close the gap). The number to trust most is the in-process `run`-vs-`runvm` verdict.
 
 ## How execution time is collected
 

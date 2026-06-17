@@ -100,9 +100,13 @@ pub fn help_for(cmd: &str) -> String {
         }
         "bench" => {
             "bench — benchmark `run` vs `runvm` (median wall-clock + memory).\n\n\
-                    usage:\n  phorge bench <file | - | -e code>\n\n\
+                    usage:\n  phorge bench [--vs-php] <file | - | -e code>\n\n\
+                    flags:\n  \
+                    --vs-php   also transpile + median-time the PHP backend (3-way comparison;\n             \
+                               requires `php` on PATH; output-identity-gated)\n\n\
                     examples:\n  \
-                    phorge bench examples/bench/workload.phg\n"
+                    phorge bench examples/bench/workload.phg\n  \
+                    phorge bench --vs-php examples/bench/workload.phg\n"
         }
         "build" => {
             "build — compile to a standalone executable (embeds the program source).\n\n\
@@ -442,6 +446,116 @@ pub fn cmd_bench(src: &str) -> Result<String, String> {
     bench_report(src, BENCH_DEFAULT_ITERS)
 }
 
+/// `bench --vs-php`: the standard bench report plus a transpile-and-time-PHP comparison (Track D).
+pub fn cmd_bench_vs_php(src: &str) -> Result<String, String> {
+    bench_report_opts(src, BENCH_DEFAULT_ITERS, true)
+}
+
+/// `php --version`'s first line, or `None` if `php` is not on `PATH`. Used to gate + label the
+/// `--vs-php` comparison.
+fn php_version_line() -> Option<String> {
+    let out = std::process::Command::new("php")
+        .arg("--version")
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    Some(
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .next()
+            .unwrap_or("php")
+            .to_string(),
+    )
+}
+
+/// Transpile `prog` to PHP, gate its output against `expected` (the Phorge backends' shared output),
+/// then median-time `php <file>`. Returns a report section comparing PHP to the faster Phorge backend
+/// (`tw`/`vm` medians), or a graceful note when `php` is absent or the transpiled output diverges.
+/// Each sample spawns a `php` process — that cost is part of what's measured and is called out.
+fn php_bench_section(
+    prog: &Program,
+    iters: usize,
+    expected: &str,
+    tw: Duration,
+    vm: Duration,
+) -> String {
+    let Some(ver) = php_version_line() else {
+        return "\nvs PHP: `php` not on PATH — skipping (install php to enable --vs-php)\n"
+            .to_string();
+    };
+    let php_src = match crate::transpile::emit(prog) {
+        Ok(s) => s,
+        Err(e) => return format!("\nvs PHP: transpile failed ({e}) — skipping\n"),
+    };
+    let path = std::env::temp_dir().join(format!("phorge_bench_{}.php", std::process::id()));
+    if std::fs::write(&path, &php_src).is_err() {
+        return "\nvs PHP: could not write temp file — skipping\n".to_string();
+    }
+    let run_php = || -> Result<String, String> {
+        let o = std::process::Command::new("php")
+            .arg(&path)
+            .output()
+            .map_err(|e| e.to_string())?;
+        if !o.status.success() {
+            return Err(format!(
+                "php exited {}: {}",
+                o.status.code().unwrap_or(-1),
+                String::from_utf8_lossy(&o.stderr).trim()
+            ));
+        }
+        Ok(String::from_utf8_lossy(&o.stdout).into_owned())
+    };
+    let section = match run_php() {
+        Err(e) => format!("\nvs PHP: run failed ({e}) — skipping\n"),
+        // Output-identity gate — the same parity contract used between the Phorge backends. A
+        // divergence is a transpile-bug report, not a timing result.
+        Ok(out) if out != expected => format!(
+            "\nvs PHP: transpiled output differs from Phorge ({} vs {} bytes) — skipping \
+             (transpile divergence, not a timing result)\n",
+            out.len(),
+            expected.len()
+        ),
+        Ok(_) => match median_of(iters, run_php) {
+            Err(e) => format!("\nvs PHP: timing failed ({e})\n"),
+            Ok(php) => {
+                let mut s = format!("\nvs PHP — {ver}\n");
+                s.push_str(&format!(
+                    "  php run       {}  (spawns a process per sample)\n",
+                    fmt_dur(php)
+                ));
+                let best = tw.min(vm);
+                let best_name = if vm <= tw { "vm" } else { "tree-walk" };
+                let (a, b) = (best.as_nanos(), php.as_nanos());
+                if a > 0 && b > 0 {
+                    if a <= b {
+                        s.push_str(&format!(
+                            "  winner: Phorge ({best_name}) — {:.2}× faster than PHP ({} → {})\n",
+                            b as f64 / a as f64,
+                            fmt_dur(php),
+                            fmt_dur(best)
+                        ));
+                    } else {
+                        s.push_str(&format!(
+                            "  winner: PHP — {:.2}× faster than Phorge ({best_name}) ({} → {})\n",
+                            a as f64 / b as f64,
+                            fmt_dur(best),
+                            fmt_dur(php)
+                        ));
+                    }
+                }
+                s.push_str(
+                    "  note: PHP timing includes process spawn and depends on opcache/JIT (php.ini)\n",
+                );
+                s
+            }
+        },
+    };
+    let _ = std::fs::remove_file(&path);
+    section
+}
+
 /// Median wall-clock of `f` over `iters` samples after one untimed warmup. Generic over the
 /// closure's `Ok` value so the same path times the interpreter (`String`), the VM (`String`), and
 /// the compiler (`BytecodeProgram`). Propagates the first error — a faulting program can't be
@@ -506,6 +620,12 @@ fn fmt_kb(kb: Option<u64>) -> String {
 /// The bench engine (separated from [`cmd_bench`] so tests can pass a small `iters`). Runs on the
 /// deep-stack worker like every other pipeline command.
 fn bench_report(src: &str, iters: usize) -> Result<String, String> {
+    bench_report_opts(src, iters, false)
+}
+
+/// Bench engine with an opt-in PHP comparison (`--vs-php`, Track D). `vs_php` transpiles the program,
+/// gates its PHP output against the Phorge backends' output, and median-times `php <file>`.
+fn bench_report_opts(src: &str, iters: usize, vs_php: bool) -> Result<String, String> {
     on_deep_stack(|| {
         let prog = parse_checked(src)?;
         let program = compile(&prog).map_err(|e| e.to_string())?;
@@ -577,6 +697,11 @@ fn bench_report(src: &str, iters: usize) -> Result<String, String> {
         out.push_str(&format!("  vm run        {}\n\n", fmt_dur(vm)));
         out.push_str(&verdict);
         out.push('\n');
+
+        // Optional PHP comparison (Track D) — appended after the Phorge verdict, before memory.
+        if vs_php {
+            out.push_str(&php_bench_section(&prog, iters, &tw_out, tw, vm));
+        }
 
         // Memory (Linux /proc). The cold-run growth (captured before any warmup) is the workload's
         // own resident footprint for one execution; the process figures are the bench process's
@@ -798,6 +923,17 @@ function main() {
         assert!(out.contains("verdict:"), "{out}");
         // Output is "42\n" = 3 bytes — the report states the byte count it asserted identical.
         assert!(out.contains("3 bytes"), "{out}");
+    }
+
+    #[test]
+    fn bench_vs_php_emits_a_php_section() {
+        // `--vs-php` always emits a "vs PHP" section — either the comparison (php present) or a
+        // graceful skip note (php absent). Both start with "vs PHP", so the test is host-agnostic.
+        let src = r#"function main() { int x = 21; println("{x + x}"); }"#;
+        let out = bench_report_opts(src, 3, true).expect("bench");
+        assert!(out.contains("vs PHP"), "{out}");
+        // The standard report is still present.
+        assert!(out.contains("vm run"), "{out}");
     }
 
     #[test]

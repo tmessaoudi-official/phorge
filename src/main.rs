@@ -145,8 +145,16 @@ fn main() {
             }
         }
     }
+    // `bench` accepts an optional `--vs-php` flag (transpile + median-time the PHP backend too).
+    // Strip it before source resolution so it isn't mistaken for a file/flag.
+    let bench_vs_php = cmd == "bench" && args[2..].iter().any(|a| a == "--vs-php");
+    let rest: Vec<String> = args[2..]
+        .iter()
+        .filter(|a| a.as_str() != "--vs-php")
+        .cloned()
+        .collect();
     // Run-family: resolve the source — <file> | - (stdin) | -e/--eval <code> | -- <file>.
-    let src = match cli::resolve_source(&args[2..]) {
+    let src = match cli::resolve_source(&rest) {
         Some(cli::SourceSpec::File(path)) => read_source_file(&path),
         Some(cli::SourceSpec::Stdin) => read_stdin(),
         Some(cli::SourceSpec::Inline(code)) => code,
@@ -163,6 +171,7 @@ fn main() {
         "lex" => cli::cmd_lex(&src),
         "transpile" => cli::cmd_transpile(&src),
         "disasm" => cli::cmd_disasm(&src),
+        "bench" if bench_vs_php => cli::cmd_bench_vs_php(&src),
         "bench" => cli::cmd_bench(&src),
         _ => unreachable!("validated above"),
     };
