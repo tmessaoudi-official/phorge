@@ -249,6 +249,19 @@ impl<'a> Vm<'a> {
                 Value::List(xs) => self.stack.push(Value::Int(xs.len() as i64)),
                 v => return Err(format!("cannot take length of {}", v.type_name())),
             },
+            Op::MakeRange(inclusive) => {
+                // `end` was pushed last, so it's on top; `start` is below (compiler emit order).
+                let end = self.pop_int()?;
+                let start = self.pop_int()?;
+                // Rust's native ranges materialize the same list the interpreter builds (byte-
+                // identical), and `start..=i64::MAX` stops cleanly without a counter overflow (EV-7).
+                let list: Vec<Value> = if inclusive {
+                    (start..=end).map(Value::Int).collect()
+                } else {
+                    (start..end).map(Value::Int).collect()
+                };
+                self.stack.push(Value::List(Rc::new(list)));
+            }
 
             Op::Print(n) => {
                 let parts = self.split_off(n);

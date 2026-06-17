@@ -45,6 +45,8 @@ pub enum TokenKind {
     TypeKw,
     // punctuation / operators
     Dot,
+    DotDot,   // `..` exclusive range
+    DotDotEq, // `..=` inclusive range
     Semicolon,
     Comma,
     Colon,

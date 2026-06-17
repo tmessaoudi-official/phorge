@@ -555,6 +555,9 @@ impl Checker {
                 arms,
                 span,
             } => self.check_match(scrutinee, arms, *span), // Task 8
+            Expr::Range {
+                start, end, span, ..
+            } => self.check_range(start, end, *span),
         }
     }
 
@@ -672,7 +675,8 @@ impl Checker {
             | Expr::Call { span, .. }
             | Expr::Member { span, .. }
             | Expr::Index { span, .. }
-            | Expr::Match { span, .. } => *span,
+            | Expr::Match { span, .. }
+            | Expr::Range { span, .. } => *span,
         }
     }
     fn check_list(&mut self, elems: &[crate::ast::Expr], span: Span) -> Ty {
@@ -712,6 +716,22 @@ impl Checker {
             Ty::Error => Ty::Error,
             other => self.err(span, format!("type `{other}` cannot be indexed")),
         }
+    }
+    /// `start..end` / `start..=end`: both bounds must be `int`; the range's type is `List<int>` (its
+    /// only role this slice is `for … in`). A non-int bound is `E-RANGE-TYPE` (decision S1-R).
+    fn check_range(&mut self, start: &crate::ast::Expr, end: &crate::ast::Expr, span: Span) -> Ty {
+        let s = self.check_expr(start);
+        let e = self.check_expr(end);
+        let ok = |t: &Ty| matches!(t, Ty::Int | Ty::Error);
+        if !ok(&s) || !ok(&e) {
+            return self.err_coded(
+                span,
+                format!("range bounds must be `int`, found `{s}` and `{e}`"),
+                "E-RANGE-TYPE",
+                None,
+            );
+        }
+        Ty::List(Box::new(Ty::Int))
     }
     fn check_call(
         &mut self,
@@ -1620,6 +1640,25 @@ mod tests {
         assert!(
             errs.iter()
                 .any(|e| e.message.contains("`for`-`in` requires a List")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn range_in_for_checks_clean_and_binds_int() {
+        assert!(errors_of("function main() { for (int i in 0..5) { int x = i + 1; } }").is_empty());
+        assert!(errors_of("function main() { for (int i in 0..=5) { } }").is_empty());
+        // a range bound to a local is `List<int>`
+        assert!(errors_of("function main() { List<int> xs = 0..3; }").is_empty());
+    }
+
+    #[test]
+    fn range_non_int_bound_is_error() {
+        let errs = errors_of("function main() { for (int i in 0..3.0) { } }");
+        assert!(
+            errs.iter()
+                .any(|e| e.message.contains("range bounds must be `int`")
+                    && e.code == Some("E-RANGE-TYPE")),
             "{errs:?}"
         );
     }

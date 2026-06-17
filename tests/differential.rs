@@ -177,6 +177,24 @@ fn s1_index_oob_faults_identically() {
     agree_err(r#"function main() { List<int> xs = [1, 2]; println("{xs[5]}"); }"#);
 }
 
+/// M3 S1.2 — integer ranges `a..b` (exclusive) / `a..=b` (inclusive), materialized to `List<int>`
+/// via the one new `Op::MakeRange`. The compiler/interpreter must build the *same* list (same order,
+/// same emptiness rule) so `for…in` over a range is byte-identical on both backends.
+#[test]
+fn s1_ranges_are_byte_identical() {
+    agree(r#"function main() { for (int i in 0..3) { println("{i}"); } }"#); // 0,1,2
+    agree(r#"function main() { for (int i in 1..=3) { println("{i}"); } }"#); // 1,2,3
+                                                                              // empty range (start >= end): the body never runs on either backend
+    agree(r#"function main() { for (int i in 5..5) { println("{i}"); } println("done"); }"#);
+    agree(r#"function main() { for (int i in 5..2) { println("{i}"); } println("empty"); }"#);
+    // a range bound to a `var` (typed `List<int>`), then iterated
+    agree(r#"function main() { var xs = 0..3; for (int i in xs) { println("{i + 1}"); } }"#);
+    // range bounds from expressions
+    agree(
+        r#"function lo() -> int { return 2; } function main() { for (int i in lo()..lo() + 3) { println("{i}"); } }"#,
+    );
+}
+
 /// P3 surface: user function calls, recursion, mutual recursion, void functions, returns in
 /// branches, nested calls, float-returning functions, and calls as statements. Each must run
 /// identically on both backends.

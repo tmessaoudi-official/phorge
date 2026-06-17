@@ -573,7 +573,7 @@ impl<'a> Compiler<'a> {
             Op::AddI | Op::SubI | Op::MulI | Op::DivI | Op::RemI => -1,
             Op::AddF | Op::SubF | Op::MulF | Op::DivF | Op::RemF => -1,
             Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge => -1,
-            Op::Pop | Op::SetLocal(_) | Op::JumpIfFalse(_) | Op::Index => -1,
+            Op::Pop | Op::SetLocal(_) | Op::JumpIfFalse(_) | Op::Index | Op::MakeRange(_) => -1,
             Op::Neg | Op::Not | Op::Len | Op::Jump(_) => 0,
             Op::MatchTag(_) | Op::GetEnumField(_) => 0, // pop one, push one
             Op::Concat(n) | Op::MakeList(n) => 1 - *n as isize,
@@ -724,6 +724,9 @@ impl<'a> Compiler<'a> {
                 Some(arm) => self.ctype(&arm.body),
                 None => Ok(CTy::Other),
             },
+            // A range is a `List<int>` — never a numeric/class operand (the checker rejects
+            // arithmetic on it); `Other` is the correct non-numeric classification.
+            Expr::Range { .. } => Ok(CTy::Other),
             other => Err(format!("cannot infer numeric type of {other:?}")),
         }
     }
@@ -886,6 +889,17 @@ impl<'a> Compiler<'a> {
                 arms,
                 span,
             } => self.compile_match(scrutinee, arms, span.line)?,
+            Expr::Range {
+                start,
+                end,
+                inclusive,
+                span,
+            } => {
+                // Push start, then end; `MakeRange` pops end-then-start and materializes the list.
+                self.expr(start)?;
+                self.expr(end)?;
+                self.emit(Op::MakeRange(*inclusive), span.line);
+            }
         }
         Ok(())
     }
@@ -1498,6 +1512,18 @@ mod tests {
             println("done");
         }"#;
         assert_eq!(out(src), "11\n12\ndone\n");
+    }
+
+    #[test]
+    fn ranges_iterate_on_vm() {
+        assert_eq!(
+            out(r#"function main() { for (int i in 0..3) { println("{i}"); } }"#),
+            "0\n1\n2\n"
+        );
+        assert_eq!(
+            out(r#"function main() { for (int i in 2..=4) { println("{i}"); } }"#),
+            "2\n3\n4\n"
+        );
     }
 
     #[test]

@@ -130,6 +130,14 @@ pub enum Expr {
         arms: Vec<MatchArm>,
         span: Span,
     },
+    /// `start..end` (exclusive) or `start..=end` (inclusive) — an integer range, materialized to a
+    /// `List<int>` by both backends (decision S1-R). Its only role this slice is `for … in`.
+    Range {
+        start: Box<Expr>,
+        end: Box<Expr>,
+        inclusive: bool,
+        span: Span,
+    },
 }
 
 /// A function/method parameter: `Type name`.

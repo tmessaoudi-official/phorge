@@ -151,6 +151,12 @@ pub fn explain_text(code: &str) -> Option<String> {
              `type A = B; type B = A;` has no underlying type. Break the cycle so every alias\n\
              bottoms out at a built-in, class, or enum type.\n"
         }
+        "E-RANGE-TYPE" => {
+            "E-RANGE-TYPE — a range bound is not an `int`.\n\n\
+             Both bounds of `a..b` / `a..=b` must be `int`; the range materializes to a\n\
+             `List<int>` (its role this slice is `for (int i in 0..n)`). Use integer bounds, or\n\
+             build a `List` explicitly if you need other element types.\n"
+        }
         _ => return None,
     };
     Some(body.to_string())
@@ -161,7 +167,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE)"
+             (known: E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE)"
         )
     })
 }

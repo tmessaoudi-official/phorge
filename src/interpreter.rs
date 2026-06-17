@@ -287,6 +287,29 @@ impl Interp {
             Expr::Match {
                 scrutinee, arms, ..
             } => self.eval_match(scrutinee, arms),
+            Expr::Range {
+                start,
+                end,
+                inclusive,
+                ..
+            } => {
+                // Evaluate start before end (matches the compiler's emit order, for side-effect
+                // parity), then materialize via the same native ranges the VM uses.
+                let s = match self.eval(start)? {
+                    Value::Int(n) => n,
+                    v => return rt(format!("range start must be int, found {}", v.type_name())),
+                };
+                let e = match self.eval(end)? {
+                    Value::Int(n) => n,
+                    v => return rt(format!("range end must be int, found {}", v.type_name())),
+                };
+                let list: Vec<Value> = if *inclusive {
+                    (s..=e).map(Value::Int).collect()
+                } else {
+                    (s..e).map(Value::Int).collect()
+                };
+                Ok(Value::List(Rc::new(list)))
+            }
         }
     }
 
@@ -778,6 +801,23 @@ mod tests {
             e.message.contains("list index out of range"),
             "{}",
             e.message
+        );
+    }
+
+    #[test]
+    fn ranges_iterate_like_lists() {
+        assert_eq!(
+            out(r#"function main() { for (int i in 0..3) { println("{i}"); } }"#),
+            "0\n1\n2\n"
+        );
+        assert_eq!(
+            out(r#"function main() { for (int i in 1..=3) { println("{i}"); } }"#),
+            "1\n2\n3\n"
+        );
+        // empty range (start >= end): body never runs
+        assert_eq!(
+            out(r#"function main() { for (int i in 5..2) { println("{i}"); } println("done"); }"#),
+            "done\n"
         );
     }
 

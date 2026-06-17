@@ -30,6 +30,10 @@ impl<'a> Lexer<'a> {
         self.src.get(self.pos + 1).copied()
     }
 
+    fn peek3(&self) -> Option<u8> {
+        self.src.get(self.pos + 2).copied()
+    }
+
     fn bump(&mut self) -> Option<u8> {
         let b = self.peek()?;
         self.pos += 1;
@@ -299,6 +303,30 @@ pub fn lex(src: &str) -> Result<Vec<Token>, Diagnostic> {
                     continue;
                 }
 
+                // Range operators: longest-match `..=` (3) and `..` (2) ahead of `.` (1). A number
+                // like `0..3` already lexes `0` as `Int(0)` — `scan_number`'s float branch needs a
+                // *digit* after the dot, and here the next char is another `.`.
+                if b == b'.' && lx.peek2() == Some(b'.') {
+                    let (kind, len) = if lx.peek3() == Some(b'=') {
+                        (TokenKind::DotDotEq, 3)
+                    } else {
+                        (TokenKind::DotDot, 2)
+                    };
+                    for _ in 0..len {
+                        lx.bump();
+                    }
+                    out.push(Token {
+                        kind,
+                        span: Span {
+                            start,
+                            len,
+                            line,
+                            col,
+                        },
+                    });
+                    continue;
+                }
+
                 // two-char operators take priority
                 let two = |k: TokenKind| Token {
                     kind: k,
@@ -431,6 +459,19 @@ mod tests {
         assert_eq!(
             kinds("== != <= >= -> => |> && ||"),
             vec![EqEq, NotEq, Le, Ge, Arrow, FatArrow, Pipe, AndAnd, OrOr, Eof]
+        );
+    }
+
+    #[test]
+    fn range_operators_lex_longest_match() {
+        use TokenKind::*;
+        // `..=` (3) beats `..` (2) beats `.` (1); `0` stays an Int (no digit after the dot).
+        assert_eq!(kinds("0..3"), vec![Int(0), DotDot, Int(3), Eof]);
+        assert_eq!(kinds("0..=3"), vec![Int(0), DotDotEq, Int(3), Eof]);
+        // a lone `.` is still a member-access Dot — `..` handling doesn't swallow it
+        assert_eq!(
+            kinds("a.b"),
+            vec![Ident("a".into()), Dot, Ident("b".into()), Eof]
         );
     }
 

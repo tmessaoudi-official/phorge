@@ -403,6 +403,24 @@ impl Transpiler {
             Expr::Match { .. } => {
                 Err("transpile error: match in this position is not yet supported".into())
             }
+            // PHP `range()` is inclusive, so an exclusive `a..b` emits `range($a, $b - 1)`. NB this
+            // differs from Phorge for an *empty/reversed* range (`a >= b`): PHP `range` descends
+            // instead of yielding `[]` — a transpile-only caveat documented in KNOWN_ISSUES; the
+            // Phorge backends (run/runvm) are byte-identical and unaffected.
+            Expr::Range {
+                start,
+                end,
+                inclusive,
+                ..
+            } => {
+                let s = self.emit_expr(start)?;
+                let e = self.emit_expr(end)?;
+                Ok(if *inclusive {
+                    format!("range({s}, {e})")
+                } else {
+                    format!("range({s}, {e} - 1)")
+                })
+            }
         }
     }
 
@@ -662,6 +680,15 @@ mod tests {
     fn indexing_emits_php_subscript() {
         let out = php("function at(List<int> xs, int i) -> int { return xs[i]; }");
         assert!(out.contains("$xs[$i]"), "{out}");
+    }
+
+    #[test]
+    fn ranges_emit_php_range() {
+        // PHP `range` is inclusive, so exclusive `0..3` emits `range(0, 3 - 1)`.
+        let out = php(r#"function main() { for (int i in 0..3) { println("{i}"); } }"#);
+        assert!(out.contains("range(0, 3 - 1)"), "{out}");
+        let inc = php(r#"function main() { for (int i in 1..=3) { println("{i}"); } }"#);
+        assert!(inc.contains("range(1, 3)"), "{inc}");
     }
 
     #[test]

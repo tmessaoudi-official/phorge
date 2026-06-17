@@ -84,7 +84,28 @@ impl Parser {
 
     /// Entry point: parse a full expression (lowest precedence).
     pub fn parse_expr(&mut self) -> Result<Expr, Diagnostic> {
-        self.parse_binary(0)
+        self.parse_range()
+    }
+
+    /// Ranges bind looser than every binary operator: `a..b` reads `a` and `b` as full
+    /// (binary) sub-expressions, so `0..n + 1` is `0..(n + 1)`. Non-chaining (no `a..b..c`); a
+    /// single optional `..`/`..=` follows the first operand. Used mainly as `for (int i in 0..n)`.
+    fn parse_range(&mut self) -> Result<Expr, Diagnostic> {
+        let start = self.parse_binary(0)?;
+        let inclusive = match self.peek() {
+            TokenKind::DotDot => false,
+            TokenKind::DotDotEq => true,
+            _ => return Ok(start),
+        };
+        let sp = self.peek_span();
+        self.advance(); // consume `..` / `..=`
+        let end = self.parse_binary(0)?;
+        Ok(Expr::Range {
+            start: Box::new(start),
+            end: Box::new(end),
+            inclusive,
+            span: sp,
+        })
     }
 
     /// Left binding power for an infix operator token, plus its `BinaryOp`.
@@ -1195,6 +1216,23 @@ mod tests {
                 assert_eq!(arms.len(), 2);
                 assert!(matches!(arms[0].body, Expr::Binary { .. }));
             }
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_ranges() {
+        match expr("0..3") {
+            Expr::Range { inclusive, .. } => assert!(!inclusive),
+            other => panic!("got {other:?}"),
+        }
+        match expr("1..=n") {
+            Expr::Range { inclusive, .. } => assert!(inclusive),
+            other => panic!("got {other:?}"),
+        }
+        // ranges bind looser than `+`: `0..n + 1` is `0..(n + 1)`
+        match expr("0..n + 1") {
+            Expr::Range { end, .. } => assert!(matches!(*end, Expr::Binary { .. })),
             other => panic!("got {other:?}"),
         }
     }

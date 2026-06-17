@@ -84,6 +84,13 @@ pub enum Op {
     Index,
     /// Pop a list; push its length as an `Int`.
     Len,
+    /// Pop two ints (`end` on top, then `start`) and push a `List<int>` materialization of the
+    /// range: `[start, …, end-1]` exclusive, or `[start, …, end]` inclusive (the `bool` flag). Empty
+    /// when `start >= end` (exclusive) / `start > end` (inclusive). Built via Rust's native
+    /// `start..end` / `start..=end`, which stop at `i64::MAX` without a counter overflow (EV-7).
+    /// Carries no static index, so — like `GetEnumField` — it needs no `validate` arm (decision
+    /// S1-R, M3 S1.2).
+    MakeRange(bool),
     /// Pop `n` values, space-join their `as_display`, append a line to output.
     Print(usize),
     /// Call `functions[idx]`: its args are already on top of the stack; the new frame's
@@ -228,7 +235,8 @@ impl BytecodeProgram {
     /// `CallMethod` (name into the `names` pool; its function target is resolved at runtime via the
     /// method table, range-checked after the per-op loop). Each new index-carrying op extends the
     /// match below in lockstep (see memory `op-variant-match-coupling`). `GetEnumField` carries a
-    /// payload index with no static bound (like a local slot) — covered by the VM's runtime guard.
+    /// payload index with no static bound (like a local slot) — covered by the VM's runtime guard;
+    /// M3 S1.2's `MakeRange(bool)` carries a flag, not an index, so it likewise needs no arm here.
     pub fn validate(&self) -> Result<(), String> {
         let nfns = self.functions.len();
         if self.main >= nfns {
