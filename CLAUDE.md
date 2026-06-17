@@ -144,8 +144,18 @@ adds **no new `Op` variant**). All byte-identical on `run`/`runvm` + round-tripp
 `examples/guide/null-safety.phg` showcases the suite. **Gotcha (fixed this slice):** `??`/`?.`/`opt!`
 stash their receiver in a scratch slot that must be `self.height - 1` (the receiver's frame slot), not
 `add_local()`'s `locals.len()-1` — two such ops in one expression (e.g. `"{a ?? -1} {b ?? -1}"`) put a
-live transient below the receiver and the old slot was off, a silent `run`↔`runvm` break. **Next: M3
-S3+** (further language slices). **Parked:** M2.5 Phase 3 (CI stub registry + opt-in `--sign`) —
+live transient below the receiver and the old slot was off, a silent `run`↔`runvm` break.
+
+**Post-S2 direction (designed 2026-06-18, `docs/specs/2026-06-18-m3-next-intuitive-features-and-io-design.md`):**
+developer asked for more intuitive features + exhaustive examples (file/URL/imports) + a Phorge-vs-PHP
+benchmark. Locked: **build order D→B→A**; **URL/network deferred to M6** (Rust std has no HTTP client →
+breaks zero-dep, *and* network is non-deterministic → breaks the byte-identical spine; determinism, not
+the dependency, gates examples); **rich std-only stdlib now**; multiple inheritance = traits/mixins at
+S5 (rejected as MI, D-L3). **Track D DONE** — `phorge bench --vs-php` (3-way interpreter/VM/PHP, VM ≈3.2×
+faster than a debug PHP 8.6 on the workload). **ACTIVE: Track B** (std-only stdlib + I/O + real
+`import std.*`) — plan `docs/plans/2026-06-18-trackB-stdlib-io-imports.md`. **Resume at Task 1: the
+`NativeModule` foundation** (registry + dual+ registration; `Op::Print`→`Op::CallNative`; migrate
+`println`). Then Track A (S3 lambdas/pipeline). **Parked:** M2.5 Phase 3 (CI stub registry + `--sign`) —
 `docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing
