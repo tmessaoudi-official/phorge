@@ -1,0 +1,44 @@
+import std.io;
+
+// Functions in Phorge: typed parameters and a return type.
+// A function with no `-> T` (like `main`) returns nothing.
+
+// Two typed parameters, returns int.
+function add(int a, int b) -> int {
+    return a + b;
+}
+
+// A string in, a string out — interpolation builds the result.
+function greet(string name) -> string {
+    return "hello, {name}";
+}
+
+// Functions compose: `shout` calls `greet`.
+function shout(string name) -> string {
+    return "{greet(name)}!";
+}
+
+// A function may return a List<int>; a range materializes into one.
+function up_to(int n) -> List<int> {
+    return 0..n;
+}
+
+// No return type: this function just prints.
+function banner(string title) {
+    println("== {title} ==");
+}
+
+function main() {
+    banner("functions");
+    println("add(2, 3) = {add(2, 3)}");
+    println(greet("phorge"));
+    println(shout("phorge"));
+
+    // Call results feed directly into other expressions.
+    int total = add(add(1, 2), add(3, 4));
+    println("nested add = {total}");
+
+    for (int i in up_to(4)) {
+        println("i = {i}");
+    }
+}

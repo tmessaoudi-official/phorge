@@ -17,6 +17,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `realworld/rpg.phg` | turn-based combat: enum + `match`, class + methods + `this`, `List` + `for`, immutable state evolution |
 | `guide/operators.phg` | arithmetic, comparison, logical, unary operators; `bool` |
 | `guide/control-flow.phg` | `if`/`else`, `for…in`, recursion, mutual recursion |
+| `guide/functions.phg` | functions: typed params, return types, a no-return function, composition, a `List<int>`-returning function |
 | `guide/collections.phg` | `List<T>` literals, nested `List<List<int>>`, nested `for`, list of instances |
 | `guide/classes.phg` | constructor promotion, methods, `this`, composition, a method call on a field |
 | `guide/enums-match.phg` | payload + zero-payload variants; literal, binding, and variant patterns |
@@ -32,7 +33,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 |---|---|
 | `int`/`float` arithmetic, `%`, comparison, logical, unary, overflow-checked | `guide/operators`, all `realworld/*` |
 | immutable typed bindings | every example |
-| functions, recursion, mutual recursion | `guide/control-flow`, `fib`, `ledger`, `shop` |
+| functions, recursion, mutual recursion | `guide/functions`, `guide/control-flow`, `fib`, `ledger`, `shop` |
 | `if`/`else`, `for…in` | `guide/control-flow`, `fib`, all `realworld/*` |
 | `List<T>` literals, nesting, iteration | `guide/collections`, all `realworld/*` |
 | classes: ctor promotion, fields, methods, `this`, field reads, composition | `guide/classes`, `ledger`, `rpg`, `grades` |
