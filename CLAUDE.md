@@ -102,10 +102,22 @@ Showcase: `examples/bench/workload.phg` (+ its README), auto byte-identity-gated
 CODE_OF_CONDUCT, SECURITY, ROADMAP, VISION, FEATURES, KNOWN_ISSUES, THIRD-PARTY-NOTICES, CITATION.cff,
 `.github/` templates). See **`ROADMAP.md`** / **`VISION.md`** for the forward plan.
 
-**Next (locked sequence): M2.5 Phase 3** — CI stub registry (distributed phorge cross-builds without a
-source checkout) + opt-in `--sign` (Windows Authenticode + macOS codesign/notarize via `rcodesign` from
-Linux); then **M3** (grow the language: indexing, Map/Set, null/optionals, `|>`, exceptions, mutation —
-mutation finally motivates the real tracing GC).
+**M3 is now the active milestone** (`docs/specs/2026-06-17-m3-language-roadmap-design.md` +
+`docs/specs/2026-06-17-m3-slice1-s0-s1-s2-design.md`). The transpile contract is **Phorge : PHP ::
+TypeScript : JavaScript** — every feature maps to idiomatic PHP; PHP-absent features (generics) are
+compile-time-only and erased. **Slice S0 (developer experience) is COMPLETE**
+(`docs/plans/2026-06-17-m3-s0-dx.md`): per-command `--help` with worked examples; `var` local type
+inference (`Type::Infer`, resolved in the checker; the VM derives the local's operand `CTy` from the
+initializer so arithmetic still specializes); `type` aliases (`Item::TypeAlias`, resolved +
+cycle/duplicate/built-in-shadow-checked in the checker, then expanded out of the AST by
+`checker::expand_aliases` so the interpreter/VM/transpiler — and the PHP output — are alias-free);
+sharper diagnostics (caret-underlined span + did-you-mean hints + stable codes, `Diagnostic`
+construction centralized through `Diagnostic::new`, front-end-only so runtime parity is untouched); and
+`phorge explain <CODE>`. **Next: M3 S1** — indexing `xs[i]`, ranges `0..n`/`0..=n` (one new
+`Op::MakeRange`), expression `if`, smart-cast narrowing; then **S2** (null-safety: `T?`, `??`, `?.`,
+`if (var x = opt)`, checked `opt!` — PHP-native nullable, **no new `Op`**). **Parked:** M2.5 Phase 3
+(CI stub registry + opt-in `--sign`), resumable after the M3 slices —
+`docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing
 correctness rules — read before touching backends, value kernels, or the `Op` set) and
