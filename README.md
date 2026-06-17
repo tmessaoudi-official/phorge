@@ -118,7 +118,8 @@ phorge <command> <source> [options]
 | `parse` | dump the AST | exit 1 on parse error |
 | `lex` | dump the token stream | exit 1 on lex error |
 | `transpile` | type-check (gate) → emit PHP to stdout | exit 1 on type/transpile error |
-| `bench` | median-of-N timing of both backends, output-identity gated | exit 1 if they fault or disagree |
+| `disasm` | type-check → compile → dump the bytecode (per-function listings + descriptor tables) | exit 1 on type error |
+| `bench` | median-of-N timing of both backends + memory (peak/current RSS, Linux), output-identity gated | exit 1 if they fault or disagree |
 | `build` | compile to a standalone native executable | exit 1 on type error / build failure |
 
 **Source** (for the run-family commands):
