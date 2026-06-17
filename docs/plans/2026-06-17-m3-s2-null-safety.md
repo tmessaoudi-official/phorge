@@ -64,7 +64,9 @@ if-let lower to existing `SetLocal`/`GetLocal` + a null-test (`Eq` vs a `null` c
 - [x] Task 6 — `match` over `T?` with null-arm narrowing (`Pattern::Null` un-rejected on optional
   scrutinee across all 4 backends; catch-all binding narrows to inner `T` after a prior `null` arm;
   `emit_literal_test(Null)` lowering; PHP `=== null` guard) — committed below
-- [ ] Task 7 — example + docs
+- [x] Task 7 — `examples/guide/null-safety.phg` + README rows; FEATURES/CHANGELOG/KNOWN_ISSUES/
+  ROADMAP/CLAUDE flipped; `explain` codes added. **S2 COMPLETE.** (Plus a found+fixed pre-existing
+  parity bug: null-op scratch slot `height-1` — `0e98279`.)
 
 ## File Structure
 

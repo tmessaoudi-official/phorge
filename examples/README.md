@@ -24,6 +24,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/strings.phg` | string interpolation |
 | `guide/inference.phg` | `var` local type inference + `type` aliases (M3 S0) |
 | `guide/ergonomics.phg` | indexing `xs[i]`, integer ranges `0..n` / `0..=n`, expression `if` (M3 S1) |
+| `guide/null-safety.phg` | optionals `T?`, `??`, `?.`, `if (var x = opt)`, `opt!`, `match` over `T?` (M3 S2) |
 | `bench/workload.phg` | a **profiling** workload (CPU recursion + heap allocation) for `phorge bench`/`disasm` — see `bench/README.md` |
 | `transpile/demo.phg` | the **Phorge → PHP** bridge — see `transpile/README.md` |
 | `build/app.phg` | **standalone executables** — `phorge build` — see `build/README.md` |
@@ -42,6 +43,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | enums (payload **and** zero-payload via `V()`) + exhaustive `match` | `guide/enums-match`, all `realworld/*`, `grades` |
 | string interpolation `"{expr}"` | `guide/strings`, every example |
 | indexing `xs[i]`, ranges `0..n` / `0..=n`, expression `if` | `guide/ergonomics` |
+| null safety: `T?`, `??`, `?.`, `if (var x = opt)`, `opt!`, `match` over `T?` | `guide/null-safety` |
 | `var` local type inference, `type` aliases | `guide/inference` |
 | `println(string)` (the only builtin) | every example |
 | Phorge → PHP transpile | `transpile/demo` |
@@ -59,6 +61,6 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 ## Not yet supported (intentionally absent here)
 
 These are designed but not implemented; they will arrive in **M3+** (the language-growth milestone),
-and examples will be added as each lands: `null` / `T?` / `Option`, `Map`/`Set` values & indexing,
-the pipe operator `|>`, exceptions (`try`/`catch`/`throw`), traits, function overloading, sized ints,
-`decimal`, and real multi-file `import` resolution.
+and examples will be added as each lands: `Map`/`Set` values & indexing, the pipe operator `|>`,
+exceptions (`try`/`catch`/`throw`), traits, function overloading, sized ints, `decimal`, and real
+multi-file `import` resolution.

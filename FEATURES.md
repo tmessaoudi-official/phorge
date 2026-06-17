@@ -27,7 +27,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Integer ranges `a..b` / `a..=b` | ✅ | materialize to `List<int>`; mainly `for (int i in 0..n)` |
 | Expression `if` | ✅ | `var x = if (c) { 1 } else { 2 };` (value position; `else` required) |
 | `Map` / `Set` / tuples | 🔲 M3 | |
-| Null safety / optionals (`T?`) | 🔲 M3 | |
+| Null safety / optionals (`T?`) | ✅ | `??`, `?.`, `if (var x = opt)`, checked `opt!`, `match` over `T?`; non-optional `T` is never null (compile-time) |
 | Pipe operator `\|>` | 🔲 M3 | |
 | Exceptions (try/catch/throw) | 🔲 M3 | |
 | Mutation (reassignment, field writes) | 🔲 M3 | triggers the tracing GC |

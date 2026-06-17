@@ -1,0 +1,52 @@
+import std.io;
+
+// M3 S2 "null safety": optionals `T?`, `??`, `?.`, `if (var x = opt)`, `opt!`, and `match` over
+// `T?`. A non-optional `T` can never hold `null` — the checker enforces it (TypeScript
+// `strictNullChecks` over PHP's nullable runtime). These operators are the only ways from `T?` to T.
+
+class Box {
+    constructor(private int v) {}
+    function get() -> int { return v; }
+}
+
+// `match` over an optional: the `null` arm handles absence; the binding arm narrows `v` to `int`.
+function describe(int? o) -> string {
+    return match o {
+        null => "absent",
+        v => "present {v}",
+    };
+}
+
+function main() {
+    // A `T?` holds a value or `null`; a non-optional `T` widens to `T?`.
+    int? some = 7;
+    int? none = null;
+
+    // `??` supplies a default when the left side is null (and skips it otherwise).
+    println("coalesce: {some ?? -1} {none ?? -1}");
+
+    // `?.` reads through a present receiver and short-circuits a null one to `null`.
+    Box? box = Box(42);
+    Box? nobox = null;
+    println("safe: {(box?.get()) ?? -1} {(nobox?.get()) ?? -1}");
+
+    // `if (var x = opt)` binds the non-null inner inside the then-block only (smart-cast to `int`).
+    if (var x = some) {
+        println("if-let: got {x}");
+    } else {
+        println("if-let: none");
+    }
+    if (var y = none) {
+        println("if-let: got {y}");
+    } else {
+        println("if-let: none");
+    }
+
+    // `opt!` force-unwraps a known-present optional to `int` (it would fault on null — never used on
+    // a value that can be null; the `W-FORCE-UNWRAP` lint flags every use). `x` is then a real `int`.
+    int forced = some!;
+    println("force: {forced + 1}");
+
+    // `match` over `T?` with null-arm narrowing.
+    println("match: {describe(some)} / {describe(none)}");
+}

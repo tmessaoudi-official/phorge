@@ -11,7 +11,6 @@ These are designed but not in the current surface; using them produces a clean c
 not a panic:
 
 - `Map` / `Set` / tuples
-- Null safety / optionals (`T?`, `null`)
 - The pipe operator (`|>`) and the `is` operator
 - Exceptions (try / catch / throw)
 - Mutation (reassignment and field writes) — Phorge is immutable-by-default today
@@ -55,9 +54,12 @@ not a panic:
   backends (`run`/`runvm`) treat an empty range as empty and stay byte-identical; only the
   PHP-transpiled output diverges, and only for empty/reversed ranges. Use ascending, non-empty ranges
   when round-tripping through PHP. (Parallel to the indexing-OOB transpile note.)
-- **Smart-cast narrowing arrives with optionals (S2).** Flow-sensitive narrowing (e.g. an optional
-  `T?` proven non-null inside `if (var x = opt)`) is part of the null-safety slice; until then there
-  are no optionals to narrow.
+- **`opt!`-on-null transpiles to a different message than the Phorge backends.** A null force-unwrap
+  faults `force-unwrap of null` on `run`/`runvm` (located, classified `FaultKind::ForceUnwrap`); the
+  transpiled PHP throws a `RuntimeException("force-unwrap of null")` via the `__phorge_unwrap()`
+  helper without the source name/line. The *present-value* case is byte-identical; only the null-fault
+  message differs (a transpile-only caveat, parallel to the range/index-OOB notes). The differential
+  harness excludes fault cases by design.
 
 ## Reporting
 

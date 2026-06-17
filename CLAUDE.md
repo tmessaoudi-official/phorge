@@ -131,12 +131,21 @@ both backends materialize a `List<int>` via native Rust ranges, so `for (int i i
 unchanged; transpiles to PHP `range()`); and expression `if` (`if (c) { e } else { e }` in value
 position — parens + mandatory `else`, single-expression arms; lowers via the existing branch ops like
 `&&`/`||`, transpiles to a PHP ternary). All three are byte-identical on `run`/`runvm` **and**
-round-tripped through real PHP; `examples/guide/ergonomics.phg` showcases them. **S1.4 (smart-cast
-narrowing) is deferred to S2** — its only described surface (`if (var x = opt)` + null-excluding
-`match` arms) operates on optionals (`T?`), which arrive in S2, so there is no exercisable behavior to
-test in S1. **Next: M3 S2** — null-safety (`T?`, `??`, `?.`, `if (var x = opt)`, checked `opt!`, and
-S1.4 smart-cast) — PHP-native nullable, **no new `Op`**. **Parked:** M2.5 Phase 3
-(CI stub registry + opt-in `--sign`), resumable after the M3 slices —
+round-tripped through real PHP; `examples/guide/ergonomics.phg` showcases them. **Slice S2
+(null-safety) is COMPLETE** (`docs/plans/2026-06-17-m3-s2-null-safety.md`): optionals `T?`
+(`Ty::Optional` + `Value::Null`) with a compile-time non-null guarantee (a non-optional `T` is never
+null — TypeScript `strictNullChecks` over PHP's nullable runtime); `??` null-coalesce; `?.` safe
+access (PHP `?->`); `if (var x = opt)` if-let binding + smart-cast (S1.4 landed here); `opt!` checked
+force-unwrap (clean `force-unwrap of null` fault, `FaultKind::ForceUnwrap` parity) with the
+**`W-FORCE-UNWRAP`** lint; and `match` over `T?` with null-arm narrowing. Two cross-cutting additions:
+the **warning channel** (first non-fatal lint — `check()` returns `Ok(warnings)`, rendered to stderr,
+never gating the build) and the generalization of `Op::MatchFail` → **`Op::Fault(FaultMsg)`** (so S2
+adds **no new `Op` variant**). All byte-identical on `run`/`runvm` + round-tripped through real PHP;
+`examples/guide/null-safety.phg` showcases the suite. **Gotcha (fixed this slice):** `??`/`?.`/`opt!`
+stash their receiver in a scratch slot that must be `self.height - 1` (the receiver's frame slot), not
+`add_local()`'s `locals.len()-1` — two such ops in one expression (e.g. `"{a ?? -1} {b ?? -1}"`) put a
+live transient below the receiver and the old slot was off, a silent `run`↔`runvm` break. **Next: M3
+S3+** (further language slices). **Parked:** M2.5 Phase 3 (CI stub registry + opt-in `--sign`) —
 `docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing

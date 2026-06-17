@@ -45,8 +45,31 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   auto byte-identity-gated and round-tripped through real PHP.
 - **S1.4 (smart-cast narrowing) deferred to S2** — it only narrows optionals (`T?`), which arrive in S2.
 
-_Next: M3 S2 (null-safety: `T?`, `??`, `?.`, `if (var x = opt)`, checked `opt!`, and S1.4 smart-cast —
-PHP-native nullable, no new `Op`). M2.5 Phase 3 (CI stub registry; opt-in `--sign`) remains parked._
+### M3 slice S2 — null-safety
+
+PHP-native nullable with a compile-time non-null guarantee (TypeScript `strictNullChecks` over PHP's
+nullable runtime). `T?` is the existing `null` value at runtime; the guarantee lives in the checker
+(a non-optional `T` can never be `null`). All byte-identical on `run`/`runvm` and 1:1 to PHP.
+
+- **Optionals `T?` + non-null discipline** — `Ty::Optional` + `Value::Null`; `T` auto-widens to `T?`,
+  but a `T?` cannot flow into a non-optional `T` (`E-OPT-ASSIGN`), nor be used as an operand/receiver
+  without unwrapping (`E-OPT-USE`).
+- **`??` null-coalesce** — `a ?? b`; `?.` safe access — `opt?.member` / `opt?.method()` short-circuits
+  a null receiver to `null` (PHP `?->`). Both lower to a null-test + branch, **no new `Op`**.
+- **`if (var x = opt)`** — binds the non-null inner `T` (smart-cast S1.4) inside the then-block only;
+  `E-IF-LET-TYPE` on a non-optional scrutinee. Transpiles to `if (($x = E) !== null) { … }`.
+- **`opt!` checked force-unwrap** — `T?` → `T`, a clean `force-unwrap of null` fault on null (never a
+  crash; `FaultKind::ForceUnwrap` parity). `E-OPT-UNWRAP` on a non-optional; the **`W-FORCE-UNWRAP`**
+  lint flags every use. Transpiles to a once-per-file `__phorge_unwrap()` helper.
+- **`match` over `T?`** — `match opt { null => …, v => … }` is exhaustive; the binding arm narrows
+  `v` to the non-null inner after a `null` arm.
+- **Warning channel (first lint)** — the checker now collects non-fatal warnings; `check()` returns
+  them on success and the CLI renders them to stderr without gating the build.
+- **No new `Op` variant** — `Op::MatchFail` was generalized to `Op::Fault(FaultMsg)` (single-sourced
+  message), serving both match-exhaustiveness and `opt!`-on-null.
+- New guide example `examples/guide/null-safety.phg`, auto byte-identity-gated + PHP round-tripped.
+
+_Next: M3 S3+ (the language-growth slices). M2.5 Phase 3 (CI stub registry; opt-in `--sign`) remains parked._
 
 ## [0.4.0] — 2026-06-17
 
