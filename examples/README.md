@@ -26,6 +26,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/ergonomics.phg` | indexing `xs[i]`, integer ranges `0..n` / `0..=n`, expression `if` (M3 S1) |
 | `bench/workload.phg` | a **profiling** workload (CPU recursion + heap allocation) for `phorge bench`/`disasm` — see `bench/README.md` |
 | `transpile/demo.phg` | the **Phorge → PHP** bridge — see `transpile/README.md` |
+| `build/app.phg` | **standalone executables** — `phorge build` — see `build/README.md` |
 
 ## Coverage matrix (the runnable surface)
 
@@ -43,6 +44,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `var` local type inference, `type` aliases | `guide/inference` |
 | `println(string)` (the only builtin) | every example |
 | Phorge → PHP transpile | `transpile/demo` |
+| standalone executable (`phorge build`) | `build/app` |
 
 ## Two sharp edges
 

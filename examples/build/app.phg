@@ -1,0 +1,19 @@
+import std.io;
+
+// A self-contained program built into a standalone executable with `phorge build`.
+// The produced binary embeds this source (in a CRC-guarded `.phorge` object-file
+// section) and runs it on the bytecode VM at startup — no Phorge install needed.
+
+function fib(int n) -> int {
+    if (n < 2) {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+
+function main() {
+    println("phorge standalone build");
+    for (int i in 0..10) {
+        println("fib({i}) = {fib(i)}");
+    }
+}
