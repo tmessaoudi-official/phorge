@@ -163,6 +163,12 @@ pub fn explain_text(code: &str) -> Option<String> {
              parameter, field, or return without handling absence first. Unwrap it with `??`\n\
              (default), `?.` (safe access), `if (var x = opt) { … }`, or `opt!` (checked).\n"
         }
+        "E-OPT-USE" => {
+            "E-OPT-USE — a plain `.field` / `.method()` was used on an optional `T?` receiver.\n\n\
+             The receiver could be `null`, so a plain member access risks a null dereference. Use\n\
+             `?.` for null-safe access (the whole access yields `null` when the receiver is null),\n\
+             or first narrow the optional with `if (var x = opt) { … }` or `opt!` (checked).\n"
+        }
         _ => return None,
     };
     Some(body.to_string())
@@ -173,7 +179,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN)"
+             (known: E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE)"
         )
     })
 }

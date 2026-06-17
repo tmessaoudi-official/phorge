@@ -200,18 +200,20 @@ impl Parser {
         loop {
             let sp = self.peek_span();
             match self.peek() {
-                TokenKind::Dot => {
+                TokenKind::Dot | TokenKind::QuestionDot => {
+                    let safe = matches!(self.peek(), TokenKind::QuestionDot);
                     self.advance();
                     let name = match self.peek().clone() {
                         TokenKind::Ident(n) => {
                             self.advance();
                             n
                         }
-                        _ => return Err(self.error("a field or method name after '.'")),
+                        _ => return Err(self.error("a field or method name after '.' or '?.'")),
                     };
                     e = Expr::Member {
                         object: Box::new(e),
                         name,
+                        safe,
                         span: sp,
                     };
                 }
@@ -985,7 +987,14 @@ mod tests {
                 };
                 format!("({o} {} {})", sexpr(lhs), sexpr(rhs))
             }
-            Expr::Member { object, name, .. } => format!("{}.{}", sexpr(object), name),
+            Expr::Member {
+                object, name, safe, ..
+            } => format!(
+                "{}{}{}",
+                sexpr(object),
+                if *safe { "?." } else { "." },
+                name
+            ),
             Expr::Call { callee, args, .. } => {
                 let a: Vec<String> = args.iter().map(sexpr).collect();
                 format!("{}({})", sexpr(callee), a.join(", "))
@@ -1120,6 +1129,28 @@ mod tests {
         }
         // postfix binds tighter than unary: -a.b  ==  -(a.b)
         assert_eq!(sexpr(&expr("-a.b")), "(- a.b)");
+    }
+
+    #[test]
+    fn parses_safe_member_access() {
+        // `?.` parses as a *safe* Member; plain `.` stays unsafe. `sexpr` renders the distinction.
+        assert_eq!(sexpr(&expr("a?.b")), "a?.b");
+        assert_eq!(sexpr(&expr("a.b")), "a.b");
+        // chained safe access stays right-extending
+        assert_eq!(sexpr(&expr("a?.b?.c")), "a?.b?.c");
+        // a safe method call is a `Call` whose callee is a safe `Member`
+        assert_eq!(sexpr(&expr("a?.m(x)")), "a?.m(x)");
+        match expr("a?.b") {
+            Expr::Member { name, safe, .. } => {
+                assert_eq!(name, "b");
+                assert!(safe, "`?.` must set safe = true");
+            }
+            other => panic!("got {other:?}"),
+        }
+        match expr("a.b") {
+            Expr::Member { safe, .. } => assert!(!safe, "`.` must set safe = false"),
+            other => panic!("got {other:?}"),
+        }
     }
 
     #[test]

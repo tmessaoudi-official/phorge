@@ -115,10 +115,13 @@ pub enum Expr {
         args: Vec<Expr>,
         span: Span,
     },
-    /// `object.name`
+    /// `object.name` (`safe == false`) or `object?.name` (`safe == true`, nullsafe access:
+    /// a `null` receiver short-circuits the whole access to `null` instead of faulting). A
+    /// safe *method* call is a `Call` whose `callee` is a `Member { safe: true, .. }` (M3 S2).
     Member {
         object: Box<Expr>,
         name: String,
+        safe: bool,
         span: Span,
     },
     /// `object[index]`

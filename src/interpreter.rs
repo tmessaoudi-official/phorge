@@ -257,13 +257,22 @@ impl Interp {
             Expr::Unary { op, expr, .. } => self.eval_unary(*op, expr),
             Expr::Binary { op, lhs, rhs, .. } => self.eval_binary(*op, lhs, rhs),
             Expr::Call { callee, args, .. } => self.eval_call(callee, args),
-            Expr::Member { object, name, .. } => match self.eval(object)? {
-                Value::Instance(inst) => match inst.fields.get(name) {
-                    Some(v) => Ok(v.clone()),
-                    None => rt(format!("no field `{name}` on `{}`", inst.class)),
-                },
-                other => rt(format!("cannot read `.{name}` on {}", other.type_name())),
-            },
+            Expr::Member {
+                object, name, safe, ..
+            } => {
+                let recv = self.eval(object)?;
+                if *safe && matches!(recv, Value::Null) {
+                    Ok(Value::Null) // `o?.field` on a null receiver short-circuits to null
+                } else {
+                    match recv {
+                        Value::Instance(inst) => match inst.fields.get(name) {
+                            Some(v) => Ok(v.clone()),
+                            None => rt(format!("no field `{name}` on `{}`", inst.class)),
+                        },
+                        other => rt(format!("cannot read `.{name}` on {}", other.type_name())),
+                    }
+                }
+            }
             Expr::Index { object, index, .. } => {
                 // Evaluate the object before the index (matches the compiler's emit order and the
                 // VM's pop order, so any side effects fire in the same sequence — byte-identity).
@@ -407,8 +416,15 @@ impl Interp {
 
     fn eval_call(&mut self, callee: &Expr, args: &[Expr]) -> R<Value> {
         // method call: `object.name(args)`
-        if let Expr::Member { object, name, .. } = callee {
+        if let Expr::Member {
+            object, name, safe, ..
+        } = callee
+        {
             let recv = self.eval(object)?;
+            if *safe && matches!(recv, Value::Null) {
+                // `o?.m(args)` on a null receiver short-circuits: args are NOT evaluated.
+                return Ok(Value::Null);
+            }
             let argv = self.eval_args(args)?;
             return self.call_method(recv, name, argv);
         }

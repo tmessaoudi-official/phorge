@@ -567,7 +567,12 @@ impl Checker {
             Expr::Unary { op, expr, span } => self.check_unary(*op, expr, *span),
             Expr::Binary { op, lhs, rhs, span } => self.check_binary(*op, lhs, rhs, *span),
             Expr::Call { callee, args, span } => self.check_call(callee, args, *span), // Task 4
-            Expr::Member { object, name, span } => self.check_member(object, name, *span), // Task 6
+            Expr::Member {
+                object,
+                name,
+                safe,
+                span,
+            } => self.check_member(object, name, *safe, *span),
             Expr::Index {
                 object,
                 index,
@@ -824,7 +829,9 @@ impl Checker {
         use crate::ast::Expr;
         match callee {
             Expr::Ident(name, _) => self.check_named_call(name, args, span),
-            Expr::Member { object, name, .. } => self.check_method_call(object, name, args, span), // Task 6
+            Expr::Member {
+                object, name, safe, ..
+            } => self.check_method_call(object, name, args, *safe, span),
             other => {
                 for a in args {
                     self.check_expr(a);
@@ -915,10 +922,35 @@ impl Checker {
         object: &crate::ast::Expr,
         name: &str,
         args: &[crate::ast::Expr],
+        safe: bool,
         span: Span,
     ) -> Ty {
         let obj = self.check_expr(object);
-        match obj {
+        // Peel an optional/null receiver, enforcing the non-null discipline: a plain `.m()` on a
+        // `T?` is `E-OPT-USE`; `?.m()` unwraps and re-wraps the result as optional (M3 S2.3).
+        let base = match &obj {
+            Ty::Error => {
+                for a in args {
+                    self.check_expr(a);
+                }
+                return Ty::Error;
+            }
+            Ty::Null if safe => {
+                for a in args {
+                    self.check_expr(a);
+                }
+                return Ty::Null; // `null?.m()` short-circuits to null
+            }
+            Ty::Optional(_) | Ty::Null if !safe => {
+                for a in args {
+                    self.check_expr(a);
+                }
+                return self.err_opt_use(span, name, &obj, "call method");
+            }
+            Ty::Optional(inner) => (**inner).clone(),
+            other => other.clone(),
+        };
+        let ret = match base {
             Ty::Named(cls) => {
                 let sig = self
                     .classes
@@ -938,34 +970,76 @@ impl Checker {
                     }
                 }
             }
-            Ty::Error => {
-                for a in args {
-                    self.check_expr(a);
-                }
-                Ty::Error
-            }
+            Ty::Error => Ty::Error,
             other => {
                 for a in args {
                     self.check_expr(a);
                 }
                 self.err(span, format!("type `{other}` has no method `{name}`"))
             }
+        };
+        if safe {
+            Self::opt_wrap(ret)
+        } else {
+            ret
         }
     }
-    fn check_member(&mut self, object: &crate::ast::Expr, name: &str, span: Span) -> Ty {
+    fn check_member(
+        &mut self,
+        object: &crate::ast::Expr,
+        name: &str,
+        safe: bool,
+        span: Span,
+    ) -> Ty {
         let obj = self.check_expr(object);
-        match obj {
+        // Peel an optional/null receiver, enforcing the non-null discipline: a plain `.field` on a
+        // `T?` is `E-OPT-USE`; `?.field` unwraps and re-wraps the result as optional (M3 S2.3).
+        let base = match &obj {
+            Ty::Error => return Ty::Error,
+            Ty::Null if safe => return Ty::Null, // `null?.field` short-circuits to null
+            Ty::Optional(_) | Ty::Null if !safe => {
+                return self.err_opt_use(span, name, &obj, "read field");
+            }
+            Ty::Optional(inner) => (**inner).clone(),
+            other => other.clone(),
+        };
+        let field_ty = match base {
             Ty::Named(cls) => {
-                if let Some(info) = self.classes.get(&cls) {
-                    if let Some(t) = info.fields.get(name) {
-                        return t.clone();
-                    }
-                    return self.err(span, format!("type `{cls}` has no field `{name}`"));
+                let found = self
+                    .classes
+                    .get(&cls)
+                    .and_then(|info| info.fields.get(name).cloned());
+                match found {
+                    Some(t) => t,
+                    None => self.err(span, format!("type `{cls}` has no field `{name}`")),
                 }
-                self.err(span, format!("type `{cls}` has no field `{name}`"))
             }
             Ty::Error => Ty::Error,
             other => self.err(span, format!("type `{other}` has no field `{name}`")),
+        };
+        if safe {
+            Self::opt_wrap(field_ty)
+        } else {
+            field_ty
+        }
+    }
+    /// `E-OPT-USE`: a plain `.`/`.m()` was used on an optional (or `null`) receiver, which could
+    /// dereference null. Steers the developer to `?.`, `??`, or a checked unwrap `!`.
+    fn err_opt_use(&mut self, span: Span, name: &str, recv: &Ty, verb: &str) -> Ty {
+        self.err_coded(
+            span,
+            format!("cannot {verb} `{name}` of optional `{recv}`; use `?.` for null-safe access or unwrap with `!`"),
+            "E-OPT-USE",
+            Some(format!("`{name}` is only present when the receiver is non-null")),
+        )
+    }
+    /// Wrap a member/method result in `Optional` for a `?.` access (a safe access yields a nullable
+    /// result), without double-wrapping an already-optional member and leaving `Error` to cascade.
+    fn opt_wrap(t: Ty) -> Ty {
+        match t {
+            Ty::Error => Ty::Error,
+            Ty::Optional(_) => t,
+            other => Ty::Optional(Box::new(other)),
         }
     }
     fn check_for(&mut self, stmt: &crate::ast::Stmt) {
@@ -1408,6 +1482,33 @@ mod tests {
         assert!(errors_of("function main() { int y = null ?? 3; }").is_empty());
         // `??` on a non-optional left operand is a misuse.
         assert!(!errors_of("function main() { int a = 1; int y = a ?? 3; }").is_empty());
+    }
+
+    #[test]
+    fn safe_member_access_typing() {
+        let cls =
+            "class Box { constructor(private int v) {} function v_of() -> int { return v; } } ";
+        // `?.` on an optional yields an optional member, usable via `??`.
+        let ok_field = cls.to_string() + "function main() { Box? b = null; int y = (b?.v) ?? -1; }";
+        assert!(
+            errors_of(&ok_field).is_empty(),
+            "{:?}",
+            errors_of(&ok_field)
+        );
+        let ok_method =
+            cls.to_string() + "function main() { Box? b = null; int y = (b?.v_of()) ?? -1; }";
+        assert!(
+            errors_of(&ok_method).is_empty(),
+            "{:?}",
+            errors_of(&ok_method)
+        );
+        // plain `.` on an optional is the non-null-discipline violation → E-OPT-USE.
+        let bad_field = cls.to_string() + "function main() { Box? b = null; int y = b.v; }";
+        let e = errors_of(&bad_field);
+        assert!(e.iter().any(|d| d.code == Some("E-OPT-USE")), "got {e:?}");
+        let bad_method = cls.to_string() + "function main() { Box? b = null; int y = b.v_of(); }";
+        let em = errors_of(&bad_method);
+        assert!(em.iter().any(|d| d.code == Some("E-OPT-USE")), "got {em:?}");
     }
 
     #[test]

@@ -399,9 +399,12 @@ impl Transpiler {
             }
             Expr::Str(parts, _) => self.emit_string(parts),
             Expr::Call { callee, args, .. } => self.emit_call(callee, args),
-            Expr::Member { object, name, .. } => {
+            Expr::Member {
+                object, name, safe, ..
+            } => {
                 let o = self.emit_expr(object)?;
-                Ok(format!("{o}->{name}"))
+                let arrow = if *safe { "?->" } else { "->" };
+                Ok(format!("{o}{arrow}{name}"))
             }
             // Implemented in Task 6:
             Expr::Match { .. } => {
@@ -490,10 +493,14 @@ impl Transpiler {
     }
 
     fn emit_member_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<String, String> {
-        if let Expr::Member { object, name, .. } = callee {
+        if let Expr::Member {
+            object, name, safe, ..
+        } = callee
+        {
             let o = self.emit_expr(object)?;
             let a = self.emit_args(args)?;
-            return Ok(format!("{o}->{name}({a})"));
+            let arrow = if *safe { "?->" } else { "->" };
+            return Ok(format!("{o}{arrow}{name}({a})"));
         }
         Err("transpile error: bad member call".into())
     }

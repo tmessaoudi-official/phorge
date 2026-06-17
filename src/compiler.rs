@@ -889,13 +889,27 @@ impl<'a> Compiler<'a> {
                 // Checker-unreachable (`this` outside a method/ctor); mirrors the interpreter.
                 None => return Err("`this` used outside a method".into()),
             },
-            Expr::Member { object, name, span } => {
+            Expr::Member {
+                object,
+                name,
+                safe,
+                span,
+            } => {
                 // Field read: evaluate the object, then look its field up at runtime by name
                 // (decision P4-5). Runtime lookup keeps the compiler untyped; the fault on a miss
-                // is byte-identical to the interpreter's.
-                self.expr(object)?;
-                let idx = self.field_name_index(name)?;
-                self.emit(Op::GetField(idx), span.line);
+                // is byte-identical to the interpreter's. `?.` (safe) short-circuits a null receiver.
+                let line = span.line;
+                if *safe {
+                    self.compile_safe_access(object, line, |c| {
+                        let idx = c.field_name_index(name)?;
+                        c.emit(Op::GetField(idx), line);
+                        Ok(())
+                    })?;
+                } else {
+                    self.expr(object)?;
+                    let idx = self.field_name_index(name)?;
+                    self.emit(Op::GetField(idx), line);
+                }
             }
             Expr::Index {
                 object,
@@ -1114,7 +1128,22 @@ impl<'a> Compiler<'a> {
         }
         // Method call `object.name(args)`: evaluate the receiver, then the args, and dispatch by
         // name at runtime off the receiver's class (decision P4-6).
-        if let Expr::Member { object, name, .. } = callee {
+        if let Expr::Member {
+            object, name, safe, ..
+        } = callee
+        {
+            // `o?.m(args)`: a null receiver short-circuits — the args are NOT evaluated and the
+            // method is NOT dispatched (the null-skip lowering jumps over the whole `access`).
+            if *safe {
+                return self.compile_safe_access(object, line, |c| {
+                    for a in args {
+                        c.expr(a)?;
+                    }
+                    let idx = c.field_name_index(name)?;
+                    c.emit(Op::CallMethod(idx, args.len()), line);
+                    Ok(())
+                });
+            }
             self.expr(object)?;
             for a in args {
                 self.expr(a)?;
@@ -1124,6 +1153,34 @@ impl<'a> Compiler<'a> {
             return Ok(());
         }
         Err("unsupported call target".into())
+    }
+
+    /// Lower a `?.` access (field read or method call): evaluate `object`; if it is `null`, the
+    /// whole access short-circuits to `null`; otherwise run `access`, which transforms the receiver
+    /// on top of the stack into the member result. No new `Op` (decision S2-OPS): a scratch local
+    /// peeks the receiver for the null test (the `$coalesce` trick from `??`), then a
+    /// `JumpIfFalse`/`Jump` pair selects the path. Both paths leave exactly one value at the
+    /// receiver's slot, so the static height is the receiver's height throughout.
+    fn compile_safe_access(
+        &mut self,
+        object: &Expr,
+        line: u32,
+        access: impl FnOnce(&mut Self) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.expr(object)?; // [.., recv]
+        let slot = self.add_local("$safe", CTy::Other);
+        self.emit(Op::GetLocal(slot), line); // [.., recv, recv]
+        self.emit_const(Value::Null, line); // [.., recv, recv, null]
+        self.emit(Op::Eq, line); // [.., recv, bool]
+        let do_access = self.emit_jump(Op::JumpIfFalse(0), line); // [.., recv]; recv != null → access
+        let to_end = self.emit_jump(Op::Jump(0), line); // recv == null → keep recv (= null), skip access
+        self.patch_jump(do_access);
+        let h = self.height;
+        access(self)?; // [.., recv] -> [.., member]
+        self.patch_jump(to_end);
+        self.height = h; // both paths converge here with one value at the receiver's slot
+        self.locals.pop(); // unregister $safe; the result stays on the stack
+        Ok(())
     }
 
     fn compile_if(

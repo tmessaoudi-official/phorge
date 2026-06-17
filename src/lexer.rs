@@ -349,6 +349,7 @@ pub fn lex(src: &str) -> Result<Vec<Token>, Diagnostic> {
                     (b'&', Some(b'&')) => Some(TokenKind::AndAnd),
                     (b'|', Some(b'|')) => Some(TokenKind::OrOr),
                     (b'?', Some(b'?')) => Some(TokenKind::QuestionQuestion),
+                    (b'?', Some(b'.')) => Some(TokenKind::QuestionDot),
                     _ => None,
                 };
                 if let Some(k) = matched_two {

@@ -52,6 +52,7 @@ pub enum TokenKind {
     Colon,
     Question,
     QuestionQuestion, // `??` null-coalesce
+    QuestionDot,      // `?.` safe (nullsafe) access
     Arrow,
     FatArrow,
     Pipe,

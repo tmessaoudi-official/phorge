@@ -138,6 +138,61 @@ fn transpiled_php_runs_and_matches_interpreter() {
     );
 }
 
+/// `?.` transpiles to PHP's nullsafe `?->` and behaves identically once run by real PHP.
+/// Uses a getter (not a direct private-field read): PHP enforces `private` visibility while
+/// Phorge's own backends do not. Self-skips (passes) if `php` is not on PATH.
+#[test]
+fn safe_access_transpiles_and_runs_in_php() {
+    let have_php = Command::new("php")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !have_php {
+        eprintln!("skipping ?. round-trip: php not on PATH");
+        return;
+    }
+    let src = "import std.io;\n\
+               class Box {\n\
+               \x20   constructor(private int v) {}\n\
+               \x20   function v_of() -> int { return v; }\n\
+               }\n\
+               function main() {\n\
+               \x20   Box? a = null;\n\
+               \x20   println(\"{(a?.v_of()) ?? -1}\");\n\
+               \x20   Box? b = Box(7);\n\
+               \x20   println(\"{(b?.v_of()) ?? -1}\");\n\
+               }\n";
+    let dir = std::env::temp_dir().join("phorge_rt_safe");
+    std::fs::create_dir_all(&dir).unwrap();
+    let phg = dir.join("safe.phg");
+    std::fs::write(&phg, src).unwrap();
+    let php = Command::new(BIN)
+        .arg("transpile")
+        .arg(&phg)
+        .output()
+        .expect("spawn transpile");
+    assert!(
+        php.status.success(),
+        "transpile stderr: {}",
+        String::from_utf8_lossy(&php.stderr)
+    );
+    let php_path = dir.join("safe.php");
+    std::fs::write(&php_path, &php.stdout).unwrap();
+    let run = Command::new("php")
+        .arg(&php_path)
+        .output()
+        .expect("spawn php");
+    let _ = std::fs::remove_file(&phg);
+    let _ = std::fs::remove_file(&php_path);
+    assert!(
+        run.status.success(),
+        "php stderr: {}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "-1\n7\n");
+}
+
 #[test]
 fn run_reads_program_from_stdin() {
     use std::io::Write;
