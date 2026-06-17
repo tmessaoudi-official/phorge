@@ -47,8 +47,9 @@ byte-identically on both backends (VM ≈3.2×). The VM object model is value-na
 class-aware (`enum CTy { Int, Float, Class(String), Other }` + a recursive `ctype(&Expr)` resolver),
 so a field read on an arbitrary instance (`p.x + 1`), a method-call result (`c.get() + 1`), a nested
 `a.inner.x`, and a class-typed enum payload all compile and run byte-identically — closing the last
-known `run`↔`runvm` parity gaps. The only remaining coarse-type note is the deliberately
-out-of-M1-surface `Index` (`xs[i]` — rejected on both backends).
+known `run`↔`runvm` parity gaps. (M3 S1.1 later extended `CTy` with a `List(elem)` variant so a
+list-element read `xs[i]` resolves as an arithmetic operand too — indexing is now part of the surface,
+no longer rejected.)
 
 **M2 P5a is COMPLETE** (`docs/specs/2026-06-16-m2-p5-object-model-design.md`,
 `docs/plans/2026-06-16-m2-p5a-rc-shared-heap.md`): heap objects are now **`Rc`-shared**

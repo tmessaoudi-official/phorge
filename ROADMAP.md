@@ -46,13 +46,15 @@ binary self-detects and runs it at startup — a third surface on the parity spi
   source checkout); opt-in `--sign` for Windows Authenticode and macOS codesign + notarize via
   `rcodesign` from Linux (no Mac needed).
 
-## 🔲 M3 — Language enrichment
+## 🔨 M3 — Language enrichment
 
-Grow the language beyond the M1 surface. Planned, roughly in order: indexing (`xs[i]`), `Map`/`Set`,
-null safety / optionals (`T?`), the pipe operator (`|>`), exceptions (try/catch/throw), and
-**mutation**. Mutation is the trigger for the **real tracing garbage collector** — once values can be
-reassigned and fields mutated, the `Rc` graph can form cycles that refcounting alone would leak, so M3
-is where the mark-sweep collector finally earns its place.
+Grow the language beyond the M1 surface. **Landed so far:** developer-experience polish (S0 — `var`
+inference, `type` aliases, sharper diagnostics, `phorge explain`) and core ergonomics (S1 — indexing
+`xs[i]`, integer ranges `0..n`/`0..=n`, expression `if`). Planned next, roughly in order: null safety
+/ optionals (`T?`, `??`, `?.`), `Map`/`Set`, the pipe operator (`|>`), exceptions (try/catch/throw),
+and **mutation**. Mutation is the trigger for the **real tracing garbage collector** — once values can
+be reassigned and fields mutated, the `Rc` graph can form cycles that refcounting alone would leak, so
+M3 is where the mark-sweep collector finally earns its place.
 
 ## 🔲 M4–M8 — Ecosystem
 

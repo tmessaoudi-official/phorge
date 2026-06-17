@@ -21,6 +21,8 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/classes.phg` | constructor promotion, methods, `this`, composition, a method call on a field |
 | `guide/enums-match.phg` | payload + zero-payload variants; literal, binding, and variant patterns |
 | `guide/strings.phg` | string interpolation |
+| `guide/inference.phg` | `var` local type inference + `type` aliases (M3 S0) |
+| `guide/ergonomics.phg` | indexing `xs[i]`, integer ranges `0..n` / `0..=n`, expression `if` (M3 S1) |
 | `bench/workload.phg` | a **profiling** workload (CPU recursion + heap allocation) for `phorge bench`/`disasm` — see `bench/README.md` |
 | `transpile/demo.phg` | the **Phorge → PHP** bridge — see `transpile/README.md` |
 
@@ -36,6 +38,8 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | classes: ctor promotion, fields, methods, `this`, field reads, composition | `guide/classes`, `ledger`, `rpg`, `grades` |
 | enums (payload **and** zero-payload via `V()`) + exhaustive `match` | `guide/enums-match`, all `realworld/*`, `grades` |
 | string interpolation `"{expr}"` | `guide/strings`, every example |
+| indexing `xs[i]`, ranges `0..n` / `0..=n`, expression `if` | `guide/ergonomics` |
+| `var` local type inference, `type` aliases | `guide/inference` |
 | `println(string)` (the only builtin) | every example |
 | Phorge → PHP transpile | `transpile/demo` |
 
