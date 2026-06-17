@@ -6,9 +6,28 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
-_Next: M2.5 Phase 3 (CI stub registry so a distributed phorge can cross-build without source; opt-in
-`--sign` for Windows Authenticode + macOS codesign/notarize via `rcodesign`), then M3 language
-enrichment (indexing, `Map`/`Set`, optionals, `|>`, exceptions, mutation + a tracing GC)._
+### M3 slice S0 — developer experience
+
+- **`var` local type inference** — `var x = expr;` infers the binding's type from its initializer
+  (still fully static + immutable). The VM derives the local's operand type from the initializer, so
+  arithmetic on a `var` still specializes (`AddI`/`AddF`); `ctype` now also resolves a `match` value.
+- **`type` aliases** — `type Name = T;`, compile-time only. The checker resolves aliases (with cycle,
+  built-in-shadow, and duplicate detection); a post-check pass (`checker::expand_aliases`) expands
+  them out of the AST so the interpreter, VM, and transpiler all see alias-free types and the PHP
+  output never mentions the alias.
+- **Sharper diagnostics** — front-end (lex/parse/type) errors render the offending source line with a
+  caret, attach a "did you mean `…`?" hint (nearest in-scope name, Levenshtein ≤ 2), and carry a
+  stable code. `Diagnostic` gains `code`/`hint` fields + a `render` method; all construction is
+  centralized through `Diagnostic::new`. Runtime-error strings are unchanged (differential parity).
+- **`phorge explain <CODE>`** — print the explanation for a diagnostic code (`E-UNKNOWN-IDENT`,
+  `E-UNKNOWN-TYPE`, `E-INFER-NULL`, `E-ALIAS-CYCLE`).
+- **Per-command help** — `phorge <command> --help` / `-h` prints a description, the source/flag forms,
+  and 1–2 worked examples.
+- New guide example `examples/guide/inference.phg` (auto byte-identity-gated by the differential
+  harness).
+
+_Next: M3 S1 (indexing `xs[i]`, ranges `0..n`, expression `if`), then S2 (null-safety: `T?`, `??`,
+`?.`). M2.5 Phase 3 (CI stub registry; opt-in `--sign`) remains parked._
 
 ## [0.4.0] — 2026-06-17
 

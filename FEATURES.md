@@ -21,6 +21,8 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | `for … in` over lists | ✅ | `for (int s in [80, 30, 55]) { … }` |
 | `if` / `else`, blocks, comparison, equality, `&&`/`||`, unary | ✅ | short-circuit logical ops |
 | Checked arithmetic | ✅ | int overflow & div-by-zero → clean runtime error, never a panic |
+| Local type inference: `var x = …;` | ✅ | inferred from the initializer; still fully static + immutable |
+| Type aliases: `type Name = T;` | ✅ | compile-time only, erased in the PHP output |
 | Indexing `xs[i]` | 🔲 M3 | rejected cleanly today |
 | `Map` / `Set` / tuples | 🔲 M3 | |
 | Null safety / optionals (`T?`) | 🔲 M3 | |
@@ -41,7 +43,9 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Bytecode disassembler (per-function listings + descriptor tables) | ✅ | `phorge disasm` |
 | Phorge → PHP transpiler (runs under real PHP) | ✅ | `phorge transpile` |
 | Type-check / parse / lex inspection | ✅ | `phorge check` / `parse` / `lex` |
-| `--version` / `--help` | ✅ | `phorge -v` / `-h` |
+| `--version` / `--help`, plus per-command help with examples | ✅ | `phorge -v` / `-h` / `phorge <cmd> --help` |
+| Sharp diagnostics: caret-underlined span, did-you-mean hints, stable codes | ✅ | front-end errors |
+| Diagnostic dictionary (look up a code) | ✅ | `phorge explain <CODE>` |
 | Program from stdin / inline / `--` | ✅ | `run -`, `run -e '…'`, `run -- <file>` |
 | Standalone executable (host) | ✅ | `phorge build foo.phg` |
 | Standalone executable (Linux cross + Windows) | 🔨 | `phorge build --target … / --all` |

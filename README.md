@@ -121,6 +121,7 @@ phorge <command> <source> [options]
 | `disasm` | type-check → compile → dump the bytecode (per-function listings + descriptor tables) | exit 1 on type error |
 | `bench` | median-of-N timing of both backends + memory (peak/current RSS, Linux), output-identity gated | exit 1 if they fault or disagree |
 | `build` | compile to a standalone native executable | exit 1 on type error / build failure |
+| `explain` | look up a diagnostic code (`phorge explain E-UNKNOWN-IDENT`) | exit 1 on unknown code |
 
 **Source** (for the run-family commands):
 
@@ -131,7 +132,8 @@ phorge <command> <source> [options]
 | `-e <code>` / `--eval <code>` | inline source text |
 | `-- <file>` | a file path that may start with `-` |
 
-**Global flags:** `-h` / `--help` (full usage) · `-v` / `--version`.
+**Global flags:** `-h` / `--help` (full usage; `phorge <command> --help` gives per-command help with
+worked examples) · `-v` / `--version`.
 
 No arguments → usage on stderr, exit 2. Unreadable file → exit 1.
 
@@ -157,6 +159,10 @@ not). See [ROADMAP.md](ROADMAP.md) for Phase 2/3 details.
 ## Language at a glance
 
 - **Static types** — `int`, `float`, `bool`, `string`, generic `List<T>`.
+- **Local type inference** — `var x = expr;` infers the binding type from its initializer (still
+  fully static, still immutable).
+- **Type aliases** — `type UserId = int;` names a type for readability; compile-time only, erased in
+  the transpiled PHP.
 - **Immutable by default** — no reassignment; introduce a fresh binding (`int y = x + 1;`).
 - **Functions** — `function f(int n) -> int { ... }`; `main()` is the entry point.
 - **Classes** — with **constructor promotion** (`constructor(private int total) {}` declares and
@@ -167,6 +173,8 @@ not). See [ROADMAP.md](ROADMAP.md) for Phase 2/3 details.
 - **String interpolation** — `"area = {area(s)}"`.
 - **`for ... in`** over lists — `for (int s in [80, 30, 55]) { ... }`.
 - **Checked arithmetic** — int overflow and division-by-zero are clean runtime errors, never panics.
+- **Sharp diagnostics** — type errors underline the offending span with a caret, suggest the nearest
+  in-scope name on a typo, and carry a stable code you can look up with `phorge explain <CODE>`.
 
 A full capability matrix (implemented vs. planned) lives in [FEATURES.md](FEATURES.md); current
 limitations in [KNOWN_ISSUES.md](KNOWN_ISSUES.md); the frozen language design in

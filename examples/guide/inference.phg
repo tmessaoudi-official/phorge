@@ -1,0 +1,23 @@
+import std.io;
+
+// `type` alias: a domain-specific name for a primitive. It is compile-time only — the checker
+// resolves `Celsius` to `int`, and it is fully erased from the transpiled PHP.
+type Celsius = int;
+
+function freezing() -> Celsius {
+    return 0;
+}
+
+function boiling() -> Celsius {
+    return 100;
+}
+
+function main() {
+    // `var`: the binding's type is inferred from its initializer, yet stays fully static —
+    // `label` is a string, `lo`/`hi`/`range` are ints, checked like any explicit annotation.
+    var label = "water";
+    var lo = freezing();
+    var hi = boiling();
+    var range = hi - lo;
+    println("{label}: {lo} to {hi} ({range} degrees)");
+}
