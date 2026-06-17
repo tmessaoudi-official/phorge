@@ -291,3 +291,19 @@ fn per_command_help_prints_examples_exit_0() {
         );
     }
 }
+
+#[test]
+fn explain_subcommand_known_and_unknown() {
+    let ok = Command::new(BIN)
+        .args(["explain", "E-UNKNOWN-IDENT"])
+        .output()
+        .expect("spawn phorge");
+    assert!(ok.status.success(), "explain exit {:?}", ok.status.code());
+    assert!(String::from_utf8_lossy(&ok.stdout).contains("E-UNKNOWN-IDENT"));
+
+    let bad = Command::new(BIN)
+        .args(["explain", "E-NOPE"])
+        .output()
+        .expect("spawn phorge");
+    assert_eq!(bad.status.code(), Some(1));
+}

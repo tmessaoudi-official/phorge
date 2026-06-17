@@ -6,7 +6,8 @@ use std::process::exit;
 
 use phorge::cli;
 
-const USAGE: &str = "usage: phorge <run|runvm|check|parse|lex|transpile|disasm|bench|build> \
+const USAGE: &str =
+    "usage: phorge <run|runvm|check|parse|lex|transpile|disasm|bench|build|explain> \
                      <file | - | -e code> [-o out]   (phorge -h for help, -v for version)";
 
 fn main() {
@@ -41,7 +42,7 @@ fn main() {
     let cmd = match args.get(1).map(String::as_str) {
         Some(
             c @ ("run" | "runvm" | "check" | "parse" | "lex" | "transpile" | "disasm" | "bench"
-            | "build"),
+            | "build" | "explain"),
         ) => c,
         _ => {
             eprintln!("{USAGE}");
@@ -52,6 +53,27 @@ fn main() {
     if args[2..].iter().any(|a| a == "-h" || a == "--help") {
         print!("{}", cli::help_for(cmd));
         return;
+    }
+    // `explain <CODE>` takes a diagnostic code, not a program source — handle it before the
+    // source-resolving run-family path.
+    if cmd == "explain" {
+        let code = match args.get(2) {
+            Some(c) => c,
+            None => {
+                eprintln!("usage: phorge explain <CODE>");
+                exit(2);
+            }
+        };
+        match cli::cmd_explain(code) {
+            Ok(text) => {
+                print!("{text}");
+                return;
+            }
+            Err(err) => {
+                eprintln!("{err}");
+                exit(1);
+            }
+        }
     }
     // `build` keeps file-only source handling (Phase 1; cross targets extend it in Wave C). It
     // consumes an optional `-o <out>`; a dangling `-o`, an unrecognized trailing arg, or any extra

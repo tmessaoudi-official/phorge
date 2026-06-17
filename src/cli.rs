@@ -35,7 +35,8 @@ pub fn help_text() -> String {
          transpile  emit PHP\n  \
          disasm     print the compiled bytecode\n  \
          bench      benchmark run vs runvm (time + memory)\n  \
-         build      compile to a standalone executable (-o <out>)\n\n\
+         build      compile to a standalone executable (-o <out>)\n  \
+         explain    explain a diagnostic code (e.g. phorge explain E-UNKNOWN-IDENT)\n\n\
          source:\n  \
          <file>     read the program from a file\n  \
          -          read the program from stdin\n  \
@@ -120,6 +121,49 @@ pub fn help_for(cmd: &str) -> String {
         _ => return help_text(),
     };
     format!("{}\n{body}", version_line())
+}
+
+/// The prose explanation for a diagnostic `code`, or `None` if the code is unknown. The codes are
+/// the stable identifiers carried by [`crate::diagnostic::Diagnostic::code`] and shown in `[…]`
+/// beneath a rendered error.
+pub fn explain_text(code: &str) -> Option<String> {
+    let body = match code {
+        "E-UNKNOWN-IDENT" => {
+            "E-UNKNOWN-IDENT — a name was used that is not in scope.\n\n\
+             Phorge resolves identifiers lexically: block-scope locals (including `var` bindings\n\
+             and `for` loop variables), parameters, top-level functions, and — inside a method —\n\
+             the current class's fields. A typo or an out-of-scope reference triggers this; the\n\
+             diagnostic suggests the nearest in-scope name when one is close.\n"
+        }
+        "E-UNKNOWN-TYPE" => {
+            "E-UNKNOWN-TYPE — a type name was used that is not defined.\n\n\
+             Built-in types are `int`, `float`, `bool`, `string`, `List<T>`, `Map<K,V>`, `Set<T>`.\n\
+             User types come from `class`, `enum`, and `type` alias declarations. Check the\n\
+             spelling and that the declaration is present.\n"
+        }
+        "E-INFER-NULL" => {
+            "E-INFER-NULL — `var` cannot infer a type from `null` alone.\n\n\
+             `null` has no element type on its own, so `var x = null;` is rejected. Give the\n\
+             binding an explicit type instead (optionals arrive in a later slice).\n"
+        }
+        "E-ALIAS-CYCLE" => {
+            "E-ALIAS-CYCLE — a `type` alias refers to itself.\n\n\
+             `type A = B; type B = A;` has no underlying type. Break the cycle so every alias\n\
+             bottoms out at a built-in, class, or enum type.\n"
+        }
+        _ => return None,
+    };
+    Some(body.to_string())
+}
+
+/// `explain <code>`: print the explanation for a diagnostic code, or error on an unknown one.
+pub fn cmd_explain(code: &str) -> Result<String, String> {
+    explain_text(code).ok_or_else(|| {
+        format!(
+            "unknown diagnostic code `{code}` \
+             (known: E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE)"
+        )
+    })
 }
 
 /// Where a command reads its program from, resolved from the args after the subcommand.
@@ -787,5 +831,13 @@ function main() {
         .unwrap();
         assert!(!php.contains("Count"), "alias leaked into PHP:\n{php}");
         assert!(php.contains("function tally(int $n): int"), "{php}");
+    }
+
+    #[test]
+    fn explain_known_code_returns_paragraph_unknown_errors() {
+        let ok = cmd_explain("E-UNKNOWN-IDENT").unwrap();
+        assert!(ok.contains("E-UNKNOWN-IDENT"), "{ok}");
+        assert!(ok.len() > 40, "explanation too short: {ok}");
+        assert!(cmd_explain("E-NOPE").is_err());
     }
 }
