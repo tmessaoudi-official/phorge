@@ -251,6 +251,7 @@ fn keyword(s: &str) -> Option<TokenKind> {
         "new" => New,
         "is" => Is,
         "var" => Var,
+        "type" => TypeKw,
         _ => return None,
     })
 }

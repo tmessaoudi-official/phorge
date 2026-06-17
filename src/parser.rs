@@ -645,7 +645,8 @@ impl Parser {
             TokenKind::Function => Ok(Item::Function(self.parse_function(Vec::new(), sp)?)),
             TokenKind::Enum => Ok(Item::Enum(self.parse_enum(sp)?)),
             TokenKind::Class => Ok(Item::Class(self.parse_class(sp)?)),
-            _ => Err(self.error("a top-level item (import, function, enum, or class)")),
+            TokenKind::TypeKw => self.parse_type_alias(sp),
+            _ => Err(self.error("a top-level item (import, function, enum, class, or type)")),
         }
     }
 
@@ -668,6 +669,16 @@ impl Parser {
         }
         self.expect(&TokenKind::Semicolon, "';' after import")?;
         Ok(Item::Import { path, span: sp })
+    }
+
+    /// `type Name = Type;` — a top-level alias. Assumes the current token is `type`.
+    fn parse_type_alias(&mut self, sp: Span) -> Result<Item, Diagnostic> {
+        self.expect(&TokenKind::TypeKw, "'type'")?;
+        let name = self.expect_ident("an alias name after 'type'")?;
+        self.expect(&TokenKind::Eq, "'=' in type alias")?;
+        let ty = self.parse_type()?;
+        self.expect(&TokenKind::Semicolon, "';' after type alias")?;
+        Ok(Item::TypeAlias { name, ty, span: sp })
     }
 
     /// `function name(params) [-> RetType] BLOCK`. `modifiers` are pre-parsed by the caller

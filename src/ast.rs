@@ -255,6 +255,13 @@ pub enum Item {
     Function(FunctionDecl),
     Enum(EnumDecl),
     Class(ClassDecl),
+    /// `type Name = Type;` — a compile-time alias, erased after checking (resolved by the checker
+    /// and expanded out of the AST before any backend runs).
+    TypeAlias {
+        name: String,
+        ty: Type,
+        span: Span,
+    },
 }
 
 /// A whole parsed program.

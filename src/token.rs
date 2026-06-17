@@ -42,6 +42,7 @@ pub enum TokenKind {
     New,
     Is,
     Var,
+    TypeKw,
     // punctuation / operators
     Dot,
     Semicolon,

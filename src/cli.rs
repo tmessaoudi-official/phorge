@@ -178,7 +178,9 @@ fn lex_parse(src: &str) -> Result<Program, String> {
 fn parse_checked(src: &str) -> Result<Program, String> {
     let prog = lex_parse(src)?;
     match check(&prog) {
-        Ok(()) => Ok(prog),
+        // De-alias the program so every backend sees alias-free types (aliases are front-end
+        // sugar; the checker validated them, including cycles + built-in shadowing).
+        Ok(()) => Ok(crate::checker::expand_aliases(&prog)),
         Err(errs) => {
             let lines: Vec<String> = errs.iter().map(ToString::to_string).collect();
             Err(lines.join("\n"))
@@ -774,5 +776,16 @@ function main() {
         // `var` is erased; PHP locals are untyped, so it emits a bare `$x = …;`.
         let php = cmd_transpile("function main() { var x = 1; println(\"{x}\"); }").unwrap();
         assert!(php.contains("$x = 1;"), "{php}");
+    }
+
+    #[test]
+    fn type_alias_is_erased_in_php() {
+        // The alias declaration vanishes and `Count` resolves to `int` in the emitted signature.
+        let php = cmd_transpile(
+            "type Count = int; function tally(Count n) -> Count { return n + 1; } function main() {}",
+        )
+        .unwrap();
+        assert!(!php.contains("Count"), "alias leaked into PHP:\n{php}");
+        assert!(php.contains("function tally(int $n): int"), "{php}");
     }
 }

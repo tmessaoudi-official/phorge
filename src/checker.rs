@@ -39,6 +39,10 @@ pub struct Checker {
     cur_class: Option<String>,
     /// live `check_expr` recursion depth, bounded by [`MAX_EXPR_DEPTH`]
     depth: usize,
+    /// `type Name = Type;` aliases, stored as raw AST types and expanded in `resolve_type`.
+    aliases: HashMap<String, crate::ast::Type>,
+    /// alias names currently being expanded — detects `type A = B; type B = A;` cycles.
+    alias_stack: Vec<String>,
 }
 
 impl Checker {
@@ -52,6 +56,8 @@ impl Checker {
             cur_ret: Ty::Unit,
             cur_class: None,
             depth: 0,
+            aliases: HashMap::new(),
+            alias_stack: Vec::new(),
         }
     }
 
@@ -104,7 +110,16 @@ impl Checker {
                     format!("the numeric type `{name}` is not yet supported in M1"),
                 ),
                 other => {
-                    if self.enums.contains_key(other) || self.classes.contains_key(other) {
+                    if self.aliases.contains_key(other) {
+                        if self.alias_stack.iter().any(|n| n == other) {
+                            return self.err(*span, format!("type alias cycle through `{other}`"));
+                        }
+                        let aliased = self.aliases.get(other).cloned().expect("alias present");
+                        self.alias_stack.push(other.to_string());
+                        let ty = self.resolve_type(&aliased);
+                        self.alias_stack.pop();
+                        ty
+                    } else if self.enums.contains_key(other) || self.classes.contains_key(other) {
                         Ty::Named(other.to_string())
                     } else {
                         self.err(*span, format!("unknown type `{other}`"))
@@ -155,6 +170,17 @@ impl Checker {
                 Item::Enum(e) => self.collect_enum(e),
                 Item::Class(c) => self.collect_class(c),
                 Item::Import { .. } => {} // module resolution deferred; prelude covers println
+                Item::TypeAlias { name, ty, span } => {
+                    if is_builtin_type_name(name) {
+                        // Aliasing a built-in would make the checker (primitive wins) and the
+                        // backend expansion (alias wins) disagree — reject it outright.
+                        self.err(*span, format!("cannot redefine built-in type `{name}`"));
+                    } else if self.aliases.contains_key(name) {
+                        self.err(*span, format!("duplicate type name `{name}`"));
+                    } else {
+                        self.aliases.insert(name.clone(), ty.clone());
+                    }
+                }
             }
         }
     }
@@ -301,7 +327,7 @@ impl Checker {
                     }
                     self.cur_class = prev;
                 }
-                Item::Enum(_) | Item::Import { .. } => {}
+                Item::Enum(_) | Item::Import { .. } | Item::TypeAlias { .. } => {}
             }
         }
     }
@@ -968,6 +994,200 @@ pub fn check(program: &Program) -> Result<(), Vec<Diagnostic>> {
     }
 }
 
+/// True for the built-in type names `resolve_type` handles directly — a `type` alias may not
+/// shadow them (else the checker and the backend expansion would disagree; see `collect`).
+fn is_builtin_type_name(name: &str) -> bool {
+    matches!(
+        name,
+        "int"
+            | "float"
+            | "bool"
+            | "string"
+            | "List"
+            | "Map"
+            | "Set"
+            | "decimal"
+            | "double"
+            | "i8"
+            | "i16"
+            | "i32"
+            | "i64"
+            | "u8"
+            | "u16"
+            | "u32"
+            | "u64"
+    )
+}
+
+/// Expand every `type` alias into its underlying type and drop the alias declarations, so the
+/// interpreter, compiler, and transpiler all see alias-free types (aliases are pure front-end
+/// sugar). Runs *after* [`check`] succeeds — which has already rejected cycles and built-in
+/// shadowing — so a fixed depth bound is a sufficient guard against a residual self-reference, and
+/// the resolver can be a simple "look the name up, recurse" walk. `Expr` nodes carry no `Type` in
+/// M1, so they are cloned unchanged.
+pub fn expand_aliases(program: &Program) -> Program {
+    use crate::ast::{
+        ClassDecl, ClassMember, CtorParam, EnumDecl, EnumVariant, FunctionDecl, Item, Param, Stmt,
+        Type,
+    };
+    type Aliases = HashMap<String, Type>;
+
+    let mut aliases: Aliases = HashMap::new();
+    for item in &program.items {
+        if let Item::TypeAlias { name, ty, .. } = item {
+            aliases.insert(name.clone(), ty.clone());
+        }
+    }
+
+    fn rt(ty: &Type, a: &Aliases, depth: usize) -> Type {
+        if depth > 64 {
+            return ty.clone(); // defensive: check() already rejected alias cycles
+        }
+        match ty {
+            Type::Named { name, args, span } => {
+                if let Some(target) = a.get(name) {
+                    rt(target, a, depth + 1)
+                } else {
+                    Type::Named {
+                        name: name.clone(),
+                        args: args.iter().map(|x| rt(x, a, depth + 1)).collect(),
+                        span: *span,
+                    }
+                }
+            }
+            Type::Optional { inner, span } => Type::Optional {
+                inner: Box::new(rt(inner, a, depth + 1)),
+                span: *span,
+            },
+            Type::Infer(s) => Type::Infer(*s),
+        }
+    }
+    fn rparam(p: &Param, a: &Aliases) -> Param {
+        Param {
+            ty: rt(&p.ty, a, 0),
+            name: p.name.clone(),
+            span: p.span,
+        }
+    }
+    fn rstmt(s: &Stmt, a: &Aliases) -> Stmt {
+        match s {
+            Stmt::VarDecl {
+                ty,
+                name,
+                init,
+                span,
+            } => Stmt::VarDecl {
+                ty: rt(ty, a, 0),
+                name: name.clone(),
+                init: init.clone(),
+                span: *span,
+            },
+            Stmt::For {
+                ty,
+                name,
+                iter,
+                body,
+                span,
+            } => Stmt::For {
+                ty: rt(ty, a, 0),
+                name: name.clone(),
+                iter: iter.clone(),
+                body: body.iter().map(|s| rstmt(s, a)).collect(),
+                span: *span,
+            },
+            Stmt::If {
+                cond,
+                then_block,
+                else_block,
+                span,
+            } => Stmt::If {
+                cond: cond.clone(),
+                then_block: then_block.iter().map(|s| rstmt(s, a)).collect(),
+                else_block: else_block
+                    .as_ref()
+                    .map(|b| b.iter().map(|s| rstmt(s, a)).collect()),
+                span: *span,
+            },
+            Stmt::Block(stmts, span) => {
+                Stmt::Block(stmts.iter().map(|s| rstmt(s, a)).collect(), *span)
+            }
+            Stmt::Return { .. } | Stmt::Expr(..) => s.clone(),
+        }
+    }
+    fn rfunc(f: &FunctionDecl, a: &Aliases) -> FunctionDecl {
+        FunctionDecl {
+            modifiers: f.modifiers.clone(),
+            name: f.name.clone(),
+            params: f.params.iter().map(|p| rparam(p, a)).collect(),
+            ret: f.ret.as_ref().map(|t| rt(t, a, 0)),
+            body: f.body.iter().map(|s| rstmt(s, a)).collect(),
+            span: f.span,
+        }
+    }
+    fn rmember(m: &ClassMember, a: &Aliases) -> ClassMember {
+        match m {
+            ClassMember::Field {
+                modifiers,
+                ty,
+                name,
+                span,
+            } => ClassMember::Field {
+                modifiers: modifiers.clone(),
+                ty: rt(ty, a, 0),
+                name: name.clone(),
+                span: *span,
+            },
+            ClassMember::Constructor { params, body, span } => ClassMember::Constructor {
+                params: params
+                    .iter()
+                    .map(|p| CtorParam {
+                        modifiers: p.modifiers.clone(),
+                        ty: rt(&p.ty, a, 0),
+                        name: p.name.clone(),
+                        span: p.span,
+                    })
+                    .collect(),
+                body: body.iter().map(|s| rstmt(s, a)).collect(),
+                span: *span,
+            },
+            ClassMember::Method(f) => ClassMember::Method(rfunc(f, a)),
+        }
+    }
+
+    let items = program
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            Item::TypeAlias { .. } => None,
+            Item::Import { .. } => Some(item.clone()),
+            Item::Function(f) => Some(Item::Function(rfunc(f, &aliases))),
+            Item::Class(c) => Some(Item::Class(ClassDecl {
+                name: c.name.clone(),
+                members: c.members.iter().map(|m| rmember(m, &aliases)).collect(),
+                span: c.span,
+            })),
+            Item::Enum(e) => Some(Item::Enum(EnumDecl {
+                name: e.name.clone(),
+                variants: e
+                    .variants
+                    .iter()
+                    .map(|v| EnumVariant {
+                        name: v.name.clone(),
+                        fields: v.fields.iter().map(|p| rparam(p, &aliases)).collect(),
+                        span: v.span,
+                    })
+                    .collect(),
+                span: e.span,
+            })),
+        })
+        .collect();
+
+    Program {
+        items,
+        span: program.span,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1014,6 +1234,65 @@ mod tests {
     fn var_from_null_is_rejected() {
         // `null` has no inferable element type in M1 (optionals arrive in S2).
         assert!(!errors_of("function main() { var x = null; }").is_empty());
+    }
+
+    #[test]
+    fn type_alias_resolves_and_alias_of_alias_works() {
+        // `B` -> `A` -> `int`: a param/return typed `B` checks exactly like `int`.
+        let errs = errors_of(
+            "type A = int; type B = A; function f(B x) -> B { return x + 1; } function main() {}",
+        );
+        assert!(errs.is_empty(), "{errs:?}");
+    }
+
+    #[test]
+    fn type_alias_cycle_is_an_error() {
+        let errs = errors_of("type A = B; type B = A; function f(A x) {} function main() {}");
+        assert!(errs.iter().any(|e| e.message.contains("cycle")), "{errs:?}");
+    }
+
+    #[test]
+    fn duplicate_type_name_is_an_error() {
+        let errs = errors_of("type A = int; type A = float; function main() {}");
+        assert!(
+            errs.iter().any(|e| e.message.contains("duplicate")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn expand_aliases_dealiases_the_program_for_backends() {
+        // After expansion the backends must see no alias names: `B`/`A` collapse to `int`.
+        let p =
+            prog("type A = int; type B = A; function f(B x) -> B { return x; } function main() {}");
+        let e = expand_aliases(&p);
+        // no TypeAlias items survive
+        assert!(
+            !e.items
+                .iter()
+                .any(|it| matches!(it, crate::ast::Item::TypeAlias { .. })),
+            "alias items leaked"
+        );
+        // f's param + return are now `int`
+        if let crate::ast::Item::Function(f) = e
+            .items
+            .iter()
+            .find(|it| matches!(it, crate::ast::Item::Function(_)))
+            .unwrap()
+        {
+            assert!(
+                matches!(&f.params[0].ty, crate::ast::Type::Named { name, .. } if name == "int"),
+                "param not de-aliased: {:?}",
+                f.params[0].ty
+            );
+            assert!(
+                matches!(&f.ret, Some(crate::ast::Type::Named { name, .. }) if name == "int"),
+                "return not de-aliased: {:?}",
+                f.ret
+            );
+        } else {
+            panic!("no function item");
+        }
     }
 
     #[test]

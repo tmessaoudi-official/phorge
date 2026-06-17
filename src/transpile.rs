@@ -63,6 +63,8 @@ impl Transpiler {
                     }
                 }
                 Item::Import { .. } => {}
+                // Aliases are expanded out of the AST before transpiling; arm only for exhaustiveness.
+                Item::TypeAlias { .. } => {}
             }
         }
     }
@@ -75,6 +77,8 @@ impl Transpiler {
                 Item::Function(f) => self.emit_function(f, false)?,
                 Item::Enum(e) => self.emit_enum(e)?,
                 Item::Class(c) => self.emit_class(c)?,
+                // Aliases are expanded out of the AST before transpiling; arm only for exhaustiveness.
+                Item::TypeAlias { .. } => {}
             }
         }
         // The interpreter auto-invokes `main`; PHP does not. Emit the call so the output

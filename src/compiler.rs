@@ -185,6 +185,9 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             }
             Item::Class(c) => class_decls.push(c),
             Item::Import { .. } => {}
+            // Aliases are expanded out of the AST before compiling (checker::expand_aliases); this
+            // arm only satisfies the exhaustive match.
+            Item::TypeAlias { .. } => {}
         }
     }
     let main = fns

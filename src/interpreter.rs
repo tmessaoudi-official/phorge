@@ -129,6 +129,9 @@ impl Interp {
                     self.classes.insert(c.name.clone(), c.clone());
                 }
                 Item::Import { .. } => {}
+                // Aliases are expanded out of the AST before any backend runs (checker::
+                // expand_aliases); this arm only satisfies the exhaustive match.
+                Item::TypeAlias { .. } => {}
             }
         }
     }
