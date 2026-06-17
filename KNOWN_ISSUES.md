@@ -38,9 +38,11 @@ not a panic:
 
 ## Behavioral quirks
 
-- **Runtime errors inside string interpolation report line 1.** A fault raised within a `"{ … }"`
-  interpolation is reported at line 1 because the interpolation sub-lexer resets position. (VM errors
-  carry an accurate line; the interpreter's runtime errors generally do not carry one.)
+- **Errors inside string interpolation report line 1 (and the caret points there).** A fault *or* a
+  type error raised within a `"{ … }"` interpolation is reported at line 1 because the interpolation
+  sub-lexer resets position — so the diagnostic caret (S0.4) underlines column 1 of the program rather
+  than the real sub-expression. (VM runtime errors carry an accurate line; the interpreter's runtime
+  errors generally do not. Errors *outside* interpolation are located and underlined accurately.)
 - **Recursion is depth-limited.** Recursion runs on a fixed-size (256 MB) worker stack with explicit
   depth caps (`src/limits.rs`); extremely deep recursion faults cleanly rather than overflowing the
   native stack.
