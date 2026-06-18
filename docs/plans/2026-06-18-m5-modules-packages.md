@@ -41,6 +41,20 @@
   to language rule**; transpile = emit PHP files in PSR-4 layout + a generated autoload/composer block.
   Contract holds: Phorge package resolution : PHP/PSR-4 :: TS module resolution : JS.
 
+- [2026-06-18] AGREED (S2c scope): library packages export **functions only** this slice — a
+  `class`/`enum` in a non-`main` package is rejected (`E-PKG-TYPE`); cross-package type namespacing is
+  an M5 follow-up. The public `examples/project/` showcase is deferred to S2d (the single-file
+  differential glob can't run a library file with no `main`); S2c's executable proof is the
+  `tests/project.rs` integration suite. (Developer chose "Go — implement as planned".)
+- [2026-06-18] AGREED (S2c architecture): **loader-side resolution + name-mangling**, NOT backend-aware
+  resolution. The loader (path-aware, runs before checker/backends) rewrites each file's calls using
+  that file's import map, mangling every **non-`main`** top-level def to a PHP-FQN-shaped global key
+  (`compute` in `acme.util` ⇒ `Acme\Util\compute`); `package main` defs stay unmangled (auto-invoke +
+  single-file byte-identity). Native `core.*` calls are left untouched (classified by import-path root).
+  Checker/interpreter/compiler/VM consume the rewritten flat AST **unchanged** ⇒ run==runvm structurally
+  guaranteed. Only the **transpiler** changes: mangled names present ⇒ group into `namespace Acme\Util {}`
+  brace-blocks + nameless `\Main\main()` bootstrap (M5-7); no mangled names ⇒ today's flat path
+  (byte-identical to `demo.php`). 3C gate: full 30/8.
 - [2026-06-18] AGREED (S2b approach): **directory = package** (Go's model — `src/acme/util/*.phg` all
   declare `package acme.util`; multiple files per package dir; `package main` folder-exempt, runnable
   anywhere). **Flat AST merge** (parse each project file → merge `items` into one `Program`; backends
@@ -98,8 +112,17 @@ Slices (each: one+ green commit, run==runvm byte-identical, PHP round-tripped, e
   lex/disasm/bench/build on the string path. Flat-merge interim: cross-file calls resolve unqualified;
   qualified calls + namespaced PHP + aliasing are S2c. 12 tests (9 loader unit + 3 integration, incl.
   byte-identical multi-file run). Example showcase deferred to S2d.
-- [ ] **S2c — qualified cross-package calls** (4-backend resolution) + multi-namespace PHP emission +
-  import aliasing. *(The one byte-identity-risky slice — gate with multi-file `agree`/`agree_err`.)*
+- [x] **S2c — qualified cross-package calls** + multi-namespace PHP emission + import aliasing — DONE
+  (2026-06-18, 409 tests green, clippy + fmt clean, run==runvm + real-PHP round-trip byte-identical).
+  Implemented as a **loader-side resolution + name-mangling pass** (not backend-aware resolution): the
+  loader mangles every non-`main` def to a global PHP-FQN key (`Acme\Util\compute`), rewrites
+  same-package bare + qualified user calls (`util.compute(x)`, per-file import map) to bare mangled
+  calls, leaves `core.*` natives untouched, then flat-merges. Backends consume the rewritten AST
+  unchanged ⇒ run==runvm structural. Transpiler de-mangles into `namespace Acme\Util {}` brace-blocks +
+  `\Main\main()` bootstrap. Aliasing via `Item::Import.alias` (contextual `as`). **Scope: library
+  packages export functions only** (`E-PKG-TYPE` rejects non-`main` types; cross-package types are an
+  M5 follow-up). The S2b bare cross-package interim is tightened (unqualified now fails on both
+  backends). The public `examples/project/` showcase ships at S2d (needs the project-aware harness).
 - [ ] **S2d — project-aware differential harness + `examples/project/` showcase**.
 - [ ] **S3 — git deps + `phorge.lock` + `phorge vendor` + auto-offline** (final M5 slice or follow-up).
 

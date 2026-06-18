@@ -1,4 +1,4 @@
-//! Multi-file project loader (M5 S2b).
+//! Multi-file project loader + cross-package name resolution (M5 S2b/S2c).
 //!
 //! Turns an entry source into a single [`Unit`] (one [`Program`] ready for check + run) and
 //! enforces the project structure that the package declaration alone cannot:
@@ -6,19 +6,27 @@
 //! - **Project mode** — a `phorge.toml` found by walking up from the entry ([`crate::manifest`])
 //!   marks the project root. Every `.phg` under the source root is parsed, its package is validated
 //!   against its location (**folder = package**, Go's model — `src/acme/util/*.phg` ⇒ `package
-//!   acme.util`; `package main` is folder-exempt and may live anywhere), and all items are merged
-//!   into one flat [`Program`]. The backends still see a flat item set — qualified cross-package
-//!   *call resolution* and namespaced PHP are S2c — so this stays byte-identical for existing
-//!   single-file programs.
+//!   acme.util`; `package main` is folder-exempt and may live anywhere). A resolution pass then
+//!   mangles every non-`main` definition to a globally-unique name (`acme.util` + `compute` ⇒
+//!   `Acme\Util\compute`) and rewrites call sites — same-package bare calls and qualified user calls
+//!   (`util.compute(x)`, via the per-file import map) become bare calls on the mangled name; native
+//!   `core.*` calls are untouched (S2c). All items then merge into one flat [`Program`]. Because the
+//!   rewrite produces concrete bare names *before* any backend runs, the checker/interpreter/
+//!   compiler/VM are unchanged (run==runvm is structural); only the transpiler de-mangles the
+//!   `\`-bearing names back into PHP `namespace` blocks. A single-package program has no mangled
+//!   names, so it is byte-identical to the pre-S2c output.
 //! - **Loose-script mode** — no manifest above the entry. Only `package main;` is legal (a dotted
 //!   library package requires a project); folder = path is suspended.
 //!
-//! Enforcement lives here (path-aware), never in the type checker, so `cli::cmd_run(&str)`, the
-//! differential harness, and the checker's package-agnostic tests are untouched.
+//! Enforcement and resolution live here (path-aware), never in the type checker, so
+//! `cli::cmd_run(&str)`, the differential harness, and the checker's package-agnostic tests are
+//! untouched. S2c scope: library packages export **functions** only (a `class`/`enum` in a non-`main`
+//! package is rejected, `E-PKG-TYPE`); cross-package type namespacing is an M5 follow-up.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::ast::{Item, Program};
+use crate::ast::{ClassMember, Expr, Item, MatchArm, Program, Stmt, StrPart};
 use crate::lexer::lex;
 use crate::manifest::Project;
 use crate::parser::Parser;
@@ -27,7 +35,8 @@ use crate::token::Span;
 /// A loaded compilation unit: the (possibly merged) program plus the source text used to render
 /// type-error carets. `diag_src` is the single file's source in loose mode (full carets) or empty
 /// for a merged multi-file unit, where no single source aligns — diagnostics then print message +
-/// position without a source line (a deliberate flat-merge limitation until S2c).
+/// position without a source line (a deliberate flat-merge limitation; richer multi-file carets are
+/// a later slice).
 #[derive(Debug, Clone)]
 pub struct Unit {
     pub program: Program,
@@ -60,8 +69,22 @@ pub fn load_loose_src(src: &str) -> Result<Unit, String> {
     })
 }
 
-/// Assemble a project's compilation unit: parse + folder=path-validate every `.phg` under the
-/// source root (and the entry, if it lives outside it), then merge all items into one flat program.
+/// Assemble a project's compilation unit (M5 S2c). Two passes over every `.phg` under the source
+/// root (plus the entry, if outside it):
+///
+/// 1. Parse + folder=path-validate each file; reject library-package types (S2c namespaces
+///    *functions* only). Build the global function symbol table — `(package, name)` ⇒ a globally
+///    unique **mangled** name (`acme.util` + `compute` ⇒ `Acme\Util\compute`); `package main` defs
+///    keep their bare name (the auto-invoked entry + single-file byte-identity).
+/// 2. Per file, rewrite call sites against that file's package + import map: a same-package bare
+///    call becomes the mangled target (a no-op for `main`); a qualified user call `util.compute(x)`
+///    (leaf `util` imported from a non-`core` package that defines `compute`) becomes a bare call
+///    on the mangled name. Native (`core.*`) calls and unresolvable heads are left untouched. Then
+///    all items merge into one flat program.
+///
+/// Because the rewrite produces concrete, globally-unique bare names *before* any backend runs, the
+/// checker / interpreter / compiler / VM consume the result unchanged — run==runvm is structural.
+/// Only the transpiler de-mangles the `\`-bearing names back into PHP `namespace` blocks.
 fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
     let mut files = collect_phg(&project.source_root)?;
     if !files.iter().any(|f| same_file(f, entry)) {
@@ -70,6 +93,27 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
     files.sort();
     files.dedup();
 
+    // Pass 1 — parse, validate, and index every function by (package, name) ⇒ mangled global name.
+    let mut parsed: Vec<(PathBuf, Program)> = Vec::with_capacity(files.len());
+    let mut defined: HashMap<(String, String), String> = HashMap::new();
+    for file in &files {
+        let src = read_file(file)?;
+        let prog = parse_at(file, &src)?;
+        validate_folder_path(&prog, file, &project.source_root)?;
+        reject_library_types(&prog, file)?;
+        let pkg = prog.package.join(".");
+        for item in &prog.items {
+            if let Item::Function(f) = item {
+                defined.insert(
+                    (pkg.clone(), f.name.clone()),
+                    mangle(&prog.package, &f.name),
+                );
+            }
+        }
+        parsed.push((file.clone(), prog));
+    }
+
+    // Pass 2 — resolve call sites per file, then flat-merge.
     let mut merged_items: Vec<Item> = Vec::new();
     // The merged unit runs as the entry's package (normally `main`); its span anchors any
     // program-level diagnostic.
@@ -81,15 +125,19 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
         col: 0,
     };
 
-    for file in &files {
-        let src = read_file(file)?;
-        let prog = parse_at(file, &src)?;
-        validate_folder_path(&prog, file, &project.source_root)?;
-        if same_file(file, entry) {
+    for (file, prog) in parsed {
+        if same_file(&file, entry) {
             unit_package = prog.package.clone();
             unit_span = prog.span;
         }
-        merged_items.extend(prog.items);
+        let ctx = ResolveCtx {
+            package: prog.package.clone(),
+            user_imports: user_import_map(&prog.items),
+            defined: &defined,
+        };
+        for item in prog.items {
+            merged_items.push(resolve_item(item, &ctx));
+        }
     }
 
     Ok(Unit {
@@ -100,6 +148,317 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
         },
         diag_src: String::new(),
     })
+}
+
+/// The globally-unique name for a top-level definition. `package main` (and the malformed empty
+/// package) keep the bare name — so the entry stays byte-identical to a single-file program; any
+/// other package is mangled to a PHP-FQN-shaped key (`acme.util` + `compute` ⇒ `Acme\Util\compute`),
+/// which the transpiler later splits back into a `namespace Acme\Util` block.
+fn mangle(package: &[String], name: &str) -> String {
+    if package.is_empty() || package == ["main"] {
+        return name.to_string();
+    }
+    let ns = package
+        .iter()
+        .map(|s| pascal(s))
+        .collect::<Vec<_>>()
+        .join("\\");
+    format!("{ns}\\{name}")
+}
+
+/// PascalCase one package segment (`util` ⇒ `Util`) for the PHP namespace mapping (M5-2).
+fn pascal(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
+    }
+}
+
+/// A file's **user** import map: bound qualifier ⇒ target package segments, for non-`core` imports
+/// only. Native (`core.*`) imports are excluded — their member calls stay native and are resolved by
+/// the backends (and the transpiler) as before. An alias (`import a.b as c;`) binds `c`, else the
+/// path's last segment.
+fn user_import_map(items: &[Item]) -> HashMap<String, Vec<String>> {
+    let mut map = HashMap::new();
+    for item in items {
+        if let Item::Import { path, alias, .. } = item {
+            if path.first().map(String::as_str) == Some("core") {
+                continue;
+            }
+            let qualifier = alias.clone().or_else(|| path.last().cloned());
+            if let Some(q) = qualifier {
+                map.insert(q, path.clone());
+            }
+        }
+    }
+    map
+}
+
+/// S2c scope: a non-`main` (library) package may export functions only. A top-level `class`/`enum`
+/// in a library package is rejected (`E-PKG-TYPE`) — cross-package type namespacing is an M5
+/// follow-up. `package main` (and the empty package, left to the checker) may define anything.
+fn reject_library_types(prog: &Program, file: &Path) -> Result<(), String> {
+    if prog.package.is_empty() || prog.package == ["main"] {
+        return Ok(());
+    }
+    for item in &prog.items {
+        let kind = match item {
+            Item::Class(_) => "class",
+            Item::Enum(_) => "enum",
+            _ => continue,
+        };
+        return Err(format!(
+            "{}: a {kind} in the library package `{}` is not yet supported — S2c namespaces \
+             functions only; move the type to `package main` (or await the M5 follow-up) [E-PKG-TYPE]",
+            file.display(),
+            prog.package.join(".")
+        ));
+    }
+    Ok(())
+}
+
+/// The resolution context for one file: its package (caller side of a bare call), its user-import
+/// map (for qualified calls), and the shared global symbol table.
+struct ResolveCtx<'a> {
+    package: Vec<String>,
+    user_imports: HashMap<String, Vec<String>>,
+    defined: &'a HashMap<(String, String), String>,
+}
+
+/// Rewrite one top-level item: rename a function to its mangled global name and resolve its body;
+/// resolve a class's method/constructor bodies (a class is always `package main` — library types
+/// are rejected upstream). Enums/imports/aliases have no call sites to rewrite.
+fn resolve_item(item: Item, ctx: &ResolveCtx) -> Item {
+    match item {
+        Item::Function(mut f) => {
+            f.name = mangle(&ctx.package, &f.name);
+            f.body = resolve_block(f.body, ctx);
+            Item::Function(f)
+        }
+        Item::Class(mut c) => {
+            for m in &mut c.members {
+                match m {
+                    ClassMember::Method(f) => {
+                        let body = std::mem::take(&mut f.body);
+                        f.body = resolve_block(body, ctx);
+                    }
+                    ClassMember::Constructor { body, .. } => {
+                        let b = std::mem::take(body);
+                        *body = resolve_block(b, ctx);
+                    }
+                    ClassMember::Field { .. } => {}
+                }
+            }
+            Item::Class(c)
+        }
+        other => other,
+    }
+}
+
+fn resolve_block(stmts: Vec<Stmt>, ctx: &ResolveCtx) -> Vec<Stmt> {
+    stmts.into_iter().map(|s| resolve_stmt(s, ctx)).collect()
+}
+
+fn resolve_stmt(stmt: Stmt, ctx: &ResolveCtx) -> Stmt {
+    match stmt {
+        Stmt::VarDecl {
+            ty,
+            name,
+            init,
+            span,
+        } => Stmt::VarDecl {
+            ty,
+            name,
+            init: resolve_expr(init, ctx),
+            span,
+        },
+        Stmt::Return { value, span } => Stmt::Return {
+            value: value.map(|e| resolve_expr(e, ctx)),
+            span,
+        },
+        Stmt::If {
+            cond,
+            bind,
+            then_block,
+            else_block,
+            span,
+        } => Stmt::If {
+            cond: resolve_expr(cond, ctx),
+            bind,
+            then_block: resolve_block(then_block, ctx),
+            else_block: else_block.map(|b| resolve_block(b, ctx)),
+            span,
+        },
+        Stmt::For {
+            ty,
+            name,
+            iter,
+            body,
+            span,
+        } => Stmt::For {
+            ty,
+            name,
+            iter: resolve_expr(iter, ctx),
+            body: resolve_block(body, ctx),
+            span,
+        },
+        Stmt::Block(stmts, span) => Stmt::Block(resolve_block(stmts, ctx), span),
+        Stmt::Expr(e, span) => Stmt::Expr(resolve_expr(e, ctx), span),
+    }
+}
+
+fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
+    match expr {
+        Expr::Call { callee, args, span } => resolve_call(*callee, args, span, ctx),
+        Expr::Member {
+            object,
+            name,
+            safe,
+            span,
+        } => Expr::Member {
+            object: Box::new(resolve_expr(*object, ctx)),
+            name,
+            safe,
+            span,
+        },
+        Expr::Index {
+            object,
+            index,
+            span,
+        } => Expr::Index {
+            object: Box::new(resolve_expr(*object, ctx)),
+            index: Box::new(resolve_expr(*index, ctx)),
+            span,
+        },
+        Expr::Unary { op, expr, span } => Expr::Unary {
+            op,
+            expr: Box::new(resolve_expr(*expr, ctx)),
+            span,
+        },
+        Expr::Binary { op, lhs, rhs, span } => Expr::Binary {
+            op,
+            lhs: Box::new(resolve_expr(*lhs, ctx)),
+            rhs: Box::new(resolve_expr(*rhs, ctx)),
+            span,
+        },
+        Expr::Force { inner, span } => Expr::Force {
+            inner: Box::new(resolve_expr(*inner, ctx)),
+            span,
+        },
+        Expr::List(items, span) => Expr::List(
+            items.into_iter().map(|e| resolve_expr(e, ctx)).collect(),
+            span,
+        ),
+        Expr::Str(parts, span) => Expr::Str(
+            parts
+                .into_iter()
+                .map(|p| match p {
+                    StrPart::Expr(e) => StrPart::Expr(Box::new(resolve_expr(*e, ctx))),
+                    lit => lit,
+                })
+                .collect(),
+            span,
+        ),
+        Expr::Match {
+            scrutinee,
+            arms,
+            span,
+        } => Expr::Match {
+            scrutinee: Box::new(resolve_expr(*scrutinee, ctx)),
+            arms: arms
+                .into_iter()
+                .map(|a| MatchArm {
+                    pattern: a.pattern,
+                    body: resolve_expr(a.body, ctx),
+                    span: a.span,
+                })
+                .collect(),
+            span,
+        },
+        Expr::Range {
+            start,
+            end,
+            inclusive,
+            span,
+        } => Expr::Range {
+            start: Box::new(resolve_expr(*start, ctx)),
+            end: Box::new(resolve_expr(*end, ctx)),
+            inclusive,
+            span,
+        },
+        Expr::If {
+            cond,
+            then_expr,
+            else_expr,
+            span,
+        } => Expr::If {
+            cond: Box::new(resolve_expr(*cond, ctx)),
+            then_expr: Box::new(resolve_expr(*then_expr, ctx)),
+            else_expr: Box::new(resolve_expr(*else_expr, ctx)),
+            span,
+        },
+        // Leaves carry no nested call site: Int / Float / Bool / Null / Ident / This.
+        leaf => leaf,
+    }
+}
+
+/// Resolve a call. A bare `Ident` head resolves against the caller's own package (mangled if that
+/// package is non-`main`; a no-op for `main`, and for variants/classes/unknowns which aren't in the
+/// function table). A `Member` head `q.name` is a qualified user call iff `q` is a non-`core` import
+/// leaf whose target package defines `name` — rewritten to a bare call on the mangled name;
+/// otherwise it is a native call or a method on a value and is left intact (receiver resolved).
+fn resolve_call(callee: Expr, args: Vec<Expr>, span: Span, ctx: &ResolveCtx) -> Expr {
+    let args: Vec<Expr> = args.into_iter().map(|a| resolve_expr(a, ctx)).collect();
+    match callee {
+        Expr::Ident(n, isp) => {
+            let mangled = ctx
+                .defined
+                .get(&(ctx.package.join("."), n.clone()))
+                .cloned()
+                .unwrap_or(n);
+            Expr::Call {
+                callee: Box::new(Expr::Ident(mangled, isp)),
+                args,
+                span,
+            }
+        }
+        Expr::Member {
+            object,
+            name,
+            safe,
+            span: msp,
+        } => {
+            if !safe {
+                if let Expr::Ident(q, _) = object.as_ref() {
+                    if let Some(target) = ctx.user_imports.get(q) {
+                        if let Some(mangled) = ctx.defined.get(&(target.join("."), name.clone())) {
+                            return Expr::Call {
+                                callee: Box::new(Expr::Ident(mangled.clone(), msp)),
+                                args,
+                                span,
+                            };
+                        }
+                    }
+                }
+            }
+            Expr::Call {
+                callee: Box::new(Expr::Member {
+                    object: Box::new(resolve_expr(*object, ctx)),
+                    name,
+                    safe,
+                    span: msp,
+                }),
+                args,
+                span,
+            }
+        }
+        other => Expr::Call {
+            callee: Box::new(resolve_expr(other, ctx)),
+            args,
+            span,
+        },
+    }
 }
 
 /// lex + parse a single source, rendering any front-end error to one line (no path prefix — used

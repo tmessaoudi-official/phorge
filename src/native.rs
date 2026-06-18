@@ -479,9 +479,12 @@ pub fn index_of_by_leaf(leaf: &str, name: &str) -> Option<usize> {
 pub fn import_map(items: &[Item]) -> HashMap<String, String> {
     let mut map = HashMap::new();
     for item in items {
-        if let Item::Import { path, .. } = item {
-            if let Some(leaf) = path.last() {
-                map.insert(leaf.clone(), path.join("."));
+        if let Item::Import { path, alias, .. } = item {
+            // The bound qualifier is the alias when present (`import a.b as c;` ⇒ `c`), else the
+            // path's last segment (M5 S2c).
+            let qualifier = alias.clone().or_else(|| path.last().cloned());
+            if let Some(q) = qualifier {
+                map.insert(q, path.join("."));
             }
         }
     }
@@ -713,9 +716,20 @@ mod tests {
         };
         let items = vec![Item::Import {
             path: vec!["core".into(), "console".into()],
+            alias: None,
             span: sp,
         }];
         let m = import_map(&items);
         assert_eq!(m.get("console").map(String::as_str), Some("core.console"));
+
+        // An alias overrides the bound qualifier (M5 S2c).
+        let aliased = vec![Item::Import {
+            path: vec!["acme".into(), "util".into()],
+            alias: Some("u".into()),
+            span: sp,
+        }];
+        let m = import_map(&aliased);
+        assert_eq!(m.get("u").map(String::as_str), Some("acme.util"));
+        assert!(!m.contains_key("util"), "alias replaces the leaf qualifier");
     }
 }

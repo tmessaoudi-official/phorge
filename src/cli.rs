@@ -173,6 +173,18 @@ pub fn explain_text(code: &str) -> Option<String> {
              `core.file`, …), like a built-in type name. Root your own packages elsewhere, e.g.\n\
              `package app;` or `package app.util;`.\n"
         }
+        "E-PKG-PATH" => {
+            "E-PKG-PATH — a file's `package` does not match its location.\n\n\
+             In a project, the directory under the source root IS the package (folder = path, Go's\n\
+             model): `src/app/util/*.phg` must declare `package app.util;`. `package main;` is exempt\n\
+             (runnable anywhere). Move the file, or fix its package to match the directory.\n"
+        }
+        "E-PKG-TYPE" => {
+            "E-PKG-TYPE — a class/enum was declared in a library (non-`main`) package.\n\n\
+             M5 S2c namespaces *functions* across packages; cross-package types are a later slice.\n\
+             A library package may export functions only — move the `class`/`enum` to `package main;`\n\
+             for now, or await the M5 type-namespacing follow-up.\n"
+        }
         "E-SHADOW-IMPORT" => {
             "E-SHADOW-IMPORT — a local binding shadows an imported module qualifier.\n\n\
              Everything is namespaced (\"nothing in the wind\"): after `import core.console;` the\n\
@@ -221,7 +233,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP)"
         )
     })
 }

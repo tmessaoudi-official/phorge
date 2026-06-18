@@ -216,11 +216,19 @@ root + folder=path `E-PKG-PATH` (directory=package, `main` exempt) + flat AST me
 `main`-only). Enforcement is **path-aware in the loader, never in `check()`** → `cmd_run(&str)` +
 differential untouched. `main.rs` routes `<file>` run/runvm/check/transpile through the loader via new
 `cli::{run,runvm,check,transpile}_program`; `-e`/stdin/parse/lex/disasm/bench/build stay on the string
-path. **Flat-merge interim:** cross-file calls resolve *unqualified* until S2c. 12 tests (9 loader + 3
-integration, incl. byte-identical multi-file run). **NEXT: S2c** (qualified cross-package calls in all 4
-backends + one-brace-block-per-package PHP emission + import aliasing — the one byte-identity-risky
-slice; gate with multi-file `agree`/`agree_err`) → S2d (project-aware harness + `examples/project/`) →
-S3 (git deps + `phorge.lock` + `phorge vendor`). Then
+path. **M5 S2c COMPLETE** — qualified cross-package calls (`import acme.util;` → `util.compute(x)`) +
+namespaced PHP + import aliasing, via a **loader-side resolution + name-mangling pass** (chosen over
+backend-aware resolution): the loader mangles every non-`main` def to a global PHP-FQN key
+(`acme.util`+`compute` ⇒ `Acme\Util\compute`; `main` stays bare), rewrites same-package bare + qualified
+user calls to bare mangled calls (`core.*` natives untouched), then flat-merges. Backends consume the
+rewritten AST **unchanged** ⇒ run==runvm structural; only the transpiler de-mangles into
+`namespace Acme\Util {}` brace-blocks + `\Main\main()` bootstrap (single-package programs have no `\`
+names ⇒ flat path, byte-identical to pre-S2c). Aliasing: `import a.b as c;` (`Item::Import.alias`,
+contextual `as`). **Scope: library packages export functions only** (`E-PKG-TYPE` rejects non-`main`
+types — cross-package types are a follow-up); the S2b bare cross-package interim is tightened
+(unqualified now fails on both backends). Verified `42` on run/runvm/**real PHP 8.6**. 409 tests green.
+**NEXT: S2d** (project-aware differential harness + `examples/project/` showcase — the public multi-file
+example deferred here from S2a–S2c) → S3 (git deps + `phorge.lock` + `phorge vendor`). Then
 Track A (S3 lambdas/pipeline), which also unblocks the deferred `core.list`. **Parked:** M2.5 Phase 3 (CI
 stub registry + `--sign`) — `docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
 

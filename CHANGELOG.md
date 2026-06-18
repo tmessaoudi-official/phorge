@@ -6,6 +6,30 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### M5 slice S2c — qualified cross-package calls + namespaced PHP + import aliasing
+
+- **Cross-package calls resolve** — `import acme.util;` then `util.compute(x)` now works across files.
+  A new resolution pass in the loader (`src/loader.rs`) mangles every non-`main` definition to a
+  globally-unique name (`acme.util` + `compute` ⇒ `Acme\Util\compute`; `package main` defs stay bare),
+  then rewrites call sites against each file's package + import map: same-package bare calls and
+  qualified user calls become bare calls on the mangled name. Native `core.*` calls are untouched.
+- **Import aliasing** — `import a.b as c;` binds the call-site leaf `c` (AST `Item::Import.alias`,
+  parsed as a contextual `as` keyword so `as` stays a valid identifier). Resolves leaf collisions (O-9).
+- **Namespaced PHP emission** (M5-7/M5-8) — a multi-package program transpiles to one
+  `namespace Acme\Util { … }` brace-block per package + a `namespace Main { … }` block + a nameless
+  `namespace { \Main\main(); }` bootstrap. Cross-package calls emit fully-qualified (`\Acme\Util\compute`);
+  global-function natives gain a leading `\`. A single-package program has no mangled names and stays on
+  the flat path — byte-identical to the pre-S2c output.
+- **S2c scope: functions only** — a `class`/`enum` in a non-`main` (library) package is rejected
+  (`E-PKG-TYPE`); cross-package type namespacing is an M5 follow-up. The S2b bare cross-package call
+  interim is tightened: an unqualified cross-package call now fails on both backends.
+- **Byte-identity** — resolution runs in the loader *before* any backend, so checker/interpreter/
+  compiler/VM are unchanged (run==runvm is structural). Verified end-to-end: a two-file project runs
+  `42` on `run`, `runvm`, **and real PHP 8.6** (`php out.php`).
+- **`explain`** gains `E-PKG-TYPE` and `E-PKG-PATH` (the latter backfilled from S2b).
+- 7 new tests (`tests/project.rs` qualified/alias/same-package-cross-file/unqualified-rejection/
+  type-rejection/transpile-structure + a `native.rs` alias-`import_map` case). 409 total green.
+
 ### M5 slice S2b — multi-file loader + folder=path enforcement
 
 - **Project loader** (`src/loader.rs`) — resolves an entry source to one `Unit` (a single, possibly

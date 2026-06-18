@@ -759,15 +759,27 @@ impl Parser {
         Ok(path)
     }
 
-    /// `import a.b.c;` — dotted module path. Assumes current token is `import`.
+    /// `import a.b.c;` or `import a.b.c as leaf;` — dotted module path with an optional alias. `as`
+    /// is a **contextual** keyword (recognized only here), so it stays a valid identifier elsewhere.
+    /// Assumes current token is `import`.
     fn parse_import(&mut self, sp: Span) -> Result<Item, Diagnostic> {
         self.expect(&TokenKind::Import, "'import'")?;
         let mut path = vec![self.expect_ident("a module path segment")?];
         while self.eat(&TokenKind::Dot) {
             path.push(self.expect_ident("a module path segment after '.'")?);
         }
+        let alias = if matches!(self.peek(), TokenKind::Ident(s) if s == "as") {
+            self.advance(); // consume `as`
+            Some(self.expect_ident("an alias after 'as'")?)
+        } else {
+            None
+        };
         self.expect(&TokenKind::Semicolon, "';' after import")?;
-        Ok(Item::Import { path, span: sp })
+        Ok(Item::Import {
+            path,
+            alias,
+            span: sp,
+        })
     }
 
     /// `type Name = Type;` — a top-level alias. Assumes the current token is `type`.

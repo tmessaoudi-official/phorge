@@ -29,12 +29,52 @@ struct Transpiler {
     /// Set when an `opt!` force-unwrap is emitted, so the `__phorge_unwrap` helper is defined once
     /// per file (PHP hoists top-level function declarations, so its position is immaterial).
     uses_force: bool,
+    /// True when the program carries mangled (`\`-bearing) names — a multi-package project (M5 S2c).
+    /// Switches emission from the flat single-package form to one `namespace …{}` brace-block per
+    /// package + a nameless bootstrap block, and forces fully-qualified (leading-`\`) call emission.
+    namespaced: bool,
 }
 
 /// Where a `match` expression's arm values flow: a `return` or an assignment to `$name`.
 enum MatchTarget {
     Return,
     Assign(String),
+}
+
+/// The PHP namespace of a (possibly mangled) function name: the prefix before the last `\`
+/// (`Acme\Util\compute` ⇒ `Acme\Util`), or `Main` for a bare name (the `main` package).
+fn namespace_of(name: &str) -> String {
+    match name.rfind('\\') {
+        Some(i) => name[..i].to_string(),
+        None => "Main".to_string(),
+    }
+}
+
+/// The trailing segment of a mangled name (`Acme\Util\compute` ⇒ `compute`), used as the function's
+/// declared name inside its `namespace` block. A bare name is returned unchanged.
+fn last_segment(name: &str) -> &str {
+    name.rsplit('\\').next().unwrap_or(name)
+}
+
+/// Whether a native's PHP erasure is a global function call (`strlen(...)`, `str_replace(...)`) — an
+/// identifier immediately followed by `(`. Such calls need a leading `\` inside a namespace block so
+/// they resolve to the global PHP builtin, not `CurrentNs\strlen`. A language construct like
+/// `echo … . "\n"` (`console.println`) is not a function call and is left alone (M5-8).
+fn looks_like_global_call(s: &str) -> bool {
+    let mut chars = s.char_indices();
+    match chars.next() {
+        Some((_, c)) if c.is_ascii_alphabetic() || c == '_' => {}
+        _ => return false,
+    }
+    for (_, c) in chars {
+        if c == '(' {
+            return true;
+        }
+        if !(c.is_ascii_alphanumeric() || c == '_') {
+            return false;
+        }
+    }
+    false
 }
 
 impl Transpiler {
@@ -50,6 +90,7 @@ impl Transpiler {
             cur_class_fields: None,
             imports: HashMap::new(),
             uses_force: false,
+            namespaced: false,
         }
     }
 
@@ -84,6 +125,16 @@ impl Transpiler {
     }
 
     fn emit_program(&mut self, program: &Program) -> Result<(), String> {
+        // A mangled (`\`-bearing) top-level name means a multi-package project (M5 S2c): switch to
+        // the brace-namespace form. A single-package program (every existing example) has no `\`
+        // names and stays on the flat path — byte-identical to today's output.
+        self.namespaced = program
+            .items
+            .iter()
+            .any(|it| matches!(it, Item::Function(f) if f.name.contains('\\')));
+        if self.namespaced {
+            return self.emit_program_namespaced(program);
+        }
         self.out.push_str("<?php\n");
         for item in &program.items {
             match item {
@@ -103,16 +154,66 @@ impl Transpiler {
         // The `opt!` runtime helper, defined once when used. PHP hoists top-level function
         // declarations, so emitting it after `main();` is still callable from any body (M3 S2.5).
         if self.uses_force {
-            self.line("function __phorge_unwrap($v) {");
+            self.emit_force_helper();
+        }
+        Ok(())
+    }
+
+    /// Multi-package emission (M5 S2c, M5-7): one `namespace …{}` brace-block per package, then a
+    /// nameless `namespace {}` block that bootstraps `\Main\main()` and holds the global `opt!`
+    /// helper. A function's namespace is its mangled prefix (`Acme\Util\compute` ⇒ `Acme\Util`);
+    /// bare names (the `main` package) and all enums/classes (library types are rejected, so types
+    /// are `main`-only) land in `Main`. The bootstrap block is emitted last so every package's
+    /// functions are already declared when it runs.
+    fn emit_program_namespaced(&mut self, program: &Program) -> Result<(), String> {
+        use std::collections::BTreeMap;
+        self.out.push_str("<?php\n");
+        let mut buckets: BTreeMap<String, Vec<&Item>> = BTreeMap::new();
+        for item in &program.items {
+            let ns = match item {
+                Item::Function(f) => namespace_of(&f.name),
+                Item::Enum(_) | Item::Class(_) => "Main".to_string(),
+                _ => continue,
+            };
+            buckets.entry(ns).or_default().push(item);
+        }
+        for (ns, items) in &buckets {
+            self.line(&format!("namespace {ns} {{"));
             self.indent += 1;
-            self.line(
-                "if ($v === null) { throw new \\RuntimeException(\"force-unwrap of null\"); }",
-            );
-            self.line("return $v;");
+            for item in items {
+                match item {
+                    Item::Function(f) => self.emit_function(f, false)?,
+                    Item::Enum(e) => self.emit_enum(e)?,
+                    Item::Class(c) => self.emit_class(c)?,
+                    _ => {}
+                }
+            }
             self.indent -= 1;
             self.line("}");
         }
+        self.line("namespace {");
+        self.indent += 1;
+        if self.funcs.contains("main") {
+            self.line("\\Main\\main();");
+        }
+        if self.uses_force {
+            self.emit_force_helper();
+        }
+        self.indent -= 1;
+        self.line("}");
         Ok(())
+    }
+
+    /// The `opt!` runtime helper. In flat mode it is a top-level global; in namespaced mode it is
+    /// emitted inside the nameless block (so its fully-qualified name is `\__phorge_unwrap`, which
+    /// the `Expr::Force` call site emits).
+    fn emit_force_helper(&mut self) {
+        self.line("function __phorge_unwrap($v) {");
+        self.indent += 1;
+        self.line("if ($v === null) { throw new \\RuntimeException(\"force-unwrap of null\"); }");
+        self.line("return $v;");
+        self.indent -= 1;
+        self.line("}");
     }
 
     /// Indentation-aware line writer.
@@ -161,15 +262,22 @@ impl Transpiler {
         }
     }
 
-    fn emit_function(&mut self, f: &FunctionDecl, _is_method: bool) -> Result<(), String> {
+    fn emit_function(&mut self, f: &FunctionDecl, is_method: bool) -> Result<(), String> {
         let params: Vec<String> = f
             .params
             .iter()
             .map(|p| format!("{} ${}", Self::emit_type(&p.ty), p.name))
             .collect();
+        // In namespaced mode a top-level function is declared inside its `namespace` block, so emit
+        // only its trailing segment (`Acme\Util\compute` ⇒ `compute`). Methods keep their name.
+        let disp = if self.namespaced && !is_method {
+            last_segment(&f.name)
+        } else {
+            &f.name
+        };
         self.line(&format!(
             "function {}({}): {} {{",
-            f.name,
+            disp,
             params.join(", "),
             Self::ret_hint(&f.ret)
         ));
@@ -447,7 +555,9 @@ impl Transpiler {
             Expr::Force { inner, .. } => {
                 let v = self.emit_expr(inner)?;
                 self.uses_force = true;
-                Ok(format!("__phorge_unwrap({v})"))
+                // Namespaced mode puts the helper in the nameless global block → call it `\…`.
+                let bs = if self.namespaced { "\\" } else { "" };
+                Ok(format!("{bs}__phorge_unwrap({v})"))
             }
             // Implemented in Task 6:
             Expr::Match { .. } => {
@@ -514,6 +624,11 @@ impl Transpiler {
             if self.variants.contains(name) || self.classes.contains(name) {
                 return Ok(format!("new {name}({argv})"));
             }
+            // A resolved cross-package call carries a mangled (`\`-bearing) name → emit it
+            // fully-qualified (leading `\`). A bare name (same-`Main`-namespace call) stays bare.
+            if self.namespaced && name.contains('\\') {
+                return Ok(format!("\\{name}({argv})"));
+            }
             return Ok(format!("{name}({argv})")); // free function
         }
         if let Expr::Member { .. } = callee {
@@ -547,7 +662,14 @@ impl Transpiler {
                             .iter()
                             .map(|a| self.emit_expr(a))
                             .collect::<Result<_, _>>()?;
-                        return Ok((crate::native::registry()[idx].php)(&argv));
+                        let php = (crate::native::registry()[idx].php)(&argv);
+                        // Inside a namespace block a bare `strlen(...)` would resolve to
+                        // `CurrentNs\strlen`; emit `\strlen(...)` for global-function natives (M5-8).
+                        return Ok(if self.namespaced && looks_like_global_call(&php) {
+                            format!("\\{php}")
+                        } else {
+                            php
+                        });
                     }
                 }
             }

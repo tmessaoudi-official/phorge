@@ -280,9 +280,12 @@ pub struct ClassDecl {
 /// A top-level item in a program.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Item {
-    /// `import a.b.c;`
+    /// `import a.b.c;` or `import a.b.c as leaf;` — `alias`, when present, overrides the call-site
+    /// qualifier (the bound leaf) so colliding leaves from different packages can coexist (M5 S2c,
+    /// design O-9). `None` ⇒ the qualifier is `path`'s last segment.
     Import {
         path: Vec<String>,
+        alias: Option<String>,
         span: Span,
     },
     Function(FunctionDecl),
