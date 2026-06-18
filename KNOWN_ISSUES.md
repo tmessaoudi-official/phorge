@@ -54,6 +54,14 @@ not a panic:
   backends (`run`/`runvm`) treat an empty range as empty and stay byte-identical; only the
   PHP-transpiled output diverges, and only for empty/reversed ranges. Use ascending, non-empty ranges
   when round-tripping through PHP. (Parallel to the indexing-OOB transpile note.)
+- **Irrational `float` values render with more digits on the Phorge backends than in transpiled PHP.**
+  The Phorge backends stringify a `float` with Rust's shortest-round-trip formatting (e.g.
+  `sqrt(2.0)` → `1.4142135623730951`), while the transpiled PHP relies on PHP's default `echo`
+  precision (`precision=14` → `1.4142135623731`). For *exactly representable* values (integers-as-
+  floats, short terminating decimals) both render identically, so `guide/math.phg` keeps to such
+  values. This is a transpile-only caveat — the `run`/`runvm` spine is byte-identical (both Rust); it
+  predates `core.math` (any irrational float interpolation hits it) and `core.math` merely makes it
+  easy to reach via `sqrt`/`pow`. Round-trip through PHP only with exactly-representable floats.
 - **`opt!`-on-null transpiles to a different message than the Phorge backends.** A null force-unwrap
   faults `force-unwrap of null` on `run`/`runvm` (located, classified `FaultKind::ForceUnwrap`); the
   transpiled PHP throws a `RuntimeException("force-unwrap of null")` via the `__phorge_unwrap()`

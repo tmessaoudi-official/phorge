@@ -40,6 +40,14 @@ byte-identity-gated example set.
   for `std.io` (println)** for back-comat; **import-gated** for `std.fs` etc. — decide in Task 3.
 - [2026-06-18] DESIGN (determinism): file examples read a **committed fixture** under `examples/`, so
   both backends read identical bytes → byte-identical. `read_file` returns `string?` (null on missing).
+- [2026-06-18] AGREED (Wave 2 scope split): the native registry's `params`/`ret` are **concrete** (`Ty`
+  has no type variable) and **lambdas (S3) don't exist yet**. So of the five planned leaf modules, only
+  **`core.file`, `core.math`, `core.text`** are cleanly typeable today (all-concrete signatures,
+  determinism-gateable). **`core.list` is deferred** (`map`/`filter`/`reduce` need S3 lambdas;
+  `reverse`/`sum`/`first`/`last` need generics — `List<T>`) and **`core.json` is deferred** (`parse ->
+  Json?` needs a dynamic/`Json` type; `stringify(v)` needs a generic `v`). Wave 2 ships the three
+  buildable modules now; list+json land once generics or S3 exist. Each module = one green commit + a
+  byte-identity-gated guide example.
 
 ## Progress
 - [x] Task 1 / **Wave 1** — namespaced native foundation: `src/native.rs` registry keyed by

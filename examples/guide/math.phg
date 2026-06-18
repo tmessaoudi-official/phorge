@@ -1,0 +1,22 @@
+import core.console;
+import core.math;
+
+// M3 Track B Wave 2 — the `core.math` stdlib module. Each function erases to the PHP builtin of
+// the same name. Float ops (`sqrt`/`pow`/`floor`/`ceil`) return `float`; `abs`/`min`/`max` are
+// `int`. Printed values are kept exactly representable so the transpiled PHP renders byte-identically
+// (an irrational result like `sqrt(2.0)` would differ — see KNOWN_ISSUES, float precision).
+
+function main() {
+    // float math
+    float root = math.sqrt(16.0);
+    float power = math.pow(2.0, 10.0);
+    float down = math.floor(3.7);
+    float up = math.ceil(3.2);
+    console.println("sqrt(16) = {root}, 2^10 = {power}, floor(3.7) = {down}, ceil(3.2) = {up}");
+
+    // int math
+    int magnitude = math.abs(-7);
+    int smaller = math.min(3, 8);
+    int larger = math.max(3, 8);
+    console.println("abs(-7) = {magnitude}, min(3,8) = {smaller}, max(3,8) = {larger}");
+}
