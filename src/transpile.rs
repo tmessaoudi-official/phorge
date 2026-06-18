@@ -599,11 +599,21 @@ impl Transpiler {
                 let e = self.emit_expr(else_expr)?;
                 Ok(format!("({c} ? {t} : {e})"))
             }
-            // Lambda transpilation to PHP closures lands in Task 5 (transpiler).
-            Expr::Lambda { .. } => Err(
-                "transpile error: lambda expressions are not yet supported (M3 S3 Task 5)"
-                    .to_string(),
-            ),
+            // Expression-body lambda → PHP arrow function (auto by-value capture — no explicit
+            // `use` clause needed). Statement-body lambdas land in Task 6.
+            Expr::Lambda { params, body, .. } => {
+                let ps = params
+                    .iter()
+                    .map(|p| format!("${}", p.name))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                match body {
+                    LambdaBody::Expr(e) => Ok(format!("fn({ps}) => {}", self.emit_expr(e)?)),
+                    LambdaBody::Block(_) => {
+                        unreachable!("statement bodies land in S3 Task 6")
+                    }
+                }
+            }
         }
     }
 
@@ -633,6 +643,11 @@ impl Transpiler {
             // Enum variant or class construction → `new`; mirrors the evaluator's dispatch.
             if self.variants.contains(name) || self.classes.contains(name) {
                 return Ok(format!("new {name}({argv})"));
+            }
+            // A closure stored in a local variable (e.g. a `\Closure` parameter or a `var`-bound
+            // lambda) must be called as `$f(…)` — PHP requires the `$` sigil on variable-call sites.
+            if self.is_local(name) {
+                return Ok(format!("${name}({argv})"));
             }
             // A resolved cross-package call carries a mangled (`\`-bearing) name → emit it
             // fully-qualified (leading `\`). A bare name (same-`Main`-namespace call) stays bare.
@@ -807,6 +822,14 @@ impl Transpiler {
             .is_some_and(|f| f.contains(name))
         {
             format!("$this->{name}")
+        } else if self.funcs.contains(name) {
+            // Bare named-function reference in value position — PHP 8.1 first-class callable.
+            // Reuses the same FQN logic as emit_call: cross-package mangled names get a leading `\`.
+            if self.namespaced && name.contains('\\') {
+                format!("\\{name}(...)")
+            } else {
+                format!("{name}(...)")
+            }
         } else {
             format!("${name}") // best-effort; the checker guarantees resolution
         }
@@ -1104,6 +1127,23 @@ function main() { for (int i in 1..=3) { console.println("{i}"); } }"#);
         assert!(
             err.contains("match in this position is not yet supported"),
             "{err}"
+        );
+    }
+
+    // ── M3 S3 Task 5: expression lambdas + named-fn references ──────────────
+
+    #[test]
+    fn transpiles_expression_lambda_to_arrow_fn() {
+        let php_out = php("package main; import core.console; function main(){ var d = fn(int x) => x*2; console.println(\"{d(5)}\"); }");
+        assert!(php_out.contains("fn($x) => $x * 2"), "{php_out}");
+    }
+
+    #[test]
+    fn transpiles_named_fn_reference() {
+        let php_out = php("package main; function inc(int x)->int{return x+1;} function apply(int x,(int)->int f)->int{return f(x);} function main(){ apply(1, inc); }");
+        assert!(
+            php_out.contains("inc(...)"),
+            "first-class callable: {php_out}"
         );
     }
 }
