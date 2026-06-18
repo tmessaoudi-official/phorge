@@ -49,6 +49,14 @@
   - **Spike scope:** pure handler + `phorge serve` + a documented ~10-line PHP front-controller in the
     serve README. Router/middleware deferred to S3 lambdas; Map ergonomics to S4; `core.http` stdlib to
     the cross-package-types follow-up; `bytes` type deferred (UTF-8 text bodies v1).
+- [2026-06-18] DESIGN-LOCKED (developer answered the §11 open decisions; spec
+  `docs/specs/2026-06-18-m6-web-design.md` updated): (1) **Shape A** is the one public API — "do both?"
+  resolved to one-API / evolving-engine (Shape B's native map is a later invisible optimization, §3a);
+  (2) scope = **pure handler + static exact-match router** (W1–W2); path params→S4, middleware→S3 are
+  "the rest"; (3) **`bytes` pulled forward as its own first slice W0** (developer choice) — PHP transpile
+  trivial, design is Phorge-side literal + UTF-8 interop; (4) **spike now, before Track A**. Build order:
+  W0 bytes → W1 handler → W2 router → W3 `src/serve.rs`+Transport → W4 `phorge serve` CLI + PHP bridge +
+  docs. No code until the build-gate "go".
 
 ## The dominating constraint — determinism
 

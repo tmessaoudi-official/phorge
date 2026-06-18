@@ -1,6 +1,7 @@
 # M6 Web Capabilities — Design Spec
 
-> **Status:** DESIGNED — not yet implemented (awaiting developer design-lock).
+> **Status:** DESIGN-LOCKED 2026-06-18 (see §11) — not yet implemented. Build order: W0 bytes → W1
+> handler → W2 static router → W3 serve runtime → W4 CLI+PHP bridge+docs.
 > Research spine: `docs/plans/2026-06-18-m6-web-capabilities-research.md` (decisions log + raw agent
 > findings in `docs/research/m6/raw/`). Converged via a full 30/8 3C gate (8/8 at cycle 11).
 > Roadmap home: `ROADMAP.md` **M6 — Concurrency + servers** ("a native HTTP server").
@@ -81,7 +82,18 @@ bodies are UTF-8 `string` and examples stay ASCII (the `core.text`↔PHP round-t
 *Rejected:* **Shape B** (native-backed `core.http` accessors — `http.method(req)`, etc.) works as a
 real stdlib module today but makes the parser Rust (not a Phorge showcase) and needs awkward
 `Value::Instance` construction from Rust; **Shape C** (hybrid native parser → Phorge class) carries the
-same construction awkwardness. Both are viable fallbacks if Shape A's verbosity proves unacceptable.
+same construction awkwardness.
+
+### 3a. "Why choose? — can we do both?" — resolved: one API, evolving engine
+
+A and B are not two products; they are two *implementations of the same handler contract*. The handler
+signature `handle(Request) -> Response` is shape-independent — the only difference is the access syntax
+(`req.header(k)` method vs `http.header(req,k)` free function). Shipping both = two competing public
+APIs, double docs/tests, and a "which do I use?" tax. **Resolution: the method-call API (`req.header(k)`,
+Shape A) is the ONE public surface; Shape B's native header map is an internal optimization that can be
+swapped in later, invisibly, behind that same API once Map (S4) makes it worthwhile.** The only thing B
+had that A lacks — "works as a `core.http` *library* today" — is the E-PKG-TYPE limit the cross-package
+-types follow-up removes. So "both" is a migration path under a stable API, not a fork.
 
 ## 4. Runtime glue — `phorge serve` (Phorge side) and `php -S` (PHP side)
 
@@ -161,14 +173,18 @@ end-to-end without pulling the green-thread runtime forward.
 
 ## 8. Sequencing & dependencies
 
+**Developer design-lock (2026-06-18):** bytes pulled forward as its own slice (W0); static
+exact-match router added to the spike; Shape A is the one API; spike lands before Track A.
+
 | Capability | Gated on | When |
 |---|---|---|
-| Pure `handle(Request)->Response` + parser + serializer (Shape A) | nothing — ships on today's language | **spike now** |
-| `phorge serve` single-threaded + `tests/serve.rs` + PHP front-controller README | nothing | **spike now** |
+| **`bytes` type** (`Ty::Bytes` + `Value::Bytes` + `b"…"` literal + `string`↔`bytes` interop) | own language slice — PHP transpile trivial (PHP strings are byte arrays) | **spike W0 (first)** |
+| Pure `handle(Request)->Response` + parser + serializer (Shape A) | nothing — ships on today's language | **spike W1** |
+| **Static exact-match router** (`(method,"/path")->namedHandler`) | nothing — named fns + string match | **spike W2** |
+| `phorge serve` single-threaded + `tests/serve.rs` + PHP front-controller README | nothing | **spike W3–W4** |
 | `core.http` as a real **library package** (not `package main`) | M5 cross-package-types follow-up (E-PKG-TYPE) | post-spike |
-| Map-based headers (`req.headers: Map<string,string>`) | M3 **S4** (Map surface syntax) | later |
-| Router + middleware DSL (`app.get("/p", handler)`) | M3 **S3** lambdas (Track A — NEXT) | later |
-| `bytes` request/response bodies (octets, not UTF-8) | a new `bytes` type (unscheduled) | later |
+| Map-based headers + **path params `/users/{id}`** | M3 **S4** (Map surface syntax) | later — "the rest" |
+| **Middleware + closure routes** (`app.get("/p", req => …)`) | M3 **S3** lambdas (Track A) | later — "the rest" |
 | Multi-threaded / concurrent serving | M6 green-thread runtime | M6 proper |
 
 ## 9. Examples (examples-ship-with-features mandate)
@@ -183,29 +199,40 @@ Two-part, mirroring `examples/build/` + `examples/cli/`:
    equivalent (with the ~10-line front-controller). The socket loop can't be a byte-identical example.
 3. **`examples/README.md`** index + coverage-matrix row.
 
-## 10. Spike plan (phased — no code until design-lock)
+## 10. Spike plan (phased — no code until design-lock; **locked 2026-06-18**)
 
-- **P0 — handler model in Phorge** (in-spine, pure): `Request`/`Response`/`Header` classes,
-  `parse_request`/`serialize`, a `handle`, `examples/web/handler.phg` + fixture. *Acceptance:* the
-  example runs byte-identically on `run`/`runvm` + real PHP; auto-gated by the glob.
-- **P1 — `src/serve.rs` + `Transport`**: pure `handle_raw(bytes, program) -> bytes` (parse→call
-  `handle`→serialize) over the trait; the VM "call named fn with arg" entry path. *Acceptance:* fixture
-  `Transport` unit test + the conformance test, all in `tests/serve.rs`/unit.
-- **P2 — `phorge serve` CLI**: dispatch block, `--port`, blocking loop, startup/missing-`handle`/`400`
-  handling, help + USAGE + `explain` codes. *Acceptance:* `tests/serve.rs` real ephemeral-port request
-  (skip-aware); manual `curl`.
-- **P3 — PHP bridge + docs**: front-controller README, `examples/web/README.md`, `examples/README.md`
-  row, `FEATURES.md`/`CHANGELOG.md`/`ROADMAP.md` updates. *Acceptance:* documented `php -S` round-trip.
+- **W0 — `bytes` type** (its own language slice, FIRST): `Ty::Bytes`, `Value::Bytes(Rc<Vec<u8>>)`,
+  `b"…"` literal in the lexer, `string`↔`bytes` interop (`bytes(s)`, `string(b) -> string?` with UTF-8
+  validation), transpile to PHP string (trivial — PHP strings are byte arrays). *Acceptance:* a
+  byte-identity-gated `examples/guide/bytes.phg`; round-trips through real PHP.
+- **W1 — handler model in Phorge** (in-spine, pure, Shape A): `Request`/`Response`/`Header` classes,
+  `parse_request`/`serialize` (bodies are `bytes`), a `handle`, `examples/web/handler.phg` + fixture.
+  *Acceptance:* runs byte-identically on `run`/`runvm` + real PHP; auto-gated by the glob.
+- **W2 — static router** (in-spine): an exact-match `(method, path) -> namedHandler` dispatch, pure and
+  testable. *Acceptance:* a routed example, glob-gated; path params + middleware explicitly deferred
+  (S4/S3) and noted.
+- **W3 — `src/serve.rs` + `Transport`**: the non-transpiled Phorge runtime entry `__serve(bytes) ->
+  bytes` (parse→route→`handle`→serialize); the VM "call named fn with arg" entry path. *Acceptance:*
+  fixture `Transport` unit test + the dual-bridge conformance test (`tests/serve.rs`/unit).
+- **W4 — `phorge serve` CLI + PHP bridge + docs**: dispatch block, `--port`, blocking loop,
+  startup/missing-`handle`/`400` handling, help + USAGE + `explain`; the ~PHP front-controller (now a
+  `match($path)` router); `examples/web/README.md`, `examples/README.md` row,
+  `FEATURES.md`/`CHANGELOG.md`/`ROADMAP.md`. *Acceptance:* `tests/serve.rs` real ephemeral-port request
+  (skip-aware); documented `php -S` round-trip.
 
 Each phase is a green, self-contained commit (quality gate: `cargo test` + `clippy --all-targets` +
-`fmt --check`).
+`fmt --check`). The portable `handle(Request)->Response` contract is fixed from W1 and unchanged by the
+later green-thread executor (M6) or the S3 middleware/S4 param layers.
 
-## 11. Open decisions for design-lock
+## 11. Design-lock decisions (RESOLVED 2026-06-18)
 
-1. **Request/Response shape:** Shape A (pure-Phorge classes, recommended) vs Shape B (native-backed
-   `core.http`). Shape A is the recommendation; B is the fallback if verbosity bites.
-2. **Spike scope:** pure handler + `phorge serve` + PHP-bridge README (recommended) — or also a minimal
-   *static* router now (no lambdas needed for a static route table)?
-3. **`bytes`:** confirm UTF-8 text-only bodies for v1 (recommended) vs pulling a `bytes` type forward.
-4. **Milestone placement:** ship the spike now (interleaved before Track A/S3) vs after S3 lambdas so
-   the router can land in the same arc.
+1. **Request/Response shape:** **Shape A** (pure-Phorge classes) as the one public API. Shape B's native
+   engine is a later invisible optimization behind the same `req.header(k)` surface — not a second API
+   (see §3a). *Developer asked "do both?" → resolved to one-API-evolving-engine.*
+2. **Spike scope:** **both** the pure handler **and** a **static exact-match router** (W1–W2). Path
+   params (S4 Map) and middleware/closure routes (S3 lambdas) are "the rest" — they layer on later with
+   no handler-contract change.
+3. **`bytes`:** **pulled forward as its own slice W0** (developer choice), built before the serve
+   runtime. PHP transpile is trivial (PHP strings are byte arrays); the design is Phorge-side (literal
+   + UTF-8 interop).
+4. **Milestone placement:** **spike now, before Track A** (matches "Option 1 — spike now").
