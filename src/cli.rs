@@ -278,24 +278,31 @@ fn lex_parse(src: &str) -> Result<Program, String> {
         .map_err(|e| e.render(src))
 }
 
-/// lex + parse + type-check (the gate). Renders every type error, one per line.
-fn parse_checked(src: &str) -> Result<Program, String> {
-    let prog = lex_parse(src)?;
-    match check(&prog) {
-        // De-alias the program so every backend sees alias-free types (aliases are front-end
-        // sugar; the checker validated them, including cycles + built-in shadowing). Non-fatal
-        // warnings (the lint channel, M3 S2.5) render to stderr and never gate the build.
+/// Type-check + de-alias an already-parsed program (the gate, minus lex/parse). De-aliases so every
+/// backend sees alias-free types (aliases are front-end sugar; the checker validated them, including
+/// cycles + built-in shadowing). Non-fatal warnings (the lint channel, M3 S2.5) render to stderr and
+/// never gate the build. `diag_src` is the source used to render error carets — the single file for a
+/// loose program, or `""` for a merged multi-file unit (where no single source aligns, so diagnostics
+/// print message + position without a source line).
+pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, String> {
+    match check(prog) {
         Ok(warnings) => {
             for w in &warnings {
-                eprintln!("warning: {}", w.render(src));
+                eprintln!("warning: {}", w.render(diag_src));
             }
-            Ok(crate::checker::expand_aliases(&prog))
+            Ok(crate::checker::expand_aliases(prog))
         }
         Err(errs) => {
-            let lines: Vec<String> = errs.iter().map(|e| e.render(src)).collect();
+            let lines: Vec<String> = errs.iter().map(|e| e.render(diag_src)).collect();
             Err(lines.join("\n"))
         }
     }
+}
+
+/// lex + parse + type-check (the gate). Renders every type error, one per line.
+fn parse_checked(src: &str) -> Result<Program, String> {
+    let prog = lex_parse(src)?;
+    check_and_expand(&prog, src)
 }
 
 /// `run`: lex -> parse -> check (gate) -> interpret -> captured stdout.
@@ -321,6 +328,46 @@ pub fn cmd_check(src: &str) -> Result<String, String> {
     on_deep_stack(|| {
         parse_checked(src)?;
         Ok("OK (type-checks clean)\n".to_string())
+    })
+}
+
+// --- Program-taking runners (M5 S2b) -----------------------------------------------------------
+// The project loader (`crate::loader`) resolves a file path to a single, possibly multi-file-merged
+// `Program`; these run/check/transpile it. They mirror the `cmd_*(&str)` pipelines exactly (same
+// check -> de-alias -> backend), so a loose single-file program routed through `loader` produces
+// byte-identical output. `diag_src` carries the source for error carets (`""` for a merged unit).
+
+/// `run` on an already-loaded program (interpreter backend).
+pub fn run_program(prog: &Program, diag_src: &str) -> Result<String, String> {
+    on_deep_stack(|| {
+        let checked = check_and_expand(prog, diag_src)?;
+        interpret(&checked).map_err(|e| e.to_string())
+    })
+}
+
+/// `runvm` on an already-loaded program (bytecode + VM backend).
+pub fn runvm_program(prog: &Program, diag_src: &str) -> Result<String, String> {
+    on_deep_stack(|| {
+        let checked = check_and_expand(prog, diag_src)?;
+        let program = compile(&checked).map_err(|e| e.to_string())?;
+        Vm::new(&program).run().map_err(|e| e.to_string())
+    })
+}
+
+/// `check` on an already-loaded program.
+pub fn check_program(prog: &Program, diag_src: &str) -> Result<String, String> {
+    on_deep_stack(|| {
+        check_and_expand(prog, diag_src)?;
+        Ok("OK (type-checks clean)\n".to_string())
+    })
+}
+
+/// `transpile` on an already-loaded program (emit PHP). Multi-namespace emission for a multi-package
+/// project is S2c; S2b emits the existing flat form (correct for `package main` / single-package).
+pub fn transpile_program(prog: &Program, diag_src: &str) -> Result<String, String> {
+    on_deep_stack(|| {
+        let checked = check_and_expand(prog, diag_src)?;
+        crate::transpile::emit(&checked)
     })
 }
 

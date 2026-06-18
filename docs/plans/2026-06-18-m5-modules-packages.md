@@ -41,6 +41,17 @@
   to language rule**; transpile = emit PHP files in PSR-4 layout + a generated autoload/composer block.
   Contract holds: Phorge package resolution : PHP/PSR-4 :: TS module resolution : JS.
 
+- [2026-06-18] AGREED (S2b approach): **directory = package** (Go's model — `src/acme/util/*.phg` all
+  declare `package acme.util`; multiple files per package dir; `package main` folder-exempt, runnable
+  anywhere). **Flat AST merge** (parse each project file → merge `items` into one `Program`; backends
+  see a bigger flat set, byte-safe). Enforcement (folder=path `E-PKG-PATH` + loose-mode `main`-only)
+  lives in a new **path-aware `src/loader.rs`**, never in `check()` (so `cmd_run(src)`, the differential
+  harness, and `checker.rs:1649` `package app.util` stay untouched). File-path sources route through the
+  loader on run/runvm/check/transpile; `-e`/stdin/parse/lex/build keep the single-file string path.
+  Multi-namespace transpile + qualified call resolution remain S2c; the multi-file example ships at S2d.
+  A non-`main` file directly under the source root (empty relative dir) is an error — a dotted package
+  needs a matching subdirectory.
+
 ## Open items — RESOLVED in the design spec (`docs/specs/2026-06-18-m5-project-model-design.md`)
 - O-1 Source root → **convention `src/`, overridable via manifest `source =`** (M5-6).
 - O-2 Manifest → **minimal `phorge.toml`** ([package] name/version/source + [dependencies]); its
@@ -77,7 +88,16 @@ Slices (each: one+ green commit, run==runvm byte-identical, PHP round-tripped, e
   walk-up discovery + source-root resolution (default `src`); `namespace_root()` PSR-4 mapping. 18 unit
   tests; byte-safe (unconsumed — no backend touched). Rejected literal `composer.json` (tool can't
   process it). Example showcase deferred to S2d (when behavior is observable).
-- [ ] **S2b — multi-file loader + strict folder=path enforcement**.
+- [x] **S2b — multi-file loader + strict folder=path enforcement** — DONE (2026-06-18). `src/loader.rs`:
+  `load(entry)`/`load_loose_src(src)` → `Unit { program, diag_src }`. Project mode walks up to
+  `phorge.toml`, parses every `.phg` under the source root, validates folder=path (`E-PKG-PATH`;
+  directory=package Go-model, `main` folder-exempt), merges items flat. Loose mode enforces
+  `package main`-only. Enforcement path-aware (in the loader, never `check()`) → `cmd_run(&str)` +
+  differential untouched. `cli::{run,runvm,check,transpile}_program` consume the loaded program;
+  `main.rs` routes `<file>` for run/runvm/check/transpile through the loader, keeps `-e`/stdin/parse/
+  lex/disasm/bench/build on the string path. Flat-merge interim: cross-file calls resolve unqualified;
+  qualified calls + namespaced PHP + aliasing are S2c. 12 tests (9 loader unit + 3 integration, incl.
+  byte-identical multi-file run). Example showcase deferred to S2d.
 - [ ] **S2c — qualified cross-package calls** (4-backend resolution) + multi-namespace PHP emission +
   import aliasing. *(The one byte-identity-risky slice — gate with multi-file `agree`/`agree_err`.)*
 - [ ] **S2d — project-aware differential harness + `examples/project/` showcase**.

@@ -4,7 +4,7 @@
 
 use std::process::exit;
 
-use phorge::cli;
+use phorge::{cli, loader};
 
 const USAGE: &str =
     "usage: phorge <run|runvm|check|parse|lex|transpile|disasm|bench|build|explain> \
@@ -153,27 +153,53 @@ fn main() {
         .filter(|a| a.as_str() != "--vs-php")
         .cloned()
         .collect();
-    // Run-family: resolve the source — <file> | - (stdin) | -e/--eval <code> | -- <file>.
-    let src = match cli::resolve_source(&rest) {
-        Some(cli::SourceSpec::File(path)) => read_source_file(&path),
-        Some(cli::SourceSpec::Stdin) => read_stdin(),
-        Some(cli::SourceSpec::Inline(code)) => code,
-        None => {
-            eprintln!("{USAGE}");
-            exit(2);
+    // run/runvm/check/transpile are project-aware (M5 S2b): a <file> source is resolved through the
+    // project loader — a phorge.toml walk-up triggers multi-file merge + folder=path validation;
+    // otherwise loose mode (single file, `package main` only). `-e`/stdin are always loose. parse,
+    // lex, disasm, and bench keep the single-file string path (they dump/measure one source).
+    let result = if matches!(cmd, "run" | "runvm" | "check" | "transpile") {
+        let unit = match cli::resolve_source(&rest) {
+            Some(cli::SourceSpec::File(path)) => loader::load(std::path::Path::new(&path)),
+            Some(cli::SourceSpec::Stdin) => loader::load_loose_src(&read_stdin()),
+            Some(cli::SourceSpec::Inline(code)) => loader::load_loose_src(&code),
+            None => {
+                eprintln!("{USAGE}");
+                exit(2);
+            }
+        };
+        let unit = match unit {
+            Ok(u) => u,
+            Err(err) => {
+                eprintln!("{err}");
+                exit(1);
+            }
+        };
+        match cmd {
+            "run" => cli::run_program(&unit.program, &unit.diag_src),
+            "runvm" => cli::runvm_program(&unit.program, &unit.diag_src),
+            "check" => cli::check_program(&unit.program, &unit.diag_src),
+            "transpile" => cli::transpile_program(&unit.program, &unit.diag_src),
+            _ => unreachable!("matched above"),
         }
-    };
-    let result = match cmd {
-        "run" => cli::cmd_run(&src),
-        "runvm" => cli::cmd_runvm(&src),
-        "check" => cli::cmd_check(&src),
-        "parse" => cli::cmd_parse(&src),
-        "lex" => cli::cmd_lex(&src),
-        "transpile" => cli::cmd_transpile(&src),
-        "disasm" => cli::cmd_disasm(&src),
-        "bench" if bench_vs_php => cli::cmd_bench_vs_php(&src),
-        "bench" => cli::cmd_bench(&src),
-        _ => unreachable!("validated above"),
+    } else {
+        // Source forms — <file> | - (stdin) | -e/--eval <code> | -- <file>.
+        let src = match cli::resolve_source(&rest) {
+            Some(cli::SourceSpec::File(path)) => read_source_file(&path),
+            Some(cli::SourceSpec::Stdin) => read_stdin(),
+            Some(cli::SourceSpec::Inline(code)) => code,
+            None => {
+                eprintln!("{USAGE}");
+                exit(2);
+            }
+        };
+        match cmd {
+            "parse" => cli::cmd_parse(&src),
+            "lex" => cli::cmd_lex(&src),
+            "disasm" => cli::cmd_disasm(&src),
+            "bench" if bench_vs_php => cli::cmd_bench_vs_php(&src),
+            "bench" => cli::cmd_bench(&src),
+            _ => unreachable!("validated above"),
+        }
     };
     match result {
         Ok(text) => print!("{text}"),

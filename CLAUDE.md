@@ -210,10 +210,17 @@ touched). **Manifest = Composer's *vocabulary* in an honest TOML container** (de
 "vendor/package"`, `[require]`/`[require-dev]`, deps `{ git, tag|rev }` or `"url@tag"` shorthand,
 exact-pin only (no `^`/`~` ranges — lockfile pins exact). Literal `composer.json` was **rejected** — the
 `composer` tool can't process it (no Packagist/autoloader Phorge uses), so the filename is a false
-promise; familiarity is vocabulary, not the tool. **NEXT: S2b** (multi-file loader + strict folder=path
-enforcement; consumes `Project::detect`) → **S2c** (qualified cross-package calls in all 4 backends +
-brace-namespace PHP — the one byte-identity-risky slice) → S2d (project-aware harness +
-`examples/project/`) → S3 (git deps + `phorge.lock` + `phorge vendor`). Then
+promise; familiarity is vocabulary, not the tool. **M5 S2b COMPLETE** (`src/loader.rs`: `load`/
+`load_loose_src` → `Unit{program,diag_src}`; project-mode walk-up + parse every `.phg` under source
+root + folder=path `E-PKG-PATH` (directory=package, `main` exempt) + flat AST merge; loose-mode
+`main`-only). Enforcement is **path-aware in the loader, never in `check()`** → `cmd_run(&str)` +
+differential untouched. `main.rs` routes `<file>` run/runvm/check/transpile through the loader via new
+`cli::{run,runvm,check,transpile}_program`; `-e`/stdin/parse/lex/disasm/bench/build stay on the string
+path. **Flat-merge interim:** cross-file calls resolve *unqualified* until S2c. 12 tests (9 loader + 3
+integration, incl. byte-identical multi-file run). **NEXT: S2c** (qualified cross-package calls in all 4
+backends + one-brace-block-per-package PHP emission + import aliasing — the one byte-identity-risky
+slice; gate with multi-file `agree`/`agree_err`) → S2d (project-aware harness + `examples/project/`) →
+S3 (git deps + `phorge.lock` + `phorge vendor`). Then
 Track A (S3 lambdas/pipeline), which also unblocks the deferred `core.list`. **Parked:** M2.5 Phase 3 (CI
 stub registry + `--sign`) — `docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
 

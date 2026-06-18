@@ -6,6 +6,30 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### M5 slice S2b — multi-file loader + folder=path enforcement
+
+- **Project loader** (`src/loader.rs`) — resolves an entry source to one `Unit` (a single, possibly
+  multi-file-merged `Program` + the source text for diagnostics). **Project mode**: a `phorge.toml`
+  found by walking up marks the root; every `.phg` under the source root is parsed, validated against
+  its location (**folder = package**, Go's model — `src/acme/util/*.phg` ⇒ `package acme.util`;
+  `package main` is folder-exempt), and all items are merged into one flat program. **Loose mode** (no
+  manifest above): only `package main;` runs — a dotted library package requires a project.
+- **`E-PKG-PATH`** — a file whose package does not match its directory under the source root, a dotted
+  package sitting directly in the source root, or a non-`main` package living outside the source root.
+- **Byte-identity preserved** — enforcement is path-aware and lives in the loader, never in the type
+  checker, so `cli::cmd_run(&str)` and the differential harness are untouched. `run`/`runvm`/`check`/
+  `transpile` route a `<file>` source through the loader (new `cli::run_program`/`runvm_program`/
+  `check_program`/`transpile_program` consume the loaded program); `-e`, stdin, `parse`, `lex`,
+  `disasm`, `bench`, and `build` keep the single-file string path. A loose single-file program through
+  the loader produces identical output to the pre-S2b pipeline.
+- **Flat-merge interim** — until S2c, the merged items share one flat namespace, so a cross-file call
+  resolves **unqualified**; qualified cross-package calls (`util.parse(x)`) + one-brace-block-per-package
+  PHP emission + import aliasing are S2c. `transpile` of a multi-*package* project therefore emits flat
+  PHP for now (correct for `package main` / single-package). Multi-file type-error diagnostics omit the
+  source-line caret (no single aligned source). The `examples/project/` showcase ships at S2d.
+- 12 new tests (9 `loader` unit + 3 `tests/project.rs` integration, incl. a multi-file project running
+  byte-identically on both backends).
+
 ### M5 slice S2a — project manifest + source root + project detection
 
 - **`phorge.toml` manifest** — new `src/manifest.rs` parses a minimal, std-only TOML subset into
