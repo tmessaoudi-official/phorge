@@ -302,10 +302,15 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
     // Free functions have no enclosing class, so no `this` and no field scope.
     let empty_fields: HashMap<String, CTy> = HashMap::new();
     let mut functions = Vec::with_capacity(next_idx);
+    // Lambdas live in a trailing block *after* all `next_idx` named functions, so every named
+    // function keeps its hoist-order index (`Op::Call` targets and the `main` entry stay valid even
+    // when an earlier function defines a lambda). Each function's lambdas are numbered from
+    // `next_idx + lambdas.len()` and accumulated here; appended to `functions` once all are compiled.
+    let mut lambdas: Vec<Function> = Vec::new();
     for f in &order {
-        // Lambda sub-functions compiled inside this body will be appended starting at
-        // `functions.len()` (the current length, before any extras are pushed).
-        let base = functions.len();
+        // This function's lambda sub-functions are numbered starting at `next_idx + lambdas.len()`
+        // — the start of its slice of the trailing lambda block.
+        let base = next_idx + lambdas.len();
         let mut c = Compiler::new(
             &fns,
             &arities,
@@ -336,10 +341,10 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             chunk: c.chunk,
         });
         // Drain any lambda sub-functions emitted during this body's compilation.
-        functions.extend(c.extra_functions);
+        lambdas.extend(c.extra_functions);
     }
     for (ci, cd) in class_decls.iter().enumerate() {
-        let base = functions.len();
+        let base = next_idx + lambdas.len();
         let (f, extras) = compile_constructor(
             cd,
             ci,
@@ -356,11 +361,11 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             base,
         )?;
         functions.push(f);
-        functions.extend(extras);
+        lambdas.extend(extras);
     }
     for (ci, f) in &methods_to_compile {
         let class_name = &class_decls[*ci].name;
-        let base = functions.len();
+        let base = next_idx + lambdas.len();
         let (func, extras) = compile_method(
             class_name,
             f,
@@ -377,8 +382,12 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             base,
         )?;
         functions.push(func);
-        functions.extend(extras);
+        lambdas.extend(extras);
     }
+
+    // Append the trailing lambda block. Named functions occupy `0..next_idx` (hoist order); every
+    // lambda follows at the index it was numbered with (`next_idx + its position within lambdas`).
+    functions.extend(lambdas);
 
     Ok(BytecodeProgram {
         functions,
@@ -650,10 +659,11 @@ impl<'a> Compiler<'a> {
             // Terminal (end/redirect the frame): height afterward is dead code, never read.
             Op::Return | Op::Fault(_) => 0,
             // MakeClosure(idx): pops `n_captures` capture values, pushes one `Value::Closure`.
-            // Lambdas compiled by THIS function occupy [base+1, base+1+lambda_n_captures.len()).
-            // Any other index is a named-function reference (never a closure → 0 captures).
+            // Lambdas compiled by THIS compiler occupy [base, base+lambda_n_captures.len()) in the
+            // trailing lambda block. Any other index is a named-function reference (never a closure
+            // → 0 captures), including a forward-referenced one (its index is below `base`).
             Op::MakeClosure(idx) => {
-                let lo = self.base_fn_idx + 1;
+                let lo = self.base_fn_idx;
                 let n = if *idx >= lo && *idx < lo + self.lambda_n_captures.len() {
                     self.lambda_n_captures[idx - lo]
                 } else {
@@ -1408,13 +1418,14 @@ impl<'a> Compiler<'a> {
         let n_captures = captures.len();
 
         // 3. Build the sub-function's index in the global table.
-        //    The enclosing function occupies `base_fn_idx`; lambdas follow it starting at
-        //    `base_fn_idx + 1`.  Each successive lambda shifts by one, hence `+ 1 + len`.
-        let fn_idx = self.base_fn_idx + 1 + self.extra_functions.len();
+        //    `base_fn_idx` is the start of this compilation's slice of the trailing lambda block;
+        //    each lambda this compiler emits takes the next slot, hence `base + len`.
+        let fn_idx = self.base_fn_idx + self.extra_functions.len();
 
         // 4. Build a sub-compiler for the lambda body.
-        //    The sub-compiler's `base_fn_idx` is one past the lambda itself, so any nested
-        //    lambdas inside the body get indices starting at `fn_idx + 1`.
+        //    This lambda occupies global slot `fn_idx`; step 8 appends its nested lambdas
+        //    *immediately after* it, so they start at `fn_idx + 1`. The sub-compiler therefore
+        //    treats `fn_idx + 1` as the start of its own (nested) lambda slice.
         let sub_base = fn_idx + 1;
         let empty_fields: HashMap<String, CTy> = HashMap::new();
         // A lambda body cannot reference `this` or bare fields (checker enforces E-LAMBDA-THIS),

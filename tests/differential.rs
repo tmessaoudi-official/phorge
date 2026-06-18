@@ -981,3 +981,24 @@ fn transpiles_lambda_literal_call_target() {
     let php = transpile_ok("package main; import core.console; function main(){ console.println(\"{3 |> fn(int v) => v + 100}\"); }");
     assert!(php.contains("(fn($v) => $v + 100)(3)"), "{php}");
 }
+
+#[test]
+fn escaping_and_nested_lambdas_agree() {
+    // A closure that ESCAPES its defining frame: a named function returns a lambda capturing its
+    // param, then it is called after the function has returned. Captures live in the closure's Rc,
+    // so both backends must agree. (Guards the trailing-lambda-block layout: a lambda defined in a
+    // function *before* `main` must not shift `main`'s entry index.)
+    agree("import core.console; function mk(int a)->(int)->int{ return fn(int b)=>a+b; } function main(){ var f=mk(10); console.println(\"{f(5)}\"); }"); // 15
+                                                                                                                                                          // Escaping closure capturing a `var` local of the enclosing function (not a param).
+    agree("import core.console; function mk(int z)->(int)->int{ var a=z*2; return fn(int b)=>a+b; } function main(){ var f=mk(10); console.println(\"{f(5)}\"); }"); // 25
+                                                                                                                                                                     // Lexically NESTED lambda: a lambda whose body defines and returns another capturing lambda.
+    agree("import core.console; function mk(int a)->(int)->int{ var outer=fn(int b)->(int)->int{ return fn(int c)=>a+b+c; }; return outer(a); } function main(){ var f=mk(100); console.println(\"{f(11)}\"); }"); // 100+100+11 = 211
+                                                                                                                                                                                                                   // Two functions defined before `main`, the first bearing a lambda — exercises the entry-index
+                                                                                                                                                                                                                   // and Op::Call stability under the trailing-lambda block (a regression would call the wrong fn).
+    agree("import core.console; function a(int x)->int{ var inc=fn(int n)=>n+1; return inc(x); } function b(int x)->int{ return x*10; } function main(){ console.println(\"{a(4)} {b(4)}\"); }");
+    // 5 40
+    // A lambda inside a METHOD body (capturing a method param) — the constructor/method compile
+    // loops number their lambdas from the same trailing block, so this guards that path too.
+    agree("import core.console; class Box { constructor(public int v) {} function scaledBy(int k)->int{ var f=fn(int x)->int{ return x*k; }; return f(this.v); } } function main(){ var b=Box(7); console.println(\"{b.scaledBy(3)}\"); }");
+    // 21
+}

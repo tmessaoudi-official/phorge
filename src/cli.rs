@@ -218,6 +218,14 @@ pub fn explain_text(code: &str) -> Option<String> {
              would read a method call, the transpiler a native. Rename the binding, or drop the\n\
              matching import.\n"
         }
+        "E-SHADOW-FN" => {
+            "E-SHADOW-FN — a local binding shadows a top-level function name.\n\n\
+             Functions are first-class values, so a bare `f` resolves to the function and a bare\n\
+             `f(…)` calls it. A local binding (variable, parameter, loop or match binding) of the\n\
+             same name would be ambiguous — the run backends dispatch functions-first while the\n\
+             transpiler emits the local, a silent divergence. Rename the binding so a local never\n\
+             shares a name with a function.\n"
+        }
         "E-OPT-ASSIGN" => {
             "E-OPT-ASSIGN — an optional `T?` was used where a non-optional `T` is required.\n\n\
              A non-optional value can never be `null`, so a `T?` cannot flow into a `T` binding,\n\
@@ -282,7 +290,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN)"
         )
     })
 }

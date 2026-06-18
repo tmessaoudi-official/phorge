@@ -470,6 +470,21 @@ impl Checker {
                 )),
             );
         }
+        // Likewise, a value binding may not shadow a top-level function name. A bare `f(…)` call
+        // dispatches functions-first in the run backends but locals-first in the transpiler, and a
+        // bare `f` value reference resolves to the function in the backends but the local in PHP —
+        // so an overlap is a silent four-backend divergence (the function-name analogue of
+        // E-SHADOW-IMPORT, made reachable once functions became first-class values in M3 S3).
+        if self.funcs.contains_key(name) {
+            self.err_coded(
+                span,
+                format!("`{name}` shadows the top-level function `{name}`"),
+                "E-SHADOW-FN",
+                Some(format!(
+                    "rename the binding; a local may not share a name with a function (`{name}` is callable as a value)"
+                )),
+            );
+        }
         if let Some(top) = self.scopes.last_mut() {
             top.insert(name.to_string(), ty);
         }
@@ -2299,6 +2314,22 @@ function main() { int console = 0; console.println("{console}"); }"#,
         );
         assert!(
             errs.iter().any(|e| e.code == Some("E-SHADOW-IMPORT")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn local_shadowing_function_name_errors() {
+        // A value binding may not shadow a top-level function name: a bare `f(…)` call dispatches
+        // functions-first in the run backends but locals-first in the transpiler, so an overlap is
+        // a silent four-backend divergence (made reachable once functions became first-class values
+        // in M3 S3). Coded `E-SHADOW-FN`. See `declare`.
+        let errs = errors_of(
+            r#"function dbl(int x) -> int { return x * 2; }
+function main() { var dbl = fn(int x) => x + 1000; }"#,
+        );
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-SHADOW-FN")),
             "{errs:?}"
         );
     }
