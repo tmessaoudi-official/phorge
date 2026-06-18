@@ -32,6 +32,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `transpile/demo.phg` | the **Phorge → PHP** bridge — see `transpile/README.md` |
 | `build/app.phg` | **standalone executables** — `phorge build` — see `build/README.md` |
 | `cli/demo.phg` | the **`phorge` CLI** — source forms, `check`/`parse`/`lex`, diagnostics, `explain` — see `cli/README.md` |
+| `project/tempconv/` | a **multi-file project** (M5) — mandatory packages, folder = path, cross-package qualified calls + import aliasing, namespaced PHP — see `project/README.md` |
 
 ## Coverage matrix (the runnable surface)
 
@@ -55,26 +56,27 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | Phorge → PHP transpile | `transpile/demo` |
 | standalone executable (`phorge build`) | `build/app` |
 | CLI: source forms, inspection (`check`/`parse`/`lex`), diagnostics, `explain` | `cli/demo` |
+| multi-file projects: packages, folder = path, cross-package imports + aliasing, namespaced PHP | `project/tempconv` |
 
 ## Three sharp edges
 
 - **Every file declares a package (M5 S1) — `package main;` is the runnable entry.** Nothing lives
   "in the wind": each file's first line is a `package` declaration, never inferred. A runnable program
   uses the reserved `package main;` (every example here starts with it); `core` is reserved for the
-  stdlib. (Dotted library packages like `package app.util;` + strict folder=path + cross-package
-  imports arrive with the project model in a later M5 slice.)
+  stdlib. Dotted library packages (`package acme.convert;`) + strict folder=path + cross-package
+  imports are now **shipped** — see `project/tempconv/` and `project/README.md`.
 - **Zero-payload enum variants use call form `V()` everywhere** — to construct (`Defend()`) *and* in
   a `match` arm (`Defend() =>`). A bare `Defend =>` arm is a catch-all *binding*, not a variant
   pattern, so it silently swallows every case.
 - **`import core.console;` is load-bearing (M3 Wave 1).** Everything is namespaced — "nothing in the
   wind" — so there is no free global `println`: a program must `import core.console;` and call
   `console.println(...)`. Stdlib modules are reserved under `core.*`; the root lives in the import and
-  the leaf qualifies the call (Go's `import "fmt"` → `fmt.Println`). *File-based* `import` of user
-  `.phg` modules is still a later milestone.
+  the leaf qualifies the call (Go's `import "fmt"` → `fmt.Println`). The same leaf-qualified `import`
+  resolves user `.phg` packages in a project (M5) — see `project/tempconv/`.
 
 ## Not yet supported (intentionally absent here)
 
 These are designed but not implemented; they will arrive in **M3+** (the language-growth milestone),
 and examples will be added as each lands: `Map`/`Set` values & indexing, the pipe operator `|>`,
-exceptions (`try`/`catch`/`throw`), traits, function overloading, sized ints, `decimal`, and real
-multi-file `import` resolution.
+exceptions (`try`/`catch`/`throw`), traits, function overloading, sized ints, `decimal`, and
+git-based package dependencies (`[require]` in `phorge.toml` — M5 S3).

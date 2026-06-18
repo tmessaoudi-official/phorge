@@ -9,6 +9,7 @@
 //! (`"runtime error:"` vs `"compile error:"`), so a raw `assert_eq!` would spuriously fail.
 
 use phorge::cli::{cmd_run, cmd_runvm};
+use phorge::{cli, loader};
 
 /// Assert the two backends agree on success output. Compares `Result` values structurally
 /// (never `.expect()`): in release builds an unchecked-arithmetic divergence surfaces as an
@@ -529,8 +530,16 @@ fn p4c_programs_match_between_backends() {
     }
 }
 
-/// Recursively collect every `*.phg` under `dir`.
+/// Recursively collect every single-file `*.phg` under `dir`, **skipping project roots**. A
+/// directory containing a `phorge.toml` is a multi-file project (M5): its files import each other
+/// and only run when assembled through `loader::load`, so running them standalone here would fail.
+/// `all_example_projects_match_between_backends` gates those instead. The exclusion is structural
+/// (keyed on the manifest's presence), not name-based, so any project added under `examples/` later
+/// is auto-excluded with no test edit.
 fn collect_phg(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+    if dir.join("phorge.toml").is_file() {
+        return; // a project root — handled by the project-aware harness below
+    }
     for entry in std::fs::read_dir(dir).expect("read_dir examples/") {
         let path = entry.expect("examples dir entry").path();
         if path.is_dir() {
@@ -539,6 +548,47 @@ fn collect_phg(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
             out.push(path);
         }
     }
+}
+
+/// Recursively collect every project root (a directory holding a `phorge.toml`) under `dir`.
+fn collect_projects(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+    if dir.join("phorge.toml").is_file() {
+        out.push(dir.to_path_buf());
+        return; // projects don't nest in the example set — don't descend further
+    }
+    for entry in std::fs::read_dir(dir).expect("read_dir examples/") {
+        let path = entry.expect("examples dir entry").path();
+        if path.is_dir() {
+            collect_projects(&path, out);
+        }
+    }
+}
+
+/// The `package main` entry of a project: the (single) file named `main.phg` under the project root.
+/// Examples follow the convention `src/main.phg`, but this walks so a project may place it anywhere.
+fn find_main_phg(project_dir: &std::path::Path) -> std::path::PathBuf {
+    fn walk(dir: &std::path::Path) -> Option<std::path::PathBuf> {
+        let mut entries: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
+            .ok()?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .collect();
+        entries.sort();
+        for p in &entries {
+            if p.is_file() && p.file_name().and_then(|n| n.to_str()) == Some("main.phg") {
+                return Some(p.clone());
+            }
+        }
+        for p in &entries {
+            if p.is_dir() {
+                if let Some(found) = walk(p) {
+                    return Some(found);
+                }
+            }
+        }
+        None
+    }
+    walk(project_dir)
+        .unwrap_or_else(|| panic!("project {} has no main.phg entry", project_dir.display()))
 }
 
 /// Every runnable example under `examples/` must produce byte-identical stdout on both backends.
@@ -568,6 +618,43 @@ fn all_examples_match_between_backends() {
             cmd_run(&src)
         );
         agree(&src);
+    }
+}
+
+/// M5 S2d — every multi-file **project** under `examples/` must also run byte-identically on both
+/// backends. Unlike the single-file glob above, a project is assembled through `loader::load` (which
+/// walks up to its `phorge.toml`, parses every file under the source root, validates folder=path, and
+/// resolves cross-package qualified calls into one flat program). Because the loader produces concrete
+/// bare names before any backend runs, run==runvm is structural — but a malformed example (an import
+/// that resolves to nothing, a folder=path violation) would surface as a *shared* failure, which the
+/// explicit `Ok` assertion catches. Discovery is glob-based, so a project added later is auto-gated.
+#[test]
+fn all_example_projects_match_between_backends() {
+    let mut projects = Vec::new();
+    collect_projects(std::path::Path::new("examples"), &mut projects);
+    projects.sort();
+    assert!(
+        !projects.is_empty(),
+        "expected at least one example project (examples/project/*), found none"
+    );
+    for project in &projects {
+        let entry = find_main_phg(project);
+        eprintln!("project: {} (entry {})", project.display(), entry.display());
+        let unit = loader::load(&entry)
+            .unwrap_or_else(|e| panic!("project {} must load: {e}", project.display()));
+        let run = cli::run_program(&unit.program, &unit.diag_src);
+        let runvm = cli::runvm_program(&unit.program, &unit.diag_src);
+        assert!(
+            run.is_ok(),
+            "project {} must run on the interpreter, got {run:?}",
+            project.display()
+        );
+        assert_eq!(
+            run,
+            runvm,
+            "backend mismatch for project {}:\n  run={run:?}\n  runvm={runvm:?}",
+            project.display()
+        );
     }
 }
 

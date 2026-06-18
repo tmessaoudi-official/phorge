@@ -41,6 +41,13 @@
   to language rule**; transpile = emit PHP files in PSR-4 layout + a generated autoload/composer block.
   Contract holds: Phorge package resolution : PHP/PSR-4 :: TS module resolution : JS.
 
+- [2026-06-18] AGREED (S2d): next = **project-aware differential harness + public `examples/project/`
+  showcase** (the multi-file example deferred from S2a–S2c, satisfying "examples ship with features").
+  Harness lives in `tests/differential.rs`: discover every project root under `examples/` (a dir with
+  a `phorge.toml`), load via `loader::load`, run both backends, assert `Ok` + byte-identical. The
+  single-file glob is made **project-aware** — it stops descending into any directory that contains a
+  `phorge.toml` (structural exclusion, not name-based), so project files are never run standalone and
+  the `len() >= 3` floor still gates the flat examples. (Developer chose "S2d — harness + example".)
 - [2026-06-18] AGREED (S2c scope): library packages export **functions only** this slice — a
   `class`/`enum` in a non-`main` package is rejected (`E-PKG-TYPE`); cross-package type namespacing is
   an M5 follow-up. The public `examples/project/` showcase is deferred to S2d (the single-file
@@ -123,7 +130,15 @@ Slices (each: one+ green commit, run==runvm byte-identical, PHP round-tripped, e
   packages export functions only** (`E-PKG-TYPE` rejects non-`main` types; cross-package types are an
   M5 follow-up). The S2b bare cross-package interim is tightened (unqualified now fails on both
   backends). The public `examples/project/` showcase ships at S2d (needs the project-aware harness).
-- [ ] **S2d — project-aware differential harness + `examples/project/` showcase**.
+- [x] **S2d — project-aware differential harness + `examples/project/` showcase** — DONE
+  (2026-06-18, 410 tests green, clippy + fmt clean, run==runvm + real-PHP round-trip byte-identical).
+  `examples/project/tempconv/` (two-package C→F converter) is the first public multi-file project:
+  mandatory packages + folder=path, cross-package qualified call, import aliasing (`as`), same-package
+  bare call across files, namespaced PHP. `tests/differential.rs` discovers every project root (dir
+  with `phorge.toml`), loads via `loader::load`, asserts `run` ≡ `runvm`; the single-file glob is made
+  project-aware (skips any dir holding a `phorge.toml` — structural, name-independent). Docs refreshed
+  (`examples/README.md` rows + corrected "later slice" notes; `examples/project/README.md`; `FEATURES.md`
+  Modules/packages → 🚧).
 - [ ] **S3 — git deps + `phorge.lock` + `phorge vendor` + auto-offline** (final M5 slice or follow-up).
 
 > Phase 3C convergence gate runs before S1 implementation begins. Each slice re-enters Phase 5→6→6C.

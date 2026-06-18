@@ -32,7 +32,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Exceptions (try/catch/throw) | 🔲 M3 | |
 | Mutation (reassignment, field writes) | 🔲 M3 | triggers the tracing GC |
 | Traits, operator overloading, method overloading | 🔲 future | |
-| Modules / packages | 🔲 M5 | real `import` resolution |
+| Modules / packages | 🚧 M5 | multi-file projects, folder=path, cross-package `import` + aliasing, namespaced PHP — shipped; git-based deps next (S3) |
 | Concurrency (`spawn` + channels) | 🔲 M6 | uncolored, green-threaded |
 
 ## Backends & tooling

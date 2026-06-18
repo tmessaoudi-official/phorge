@@ -6,6 +6,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### M5 slice S2d — project-aware differential harness + public multi-file example
+
+- **First public multi-file project** — `examples/project/tempconv/` (a two-package Celsius→Fahrenheit
+  converter) showcases the M5 project model end-to-end: mandatory packages + folder=path, a
+  cross-package qualified call (`convert.c_to_f(0)`), import aliasing (`import acme.label as fmt;` →
+  `fmt.tag(...)`), and a same-package bare call across two files. Plus `examples/project/README.md`.
+- **Project-aware byte-identity gate** — `tests/differential.rs` now discovers every project root (a
+  directory with a `phorge.toml`) under `examples/`, loads it through `loader::load`, and asserts
+  `run` ≡ `runvm` (and that it runs). The single-file glob is made project-aware — it stops descending
+  into any directory holding a `phorge.toml`, so project files are never run standalone (structural,
+  name-independent; flat examples keep their `len() >= 3` floor). A project added later is auto-gated.
+- **Verified** — the example runs `freezing = 32F` / `boiling = 212F` byte-identically on `run`,
+  `runvm`, **and real PHP 8.6** (exact integer math, chosen so PHP's float `/` agrees).
+- Docs refreshed for shipped multi-file support: `examples/README.md` (index + matrix rows; the two
+  "arrives in a later slice" notes corrected) and `FEATURES.md` (Modules/packages → 🚧, git deps = S3).
+
 ### M5 slice S2c — qualified cross-package calls + namespaced PHP + import aliasing
 
 - **Cross-package calls resolve** — `import acme.util;` then `util.compute(x)` now works across files.

@@ -227,8 +227,14 @@ names ⇒ flat path, byte-identical to pre-S2c). Aliasing: `import a.b as c;` (`
 contextual `as`). **Scope: library packages export functions only** (`E-PKG-TYPE` rejects non-`main`
 types — cross-package types are a follow-up); the S2b bare cross-package interim is tightened
 (unqualified now fails on both backends). Verified `42` on run/runvm/**real PHP 8.6**. 409 tests green.
-**NEXT: S2d** (project-aware differential harness + `examples/project/` showcase — the public multi-file
-example deferred here from S2a–S2c) → S3 (git deps + `phorge.lock` + `phorge vendor`). Then
+**M5 S2d COMPLETE** — first public multi-file project (`examples/project/tempconv/`, a two-package
+C→F converter) showcasing mandatory packages + folder=path, a cross-package qualified call, import
+aliasing (`as`), a same-package bare call across files, and namespaced PHP; runs `freezing = 32F` /
+`boiling = 212F` byte-identically on run/runvm/**real PHP 8.6** (exact integer math, so PHP's float `/`
+agrees). `tests/differential.rs` is now **project-aware**: it discovers every project root (a dir with
+`phorge.toml`) under `examples/`, loads via `loader::load`, and gates `run` ≡ `runvm`; the single-file
+glob skips any dir holding a `phorge.toml` (structural exclusion). 410 tests green.
+**NEXT: S3** (git deps + `phorge.lock` + `phorge vendor` + auto-offline — the final M5 slice). Then
 Track A (S3 lambdas/pipeline), which also unblocks the deferred `core.list`. **Parked:** M2.5 Phase 3 (CI
 stub registry + `--sign`) — `docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
 

@@ -1,0 +1,6 @@
+package acme.convert;
+
+// The Celsius->Fahrenheit scale factor, in exact integer arithmetic: 0 -> 0, 100 -> 180.
+function scale(int c) -> int {
+    return c * 9 / 5;
+}
