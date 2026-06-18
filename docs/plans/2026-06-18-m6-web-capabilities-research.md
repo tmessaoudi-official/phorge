@@ -22,6 +22,33 @@
   thin real-socket integration test (`tests/serve.rs`, outside `differential.rs`) validates the seam.
   Combines the env-update HTTP-fixture-seam pattern with the existing `tests/build.rs` quarantine
   precedent. Developer asked for pros/cons + a recommendation; this is it, to be confirmed in research.
+- [2026-06-18] AGREED (execution): run the research via **parallel research subagents** (~4
+  concurrent, ≤5 rate-limit ceiling) — each writes raw findings to `docs/research/m6/raw/<topic>.md`
+  (compaction-safe), then synthesize into the design spec. Inline-sequential and prereqs-first were
+  the alternatives; fan-out chosen for exhaustive coverage speed.
+- [2026-06-18] AGREED (gate): the design-lock 3C convergence gate runs at **full 30/8** (30-cycle cap,
+  8 consecutive clean cycles, 3 angles) before the spec is written — matches the "perfect design" bar.
+- [2026-06-18] CONVERGED (research → design, 3C 8/8 at cycle 11). Locked design findings:
+  - The **portable unit is `handle(Request) -> Response` at the VALUE level**, not raw bytes (PSR-7/15
+    insight: handler portable, SAPI bridge not). Parsing wire-bytes→Request is *runtime glue* (Phorge
+    socket-side vs PHP superglobal-side) — NOT transpiled 1:1; only `handle` round-trips.
+  - **Request/Response shape (recommended): Shape A — pure-Phorge classes** (in `package main` for the
+    spike; a `core.http` *library* awaits the M5 cross-package-types follow-up, E-PKG-TYPE). Headers as
+    `List<Header>` + `header(k):string?` linear scan (no Map surface until S4); composes with S2 `??`.
+    Needs ZERO new language features — M1 classes + S1 list/range + S2 optionals + `core.text`.
+  - **Concurrency: single-threaded spike — forced by the `Rc`-shared heap (P5a, not `Send`).** OS-thread
+    pools are off the table; real concurrency is the M6 green-thread runtime on the VM's reified frames.
+  - **Quarantine:** socket accept-loop in a new `src/serve.rs` behind a `Transport` trait, tested by a
+    skip-aware `tests/serve.rs` OUTSIDE `differential.rs` (build.rs/vendor.rs precedent). `handle` +
+    parse + serialize are deterministic → in the spine via a glob-gated `examples/` program.
+  - **One new runtime path:** invoke a named fn (`handle`) with a constructed arg from Rust (VM enters
+    `main()` only today). Additive — does not touch `main()` dispatch.
+  - **Wire (spike):** HTTP/1.1, mandatory `Content-Length`, status→reason-phrase, `Connection: close`,
+    one request/socket, Content-Length bodies only (no keep-alive/chunked), malformed→`400`, ASCII
+    bodies (PHP round-trip). `phorge serve <file> [--port]` blocks (own dispatch, not the `print!` tail).
+  - **Spike scope:** pure handler + `phorge serve` + a documented ~10-line PHP front-controller in the
+    serve README. Router/middleware deferred to S3 lambdas; Map ergonomics to S4; `core.http` stdlib to
+    the cross-package-types follow-up; `bytes` type deferred (UTF-8 text bodies v1).
 
 ## The dominating constraint — determinism
 
