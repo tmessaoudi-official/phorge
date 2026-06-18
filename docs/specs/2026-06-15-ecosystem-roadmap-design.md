@@ -44,7 +44,7 @@ the stdlib and connectors ride on.
 
 | # | Decision | Choice |
 |---|---|---|
-| E-1 | Backends | Two (native VM + PHP-transpile) behind a clean `Backend` trait; **PHP backend optional/deactivatable** (feature-gated/pluggable). _As-built M2 P3.5: the trait is **planned, not yet present** (`grep 'trait ' src/` = 0) — today the three pipelines (`cmd_run`/`cmd_runvm`/`cmd_transpile`) are free functions dispatched by a string `match` in `main.rs`; the trait lands with the 4th backend (`phorge build`) per Rule of Three._ |
+| E-1 | Backends | Two (native VM + PHP-transpile) behind a clean `Backend` trait; **PHP backend optional/deactivatable** (feature-gated/pluggable). _As-built M2 P3.5: the trait is **planned, not yet present** (`grep 'trait ' src/` = 0) — today the three pipelines (`cmd_run`/`cmd_runvm`/`cmd_transpile`) are free functions dispatched by a string `match` in `main.rs`; the trait lands with the 4th backend (`phg build`) per Rule of Three._ |
 | E-2 | PHP ecosystem | PHP backend for eco + native connectors for VM; migration = typed-subset batch. Reject live-transpile, C-ext FFI, dynamic `.so` |
 | E-3 | Package distribution | Git-based/decentralized first behind a `PackageSource` trait; central-registry-capable later with no rework |
 | E-4 | Ecosystem sequencing | Extension API + stdlib → module resolution → packages → connectors |
@@ -58,7 +58,7 @@ the stdlib and connectors ride on.
 | Milestone | Scope | Sprints | ROI rationale |
 |---|---|---|---|
 | **M2** *(active)* | Bytecode VM + mark-sweep GC | P1✅ Chunk+Op+VM · P2 compiler+`runvm`+differential · P3 functions · P4 classes/enums+arena · P5 GC collector · P6 strings/full differential sweep | Runtime foundation; native "Go model" path |
-| **M2.5** | Single-binary bundling (`phorge build`) | embed bytecode in the runtime binary (bun-compile style) | Cheap once the VM works; tangible "ship one file" artifact |
+| **M2.5** | Single-binary bundling (`phg build`) | embed bytecode in the runtime binary (bun-compile style) | Cheap once the VM works; tangible "ship one file" artifact |
 | **M3** | Language enrichment (once, on VM+interp+transpile) | 3a exceptions + null safety/Option · 3b Map/Set/tuples + collection ops · 3c traits + method overloading *(design-risky → prototype on tree-walker first)* · 3d value types + operator overloading + sized ints/`decimal` + `const`/`final` | Makes Phorge a *good* language; **prerequisite for a real stdlib** (needs Map/Set/traits/generics) |
 | **M4** | Native extension API + stdlib | 4a `NativeModule` dual+registration (checker sig + native impl + PHP-emit) · 4b stdlib: io/string/math/collections/json/time/fs | Foundational ecosystem piece (E-4); unlocks native modules on **both** backends |
 | **M5** | Modules + package manager | 5a real `import a.b.c` resolution (load `.phg`) · 5b git-based pkg mgr behind `PackageSource` (`phorge.toml` + lockfile) | Ecosystem plumbing; reuse/sharing; registry slots in later |

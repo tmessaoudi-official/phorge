@@ -1,7 +1,7 @@
 use std::process::Command;
 
 /// Path to the compiled `phorge` binary (Cargo sets this for integration tests).
-const BIN: &str = env!("CARGO_BIN_EXE_phorge");
+const BIN: &str = env!("CARGO_BIN_EXE_phg");
 
 #[test]
 fn run_sample_fixture_prints_expected_output() {
@@ -28,7 +28,7 @@ fn version_flag_prints_version_exit_0() {
         let out = Command::new(BIN).arg(flag).output().expect("spawn phorge");
         assert!(out.status.success(), "{flag} exit {:?}", out.status.code());
         let s = String::from_utf8_lossy(&out.stdout);
-        assert!(s.starts_with("phorge "), "{flag} stdout: {s}");
+        assert!(s.starts_with("phg "), "{flag} stdout: {s}");
         assert!(
             s.trim().ends_with(env!("CARGO_PKG_VERSION")),
             "{flag} stdout: {s}"
@@ -80,7 +80,7 @@ fn transpile_sample_exits_0_with_php() {
 }
 
 /// The committed `examples/transpile/demo.php` must equal freshly-generated output, so transpiler
-/// drift fails the suite (regenerate with `phorge transpile examples/transpile/demo.phg > …`).
+/// drift fails the suite (regenerate with `phg transpile examples/transpile/demo.phg > …`).
 #[test]
 fn transpile_demo_matches_committed_php() {
     let expected =

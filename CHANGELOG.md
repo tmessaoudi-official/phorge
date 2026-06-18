@@ -25,9 +25,9 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   `docs/specs/2026-06-18-m6-web-design.md`); bytes was pulled forward so HTTP bodies can be honest
   octets.
 
-### M5 slice S3 — git dependencies + `phorge.lock` + `phorge vendor` + auto-offline
+### M5 slice S3 — git dependencies + `phorge.lock` + `phg vendor` + auto-offline
 
-- **`phorge vendor`** — the only network-touching command. It clones each `[require]` git dependency
+- **`phg vendor`** — the only network-touching command. It clones each `[require]` git dependency
   at its pinned `tag`/`rev`, copies the dependency's source into `vendor/<vendor>/<package>/`, and
   writes `phorge.lock` pinning the **resolved commit SHA** + an FNV-1a-64 content hash. Idempotent and
   crash-safe (stages into a temp dir, swaps atomically, touches only each dependency's own subtree).
@@ -41,8 +41,8 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   `(package, name)` after the merge — previously a silent overwrite).
 - **Example** — `examples/project/withdeps/` (a project consuming a vendored `acme/strutil` library):
   ships its committed `vendor/` + `phorge.lock`; the project-aware differential harness loads it
-  offline and gates `run` ≡ `runvm`, and it round-trips through real PHP. `phorge vendor` gains a
-  `--help` entry, USAGE/dispatch wiring, and three `phorge explain` codes.
+  offline and gates `run` ≡ `runvm`, and it round-trips through real PHP. `phg vendor` gains a
+  `--help` entry, USAGE/dispatch wiring, and three `phg explain` codes.
 - **Tests** — `tests/vendor.rs` drives the real `git clone`/`checkout`/`rev-parse` path against a
   `file://` local-git fixture (offline, deterministic): fetch + lock + offline byte-identical load,
   idempotent re-vendor, and `E-VENDOR-MISSING`.
@@ -137,7 +137,7 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 - **Mandatory `package` declaration** — every file declares its package as the first line, never
   inferred (`package app.util;`). The reserved **`package main;`** is the runnable entry (Go's model;
   pairs with `fn main()`); `core` is reserved for the standard library. New checker codes
-  `E-NO-PACKAGE` / `E-RESERVED-PACKAGE` (both `phorge explain`-documented). The parser captures the
+  `E-NO-PACKAGE` / `E-RESERVED-PACKAGE` (both `phg explain`-documented). The parser captures the
   path on `Program.package`; a `package` after any item is a parse error (it must be first).
 - **Byte-identity preserved** — S1 is front-end only: the interpreter, VM, and transpiler ignore the
   package (flat PHP emission unchanged — `package main` → no namespace), so `run`/`runvm` and the PHP
@@ -161,9 +161,9 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   caret, attach a "did you mean `…`?" hint (nearest in-scope name, Levenshtein ≤ 2), and carry a
   stable code. `Diagnostic` gains `code`/`hint` fields + a `render` method; all construction is
   centralized through `Diagnostic::new`. Runtime-error strings are unchanged (differential parity).
-- **`phorge explain <CODE>`** — print the explanation for a diagnostic code (`E-UNKNOWN-IDENT`,
+- **`phg explain <CODE>`** — print the explanation for a diagnostic code (`E-UNKNOWN-IDENT`,
   `E-UNKNOWN-TYPE`, `E-INFER-NULL`, `E-ALIAS-CYCLE`).
-- **Per-command help** — `phorge <command> --help` / `-h` prints a description, the source/flag forms,
+- **Per-command help** — `phg <command> --help` / `-h` prints a description, the source/flag forms,
   and 1–2 worked examples.
 - New guide example `examples/guide/inference.phg` (auto byte-identity-gated by the differential
   harness).
@@ -179,7 +179,7 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   `vm::exec_op`, `compiler::stack_effect`; `chunk::validate` needs no arm: no static index). Both
   backends build the list via Rust's native `start..end` / `start..=end` (no counter overflow), so
   `for (int i in 0..n)` works unchanged. The lexer adds `..` / `..=` (longest-match). Transpiles to PHP
-  `range()`; a non-int bound is `E-RANGE-TYPE` (a `phorge explain` entry).
+  `range()`; a non-int bound is `E-RANGE-TYPE` (a `phg explain` entry).
 - **Expression `if`** — `if (c) { e } else { e }` in value position (`var x = if (c) { 1 } else { 2 };`).
   Parens + a mandatory `else`; single-expression arms. Disambiguated from the statement `if` by parse
   position; lowers to the existing branch ops (no new `Op`); transpiles to a PHP ternary.
@@ -263,10 +263,10 @@ and a complete OSS doc set.
 
 ### Profiling & introspection
 
-- `phorge bench` now reports **memory** alongside timing: peak-RSS growth of one cold execution plus
+- `phg bench` now reports **memory** alongside timing: peak-RSS growth of one cold execution plus
   the process `VmHWM`/`VmRSS`, via a std-only, Linux-only `src/mem.rs` (`/proc/self/status` +
   `/proc/self/clear_refs`). Non-Linux hosts print `memory: unavailable on this platform`.
-- `phorge disasm <source>` — print the compiled bytecode: per-function instruction listings (index,
+- `phg disasm <source>` — print the compiled bytecode: per-function instruction listings (index,
   source line, op, and a resolved annotation for index-carrying ops) plus the program-level
   enum/class/method descriptor tables.
 - New profiling example `examples/bench/workload.phg` (CPU recursion + heap allocation) with
@@ -274,7 +274,7 @@ and a complete OSS doc set.
 
 ### CLI UX
 
-- `-v` / `--version` — print `phorge <version>` and exit; `-h` / `--help` — full usage banner.
+- `-v` / `--version` — print `phg <version>` and exit; `-h` / `--help` — full usage banner.
 - Flexible program source for the run-family commands
   (`run`/`runvm`/`check`/`parse`/`lex`/`transpile`/`disasm`/`bench`): `<file>` | `-` (read from **stdin**) |
   `-e <code>` / `--eval <code>` (run **inline** source) | `--` (next arg is a path even if it starts
@@ -282,7 +282,7 @@ and a complete OSS doc set.
 
 ### M2.5 Phase 2 — cross-OS standalone builds
 
-- `phorge build --target <triple>` / `--all` cross-compiles a runtime stub via
+- `phg build --target <triple>` / `--all` cross-compiles a runtime stub via
   [`cargo-zigbuild`](https://github.com/rust-cross/cargo-zigbuild) (zig as the linker) and embeds the
   program as a named object-file section. Targets: `x86_64-unknown-linux-musl`,
   `aarch64-unknown-linux-{gnu,musl}`, `x86_64-pc-windows-gnu`.
@@ -290,7 +290,7 @@ and a complete OSS doc set.
   (thin + fat), a magic-sniffing `section::find_section` dispatcher, and a `cross` orchestrator. The
   hand-rolled, std-only **PE/COFF**, **Mach-O 64**, and **fat/universal** readers use checked arithmetic
   (EV-7: adversarial input → `None`, never a panic) so a produced binary self-reads its own format.
-- Stub cache keyed on an FNV-1a-64 of the phorge binary's own bytes (a rebuilt phorge invalidates stale
+- Stub cache keyed on an FNV-1a-64 of the phg binary's own bytes (a rebuilt phorge invalidates stale
   stubs, protecting the parity spine). Precise "missing rustup target" / "needs a source checkout"
   errors. apple/darwin targets are rejected with a clear message (macOS stub deferred to Phase 3; the
   Mach-O reader ships and is tested). `--sign` reserved for Phase 3.
@@ -309,15 +309,15 @@ Built standalone binaries are unchanged: they run their embedded program and ign
 
 First tagged POC. Usable end-to-end on `x86_64-linux-gnu`: the full M1 language on two
 byte-identical backends (`run` interpreter + `runvm` bytecode VM), a Phorge→PHP transpiler, and
-`phorge build` producing a standalone native Linux executable. Bundles all post-M2-P3 work — the
+`phg build` producing a standalone native Linux executable. Bundles all post-M2-P3 work — the
 P3.5 hardening pass, M2 P4 (classes/enums/match/methods), Wave 4 (class-aware compiler types), P5a
 (`Rc`-shared heap), the full-coverage example set, and M2.5 Phase 1 (standalone build). Known v1
 limits: `build` is host-only; the artifact ignores argv and always exits 0; the language has no
 indexing/`Map`/`Set`/optionals/`|>`/exceptions/mutation (all M3).
 
-### M2.5 Phase 1 — `phorge build` (x86_64-linux-gnu) (2026-06-16) — **distribution**
-`phorge build foo.phg` produces a standalone host executable that runs `foo.phg` on the VM with no
-Phorge install — by copying the running phorge binary, embedding the program **source** in a
+### M2.5 Phase 1 — `phg build` (x86_64-linux-gnu) (2026-06-16) — **distribution**
+`phg build foo.phg` produces a standalone host executable that runs `foo.phg` on the VM with no
+Phorge install — by copying the running phg binary, embedding the program **source** in a
 `.phorge` ELF section, and self-detecting + running that payload at startup. Same section+container
 mechanism as the cross-OS end state (design §7). See
 `docs/specs/2026-06-16-m2.5-phorge-build-design.md` + `docs/plans/2026-06-16-m2.5-phase1-build-linux-gnu.md`.
@@ -330,14 +330,14 @@ mechanism as the cross-OS end state (design §7). See
     malformed/tampered/absent input).
   - `cli::cmd_build` — validates the program (no broken binary is ever emitted), copies `current_exe`,
     and shells `llvm-objcopy --add-section .phorge=…` (override via `PHORGE_OBJCOPY`).
-  - `phorge build <file> [-o out]` CLI command; `main()` runs an embedded payload at startup before
+  - `phg build <file> [-o out]` CLI command; `main()` runs an embedded payload at startup before
     any arg parsing.
   - `tests/build.rs` — the parity spine extended to distribution: a built binary's output is
     byte-identical to `runvm`; argv is ignored (v1); ill-typed programs fail with diagnostics and
     emit no binary.
   - **Hardening (post-review):** the ELF64 reader uses fully-checked offset arithmetic — adversarial/
     malformed input returns `None`, never overflow-panics under the debug/test profile
-    (regression-tested per EV-7); `phorge build` rejects a dangling `-o`, an unrecognized flag, or any
+    (regression-tested per EV-7); `phg build` rejects a dangling `-o`, an unrecognized flag, or any
     extra argument with a usage error (exit 2) instead of a silent default-named build. `docs/INVARIANTS.md`
     #1 now records the build binary as the third `cmd_runvm` parity surface.
 - **Notes** (v1 limits) — host-only (`x86_64-linux-gnu`); the embedded program ignores argv and
@@ -380,7 +380,7 @@ collector is needed (that stays deferred to M3). See
   - Three move-out sites adjusted (can't move out of an `Rc`): `vm.rs` `GetEnumField`
     (`into_iter().nth` → `.get().cloned()`), the interpreter's list `for` (iterate by ref + clone),
     and the ctor double-build (folded into one shared `Rc`). No `Op`/bytecode/AST/checker change.
-- **Perf** (`phorge bench`, median of 101, `fib(28)`)
+- **Perf** (`phg bench`, median of 101, `fib(28)`)
   - Object-heavy VM run **1537 ms → 634 ms (2.4× faster)**; the VM's advantage over the tree-walker
     recovered from **4.73× → 9.35×**, essentially on par with the scalar baseline (10.92×) — i.e.
     the object-path penalty (deep-clone-on-load) is largely eliminated.
@@ -426,7 +426,7 @@ language surface** and `examples/grades.phg` runs on both backends. See
     receiver at slot 0 (`this`).
   - Methods compile to functions (receiver at slot 0, params at `1..=argc`); `this` and bare field
     reads inside a method/ctor body resolve against the receiver.
-  - `examples/grades.phg` joined the differential examples sweep; `phorge bench examples/grades.phg`
+  - `examples/grades.phg` joined the differential examples sweep; `phg bench examples/grades.phg`
     runs (VM ≈3.2× the tree-walker on it).
 - **Removed**
   - The last two `(M2 P4)` compile-error stubs (`Expr::This`, method calls) — `grep "M2 P4"` in
@@ -490,7 +490,7 @@ Closing the parity/no-crash contract gaps before P4 widens the surface. See
 `docs/plans/2026-06-16-m2-p3.5-hardening-roadmap.md`.
 
 - **Added**
-  - `phorge bench <file>` — median-of-N timing of both backends, output-identity gated; measures
+  - `phg bench <file>` — median-of-N timing of both backends, output-identity gated; measures
     the "VM faster than tree-walker" thesis (≈10× on `examples/fib.phg`) instead of asserting it.
   - `agree_err` error-parity oracle in the differential harness (faults classified by semantic
     `FaultKind`).
@@ -514,7 +514,7 @@ Closing the parity/no-crash contract gaps before P4 widens the surface. See
 
 ## M2 — Bytecode + VM (P1–P3, 2026-06-16)
 - **P1** — `Chunk` + typed `Op` enum + stack VM dispatch loop.
-- **P2** — AST→bytecode compiler for the `main`-only surface + `phorge runvm` + the differential
+- **P2** — AST→bytecode compiler for the `main`-only surface + `phg runvm` + the differential
   harness (`runvm` byte-identical to `run`).
 - **P3** — user function calls, clox-style call frames, recursion/mutual recursion; `examples/fib.phg`
   runs on the VM.
@@ -522,7 +522,7 @@ Closing the parity/no-crash contract gaps before P4 widens the surface. See
 ## M1 — Tree-walking interpreter + transpiler — 2026-06-15 (`9da6e56`)
 - Full pipeline: lexer → parser → type-checker → tree-walking evaluator.
 - Phorge → PHP transpiler, round-trip-verified against real PHP.
-- CLI: `phorge <run|check|parse|lex|transpile>`.
+- CLI: `phg <run|check|parse|lex|transpile>`.
 - Language surface: static types, immutable-by-default bindings, functions, classes + constructor
   promotion, single-payload enums + exhaustive `match`, string interpolation, `List<T>` literals,
   `for…in`, checked int/float arithmetic. 162 tests green at the tag.

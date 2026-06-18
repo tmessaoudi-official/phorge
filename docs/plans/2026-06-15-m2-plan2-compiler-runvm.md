@@ -5,7 +5,7 @@
 > Steps use checkbox (`- [ ]`) syntax. **Rule 10 applies: confirm before every commit.**
 
 **Goal:** Compile the type-checked AST to bytecode and execute it on the P1 stack VM, so
-`phorge runvm <file>` produces byte-identical stdout to `phorge run` (the tree-walker) across
+`phg runvm <file>` produces byte-identical stdout to `phg run` (the tree-walker) across
 the P2 language surface.
 
 **Architecture:** A new `src/compiler.rs` pass walks the existing typed `Program`, emits a
@@ -1189,7 +1189,7 @@ pub fn cmd_runvm(src: &str) -> Result<String, String> {
 
 - [ ] **Step 4: Wire `runvm` into `src/main.rs`**
 
-- Change `USAGE` to: `"usage: phorge <run|runvm|check|parse|lex|transpile> <file>"`
+- Change `USAGE` to: `"usage: phg <run|runvm|check|parse|lex|transpile> <file>"`
 - Add `runvm` to the command match: `Some(c @ ("run" | "runvm" | "check" | "parse" | "lex" | "transpile")) => c,`
 - Add the dispatch arm: `"runvm" => cli::cmd_runvm(&src),`
 - Update the module doc-comment (line 1) command list to include `runvm`.
@@ -1209,7 +1209,7 @@ Run: `export PATH=/stack/tools/cargo/bin:$PATH && cargo clippy --all-targets 2>&
 
 ```bash
 git add src/cli.rs src/main.rs README.md
-git commit -m "feat(cli): phorge runvm — bytecode backend command (M2 P2)"
+git commit -m "feat(cli): phg runvm — bytecode backend command (M2 P2)"
 ```
 
 ---
@@ -1335,8 +1335,8 @@ git commit -m "test: VM-vs-interpreter differential harness for P2 surface (M2 P
 
 ## Done criteria (P2 complete)
 
-1. `phorge runvm <file>` runs every P2-surface program with **byte-identical** stdout to
-   `phorge run` (asserted by `tests/differential.rs`).
+1. `phg runvm <file>` runs every P2-surface program with **byte-identical** stdout to
+   `phg run` (asserted by `tests/differential.rs`).
 2. `cargo test` green (lib + all integration suites, incl. the differential harness).
 3. `cargo clippy --all-targets` clean.
 4. Completion Gate (Coverage/Docs/Config/Blast-radius) evidenced in the closing report.

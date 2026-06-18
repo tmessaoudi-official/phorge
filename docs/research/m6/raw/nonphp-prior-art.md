@@ -1,7 +1,7 @@
 # M6 Web Capabilities — Non-PHP Prior Art Survey
 
 > Purpose: survey the best non-PHP std-lib HTTP server designs to steal the right abstractions
-> for Phorge's `phorge serve` + a typed `handler(Request) -> Response` model.
+> for Phorge's `phg serve` + a typed `handler(Request) -> Response` model.
 > Lens: Phorge today is immutable-by-default, no Map/Set, no closures/lambdas yet (Track A),
 > no exceptions, `#![forbid(unsafe_code)]`, std-only/zero-dep, UTF-8 strings, byte-identical
 > `run`/`runvm` spine, green-threads (uncolored `spawn` + channels) planned for M6.
@@ -223,7 +223,7 @@ Map type. The static-route subset is shippable before Track A.
 ## 4. Rust std-only TCP server — proves zero-dependency feasibility (~40 lines)
 
 **Why it matters:** Phorge's runtime is Rust, std-only, zero-dep, `forbid(unsafe)`. This is the
-*exact* template for how `phorge serve`'s Rust host implementation reads sockets and writes HTTP/1.1
+*exact* template for how `phg serve`'s Rust host implementation reads sockets and writes HTTP/1.1
 by hand. The Rust Book's final project does it in **~40 lines** for the socket+parse+response layer.
 
 ### Socket bind + accept loop
@@ -266,7 +266,7 @@ stream.write_all(response.as_bytes()).unwrap();
 ```
 Response wire format: `status-line CRLF` + `headers CRLF` + blank `CRLF` + body.
 
-### HTTP/1.1 parsing concerns the toy server SKIPS (the real work for `phorge serve`)
+### HTTP/1.1 parsing concerns the toy server SKIPS (the real work for `phg serve`)
 
 - **Request line**: only the literal `"GET / HTTP/1.1"` is matched — no method/path/version parse.
 - **Headers**: read but *ignored* — must be parsed into a name→value collection.
@@ -349,7 +349,7 @@ immutable language. Node is the cautionary contrast, not a model to copy.
 ### The three-layer stratification (raw → pure handler → router+middleware)
 
 1. **Raw socket** (Rust-book layer): `TcpListener` + hand-written HTTP/1.1. This is the **Rust host
-   implementation** of `phorge serve`, invisible to Phorge users.
+   implementation** of `phg serve`, invisible to Phorge users.
 2. **Pure handler `fn(Request) -> Response`** (Deno layer): the **public Phorge default**. A single
    top-level function, return an immutable `Response`. No closures, no Map, no streams required.
 3. **Router + middleware** (Go/Bun layer): a `ServeMux`-style router and `Handler -> Handler`
@@ -392,7 +392,7 @@ A live server is inherently non-deterministic (network, timing, client identity)
 a byte-identity-gated example. The handler *function itself* IS deterministic and testable:
 `handler(Request) -> Response` is a pure function over a value, so the **handler** can be unit-tested
 / differential-gated by feeding a constructed `Request` and asserting the `Response` is byte-identical
-on `run`/`runvm` — exactly the Deno/Bun `server.fetch(request)` test seam. The `phorge serve` runtime
+on `run`/`runvm` — exactly the Deno/Bun `server.fetch(request)` test seam. The `phg serve` runtime
 (socket loop) stays *outside* the differential harness (like vendor/network code already does).
 
 ---

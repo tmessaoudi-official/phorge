@@ -32,14 +32,14 @@ Scope and limits:
 The differential harness (`tests/differential.rs`) is the correctness spine — `run` and `runvm`
 must stay byte-identical. Adding an `Op` variant requires extending three exhaustive matches in
 the same commit: `src/vm.rs` `exec_op`, `src/chunk.rs` `BytecodeProgram::validate`, and
-`src/compiler.rs` `stack_effect`. `phorge bench <file>` measures the two backends (median-of-N,
+`src/compiler.rs` `stack_effect`. `phg bench <file>` measures the two backends (median-of-N,
 output-identity gated) — run it for a before/after number before any perf change.
 
 **Examples ship with features** (developer rule, 2026-06-17): every shipped feature lands with a
 runnable example under `examples/` (auto-gated by the `tests/differential.rs` glob, so it must run
 byte-identically on both backends) and an `examples/README.md` entry (index + coverage matrix), in
 the **same change** as the feature. CLI/tooling features that aren't a single program (e.g.
-`phorge build`, `explain`) get a walkthrough README + a small companion `.phg` (see `examples/build/`,
+`phg build`, `explain`) get a walkthrough README + a small companion `.phg` (see `examples/build/`,
 `examples/cli/`). Faults can't be a runnable example (every example must produce identical *Ok*
 output) — capture them in a README instead.
 
@@ -80,14 +80,14 @@ example (and any added later) is byte-identity-gated automatically; `examples/RE
 living surface showcase. **Gotcha:** zero-payload enum variants need call form `V()` both to
 construct AND in a `match` pattern (bare `V =>` is a silent catch-all binding).
 
-**M2.5 `phorge build` (standalone executables) — Phases 1 & 2 COMPLETE** (released as **v0.4.0**).
-Phase 1 (host `x86_64-linux-gnu`): `phorge build foo.phg` embeds the program **source** in a `.phorge`
+**M2.5 `phg build` (standalone executables) — Phases 1 & 2 COMPLETE** (released as **v0.4.0**).
+Phase 1 (host `x86_64-linux-gnu`): `phg build foo.phg` embeds the program **source** in a `.phorge`
 section (versioned CRC-guarded container + hand-rolled ELF64 reader); `main()` self-detects + runs it
 on the VM. Phase 2 (`docs/plans/2026-06-16-m2.5-phase2-cross-os.md`): `src/bundle.rs` split into a
 `bundle/` module — `container`, per-format readers `elf`/`pe`/`macho` (thin + fat), a magic-sniffing
-`section::find_section`, and a `cross` orchestrator — plus `phorge build --target/--all` cross-compiling
+`section::find_section`, and a `cross` orchestrator — plus `phg build --target/--all` cross-compiling
 stubs via **cargo-zigbuild** (zig linker) for Linux `x86_64-musl`/`aarch64-{gnu,musl}` +
-`x86_64-pc-windows-gnu`, cached under an **FNV-1a-64 of the phorge binary's bytes**. All readers honor
+`x86_64-pc-windows-gnu`, cached under an **FNV-1a-64 of the phg binary's bytes**. All readers honor
 EV-7 (checked arithmetic, `None` on bad input). macOS reader ships + fixture-tested; apple `--target`
 is **rejected** (Mac stub deferred to Phase 3). `tests/build.rs` gates cross-parity (musl native exec +
 real windows-PE round-trip). **Hard-won gotcha (verified):** `llvm-objcopy --add-section` on **PE**
@@ -98,11 +98,11 @@ for ELF + PE (a prior "skip on PE" attempt was the bug; only the real-binary win
 (stdin) | `-e`/`--eval <code>` (inline) | `--` (literal path). `cli::resolve_source` is the pure,
 tested resolver; built binaries still ignore argv (run their embedded program).
 
-**Profiling & introspection (v0.4.0):** `phorge bench` now reports **memory** (cold-execution
+**Profiling & introspection (v0.4.0):** `phg bench` now reports **memory** (cold-execution
 peak-RSS growth + process `VmHWM`/`VmRSS`) beside its timing, via a std-only **Linux** `/proc`
 sampler (`src/mem.rs` — `/proc/self/status` + `clear_refs`=5 peak reset; non-Linux prints
 "unavailable"). Per-phase/sequential per-backend RSS is *deliberately not* reported — it reads ~0
-after the 101× timing loop warms the allocator (glibc rarely returns freed pages). `phorge disasm
+after the 101× timing loop warms the allocator (glibc rarely returns freed pages). `phg disasm
 <source>` dumps the compiled bytecode (per-function listings via `Op` `Debug` + a `_`-fall-through
 annotator, so no second match surface to drift; plus enum/class/method descriptor tables).
 Showcase: `examples/bench/workload.phg` (+ its README), auto byte-identity-gated like every example.
@@ -122,7 +122,7 @@ cycle/duplicate/built-in-shadow-checked in the checker, then expanded out of the
 `checker::expand_aliases` so the interpreter/VM/transpiler — and the PHP output — are alias-free);
 sharper diagnostics (caret-underlined span + did-you-mean hints + stable codes, `Diagnostic`
 construction centralized through `Diagnostic::new`, front-end-only so runtime parity is untouched); and
-`phorge explain <CODE>`. **Slice S1 (core ergonomics) is COMPLETE**
+`phg explain <CODE>`. **Slice S1 (core ergonomics) is COMPLETE**
 (`docs/plans/2026-06-17-m3-s1-ergonomics.md`): list indexing `xs[i]` (un-rejected in both backends —
 the checker already typed it — reusing the bounds-checked `Op::Index`; OOB → byte-identical
 `"list index out of range"` fault, classified `FaultKind::IndexOob` in the differential harness);
@@ -151,7 +151,7 @@ developer asked for more intuitive features + exhaustive examples (file/URL/impo
 benchmark. Locked: **build order D→B→A**; **URL/network deferred to M6** (Rust std has no HTTP client →
 breaks zero-dep, *and* network is non-deterministic → breaks the byte-identical spine; determinism, not
 the dependency, gates examples); **rich std-only stdlib now**; multiple inheritance = traits/mixins at
-S5 (rejected as MI, D-L3). **Track D DONE** — `phorge bench --vs-php` (3-way interpreter/VM/PHP, VM ≈3.2×
+S5 (rejected as MI, D-L3). **Track D DONE** — `phg bench --vs-php` (3-way interpreter/VM/PHP, VM ≈3.2×
 faster than a debug PHP 8.6 on the workload).
 
 **NAMESPACE RESHAPE (designed 2026-06-18, `docs/specs/2026-06-18-m3-namespace-system-design.md`):** the
@@ -236,8 +236,8 @@ agrees). `tests/differential.rs` is now **project-aware**: it discovers every pr
 glob skips any dir holding a `phorge.toml` (structural exclusion). 410 tests green.
 
 **M5 S3 COMPLETE — M5 is now CLOSED** (`docs/plans/2026-06-18-m5-modules-packages.md`): git dependencies
-+ `phorge.lock` + `phorge vendor` + auto-offline. `src/lock.rs` is a strict TOML-subset lockfile
-(`[[package]]` → `name`/`git`/`rev`/`hash`, round-tripping). `src/vendor.rs` (`phorge vendor`) is the
++ `phorge.lock` + `phg vendor` + auto-offline. `src/lock.rs` is a strict TOML-subset lockfile
+(`[[package]]` → `name`/`git`/`rev`/`hash`, round-tripping). `src/vendor.rs` (`phg vendor`) is the
 **only network-touching command**: clone → checkout the pinned tag/rev → copy the dep's source into
 `vendor/<vendor>/<package>/` (its own mini source-root, so folder=path validates per-dep) → FNV-1a-64
 content hash (reuses `bundle::cross::fnv1a_64`; the resolved 40-hex commit SHA is the real pin) → write
@@ -255,7 +255,7 @@ fixture** (offline, deterministic): fetch+lock+load, idempotent re-vendor, `E-VE
 **Gotcha:** the example's `[require]` git URL is a documented public-style placeholder; the dep's source
 is committed under `vendor/` (Go's vendoring model), so the example runs with zero network — `rev`/`hash`
 in `phorge.lock` are the real values for the committed source. **Deferred (KNOWN_ISSUES, not regressions):**
-transitive deps (a dep's own `[require]`); `phorge build` stays single-file (won't merge `vendor/`).
+transitive deps (a dep's own `[require]`); `phg build` stays single-file (won't merge `vendor/`).
 421 tests green.
 
 **M6 WEB CAPABILITIES — design-locked + spike in progress** (research
@@ -267,7 +267,7 @@ classes) is the ONE public API ("do both?" resolved to one-API/evolving-engine �
 later invisible optimization, not a 2nd API); **single-threaded is FORCED** by the `Rc`-shared heap (`Value`
 isn't `Send`), real concurrency = M6 green-threads under an unchanged contract; socket quarantined in a future
 `src/serve.rs` behind a `Transport` trait, tested outside `differential.rs`. Build order (tasks #16–#20):
-**W0 bytes → W1 handler(Shape A) → W2 static router → W3 `src/serve.rs`+Transport → W4 `phorge serve` CLI +
+**W0 bytes → W1 handler(Shape A) → W2 static router → W3 `src/serve.rs`+Transport → W4 `phg serve` CLI +
 PHP front-controller + docs**. **M6 W0 COMPLETE** (`446bcb9`, `docs/specs/2026-06-18-m6-w0-bytes-design.md`):
 `bytes` primitive + `b"…"` literals (`\xHH`) + `core.bytes` interop (`from_string`/`to_string`→`string?`/`len`
 byte-count/`concat`/`slice` clamped) — **no new `Op`** (literal via `Op::Const`, interop via `Op::CallNative`,

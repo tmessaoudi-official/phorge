@@ -6,7 +6,7 @@
 > before touching the compiler/backends. This is the long-deferred "Wave 4" from the M2 P3.5
 > hardening roadmap, scheduled (per that roadmap) to land *with* P4/P5 — now, right after P4.
 
-**Goal:** Close the last known `phorge run` ↔ `phorge runvm` divergences: programs that type-check
+**Goal:** Close the last known `phg run` ↔ `phg runvm` divergences: programs that type-check
 and run on the interpreter but the **VM compiler rejects** because its operand-type inference
 (`num_ty`) is *coarse* (`TyTag = Int | Float | Other`) and can't see through a field read on an
 arbitrary instance or a method-call result. Give the compiler a **class-aware** internal type so

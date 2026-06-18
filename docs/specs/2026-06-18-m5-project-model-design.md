@@ -48,7 +48,7 @@ runtime, idiomatic PHP on emission.**
   natively) as `"vendor/pkg" = { git = "…", tag|rev = "v1" }` (tag/rev only — never bare URL/branch),
   with an optional `"vendor/pkg" = "<git-url>@v1.2.0"` string shorthand. **Exact-pin only — no `^`/`~`
   ranges** (the lockfile pins exact, so a resolver/SAT-solve is unnecessary; deferred). `phorge.lock`
-  pins resolved commit SHA + content hash. A committed `vendor/` (via `phorge vendor`) is **used
+  pins resolved commit SHA + content hash. A committed `vendor/` (via `phg vendor`) is **used
   automatically with zero network** when present — the only way examples stay byte-identical. (Go's
   `vendor/` + self-locating import path + Cargo's lock, fused.) **Rejected: literal `composer.json`** —
   a file the `composer` tool cannot actually process (no Packagist, no autoloader Phorge uses) is a
@@ -132,7 +132,7 @@ it is isolated to its own slice. Lowest-risk order below.
     backends; the only flat-namespace-breaking change) + **multi-namespace PHP emission** (one brace
     block per package). + aliasing (O-9).
   - **S2d — project-aware differential harness** + a multi-file `examples/project/` showcase.
-- **S3 — git deps + vendor + lockfile.** `[dependencies]` git+tag, `phorge.lock` (SHA), `phorge vendor`,
+- **S3 — git deps + vendor + lockfile.** `[dependencies]` git+tag, `phorge.lock` (SHA), `phg vendor`,
   auto-offline when `vendor/` present. May land as the final M5 slice or split to a follow-up; design
   must not preclude it. Examples needing deps ship vendored sources for determinism.
 
@@ -158,7 +158,7 @@ it is isolated to its own slice. Lowest-risk order below.
 - **`package` keyword (F15):** verified used as an identifier nowhere — making it a keyword is safe.
 - **Error codes (F11/F12):** `E-NO-PACKAGE` (missing decl), `E-RESERVED-PACKAGE` (user `package core…`
   or `import core.X` of a non-native), `E-PACKAGE-LOOSE` (non-`main` package run as a loose script).
-  Each needs a `phorge explain <CODE>` entry (S0 diagnostics registry).
+  Each needs a `phg explain <CODE>` entry (S0 diagnostics registry).
 - **Migration scope (F4/F6/F14):** only programs that reach the **checker** (`parse_checked`/`cmd_run`/
   `cmd_runvm`/`cmd_transpile`/`cmd_disasm`/`cmd_bench`/`cmd_build`) need `package main;` — lexer/parser-
   only fragment tests do not. **Exclude negative/error-path tests** from any migrator (Wave-1 pitfall —

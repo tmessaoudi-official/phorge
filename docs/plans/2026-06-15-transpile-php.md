@@ -4,7 +4,7 @@
 > this plan task-by-task (subagent-driven deadlocks on the ask-human gate in this project —
 > execute inline on `master`). Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Emit runnable PHP 8.x from a type-checked Phorge program via `phorge transpile <file>`.
+**Goal:** Emit runnable PHP 8.x from a type-checked Phorge program via `phg transpile <file>`.
 
 **Architecture:** New `src/transpile.rs` codegen module walks the untyped AST (same AST as
 the evaluator), tracking global tables (funcs/classes/variants) and a per-function
@@ -896,7 +896,7 @@ pub fn cmd_transpile(src: &str) -> Result<String, String> {
 ```
 In `src/main.rs`: add `"transpile"` to the validated subcommand set, the dispatch arm
 `"transpile" => cli::cmd_transpile(&src),`, and update USAGE to
-`"usage: phorge <run|check|parse|lex|transpile> <file>"`.
+`"usage: phg <run|check|parse|lex|transpile> <file>"`.
 
 - [ ] **Step 4: Run, verify pass** — `cargo test 2>&1 | grep -E "test result|FAILED"` (all suites).
 
@@ -904,7 +904,7 @@ In `src/main.rs`: add `"transpile"` to the validated subcommand set, the dispatc
 
 ---
 
-### Task 8: Round-trip verification — emitted PHP runs and matches `phorge run`
+### Task 8: Round-trip verification — emitted PHP runs and matches `phg run`
 
 **Files:** Modify: `tests/cli.rs`
 
@@ -948,7 +948,7 @@ fn transpiled_php_runs_and_matches_interpreter() {
 
 ## Acceptance Criteria
 
-- `phorge transpile tests/fixtures/sample.phg` prints valid PHP beginning `<?php`, exit 0.
+- `phg transpile tests/fixtures/sample.phg` prints valid PHP beginning `<?php`, exit 0.
 - Emitted PHP (if `php` available) prints exactly `Hello Tak\narea = 12.56636\narea = 12\n`.
 - Ill-typed input → `type error …`, exit 1. Unsupported feature → `transpile error: …`, exit 1.
 - Full `cargo test` green; `cargo clippy --all-targets` exit 0, zero warnings.

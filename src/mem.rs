@@ -1,4 +1,4 @@
-//! Process memory sampling for `phorge bench`. std-only and Linux-only: it reads
+//! Process memory sampling for `phg bench`. std-only and Linux-only: it reads
 //! `/proc/self/status` (`VmRSS` = current resident set, `VmHWM` = peak resident set) and resets the
 //! kernel's peak high-water mark through `/proc/self/clear_refs`. Every function returns an
 //! `Option` (or is a silent no-op) when `/proc` is unavailable — non-Linux hosts, sandboxes, the

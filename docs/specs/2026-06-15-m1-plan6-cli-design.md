@@ -6,7 +6,7 @@
 
 ## 1. Goal
 
-`phorge run file.phg` executes a Phorge program end-to-end and prints its output.
+`phg run file.phg` executes a Phorge program end-to-end and prints its output.
 The full four-stage pipeline (lex → parse → check → interpret) is exposed through
 subcommands. After this plan, M1 is complete: programs run from a file.
 
@@ -22,7 +22,7 @@ Plan 1); this plan extends them.
 
 ## 3. Commands
 
-`phorge <command> <file>`:
+`phg <command> <file>`:
 
 | Command | Pipeline | Success output |
 |---------|----------|----------------|
@@ -42,7 +42,7 @@ printed and the program is **not** executed.
   Unit tests.
 - `src/main.rs` — rewritten as a thin dispatcher over `phorge::cli`.
 - `src/lib.rs` — add `pub mod cli;`.
-- `tests/cli.rs` — subprocess smoke tests via `env!("CARGO_BIN_EXE_phorge")`.
+- `tests/cli.rs` — subprocess smoke tests via `env!("CARGO_BIN_EXE_phg")`.
 - `tests/fixtures/sample.phg` — the verbatim §6 sample (committed fixture).
 
 ## 5. Error reporting
@@ -76,12 +76,12 @@ with `OK`; `cmd_check` on a type error → `Err`; `cmd_parse` → `Ok` containin
 `Program`; `cmd_lex` → `Ok` containing a token.
 
 **Subprocess** (`tests/cli.rs`, std `Command`, no external crates):
-`phorge run tests/fixtures/sample.phg` → stdout == the three lines, exit 0;
+`phg run tests/fixtures/sample.phg` → stdout == the three lines, exit 0;
 no-args → exit 2; `run` on a nonexistent file → exit 1.
 
 ## 8. Decisions Log
 
-- **CLI-1** Subcommand invocation (`phorge <cmd> <file>`), not bare-file default —
+- **CLI-1** Subcommand invocation (`phg <cmd> <file>`), not bare-file default —
   consistent with the existing `lex` command.
 - **CLI-2** Commands: `run`, `check`, `parse`, `lex` (all four).
 - **CLI-3** Thin `main` over a testable `cli` library module; std-only arg parsing.

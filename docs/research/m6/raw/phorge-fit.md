@@ -33,7 +33,7 @@
   `run.is_ok()` (`:647-651`).
 
 ### The quarantine precedent — `tests/build.rs` and `tests/vendor.rs` live OUTSIDE the spine
-- `tests/build.rs` gates `phorge build`'s output against `phorge runvm` (parity extended to the
+- `tests/build.rs` gates `phg build`'s output against `phg runvm` (parity extended to the
   *distribution* layer, `tests/build.rs:1-3`) but is **a separate integration test file** — it is
   *not* part of the `agree`/glob spine. It is **toolchain-gated with graceful skip**:
   `cross_toolchain_ready` returns false (and the test no-ops) when cargo-zigbuild or the rustup
@@ -144,7 +144,7 @@ thing that can't be an op is the socket accept-loop — and that doesn't run in 
 
 ---
 
-## 4. The transpile target (`src/transpile.rs`) — `handler(Request)->Response` → stock PHP; `phorge serve` → `php -S`
+## 4. The transpile target (`src/transpile.rs`) — `handler(Request)->Response` → stock PHP; `phg serve` → `php -S`
 
 ### How a handler transpiles to idiomatic PHP
 - Classes already transpile: `emit_class` produces a PHP `class` with constructor promotion
@@ -161,20 +161,20 @@ thing that can't be an op is the socket accept-loop — and that doesn't run in 
   (e.g. `req.path()` → `$_SERVER['REQUEST_URI']`) and Response *emission* to `header()` + `echo`.
   This mirrors `console.println` → `echo … . "\n"` exactly (`src/native.rs:428-433`).
 
-### Where the `phorge serve` → `php -S` seam is
+### Where the `phg serve` → `php -S` seam is
 - **There is no `serve` in the transpiler** — and there shouldn't be. The transpiler emits the
   *handler script*; `php -S` is the *server* that invokes that script per request. The seam is the
-  **CLI**, not the language: `phorge serve app.phg` runs Phorge's own socket loop calling the Phorge
+  **CLI**, not the language: `phg serve app.phg` runs Phorge's own socket loop calling the Phorge
   handler; `php -S localhost:8000 app.php` (the transpiled output) is the PHP-side equivalent. They
   are two runtimes wrapping the **same pure handler** — precisely the §6 three-layer split.
 - Concretely: `transpile` already exists as a Program-taking runner (`cli::transpile_program`,
   `src/cli.rs:424-429`) and a string runner (`cmd_transpile`, `:469-474`). The web transpile reuses
-  them unchanged; only the `core.http` natives' `php` closures are new. `phorge serve` is a **new CLI
+  them unchanged; only the `core.http` natives' `php` closures are new. `phg serve` is a **new CLI
   command** (§5), parallel to `build`/`vendor`, that imports the *runtime*, not the transpiler.
 
 ---
 
-## 5. CLI structure (`src/cli.rs` + `src/main.rs`) — where `phorge serve` slots in
+## 5. CLI structure (`src/cli.rs` + `src/main.rs`) — where `phg serve` slots in
 
 ### How commands dispatch
 - `main.rs` is a thin dispatcher. The command whitelist is a single `match` on `args[1]`
@@ -192,7 +192,7 @@ thing that can't be an op is the socket accept-loop — and that doesn't run in 
     then delegates to `bundle::cross`. Its parity is gated by `tests/build.rs`, not `differential.rs`.
 
 ### Where `serve` slots in
-`phorge serve <file> [--port N]` is a **new tooling command modeled on `vendor`/`build`**:
+`phg serve <file> [--port N]` is a **new tooling command modeled on `vendor`/`build`**:
 - Add `"serve"` to the whitelist (`src/main.rs:42-46`) and the `USAGE` string (`:9-11`); add a
   per-command help arm in `help_for` (`src/cli.rs:55-137`).
 - Add a dedicated dispatch block (like `vendor`'s, `src/main.rs:81-97`) that parses `--port`, loads the
@@ -217,7 +217,7 @@ thing that can't be an op is the socket accept-loop — and that doesn't run in 
    parsing native.
 2. **Dirty (outside the spine):** the `TcpListener::accept()` loop — read raw bytes off the socket,
    hand them to layer 1, write `Response` bytes back. Maximally non-deterministic (timing, client
-   identity, concurrency). Lives in `src/serve.rs`, driven by `phorge serve`, tested by a thin
+   identity, concurrency). Lives in `src/serve.rs`, driven by `phg serve`, tested by a thin
    `tests/serve.rs`.
 3. **Transpile:** the same layer-1 handler → PHP superglobals+echo; `php -S` is the layer-2 equivalent
    on the PHP side (§4).
@@ -269,8 +269,8 @@ aren't a single program get a walkthrough README + a small companion `.phg`.
    round-trips through real PHP. (Fixture-driven, like `examples/guide/file.phg` reading
    `examples/guide/fixtures/`, `src/native.rs:347-353`.)
 2. **A README walkthrough for the live server** under `examples/web/README.md` (cf.
-   `examples/build/README.md` 2.1K, `examples/cli/README.md` 3.4K) showing `phorge serve app.phg`,
-   the `curl` against it, and the `phorge transpile app.phg | php -S` equivalent. The live socket
+   `examples/build/README.md` 2.1K, `examples/cli/README.md` 3.4K) showing `phg serve app.phg`,
+   the `curl` against it, and the `phg transpile app.phg | php -S` equivalent. The live socket
    loop **cannot be a runnable byte-identical example** (non-deterministic — same reason a fault can't
    be one, project CLAUDE.md), so it is captured in the README + the thin `tests/serve.rs`, not the
    glob.
@@ -286,6 +286,6 @@ aren't a single program get a walkthrough README + a small companion `.phg`.
 | Parsing / routing / dispatch | Phorge functions + (optional) parsing native via `Op::CallNative` (`chunk.rs:118-122`, `vm.rs:266-273`) — **no new Op** | in spine (deterministic) |
 | `core.http` natives | append `NativeFn`s to a `http_natives()` builder in `native.rs` (purely additive, `:421-446`) | `eval` in spine; `php` erasure to superglobals+echo |
 | Socket accept-loop | new `src/serve.rs` behind a `Transport` trait (`std::net`, safe, std-only) | **outside spine** (`tests/serve.rs`, skip-aware) |
-| `phorge serve` CLI | new command modeled on `vendor` (`main.rs:81-97`) / `build` (`main.rs:101-167`) + `cli.rs` help arm | tooling, not language |
+| `phg serve` CLI | new command modeled on `vendor` (`main.rs:81-97`) / `build` (`main.rs:101-167`) + `cli.rs` help arm | tooling, not language |
 | Transpile | reuse `transpile_program`/`emit` unchanged; only new `core.http` `php` closures | round-trip-gated like `bench --vs-php` |
 | Examples | pure handler `.phg` (glob-gated) + `examples/web/README.md` (live server) | matches build/cli precedent |

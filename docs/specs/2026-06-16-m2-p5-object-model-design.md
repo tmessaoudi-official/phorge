@@ -17,13 +17,13 @@ Stay byte-identical on both backends throughout (the differential harness is the
   on an immutable acyclic heap it can reclaim nothing that `Rc`/`Drop` doesn't. Deferred to **M3**,
   if/when mutation (reassignment, mutable fields, cyclic data) is introduced — *that* is when a
   cycle can form and a tracing GC earns its keep.
-- New language features (M3), bundling/`phorge build` (M2.5).
+- New language features (M3), bundling/`phg build` (M2.5).
 - A `Vec<Obj>` **slab arena** with integer handles — more code than `Rc` for a cache-locality
   benefit we have no evidence we need. Revisit only if a post-Phase-A bench demands locality.
 
 ## 2. Evidence — the measured cost (bench, 2026-06-16)
 
-`phorge bench`, median of 101, output-identity gated, on two `fib(28)` programs (~832k calls):
+`phg bench`, median of 101, output-identity gated, on two `fib(28)` programs (~832k calls):
 
 | Workload | tree-walk | VM | VM advantage |
 |---|---|---|---|
@@ -93,7 +93,7 @@ indirection + a free-list/refcount layer. No evidence locality is the bottleneck
 
 ## 6. Success criteria (P5 done)
 
-1. Object-heavy bench improves measurably on the VM (before/after `phorge bench` numbers
+1. Object-heavy bench improves measurably on the VM (before/after `phg bench` numbers
    recorded), with the differential suite and examples sweep still byte-identical.
 2. `cargo test` green, `cargo clippy --all-targets` clean, `cargo fmt --check` clean,
    `#![forbid(unsafe_code)]` intact.

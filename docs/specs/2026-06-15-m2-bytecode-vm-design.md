@@ -14,7 +14,7 @@ features — M2 is a runtime-architecture and learning milestone, not a surface 
 - New language features (exceptions, `Map`/`Set`, null safety, traits, overloading,
   `|>`, value types, operator overloading, sized ints, `decimal`) → **M3** ("grow the
   language"), implemented **once**, on the VM.
-- Single-binary bundling (`phorge build` → standalone exe) → **M2.5**, the immediate
+- Single-binary bundling (`phg build` → standalone exe) → **M2.5**, the immediate
   next slice (depends on a working VM; it is packaging, not VM work).
 - Concurrency model (async/await vs goroutine+channels) → parked (not in the current
   surface; revisit in M3 before the "Go model" server work).
@@ -121,7 +121,7 @@ diverges from this design-level inventory —
 
 ## 8. CLI integration
 
-`phorge run` stays the **tree-walker** for the duration of M2. Add **`phorge runvm <file>`**
+`phg run` stays the **tree-walker** for the duration of M2. Add **`phg runvm <file>`**
 (compile → VM). The differential test harness runs both and asserts identical stdout.
 After M2 proves out, `run` may default to the VM (with a `--treewalk` escape hatch) — a
 post-M2 decision, not part of this milestone.
@@ -140,12 +140,12 @@ post-M2 decision, not part of this milestone.
 ## 10. Success criteria (M2 done)
 
 1. Every `examples/*.phg` and `tests/fixtures/*.phg` produces **byte-identical** stdout
-   under `phorge runvm` and `phorge run`.
+   under `phg runvm` and `phg run`.
 2. The mark-sweep collector reclaims unreachable objects under a stress test (measured
    heap shrink), with no use-after-free and no panics.
 3. `cargo test` green (incl. a differential harness), `cargo clippy --all-targets` clean.
 
-Then **M2.5** adds `phorge build <file>` — embed the compiled bytecode into a copy of the
+Then **M2.5** adds `phg build <file>` — embed the compiled bytecode into a copy of the
 runtime binary (bun-compile style) to produce a standalone executable.
 
 ## 11. Decisions Log

@@ -16,7 +16,7 @@ name = "phorge"
 path = "src/lib.rs"
 
 [[bin]]
-name = "phorge"
+name = "phg"
 path = "src/main.rs"
 
 # Quality gate (M2 P3.5 Wave 0, Task 0.5): clippy-clean and warning-free become a *compile* gate,

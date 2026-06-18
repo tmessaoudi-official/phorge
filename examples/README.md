@@ -1,7 +1,7 @@
 # Phorge examples
 
 What Phorge can do **today**. Every `.phg` here runs byte-identically on both backends
-(`phorge run` and `phorge runvm`) — enforced by `tests/differential.rs`, which globs this directory,
+(`phg run` and `phg runvm`) — enforced by `tests/differential.rs`, which globs this directory,
 so a new example is auto-gated the moment it lands. This page is updated as examples are added.
 
 ## Index
@@ -29,12 +29,12 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/text.phg` | the `core.text` stdlib module — `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace` (M3 Track B Wave 2) |
 | `guide/file.phg` | the `core.file` stdlib module — `read` (→ `string?`), `exists`; reads a committed fixture, composes with S2 `??` / if-let (M3 Track B Wave 2) |
 | `guide/bytes.phg` | the `bytes` type + `b"…"` literals (`\xHH`) + `core.bytes` interop — `from_string`/`to_string` (→ `string?`)/`len`/`concat`/`slice` (M6 W0) |
-| `bench/workload.phg` | a **profiling** workload (CPU recursion + heap allocation) for `phorge bench`/`disasm` — see `bench/README.md` |
+| `bench/workload.phg` | a **profiling** workload (CPU recursion + heap allocation) for `phg bench`/`disasm` — see `bench/README.md` |
 | `transpile/demo.phg` | the **Phorge → PHP** bridge — see `transpile/README.md` |
-| `build/app.phg` | **standalone executables** — `phorge build` — see `build/README.md` |
+| `build/app.phg` | **standalone executables** — `phg build` — see `build/README.md` |
 | `cli/demo.phg` | the **`phorge` CLI** — source forms, `check`/`parse`/`lex`, diagnostics, `explain` — see `cli/README.md` |
 | `project/tempconv/` | a **multi-file project** (M5) — mandatory packages, folder = path, cross-package qualified calls + import aliasing, namespaced PHP — see `project/README.md` |
-| `project/withdeps/` | a project with a **vendored git dependency** (M5 S3) — `[require]`, `phorge vendor`, `phorge.lock`, offline `vendor/` — see `project/withdeps/README.md` |
+| `project/withdeps/` | a project with a **vendored git dependency** (M5 S3) — `[require]`, `phg vendor`, `phorge.lock`, offline `vendor/` — see `project/withdeps/README.md` |
 
 ## Coverage matrix (the runnable surface)
 
@@ -56,10 +56,10 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `core.text` stdlib: `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace` | `guide/text` |
 | `core.file` stdlib: `read` (→ `string?`), `exists` (fixture-gated) | `guide/file` |
 | Phorge → PHP transpile | `transpile/demo` |
-| standalone executable (`phorge build`) | `build/app` |
+| standalone executable (`phg build`) | `build/app` |
 | CLI: source forms, inspection (`check`/`parse`/`lex`), diagnostics, `explain` | `cli/demo` |
 | multi-file projects: packages, folder = path, cross-package imports + aliasing, namespaced PHP | `project/tempconv` |
-| git dependencies: `[require]`, `phorge vendor`, `phorge.lock`, offline `vendor/` | `project/withdeps` |
+| git dependencies: `[require]`, `phg vendor`, `phorge.lock`, offline `vendor/` | `project/withdeps` |
 
 ## Three sharp edges
 

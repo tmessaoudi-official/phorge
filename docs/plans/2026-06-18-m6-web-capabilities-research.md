@@ -9,7 +9,7 @@
 ## Decisions Log
 
 - [2026-06-18] AGREED: pursue **Option 1 — research + prototype spike now** (design the handler model
-  + a throwaway std-only blocking `phorge serve` prototype to de-risk the architecture end-to-end),
+  + a throwaway std-only blocking `phg serve` prototype to de-risk the architecture end-to-end),
   but **defer the polished version until M3 ergonomics land**. No language-feature commitment yet.
 - [2026-06-18] AGREED: this requires **deep, real research + brainstorming covering BOTH (a) the M3
   ergonomics prerequisites and (b) the web design** — the developer wants a "perfect", "solid,
@@ -45,8 +45,8 @@
     `main()` only today). Additive — does not touch `main()` dispatch.
   - **Wire (spike):** HTTP/1.1, mandatory `Content-Length`, status→reason-phrase, `Connection: close`,
     one request/socket, Content-Length bodies only (no keep-alive/chunked), malformed→`400`, ASCII
-    bodies (PHP round-trip). `phorge serve <file> [--port]` blocks (own dispatch, not the `print!` tail).
-  - **Spike scope:** pure handler + `phorge serve` + a documented ~10-line PHP front-controller in the
+    bodies (PHP round-trip). `phg serve <file> [--port]` blocks (own dispatch, not the `print!` tail).
+  - **Spike scope:** pure handler + `phg serve` + a documented ~10-line PHP front-controller in the
     serve README. Router/middleware deferred to S3 lambdas; Map ergonomics to S4; `core.http` stdlib to
     the cross-package-types follow-up; `bytes` type deferred (UTF-8 text bodies v1).
 - [2026-06-18] DESIGN-LOCKED (developer answered the §11 open decisions; spec
@@ -55,7 +55,7 @@
   (2) scope = **pure handler + static exact-match router** (W1–W2); path params→S4, middleware→S3 are
   "the rest"; (3) **`bytes` pulled forward as its own first slice W0** (developer choice) — PHP transpile
   trivial, design is Phorge-side literal + UTF-8 interop; (4) **spike now, before Track A**. Build order:
-  W0 bytes → W1 handler → W2 router → W3 `src/serve.rs`+Transport → W4 `phorge serve` CLI + PHP bridge +
+  W0 bytes → W1 handler → W2 router → W3 `src/serve.rs`+Transport → W4 `phg serve` CLI + PHP bridge +
   docs. No code until the build-gate "go".
 
 ## The dominating constraint — determinism
@@ -72,11 +72,11 @@ non-deterministic → breaks the byte-identical spine; determinism, not the depe
 | Layer | What | Deterministic? | Home | Tested by |
 |---|---|---|---|---|
 | **1. Handler model** | `Request`/`Response` value types + `fn(Request) -> Response` contract | **Yes** | language/stdlib (`core.http`) | byte-identical differential (golden Request→Response), run≡runvm≡PHP |
-| **2. Server runtime** | bind socket, accept loop, route, dispatch | **No** | CLI/tooling (`phorge serve`) — *not* a language feature | integration (`tests/serve.rs`, outside the spine) |
+| **2. Server runtime** | bind socket, accept loop, route, dispatch | **No** | CLI/tooling (`phg serve`) — *not* a language feature | integration (`tests/serve.rs`, outside the spine) |
 | **3. Transpile target** | Phorge web app → idiomatic PHP | n/a | transpiler | real-PHP round-trip |
 
 Layer 1 is pure + testable; Layer 2 is the dirty I/O shell that never touches `differential.rs` —
-exactly how `phorge build` (tested in `tests/build.rs`, outside the spine) coexists with the pure core
+exactly how `phg build` (tested in `tests/build.rs`, outside the spine) coexists with the pure core
 today. **Precedent exists.** PHP mapping is natural: a pure `Request → Response` handler IS PHP's
 request-per-invocation model (superglobals + echo); `php -S` is Layer 2 wrapping Layer 1.
 
@@ -115,12 +115,12 @@ request-per-invocation model (superglobals + echo); `php -S` is Layer 2 wrapping
   parsers, typed bodies (JSON via the deferred `core.json`)?
 - **Routing:** static vs param routes (`/user/{id}`), method dispatch, precedence. Needs Map + (for the
   DSL) lambdas.
-- **`phorge serve` runtime:** blocking thread-per-request (std::thread, ships now) vs the M6 green-thread
+- **`phg serve` runtime:** blocking thread-per-request (std::thread, ships now) vs the M6 green-thread
   runtime (uncolored `spawn` + channels on the VM's reified frames). Decouple: simple blocking server
   for the spike, couple to green threads at M6. HTTP/1.1 parsing (keep-alive, chunked, content-length)
   std-only. Graceful shutdown, ephemeral-port binding for tests.
-- **Transpile contract (Phorge:PHP::TS:JS):** handler → PHP superglobals + echo? `phorge serve` →
-  `php -S` dev server? Production → FPM? What does `phorge transpile` emit for a web app, and does it run
+- **Transpile contract (Phorge:PHP::TS:JS):** handler → PHP superglobals + echo? `phg serve` →
+  `php -S` dev server? Production → FPM? What does `phg transpile` emit for a web app, and does it run
   under stock PHP? (No Swoole/ReactPHP — those aren't core PHP.)
 - **Determinism quarantine** (test boundary): confirm the layered recommendation above; define exactly
   where the pure/dirty line is drawn and the `Transport` seam's interface.

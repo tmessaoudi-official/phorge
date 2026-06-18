@@ -1,7 +1,7 @@
 package main;
 import core.console;
 
-// A self-contained program built into a standalone executable with `phorge build`.
+// A self-contained program built into a standalone executable with `phg build`.
 // The produced binary embeds this source (in a CRC-guarded `.phorge` object-file
 // section) and runs it on the bytecode VM at startup — no Phorge install needed.
 

@@ -348,7 +348,7 @@ it now would be untestable dead code (YAGNI). It is folded into the S2 plan. Doc
       for (int n in 1..=3) { println("n={n}"); }
   }
   ```
-- [ ] **Step 2 — verify example.** `phorge run examples/guide/ergonomics.phg` and `runvm` match;
+- [ ] **Step 2 — verify example.** `phg run examples/guide/ergonomics.phg` and `runvm` match;
   `cargo test --test differential all_examples` green (auto-gated).
 - [ ] **Step 3 — docs.**
   - `KNOWN_ISSUES.md`: remove "Indexing (`xs[i]`)" from "not yet implemented"; add a **Behavioral
@@ -370,7 +370,7 @@ it now would be untestable dead code (YAGNI). It is folded into the S2 plan. Doc
 
 - **Spec coverage:** S1.1 (Task 1), S1.2 (Task 2), S1.3 (Task 3); S1.4 explicitly deferred with
   rationale (Task 4). Cross-cutting: each feature gets a `differential.rs` `agree`/`agree_err` case +
-  the auto-gated example; transpile assertions per feature. `E-RANGE-TYPE` gets a `phorge explain`
+  the auto-gated example; transpile assertions per feature. `E-RANGE-TYPE` gets a `phg explain`
   entry. The one new `Op` extends the coupled matches in its own commit.
 - **Type consistency:** `Expr::Range{start,end,inclusive,span}` and `Expr::If{cond,then_expr,else_expr,span}`
   used identically across parser/checker/interpreter/compiler/transpiler. `Op::MakeRange(bool)`.

@@ -12,7 +12,7 @@ every friction point for a statically-typed, immutable-by-default, no-generics-y
 
 ---
 
-## 1. `php -S` — Built-in Dev Server (likely `phorge serve` transpile target)
+## 1. `php -S` — Built-in Dev Server (likely `phg serve` transpile target)
 
 ### What it is
 Single-threaded HTTP server bundled with the **CLI SAPI**. Explicitly development-only;
@@ -56,16 +56,16 @@ index is returned; unreliable when the URI contains a dot like `.json`).
 
 ### Pure vs I/O
 - **I/O (everything here)**: binding the socket, accepting connections, reading the request
-  line, writing the response. This is the part Phorge's `phorge serve` runtime *owns* and
+  line, writing the response. This is the part Phorge's `phg serve` runtime *owns* and
   quarantines from determinism — it is not part of the byte-identical spine.
 - The **router script body** is the only "pure-ish" surface: given the already-parsed request
   (superglobals), produce output. That is where a transpiled Phorge handler lives.
 
 ### Cleanest minimal subset for Phorge
-`phorge serve <file>` = launch `php -S host:port router.php` where `router.php` is the
+`phg serve <file>` = launch `php -S host:port router.php` where `router.php` is the
 **transpiled** Phorge program acting as a front-controller: read request from superglobals →
 call the user's `handle(Request): Response` → emit headers + body. The dev server itself is
-PHP's; Phorge only generates the router script. Native `phorge serve` (Rust `std::net`) is
+PHP's; Phorge only generates the router script. Native `phg serve` (Rust `std::net`) is
 the *interpreter/VM* side; the *transpile* side is literally this router.php.
 
 ### ADVERSARIAL friction
@@ -427,7 +427,7 @@ Route::get('/posts/{post}/comments/{comment}', function (string $postId, string 
 ## Cross-cutting synthesis (for the design doc)
 
 **The clean architecture all five sources converge on** (and which matches Phorge's M6
-3-layer memory: pure handler / `phorge serve` runtime / PHP transpile):
+3-layer memory: pure handler / `phg serve` runtime / PHP transpile):
 
 ```
 [ I/O edge: read superglobals → build Request ]      (impure, framework/runtime owned)
@@ -443,7 +443,7 @@ Route::get('/posts/{post}/comments/{comment}', function (string $postId, string 
 
 The **pure core (middleware + router + handler over immutable Request/Response values)** is
 fully deterministic and byte-identity-testable on Phorge's `run`/`runvm` spine. The **I/O edges**
-are quarantined into the `phorge serve` runtime (native: Rust `std::net`; transpile: the
+are quarantined into the `phg serve` runtime (native: Rust `std::net`; transpile: the
 generated `router.php` front-controller using superglobals + `header`/`echo`). This is the
 determinism-quarantine boundary M6 already chose.
 

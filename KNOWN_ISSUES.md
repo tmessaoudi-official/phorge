@@ -20,18 +20,18 @@ not a panic:
 
 ## Git dependencies (M5 S3)
 
-- **Transitive dependencies are not resolved.** `phorge vendor` fetches the direct `[require]` set;
+- **Transitive dependencies are not resolved.** `phg vendor` fetches the direct `[require]` set;
   a dependency's *own* `[require]` is not walked. Vendor flat-named leaf libraries for now (the
   shipped `examples/project/withdeps/` does exactly this).
-- **`phorge build` is single-file and does not merge `vendor/`.** A program that imports a vendored
+- **`phg build` is single-file and does not merge `vendor/`.** A program that imports a vendored
   (or any cross-package) dependency runs via `run`/`runvm`/`transpile` (which go through the project
   loader) but cannot yet be compiled to a standalone executable. `build` embeds one source file only
   (M2.5 Phase 1 scope), unchanged by S3.
 - **Resolution is offline by design.** `run`/`check`/`transpile` never fetch — they read the
-  committed `vendor/`. Only `phorge vendor` touches the network; commit `vendor/` + `phorge.lock` so
+  committed `vendor/`. Only `phg vendor` touches the network; commit `vendor/` + `phorge.lock` so
   builds stay deterministic and reproducible (the same determinism rule that defers URL/network to M6).
 
-## `phorge build` limitations (M2.5, in progress)
+## `phg build` limitations (M2.5, in progress)
 
 - **macOS targets are rejected.** The Mach-O/fat section *reader* ships and is tested, but producing a
   signed macOS *stub* is deferred to Phase 3. An apple/darwin `--target` errors with a clear message

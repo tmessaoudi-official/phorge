@@ -16,7 +16,7 @@ cargo build              # std-only — no dependencies to fetch
 cargo test               # run the full suite
 ```
 
-You need a stable Rust toolchain (edition 2021). Cross-builds for `phorge build --target` additionally
+You need a stable Rust toolchain (edition 2021). Cross-builds for `phg build --target` additionally
 need [`cargo-zigbuild`](https://github.com/rust-cross/cargo-zigbuild), `zig`, and `llvm-objcopy`, but
 those are **not** required for normal development.
 
@@ -46,7 +46,7 @@ change is considered complete.
 These are non-negotiable. The full list is in [`docs/INVARIANTS.md`](docs/INVARIANTS.md); the
 load-bearing ones:
 
-1. **Backend parity is the spine.** `phorge run` (interpreter) and `phorge runvm` (VM) must produce
+1. **Backend parity is the spine.** `phg run` (interpreter) and `phg runvm` (VM) must produce
    **byte-identical** output. The interpreter is the reference semantics; the VM matches it. Enforced
    by `tests/differential.rs`, which globs `examples/**/*.phg`. A standalone built binary is a third
    surface on the same spine and must match `runvm`.
@@ -59,7 +59,7 @@ load-bearing ones:
 4. **Never panic on input (EV-7).** Lexer/parser/checker and the object-file section readers must
    reject adversarial or malformed input cleanly (a diagnostic or `None`), never a panic/SIGABRT. All
    offset arithmetic in the readers uses `checked_add`/`checked_mul`.
-5. **Run a perf number before/after a perf change.** `phorge bench <file>` measures both backends
+5. **Run a perf number before/after a perf change.** `phg bench <file>` measures both backends
    (median-of-N, output-identity gated).
 
 ## Architecture orientation

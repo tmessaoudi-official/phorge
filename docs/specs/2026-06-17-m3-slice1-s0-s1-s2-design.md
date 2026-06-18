@@ -28,8 +28,8 @@ PHP's native nullable model.
 ## S0 — Developer experience (no `Op`/backend change; CLI + checker only)
 
 ### S0.1 Per-command `--help` with examples
-- **Surface:** `phorge <cmd> --help` / `-h` prints a command-specific usage block with a one-line
-  description, the source forms, flags, and **1–2 worked examples**. `phorge --help` lists commands.
+- **Surface:** `phg <cmd> --help` / `-h` prints a command-specific usage block with a one-line
+  description, the source forms, flags, and **1–2 worked examples**. `phg --help` lists commands.
 - **Where:** `cli.rs` (a `help_for(cmd)` table) + `main.rs` dispatch (intercept `--help`/`-h` before
   running). No grammar/backend impact.
 - **Transpile:** n/a. **Tests:** `tests/cli.rs` — `run --help` exit 0, contains the example + form list;
@@ -55,11 +55,11 @@ PHP's native nullable model.
 - **Backends/Transpile:** fully **erased** — aliases vanish after checking (PHP has no type aliases).
 - **Tests:** `type UserId = int;` usable as a param/field/return type; alias cycle → error; erased in PHP.
 
-### S0.4 Sharper diagnostics + `phorge explain`
+### S0.4 Sharper diagnostics + `phg explain`
 - **Diagnostics:** extend `diagnostic.rs` rendering to underline the offending span with a **caret line**
   (`^^^`) under the source line, and add an optional `hint: Option<String>` ("did you mean `…`?",
   nearest-identifier suggestion via edit distance over in-scope names).
-- **`phorge explain <code>`:** a new read-only subcommand mapping a diagnostic code (e.g. `E-OPT-UNWRAP`)
+- **`phg explain <code>`:** a new read-only subcommand mapping a diagnostic code (e.g. `E-OPT-UNWRAP`)
   to a paragraph + example. Diagnostics gain a stable `code` field.
 - **Backends/Transpile:** n/a. **Tests:** a known type error renders a caret + hint; `explain E-…` prints
   the entry; unknown code → exit 1 with a clean message.
@@ -192,7 +192,7 @@ value — the PHP-way (D-L9). The *guarantee* lives in the checker: a non-option
   assert byte-identical to `runvm`). The two genuinely-divergent points (indexing OOB; `!` on null) are
   fault cases the differential harness already excludes, and are documented in `KNOWN_ISSUES.md`.
 - **Diagnostics codes** introduced: `E-OPT-ASSIGN`, `E-OPT-USE`, `E-OPT-UNWRAP`, `W-FORCE-UNWRAP`,
-  `E-INFER-NULL`, `E-RANGE-TYPE`, `E-IF-EXPR-ELSE` — each gets a `phorge explain` entry (S0.4).
+  `E-INFER-NULL`, `E-RANGE-TYPE`, `E-IF-EXPR-ELSE` — each gets a `phg explain` entry (S0.4).
 
 ## Decisions log
 

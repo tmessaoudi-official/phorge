@@ -15,9 +15,9 @@ use crate::mem;
 use crate::parser::Parser;
 use crate::vm::Vm;
 
-/// The `--version` line: `phorge <version>` (from `CARGO_PKG_VERSION`).
+/// The `--version` line: `phg <version>` (from `CARGO_PKG_VERSION`).
 pub fn version_line() -> String {
-    format!("phorge {}", env!("CARGO_PKG_VERSION"))
+    format!("phg {}", env!("CARGO_PKG_VERSION"))
 }
 
 /// The `--help` text: version banner + commands + source forms + options.
@@ -25,7 +25,7 @@ pub fn help_text() -> String {
     format!(
         "{version}\n\
          usage:\n  \
-         phorge <command> <source> [options]\n\n\
+         phg <command> <source> [options]\n\n\
          commands:\n  \
          run        interpret the program (tree-walking)\n  \
          runvm      run the program on the bytecode VM\n  \
@@ -37,7 +37,7 @@ pub fn help_text() -> String {
          bench      benchmark run vs runvm (time + memory)\n  \
          build      compile to a standalone executable (-o <out>)\n  \
          vendor     fetch [require] git deps into an offline vendor/ (writes phorge.lock)\n  \
-         explain    explain a diagnostic code (e.g. phorge explain E-UNKNOWN-IDENT)\n\n\
+         explain    explain a diagnostic code (e.g. phg explain E-UNKNOWN-IDENT)\n\n\
          source:\n  \
          <file>     read the program from a file\n  \
          -          read the program from stdin\n  \
@@ -56,72 +56,72 @@ pub fn help_for(cmd: &str) -> String {
     let body = match cmd {
         "run" => {
             "run — interpret the program with the tree-walking interpreter.\n\n\
-                  usage:\n  phorge run <file | - | -e code> [--]\n\n\
+                  usage:\n  phg run <file | - | -e code> [--]\n\n\
                   examples:\n  \
-                  phorge run hello.phg\n  \
-                  phorge run -e 'function main() { console.println(\"hi\"); }'\n  \
-                  echo 'function main(){console.println(\"hi\");}' | phorge run -\n"
+                  phg run hello.phg\n  \
+                  phg run -e 'function main() { console.println(\"hi\"); }'\n  \
+                  echo 'function main(){console.println(\"hi\");}' | phg run -\n"
         }
         "runvm" => {
             "runvm — run the program on the bytecode VM (byte-identical to `run`).\n\n\
-                    usage:\n  phorge runvm <file | - | -e code>\n\n\
+                    usage:\n  phg runvm <file | - | -e code>\n\n\
                     examples:\n  \
-                    phorge runvm hello.phg\n  \
-                    phorge runvm -e 'function main() { console.println(\"{2 + 2}\"); }'\n"
+                    phg runvm hello.phg\n  \
+                    phg runvm -e 'function main() { console.println(\"{2 + 2}\"); }'\n"
         }
         "check" => {
             "check — type-check only; print OK or the type errors, run nothing.\n\n\
-                    usage:\n  phorge check <file | - | -e code>\n\n\
+                    usage:\n  phg check <file | - | -e code>\n\n\
                     examples:\n  \
-                    phorge check src.phg\n"
+                    phg check src.phg\n"
         }
         "parse" => {
             "parse — print the parsed AST (no type-check).\n\n\
-                    usage:\n  phorge parse <file | - | -e code>\n\n\
+                    usage:\n  phg parse <file | - | -e code>\n\n\
                     examples:\n  \
-                    phorge parse src.phg\n"
+                    phg parse src.phg\n"
         }
         "lex" => {
             "lex — print the token stream with positions.\n\n\
-                  usage:\n  phorge lex <file | - | -e code>\n\n\
+                  usage:\n  phg lex <file | - | -e code>\n\n\
                   examples:\n  \
-                  phorge lex -e 'var x = 1;'\n"
+                  phg lex -e 'var x = 1;'\n"
         }
         "transpile" => {
             "transpile — emit idiomatic PHP for the program.\n\n\
-                        usage:\n  phorge transpile <file | - | -e code>\n\n\
+                        usage:\n  phg transpile <file | - | -e code>\n\n\
                         examples:\n  \
-                        phorge transpile src.phg\n"
+                        phg transpile src.phg\n"
         }
         "disasm" => {
             "disasm — print the compiled bytecode the VM will execute.\n\n\
-                     usage:\n  phorge disasm <file | - | -e code>\n\n\
+                     usage:\n  phg disasm <file | - | -e code>\n\n\
                      examples:\n  \
-                     phorge disasm -e 'function main() { int x = 1 + 2; }'\n"
+                     phg disasm -e 'function main() { int x = 1 + 2; }'\n"
         }
         "bench" => {
             "bench — benchmark `run` vs `runvm` (median wall-clock + memory).\n\n\
-                    usage:\n  phorge bench [--vs-php] <file | - | -e code>\n\n\
+                    usage:\n  phg bench [--vs-php] <file | - | -e code>\n\n\
                     flags:\n  \
                     --vs-php   also transpile + median-time the PHP backend (3-way comparison;\n             \
                                requires `php` on PATH; output-identity-gated)\n\n\
                     examples:\n  \
-                    phorge bench examples/bench/workload.phg\n  \
-                    phorge bench --vs-php examples/bench/workload.phg\n"
+                    phg bench examples/bench/workload.phg\n  \
+                    phg bench --vs-php examples/bench/workload.phg\n"
         }
         "build" => {
             "build — compile to a standalone executable (embeds the program source).\n\n\
-                    usage:\n  phorge build <file> [-o out] [--target triple | --all]\n\n\
+                    usage:\n  phg build <file> [-o out] [--target triple | --all]\n\n\
                     examples:\n  \
-                    phorge build app.phg\n  \
-                    phorge build app.phg -o dist/app\n  \
-                    phorge build app.phg --target x86_64-unknown-linux-musl\n"
+                    phg build app.phg\n  \
+                    phg build app.phg -o dist/app\n  \
+                    phg build app.phg --target x86_64-unknown-linux-musl\n"
         }
         "explain" => {
             "explain — print the explanation for a diagnostic code.\n\n\
-                      usage:\n  phorge explain <CODE>\n\n\
+                      usage:\n  phg explain <CODE>\n\n\
                       examples:\n  \
-                      phorge explain E-UNKNOWN-IDENT\n"
+                      phg explain E-UNKNOWN-IDENT\n"
         }
         "vendor" => {
             "vendor — fetch the project's `[require]` git dependencies into an offline `vendor/`.\n\n\
@@ -129,10 +129,10 @@ pub fn help_for(cmd: &str) -> String {
                      `vendor/<vendor>/<package>/`, and writes `phorge.lock` (resolved SHA + content\n\
                      hash). This is the only command that touches the network; commit `vendor/` +\n\
                      `phorge.lock` so `run`/`check`/`transpile` resolve fully offline.\n\n\
-                     usage:\n  phorge vendor [project-dir | phorge.toml]   (defaults to .)\n\n\
+                     usage:\n  phg vendor [project-dir | phorge.toml]   (defaults to .)\n\n\
                      examples:\n  \
-                     phorge vendor\n  \
-                     phorge vendor path/to/project\n"
+                     phg vendor\n  \
+                     phg vendor path/to/project\n"
         }
         _ => return help_text(),
     };
@@ -238,7 +238,7 @@ pub fn explain_text(code: &str) -> Option<String> {
         "E-VENDOR-MISSING" => {
             "E-VENDOR-MISSING — a `[require]` dependency is declared but not vendored.\n\n\
              Dependencies resolve offline from the committed `vendor/` tree — Phorge never fetches on\n\
-             `run`/`check`/`transpile`. Run `phorge vendor` to clone each `[require]` dependency at its\n\
+             `run`/`check`/`transpile`. Run `phg vendor` to clone each `[require]` dependency at its\n\
              pinned tag/rev into `vendor/` and write `phorge.lock`, then commit both.\n"
         }
         "E-VENDOR-MAIN" => {
@@ -277,7 +277,7 @@ pub fn cmd_vendor(arg: &str) -> Result<String, String> {
     match crate::manifest::Project::detect(start)? {
         Some(project) => crate::vendor::vendor(&project),
         None => Err(format!(
-            "no phorge.toml found at or above `{arg}` — `phorge vendor` requires a project \
+            "no phorge.toml found at or above `{arg}` — `phg vendor` requires a project \
              (add a phorge.toml with a [require] section)"
         )),
     }
@@ -430,7 +430,7 @@ pub fn transpile_program(prog: &Program, diag_src: &str) -> Result<String, Strin
 
 /// Build a standalone executable for the host from `src`. `input_path` names the source (used to
 /// derive the default output name); `out_path` overrides it. Validates the program first (never emits
-/// a broken binary), then delegates to `bundle::cross::build_host`, which reuses this phorge binary as
+/// a broken binary), then delegates to `bundle::cross::build_host`, which reuses this phg binary as
 /// the stub and embeds `src` as a `.phorge` section. Returns a one-line success message.
 pub fn cmd_build(input_path: &str, src: &str, out_path: Option<&str>) -> Result<String, String> {
     cmd_check(src)?; // validate; emit nothing on failure
@@ -517,7 +517,7 @@ fn annotate(op: &Op, chunk: &Chunk, p: &BytecodeProgram) -> Option<String> {
 /// invariant #8) so the output is stable across runs.
 fn disasm_program(p: &BytecodeProgram) -> String {
     let mut out = format!(
-        "phorge disasm — {} function(s), main = #{}\n",
+        "phg disasm — {} function(s), main = #{}\n",
         p.functions.len(),
         p.main
     );
@@ -558,7 +558,7 @@ fn disasm_program(p: &BytecodeProgram) -> String {
     out
 }
 
-/// Default sample count for `phorge bench`. Odd, so the median is a real observed sample rather
+/// Default sample count for `phg bench`. Odd, so the median is a real observed sample rather
 /// than an average of two; large enough to damp scheduler jitter on the small M2 corpus without
 /// making the CLI feel slow.
 const BENCH_DEFAULT_ITERS: usize = 101;
@@ -809,7 +809,7 @@ fn bench_report_opts(src: &str, iters: usize, vs_php: bool) -> Result<String, St
 
         let mut out = String::new();
         out.push_str(&format!(
-            "phorge bench — median of {iters} (warmup 1, std Instant)\n"
+            "phg bench — median of {iters} (warmup 1, std Instant)\n"
         ));
         out.push_str(&format!(
             "output: {} bytes, identical on both backends\n\n",
@@ -1112,14 +1112,14 @@ function main() { console.println("hi"); }"#);
 
     #[test]
     fn explain_covers_shadow_import_code() {
-        // The M3 Wave 1 shadowing diagnostic is self-documenting via `phorge explain`.
+        // The M3 Wave 1 shadowing diagnostic is self-documenting via `phg explain`.
         let body = explain_text("E-SHADOW-IMPORT").expect("E-SHADOW-IMPORT has an explanation");
         assert!(body.contains("module qualifier"), "{body}");
     }
 
     #[test]
     fn explain_covers_m5_package_codes() {
-        // The M5 S1 package diagnostics are self-documenting via `phorge explain`.
+        // The M5 S1 package diagnostics are self-documenting via `phg explain`.
         let np = explain_text("E-NO-PACKAGE").expect("E-NO-PACKAGE has an explanation");
         assert!(np.contains("package main"), "{np}");
         let rp = explain_text("E-RESERVED-PACKAGE").expect("E-RESERVED-PACKAGE has an explanation");
@@ -1146,14 +1146,14 @@ function main() { console.println("hi"); }"#);
         let out = cmd_bench(&wp(r#"import core.console;
 function main() { console.println("hi"); }"#))
         .expect("bench");
-        assert!(out.starts_with("phorge bench — median of 101"), "{out}");
+        assert!(out.starts_with("phg bench — median of 101"), "{out}");
     }
 
     #[test]
     fn help_for_known_command_has_examples_and_name() {
         let h = help_for("run");
         assert!(h.contains("examples:"), "{h}");
-        assert!(h.contains("phorge run"), "{h}");
+        assert!(h.contains("phg run"), "{h}");
     }
 
     #[test]

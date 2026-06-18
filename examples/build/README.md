@@ -1,18 +1,18 @@
-# Standalone executables — `phorge build`
+# Standalone executables — `phg build`
 
-`phorge build` compiles a program into a **single native executable** that runs on the bytecode VM
+`phg build` compiles a program into a **single native executable** that runs on the bytecode VM
 with no Phorge install. The program *source* is embedded in a CRC-guarded, versioned section of the
 output binary (`.phorge` on ELF); at startup the binary detects that section and runs it on the VM —
-a third surface on the parity spine, so it must match `phorge runvm` byte-for-byte.
+a third surface on the parity spine, so it must match `phg runvm` byte-for-byte.
 
 ```bash
-phorge build app.phg                 # -> ./app for the host (x86_64-linux-gnu)
-phorge build app.phg -o dist/app     # choose the output path
+phg build app.phg                 # -> ./app for the host (x86_64-linux-gnu)
+phg build app.phg -o dist/app     # choose the output path
 ./app                                # runs with no phorge on the machine
 ```
 
 Building `app.phg` here (host build) and running the result prints exactly what
-`phorge runvm app.phg` prints:
+`phg runvm app.phg` prints:
 
 ```
 phorge standalone build
@@ -31,15 +31,15 @@ fib(9) = 34
 - The output is a normal native executable (host: ELF64 `x86_64-linux-gnu`). It carries the VM plus
   the embedded program, so its size tracks the Phorge runtime, not the length of `app.phg`.
 - `app.phg` is also in the byte-identity sweep — it runs on both backends
-  (`phorge run app.phg` / `phorge runvm app.phg`) like every example here.
+  (`phg run app.phg` / `phg runvm app.phg`) like every example here.
 - `tests/build.rs` gates that a built binary's output equals `runvm`, so the embedded-source path
   can never silently drift from the VM.
 
 ## Cross-compiling (other OSes)
 
 ```bash
-phorge build app.phg --target x86_64-unknown-linux-musl   # one target
-phorge build app.phg --all                                # every supported target
+phg build app.phg --target x86_64-unknown-linux-musl   # one target
+phg build app.phg --all                                # every supported target
 ```
 
 Cross builds use **cargo-zigbuild** (the zig toolchain as the linker) and a per-target stub cache

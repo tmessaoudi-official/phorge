@@ -1,4 +1,4 @@
-//! Phorge CLI: `phorge <run|runvm|check|parse|lex|transpile|disasm|bench> <file>`. Thin dispatcher
+//! Phorge CLI: `phg <run|runvm|check|parse|lex|transpile|disasm|bench> <file>`. Thin dispatcher
 //! over the testable `phorge::cli` module.
 #![forbid(unsafe_code)]
 
@@ -7,8 +7,8 @@ use std::process::exit;
 use phorge::{cli, loader};
 
 const USAGE: &str =
-    "usage: phorge <run|runvm|check|parse|lex|transpile|disasm|bench|build|vendor|explain> \
-                     <file | - | -e code> [-o out]   (phorge -h for help, -v for version)";
+    "usage: phg <run|runvm|check|parse|lex|transpile|disasm|bench|build|vendor|explain> \
+                     <file | - | -e code> [-o out]   (phg -h for help, -v for version)";
 
 fn main() {
     // Self-executing artifact: if this binary carries an embedded program, run it on the VM and
@@ -49,7 +49,7 @@ fn main() {
             exit(2);
         }
     };
-    // Per-command help: `phorge <cmd> -h|--help` prints command-specific help and exits 0.
+    // Per-command help: `phg <cmd> -h|--help` prints command-specific help and exits 0.
     if args[2..].iter().any(|a| a == "-h" || a == "--help") {
         print!("{}", cli::help_for(cmd));
         return;
@@ -60,7 +60,7 @@ fn main() {
         let code = match args.get(2) {
             Some(c) => c,
             None => {
-                eprintln!("usage: phorge explain <CODE>");
+                eprintln!("usage: phg explain <CODE>");
                 exit(2);
             }
         };

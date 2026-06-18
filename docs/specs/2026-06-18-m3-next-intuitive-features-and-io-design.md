@@ -113,12 +113,12 @@ File/real-import examples land *with* Track B; URL examples wait for the M6 deci
 ### Track D — Phorge-vs-PHP benchmark ("who's the winner?") — achievable NOW
 
 The developer wants a head-to-head Phorge-vs-PHP performance comparison. This is the **lowest-friction
-high-delight win**: it needs **no new language features**, only the existing `phorge bench` (median-of-N
+high-delight win**: it needs **no new language features**, only the existing `phg bench` (median-of-N
 timing of `run` vs `runvm`, output-identity-gated) + the existing PHP round-trip (`transpile` → run
 `php`). Extend `bench` (or add `bench --vs-php`) to also transpile + time the PHP backend, producing a
 **3-way table: tree-walk interpreter vs bytecode VM vs transpiled PHP**, all gated on identical output.
 
-- **Feasibility:** ✅ now. `phorge bench` infra exists; `php` is on PATH; output-identity already enforced.
+- **Feasibility:** ✅ now. `phg bench` infra exists; `php` is on PATH; output-identity already enforced.
 - **Caveats to report honestly:** the comparison is *Rust VM vs the PHP interpreter on the same
   algorithm* — informative but apples-to-oranges (different runtimes, JIT/opcache on/off matters). Report
   PHP version + whether opcache/JIT is enabled; offer a `--php-args` passthrough; median-of-N like today.

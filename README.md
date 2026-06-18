@@ -41,7 +41,7 @@ function main() {
 |---|---|---|
 | **M1** | Tree-walking interpreter + Phorge→PHP transpiler | ✅ complete |
 | **M2** | Bytecode compiler + stack VM (byte-identical to the interpreter) | ✅ complete |
-| **M2.5** | `phorge build` → standalone native executables | 🔨 in progress (Linux + Windows cross-builds; macOS readers shipped, stub deferred) |
+| **M2.5** | `phg build` → standalone native executables | 🔨 in progress (Linux + Windows cross-builds; macOS readers shipped, stub deferred) |
 | **M3+** | Language enrichment, ecosystem, tooling | 🔲 planned — see [ROADMAP.md](ROADMAP.md) & [VISION.md](VISION.md) |
 
 Pre-1.0 and single-developer; the version number tracks milestone progress, not a release cadence.
@@ -73,7 +73,7 @@ map and [`docs/INVARIANTS.md`](docs/INVARIANTS.md) for the rules that keep all s
 ### From source
 
 ```sh
-cargo build --release        # produces target/release/phorge
+cargo build --release        # produces target/release/phg
 cargo test                   # full suite
 cargo clippy --all-targets   # lints (warnings are denied)
 ```
@@ -86,27 +86,27 @@ Standalone, statically-linked binaries (no runtime to install) are published per
 one for your platform, mark it executable, and run:
 
 ```sh
-chmod +x phorge-*-linux-x86_64-musl
-./phorge-*-linux-x86_64-musl run yourfile.phg
+chmod +x phg-*-linux-x86_64-musl
+./phg-*-linux-x86_64-musl run yourfile.phg
 ```
 
 ## Quick start
 
 ```sh
-$ phorge run examples/hello.phg
+$ phg run examples/hello.phg
 Hello, Phorge!
 
-$ echo 'package main; import core.console; function main() { console.println("{1 + 2}"); }' | phorge run -
+$ echo 'package main; import core.console; function main() { console.println("{1 + 2}"); }' | phg run -
 3
 
-$ phorge run -e 'package main; import core.console; function main() { console.println("inline!"); }'
+$ phg run -e 'package main; import core.console; function main() { console.println("inline!"); }'
 inline!
 ```
 
 ## CLI
 
 ```
-phorge <command> <source> [options]
+phg <command> <source> [options]
 ```
 
 **Commands** (each is a stage of the pipeline):
@@ -122,7 +122,7 @@ phorge <command> <source> [options]
 | `disasm` | type-check → compile → dump the bytecode (per-function listings + descriptor tables) | exit 1 on type error |
 | `bench` | median-of-N timing of both backends + memory (peak/current RSS, Linux), output-identity gated | exit 1 if they fault or disagree |
 | `build` | compile to a standalone native executable | exit 1 on type error / build failure |
-| `explain` | look up a diagnostic code (`phorge explain E-UNKNOWN-IDENT`) | exit 1 on unknown code |
+| `explain` | look up a diagnostic code (`phg explain E-UNKNOWN-IDENT`) | exit 1 on unknown code |
 
 **Source** (for the run-family commands):
 
@@ -133,21 +133,21 @@ phorge <command> <source> [options]
 | `-e <code>` / `--eval <code>` | inline source text |
 | `-- <file>` | a file path that may start with `-` |
 
-**Global flags:** `-h` / `--help` (full usage; `phorge <command> --help` gives per-command help with
+**Global flags:** `-h` / `--help` (full usage; `phg <command> --help` gives per-command help with
 worked examples) · `-v` / `--version`.
 
 No arguments → usage on stderr, exit 2. Unreadable file → exit 1.
 
-## Standalone executables (`phorge build`)
+## Standalone executables (`phg build`)
 
-`phorge build foo.phg` produces a native executable that runs `foo.phg` on the VM with **no Phorge
+`phg build foo.phg` produces a native executable that runs `foo.phg` on the VM with **no Phorge
 install** required. The program source is embedded in a named object-file section (a versioned,
 CRC-guarded container); at startup the binary detects and runs it.
 
 ```sh
-phorge build foo.phg -o foo                     # host build
-phorge build foo.phg --target x86_64-unknown-linux-musl -o foo-musl
-phorge build foo.phg --all                      # host + all supported cross-targets → dist/
+phg build foo.phg -o foo                     # host build
+phg build foo.phg --target x86_64-unknown-linux-musl -o foo-musl
+phg build foo.phg --all                      # host + all supported cross-targets → dist/
 ```
 
 Cross-compilation uses [`cargo-zigbuild`](https://github.com/rust-cross/cargo-zigbuild) (zig as the
@@ -179,7 +179,7 @@ not). See [ROADMAP.md](ROADMAP.md) for Phase 2/3 details.
 - **Expression `if`** — `if (c) { e } else { e }` yields a value: `var x = if (c) { 1 } else { 2 };`.
 - **Checked arithmetic** — int overflow and division-by-zero are clean runtime errors, never panics.
 - **Sharp diagnostics** — type errors underline the offending span with a caret, suggest the nearest
-  in-scope name on a typo, and carry a stable code you can look up with `phorge explain <CODE>`.
+  in-scope name on a typo, and carry a stable code you can look up with `phg explain <CODE>`.
 
 A full capability matrix (implemented vs. planned) lives in [FEATURES.md](FEATURES.md); current
 limitations in [KNOWN_ISSUES.md](KNOWN_ISSUES.md); the frozen language design in
@@ -194,7 +194,7 @@ Every program under [`examples/`](examples/README.md) runs byte-identically on b
 
 ## Phorge → PHP transpiler
 
-`phorge transpile <file>` emits PHP 8.x (type-checked first): enums → an abstract base class plus a
+`phg transpile <file>` emits PHP 8.x (type-checked first): enums → an abstract base class plus a
 `final` subclass per variant; `match` → an `instanceof` chain; interpolation → concatenation;
 `println` → `echo`. The round-trip is verified against a real `php` in `tests/cli.rs`. (PHP → Phorge
 import is a separate future milestone.)

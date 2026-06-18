@@ -4,7 +4,7 @@
 
 Phorge has **no third-party runtime dependencies**. The crate is `std`-only — it links **zero**
 external crates. `Cargo.lock` contains a single entry: `phorge` itself. There is therefore no
-third-party code compiled into the `phorge` binary or into any executable produced by `phorge build`,
+third-party code compiled into the `phorge` binary or into any executable produced by `phg build`,
 and no third-party license obligations attach to distributing them.
 
 This is a deliberate design constraint (see [VISION.md](VISION.md)): it keeps the language buildable
@@ -19,7 +19,7 @@ not propagate to Phorge's output. They are only required for the workflows noted
 | Tool | Used for | License |
 |---|---|---|
 | Rust toolchain (`cargo`, `rustc`) | building Phorge | MIT OR Apache-2.0 |
-| `llvm-objcopy` (LLVM) | embedding the program section in `phorge build` | Apache-2.0 WITH LLVM-exception |
+| `llvm-objcopy` (LLVM) | embedding the program section in `phg build` | Apache-2.0 WITH LLVM-exception |
 | [`cargo-zigbuild`](https://github.com/rust-cross/cargo-zigbuild) | cross-target builds (`build --target`/`--all`) | MIT |
 | [`zig`](https://ziglang.org) | the C/linker driver for cross builds | MIT |
 | `php` (optional) | round-trip-testing the transpiler output | PHP License |

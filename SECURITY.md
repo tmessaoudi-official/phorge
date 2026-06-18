@@ -30,7 +30,7 @@ Phorge is a language toolchain, so the relevant attack surface is **untrusted in
   adversarial programs cleanly (a diagnostic + non-zero exit), never with a panic, infinite loop, or
   unbounded memory growth. Recursion and nesting are explicitly depth-limited (`src/limits.rs`) on a
   fixed-size worker stack so pathological nesting faults cleanly.
-- **Untrusted binaries (`phorge build`).** The hand-rolled ELF / PE / Mach-O section readers used to
+- **Untrusted binaries (`phg build`).** The hand-rolled ELF / PE / Mach-O section readers used to
   detect an embedded program parse attacker-controlled object files. They perform **minimal section
   lookup with checked arithmetic on every offset** — malformed or hostile headers return `None`, never
   an overflow panic or out-of-bounds read (invariant **EV-7**). `#![forbid(unsafe_code)]` is set

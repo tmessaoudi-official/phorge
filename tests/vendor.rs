@@ -1,4 +1,4 @@
-//! `phorge vendor` integration test — the one network-touching code path, exercised **offline**.
+//! `phg vendor` integration test — the one network-touching code path, exercised **offline**.
 //!
 //! A live remote would make the test non-deterministic (the same reason URL/network features are
 //! deferred to M6), so we build a throwaway local git repository in a temp dir and fetch it via a

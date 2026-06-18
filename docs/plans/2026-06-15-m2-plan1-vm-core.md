@@ -369,5 +369,5 @@ git commit -m "feat(vm): stack VM dispatch loop — scalar arithmetic + print (M
 
 ## Next (P2, separate plan)
 AST → bytecode compiler for expressions/statements (locals, `if`, `for`, blocks) + the
-`phorge runvm <file>` CLI command + the first **differential test** asserting
+`phg runvm <file>` CLI command + the first **differential test** asserting
 `runvm` stdout == `run` stdout.

@@ -1,7 +1,7 @@
 package main;
 import core.console;
 
-// This program is also in the byte-identity sweep. `phorge transpile` turns it into
+// This program is also in the byte-identity sweep. `phg transpile` turns it into
 // runnable PHP 8.x — the only Phorge↔PHP-ecosystem path (output, not input).
 
 enum Shape {

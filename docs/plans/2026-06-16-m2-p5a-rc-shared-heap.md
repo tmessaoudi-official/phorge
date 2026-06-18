@@ -10,7 +10,7 @@ and list payloads in `Rc`, so `Op::GetLocal`'s clone (and every interpreter var-
 O(1) refcount bump instead of a deep `HashMap`/`Vec` copy. Reclamation stays automatic via `Drop`
 and is provably correct (the M1 heap is immutable + acyclic — no `Rc` cycle can leak; design §3).
 **Behavior is unchanged** — this is a pure perf refactor gated by the differential harness, with a
-before/after `phorge bench` as the "did it help" evidence.
+before/after `phg bench` as the "did it help" evidence.
 
 **Scope.** `src/value.rs` (the `Value` variants + the `Box`→`Rc` swap) and the construct/extract
 sites in **both** backends. **No** `Op` set / bytecode-format / AST / checker change. The slab arena
@@ -81,7 +81,7 @@ change.
 ## Decisions Log
 
 - [2026-06-16] AGREED: P5 Phase A = `Rc`-wrap `Instance`/`Enum`/`List`; behavior-preserving, gated by
-  the differential harness, measured by `phorge bench`. (Design: `docs/specs/2026-06-16-m2-p5-object-model-design.md`.)
+  the differential harness, measured by `phg bench`. (Design: `docs/specs/2026-06-16-m2-p5-object-model-design.md`.)
 - [2026-06-16] AGREED: `Value::List` becomes `Rc<Vec<Value>>` (not `Rc<[Value]>`) for construction
   simplicity; `Map`/`Set`/`Str` left unchanged (not bench-stressed).
 - [2026-06-16] AGREED: Phase B (slot-indexed field layout) is **bench-gated** on A4 — not started

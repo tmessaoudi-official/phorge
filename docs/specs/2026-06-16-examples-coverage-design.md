@@ -9,8 +9,8 @@
 
 **Goal.** Give a newcomer (and the maintainer) a complete, *honest*, runnable picture of what
 Phorge can do today: four real-world programs, a focused per-feature guide set, and the
-Phorge→PHP transpile bridge — every runnable example guaranteed byte-identical on `phorge run`
-and `phorge runvm`, and grown incrementally as the language grows.
+Phorge→PHP transpile bridge — every runnable example guaranteed byte-identical on `phg run`
+and `phg runvm`, and grown incrementally as the language grows.
 
 **Non-goals.**
 - **No new language features.** Examples use only the *currently runnable* surface. Anything the
@@ -19,7 +19,7 @@ and `phorge runvm`, and grown incrementally as the language grows.
   (`checker.rs`/`compiler.rs`/`interpreter.rs`/`transpile.rs` all skip `Item::Import`; the prelude
   hard-codes `println`). Real module resolution is **M5**. We show the `import std.io;` line as-is
   and state plainly in the README that it is currently decorative.
-- **No PHP-consumption example.** The only PHP touchpoint is `phorge transpile` *producing* PHP;
+- **No PHP-consumption example.** The only PHP touchpoint is `phg transpile` *producing* PHP;
   Phorge does not consume composer/PHP packages (FFI was rejected in the ecosystem roadmap). The
   "PHP ecosystem" example is therefore a Phorge→PHP *output* demo.
 
@@ -124,8 +124,8 @@ Small and didactic — one feature cluster each, heavily commented:
 
 - `transpile/demo.phg` — a compact program (a class + an enum + a function) that is **also** in the
   byte-identity sweep (it is a normal runnable program).
-- `transpile/demo.php` — the committed output of `phorge transpile demo.phg`.
-- `transpile/README.md` — shows `phorge transpile examples/transpile/demo.phg > demo.php` and how to
+- `transpile/demo.php` — the committed output of `phg transpile demo.phg`.
+- `transpile/README.md` — shows `phg transpile examples/transpile/demo.phg > demo.php` and how to
   run the result under PHP 8.x; states this is the *only* PHP-ecosystem path (output, not input).
 - **Snapshot test:** a test (in `tests/cli.rs` or a new `tests/transpile_examples.rs`) regenerates
   the PHP from `demo.phg` and asserts it equals the committed `demo.php`, so transpiler drift fails
@@ -159,7 +159,7 @@ Three self-contained, green commits (`cargo test` + clippy + fmt clean each):
 | # | Decision | Choice | Rationale |
 |---|---|---|---|
 | EX-1 | Import-files examples | **Not written**; `import` documented as decorative (M5) | Real resolution is a no-op today; a working example is impossible — faking it would lie |
-| EX-2 | PHP-ecosystem example | A Phorge→PHP **transpile** demo (output), not PHP consumption | The only PHP path is `phorge transpile`; FFI/consumption was rejected in the roadmap |
+| EX-2 | PHP-ecosystem example | A Phorge→PHP **transpile** demo (output), not PHP consumption | The only PHP path is `phg transpile`; FFI/consumption was rejected in the roadmap |
 | EX-3 | Real-world domains | **All four** (ledger, library, shop, rpg) | User chose all four; each stresses a different mix of the same surface |
 | EX-4 | Sweep mechanism | **Glob `examples/**/*.phg`** into the differential harness | "Add as we go" needs zero test edits; divergence fails loudly |
 | EX-5 | Layout | Keep `hello`/`fib`/`grades` flat; new ones under `realworld/`/`guide/`/`transpile/` | Don't break explicit test paths; subdirs aid navigation at this scale |

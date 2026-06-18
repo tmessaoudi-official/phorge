@@ -10,7 +10,7 @@ Phorge→PHP transpile bridge).
 The socle. Real Phorge programs run end-to-end (the frozen `Shape`/`area`/`match` sample).
 
 - **Pipeline:** lexer → parser → type-checker → tree-walking evaluator (`src/{lexer,parser,checker,interpreter}.rs`).
-- **CLI:** `phorge <run|check|parse|lex|transpile> <file>`.
+- **CLI:** `phg <run|check|parse|lex|transpile> <file>`.
 - **Phorge → PHP transpiler** (`src/transpile.rs`) — round-trip-verified against real PHP 8.6.
 - **Docs/tests:** `README.md`, 3 runnable `examples/*.phg` (guarded by `tests/examples.rs`), 162 tests green at the M1 tag (223 suite-wide today), clippy clean.
 - **Delivered language surface:** static types, immutable-by-default bindings, functions, classes + constructor promotion, single-payload enums + exhaustive `match`, string interpolation, `List<T>` literals, `for…in`, checked int/float arithmetic.
@@ -26,7 +26,7 @@ enrichment = M3; single-binary bundling = M2.5.
 - **P2 ✅** — AST→bytecode compiler (`src/compiler.rs`) for the `main`-only expression/
   statement surface (literals, int/float arithmetic, comparison, equality, short-circuit
   `&&`/`||`, unary, interpolation, `println`, list literals, slot-based locals, `if`/`else`,
-  `for…in`, blocks) + `phorge runvm` (`src/cli.rs`) + the **differential harness**
+  `for…in`, blocks) + `phg runvm` (`src/cli.rs`) + the **differential harness**
   (`tests/differential.rs`): `runvm` stdout is byte-identical to `run`. Plan:
   `docs/plans/2026-06-15-m2-plan2-compiler-runvm.md`.
 - **P3 ✅** — user function calls + clox-style call frames (`Frame { func, ip, slot_base }`)
@@ -50,7 +50,7 @@ enrichment = M3; single-binary bundling = M2.5.
 ### Success criteria (design §10) — met
 
 1. **Byte-identical backends ✅** — every `examples/*.phg` (`hello`/`fib`/`grades`) and
-   `tests/fixtures/sample.phg` produce identical stdout under `phorge runvm` and `phorge run`,
+   `tests/fixtures/sample.phg` produce identical stdout under `phg runvm` and `phg run`,
    gated by `tests/differential.rs` (`examples_match_between_backends`, the per-feature program
    tables, and `agree_err` for failure parity). 244 tests green.
 2. **Reclamation ✅ (GC stance revised)** — the original M2-4 decision was a handle/arena heap +
@@ -68,9 +68,9 @@ enrichment = M3; single-binary bundling = M2.5.
 > slot-indexed field layout (P5 Phase B) stays **bench-gated and unopened** — after P5a the object
 > path is within ~15% of the scalar baseline, so field access no longer dominates.
 
-## M2.5 — Standalone executables (`phorge build`) — 🔨 IN PROGRESS (Phases 1–2 complete; Phase 3 next)
+## M2.5 — Standalone executables (`phg build`) — 🔨 IN PROGRESS (Phases 1–2 complete; Phase 3 next)
 
-Single-binary bundling: `phorge build foo.phg` → a standalone executable that runs `foo.phg` on the
+Single-binary bundling: `phg build foo.phg` → a standalone executable that runs `foo.phg` on the
 VM with no Phorge install. Design (advisor-reviewed twice): payload = a **named section** (`.phorge`
 on ELF, `__PHORGE,__source` on Mach-O — never a raw overlay, which breaks Mach-O signing) holding a
 **versioned CRC-guarded container** (source→bytecode is a `payload_kind` flip, not a format break);
@@ -89,7 +89,7 @@ section reader; build tooling (zig, llvm-tools, rcodesign, CI) is exempt. Spec:
 - **Phase 2 ✅ (2026-06-17)** — cross-OS builds via `cargo-zigbuild` (zig as the C/linker driver):
   `bundle.rs` split into a `bundle/` module + hand-rolled std-only **PE/COFF**, **Mach-O 64**, and
   **fat/universal** section readers (checked arithmetic, EV-7) behind a magic-sniffing `find_section`;
-  `phorge build --target/--all` with a per-target stub cache keyed on the phorge binary's FNV-1a-64
+  `phg build --target/--all` with a per-target stub cache keyed on the phg binary's FNV-1a-64
   hash (stale stub → cache miss, protecting the parity spine). Targets: Linux `x86_64-musl`,
   `aarch64-{gnu,musl}`, `x86_64-pc-windows-gnu`. Cross-parity gated by `tests/build.rs` (musl native
   exec + real windows-PE round-trip). macOS reader ships + is fixture-tested; the Mac *stub* (signing)
@@ -102,9 +102,9 @@ section reader; build tooling (zig, llvm-tools, rcodesign, CI) is exempt. Spec:
 
 ### Tooling (v0.4.0) — profiling + introspection
 
-- `phorge bench` reports **memory** (cold-execution peak-RSS growth + process `VmHWM`/`VmRSS`) next to
+- `phg bench` reports **memory** (cold-execution peak-RSS growth + process `VmHWM`/`VmRSS`) next to
   its timing, via a std-only Linux `/proc` sampler (`src/mem.rs`); non-Linux prints "unavailable".
-- `phorge disasm <source>` dumps the compiled bytecode (per-function listings + descriptor tables).
+- `phg disasm <source>` dumps the compiled bytecode (per-function listings + descriptor tables).
 - `examples/bench/workload.phg` (+ `examples/bench/README.md`) is the profiling showcase, auto
   byte-identity-gated like every example.
 
@@ -121,7 +121,7 @@ dynamic `.so` plugins.
 > **As-built note (M2 P3.5):** no `Backend` trait exists yet — `grep 'trait ' src/` returns
 > nothing. The three pipelines (`cmd_run`, `cmd_runvm`, `cmd_transpile`) are free functions
 > dispatched by a string `match` in `src/main.rs`; the pluggable-backend trait is deferred to the
-> 4th backend (`phorge build`, M2.5) per the Rule of Three.
+> 4th backend (`phg build`, M2.5) per the Rule of Three.
 
 ## v2 — Native + systems — 🔲 FUTURE
 

@@ -33,26 +33,26 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Exceptions (try/catch/throw) | 🔲 M3 | |
 | Mutation (reassignment, field writes) | 🔲 M3 | triggers the tracing GC |
 | Traits, operator overloading, method overloading | 🔲 future | |
-| Modules / packages | 🚧 M5 | multi-file projects, folder=path, cross-package `import` + aliasing, namespaced PHP, **git dependencies** (`[require]` + `phorge vendor` + `phorge.lock`, offline) — shipped; transitive deps next |
+| Modules / packages | 🚧 M5 | multi-file projects, folder=path, cross-package `import` + aliasing, namespaced PHP, **git dependencies** (`[require]` + `phg vendor` + `phorge.lock`, offline) — shipped; transitive deps next |
 | Concurrency (`spawn` + channels) | 🔲 M6 | uncolored, green-threaded |
 
 ## Backends & tooling
 
 | Capability | Status | Command |
 |---|---|---|
-| Tree-walking interpreter (reference semantics) | ✅ | `phorge run` |
-| Bytecode compiler + stack VM (byte-identical) | ✅ | `phorge runvm` |
-| Backend benchmark (median-of-N, identity-gated) + memory (peak/current RSS, Linux) | ✅ | `phorge bench` |
-| Bytecode disassembler (per-function listings + descriptor tables) | ✅ | `phorge disasm` |
-| Phorge → PHP transpiler (runs under real PHP) | ✅ | `phorge transpile` |
-| Type-check / parse / lex inspection | ✅ | `phorge check` / `parse` / `lex` |
-| `--version` / `--help`, plus per-command help with examples | ✅ | `phorge -v` / `-h` / `phorge <cmd> --help` |
+| Tree-walking interpreter (reference semantics) | ✅ | `phg run` |
+| Bytecode compiler + stack VM (byte-identical) | ✅ | `phg runvm` |
+| Backend benchmark (median-of-N, identity-gated) + memory (peak/current RSS, Linux) | ✅ | `phg bench` |
+| Bytecode disassembler (per-function listings + descriptor tables) | ✅ | `phg disasm` |
+| Phorge → PHP transpiler (runs under real PHP) | ✅ | `phg transpile` |
+| Type-check / parse / lex inspection | ✅ | `phg check` / `parse` / `lex` |
+| `--version` / `--help`, plus per-command help with examples | ✅ | `phg -v` / `-h` / `phg <cmd> --help` |
 | Sharp diagnostics: caret-underlined span, did-you-mean hints, stable codes | ✅ | front-end errors |
-| Diagnostic dictionary (look up a code) | ✅ | `phorge explain <CODE>` |
+| Diagnostic dictionary (look up a code) | ✅ | `phg explain <CODE>` |
 | Program from stdin / inline / `--` | ✅ | `run -`, `run -e '…'`, `run -- <file>` |
-| Vendor git dependencies (offline, lockfile-pinned) | ✅ | `phorge vendor` |
-| Standalone executable (host) | ✅ | `phorge build foo.phg` |
-| Standalone executable (Linux cross + Windows) | 🔨 | `phorge build --target … / --all` |
+| Vendor git dependencies (offline, lockfile-pinned) | ✅ | `phg vendor` |
+| Standalone executable (host) | ✅ | `phg build foo.phg` |
+| Standalone executable (Linux cross + Windows) | 🔨 | `phg build --target … / --all` |
 | Standalone executable (macOS) | 🔲 | reader ships; signed stub deferred to M2.5 Phase 3 |
 | PHP → Phorge migration | 🔲 M8 | the inverse of the transpiler |
 | Editor/LSP, formatter | 🔲 M7 | |

@@ -6,7 +6,7 @@ the value kernels, or the `Op` set. (Companion to `docs/ARCHITECTURE.md` for the
 frozen design records in `docs/specs/`.)
 
 ## 1. Backend parity is the spine — `run` ≡ `runvm`, byte-identical
-The tree-walking interpreter (`phorge run`) and the bytecode VM (`phorge runvm`) must produce
+The tree-walking interpreter (`phg run`) and the bytecode VM (`phg runvm`) must produce
 **identical stdout *and* identical failure behaviour** for every program. This is the project's
 central correctness contract.
 - **Enforced by** `tests/differential.rs`: `agree(src)` compares the `Ok` output; `agree_err(src)`
@@ -15,14 +15,14 @@ central correctness contract.
   adds per-stage prefixes and the VM adds a source-line prefix the interpreter lacks).
 - **Why it bites:** the original `Op::Neg` P0 (negating `i64::MIN`) hid in the gap that existed
   before `agree_err` — the Ok-only oracle never saw divergent *crashes*.
-- **Third surface (M2.5 `phorge build`):** a standalone binary runs its **embedded source** through
+- **Third surface (M2.5 `phg build`):** a standalone binary runs its **embedded source** through
   `cli::cmd_runvm` at startup (the self-detect hook in `src/main.rs`), so its output MUST equal
-  `phorge runvm <file>`. **Enforced by** `tests/build.rs::built_binary_matches_runvm`. The startup
+  `phg runvm <file>`. **Enforced by** `tests/build.rs::built_binary_matches_runvm`. The startup
   hook must keep dispatching through `cmd_runvm` (never `cmd_run`) and must not transform the source
   before execution — otherwise the distribution layer silently drifts off the spine while the
   differential suite (which never builds a binary) stays green.
   - **Cross-targets (Phase 2):** the surface now spans cross-built binaries. The stub-cache key is the
-    **FNV-1a-64 of the running phorge binary's bytes**, so a rebuilt phorge ⇒ cache miss ⇒ fresh stub —
+    **FNV-1a-64 of the running phg binary's bytes**, so a rebuilt phorge ⇒ cache miss ⇒ fresh stub —
     a stale stub can never embed your source into an *old* VM. Cross-parity is gated by
     `cross_musl_binary_matches_runvm` (native exec) and `cross_windows_section_round_trips` (PE section
     round-trip). The object-file section readers (ELF/PE/Mach-O/fat) honor **EV-7**: every offset uses
@@ -91,6 +91,6 @@ to keep that gate reproducible. The tracked `scripts/git-hooks/pre-commit` runs
 --all-targets` + `cargo fmt --check` + `cargo build --release`, all clean.
 
 ## 11. No perf change without a measured before/after
-`phorge bench <file>` (median-of-N, output-identity gated) is the baseline tool. Any
+`phg bench <file>` (median-of-N, output-identity gated) is the baseline tool. Any
 perf-motivated change (Copy-on-`Op`, deep-copy elimination, dispatch tweaks) must ship with a
 before/after number from it — perf claims are **Verified**, not asserted.

@@ -1,7 +1,7 @@
-//! `phorge vendor` — fetch `[require]` git dependencies into an offline `vendor/` tree.
+//! `phg vendor` — fetch `[require]` git dependencies into an offline `vendor/` tree.
 //!
 //! This is the **only** part of Phorge that touches the network, and it runs **only** on an explicit
-//! `phorge vendor` (never on `run`/`check`/`transpile` — those resolve offline from the committed
+//! `phg vendor` (never on `run`/`check`/`transpile` — those resolve offline from the committed
 //! `vendor/`). For each dependency it: `git clone`s the repo, checks out the pinned `tag`/`rev`,
 //! resolves that to a full commit SHA, reads the dependency's own manifest to find its source root,
 //! and copies that source subtree into `vendor/<vendor>/<package>/` (the dep's coordinate — so each
@@ -34,7 +34,7 @@ use crate::manifest::{Manifest, Pin, Project};
 pub fn vendor(project: &Project) -> Result<String, String> {
     let deps = &project.manifest.require;
     if deps.is_empty() {
-        return Ok("phorge vendor: no [require] dependencies to vendor\n".to_string());
+        return Ok("phg vendor: no [require] dependencies to vendor\n".to_string());
     }
     let vendor_root = project.root.join("vendor");
     let mut entries: Vec<LockEntry> = Vec::with_capacity(deps.len());
@@ -103,7 +103,7 @@ pub fn vendor(project: &Project) -> Result<String, String> {
         .map_err(|e| format!("cannot write {}: {e}", lock_path.display()))?;
 
     Ok(format!(
-        "phorge vendor: {} dependenc{} vendored → {} + {}\n{summary}",
+        "phg vendor: {} dependenc{} vendored → {} + {}\n{summary}",
         deps.len(),
         if deps.len() == 1 { "y" } else { "ies" },
         vendor_root.display(),

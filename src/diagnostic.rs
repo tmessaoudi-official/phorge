@@ -47,7 +47,7 @@ pub struct Diagnostic {
     pub message: String,
     pub line: u32,
     pub col: u32,
-    /// Stable machine code (e.g. `E-UNKNOWN-IDENT`) keyed by `phorge explain`; `None` if uncoded.
+    /// Stable machine code (e.g. `E-UNKNOWN-IDENT`) keyed by `phg explain`; `None` if uncoded.
     pub code: Option<&'static str>,
     /// An optional one-line suggestion ("did you mean `…`?").
     pub hint: Option<String>,
@@ -66,7 +66,7 @@ impl Diagnostic {
         }
     }
 
-    /// Attach a stable diagnostic code (consumed by `phorge explain`).
+    /// Attach a stable diagnostic code (consumed by `phg explain`).
     #[must_use]
     pub fn with_code(mut self, code: &'static str) -> Self {
         self.code = Some(code);

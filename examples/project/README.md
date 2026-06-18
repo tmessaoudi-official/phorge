@@ -27,11 +27,11 @@ tempconv/
 Run it (the CLI walks up to `phorge.toml`, loads the whole project, and runs `package main`):
 
 ```console
-$ phorge run examples/project/tempconv/src/main.phg
+$ phg run examples/project/tempconv/src/main.phg
 freezing = 32F
 boiling = 212F
 
-$ phorge runvm examples/project/tempconv/src/main.phg   # byte-identical
+$ phg runvm examples/project/tempconv/src/main.phg   # byte-identical
 freezing = 32F
 boiling = 212F
 ```
@@ -52,7 +52,7 @@ boiling = 212F
 
 ### The PHP it transpiles to
 
-`phorge transpile examples/project/tempconv/src/main.phg` emits one PHP `namespace` block per package
+`phg transpile examples/project/tempconv/src/main.phg` emits one PHP `namespace` block per package
 plus a bootstrap that invokes `main` last (so every function is declared before it runs):
 
 ```php

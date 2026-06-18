@@ -56,7 +56,7 @@ are opposite concepts (the rename in P3.5 removed the old name collision).
 ## Backends today vs. planned
 Three backends exist as **free functions** dispatched by a string `match` in `main.rs`
 (`cmd_run`/`cmd_runvm`/`cmd_transpile`). There is no `Backend` trait yet (`grep 'trait ' src/` = 0);
-it is deferred to the 4th backend (`phorge build`, M2.5) per the Rule of Three — see ecosystem
+it is deferred to the 4th backend (`phg build`, M2.5) per the Rule of Three — see ecosystem
 spec E-1.
 
 ## Decision records

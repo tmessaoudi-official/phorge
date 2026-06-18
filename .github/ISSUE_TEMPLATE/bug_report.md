@@ -22,7 +22,7 @@ function main() {
 
 ## Command
 
-<!-- e.g. `phorge run repro.phg`, `phorge runvm -e '...'`, `phorge build repro.phg` -->
+<!-- e.g. `phg run repro.phg`, `phg runvm -e '...'`, `phg build repro.phg` -->
 
 ```sh
 phorge ...
@@ -35,7 +35,7 @@ phorge ...
 
 ## Does it differ between backends?
 
-<!-- Important for parity bugs: do `phorge run` and `phorge runvm` produce DIFFERENT output? -->
+<!-- Important for parity bugs: do `phg run` and `phg runvm` produce DIFFERENT output? -->
 
 - [ ] `run` and `runvm` disagree
 - [ ] only `run` is wrong
@@ -44,6 +44,6 @@ phorge ...
 
 ## Environment
 
-- phorge version (`phorge --version`):
+- phorge version (`phg --version`):
 - OS / arch:
 - built from source / prebuilt binary:

@@ -5,8 +5,8 @@
 > Steps use checkbox (`- [ ]`) syntax. **Rule 10 applies: confirm before every commit.**
 
 **Goal:** Compile and execute user-defined function calls (including recursion and mutual
-recursion) on the bytecode VM, so `phorge runvm <file>` produces byte-identical stdout to
-`phorge run` for programs that call free functions — `examples/fib.phg` runs on the VM.
+recursion) on the bytecode VM, so `phg runvm <file>` produces byte-identical stdout to
+`phg run` for programs that call free functions — `examples/fib.phg` runs on the VM.
 
 **Architecture:** The compiler grows from "compile `main` to one `Chunk`" to "compile every
 top-level function to its own `Chunk`, indexed in a `BytecodeProgram`". The VM grows a
@@ -925,5 +925,5 @@ case). ✅
 
 - `cargo test` green (lib + `differential` + `cli` + `examples` + integration).
 - `cargo clippy --all-targets` clean.
-- `phorge runvm examples/fib.phg` output byte-identical to `phorge run examples/fib.phg`.
+- `phg runvm examples/fib.phg` output byte-identical to `phg run examples/fib.phg`.
 - `docs/MILESTONES.md` shows M2 P3 ✅, P4 next.

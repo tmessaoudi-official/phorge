@@ -106,13 +106,13 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
         ));
     }
     // Vendored dependencies (M5 S3): consulted only when `[require]` is non-empty, always offline —
-    // each declared dependency must already be vendored under `vendor/<name>/` (run `phorge vendor`).
+    // each declared dependency must already be vendored under `vendor/<name>/` (run `phg vendor`).
     for dep in &project.manifest.require {
         let dep_root = vendor_root.join(&dep.name);
         let dep_files = collect_phg(&dep_root)?;
         if dep_files.is_empty() {
             return Err(format!(
-                "dependency `{}` is declared in [require] but not vendored — run `phorge vendor` \
+                "dependency `{}` is declared in [require] but not vendored — run `phg vendor` \
                  (no `.phg` source found under `{}`) [E-VENDOR-MISSING]",
                 dep.name,
                 dep_root.display()

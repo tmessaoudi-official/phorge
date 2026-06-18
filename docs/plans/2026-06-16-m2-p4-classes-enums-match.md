@@ -8,8 +8,8 @@
 
 **Goal:** Compile and execute the remaining M1 language surface — single-payload **enums**,
 exhaustive **`match`**, **classes** (construction + constructor promotion + field reads), and
-**methods** (`this`) — on the bytecode VM, so `phorge runvm <file>` produces byte-identical
-stdout *and* byte-identical failures to `phorge run` for these programs. `examples/grades.phg`
+**methods** (`this`) — on the bytecode VM, so `phg runvm <file>` produces byte-identical
+stdout *and* byte-identical failures to `phg run` for these programs. `examples/grades.phg`
 runs on the VM. After P4, the VM covers the full interpreter surface.
 
 **Architecture:** The interpreter is the reference oracle (`docs/INVARIANTS.md`), and both
@@ -51,7 +51,7 @@ PATH=/stack/tools/cargo/bin:$PATH` (cargo 1.96, pinned in `rust-toolchain.toml`)
   target, never a value on the stack.
 - **The arena/handle object model** — deferred to a *measured* perf milestone (see P4-1). It
   is a performance change; `docs/INVARIANTS.md` (bench-before-perf) forbids shipping it
-  without a `phorge bench` before/after number, and value-native objects are already
+  without a `phg bench` before/after number, and value-native objects are already
   parity-correct.
 - `null`, user `a[i]` indexing, `|>` — not in the M1 interpreter surface; differential tests
   never exercise them.
@@ -192,14 +192,14 @@ Each wave is TDD-first (differential tests before the op work), ends green
       - **`num_ty(Member)` gap narrowed:** `this.field`/bare-field operands are now classifiable;
         a field read on an *arbitrary* instance or a `List` element stays the coarse-`TyTag` gap
         (Wave 4). Not in the corpus.
-      - `grep "(M2 P4)"` in `compiler.rs`/`vm.rs` is clean; `phorge bench examples/grades.phg` runs
+      - `grep "(M2 P4)"` in `compiler.rs`/`vm.rs` is clean; `phg bench examples/grades.phg` runs
         (VM ≈3.2× the tree-walker, output identical).
 
 ---
 
 ## Acceptance criteria
 
-- `phorge runvm` is byte-identical to `phorge run` (stdout **and** `FaultKind`) for every P4
+- `phg runvm` is byte-identical to `phg run` (stdout **and** `FaultKind`) for every P4
   program in `tests/differential.rs`, including `examples/grades.phg`.
 - The five `(M2 P4)` compile-error stubs in `src/compiler.rs` are all removed; no remaining
   `(M2 P4)` deferral string in `compiler.rs`/`vm.rs` (grep clean).
@@ -207,7 +207,7 @@ Each wave is TDD-first (differential tests before the op work), ends green
   matches compile; `validate` bounds-checks every new index-carrying op).
 - Gate green at each commit: `cargo test`, `cargo clippy --all-targets`, `cargo fmt --check`;
   `#![forbid(unsafe_code)]` intact.
-- `phorge bench examples/grades.phg` runs (output-identity gated) — establishes the
+- `phg bench examples/grades.phg` runs (output-identity gated) — establishes the
   classes/enums perf baseline (informational; no perf target asserted).
 
 ## Risks & rollback

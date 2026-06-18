@@ -30,7 +30,7 @@ assignees: ""
 
 - [ ] Language semantics (affects backend parity — interpreter + VM must agree)
 - [ ] CLI / tooling only
-- [ ] `phorge build` / distribution
+- [ ] `phg build` / distribution
 - [ ] Docs
 
 ## Additional context

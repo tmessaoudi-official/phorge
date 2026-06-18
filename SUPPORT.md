@@ -14,7 +14,7 @@ Thanks for using Phorge! Here is where to go for help.
 ## Reporting a bug
 
 Open an issue with the **Bug report** template. A minimal `.phg` program that reproduces the problem,
-the command you ran, the phorge version (`phorge --version`), and your platform make a fix far faster.
+the command you ran, the phorge version (`phg --version`), and your platform make a fix far faster.
 
 ## Requesting a feature
 

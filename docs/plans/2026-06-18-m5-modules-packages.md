@@ -42,15 +42,15 @@
   Contract holds: Phorge package resolution : PHP/PSR-4 :: TS module resolution : JS.
 
 - [2026-06-18] AGREED: after S2d (committed `e54c919`), next = **M5 S3** — git deps + `phorge.lock`
-  + `phorge vendor` + auto-offline, the final M5 slice (developer chose "M5 S3 — close the milestone").
+  + `phg vendor` + auto-offline, the final M5 slice (developer chose "M5 S3 — close the milestone").
   Determinism gate: deps pinned (tag/rev → SHA in lockfile) + vendored + resolved offline-only, never
   live network in tests/examples (same rule as the M6 URL deferral). Design source for S3 details:
   `docs/specs/2026-06-18-m5-project-model-design.md` M5-10 + O-7.
 - [2026-06-18] AGREED (S3 design, 3C-converged 8/8): build the **full S3 in one slice** — git deps +
-  `phorge.lock` + `phorge vendor` + auto-offline. Determinism = **vendored + offline-only in tests**
+  `phorge.lock` + `phg vendor` + auto-offline. Determinism = **vendored + offline-only in tests**
   (developer choice). Locked design:
   - **Vendor = a flat package forest** under `vendor/` with **no nested `phorge.toml`** (required so the
-    project-aware harness doesn't treat a dep as a standalone project). `phorge vendor` clones each
+    project-aware harness doesn't treat a dep as a standalone project). `phg vendor` clones each
     `[require]` dep, checks out its pinned tag/rev, reads the dep's own manifest source root, and copies
     that source subtree into `vendor/` preserving package dirs (folder=path validates against `vendor/`).
   - **`phorge.lock`** (TOML subset, like the manifest): per dep `name`, `git`, resolved `rev` (full
@@ -60,8 +60,8 @@
   - **Auto-offline load**: `loader::load_project` merges vendored packages exactly like local library
     packages (mangle + resolve → zero backend change, run==runvm structural). Vendor is consulted **only
     when `[require]` is non-empty**; requires-present-but-not-vendored → `E-VENDOR-MISSING` (run
-    `phorge vendor`). **Never fetches on run** — offline only.
-  - **`phorge vendor` is idempotent without a blanket wipe** (Rule 8): removes only the dep subtrees it
+    `phg vendor`). **Never fetches on run** — offline only.
+  - **`phg vendor` is idempotent without a blanket wipe** (Rule 8): removes only the dep subtrees it
     owns, then repopulates; **network only here**, never on run/check/transpile.
   - New guards: **`E-DUP-DEF`** (duplicate `(package,name)` in the merge — was a latent silent overwrite
     since S2c, made fatal now) and a **rejection of `package main` inside `vendor/`** (a lib dep is
@@ -71,7 +71,7 @@
     `phorge.lock`; the differential harness loads it offline → byte-identical on run/runvm + real PHP
     (exact integer/string ops only — dodges the int-`/`-vs-PHP-float-`/` gotcha).
   - **Deferred (documented, not regressions):** transitive dep resolution (vendor resolves direct
-    `[require]` only); `phorge build` stays single-file (won't merge `vendor/`). Both → KNOWN_ISSUES.
+    `[require]` only); `phg build` stays single-file (won't merge `vendor/`). Both → KNOWN_ISSUES.
 - [2026-06-18] AGREED (S2d): next = **project-aware differential harness + public `examples/project/`
   showcase** (the multi-file example deferred from S2a–S2c, satisfying "examples ship with features").
   Harness lives in `tests/differential.rs`: discover every project root under `examples/` (a dir with
@@ -170,8 +170,8 @@ Slices (each: one+ green commit, run==runvm byte-identical, PHP round-tripped, e
   project-aware (skips any dir holding a `phorge.toml` — structural, name-independent). Docs refreshed
   (`examples/README.md` rows + corrected "later slice" notes; `examples/project/README.md`; `FEATURES.md`
   Modules/packages → 🚧).
-- [x] **S3 — git deps + `phorge.lock` + `phorge vendor` + auto-offline** (final M5 slice). `src/lock.rs`
-  (strict TOML-subset lockfile, round-tripping) + `src/vendor.rs` (`phorge vendor`: clone → checkout
+- [x] **S3 — git deps + `phorge.lock` + `phg vendor` + auto-offline** (final M5 slice). `src/lock.rs`
+  (strict TOML-subset lockfile, round-tripping) + `src/vendor.rs` (`phg vendor`: clone → checkout
   pin → copy source into `vendor/<vendor>/<package>/` → FNV hash → write `phorge.lock`; idempotent,
   crash-safe, **network only here**). `loader::load_project` merges vendored packages like first-party
   libraries (mangle/resolve before any backend ⇒ run≡runvm structural; transpiler de-mangles to
@@ -180,7 +180,7 @@ Slices (each: one+ green commit, run==runvm byte-identical, PHP round-tripped, e
   (duplicate `(package,name)` — was a silent overwrite). CLI: `cmd_vendor`, dispatch/USAGE/help,
   3 `explain` codes. Example `examples/project/withdeps/` (vendored `acme/strutil`) ships committed
   `vendor/` + `phorge.lock`, byte-identical on run/runvm + real PHP. `tests/vendor.rs` drives the git
-  path via a `file://` fixture (offline). Deferred (KNOWN_ISSUES): transitive deps; `phorge build`
+  path via a `file://` fixture (offline). Deferred (KNOWN_ISSUES): transitive deps; `phg build`
   stays single-file. **421 tests green, clippy + fmt clean. M5 COMPLETE.**
 
 > Phase 3C convergence gate runs before S1 implementation begins. Each slice re-enters Phase 5→6→6C.

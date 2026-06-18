@@ -27,7 +27,7 @@ call form `V()`, and state evolves by fresh bindings/recursion (no reassignment,
   `|>`, exceptions, traits, overloading, sized ints, `decimal`, real imports. `is` omitted (it is a
   deep-`==` alias).
 - Verify EVERY new `.phg` with both backends before committing:
-  `phorge run <f>` and `phorge runvm <f>` must print identically (the glob test enforces this).
+  `phg run <f>` and `phg runvm <f>` must print identically (the glob test enforces this).
 
 ---
 
@@ -154,7 +154,7 @@ function main() {
 ```
 
 - [ ] **Step 2: Verify both backends identical.**
-  Run: `phorge run examples/realworld/ledger.phg` then `phorge runvm examples/realworld/ledger.phg`
+  Run: `phg run examples/realworld/ledger.phg` then `phg runvm examples/realworld/ledger.phg`
   Expected: identical stdout. If `runvm` errors/diverges, fix the program (likely a CTy/operand
   issue) until both match.
 
@@ -335,7 +335,7 @@ git commit -m "docs: four real-world examples (ledger, library, shop, rpg) — f
 
 ## Wave B — Six focused guide examples
 
-For each: write the file, run `phorge run` + `phorge runvm` to confirm identical output, then
+For each: write the file, run `phg run` + `phg runvm` to confirm identical output, then
 proceed. Commit once at the end of the wave (Task B7).
 
 ### Task B1: `examples/guide/operators.phg`
@@ -588,7 +588,7 @@ git commit -m "docs: six focused guide examples (operators, control-flow, collec
 ```
 import std.io;
 
-// This program is also in the byte-identity sweep. `phorge transpile` turns it into
+// This program is also in the byte-identity sweep. `phg transpile` turns it into
 // runnable PHP 8.x — the only Phorge↔PHP-ecosystem path (output, not input).
 
 enum Shape {
@@ -615,10 +615,10 @@ function main() {
 ```
 
 - [ ] **Step 2: Verify run/runvm identical.**
-  Run: `phorge run examples/transpile/demo.phg` and `phorge runvm examples/transpile/demo.phg`.
+  Run: `phg run examples/transpile/demo.phg` and `phg runvm examples/transpile/demo.phg`.
 
 - [ ] **Step 3: Generate the committed PHP.**
-  Run: `phorge transpile examples/transpile/demo.phg > examples/transpile/demo.php`
+  Run: `phg transpile examples/transpile/demo.phg > examples/transpile/demo.php`
   Then inspect it (`cat`) to confirm it is valid-looking PHP (`<?php`, a `main()` call at the end).
 
 ### Task C2: Transpile snapshot test
@@ -634,10 +634,10 @@ function main() {
 fn transpile_demo_matches_committed_php() {
     let expected = std::fs::read_to_string("examples/transpile/demo.php")
         .expect("read committed demo.php");
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_phorge"))
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_phg"))
         .args(["transpile", "examples/transpile/demo.phg"])
         .output()
-        .expect("run phorge transpile");
+        .expect("run phg transpile");
     assert!(output.status.success(), "transpile exited non-zero");
     let actual = String::from_utf8(output.stdout).expect("utf-8 php");
     assert_eq!(
@@ -665,13 +665,13 @@ Phorge can transpile to runnable **PHP 8.x**. This is the only Phorge↔PHP-ecos
 transpiler *produces* PHP source; Phorge does not consume composer/PHP packages.
 
 ```bash
-phorge transpile demo.phg > demo.php   # regenerate the committed output
+phg transpile demo.phg > demo.php   # regenerate the committed output
 php demo.php                            # run it under any PHP 8.x
 ```
 
-`demo.php` in this directory is the committed output of `phorge transpile demo.phg`, kept in sync by
+`demo.php` in this directory is the committed output of `phg transpile demo.phg`, kept in sync by
 a snapshot test (`tests/cli.rs::transpile_demo_matches_committed_php`). `demo.phg` itself also runs
-on both native backends (`phorge run` / `phorge runvm`).
+on both native backends (`phg run` / `phg runvm`).
 ```
 
 ### Task C4: `examples/README.md` index + coverage matrix

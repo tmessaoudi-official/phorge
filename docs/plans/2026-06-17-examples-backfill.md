@@ -4,11 +4,11 @@
 > with a guide + example file(s). This backfills the gap for features shipped *before* that rule.
 
 **Goal:** Cover the shipped features that currently lack a dedicated example/guide — functions,
-`phorge build`, and the CLI/diagnostics surface — so `examples/` is a complete showcase of the
+`phg build`, and the CLI/diagnostics surface — so `examples/` is a complete showcase of the
 "today" column of `FEATURES.md`.
 
 **Gap** (FEATURES ✅ rows vs. `examples/` inventory, 2026-06-17): functions (only incidental, via
-`fib`/`control-flow`), `phorge build` (none), `phorge explain`/diagnostics (none), stdin/`-e`/`--`
+`fib`/`control-flow`), `phg build` (none), `phg explain`/diagnostics (none), stdin/`-e`/`--`
 source forms (none), `check`/`parse`/`lex` (none). Arithmetic + its overflow-checking note already
 live in `guide/operators.phg`, so no separate `checked-arithmetic.phg` — the clean fault is shown as
 real output in the CLI guide instead.
@@ -24,7 +24,7 @@ captured** command output, never invented.
 - [ ] Write the example: typed params, declared return type, a no-return function, composition (one
       function calling another), a `List<int>` return via a range, nested call results. Distinct
       focus from `control-flow.phg` (which owns recursion/branching/loops).
-- [ ] Verify identical output: `phorge run` matches `phorge runvm`; `phorge transpile` emits clean PHP.
+- [ ] Verify identical output: `phg run` matches `phg runvm`; `phg transpile` emits clean PHP.
 - [ ] Add the README index row + coverage-matrix row.
 - [ ] `cargo test` green (file auto-gated). Commit.
 
@@ -32,7 +32,7 @@ captured** command output, never invented.
 **Files:** Create `examples/build/app.phg`, `examples/build/README.md`; Modify `examples/README.md`.
 - [ ] `app.phg`: a small self-contained program (fib loop) suitable to build.
 - [ ] Capture real host output: build the binary to a temp path, run it, record stdout.
-- [ ] README: the host `phorge build` flow, what the `.phorge` section holds, the
+- [ ] README: the host `phg build` flow, what the `.phorge` section holds, the
       built-binary-matches-`runvm` parity-test pointer, and that cross/macOS targets are partial.
 - [ ] Verify `app.phg` runs identically on both backends. `cargo test` green. Commit.
 

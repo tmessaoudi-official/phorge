@@ -1,7 +1,7 @@
 package main;
 
 // A project that depends on a vendored git library, `acme/strutil` (declared in phorge.toml's
-// [require], fetched by `phorge vendor` into vendor/, pinned by phorge.lock). The dependency is
+// [require], fetched by `phg vendor` into vendor/, pinned by phorge.lock). The dependency is
 // consumed exactly like a first-party package: import it, then call through its leaf qualifier.
 import core.console;
 import acme.strutil;

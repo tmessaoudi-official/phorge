@@ -22,7 +22,7 @@ Deno/Bun `serve`): **the handler is portable; the SAPI bridge is not.**
   is transpiled 1:1 and byte-identity-tested. It runs unchanged on the Phorge VM and (transpiled) on
   PHP.
 - Turning raw wire-bytes into a `Request` is **runtime glue**, and it differs per host:
-  - **Phorge socket side:** `phorge serve` reads raw HTTP/1.1 bytes and builds a `Request`.
+  - **Phorge socket side:** `phg serve` reads raw HTTP/1.1 bytes and builds a `Request`.
   - **PHP side:** the generated front-controller builds a `Request` from superglobals
     (`$_SERVER`/`$_GET`/`php://input`).
   The two bridges are *not* transpiled into each other — only `handle` is. A **conformance test**
@@ -95,9 +95,9 @@ swapped in later, invisibly, behind that same API once Map (S4) makes it worthwh
 had that A lacks — "works as a `core.http` *library* today" — is the E-PKG-TYPE limit the cross-package
 -types follow-up removes. So "both" is a migration path under a stable API, not a fork.
 
-## 4. Runtime glue — `phorge serve` (Phorge side) and `php -S` (PHP side)
+## 4. Runtime glue — `phg serve` (Phorge side) and `php -S` (PHP side)
 
-### 4a. `phorge serve <file> [--port N]`
+### 4a. `phg serve <file> [--port N]`
 A new CLI command modeled on `vendor`/`build` (`src/main.rs` dispatch block + `src/cli.rs` help arm).
 It loads the program via `loader::load` (so a multi-file project's `handle` works), validates it via
 the gate, then enters the socket loop in a **new `src/serve.rs`**.
@@ -111,12 +111,12 @@ the gate, then enters the socket loop in a **new `src/serve.rs`**.
   does not touch `main()` dispatch.
 
 ### 4b. The PHP side
-`phorge transpile app.phg` emits the handler module (functions + classes) unchanged — verified, the
+`phg transpile app.phg` emits the handler module (functions + classes) unchanged — verified, the
 transpiler already handles classes/methods/field reads and native erasure. A **~10-line PHP
 front-controller** (documented in the serve README, *not* auto-emitted in the spike) builds the
 `Request` from superglobals, calls `handle($req)`, and emits the `Response` via `header()` +
 `http_response_code()` + `echo`. `php -S localhost:8000 router.php` is then the PHP-side equivalent of
-`phorge serve`.
+`phg serve`.
 
 ## 5. Determinism quarantine — the `Transport` seam
 
@@ -134,7 +134,7 @@ pub trait Transport {
 |---|---|---|
 | `handle(Request)->Response`, parse, serialize | Phorge code (`examples/`) | **Yes** — glob-gated, run≡runvm≡PHP |
 | `Transport` real socket loop | `src/serve.rs` | **No** — `tests/serve.rs`, skip-aware |
-| `phorge serve` CLI | `src/main.rs` + `src/cli.rs` | tooling, not language |
+| `phg serve` CLI | `src/main.rs` + `src/cli.rs` | tooling, not language |
 | PHP front-controller | serve README | round-trip-documented |
 
 Tests:
@@ -181,7 +181,7 @@ exact-match router added to the spike; Shape A is the one API; spike lands befor
 | **`bytes` type** (`Ty::Bytes` + `Value::Bytes` + `b"…"` literal + `string`↔`bytes` interop) | own language slice — PHP transpile trivial (PHP strings are byte arrays) | **spike W0 (first)** |
 | Pure `handle(Request)->Response` + parser + serializer (Shape A) | nothing — ships on today's language | **spike W1** |
 | **Static exact-match router** (`(method,"/path")->namedHandler`) | nothing — named fns + string match | **spike W2** |
-| `phorge serve` single-threaded + `tests/serve.rs` + PHP front-controller README | nothing | **spike W3–W4** |
+| `phg serve` single-threaded + `tests/serve.rs` + PHP front-controller README | nothing | **spike W3–W4** |
 | `core.http` as a real **library package** (not `package main`) | M5 cross-package-types follow-up (E-PKG-TYPE) | post-spike |
 | Map-based headers + **path params `/users/{id}`** | M3 **S4** (Map surface syntax) | later — "the rest" |
 | **Middleware + closure routes** (`app.get("/p", req => …)`) | M3 **S3** lambdas (Track A) | later — "the rest" |
@@ -194,8 +194,8 @@ Two-part, mirroring `examples/build/` + `examples/cli/`:
    Phorge `parse_request(string) -> Request?` and `serialize(Response) -> string`, a `handle`, and a
    `main()` that feeds a **committed fixture request** through `handle` and prints the serialized
    response. Auto byte-identity-gated by the glob; ASCII bodies; PHP round-tripped.
-2. **`examples/web/README.md`** — the live-server walkthrough: `phorge serve handler.phg`, a `curl`
-   against it, and the `phorge transpile handler.phg > router.php && php -S localhost:8000 router.php`
+2. **`examples/web/README.md`** — the live-server walkthrough: `phg serve handler.phg`, a `curl`
+   against it, and the `phg transpile handler.phg > router.php && php -S localhost:8000 router.php`
    equivalent (with the ~10-line front-controller). The socket loop can't be a byte-identical example.
 3. **`examples/README.md`** index + coverage-matrix row.
 
@@ -214,7 +214,7 @@ Two-part, mirroring `examples/build/` + `examples/cli/`:
 - **W3 — `src/serve.rs` + `Transport`**: the non-transpiled Phorge runtime entry `__serve(bytes) ->
   bytes` (parse→route→`handle`→serialize); the VM "call named fn with arg" entry path. *Acceptance:*
   fixture `Transport` unit test + the dual-bridge conformance test (`tests/serve.rs`/unit).
-- **W4 — `phorge serve` CLI + PHP bridge + docs**: dispatch block, `--port`, blocking loop,
+- **W4 — `phg serve` CLI + PHP bridge + docs**: dispatch block, `--port`, blocking loop,
   startup/missing-`handle`/`400` handling, help + USAGE + `explain`; the ~PHP front-controller (now a
   `match($path)` router); `examples/web/README.md`, `examples/README.md` row,
   `FEATURES.md`/`CHANGELOG.md`/`ROADMAP.md`. *Acceptance:* `tests/serve.rs` real ephemeral-port request

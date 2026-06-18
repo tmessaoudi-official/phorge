@@ -77,7 +77,7 @@ impl Checker {
         Ty::Error
     }
 
-    /// Like [`Self::err`] but attaches a stable diagnostic `code` (for `phorge explain`) and an
+    /// Like [`Self::err`] but attaches a stable diagnostic `code` (for `phg explain`) and an
     /// optional hint.
     fn err_coded(
         &mut self,

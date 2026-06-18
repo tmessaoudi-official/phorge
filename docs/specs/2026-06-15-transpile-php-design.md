@@ -6,7 +6,7 @@
 > scope here.
 
 **Goal:** Emit semantically-equivalent, runnable PHP 8.x source from a type-checked
-Phorge program, via a new `phorge transpile <file>` subcommand that prints PHP to stdout.
+Phorge program, via a new `phg transpile <file>` subcommand that prints PHP to stdout.
 
 **Architecture:** A new `src/transpile.rs` codegen module walks the **untyped AST** (same
 AST the evaluator walks), tracking the same global tables (functions / enums / classes)
@@ -21,7 +21,7 @@ gates on the type-checker (reuse `parse_checked`) then calls `transpile::emit(&P
 
 ## CLI Surface (decided)
 
-- `phorge transpile <file>` → PHP source to **stdout**, exit 0.
+- `phg transpile <file>` → PHP source to **stdout**, exit 0.
 - Gated on the type-checker: ill-typed input → `type error at L:C: msg` on stderr, exit 1
   (identical contract to `run`). Only well-typed programs are emitted.
 - Fits the existing `cmd_*(src) -> Result<String,String>` pattern (Ok = print verbatim,
@@ -137,10 +137,10 @@ return/var-decl-init position → `transpile error: <feature> is not yet support
   sample → assert key PHP fragments.
 - **Round-trip (the strong test)**: if a `php` CLI is available on PATH, transpile the §6
   sample and the `examples/*.phg`, run the emitted PHP with `php`, and assert its stdout
-  equals `phorge run`'s stdout (`Hello Tak\narea = 12.56636\narea = 12\n`). If `php` is
+  equals `phg run`'s stdout (`Hello Tak\narea = 12.56636\narea = 12\n`). If `php` is
   absent, skip with a printed notice (don't fail the suite). [Verified at plan time: check
   `command -v php` before relying on this.]
-- **CLI subprocess (`tests/cli.rs`)**: `phorge transpile examples/grades.phg` exits 0 and
+- **CLI subprocess (`tests/cli.rs`)**: `phg transpile examples/grades.phg` exits 0 and
   stdout starts with `<?php`; ill-typed input exits 1.
 
 ## Out of scope (this milestone)

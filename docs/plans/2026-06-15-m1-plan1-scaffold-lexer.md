@@ -20,7 +20,7 @@
 - `src/lib.rs` — crate root, re-exports `lexer`, `token`
 - `src/token.rs` — `TokenKind`, `Token`, `Span` definitions
 - `src/lexer.rs` — `Lexer`, `lex(src) -> Result<Vec<Token>, LexError>`
-- `src/main.rs` — thin CLI: `phorge lex <file>` prints tokens (dev aid)
+- `src/main.rs` — thin CLI: `phg lex <file>` prints tokens (dev aid)
 - `tests/lexer_integration.rs` — end-to-end: tokenize the spec's sample program
 
 Each file has one responsibility: `token.rs` = data, `lexer.rs` = scanning logic, `main.rs` = I/O only.
@@ -759,14 +759,14 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(String::as_str) {
         Some("lex") => {
-            let path = args.get(2).unwrap_or_else(|| { eprintln!("usage: phorge lex <file>"); exit(2); });
+            let path = args.get(2).unwrap_or_else(|| { eprintln!("usage: phg lex <file>"); exit(2); });
             let src = std::fs::read_to_string(path).unwrap_or_else(|e| { eprintln!("read error: {e}"); exit(1); });
             match phorge::lexer::lex(&src) {
                 Ok(toks) => for t in toks { println!("{:?} @ {}:{}", t.kind, t.span.line, t.span.col); }
                 Err(e) => { eprintln!("lex error at {}:{}: {}", e.line, e.col, e.message); exit(1); }
             }
         }
-        _ => { eprintln!("usage: phorge lex <file>"); exit(2); }
+        _ => { eprintln!("usage: phg lex <file>"); exit(2); }
     }
 }
 ```

@@ -1,12 +1,12 @@
 //! Guard rail: every program in `examples/` must be a *runnable* Phorge program.
-//! Running `phorge run <file>` on each must exit 0. This turns "someone committed a
+//! Running `phg run <file>` on each must exit 0. This turns "someone committed a
 //! broken/fragment example" into a caught regression rather than a silent rot.
 
 use std::path::Path;
 use std::process::Command;
 
 /// Path to the compiled `phorge` binary (Cargo sets this for integration tests).
-const BIN: &str = env!("CARGO_BIN_EXE_phorge");
+const BIN: &str = env!("CARGO_BIN_EXE_phg");
 
 #[test]
 fn every_example_runs_clean() {

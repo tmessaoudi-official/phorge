@@ -1,9 +1,9 @@
-//! M2.5: `phorge build` produces a self-executing binary whose output is byte-identical to
-//! `phorge runvm` on the same program (the parity spine extended to the distribution layer).
+//! M2.5: `phg build` produces a self-executing binary whose output is byte-identical to
+//! `phg runvm` on the same program (the parity spine extended to the distribution layer).
 //! Phase 1 = host; Phase 2 adds cross-target parity (toolchain-gated, graceful skip).
 use std::process::Command;
 
-const BIN: &str = env!("CARGO_BIN_EXE_phorge");
+const BIN: &str = env!("CARGO_BIN_EXE_phg");
 
 /// Skip-aware: true iff cargo-zigbuild and the given rustup target are both available.
 fn cross_toolchain_ready(target: &str) -> bool {

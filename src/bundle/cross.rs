@@ -47,9 +47,9 @@ pub(crate) fn embed_section(
     Ok(())
 }
 
-/// Build for the host target: the stub is this running phorge binary. Returns the human report line.
+/// Build for the host target: the stub is this running phg binary. Returns the human report line.
 pub fn build_host(src: &str, out: &std::path::Path) -> Result<String, String> {
-    let stub = std::env::current_exe().map_err(|e| format!("cannot locate phorge binary: {e}"))?;
+    let stub = std::env::current_exe().map_err(|e| format!("cannot locate phg binary: {e}"))?;
     embed_section(&stub, out, src)?;
     Ok(format!("built {}\n", out.display()))
 }
@@ -166,15 +166,14 @@ pub fn build_all(input_path: &str, src: &str, _out_path: Option<&str>) -> Result
 }
 
 /// Cross-compile a phorge stub for `target` via cargo-zigbuild, caching it under the phorge-hash key.
-/// The stub is a phorge binary with NO embedded section (embedded_source -> None -> normal CLI).
+/// The stub is a phg binary with NO embedded section (embedded_source -> None -> normal CLI).
 pub(crate) fn build_stub(target: &str) -> Result<std::path::PathBuf, String> {
-    let phorge =
-        std::env::current_exe().map_err(|e| format!("cannot locate phorge binary: {e}"))?;
+    let phorge = std::env::current_exe().map_err(|e| format!("cannot locate phg binary: {e}"))?;
     let phorge_bytes =
-        std::fs::read(&phorge).map_err(|e| format!("cannot read phorge binary: {e}"))?;
+        std::fs::read(&phorge).map_err(|e| format!("cannot read phg binary: {e}"))?;
     let dir = cache_dir(&phorge_bytes)
         .ok_or_else(|| "cannot resolve cache dir (no HOME/XDG_CACHE_HOME)".to_string())?;
-    let cached = dir.join(target).join(output_name("phorge", target));
+    let cached = dir.join(target).join(output_name("phg", target));
     if cached.is_file() {
         return Ok(cached);
     }
@@ -187,10 +186,10 @@ pub(crate) fn build_stub(target: &str) -> Result<std::path::PathBuf, String> {
              stub download. The host build (no --target) works without source."
         ));
     }
-    // --cap-lints=warn so target-specific lints don't trip the deny gate; --bin phorge pins the one
+    // --cap-lints=warn so target-specific lints don't trip the deny gate; --bin phg pins the one
     // intended binary (future-proof against added [[bin]] targets).
     let status = std::process::Command::new("cargo-zigbuild")
-        .args(["build", "--release", "--bin", "phorge", "--target", target])
+        .args(["build", "--release", "--bin", "phg", "--target", target])
         .env("RUSTFLAGS", "--cap-lints=warn")
         .status()
         .map_err(|e| {
@@ -204,7 +203,7 @@ pub(crate) fn build_stub(target: &str) -> Result<std::path::PathBuf, String> {
     let built = std::path::PathBuf::from("target")
         .join(target)
         .join("release")
-        .join(output_name("phorge", target));
+        .join(output_name("phg", target));
     if !built.is_file() {
         return Err(format!(
             "cargo-zigbuild produced no binary at {}",

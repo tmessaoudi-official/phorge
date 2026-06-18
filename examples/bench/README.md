@@ -13,17 +13,17 @@ tool; this page documents that mechanism.)
 | `allocate_chain(1000)` | **Heap + stack** — 1000 `Cell` instances simultaneously live (each recursion frame keeps its `c` alive across the call) on the `Rc`-shared object heap, 1000-deep recursion. |
 | `for (Cell c in […])` | **Object access** — a method call + field read per list element. |
 
-It runs byte-identically on `phorge run` and `phorge runvm` (gated by `tests/differential.rs`, which
+It runs byte-identically on `phg run` and `phg runvm` (gated by `tests/differential.rs`, which
 globs `examples/**/*.phg`).
 
 ## Running it
 
 ```sh
-phorge bench  examples/bench/workload.phg            # per-phase wall-clock + memory
-phorge bench --vs-php examples/bench/workload.phg    # + a 3-way comparison against transpiled PHP
-phorge disasm examples/bench/workload.phg            # the bytecode the VM executes
-phorge run    examples/bench/workload.phg            # tree-walking interpreter
-phorge runvm  examples/bench/workload.phg            # bytecode VM
+phg bench  examples/bench/workload.phg            # per-phase wall-clock + memory
+phg bench --vs-php examples/bench/workload.phg    # + a 3-way comparison against transpiled PHP
+phg disasm examples/bench/workload.phg            # the bytecode the VM executes
+phg run    examples/bench/workload.phg            # tree-walking interpreter
+phg runvm  examples/bench/workload.phg            # bytecode VM
 ```
 
 `bench` runs the whole program **101×** (median of 101, one untimed warmup), so it takes several
@@ -31,7 +31,7 @@ seconds — that's the sampling cost, not the program's runtime.
 
 ## `--vs-php` — who's the winner?
 
-`phorge bench --vs-php <file>` adds a head-to-head against the **PHP backend**: it transpiles the
+`phg bench --vs-php <file>` adds a head-to-head against the **PHP backend**: it transpiles the
 program to PHP, runs it once to **gate output identity** (a transpile divergence aborts the
 comparison — it's a bug report, not a timing result), then median-times `php <file>` the same way.
 The report gains a `vs PHP` section naming the faster of the Phorge VM and PHP. Requires `php` on
