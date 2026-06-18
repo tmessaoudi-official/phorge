@@ -258,6 +258,7 @@ impl Interp {
             Expr::Bool(b, _) => Ok(Value::Bool(*b)),
             Expr::Null(_) => Ok(Value::Null),
             Expr::Str(parts, _) => self.eval_str(parts),
+            Expr::Bytes(b, _) => Ok(Value::Bytes(Rc::new(b.clone()))),
             Expr::Ident(name, _) => self.eval_ident(name),
             Expr::This(_) => match &self.this {
                 Some(v) => Ok(v.clone()),

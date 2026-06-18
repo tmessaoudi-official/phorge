@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### M6 slice W0 — the `bytes` type
+
+- **`bytes`** — a new primitive: raw octet sequences distinct from UTF-8 `string`. `Value::Bytes`
+  is `Rc`-shared (like `List`); `Ty::Bytes` is a built-in type name. No new `Op` — a `b"…"` literal
+  rides the constant pool (`Op::Const`), interop rides `Op::CallNative`, `==` rides `Op::Eq`.
+- **`b"…"` literals** — raw byte strings (no interpolation), escapes `\n \t \r \\ \"` plus `\xHH`
+  (two hex digits → one arbitrary octet, so a literal can hold non-UTF-8 bytes).
+- **`core.bytes`** interop module (`import core.bytes;`): `from_string(string) -> bytes`,
+  `to_string(bytes) -> string?` (UTF-8 decode; `null` on invalid — composes with S2 `??`/if-let,
+  never a fault), `len(bytes) -> int` (BYTE count, vs `core.text.len`'s character count),
+  `concat(bytes, bytes) -> bytes`, `slice(bytes, int, int) -> bytes` (half-open, bounds-clamped —
+  total, no fault).
+- **Transpile** — `bytes` erases to PHP `string` (PHP strings are byte arrays); `b"…"` → a PHP
+  double-quoted literal with `\xHH` preserved; the natives map to `strlen`/`mb_check_encoding`/`.`/
+  `substr`. Example `examples/guide/bytes.phg` runs byte-identically on `run`/`runvm` + **real PHP**.
+- First slice of the **M6 web-capabilities spike** (design-locked,
+  `docs/specs/2026-06-18-m6-web-design.md`); bytes was pulled forward so HTTP bodies can be honest
+  octets.
+
 ### M5 slice S3 — git dependencies + `phorge.lock` + `phorge vendor` + auto-offline
 
 - **`phorge vendor`** — the only network-touching command. It clones each `[require]` git dependency

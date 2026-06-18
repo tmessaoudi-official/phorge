@@ -247,6 +247,8 @@ impl Transpiler {
                 "float" => "float".into(),
                 "bool" => "bool".into(),
                 "string" => "string".into(),
+                // PHP strings ARE byte arrays — `bytes` erases to `string` (M6 W0).
+                "bytes" => "string".into(),
                 "List" | "Map" | "Set" => "array".into(),
                 other => other.to_string(), // enum / class name
             },
@@ -541,6 +543,7 @@ impl Transpiler {
                 Ok(format!("{o}[{i}]"))
             }
             Expr::Str(parts, _) => self.emit_string(parts),
+            Expr::Bytes(b, _) => Ok(format!("\"{}\"", php_escape_bytes(b))),
             Expr::Call { callee, args, .. } => self.emit_call(callee, args),
             Expr::Member {
                 object, name, safe, ..
@@ -809,6 +812,24 @@ fn php_escape(s: &str) -> String {
     s.replace('\\', "\\\\")
         .replace('"', "\\\"")
         .replace('$', "\\$")
+}
+
+/// Escape a `bytes` literal for a PHP double-quoted string. Printable ASCII is emitted verbatim (with
+/// `\` `"` `$` escaped); every other octet becomes a two-digit `\xHH` (always two digits so PHP's
+/// greedy `\x` escape can't merge with a following hex character). PHP strings are byte arrays, so the
+/// round-trip is exact (M6 W0).
+fn php_escape_bytes(bytes: &[u8]) -> String {
+    let mut out = String::new();
+    for &b in bytes {
+        match b {
+            b'\\' => out.push_str("\\\\"),
+            b'"' => out.push_str("\\\""),
+            b'$' => out.push_str("\\$"),
+            0x20..=0x7E => out.push(b as char),
+            _ => out.push_str(&format!("\\x{b:02x}")),
+        }
+    }
+    out
 }
 
 /// A ctor param is promoted (becomes a field) iff it carries a visibility modifier —

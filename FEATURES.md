@@ -10,6 +10,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Feature | Status | Notes |
 |---|---|---|
 | Static types: `int`, `float`, `bool`, `string` | ✅ | checked at compile time |
+| Raw bytes: `bytes` + `b"…"` literals (`\xHH`) | ✅ | octet sequences distinct from UTF-8 `string`; `core.bytes` interop (`from_string`/`to_string`/`len`/`concat`/`slice`) |
 | Generic lists: `List<T>` + list literals | ✅ | `[1, 2, 3]` |
 | Immutable-by-default bindings | ✅ | no reassignment; fresh binding instead |
 | Functions + recursion | ✅ | `function f(int n) -> int { … }`, `main()` entry point |

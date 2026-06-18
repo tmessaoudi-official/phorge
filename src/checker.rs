@@ -168,6 +168,7 @@ impl Checker {
                 "float" => self.no_args(name, args, *span, Ty::Float),
                 "bool" => self.no_args(name, args, *span, Ty::Bool),
                 "string" => self.no_args(name, args, *span, Ty::String),
+                "bytes" => self.no_args(name, args, *span, Ty::Bytes),
                 "List" => Ty::List(Box::new(self.one_arg(name, args, *span))),
                 "Set" => Ty::Set(Box::new(self.one_arg(name, args, *span))),
                 "Map" => {
@@ -612,6 +613,7 @@ impl Checker {
             Expr::Bool(_, _) => Ty::Bool,
             Expr::Null(_) => Ty::Null,
             Expr::Str(parts, _) => self.check_str(parts), // Task 7
+            Expr::Bytes(_, _) => Ty::Bytes,
             Expr::Ident(name, span) => match self.lookup(name) {
                 Some(t) => t,
                 None => {
@@ -794,6 +796,7 @@ impl Checker {
             | Expr::Float(_, s)
             | Expr::Bool(_, s)
             | Expr::Str(_, s)
+            | Expr::Bytes(_, s)
             | Expr::Ident(_, s)
             | Expr::List(_, s) => *s,
             Expr::Null(s) | Expr::This(s) => *s,
@@ -1392,6 +1395,7 @@ fn is_builtin_type_name(name: &str) -> bool {
             | "float"
             | "bool"
             | "string"
+            | "bytes"
             | "List"
             | "Map"
             | "Set"

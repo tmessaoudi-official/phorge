@@ -94,6 +94,8 @@ pub enum Expr {
     Null(Span),
     /// String literal as interpolation parts; a plain string is a single `Literal` part.
     Str(Vec<StrPart>, Span),
+    /// `b"…"` raw byte-string literal — a flat octet sequence, no interpolation.
+    Bytes(Vec<u8>, Span),
     Ident(String, Span),
     This(Span),
     /// `[a, b, c]`

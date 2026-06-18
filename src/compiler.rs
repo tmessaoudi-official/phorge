@@ -681,7 +681,7 @@ impl<'a> Compiler<'a> {
         match e {
             Expr::Int(..) => Ok(CTy::Int),
             Expr::Float(..) => Ok(CTy::Float),
-            Expr::Bool(..) | Expr::Str(..) => Ok(CTy::Other),
+            Expr::Bool(..) | Expr::Str(..) | Expr::Bytes(..) => Ok(CTy::Other),
             // A list literal's element type comes from its first element (empty → `Other`), so an
             // index into it (`[1, 2, 3][0] + 1`) resolves as an operand (M3 S1.1).
             Expr::List(elems, _) => Ok(CTy::List(Box::new(
@@ -861,6 +861,9 @@ impl<'a> Compiler<'a> {
             Expr::Float(x, sp) => self.emit_const(Value::Float(*x), sp.line),
             Expr::Bool(b, sp) => self.emit_const(Value::Bool(*b), sp.line),
             Expr::Str(parts, sp) => self.compile_str(parts, sp.line)?,
+            Expr::Bytes(b, sp) => {
+                self.emit_const(Value::Bytes(std::rc::Rc::new(b.clone())), sp.line)
+            }
             Expr::Ident(name, sp) => {
                 // Resolution order mirrors the interpreter's `eval_ident`: a `match`-arm binding
                 // (re-extracted from `$match` along its payload path; P4-7) shadows a local/param,

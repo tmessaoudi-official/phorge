@@ -1,0 +1,43 @@
+package main;
+
+// M6 W0 — the `bytes` type: raw octet sequences distinct from UTF-8 `string`.
+// `b"…"` literals (with `\xHH`), and the `core.bytes` interop module.
+import core.console;
+import core.bytes;
+
+function main() {
+  // from_string + len (BYTE count) + to_string round-trip.
+  bytes hello = bytes.from_string("hello");
+  int n = bytes.len(hello);
+  console.println("len={n}");                         // len=5
+  console.println(bytes.to_string(hello) ?? "?");     // hello
+
+  // A `b"…"` literal with \xHH escapes — 0x48 0x69 = "Hi".
+  bytes raw = b"\x48\x69";
+  console.println(bytes.to_string(raw) ?? "?");       // Hi
+  int rn = bytes.len(raw);
+  console.println("rawlen={rn}");                     // rawlen=2
+
+  // Invalid UTF-8 decodes to `null` (never a fault) — composes with `??`.
+  bytes bad = b"\xff\xfe";
+  console.println(bytes.to_string(bad) ?? "<non-utf8>"); // <non-utf8>
+
+  // concat + slice (half-open, bounds-clamped).
+  bytes ab = bytes.concat(b"foo", b"bar");
+  console.println(bytes.to_string(ab) ?? "?");        // foobar
+  int abn = bytes.len(ab);
+  console.println("ablen={abn}");                     // ablen=6
+
+  bytes sl = bytes.slice(ab, 1, 4);
+  console.println(bytes.to_string(sl) ?? "?");        // oob
+
+  // start > end clamps to an empty slice (total, no fault).
+  bytes empty = bytes.slice(ab, 5, 2);
+  int en = bytes.len(empty);
+  console.println("slempty={en}");                    // slempty=0
+
+  // byte-vector equality.
+  bytes eq1 = b"abc";
+  bytes eq2 = bytes.from_string("abc");
+  if (eq1 == eq2) { console.println("eq"); } else { console.println("ne"); } // eq
+}

@@ -8,6 +8,8 @@ pub enum Ty {
     Float,
     Bool,
     String,
+    /// A sequence of raw octets (not UTF-8). Converts to/from `string` only via `core.bytes`.
+    Bytes,
     Unit,
     /// A nominal enum or class type, by name.
     Named(String),
@@ -55,6 +57,7 @@ impl fmt::Display for Ty {
             Ty::Float => write!(f, "float"),
             Ty::Bool => write!(f, "bool"),
             Ty::String => write!(f, "string"),
+            Ty::Bytes => write!(f, "bytes"),
             Ty::Unit => write!(f, "unit"),
             Ty::Named(n) => write!(f, "{n}"),
             Ty::List(e) => write!(f, "List<{e}>"),

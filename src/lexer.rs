@@ -192,6 +192,79 @@ impl<'a> Lexer<'a> {
         })
     }
 
+    /// Scan a `b"…"` byte-string literal (the `b` prefix is already consumed). Unlike `scan_string`
+    /// there is NO interpolation — `{`/`}` are literal bytes. Escapes are `\n \t \r \\ \"` plus
+    /// `\xHH` (two hex digits → one arbitrary octet), so a literal can hold non-UTF-8 bytes.
+    fn scan_bytes(&mut self, start: usize, line: u32, col: u32) -> Result<Token, Diagnostic> {
+        self.bump(); // opening quote
+        let mut bytes: Vec<u8> = Vec::new();
+        loop {
+            let (el, ec) = (self.line, self.col);
+            match self.bump() {
+                None => {
+                    return Err(Diagnostic::new(
+                        Stage::Lex,
+                        "unterminated byte string",
+                        line,
+                        col,
+                    ))
+                }
+                Some(b'"') => break,
+                Some(b'\\') => match self.bump() {
+                    Some(b'n') => bytes.push(b'\n'),
+                    Some(b't') => bytes.push(b'\t'),
+                    Some(b'r') => bytes.push(b'\r'),
+                    Some(b'\\') => bytes.push(b'\\'),
+                    Some(b'"') => bytes.push(b'"'),
+                    Some(b'x') => {
+                        let hi = self.hex_digit(el, ec)?;
+                        let lo = self.hex_digit(el, ec)?;
+                        bytes.push(hi << 4 | lo);
+                    }
+                    Some(other) => {
+                        return Err(Diagnostic::new(
+                            Stage::Lex,
+                            format!("invalid escape \\{}", other as char),
+                            el,
+                            ec,
+                        ))
+                    }
+                    None => {
+                        return Err(Diagnostic::new(
+                            Stage::Lex,
+                            "unterminated byte string",
+                            line,
+                            col,
+                        ))
+                    }
+                },
+                Some(other) => bytes.push(other),
+            }
+        }
+        Ok(Token {
+            kind: TokenKind::Bytes(bytes),
+            span: Span {
+                start,
+                len: self.pos - start,
+                line,
+                col,
+            },
+        })
+    }
+
+    /// Consume one hex digit for a `\xHH` byte escape, or error at the offending position.
+    fn hex_digit(&mut self, el: u32, ec: u32) -> Result<u8, Diagnostic> {
+        match self.bump() {
+            Some(c) if c.is_ascii_hexdigit() => Ok((c as char).to_digit(16).unwrap() as u8),
+            _ => Err(Diagnostic::new(
+                Stage::Lex,
+                "invalid \\xHH byte escape (expected two hex digits)",
+                el,
+                ec,
+            )),
+        }
+    }
+
     // NOTE: identifiers are ASCII-only by design for v0.1 (scan_ident uses
     // is_ascii_alphabetic / is_ascii_alphanumeric). Unicode identifiers are out of scope.
     fn scan_ident(&mut self, start: usize, line: u32, col: u32) -> Token {
@@ -283,6 +356,15 @@ pub fn lex(src: &str) -> Result<Vec<Token>, Diagnostic> {
                 }
                 if b == b'/' && lx.peek2() == Some(b'*') {
                     lx.skip_block_comment()?;
+                    continue;
+                }
+
+                // `b"…"` byte-string literal — must precede the identifier scan (a bare `b` is a
+                // valid identifier start). Only the exact `b"` digraph triggers it.
+                if b == b'b' && lx.peek2() == Some(b'"') {
+                    lx.bump(); // consume the `b` prefix
+                    let t = lx.scan_bytes(start, line, col)?;
+                    out.push(t);
                     continue;
                 }
 
@@ -575,6 +657,42 @@ mod tests {
     fn unterminated_string_errors() {
         let err = lex("\"oops").unwrap_err();
         assert!(err.message.contains("unterminated string"));
+    }
+
+    #[test]
+    fn byte_string_literals() {
+        use TokenKind::*;
+        assert_eq!(kinds("b\"Hi\""), vec![Bytes(vec![b'H', b'i']), Eof]);
+        // \xHH escapes to arbitrary octets (incl. non-UTF-8).
+        assert_eq!(
+            kinds("b\"\\x48\\xff\\x00\""),
+            vec![Bytes(vec![0x48, 0xff, 0x00]), Eof]
+        );
+        // ordinary escapes still work.
+        assert_eq!(
+            kinds("b\"a\\nb\""),
+            vec![Bytes(vec![b'a', b'\n', b'b']), Eof]
+        );
+        // NO interpolation — braces are literal bytes.
+        assert_eq!(
+            kinds("b\"x{y}\""),
+            vec![Bytes(vec![b'x', b'{', b'y', b'}']), Eof]
+        );
+        // a bare `b` is still an identifier; only `b"` triggers a byte literal.
+        assert_eq!(kinds("b"), vec![Ident("b".into()), Eof]);
+    }
+
+    #[test]
+    fn byte_string_errors() {
+        assert!(lex("b\"oops")
+            .unwrap_err()
+            .message
+            .contains("unterminated byte string"));
+        assert!(lex("b\"\\xZZ\"").unwrap_err().message.contains("\\xHH"));
+        assert!(lex("b\"\\q\"")
+            .unwrap_err()
+            .message
+            .contains("invalid escape"));
     }
 
     #[test]

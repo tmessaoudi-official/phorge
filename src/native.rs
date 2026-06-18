@@ -415,6 +415,116 @@ fn file_natives() -> Vec<NativeFn> {
     ]
 }
 
+// ---- core.bytes ---------------------------------------------------------------------------------
+// Octet-sequence natives bridging `bytes` ↔ `string` (M6 W0). `to_string` returns `string?` — `null`
+// on invalid UTF-8 (composes with S2 `??` / if-let), never a fault. `len` is the BYTE count
+// (`strlen`), distinct from `core.text.len`'s character count (`mb_strlen`). `slice` is a total,
+// bounds-clamped half-open `[start, end)` (no fault, unlike list `xs[i]`). PHP strings are byte
+// arrays, so the erasures are exact.
+
+fn bytes_from_string(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => Ok(Value::Bytes(std::rc::Rc::new(s.clone().into_bytes()))),
+        _ => Err("bytes.from_string expects (string)".into()),
+    }
+}
+fn bytes_to_string(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        // Invalid UTF-8 → `null` (the `string?` absent case), never a fault.
+        [Value::Bytes(b)] => Ok(match std::str::from_utf8(b) {
+            Ok(s) => Value::Str(s.to_string()),
+            Err(_) => Value::Null,
+        }),
+        _ => Err("bytes.to_string expects (bytes)".into()),
+    }
+}
+fn bytes_len(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Bytes(b)] => Ok(Value::Int(b.len() as i64)),
+        _ => Err("bytes.len expects (bytes)".into()),
+    }
+}
+fn bytes_concat(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Bytes(a), Value::Bytes(b)] => {
+            let mut out = Vec::with_capacity(a.len() + b.len());
+            out.extend_from_slice(a);
+            out.extend_from_slice(b);
+            Ok(Value::Bytes(std::rc::Rc::new(out)))
+        }
+        _ => Err("bytes.concat expects (bytes, bytes)".into()),
+    }
+}
+fn bytes_slice(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        // Half-open [start, end), bounds clamped to [0, len] — total, no fault.
+        [Value::Bytes(b), Value::Int(start), Value::Int(end)] => {
+            let len = b.len() as i64;
+            let s = (*start).clamp(0, len) as usize;
+            let e = (*end).clamp(0, len) as usize;
+            let out = if s >= e { Vec::new() } else { b[s..e].to_vec() };
+            Ok(Value::Bytes(std::rc::Rc::new(out)))
+        }
+        _ => Err("bytes.slice expects (bytes, int, int)".into()),
+    }
+}
+
+/// The `core.bytes` registry entries (M6 W0).
+fn bytes_natives() -> Vec<NativeFn> {
+    vec![
+        NativeFn {
+            module: "core.bytes",
+            name: "from_string",
+            params: vec![Ty::String],
+            ret: Ty::Bytes,
+            eval: bytes_from_string,
+            // PHP strings are byte arrays → identity.
+            php: |a| parg(a, 0).to_string(),
+        },
+        NativeFn {
+            module: "core.bytes",
+            name: "to_string",
+            params: vec![Ty::Bytes],
+            ret: Ty::Optional(Box::new(Ty::String)),
+            eval: bytes_to_string,
+            php: |a| format!("(mb_check_encoding({0}, 'UTF-8') ? {0} : null)", parg(a, 0)),
+        },
+        NativeFn {
+            module: "core.bytes",
+            name: "len",
+            params: vec![Ty::Bytes],
+            ret: Ty::Int,
+            eval: bytes_len,
+            // BYTE count (strlen), not character count (mb_strlen).
+            php: |a| format!("strlen({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "core.bytes",
+            name: "concat",
+            params: vec![Ty::Bytes, Ty::Bytes],
+            ret: Ty::Bytes,
+            eval: bytes_concat,
+            php: |a| format!("({} . {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "core.bytes",
+            name: "slice",
+            params: vec![Ty::Bytes, Ty::Int, Ty::Int],
+            ret: Ty::Bytes,
+            eval: bytes_slice,
+            // Total, bounds-clamped half-open slice via an IIFE — matches the Rust clamp exactly.
+            php: |a| {
+                format!(
+                    "(function($b,$s,$e){{$n=strlen($b);$s=max(0,min($s,$n));$e=max(0,min($e,$n));return $s<$e?substr($b,$s,$e-$s):\"\";}})({}, {}, {})",
+                    parg(a, 0),
+                    parg(a, 1),
+                    parg(a, 2)
+                )
+            },
+        },
+    ]
+}
+
 /// Construct the native table once. Order is load-bearing: [`CONSOLE_PRINTLN`] pins slot 0; every
 /// other native is resolved by `(module, name)` (or leaf+name) at compile time, so appended order is
 /// free. Modules are grouped by `*_natives()` builders (one per `core.*` leaf).
@@ -435,6 +545,7 @@ fn build() -> Vec<NativeFn> {
     registry.extend(math_natives());
     registry.extend(text_natives());
     registry.extend(file_natives());
+    registry.extend(bytes_natives());
     // Pinned-slot invariant: the constant the compiler bakes into `Op::CallNative` must address the
     // entry it names. Cheap one-time check at first `registry()` access.
     assert_eq!(

@@ -28,6 +28,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/math.phg` | the `core.math` stdlib module — `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` (M3 Track B Wave 2) |
 | `guide/text.phg` | the `core.text` stdlib module — `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace` (M3 Track B Wave 2) |
 | `guide/file.phg` | the `core.file` stdlib module — `read` (→ `string?`), `exists`; reads a committed fixture, composes with S2 `??` / if-let (M3 Track B Wave 2) |
+| `guide/bytes.phg` | the `bytes` type + `b"…"` literals (`\xHH`) + `core.bytes` interop — `from_string`/`to_string` (→ `string?`)/`len`/`concat`/`slice` (M6 W0) |
 | `bench/workload.phg` | a **profiling** workload (CPU recursion + heap allocation) for `phorge bench`/`disasm` — see `bench/README.md` |
 | `transpile/demo.phg` | the **Phorge → PHP** bridge — see `transpile/README.md` |
 | `build/app.phg` | **standalone executables** — `phorge build` — see `build/README.md` |

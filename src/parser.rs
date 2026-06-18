@@ -309,6 +309,10 @@ impl Parser {
                 let parts = self.split_interpolation(&body, sp)?;
                 Ok(Expr::Str(parts, sp))
             }
+            TokenKind::Bytes(b) => {
+                self.advance();
+                Ok(Expr::Bytes(b, sp))
+            }
             TokenKind::Match => self.parse_match(sp),
             TokenKind::If => self.parse_if_expr(sp),
             TokenKind::LParen => {

@@ -15,6 +15,9 @@ pub enum Value {
     Float(f64),
     Bool(bool),
     Str(String),
+    /// Raw octet sequence (`bytes`). Shared (like `List`) — cloning is a refcount bump. Distinct from
+    /// `Str` (which is UTF-8); converts only via the `core.bytes` natives (M6 W0).
+    Bytes(Rc<Vec<u8>>),
     Unit,
     /// `null` — the sole inhabitant of an absent optional (`T?`). A non-optional `T` never holds it
     /// (the checker's non-null discipline); PHP-native, erases to PHP `null` (M3 S2).
@@ -59,6 +62,7 @@ impl Value {
             Value::Float(_) => "float",
             Value::Bool(_) => "bool",
             Value::Str(_) => "string",
+            Value::Bytes(_) => "bytes",
             Value::Unit => "unit",
             Value::Null => "null",
             Value::List(_) => "list",
@@ -92,6 +96,7 @@ impl Value {
             (Float(a), Float(b)) => a == b,
             (Bool(a), Bool(b)) => a == b,
             (Str(a), Str(b)) => a == b,
+            (Bytes(a), Bytes(b)) => a == b,
             (Unit, Unit) => true,
             (List(a), List(b)) => {
                 a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| x.eq_val(y))
