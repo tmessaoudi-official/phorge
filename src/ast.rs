@@ -19,6 +19,12 @@ pub enum Type {
     /// `var` — placeholder for an inferred local binding type (resolved by the checker from the
     /// initializer, erased everywhere else). Only valid as a `Stmt::VarDecl` type.
     Infer(Span),
+    /// `(int, string) -> bool` — a first-class function type (M3 S3).
+    Function {
+        params: Vec<Type>,
+        ret: Box<Type>,
+        span: Span,
+    },
 }
 
 /// Patterns in `match` arms.

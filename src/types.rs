@@ -25,6 +25,8 @@ pub enum Ty {
     /// Poison type: a failed sub-expression yields this. Assignable both ways so a
     /// single error does not cascade into many.
     Error,
+    /// A function type: `(int, string) -> bool`. Exact match only — no subtyping variance (A6).
+    Function(Vec<Ty>, Box<Ty>),
 }
 
 impl Ty {
@@ -44,6 +46,10 @@ impl Ty {
             // `U? -> T?` when `U -> T`; a non-optional `T -> T?` (covariant widening).
             (Ty::Optional(f), Ty::Optional(t)) => Ty::assignable(f, t),
             (other, Ty::Optional(t)) => Ty::assignable(other, t),
+            // Function types are exact-match only — no co/contra-variance (spec A6).
+            (Ty::Function(fp, fr), Ty::Function(tp, tr)) => {
+                fp.len() == tp.len() && fp.iter().zip(tp.iter()).all(|(a, b)| a == b) && fr == tr
+            }
             // A `T?` never widens to a non-optional `T` — it must be unwrapped.
             _ => from == to,
         }
@@ -66,6 +72,14 @@ impl fmt::Display for Ty {
             Ty::Optional(e) => write!(f, "{e}?"),
             Ty::Null => write!(f, "null"),
             Ty::Error => write!(f, "<error>"),
+            Ty::Function(params, ret) => {
+                let ps = params
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(f, "({ps}) -> {ret}")
+            }
         }
     }
 }
@@ -113,5 +127,16 @@ mod tests {
             Ty::List(Box::new(Ty::Named("Shape".into()))).to_string(),
             "List<Shape>"
         );
+    }
+
+    #[test]
+    fn function_type_assignability_is_exact() {
+        let int_to_int = Ty::Function(vec![Ty::Int], Box::new(Ty::Int));
+        let int_to_int2 = Ty::Function(vec![Ty::Int], Box::new(Ty::Int));
+        let int_to_float = Ty::Function(vec![Ty::Int], Box::new(Ty::Float));
+        assert!(Ty::assignable(&int_to_int, &int_to_int2));
+        assert!(!Ty::assignable(&int_to_int, &int_to_float)); // no variance (A6)
+        assert!(!Ty::assignable(&Ty::Int, &int_to_int)); // int is not a function
+        assert_eq!(format!("{int_to_int}"), "(int) -> int");
     }
 }

@@ -342,9 +342,34 @@ impl Parser {
         }
     }
 
-    /// Parse a type annotation: `Name`, `Name<T, U>`, or `T?`.
+    /// Parse a type annotation: `Name`, `Name<T, U>`, `T?`, or `(T, U) -> R`.
     pub fn parse_type(&mut self) -> Result<Type, Diagnostic> {
         let sp = self.peek_span();
+        // Leading `(` introduces a function type: `(int, string) -> bool`.
+        if self.eat(&TokenKind::LParen) {
+            let mut params = Vec::new();
+            if !self.check(&TokenKind::RParen) {
+                params.push(self.parse_type()?);
+                while self.eat(&TokenKind::Comma) {
+                    params.push(self.parse_type()?);
+                }
+            }
+            self.expect(&TokenKind::RParen, "')' to close function-type parameters")?;
+            self.expect(&TokenKind::Arrow, "'->' in a function type")?;
+            let ret = Box::new(self.parse_type()?);
+            let mut t = Type::Function {
+                params,
+                ret,
+                span: sp,
+            };
+            while self.eat(&TokenKind::Question) {
+                t = Type::Optional {
+                    inner: Box::new(t),
+                    span: sp,
+                };
+            }
+            return Ok(t);
+        }
         let name = match self.peek().clone() {
             TokenKind::Ident(n) => {
                 self.advance();
@@ -1641,5 +1666,31 @@ mod tests {
     fn empty_program_parses() {
         let prog = parser("").parse_program().expect("parse ok");
         assert!(prog.items.is_empty());
+    }
+
+    #[test]
+    fn parses_function_type_annotation() {
+        // a function-typed parameter must parse
+        let result =
+            parser("package main; function apply(int x, (int) -> int f) -> int { return x; }")
+                .parse_program();
+        assert!(
+            result.is_ok(),
+            "function-typed param should parse: {result:?}"
+        );
+        // nested + zero-arg
+        let result2 = parser("package main; function f() -> () -> int { }").parse_program();
+        assert!(
+            result2.is_ok(),
+            "zero-arg function type should parse: {result2:?}"
+        );
+        // direct type parsing
+        match ty("(int) -> int") {
+            Type::Function { params, ret, .. } => {
+                assert_eq!(params.len(), 1);
+                assert!(matches!(ret.as_ref(), Type::Named { name, .. } if name == "int"));
+            }
+            other => panic!("expected Type::Function, got {other:?}"),
+        }
     }
 }

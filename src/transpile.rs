@@ -252,6 +252,8 @@ impl Transpiler {
                 "List" | "Map" | "Set" => "array".into(),
                 other => other.to_string(), // enum / class name
             },
+            // A function-typed parameter/return erases to PHP `\Closure` (M3 S3).
+            Type::Function { .. } => "\\Closure".into(),
             // Optional types are a deferred corner the checker already rejects; be defensive.
             _ => "mixed".into(),
         }

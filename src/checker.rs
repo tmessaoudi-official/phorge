@@ -157,6 +157,10 @@ impl Checker {
         use crate::ast::Type;
         match ty {
             Type::Optional { inner, .. } => Ty::Optional(Box::new(self.resolve_type(inner))),
+            Type::Function { params, ret, .. } => Ty::Function(
+                params.iter().map(|p| self.resolve_type(p)).collect(),
+                Box::new(self.resolve_type(ret)),
+            ),
             // `var` is intercepted in `check_stmt`; reaching here means it was written somewhere it
             // is not allowed (a parameter, field, or return type).
             Type::Infer(span) => self.err(
@@ -1452,6 +1456,11 @@ pub fn expand_aliases(program: &Program) -> Program {
                 inner: Box::new(rt(inner, a, depth + 1)),
                 span: *span,
             },
+            Type::Function { params, ret, span } => Type::Function {
+                params: params.iter().map(|p| rt(p, a, depth + 1)).collect(),
+                ret: Box::new(rt(ret, a, depth + 1)),
+                span: *span,
+            },
             Type::Infer(s) => Type::Infer(*s),
         }
     }
@@ -2416,6 +2425,16 @@ function main() { int console = 0; console.println("{console}"); }"#,
         assert!(
             errs.iter()
                 .any(|e| e.message.contains("unknown identifier")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn function_typed_binding_rejects_non_function() {
+        // (int) -> int f = 5;  -> int not assignable to a function type
+        let errs = errors_of("function main() { (int) -> int f = 5; }");
+        assert!(
+            errs.iter().any(|e| e.message.contains("(int) -> int")),
             "{errs:?}"
         );
     }

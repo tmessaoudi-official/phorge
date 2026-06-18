@@ -52,6 +52,11 @@ enum CTy {
     /// A `List<elem>`, carrying its element type so `ctype(Index)` (`xs[i]`) resolves to the element
     /// — which can be an arithmetic operand since M3 S1.1 (e.g. `xs[0] + 1` → `AddI`).
     List(Box<CTy>),
+    /// A function type `(params) -> ret` — not a numeric operand; carried for future lambda support.
+    Fn {
+        params: Vec<CTy>,
+        ret: Box<CTy>,
+    },
     Other,
 }
 
@@ -526,6 +531,11 @@ fn resolve_cty(ty: &Type) -> CTy {
         Type::Optional { inner, .. } => resolve_cty(inner),
         // `var` carries no annotation; operand inference reads the initializer expression instead.
         Type::Infer(_) => CTy::Other,
+        // A function type — carry its structure for future lambda support; not a numeric operand.
+        Type::Function { params, ret, .. } => CTy::Fn {
+            params: params.iter().map(resolve_cty).collect(),
+            ret: Box::new(resolve_cty(ret)),
+        },
     }
 }
 
@@ -771,7 +781,7 @@ impl<'a> Compiler<'a> {
         match ty {
             CTy::Int => Some(NumTy::Int),
             CTy::Float => Some(NumTy::Float),
-            CTy::Class(_) | CTy::Other | CTy::List(_) => None,
+            CTy::Class(_) | CTy::Other | CTy::List(_) | CTy::Fn { .. } => None,
         }
     }
 
