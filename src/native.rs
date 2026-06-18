@@ -344,6 +344,77 @@ fn text_natives() -> Vec<NativeFn> {
     ]
 }
 
+// ---- core.file ----------------------------------------------------------------------------------
+// Filesystem natives (std::fs ↔ PHP file builtins, D-L9). `read` returns `string?` — `null` on any
+// failure (missing file, permission, non-UTF-8) — exercising S2 null-safety (`??` / `if (var x =
+// read(p))`). DETERMINISM: a file *read* is byte-identical across backends iff every backend reads
+// the same bytes, so file examples read a **committed fixture**; `write` is a non-deterministic side
+// effect and is excluded from the byte-identity-gated example set (it is unit-tested with a temp
+// file). The run↔runvm spine shares the same `eval`, so it is always identical regardless.
+
+fn file_read(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        // Any read failure maps to `null` (the `string?` absent case), never a fault.
+        [Value::Str(path)] => Ok(match std::fs::read_to_string(path) {
+            Ok(s) => Value::Str(s),
+            Err(_) => Value::Null,
+        }),
+        _ => Err("file.read expects (string)".into()),
+    }
+}
+fn file_exists(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(path)] => Ok(Value::Bool(std::path::Path::new(path).exists())),
+        _ => Err("file.exists expects (string)".into()),
+    }
+}
+fn file_write(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(path), Value::Str(contents)] => match std::fs::write(path, contents) {
+            Ok(()) => Ok(Value::Unit),
+            Err(e) => Err(format!("file.write failed: {e}")),
+        },
+        _ => Err("file.write expects (string, string)".into()),
+    }
+}
+
+/// The `core.file` registry entries (M3 Track B Wave 2).
+fn file_natives() -> Vec<NativeFn> {
+    vec![
+        NativeFn {
+            module: "core.file",
+            name: "read",
+            params: vec![Ty::String],
+            ret: Ty::Optional(Box::new(Ty::String)),
+            eval: file_read,
+            // `@` suppresses the missing-file warning; the assign-and-compare distinguishes a missing
+            // file (`false` → null) from a legitimately empty one (`""`), which a bare `?:` would not.
+            php: |a| {
+                format!(
+                    "(($__c = @file_get_contents({})) === false ? null : $__c)",
+                    parg(a, 0)
+                )
+            },
+        },
+        NativeFn {
+            module: "core.file",
+            name: "exists",
+            params: vec![Ty::String],
+            ret: Ty::Bool,
+            eval: file_exists,
+            php: |a| format!("file_exists({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "core.file",
+            name: "write",
+            params: vec![Ty::String, Ty::String],
+            ret: Ty::Unit,
+            eval: file_write,
+            php: |a| format!("file_put_contents({}, {})", parg(a, 0), parg(a, 1)),
+        },
+    ]
+}
+
 /// Construct the native table once. Order is load-bearing: [`CONSOLE_PRINTLN`] pins slot 0; every
 /// other native is resolved by `(module, name)` (or leaf+name) at compile time, so appended order is
 /// free. Modules are grouped by `*_natives()` builders (one per `core.*` leaf).
@@ -363,6 +434,7 @@ fn build() -> Vec<NativeFn> {
     }];
     registry.extend(math_natives());
     registry.extend(text_natives());
+    registry.extend(file_natives());
     // Pinned-slot invariant: the constant the compiler bakes into `Op::CallNative` must address the
     // entry it names. Cheap one-time check at first `registry()` access.
     assert_eq!(
@@ -583,6 +655,50 @@ mod tests {
         assert_eq!(
             index_of_by_leaf("text", "len"),
             index_of("core.text", "len")
+        );
+    }
+
+    #[test]
+    fn file_natives_eval_and_emit() {
+        let mut o = String::new();
+        // A missing path reads as `null` (the `string?` absent case), never a fault.
+        let missing = "/nonexistent/phorge/definitely/not/here.txt";
+        assert!(matches!(
+            file_read(&[Value::Str(missing.into())], &mut o),
+            Ok(Value::Null)
+        ));
+        assert!(matches!(
+            file_exists(&[Value::Str(missing.into())], &mut o),
+            Ok(Value::Bool(false))
+        ));
+        // write → read round-trip through a temp file (write is unit-tested, not exampled).
+        let tmp = std::env::temp_dir().join("phorge_native_file_test.txt");
+        let p = tmp.to_string_lossy().to_string();
+        let _ = std::fs::remove_file(&tmp);
+        assert!(matches!(
+            file_write(&[Value::Str(p.clone()), Value::Str("hi\n".into())], &mut o),
+            Ok(Value::Unit)
+        ));
+        assert!(matches!(
+            file_exists(&[Value::Str(p.clone())], &mut o),
+            Ok(Value::Bool(true))
+        ));
+        assert!(
+            matches!(file_read(&[Value::Str(p.clone())], &mut o), Ok(Value::Str(s)) if s == "hi\n")
+        );
+        let _ = std::fs::remove_file(&tmp);
+        // `read` returns `string?`; PHP erasure distinguishes empty file from missing.
+        assert_eq!(
+            crate::native::registry()[index_of("core.file", "read").unwrap()].ret,
+            Ty::Optional(Box::new(Ty::String))
+        );
+        assert_eq!(
+            (registry()[index_of("core.file", "read").unwrap()].php)(&["$p".into()]),
+            "(($__c = @file_get_contents($p)) === false ? null : $__c)"
+        );
+        assert_eq!(
+            index_of_by_leaf("file", "exists"),
+            index_of("core.file", "exists")
         );
     }
 

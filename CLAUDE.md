@@ -179,13 +179,25 @@ differential test now also asserts each example **runs** (`Ok`), not just that b
 migration done (all `.phg`, fixtures, ~189 inline test programs via `tools/wave1_migrate.py`). 367 tests
 green, clippy + fmt clean, real-PHP round-tripped.
 
-**NEXT: Track B Wave 2 — stdlib breadth.** Add registry entries (each a `(module,name)` with shared
-`eval` + `php` erasure) for `core.file` (fixture-gated `read`/`write`/`exists`, std::fs ↔ PHP
-`file_get_contents`/…), `core.math`, `core.text`, `core.list`, `core.json`. Determinism gates examples
-(file examples read a committed fixture; clock/env/unseeded-random are excluded from the differential
-glob). Then Wave 3 (user packages: `package` decl + strict folder=path + PHP `namespace` emission; final
-syntax deferred — design O-B). Then Track A (S3 lambdas/pipeline). **Parked:** M2.5 Phase 3 (CI stub
-registry + `--sign`) — `docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
+**Track B Wave 2 — stdlib breadth — COMPLETE (buildable subset).** Three modules landed as `(module,
+name)` registry entries (shared `eval` + PHP erasure), each with a byte-identity-gated guide example
+round-tripped through real PHP: **`core.math`** (`548e1d0` — `sqrt`/`pow`/`floor`/`ceil` float,
+`abs`/`min`/`max` int), **`core.text`** (`026094c` — `len`/`upper`/`lower`/`trim`/`contains`/`split`/
+`join`/`replace`; `split`↔`join` carry `List<string>`), **`core.file`** (`read`→`string?`/`exists`/
+`write`; reads a committed fixture for determinism, composes with S2 `??`/if-let). The four-backend
+call path was already fully generic (multi-arg, typed, value-returning), so each module was purely
+additive — no plumbing changes. **`core.list` and `core.json` are DEFERRED**: `core.list` needs S3
+lambdas (`map`/`filter`/`reduce`) or `List<T>` generics (`reverse`/`sum`/…), and `core.json` needs a
+dynamic `Json`/`Any` type (`Ty` has no type variable) — both land once generics or S3 exist.
+**Gotcha (this wave):** a guide example importing `core.text`/`core.file` must not name a local `text`/
+`file`/`console` — that trips `E-SHADOW-IMPORT` (the Wave 1 guard). And irrational floats (`sqrt(2.0)`)
+diverge between the Rust backends (full round-trip) and PHP's 14-digit `echo` — examples keep to
+exactly-representable values (now in KNOWN_ISSUES; the run↔runvm spine is always identical).
+
+**NEXT: Track B Wave 3 — user packages** (`package` decl + strict folder=path + PHP `namespace`
+emission; final syntax deferred — design O-B). Then Track A (S3 lambdas/pipeline), which also unblocks
+the deferred `core.list`. **Parked:** M2.5 Phase 3 (CI stub registry + `--sign`) —
+`docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing
 correctness rules — read before touching backends, value kernels, or the `Op` set) and

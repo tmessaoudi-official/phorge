@@ -91,8 +91,28 @@ nullable runtime). `T?` is the existing `null` value at runtime; the guarantee l
   `import core.console;` + `console.println`. The example differential test now also asserts each
   example *runs* (`Ok`), not merely that the backends agree (closing a vacuous-green gap).
 
-_Next: Track B Wave 2 (`core.file`/`math`/`text`/`list`/`json`), then Wave 3 (user packages). M2.5
-Phase 3 (CI stub registry; opt-in `--sign`) remains parked._
+### M3 Track B Wave 2 — stdlib breadth (`core.math` / `core.text` / `core.file`)
+
+- **`core.math`** — `sqrt`/`pow`/`floor`/`ceil` (float) and `abs`/`min`/`max` (int). Concrete-typed
+  (the registry's `params`/`ret` have no type variable, so no overloading); each erases to the PHP
+  builtin of the same name. `abs` faults cleanly on `i64::MIN` (EV-7).
+- **`core.text`** — `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace`. `split` returns
+  `List<string>` and `join` consumes one (the type system already carries `List<string>` end to end).
+  The PHP erasures reorder args where PHP differs (`explode`/`implode` separator-first, `str_replace`
+  search-first).
+- **`core.file`** — `read` (→ `string?`, `null` on any failure — composes with the S2 `??` / if-let),
+  `exists`, and `write`. File *reads* stay byte-identical by reading a **committed fixture**
+  (`examples/guide/fixtures/poem.txt`); `write` is a non-deterministic side effect, unit-tested but
+  kept out of the byte-identity-gated example set.
+- Each module ships a byte-identity-gated guide example (`examples/guide/math|text|file.phg`),
+  round-tripped through real PHP. `KNOWN_ISSUES` now documents the pre-existing irrational-`float`
+  precision divergence that `core.math` makes easy to reach (Rust shortest-round-trip vs PHP's
+  default `echo` precision); examples keep to exactly-representable values.
+- **Deferred:** `core.list` (needs S3 lambdas / `List<T>` generics) and `core.json` (needs a dynamic
+  `Json` type) — they land once generics or S3 exist.
+
+_Next: Track B Wave 3 (user packages: `package` decl + folder=path + PHP `namespace` emission), then
+Track A (S3 lambdas/pipeline). M2.5 Phase 3 (CI stub registry; opt-in `--sign`) remains parked._
 
 ## [0.4.0] — 2026-06-17
 

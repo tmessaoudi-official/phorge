@@ -1,0 +1,39 @@
+import core.console;
+import core.file;
+import core.text;
+
+// M3 Track B Wave 2 — the `core.file` stdlib module (std::fs ↔ PHP file builtins). `read` returns
+// `string?`, so it composes with the S2 null-safety operators (`??`, `if (var x = …)`). The example
+// reads a COMMITTED fixture so both backends read identical bytes and stay byte-identical — run it
+// from the repository root (the fixture path is repo-root-relative).
+//
+// (Note: a variable may not be named `text`/`file`/`console` here — that would shadow an imported
+// module qualifier, which the checker rejects with E-SHADOW-IMPORT.)
+
+function main() {
+    string path = "examples/guide/fixtures/poem.txt";
+
+    // `exists` → bool; render it through an expression-`if` so the output is a string.
+    bool present = file.exists(path);
+    string status = if (present) { "found" } else { "absent" };
+    console.println("fixture {status}");
+
+    // `read` → string?; `??` returns the contents for a present file.
+    string? maybe = file.read(path);
+    string body = maybe ?? "(missing)";
+    int bytes = text.len(body);
+    console.println("read {bytes} bytes");
+
+    // A missing file reads as `null` → the fallback (never a fault).
+    string? gone = file.read("examples/guide/fixtures/does-not-exist.txt");
+    string fallback = gone ?? "(no such file)";
+    console.println("missing = {fallback}");
+
+    // `if (var c = …)` binds the non-null content (S2 smart-cast) only inside the then-block.
+    if (var c = file.read(path)) {
+        int n = text.len(c);
+        console.println("if-let ok: {n} bytes");
+    } else {
+        console.println("if-let: absent");
+    }
+}

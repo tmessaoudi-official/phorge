@@ -56,11 +56,15 @@ byte-identity-gated example set.
   retired); `E-SHADOW-IMPORT` guard; full call-site migration + example `is_ok` hardening. 367 tests
   green, clippy + fmt clean, real-PHP round-tripped. *(Reshaped from the original Task 1 per the
   namespace design.)*
-- [ ] Task 2 — `std.fs`: `read_file(string) -> string?`, `write_file`, `exists` (std::fs ↔ PHP)
-- [ ] Task 3 — real `import std.*` resolution (prelude vs import-gated decision)
-- [ ] Task 4 — `std.math` (`abs`/`min`/`max`/`pow`/`sqrt`/…), `std.string` (`len`/`upper`/`split`/…)
-- [ ] Task 5 — `std.list` ops, hand-rolled `std.json`, seeded `std.random` (all deterministic)
-- [ ] Task 6 — examples (file-reading realworld program + per-module guide examples) + docs; coverage audit
+- [x] **Wave 2 — stdlib breadth (buildable subset):** `core.math` (`548e1d0`), `core.text` (`026094c`),
+  `core.file` (read→`string?`/`exists`/`write`). Each a `(module,name)` registry entry with shared
+  `eval` + PHP erasure, byte-identity-gated guide example (`guide/math|text|file.phg`), round-tripped
+  through real PHP. Real `import core.*` resolution was already shipped in Wave 1 (the import map is
+  load-bearing), so the former "Task 3" is subsumed.
+- [ ] **Deferred (needs generics or S3 lambdas):** `core.list` (`map`/`filter`/`reduce` need S3;
+  `reverse`/`sum`/`first`/`last`/`len` need `List<T>` generics) and `core.json` (`parse -> Json?`
+  needs a dynamic `Json` type; `stringify(v)` needs a generic `v`). Land once generics or S3 exist.
+- [ ] Task 6 (Track C) — a file-reading realworld program + coverage audit (per-module guide examples done)
 
 ## Foundation surface (Task 1)
 | File | Change |

@@ -27,6 +27,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/null-safety.phg` | optionals `T?`, `??`, `?.`, `if (var x = opt)`, `opt!`, `match` over `T?` (M3 S2) |
 | `guide/math.phg` | the `core.math` stdlib module — `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` (M3 Track B Wave 2) |
 | `guide/text.phg` | the `core.text` stdlib module — `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace` (M3 Track B Wave 2) |
+| `guide/file.phg` | the `core.file` stdlib module — `read` (→ `string?`), `exists`; reads a committed fixture, composes with S2 `??` / if-let (M3 Track B Wave 2) |
 | `bench/workload.phg` | a **profiling** workload (CPU recursion + heap allocation) for `phorge bench`/`disasm` — see `bench/README.md` |
 | `transpile/demo.phg` | the **Phorge → PHP** bridge — see `transpile/README.md` |
 | `build/app.phg` | **standalone executables** — `phorge build` — see `build/README.md` |
@@ -50,6 +51,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `console.println(string)` (after `import core.console;`) | every example |
 | `core.math` stdlib: `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` | `guide/math` |
 | `core.text` stdlib: `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace` | `guide/text` |
+| `core.file` stdlib: `read` (→ `string?`), `exists` (fixture-gated) | `guide/file` |
 | Phorge → PHP transpile | `transpile/demo` |
 | standalone executable (`phorge build`) | `build/app` |
 | CLI: source forms, inspection (`check`/`parse`/`lex`), diagnostics, `explain` | `cli/demo` |
