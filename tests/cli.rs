@@ -152,7 +152,7 @@ fn safe_access_transpiles_and_runs_in_php() {
         eprintln!("skipping ?. round-trip: php not on PATH");
         return;
     }
-    let src = "import core.console;\n\
+    let src = "package main;\nimport core.console;\n\
                class Box {\n\
                \x20   constructor(private int v) {}\n\
                \x20   function v_of() -> int { return v; }\n\
@@ -206,7 +206,7 @@ fn if_let_transpiles_and_runs_in_php() {
         eprintln!("skipping if-let round-trip: php not on PATH");
         return;
     }
-    let src = "import core.console;\n\
+    let src = "package main;\nimport core.console;\n\
                function main() {\n\
                \x20   int? o = 5;\n\
                \x20   if (var x = o) { console.println(\"got {x}\"); } else { console.println(\"none\"); }\n\
@@ -256,7 +256,7 @@ fn force_unwrap_transpiles_and_runs_in_php() {
         eprintln!("skipping opt! round-trip: php not on PATH");
         return;
     }
-    let src = "import core.console;\n\
+    let src = "package main;\nimport core.console;\n\
                function main() {\n\
                \x20   int? o = 7;\n\
                \x20   console.println(\"{o!}\");\n\
@@ -304,7 +304,7 @@ fn match_over_optional_transpiles_and_runs_in_php() {
         eprintln!("skipping match-T? round-trip: php not on PATH");
         return;
     }
-    let src = "import core.console;\n\
+    let src = "package main;\nimport core.console;\n\
                function f(int? o) -> int {\n\
                \x20   return match o { null => -1, v => v + 1 };\n\
                }\n\
@@ -359,7 +359,8 @@ fn run_reads_program_from_stdin() {
         .take()
         .unwrap()
         .write_all(
-            br#"import core.console;
+            br#"package main;
+import core.console;
 function main() { console.println("{1 + 2}"); }"#,
         )
         .unwrap();
@@ -375,7 +376,8 @@ fn run_eval_inline_code() {
             .args([
                 "run",
                 flag,
-                r#"import core.console;
+                r#"package main;
+import core.console;
 function main() { console.println("{2 * 3}"); }"#,
             ])
             .output()
@@ -389,7 +391,8 @@ function main() { console.println("{2 * 3}"); }"#,
 fn run_double_dash_then_path_is_a_file() {
     let path = write_temp(
         "dashdash",
-        r#"import core.console;
+        r#"package main;
+import core.console;
 function main() { console.println("ok"); }"#,
     );
     let out = Command::new(BIN)
@@ -430,7 +433,10 @@ fn lex_subcommand_dumps_tokens_exit_0() {
 
 #[test]
 fn transpile_ill_typed_exits_1_with_type_error() {
-    let path = write_temp("ill_typed", r#"function main() { int x = "no"; }"#);
+    let path = write_temp(
+        "ill_typed",
+        r#"package main; function main() { int x = "no"; }"#,
+    );
     let out = Command::new(BIN)
         .args(["transpile", path.to_str().unwrap()])
         .output()
@@ -444,7 +450,8 @@ fn transpile_ill_typed_exits_1_with_type_error() {
 fn run_runtime_error_exits_1() {
     let path = write_temp(
         "runtime_err",
-        r#"import core.console;
+        r#"package main;
+import core.console;
 function main() { console.println("{1 / 0}"); }"#,
     );
     let out = Command::new(BIN)
@@ -460,7 +467,8 @@ function main() { console.println("{1 / 0}"); }"#,
 fn runvm_simple_program_exits_0() {
     let path = write_temp(
         "runvm_ok",
-        r#"import core.console;
+        r#"package main;
+import core.console;
 function main() { console.println("{1 + 1}"); }"#,
     );
     let out = Command::new(BIN)
@@ -476,7 +484,8 @@ function main() { console.println("{1 + 1}"); }"#,
 fn runvm_runtime_error_exits_1() {
     let path = write_temp(
         "runvm_rt",
-        r#"import core.console;
+        r#"package main;
+import core.console;
 function main() { console.println("{1 / 0}"); }"#,
     );
     let out = Command::new(BIN)

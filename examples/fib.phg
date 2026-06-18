@@ -1,3 +1,4 @@
+package main;
 import core.console;
 
 // Recursion: classic Fibonacci. Phorge is immutable (no reassignment), so the

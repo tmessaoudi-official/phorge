@@ -1,3 +1,4 @@
+package main;
 import core.console;
 
 class Point {

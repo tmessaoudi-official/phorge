@@ -1,3 +1,4 @@
+package main;
 import core.console;
 
 // `type` alias: a domain-specific name for a primitive. It is compile-time only — the checker

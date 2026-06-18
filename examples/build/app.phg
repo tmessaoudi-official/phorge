@@ -1,3 +1,4 @@
+package main;
 import core.console;
 
 // A self-contained program built into a standalone executable with `phorge build`.

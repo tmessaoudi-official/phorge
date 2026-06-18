@@ -242,6 +242,7 @@ fn keyword(s: &str) -> Option<TokenKind> {
         "in" => In,
         "match" => Match,
         "import" => Import,
+        "package" => Package,
         "this" => This,
         "true" => True,
         "false" => False,

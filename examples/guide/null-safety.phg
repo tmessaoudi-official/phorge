@@ -1,3 +1,4 @@
+package main;
 import core.console;
 
 // M3 S2 "null safety": optionals `T?`, `??`, `?.`, `if (var x = opt)`, `opt!`, and `match` over

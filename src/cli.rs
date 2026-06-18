@@ -161,6 +161,18 @@ pub fn explain_text(code: &str) -> Option<String> {
              `List<int>` (its role this slice is `for (int i in 0..n)`). Use integer bounds, or\n\
              build a `List` explicitly if you need other element types.\n"
         }
+        "E-NO-PACKAGE" => {
+            "E-NO-PACKAGE — a file has no `package` declaration.\n\n\
+             Everything is namespaced (\"nothing in the wind\"): every file must declare its package\n\
+             as its first line, never inferred. A runnable program declares `package main;` (the\n\
+             reserved entry); library code declares a dotted path like `package app.util;`.\n"
+        }
+        "E-RESERVED-PACKAGE" => {
+            "E-RESERVED-PACKAGE — a user file claimed a `core` package root.\n\n\
+             The `core.` root is reserved for the standard library (`core.console`, `core.math`,\n\
+             `core.file`, …), like a built-in type name. Root your own packages elsewhere, e.g.\n\
+             `package app;` or `package app.util;`.\n"
+        }
         "E-SHADOW-IMPORT" => {
             "E-SHADOW-IMPORT — a local binding shadows an imported module qualifier.\n\n\
              Everything is namespaced (\"nothing in the wind\"): after `import core.console;` the\n\
@@ -209,7 +221,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP)"
         )
     })
 }
@@ -743,7 +755,18 @@ fn bench_report_opts(src: &str, iters: usize, vs_php: bool) -> Result<String, St
 mod tests {
     use super::*;
 
-    const SAMPLE: &str = r#"
+    /// Prepend the reserved `package main;` (M5 S1: every file is packaged, never inferred) unless
+    /// already declared, so the CLI command tests need no per-case package boilerplate. The segment
+    /// carries no newline, so line numbers in fault diagnostics are preserved.
+    fn wp(src: &str) -> String {
+        if src.trim_start().starts_with("package ") {
+            src.to_string()
+        } else {
+            format!("package main; {src}")
+        }
+    }
+
+    const SAMPLE: &str = r#"package main;
 import core.console;
 
 enum Shape {
@@ -819,25 +842,23 @@ function main() {
     #[test]
     fn run_reports_type_error_and_does_not_execute() {
         // `area` returns float; returning an int literal is a type error.
-        let src = r#"import core.console;
-function area() -> float { return 1; } function main() { console.println("{area()}"); }"#;
-        let err = cmd_run(src).unwrap_err();
+        let src = wp(r#"import core.console;
+function area() -> float { return 1; } function main() { console.println("{area()}"); }"#);
+        let err = cmd_run(&src).unwrap_err();
         assert!(err.contains("type error"), "{err}");
     }
 
     #[test]
     fn run_reports_runtime_error() {
-        let err = cmd_run(
-            r#"import core.console;
-function main() { console.println("{1 / 0}"); }"#,
-        )
+        let err = cmd_run(&wp(r#"import core.console;
+function main() { console.println("{1 / 0}"); }"#))
         .unwrap_err();
         assert!(err.contains("runtime error"), "{err}");
     }
 
     #[test]
     fn run_reports_parse_error() {
-        let err = cmd_run("function main( {").unwrap_err();
+        let err = cmd_run(&wp("function main( {")).unwrap_err();
         assert!(err.contains("parse error"), "{err}");
     }
 
@@ -849,8 +870,8 @@ function main() { console.println("{1 / 0}"); }"#,
 
     #[test]
     fn check_fails_on_type_error() {
-        let src = r#"function f() -> float { return 1; } function main() {}"#;
-        assert!(cmd_check(src).unwrap_err().contains("type error"));
+        let src = wp(r#"function f() -> float { return 1; } function main() {}"#);
+        assert!(cmd_check(&src).unwrap_err().contains("type error"));
     }
 
     #[test]
@@ -878,30 +899,28 @@ function main() { console.println("{1 / 0}"); }"#,
 
     #[test]
     fn cmd_transpile_rejects_ill_typed() {
-        let err = cmd_transpile(r#"function main() { int x = "no"; }"#).unwrap_err();
+        let err = cmd_transpile(&wp(r#"function main() { int x = "no"; }"#)).unwrap_err();
         assert!(err.contains("type error"), "{err}");
     }
 
     #[test]
     fn runvm_matches_run_on_simple_program() {
-        let src = r#"import core.console;
-function main() { int x = 21; console.println("{x + x}"); }"#;
-        assert_eq!(cmd_runvm(src).unwrap(), cmd_run(src).unwrap());
-        assert_eq!(cmd_runvm(src).unwrap(), "42\n");
+        let src = wp(r#"import core.console;
+function main() { int x = 21; console.println("{x + x}"); }"#);
+        assert_eq!(cmd_runvm(&src).unwrap(), cmd_run(&src).unwrap());
+        assert_eq!(cmd_runvm(&src).unwrap(), "42\n");
     }
 
     #[test]
     fn runvm_reports_type_error_via_the_gate() {
-        let err = cmd_runvm(r#"function main() { int x = "no"; }"#).unwrap_err();
+        let err = cmd_runvm(&wp(r#"function main() { int x = "no"; }"#)).unwrap_err();
         assert!(err.contains("type error"), "{err}");
     }
 
     #[test]
     fn runvm_reports_runtime_error_with_prefix() {
-        let err = cmd_runvm(
-            r#"import core.console;
-function main() { console.println("{1 / 0}"); }"#,
-        )
+        let err = cmd_runvm(&wp(r#"import core.console;
+function main() { console.println("{1 / 0}"); }"#))
         .unwrap_err();
         assert!(err.contains("runtime error"), "{err}");
     }
@@ -915,8 +934,8 @@ function main() { console.println("{1 / 0}"); }"#,
         // re-lexes interpolated sub-expressions with a fresh lexer that resets to line 1, so a
         // fault inside `"{…}"` reports line 1 (a pre-existing interpolation-position limitation,
         // orthogonal to this task — see the M2 P3.5 roadmap decisions log).
-        let src = "import core.console; function main() {\n    int z = 0;\n    int x = 1 / z;\n    console.println(\"{x}\");\n}";
-        let err = cmd_runvm(src).unwrap_err();
+        let src = wp("import core.console; function main() {\n    int z = 0;\n    int x = 1 / z;\n    console.println(\"{x}\");\n}");
+        let err = cmd_runvm(&src).unwrap_err();
         assert!(err.contains("division by zero"), "{err}");
         assert!(err.starts_with("runtime error at 3:"), "{err}");
     }
@@ -925,8 +944,8 @@ function main() { console.println("{1 / 0}"); }"#,
     fn run_runtime_error_has_no_line() {
         // The tree-walking interpreter tracks no source position, so its runtime errors keep
         // the position-less `runtime error: …` form (deliberate asymmetry — documented).
-        let src = "import core.console; function main() {\n    int z = 0;\n    int x = 1 / z;\n    console.println(\"{x}\");\n}";
-        let err = cmd_run(src).unwrap_err();
+        let src = wp("import core.console; function main() {\n    int z = 0;\n    int x = 1 / z;\n    console.println(\"{x}\");\n}");
+        let err = cmd_run(&src).unwrap_err();
         assert!(err.starts_with("runtime error: "), "{err}");
         assert!(!err.contains(" at "), "{err}");
     }
@@ -935,9 +954,9 @@ function main() { console.println("{1 / 0}"); }"#,
     fn bench_reports_both_backends_with_identical_output() {
         // Small iteration count keeps the test fast; the report must name both backends, confirm
         // output identity (and the byte count it asserted), and end in a verdict comparing them.
-        let src = r#"import core.console;
-function main() { int x = 21; console.println("{x + x}"); }"#;
-        let out = bench_report(src, 5).expect("bench");
+        let src = wp(r#"import core.console;
+function main() { int x = 21; console.println("{x + x}"); }"#);
+        let out = bench_report(&src, 5).expect("bench");
         assert!(out.contains("tree-walk run"), "{out}");
         assert!(out.contains("vm run"), "{out}");
         assert!(out.contains("identical on both backends"), "{out}");
@@ -950,9 +969,9 @@ function main() { int x = 21; console.println("{x + x}"); }"#;
     fn bench_vs_php_emits_a_php_section() {
         // `--vs-php` always emits a "vs PHP" section — either the comparison (php present) or a
         // graceful skip note (php absent). Both start with "vs PHP", so the test is host-agnostic.
-        let src = r#"import core.console;
-function main() { int x = 21; console.println("{x + x}"); }"#;
-        let out = bench_report_opts(src, 3, true).expect("bench");
+        let src = wp(r#"import core.console;
+function main() { int x = 21; console.println("{x + x}"); }"#);
+        let out = bench_report_opts(&src, 3, true).expect("bench");
         assert!(out.contains("vs PHP"), "{out}");
         // The standard report is still present.
         assert!(out.contains("vm run"), "{out}");
@@ -963,9 +982,9 @@ function main() { int x = 21; console.println("{x + x}"); }"#;
         // Beyond timing, the report carries a memory block. The header is printed unconditionally
         // (the per-phase numbers are present on Linux, "unavailable" elsewhere), so asserting the
         // header keeps the test platform-independent.
-        let src = r#"import core.console;
-function main() { console.println("hi"); }"#;
-        let out = bench_report(src, 5).expect("bench");
+        let src = wp(r#"import core.console;
+function main() { console.println("hi"); }"#);
+        let out = bench_report(&src, 5).expect("bench");
         assert!(out.contains("memory"), "{out}");
     }
 
@@ -973,9 +992,9 @@ function main() { console.println("hi"); }"#;
     fn disasm_dumps_bytecode_with_mnemonics_and_annotations() {
         // The disassembler names the function, prints the type-specialized int-add op, the native
         // call op (the migrated former `Print`), and annotates a constant load with its value.
-        let out = cmd_disasm(
+        let out = cmd_disasm(&wp(
             r#"import core.console; function main() { int x = 1 + 2; console.println("{x}"); }"#,
-        )
+        ))
         .expect("disasm");
         assert!(out.contains("fn #"), "{out}");
         assert!(out.contains("main/0"), "{out}");
@@ -995,26 +1014,33 @@ function main() { console.println("hi"); }"#;
     }
 
     #[test]
+    fn explain_covers_m5_package_codes() {
+        // The M5 S1 package diagnostics are self-documenting via `phorge explain`.
+        let np = explain_text("E-NO-PACKAGE").expect("E-NO-PACKAGE has an explanation");
+        assert!(np.contains("package main"), "{np}");
+        let rp = explain_text("E-RESERVED-PACKAGE").expect("E-RESERVED-PACKAGE has an explanation");
+        assert!(rp.contains("standard library"), "{rp}");
+    }
+
+    #[test]
     fn disasm_propagates_type_error() {
         // A program that fails the gate can't be disassembled — the type error surfaces instead.
-        let err = cmd_disasm(r#"function main() { int x = "no"; }"#).unwrap_err();
+        let err = cmd_disasm(&wp(r#"function main() { int x = "no"; }"#)).unwrap_err();
         assert!(err.contains("type error"), "{err}");
     }
 
     #[test]
     fn bench_propagates_type_error_without_timing() {
         // A program that fails the gate can't be benchmarked — the error surfaces, no timing runs.
-        let err = bench_report(r#"function main() { int x = "no"; }"#, 5).unwrap_err();
+        let err = bench_report(&wp(r#"function main() { int x = "no"; }"#), 5).unwrap_err();
         assert!(err.contains("type error"), "{err}");
     }
 
     #[test]
     fn bench_default_entry_uses_101_samples() {
         // The public entry runs the default-N path end to end (smoke test of `cmd_bench`).
-        let out = cmd_bench(
-            r#"import core.console;
-function main() { console.println("hi"); }"#,
-        )
+        let out = cmd_bench(&wp(r#"import core.console;
+function main() { console.println("hi"); }"#))
         .expect("bench");
         assert!(out.starts_with("phorge bench — median of 101"), "{out}");
     }
@@ -1034,9 +1060,9 @@ function main() { console.println("hi"); }"#,
     #[test]
     fn var_transpiles_to_plain_php_assignment() {
         // `var` is erased; PHP locals are untyped, so it emits a bare `$x = …;`.
-        let php = cmd_transpile(
+        let php = cmd_transpile(&wp(
             "import core.console; function main() { var x = 1; console.println(\"{x}\"); }",
-        )
+        ))
         .unwrap();
         assert!(php.contains("$x = 1;"), "{php}");
     }
@@ -1044,9 +1070,9 @@ function main() { console.println("hi"); }"#,
     #[test]
     fn type_alias_is_erased_in_php() {
         // The alias declaration vanishes and `Count` resolves to `int` in the emitted signature.
-        let php = cmd_transpile(
+        let php = cmd_transpile(&wp(
             "type Count = int; function tally(Count n) -> Count { return n + 1; } function main() {}",
-        )
+        ))
         .unwrap();
         assert!(!php.contains("Count"), "alias leaked into PHP:\n{php}");
         assert!(php.contains("function tally(int $n): int"), "{php}");

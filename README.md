@@ -10,7 +10,8 @@ stack VM — transpiles to **real PHP**, and can compile a program into a **sing
 executable** with no runtime to install.
 
 ```phorge
-import std.io;
+package main;
+import core.console;
 
 enum Shape {
     Circle(float radius),
@@ -27,7 +28,7 @@ function area(Shape s) -> float {
 function main() {
     List<Shape> shapes = [Circle(2.0), Rect(3.0, 4.0)];
     for (Shape s in shapes) {
-        println("area = {area(s)}");
+        console.println("area = {area(s)}");
     }
 }
 ```
@@ -95,10 +96,10 @@ chmod +x phorge-*-linux-x86_64-musl
 $ phorge run examples/hello.phg
 Hello, Phorge!
 
-$ echo 'function main() { println("{1 + 2}"); }' | phorge run -
+$ echo 'package main; import core.console; function main() { console.println("{1 + 2}"); }' | phorge run -
 3
 
-$ phorge run -e 'function main() { println("inline!"); }'
+$ phorge run -e 'package main; import core.console; function main() { console.println("inline!"); }'
 inline!
 ```
 

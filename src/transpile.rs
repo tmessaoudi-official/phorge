@@ -726,7 +726,15 @@ mod tests {
     }
 
     fn parse_only(src: &str) -> crate::ast::Program {
-        let tokens = lex(src).expect("lex");
+        // Auto-prepend the reserved `package main;` (M5 S1, line-preserving) unless declared, so
+        // transpiler tests need no per-case edit. The transpiler ignores the package in S1 (flat
+        // emission); brace-namespaces for non-`main` packages land in S2c.
+        let src = if src.trim_start().starts_with("package ") {
+            src.to_string()
+        } else {
+            format!("package main; {src}")
+        };
+        let tokens = lex(&src).expect("lex");
         Parser::new(tokens).parse_program().expect("parse")
     }
 

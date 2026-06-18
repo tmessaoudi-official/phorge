@@ -370,6 +370,24 @@ impl Checker {
     /// Phase 2 — check every function/method body.
     fn check_program(&mut self, program: &Program) {
         use crate::ast::{ClassMember, Item};
+        // M5 S1: every file is packaged, never inferred. Empty ⇒ no declaration; a `core` root is
+        // reserved for the standard library. (Strict folder=path and loose-mode `main`-only land
+        // with the project model in S2 — `docs/specs/2026-06-18-m5-project-model-design.md`.)
+        if program.package.is_empty() {
+            self.err_coded(
+                program.span,
+                "every file must declare a package (e.g. `package main;`) as its first line",
+                "E-NO-PACKAGE",
+                Some("add `package main;` at the top of the file".into()),
+            );
+        } else if program.package[0] == "core" {
+            self.err_coded(
+                program.span,
+                "`core` is a reserved package root (the standard library)",
+                "E-RESERVED-PACKAGE",
+                Some("use a different root, e.g. `package app;`".into()),
+            );
+        }
         for item in &program.items {
             match item {
                 Item::Function(f) => self.check_function(f),
@@ -1556,6 +1574,7 @@ pub fn expand_aliases(program: &Program) -> Program {
         .collect();
 
     Program {
+        package: program.package.clone(),
         items,
         span: program.span,
     }
@@ -1567,9 +1586,21 @@ mod tests {
     use crate::lexer::lex;
     use crate::parser::Parser;
 
-    /// Lex + parse `src` into a Program, panicking on lex/parse failure (tests here
-    /// only care about type-checking).
+    /// Lex + parse `src` into a Program, panicking on lex/parse failure (tests here only care
+    /// about type-checking). Auto-prepends the reserved `package main;` (M5 S1, line-preserving)
+    /// unless the source already declares a package, so existing checker tests need no per-case
+    /// edit. Use [`prog_raw`] when a test must exercise the package rules themselves.
     fn prog(src: &str) -> Program {
+        let src = if src.trim_start().starts_with("package ") {
+            src.to_string()
+        } else {
+            format!("package main; {src}")
+        };
+        prog_raw(&src)
+    }
+
+    /// Lex + parse without injecting a package — for tests of the package rules themselves.
+    fn prog_raw(src: &str) -> Program {
         let tokens = lex(src).expect("lex ok");
         Parser::new(tokens).parse_program().expect("parse ok")
     }
@@ -1585,6 +1616,38 @@ mod tests {
     /// Type-check `src` and return the non-fatal warnings (empty unless a lint fired).
     fn warnings_of(src: &str) -> Vec<Diagnostic> {
         check(&prog(src)).unwrap_or_default()
+    }
+
+    /// Type-check a *raw* source (no injected package) and return the errors.
+    fn errors_of_raw(src: &str) -> Vec<Diagnostic> {
+        match check(&prog_raw(src)) {
+            Ok(_) => Vec::new(),
+            Err(e) => e,
+        }
+    }
+
+    #[test]
+    fn package_is_mandatory_and_core_is_reserved() {
+        // M5 S1: every file is packaged, never inferred. No declaration → E-NO-PACKAGE.
+        let e = errors_of_raw("function main() {}");
+        assert!(
+            e.iter().any(|d| d.code == Some("E-NO-PACKAGE")),
+            "got {e:?}"
+        );
+        // The `core` root is reserved for the standard library → E-RESERVED-PACKAGE.
+        let e2 = errors_of_raw("package core; function main() {}");
+        assert!(
+            e2.iter().any(|d| d.code == Some("E-RESERVED-PACKAGE")),
+            "got {e2:?}"
+        );
+        let e3 = errors_of_raw("package core.evil; function main() {}");
+        assert!(
+            e3.iter().any(|d| d.code == Some("E-RESERVED-PACKAGE")),
+            "got {e3:?}"
+        );
+        // A well-formed user package (and the reserved `main`) type-check cleanly.
+        assert!(check(&prog_raw("package app.util; function main() {}")).is_ok());
+        assert!(check(&prog_raw("package main; function main() {}")).is_ok());
     }
 
     #[test]

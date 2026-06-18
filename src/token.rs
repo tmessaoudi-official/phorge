@@ -35,6 +35,7 @@ pub enum TokenKind {
     In,
     Match,
     Import,
+    Package,
     This,
     True,
     False,

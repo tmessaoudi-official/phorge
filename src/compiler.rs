@@ -1527,12 +1527,22 @@ mod tests {
     use crate::parser::Parser;
     use crate::vm::Vm;
 
-    /// Compile + run a program on the VM, returning captured output.
+    /// Compile + run a program on the VM, returning captured output. Auto-prepends the reserved
+    /// `package main;` (M5 S1, line-preserving) so existing test programs need no per-case edit.
     fn run(src: &str) -> Result<String, String> {
-        let tokens = lex(src).expect("lex ok");
+        let src = with_pkg(src);
+        let tokens = lex(&src).expect("lex ok");
         let prog = Parser::new(tokens).parse_program().expect("parse ok");
         let program = compile(&prog).map_err(|d| d.to_string())?;
         Vm::new(&program).run().map_err(|d| d.to_string())
+    }
+
+    fn with_pkg(src: &str) -> String {
+        if src.trim_start().starts_with("package ") {
+            src.to_string()
+        } else {
+            format!("package main; {src}")
+        }
     }
 
     fn out(src: &str) -> String {

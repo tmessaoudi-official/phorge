@@ -1,3 +1,4 @@
+package main;
 import core.console;
 
 // Functions in Phorge: typed parameters and a return type.

@@ -6,6 +6,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### M5 slice S1 — package declaration (project-model foundation)
+
+- **Mandatory `package` declaration** — every file declares its package as the first line, never
+  inferred (`package app.util;`). The reserved **`package main;`** is the runnable entry (Go's model;
+  pairs with `fn main()`); `core` is reserved for the standard library. New checker codes
+  `E-NO-PACKAGE` / `E-RESERVED-PACKAGE` (both `phorge explain`-documented). The parser captures the
+  path on `Program.package`; a `package` after any item is a parse error (it must be first).
+- **Byte-identity preserved** — S1 is front-end only: the interpreter, VM, and transpiler ignore the
+  package (flat PHP emission unchanged — `package main` → no namespace), so `run`/`runvm` and the PHP
+  round-trip stay byte-identical. Multi-file projects, strict folder=path, cross-package imports, and
+  brace-namespace PHP emission arrive in later M5 slices
+  (`docs/specs/2026-06-18-m5-project-model-design.md`).
+- All 24 examples + every test program migrated to `package main;`; the minimal program is now
+  `package main;` + `import core.console;` + `console.println`. (Also fixed pre-existing Wave-1 doc
+  drift: `README.md` showed `import std.io;` + bare `println`.)
+
 ### M3 slice S0 — developer experience
 
 - **`var` local type inference** — `var x = expr;` infers the binding's type from its initializer

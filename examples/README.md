@@ -8,7 +8,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 
 | Example | What it shows |
 |---|---|
-| `hello.phg` | the minimal program — `import core.console;` + `console.println` |
+| `hello.phg` | the minimal program — `package main;` + `import core.console;` + `console.println` |
 | `fib.phg` | recursion, `for…in`, `List<int>` |
 | `grades.phg` | enums + `match`, a class with a method, `List`, `for…in` |
 | `realworld/ledger.phg` | bank accounts: classes + methods + `this`, payload enum + `match`, recursion (compound interest), integer-cents arithmetic, immutability (`apply` returns a fresh `Account`) |
@@ -56,8 +56,13 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | standalone executable (`phorge build`) | `build/app` |
 | CLI: source forms, inspection (`check`/`parse`/`lex`), diagnostics, `explain` | `cli/demo` |
 
-## Two sharp edges
+## Three sharp edges
 
+- **Every file declares a package (M5 S1) — `package main;` is the runnable entry.** Nothing lives
+  "in the wind": each file's first line is a `package` declaration, never inferred. A runnable program
+  uses the reserved `package main;` (every example here starts with it); `core` is reserved for the
+  stdlib. (Dotted library packages like `package app.util;` + strict folder=path + cross-package
+  imports arrive with the project model in a later M5 slice.)
 - **Zero-payload enum variants use call form `V()` everywhere** — to construct (`Defend()`) *and* in
   a `match` arm (`Defend() =>`). A bare `Defend =>` arm is a catch-all *binding*, not a variant
   pattern, so it silently swallows every case.

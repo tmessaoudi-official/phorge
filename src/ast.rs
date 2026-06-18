@@ -300,6 +300,10 @@ pub enum Item {
 /// A whole parsed program.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
+    /// The file's package path (`package app.util;` ⇒ `["app", "util"]`). Empty only for a
+    /// malformed file with no declaration — the checker rejects that as `E-NO-PACKAGE` (M5: every
+    /// file is packaged, never inferred). The reserved `["main"]` is the runnable entry (M5 S1).
+    pub package: Vec<String>,
     pub items: Vec<Item>,
     pub span: Span,
 }

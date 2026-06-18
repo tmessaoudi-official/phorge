@@ -13,9 +13,21 @@ use phorge::cli::{cmd_run, cmd_runvm};
 /// Assert the two backends agree on success output. Compares `Result` values structurally
 /// (never `.expect()`): in release builds an unchecked-arithmetic divergence surfaces as an
 /// `Err` rather than a panic, and a structural compare reports it as a clean mismatch.
+/// Prepend the reserved `package main;` (M5 S1: every file is packaged, never inferred) to a test
+/// program that doesn't already declare one. Done on a single leading segment with no newline so
+/// line numbers are preserved — fault diagnostics that assert a line stay valid.
+fn with_pkg(src: &str) -> String {
+    if src.trim_start().starts_with("package ") {
+        src.to_string()
+    } else {
+        format!("package main; {src}")
+    }
+}
+
 fn agree(src: &str) {
-    let tree = cmd_run(src);
-    let vm = cmd_runvm(src);
+    let src = with_pkg(src);
+    let tree = cmd_run(&src);
+    let vm = cmd_runvm(&src);
     assert_eq!(
         tree, vm,
         "backend mismatch for:\n{src}\n  run={tree:?}\n  runvm={vm:?}"
@@ -80,8 +92,9 @@ fn classify(err: &str) -> FaultKind {
 /// Assert both backends *fail*, and fail with the same [`FaultKind`]. A backend that returns
 /// `Ok` classifies to `None`, so an `Ok`-vs-`Err` divergence is flagged too.
 fn agree_err(src: &str) {
-    let tree = cmd_run(src);
-    let vm = cmd_runvm(src);
+    let src = with_pkg(src);
+    let tree = cmd_run(&src);
+    let vm = cmd_runvm(&src);
     let tree_kind = tree.as_ref().err().map(|e| classify(e));
     let vm_kind = vm.as_ref().err().map(|e| classify(e));
     assert_eq!(
@@ -674,7 +687,7 @@ fn s2_null_and_optional_bind_and_run_on_both_backends() {
     // (Observing the null *value* needs the unwrap operators from later S2 tasks.) The exact-output
     // assertion is deliberate: `agree` alone passes vacuously if both backends share a rejection.
     let src = "import core.console; function main() { int? x = null; int? y = 5; console.println(\"optionals ok\"); }";
-    assert_eq!(cmd_run(src).as_deref(), Ok("optionals ok\n"));
+    assert_eq!(cmd_run(&with_pkg(src)).as_deref(), Ok("optionals ok\n"));
     agree(src); // run ≡ runvm
 }
 
@@ -682,11 +695,11 @@ fn s2_null_and_optional_bind_and_run_on_both_backends() {
 fn s2_coalesce_is_byte_identical() {
     // `??`: a null lhs falls through to the default; a present value is kept.
     let src = "import core.console; function main() { int? x = null; console.println(\"{x ?? 7}\"); int? y = 9; console.println(\"{y ?? 0}\"); }";
-    assert_eq!(cmd_run(src).as_deref(), Ok("7\n9\n"));
+    assert_eq!(cmd_run(&with_pkg(src)).as_deref(), Ok("7\n9\n"));
     agree(src);
     // Short-circuit: the default (a printing call) must not run when the lhs is non-null.
     let sc = "import core.console; function side() -> int { console.println(\"SIDE\"); return 0; } function main() { int? y = 9; console.println(\"{y ?? side()}\"); }";
-    assert_eq!(cmd_run(sc).as_deref(), Ok("9\n"));
+    assert_eq!(cmd_run(&with_pkg(sc)).as_deref(), Ok("9\n"));
     agree(sc);
 }
 
@@ -697,16 +710,16 @@ fn s2_safe_access_is_byte_identical() {
     let cls = "class Box { constructor(private int v) {} function v_of() -> int { return v; } function plus(int n) -> int { return v + n; } }";
     let field = cls.to_string()
         + "import core.console;  function main() { Box? a = null; console.println(\"{(a?.v) ?? -1}\"); Box? b = Box(7); console.println(\"{(b?.v) ?? -1}\"); }";
-    assert_eq!(cmd_run(&field).as_deref(), Ok("-1\n7\n"));
+    assert_eq!(cmd_run(&with_pkg(&field)).as_deref(), Ok("-1\n7\n"));
     agree(&field);
     let method = cls.to_string()
         + "import core.console;  function main() { Box? a = null; console.println(\"{(a?.v_of()) ?? -1}\"); Box? b = Box(9); console.println(\"{(b?.v_of()) ?? -1}\"); }";
-    assert_eq!(cmd_run(&method).as_deref(), Ok("-1\n9\n"));
+    assert_eq!(cmd_run(&with_pkg(&method)).as_deref(), Ok("-1\n9\n"));
     agree(&method);
     // short-circuit: a safe call on a null receiver must NOT evaluate its arguments (no "SIDE").
     let sc = cls.to_string()
         + "import core.console;  function side() -> int { console.println(\"SIDE\"); return 0; } function main() { Box? a = null; console.println(\"{(a?.plus(side())) ?? -1}\"); }";
-    assert_eq!(cmd_run(&sc).as_deref(), Ok("-1\n"));
+    assert_eq!(cmd_run(&with_pkg(&sc)).as_deref(), Ok("-1\n"));
     agree(&sc);
 }
 
@@ -716,17 +729,17 @@ fn s2_if_let_is_byte_identical() {
     // optional is present; otherwise the else-branch runs.
     let present =
         "import core.console; function main() { int? o = 5; if (var x = o) { console.println(\"got {x}\"); } else { console.println(\"none\"); } }";
-    assert_eq!(cmd_run(present).as_deref(), Ok("got 5\n"));
+    assert_eq!(cmd_run(&with_pkg(present)).as_deref(), Ok("got 5\n"));
     agree(present);
     let absent =
         "import core.console; function main() { int? o = null; if (var x = o) { console.println(\"got {x}\"); } else { console.println(\"none\"); } }";
-    assert_eq!(cmd_run(absent).as_deref(), Ok("none\n"));
+    assert_eq!(cmd_run(&with_pkg(absent)).as_deref(), Ok("none\n"));
     agree(absent);
     // The smart-cast inner is a real arithmetic operand: `x + 1` must specialize identically on both
     // backends (guards the run↔runvm operand-type gap — see the cty-tracks-operand-types invariant).
     let arith =
         "import core.console; function main() { int? o = 41; if (var x = o) { console.println(\"{x + 1}\"); } else { console.println(\"none\"); } }";
-    assert_eq!(cmd_run(arith).as_deref(), Ok("42\n"));
+    assert_eq!(cmd_run(&with_pkg(arith)).as_deref(), Ok("42\n"));
     agree(arith);
 }
 
@@ -734,13 +747,13 @@ fn s2_if_let_is_byte_identical() {
 fn s2_force_unwrap_is_byte_identical() {
     // `opt!` on a present optional yields the inner value, identically on both backends.
     let present = "import core.console; function main() { int? o = 5; console.println(\"{o!}\"); }";
-    assert_eq!(cmd_run(present).as_deref(), Ok("5\n"));
+    assert_eq!(cmd_run(&with_pkg(present)).as_deref(), Ok("5\n"));
     agree(present);
     // The unwrapped value is a real arithmetic operand: `o! + 1` must specialize identically
     // (guards the run↔runvm operand-type gap — see the cty-tracks-operand-types invariant).
     let arith =
         "import core.console; function main() { int? o = 41; console.println(\"{o! + 1}\"); }";
-    assert_eq!(cmd_run(arith).as_deref(), Ok("42\n"));
+    assert_eq!(cmd_run(&with_pkg(arith)).as_deref(), Ok("42\n"));
     agree(arith);
 }
 
@@ -758,23 +771,23 @@ fn s2_multiple_null_ops_in_one_expr_are_byte_identical() {
     // segment must not shift it. The interpreter is the oracle; the VM must match (not fault).
     let two_coalesce =
         "import core.console; function main() { int? a = 5; int? b = null; console.println(\"{a ?? -1} {b ?? -1}\"); }";
-    assert_eq!(cmd_run(two_coalesce).as_deref(), Ok("5 -1\n"));
+    assert_eq!(cmd_run(&with_pkg(two_coalesce)).as_deref(), Ok("5 -1\n"));
     agree(two_coalesce);
 
     let two_force = "import core.console; function main() { int? a = 1; int? b = 2; console.println(\"{a!} {b!}\"); }";
-    assert_eq!(cmd_run(two_force).as_deref(), Ok("1 2\n"));
+    assert_eq!(cmd_run(&with_pkg(two_force)).as_deref(), Ok("1 2\n"));
     agree(two_force);
 
     let cls = "class Box { constructor(private int v) {} function get() -> int { return v; } }";
     let two_safe = cls.to_string()
         + "import core.console;  function main() { Box? a = Box(7); Box? b = null; console.println(\"{(a?.get()) ?? -1} {(b?.get()) ?? -1}\"); }";
-    assert_eq!(cmd_run(&two_safe).as_deref(), Ok("7 -1\n"));
+    assert_eq!(cmd_run(&with_pkg(&two_safe)).as_deref(), Ok("7 -1\n"));
     agree(&two_safe);
 
     // Mixed + nested: a coalesce whose default is itself a safe-access-coalesce, beside a force.
     let mixed = cls.to_string()
         + "import core.console;  function main() { Box? a = null; int? b = 9; console.println(\"{(a?.get()) ?? (b ?? 0)} {b!}\"); }";
-    assert_eq!(cmd_run(&mixed).as_deref(), Ok("9 9\n"));
+    assert_eq!(cmd_run(&with_pkg(&mixed)).as_deref(), Ok("9 9\n"));
     agree(&mixed);
 }
 
@@ -784,6 +797,6 @@ fn s2_match_over_optional_is_byte_identical() {
     // the non-null inner `int` (used here as an arithmetic operand — guards the operand-type gap).
     let src = "import core.console; function f(int? o) -> int { return match o { null => -1, v => v + 1 }; } \
                function main() { int? a = null; int? b = 7; console.println(\"{f(a)}\"); console.println(\"{f(b)}\"); }";
-    assert_eq!(cmd_run(src).as_deref(), Ok("-1\n8\n"));
+    assert_eq!(cmd_run(&with_pkg(src)).as_deref(), Ok("-1\n8\n"));
     agree(src);
 }

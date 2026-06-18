@@ -1,3 +1,4 @@
+package main;
 import core.console;
 
 // A library catalogue. Note zero-payload variants (`Available`, `Lost`) are

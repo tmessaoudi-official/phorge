@@ -1,3 +1,4 @@
+package main;
 import core.console;
 
 // A focused profiling workload for `phorge bench` and `phorge disasm`. It mixes the two cost

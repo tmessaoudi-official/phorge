@@ -1,3 +1,4 @@
+package main;
 import core.console;
 
 // Variant patterns (with bindings) over a payload + zero-payload enum.

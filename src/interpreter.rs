@@ -712,11 +712,22 @@ mod tests {
     use crate::lexer::lex;
     use crate::parser::Parser;
 
-    /// Lex + parse + interpret; return captured stdout or the runtime error.
+    /// Lex + parse + interpret; return captured stdout or the runtime error. Auto-prepends the
+    /// reserved `package main;` (M5 S1) so existing test programs need no per-case edit; the
+    /// segment carries no newline, preserving line numbers.
     fn run(src: &str) -> Result<String, Diagnostic> {
-        let tokens = lex(src).expect("lex ok");
+        let src = with_pkg(src);
+        let tokens = lex(&src).expect("lex ok");
         let prog = Parser::new(tokens).parse_program().expect("parse ok");
         interpret(&prog)
+    }
+
+    fn with_pkg(src: &str) -> String {
+        if src.trim_start().starts_with("package ") {
+            src.to_string()
+        } else {
+            format!("package main; {src}")
+        }
     }
 
     fn out(src: &str) -> String {

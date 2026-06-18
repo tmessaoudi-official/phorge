@@ -1,3 +1,4 @@
+package main;
 import core.console;
 
 // This program is also in the byte-identity sweep. `phorge transpile` turns it into

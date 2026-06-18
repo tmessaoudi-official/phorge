@@ -721,18 +721,42 @@ impl Parser {
             TokenKind::Enum => Ok(Item::Enum(self.parse_enum(sp)?)),
             TokenKind::Class => Ok(Item::Class(self.parse_class(sp)?)),
             TokenKind::TypeKw => self.parse_type_alias(sp),
+            TokenKind::Package => Err(self
+                .error("'package' must be the first declaration, before any import or definition")),
             _ => Err(self.error("a top-level item (import, function, enum, class, or type)")),
         }
     }
 
-    /// Entry point: parse a whole program (zero or more top-level items) until EOF.
+    /// Entry point: parse a whole program — an optional leading `package …;` (M5: required by the
+    /// checker, but parsed optionally so its absence is a typed `E-NO-PACKAGE`, not a parse error)
+    /// followed by zero or more top-level items until EOF.
     pub fn parse_program(&mut self) -> Result<Program, Diagnostic> {
         let sp = self.peek_span();
+        let package = if self.check(&TokenKind::Package) {
+            self.parse_package()?
+        } else {
+            Vec::new()
+        };
         let mut items = Vec::new();
         while !self.check(&TokenKind::Eof) {
             items.push(self.parse_item()?);
         }
-        Ok(Program { items, span: sp })
+        Ok(Program {
+            package,
+            items,
+            span: sp,
+        })
+    }
+
+    /// `package a.b.c;` — dotted package path at the file top. Assumes current token is `package`.
+    fn parse_package(&mut self) -> Result<Vec<String>, Diagnostic> {
+        self.expect(&TokenKind::Package, "'package'")?;
+        let mut path = vec![self.expect_ident("a package path segment")?];
+        while self.eat(&TokenKind::Dot) {
+            path.push(self.expect_ident("a package path segment after '.'")?);
+        }
+        self.expect(&TokenKind::Semicolon, "';' after package")?;
+        Ok(path)
     }
 
     /// `import a.b.c;` — dotted module path. Assumes current token is `import`.
@@ -1567,6 +1591,24 @@ mod tests {
             Item::Import { path, .. } => assert_eq!(path, vec!["a"]),
             other => panic!("got {other:?}"),
         }
+    }
+
+    #[test]
+    fn parses_package_declaration() {
+        // `package a.b;` is captured on the Program, not as an Item (M5 S1).
+        let prog = parser("package app.util; function main() {}")
+            .parse_program()
+            .expect("parse ok");
+        assert_eq!(prog.package, vec!["app".to_string(), "util".to_string()]);
+        // A bare file parses with an empty package — the checker, not the parser, enforces presence.
+        let bare = parser("function main() {}")
+            .parse_program()
+            .expect("parse ok");
+        assert!(bare.package.is_empty());
+        // `package` after another item is a parse error (it must be the first declaration).
+        assert!(parser("function main() {} package app;")
+            .parse_program()
+            .is_err());
     }
 
     #[test]

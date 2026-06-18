@@ -1,3 +1,4 @@
+package main;
 import core.console;
 
 // Arithmetic, comparison, logical, and unary operators.

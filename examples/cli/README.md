@@ -8,8 +8,8 @@ byte-identity sweep). Run `phorge <command> --help` for per-command help with wo
 
 ```bash
 phorge run demo.phg                                              # a file
-echo 'function main() { console.println("from stdin"); }' | phorge run -   # stdin
-phorge run -e 'function main() { console.println("inline program"); }'     # inline
+echo 'package main; import core.console; function main() { console.println("from stdin"); }' | phorge run -   # stdin
+phorge run -e 'package main; import core.console; function main() { console.println("inline program"); }'     # inline
 ```
 
 ```
@@ -34,18 +34,21 @@ $ phorge check demo.phg
 OK (type-checks clean)
 
 $ phorge lex demo.phg
-Import @ 1:1
-Ident("std") @ 1:8
-Dot @ 1:11
-Ident("io") @ 1:12
-Semicolon @ 1:14
-Function @ 6:1
+Package @ 1:1
+Ident("main") @ 1:9
+Semicolon @ 1:13
+Import @ 2:1
+Ident("core") @ 2:8
+Dot @ 2:12
+Ident("console") @ 2:13
+Semicolon @ 2:20
 ...
 
 $ phorge parse demo.phg
 Program {
+    package: ["main"],
     items: [
-        Import { path: ["std", "io"], .. },
+        Import { path: ["core", "console"], .. },
         Function(FunctionDecl { name: "main", ret: None, body: [ .. ] }),
     ],
 }
@@ -59,10 +62,10 @@ Front-end errors carry a caret-underlined span, a stable code, and a did-you-mea
 name is in scope:
 
 ```
-$ phorge run -e 'function main() { int count = 1; int y = conut + 1; console.println("{y}"); }'
-type error at 1:42: unknown identifier `conut`
-function main() { int count = 1; int y = conut + 1; console.println("{y}"); }
-                                         ^
+$ phorge run -e 'package main; import core.console; function main() { int count = 1; int y = conut + 1; console.println("{y}"); }'
+type error at 1:77: unknown identifier `conut`
+package main; import core.console; function main() { int count = 1; int y = conut + 1; console.println("{y}"); }
+                                                                            ^
   [E-UNKNOWN-IDENT]
   hint: did you mean `count`?
 ```
@@ -83,13 +86,13 @@ the current class's fields. ...
 Phorge never panics on input — runtime faults are clean, one-line errors with exit code 1:
 
 ```
-$ phorge run   -e 'function main() { int a = 10; int b = 0; int x = a / b; }'
+$ phorge run   -e 'package main; function main() { int a = 10; int b = 0; int x = a / b; }'
 runtime error: division by zero
 
-$ phorge runvm -e 'function main() { int a = 10; int b = 0; int x = a / b; }'
+$ phorge runvm -e 'package main; function main() { int a = 10; int b = 0; int x = a / b; }'
 runtime error at 1: division by zero
 
-$ phorge run   -e 'function main() { List<int> xs = [1, 2]; int v = xs[5]; }'
+$ phorge run   -e 'package main; function main() { List<int> xs = [1, 2]; int v = xs[5]; }'
 runtime error: list index out of range
 ```
 

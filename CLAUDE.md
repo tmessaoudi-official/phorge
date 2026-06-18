@@ -194,10 +194,21 @@ dynamic `Json`/`Any` type (`Ty` has no type variable) — both land once generic
 diverge between the Rust backends (full round-trip) and PHP's 14-digit `echo` — examples keep to
 exactly-representable values (now in KNOWN_ISSUES; the run↔runvm spine is always identical).
 
-**NEXT: Track B Wave 3 — user packages** (`package` decl + strict folder=path + PHP `namespace`
-emission; final syntax deferred — design O-B). Then Track A (S3 lambdas/pipeline), which also unblocks
-the deferred `core.list`. **Parked:** M2.5 Phase 3 (CI stub registry + `--sign`) —
-`docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
+**Track B Wave 3 (user packages) was promoted to a full milestone — M5 is now ACTIVE.** The developer
+chose to build the complete Go-shaped, `src/`-rooted, mandatory-packaged, strict-folder=path project
+model (design `docs/specs/2026-06-18-m5-project-model-design.md`, plan
+`docs/plans/2026-06-18-m5-modules-packages.md`). Decisions: **mandatory `package` everywhere, never
+inferred** (even `-e`/stdin); reserved **`package main;`** = runnable entry (Go model); `core` reserved;
+**single-file brace-namespace PHP emission** (no Composer/autoloader — chosen because PSR-4 can't
+autoload free functions, and Phorge is function-heavy); project detection = `phorge.toml` walk-up;
+git-based deps pinned + vendored for determinism. **M5 S1 COMPLETE** (single-file `package` decl + parse
++ checker `E-NO-PACKAGE`/`E-RESERVED-PACKAGE` + flat PHP unchanged → byte-identical; all 24 examples +
+every test program migrated to `package main;`; also fixed Wave-1 `README.md` drift). **NEXT: S2a**
+(manifest + source root + walk-up detection) → S2b (multi-file loader + folder=path) → **S2c** (qualified
+cross-package calls in all 4 backends + brace-namespace PHP — the one byte-identity-risky slice) → S2d
+(project-aware harness + `examples/project/`) → S3 (git deps + `phorge.lock` + `phorge vendor`). Then
+Track A (S3 lambdas/pipeline), which also unblocks the deferred `core.list`. **Parked:** M2.5 Phase 3 (CI
+stub registry + `--sign`) — `docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing
 correctness rules — read before touching backends, value kernels, or the `Op` set) and

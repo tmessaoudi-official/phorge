@@ -1,3 +1,4 @@
+package main;
 import core.console;
 
 // A bank ledger. Phorge values are immutable, so `apply` returns a *new* Account

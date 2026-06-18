@@ -1,3 +1,4 @@
+package main;
 import core.console;
 
 // A turn-based RPG. Characters are immutable: `act` returns a new Character.
