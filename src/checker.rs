@@ -956,13 +956,15 @@ impl Checker {
                     inferred
                 }
             }
-            LambdaBody::Block(_) => {
-                // Block-body lambdas land in Task 6; require an explicit `-> T` annotation.
+            LambdaBody::Block(stmts) => {
+                // A2/F10: an explicit `-> T` annotation is required for statement-body lambdas.
                 match ret {
                     Some(rt) => {
                         let declared = self.resolve_type(rt);
                         self.cur_ret = declared.clone();
-                        // (Task 6 will check the block stmts here)
+                        for s in stmts {
+                            self.check_stmt(s);
+                        }
                         declared
                     }
                     None => self.err(

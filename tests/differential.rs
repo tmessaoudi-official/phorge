@@ -11,6 +11,27 @@
 use phorge::cli::{cmd_run, cmd_runvm};
 use phorge::{cli, loader};
 
+/// Type-check `src`; return the error diagnostics (empty = well-typed). Auto-prepends
+/// `package main;` if absent. Used to test checker rejections without running a backend.
+fn check_errs(src: &str) -> Vec<phorge::diagnostic::Diagnostic> {
+    let src = with_pkg(src);
+    let tokens = phorge::lexer::lex(&src).expect("lex ok");
+    let prog = phorge::parser::Parser::new(tokens)
+        .parse_program()
+        .expect("parse ok");
+    match phorge::checker::check(&prog) {
+        Ok(_warnings) => Vec::new(),
+        Err(e) => e,
+    }
+}
+
+/// Transpile `src` to PHP; panics if the program fails to type-check or transpile.
+/// Auto-prepends `package main;` if absent.
+fn transpile_ok(src: &str) -> String {
+    let src = with_pkg(src);
+    cli::cmd_transpile(&src).expect("transpile ok")
+}
+
 /// Assert the two backends agree on success output. Compares `Result` values structurally
 /// (never `.expect()`): in release builds an unchecked-arithmetic divergence surfaces as an
 /// `Err` rather than a panic, and a structural compare reports it as a clean mismatch.
@@ -910,4 +931,28 @@ fn lambdas_agree() {
 fn lambda_call_errors_agree() {
     // Arity mismatch: lambda expects 1 arg, called with 2
     agree_err("import core.console; function main(){ var f=fn(int x)=>x; console.println(\"{f(1,2)}\"); }");
+}
+
+#[test]
+fn statement_body_lambda_agrees() {
+    agree("import core.console; function main(){ var base=100; var f = fn(int x) -> int { var y = x*2; return y + base; }; console.println(\"{f(3)}\"); }");
+    // 106
+}
+
+#[test]
+fn statement_body_lambda_needs_return_type() {
+    let errs = check_errs("package main; function main(){ var f = fn(int x) { return x; }; }");
+    assert!(
+        errs.iter().any(|e| e.message.contains("explicit `-> T`")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn transpiles_statement_lambda_with_use_clause() {
+    let php = transpile_ok("package main; import core.console; function main(){ var base=100; var f = fn(int x) -> int { return x + base; }; console.println(\"{f(3)}\"); }");
+    assert!(
+        php.contains("function($x) use ($base)") && php.contains("return $x + $base"),
+        "{php}"
+    );
 }

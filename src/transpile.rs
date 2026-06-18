@@ -600,7 +600,9 @@ impl Transpiler {
                 Ok(format!("({c} ? {t} : {e})"))
             }
             // Expression-body lambda → PHP arrow function (auto by-value capture — no explicit
-            // `use` clause needed). Statement-body lambdas land in Task 6.
+            // `use` clause needed).
+            // Statement-body lambda → PHP `function($x) use ($cap, ...) { … }` (by-value capture
+            // with an explicit `use` clause listing only captured enclosing locals).
             Expr::Lambda { params, body, .. } => {
                 let ps = params
                     .iter()
@@ -609,8 +611,56 @@ impl Transpiler {
                     .join(", ");
                 match body {
                     LambdaBody::Expr(e) => Ok(format!("fn({ps}) => {}", self.emit_expr(e)?)),
-                    LambdaBody::Block(_) => {
-                        unreachable!("statement bodies land in S3 Task 6")
+                    LambdaBody::Block(stmts) => {
+                        // Compute captures: free variables that are enclosing locals, not
+                        // top-level function names, variants, or classes.
+                        let caps: Vec<String> = crate::ast::free_vars(params, body)
+                            .into_iter()
+                            .filter(|n| {
+                                self.is_local(n)
+                                    && !self.funcs.contains(n)
+                                    && !self.variants.contains(n)
+                                    && !self.classes.contains(n)
+                            })
+                            .map(|n| format!("${n}"))
+                            .collect();
+                        let use_clause = if caps.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" use ({})", caps.join(", "))
+                        };
+                        // Emit the block body into a temporary buffer (swapping `self.out`)
+                        // so `emit_stmt` can write indented lines, then collect them as the
+                        // inline closure body. Params and captures are declared in a fresh
+                        // scope so inner expressions resolve them correctly.
+                        let saved_out = std::mem::take(&mut self.out);
+                        let saved_indent = self.indent;
+                        self.indent = 0;
+                        self.push_scope();
+                        // Declare captures first (so params can shadow same-named captures).
+                        for cap in &caps {
+                            // Strip the leading `$` to get the bare name.
+                            self.declare(&cap[1..]);
+                        }
+                        for p in params {
+                            self.declare(&p.name);
+                        }
+                        for s in stmts {
+                            self.emit_stmt(s)?;
+                        }
+                        self.pop_scope();
+                        self.indent = saved_indent;
+                        let body_php = std::mem::replace(&mut self.out, saved_out);
+                        // The body_php has one "line" per statement (each ends with '\n' from
+                        // `self.line()`). Trim trailing whitespace and join with spaces for a
+                        // compact inline representation.
+                        let body_php = body_php
+                            .lines()
+                            .map(|l| l.trim())
+                            .filter(|l| !l.is_empty())
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        Ok(format!("function({ps}){use_clause} {{ {body_php} }}"))
                     }
                 }
             }

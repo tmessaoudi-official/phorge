@@ -351,14 +351,13 @@ impl Parser {
                 } else {
                     None
                 };
-                // Only expression bodies (`=>`) are supported in this task;
-                // statement bodies (`{ … }`) land in Task 6.
-                if !self.eat(&TokenKind::FatArrow) {
-                    return Err(self.error(
-                        "'=>' and an expression (statement-body lambdas land in S3 Task 6)",
-                    ));
-                }
-                let body = LambdaBody::Expr(Box::new(self.parse_expr()?));
+                let body = if self.eat(&TokenKind::FatArrow) {
+                    LambdaBody::Expr(Box::new(self.parse_expr()?))
+                } else if self.check(&TokenKind::LBrace) {
+                    LambdaBody::Block(self.parse_block()?)
+                } else {
+                    return Err(self.error("'=>' (expression body) or '{' (statement body)"));
+                };
                 Ok(Expr::Lambda {
                     params,
                     ret,
