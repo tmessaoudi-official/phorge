@@ -74,6 +74,9 @@ struct Local {
 struct FnMeta {
     index: usize,
     ret: CTy,
+    /// Class-aware param types, so a bare named-function reference in value position resolves to a
+    /// `CTy::Fn` (lets `var f = namedfn; f(x)` dispatch through `CallValue` like a lambda local).
+    params: Vec<CTy>,
 }
 
 /// Per-variant metadata gathered in the pre-pass: its index into the `enum_descs` table (for
@@ -181,6 +184,7 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
                     FnMeta {
                         index: order.len(),
                         ret: f.ret.as_ref().map_or(CTy::Other, resolve_cty),
+                        params: f.params.iter().map(|p| resolve_cty(&p.ty)).collect(),
                     },
                 );
                 order.push(f);
@@ -777,6 +781,13 @@ impl<'a> Compiler<'a> {
                     Ok(self.locals[s].ty.clone())
                 } else if let Some(t) = self.field_tags.get(name) {
                     Ok(t.clone())
+                } else if let Some(meta) = self.fns.get(name) {
+                    // A bare named-function reference in value position (e.g. `var f = dbl`) is a
+                    // function value, so `f(x)` dispatches through `CallValue` like a lambda local.
+                    Ok(CTy::Fn {
+                        params: meta.params.clone(),
+                        ret: Box::new(meta.ret.clone()),
+                    })
                 } else {
                     Err(format!("undefined variable `{name}`"))
                 }

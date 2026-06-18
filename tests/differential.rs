@@ -974,6 +974,11 @@ fn named_fn_ref_as_value_agrees() {
                                                                                                                                                                                            // named fn defined AFTER use (forward reference)
     agree("import core.console; function apply(int x,(int)->int f)->int{return f(x);} function callsLater(int n)->int{ return apply(n, bump); } function bump(int x)->int{return x+5;} function main(){ console.println(\"{callsLater(10)}\"); }");
     // 15
+    // A bare named function bound to a `var`, then called THROUGH the local. The compiler infers
+    // the local's `CTy::Fn` from the named-fn reference so the call dispatches via `CallValue`
+    // (without the inference the VM rejected `f(5)` as "not a function").
+    agree("import core.console; function dbl(int x)->int{return x*2;} function main(){ var f=dbl; console.println(\"{f(5)}\"); }");
+    // 10
 }
 
 #[test]
