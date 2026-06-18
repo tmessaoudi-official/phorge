@@ -234,9 +234,33 @@ aliasing (`as`), a same-package bare call across files, and namespaced PHP; runs
 agrees). `tests/differential.rs` is now **project-aware**: it discovers every project root (a dir with
 `phorge.toml`) under `examples/`, loads via `loader::load`, and gates `run` ≡ `runvm`; the single-file
 glob skips any dir holding a `phorge.toml` (structural exclusion). 410 tests green.
-**NEXT: S3** (git deps + `phorge.lock` + `phorge vendor` + auto-offline — the final M5 slice). Then
-Track A (S3 lambdas/pipeline), which also unblocks the deferred `core.list`. **Parked:** M2.5 Phase 3 (CI
-stub registry + `--sign`) — `docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
+
+**M5 S3 COMPLETE — M5 is now CLOSED** (`docs/plans/2026-06-18-m5-modules-packages.md`): git dependencies
++ `phorge.lock` + `phorge vendor` + auto-offline. `src/lock.rs` is a strict TOML-subset lockfile
+(`[[package]]` → `name`/`git`/`rev`/`hash`, round-tripping). `src/vendor.rs` (`phorge vendor`) is the
+**only network-touching command**: clone → checkout the pinned tag/rev → copy the dep's source into
+`vendor/<vendor>/<package>/` (its own mini source-root, so folder=path validates per-dep) → FNV-1a-64
+content hash (reuses `bundle::cross::fnv1a_64`; the resolved 40-hex commit SHA is the real pin) → write
+`phorge.lock`; idempotent + crash-safe (stage in a temp dir, atomic swap, touch only each dep's owned
+subtree). `loader::load_project` merges vendored packages **exactly like first-party library packages**
+(mangle + resolve *before* any backend ⇒ run≡runvm structural; the transpiler de-mangles to
+`namespace Acme\Strutil { … }`), and is **offline-only** — vendor is consulted only when `[require]` is
+non-empty and `run`/`check`/`transpile` **never fetch** (`E-VENDOR-MISSING` when a required dep isn't
+vendored). New guards: **`E-VENDOR-MAIN`** (a vendored `package main` would collide with the entry) and
+**`E-DUP-DEF`** (duplicate `(package,name)` after the flat merge — previously a silent `HashMap`
+overwrite since S2c). Example `examples/project/withdeps/` (consumes a vendored `acme/strutil`) ships its
+committed `vendor/` + `phorge.lock`; the project-aware harness loads it offline → byte-identical on
+run/runvm + **real PHP 8.6**. `tests/vendor.rs` drives the real git path against a **`file://` local-git
+fixture** (offline, deterministic): fetch+lock+load, idempotent re-vendor, `E-VENDOR-MISSING`.
+**Gotcha:** the example's `[require]` git URL is a documented public-style placeholder; the dep's source
+is committed under `vendor/` (Go's vendoring model), so the example runs with zero network — `rev`/`hash`
+in `phorge.lock` are the real values for the committed source. **Deferred (KNOWN_ISSUES, not regressions):**
+transitive deps (a dep's own `[require]`); `phorge build` stays single-file (won't merge `vendor/`).
+421 tests green.
+
+**NEXT: Track A** (S3 lambdas + pipe `|>`), which also unblocks the deferred `core.list`/`core.json`
+(`map`/`filter`/`reduce`). **Parked:** M2.5 Phase 3 (CI stub registry + `--sign`) —
+`docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing
 correctness rules — read before touching backends, value kernels, or the `Op` set) and

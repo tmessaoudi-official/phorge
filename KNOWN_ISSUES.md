@@ -16,8 +16,20 @@ not a panic:
 - Mutation (reassignment and field writes) — Phorge is immutable-by-default today
 - Method/function overloading, traits, operator overloading, property accessors
 - Sized integers / `decimal`, `const`/`final` enforcement
-- Real `import` resolution (the `import` line is accepted but not yet a module system)
 - `match` outside return / variable-declaration-initializer position
+
+## Git dependencies (M5 S3)
+
+- **Transitive dependencies are not resolved.** `phorge vendor` fetches the direct `[require]` set;
+  a dependency's *own* `[require]` is not walked. Vendor flat-named leaf libraries for now (the
+  shipped `examples/project/withdeps/` does exactly this).
+- **`phorge build` is single-file and does not merge `vendor/`.** A program that imports a vendored
+  (or any cross-package) dependency runs via `run`/`runvm`/`transpile` (which go through the project
+  loader) but cannot yet be compiled to a standalone executable. `build` embeds one source file only
+  (M2.5 Phase 1 scope), unchanged by S3.
+- **Resolution is offline by design.** `run`/`check`/`transpile` never fetch — they read the
+  committed `vendor/`. Only `phorge vendor` touches the network; commit `vendor/` + `phorge.lock` so
+  builds stay deterministic and reproducible (the same determinism rule that defers URL/network to M6).
 
 ## `phorge build` limitations (M2.5, in progress)
 

@@ -7,7 +7,7 @@ use std::process::exit;
 use phorge::{cli, loader};
 
 const USAGE: &str =
-    "usage: phorge <run|runvm|check|parse|lex|transpile|disasm|bench|build|explain> \
+    "usage: phorge <run|runvm|check|parse|lex|transpile|disasm|bench|build|vendor|explain> \
                      <file | - | -e code> [-o out]   (phorge -h for help, -v for version)";
 
 fn main() {
@@ -42,7 +42,7 @@ fn main() {
     let cmd = match args.get(1).map(String::as_str) {
         Some(
             c @ ("run" | "runvm" | "check" | "parse" | "lex" | "transpile" | "disasm" | "bench"
-            | "build" | "explain"),
+            | "build" | "vendor" | "explain"),
         ) => c,
         _ => {
             eprintln!("{USAGE}");
@@ -65,6 +65,26 @@ fn main() {
             }
         };
         match cli::cmd_explain(code) {
+            Ok(text) => {
+                print!("{text}");
+                return;
+            }
+            Err(err) => {
+                eprintln!("{err}");
+                exit(1);
+            }
+        }
+    }
+    // `vendor [project-dir | phorge.toml]` resolves a project (not a program source) and fetches its
+    // git dependencies — the only network-touching command. Defaults to the current directory; any
+    // extra argument is a usage error.
+    if cmd == "vendor" {
+        let arg = args.get(2).map(String::as_str).unwrap_or(".");
+        if args.len() > 3 {
+            eprintln!("{USAGE}");
+            exit(2);
+        }
+        match cli::cmd_vendor(arg) {
             Ok(text) => {
                 print!("{text}");
                 return;

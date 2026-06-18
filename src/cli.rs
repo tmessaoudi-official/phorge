@@ -36,6 +36,7 @@ pub fn help_text() -> String {
          disasm     print the compiled bytecode\n  \
          bench      benchmark run vs runvm (time + memory)\n  \
          build      compile to a standalone executable (-o <out>)\n  \
+         vendor     fetch [require] git deps into an offline vendor/ (writes phorge.lock)\n  \
          explain    explain a diagnostic code (e.g. phorge explain E-UNKNOWN-IDENT)\n\n\
          source:\n  \
          <file>     read the program from a file\n  \
@@ -121,6 +122,17 @@ pub fn help_for(cmd: &str) -> String {
                       usage:\n  phorge explain <CODE>\n\n\
                       examples:\n  \
                       phorge explain E-UNKNOWN-IDENT\n"
+        }
+        "vendor" => {
+            "vendor — fetch the project's `[require]` git dependencies into an offline `vendor/`.\n\n\
+                     Clones each dependency at its pinned tag/rev, copies its source into\n\
+                     `vendor/<vendor>/<package>/`, and writes `phorge.lock` (resolved SHA + content\n\
+                     hash). This is the only command that touches the network; commit `vendor/` +\n\
+                     `phorge.lock` so `run`/`check`/`transpile` resolve fully offline.\n\n\
+                     usage:\n  phorge vendor [project-dir | phorge.toml]   (defaults to .)\n\n\
+                     examples:\n  \
+                     phorge vendor\n  \
+                     phorge vendor path/to/project\n"
         }
         _ => return help_text(),
     };
@@ -223,6 +235,24 @@ pub fn explain_text(code: &str) -> Option<String> {
              flags every `!` so you can prefer a total alternative — `??` (default value), `?.`\n\
              (safe access), or `if (var x = opt) { … }` (narrow) — where null is a real possibility.\n"
         }
+        "E-VENDOR-MISSING" => {
+            "E-VENDOR-MISSING — a `[require]` dependency is declared but not vendored.\n\n\
+             Dependencies resolve offline from the committed `vendor/` tree — Phorge never fetches on\n\
+             `run`/`check`/`transpile`. Run `phorge vendor` to clone each `[require]` dependency at its\n\
+             pinned tag/rev into `vendor/` and write `phorge.lock`, then commit both.\n"
+        }
+        "E-VENDOR-MAIN" => {
+            "E-VENDOR-MAIN — a vendored dependency declared `package main`.\n\n\
+             A dependency is a library: it exports dotted packages (e.g. `package acme.strutil;`),\n\
+             never the reserved `package main` (which would collide with the consuming program's\n\
+             entry). Fix the dependency to use a dotted package, or remove the stray `main` file.\n"
+        }
+        "E-DUP-DEF" => {
+            "E-DUP-DEF — two functions share a name within one package.\n\n\
+             After the project + its vendored dependencies are merged, every function is keyed by\n\
+             `(package, name)` and must be unique. Two files declaring the same `package` cannot both\n\
+             define a function of the same name — rename one, or move it to a different package.\n"
+        }
         _ => return None,
     };
     Some(body.to_string())
@@ -233,9 +263,24 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP)"
         )
     })
+}
+
+/// `vendor [project-dir | phorge.toml]`: fetch the project's `[require]` git dependencies into an
+/// offline `vendor/` tree and (re)write `phorge.lock`. `arg` is a directory or a manifest path
+/// (default `.`); the project root is found by walking up to a `phorge.toml`. The only network-
+/// touching command — see [`crate::vendor`].
+pub fn cmd_vendor(arg: &str) -> Result<String, String> {
+    let start = std::path::Path::new(arg);
+    match crate::manifest::Project::detect(start)? {
+        Some(project) => crate::vendor::vendor(&project),
+        None => Err(format!(
+            "no phorge.toml found at or above `{arg}` — `phorge vendor` requires a project \
+             (add a phorge.toml with a [require] section)"
+        )),
+    }
 }
 
 /// Where a command reads its program from, resolved from the args after the subcommand.

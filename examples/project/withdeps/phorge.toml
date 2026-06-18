@@ -1,0 +1,6 @@
+name = "acme/withdeps"
+version = "0.1.0"
+source = "src"
+
+[require]
+"acme/strutil" = { git = "https://github.com/phorge-lang/example-strutil.phg", tag = "v0.1.0" }

@@ -6,6 +6,28 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### M5 slice S3 — git dependencies + `phorge.lock` + `phorge vendor` + auto-offline
+
+- **`phorge vendor`** — the only network-touching command. It clones each `[require]` git dependency
+  at its pinned `tag`/`rev`, copies the dependency's source into `vendor/<vendor>/<package>/`, and
+  writes `phorge.lock` pinning the **resolved commit SHA** + an FNV-1a-64 content hash. Idempotent and
+  crash-safe (stages into a temp dir, swaps atomically, touches only each dependency's own subtree).
+- **`phorge.lock`** (`src/lock.rs`) — a strict, deterministic TOML-subset lockfile (`[[package]]`
+  blocks: `name`, `git`, `rev`, `hash`); round-trips through its own parser.
+- **Auto-offline resolution** — `loader::load_project` merges vendored packages exactly like
+  first-party library packages (mangle + resolve before any backend runs ⇒ `run` ≡ `runvm`
+  structural; the transpiler de-mangles into `namespace …` blocks). `run`/`check`/`transpile`
+  **never fetch** — they read the committed `vendor/`. New guards: `E-VENDOR-MISSING` (a `[require]`
+  dep not vendored), `E-VENDOR-MAIN` (a vendored `package main`), `E-DUP-DEF` (a duplicate
+  `(package, name)` after the merge — previously a silent overwrite).
+- **Example** — `examples/project/withdeps/` (a project consuming a vendored `acme/strutil` library):
+  ships its committed `vendor/` + `phorge.lock`; the project-aware differential harness loads it
+  offline and gates `run` ≡ `runvm`, and it round-trips through real PHP. `phorge vendor` gains a
+  `--help` entry, USAGE/dispatch wiring, and three `phorge explain` codes.
+- **Tests** — `tests/vendor.rs` drives the real `git clone`/`checkout`/`rev-parse` path against a
+  `file://` local-git fixture (offline, deterministic): fetch + lock + offline byte-identical load,
+  idempotent re-vendor, and `E-VENDOR-MISSING`.
+
 ### M5 slice S2d — project-aware differential harness + public multi-file example
 
 - **First public multi-file project** — `examples/project/tempconv/` (a two-package Celsius→Fahrenheit

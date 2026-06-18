@@ -32,7 +32,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Exceptions (try/catch/throw) | 🔲 M3 | |
 | Mutation (reassignment, field writes) | 🔲 M3 | triggers the tracing GC |
 | Traits, operator overloading, method overloading | 🔲 future | |
-| Modules / packages | 🚧 M5 | multi-file projects, folder=path, cross-package `import` + aliasing, namespaced PHP — shipped; git-based deps next (S3) |
+| Modules / packages | 🚧 M5 | multi-file projects, folder=path, cross-package `import` + aliasing, namespaced PHP, **git dependencies** (`[require]` + `phorge vendor` + `phorge.lock`, offline) — shipped; transitive deps next |
 | Concurrency (`spawn` + channels) | 🔲 M6 | uncolored, green-threaded |
 
 ## Backends & tooling
@@ -49,6 +49,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Sharp diagnostics: caret-underlined span, did-you-mean hints, stable codes | ✅ | front-end errors |
 | Diagnostic dictionary (look up a code) | ✅ | `phorge explain <CODE>` |
 | Program from stdin / inline / `--` | ✅ | `run -`, `run -e '…'`, `run -- <file>` |
+| Vendor git dependencies (offline, lockfile-pinned) | ✅ | `phorge vendor` |
 | Standalone executable (host) | ✅ | `phorge build foo.phg` |
 | Standalone executable (Linux cross + Windows) | 🔨 | `phorge build --target … / --all` |
 | Standalone executable (macOS) | 🔲 | reader ships; signed stub deferred to M2.5 Phase 3 |

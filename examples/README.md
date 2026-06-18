@@ -33,6 +33,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `build/app.phg` | **standalone executables** — `phorge build` — see `build/README.md` |
 | `cli/demo.phg` | the **`phorge` CLI** — source forms, `check`/`parse`/`lex`, diagnostics, `explain` — see `cli/README.md` |
 | `project/tempconv/` | a **multi-file project** (M5) — mandatory packages, folder = path, cross-package qualified calls + import aliasing, namespaced PHP — see `project/README.md` |
+| `project/withdeps/` | a project with a **vendored git dependency** (M5 S3) — `[require]`, `phorge vendor`, `phorge.lock`, offline `vendor/` — see `project/withdeps/README.md` |
 
 ## Coverage matrix (the runnable surface)
 
@@ -57,6 +58,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | standalone executable (`phorge build`) | `build/app` |
 | CLI: source forms, inspection (`check`/`parse`/`lex`), diagnostics, `explain` | `cli/demo` |
 | multi-file projects: packages, folder = path, cross-package imports + aliasing, namespaced PHP | `project/tempconv` |
+| git dependencies: `[require]`, `phorge vendor`, `phorge.lock`, offline `vendor/` | `project/withdeps` |
 
 ## Three sharp edges
 
@@ -79,4 +81,5 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 These are designed but not implemented; they will arrive in **M3+** (the language-growth milestone),
 and examples will be added as each lands: `Map`/`Set` values & indexing, the pipe operator `|>`,
 exceptions (`try`/`catch`/`throw`), traits, function overloading, sized ints, `decimal`, and
-git-based package dependencies (`[require]` in `phorge.toml` — M5 S3).
+**transitive** git dependencies (a dependency's own `[require]`; direct git deps are shipped — see
+`project/withdeps/`).

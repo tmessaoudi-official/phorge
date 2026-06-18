@@ -86,28 +86,79 @@ pub fn load_loose_src(src: &str) -> Result<Unit, String> {
 /// checker / interpreter / compiler / VM consume the result unchanged — run==runvm is structural.
 /// Only the transpiler de-mangles the `\`-bearing names back into PHP `namespace` blocks.
 fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
-    let mut files = collect_phg(&project.source_root)?;
-    if !files.iter().any(|f| same_file(f, entry)) {
-        files.push(entry.to_path_buf());
+    // Each source carries the folder=path root it is validated against (the project's source root
+    // for first-party files; each dependency's own `vendor/<name>/` root for vendored files) and a
+    // `vendored` flag (a vendored package must be a library — never `package main`).
+    let vendor_root = project.root.join("vendor");
+    let mut sources: Vec<Source> = Vec::new();
+    for f in collect_phg(&project.source_root)? {
+        // Defensive: if `source = "."`, the vendor tree sits under the source root — never compile a
+        // vendored file as a first-party one (it is added with its own root below instead).
+        if f.starts_with(&vendor_root) {
+            continue;
+        }
+        sources.push(Source::first_party(f, &project.source_root));
     }
-    files.sort();
-    files.dedup();
+    if !sources.iter().any(|s| same_file(&s.file, entry)) {
+        sources.push(Source::first_party(
+            entry.to_path_buf(),
+            &project.source_root,
+        ));
+    }
+    // Vendored dependencies (M5 S3): consulted only when `[require]` is non-empty, always offline —
+    // each declared dependency must already be vendored under `vendor/<name>/` (run `phorge vendor`).
+    for dep in &project.manifest.require {
+        let dep_root = vendor_root.join(&dep.name);
+        let dep_files = collect_phg(&dep_root)?;
+        if dep_files.is_empty() {
+            return Err(format!(
+                "dependency `{}` is declared in [require] but not vendored — run `phorge vendor` \
+                 (no `.phg` source found under `{}`) [E-VENDOR-MISSING]",
+                dep.name,
+                dep_root.display()
+            ));
+        }
+        for f in dep_files {
+            sources.push(Source::vendored(f, &dep_root));
+        }
+    }
+    sources.sort_by(|a, b| a.file.cmp(&b.file));
+    sources.dedup_by(|a, b| a.file == b.file);
 
     // Pass 1 — parse, validate, and index every function by (package, name) ⇒ mangled global name.
-    let mut parsed: Vec<(PathBuf, Program)> = Vec::with_capacity(files.len());
+    let mut parsed: Vec<(PathBuf, Program)> = Vec::with_capacity(sources.len());
     let mut defined: HashMap<(String, String), String> = HashMap::new();
-    for file in &files {
+    for src_entry in &sources {
+        let file = &src_entry.file;
         let src = read_file(file)?;
         let prog = parse_at(file, &src)?;
-        validate_folder_path(&prog, file, &project.source_root)?;
+        validate_folder_path(&prog, file, &src_entry.root)?;
+        if src_entry.vendored && (prog.package.is_empty() || prog.package == ["main"]) {
+            return Err(format!(
+                "{}: a vendored dependency is a library and cannot declare `package main` \
+                 (it would collide with the consumer's entry) [E-VENDOR-MAIN]",
+                file.display()
+            ));
+        }
         reject_library_types(&prog, file)?;
         let pkg = prog.package.join(".");
         for item in &prog.items {
             if let Item::Function(f) = item {
-                defined.insert(
-                    (pkg.clone(), f.name.clone()),
-                    mangle(&prog.package, &f.name),
-                );
+                if defined
+                    .insert(
+                        (pkg.clone(), f.name.clone()),
+                        mangle(&prog.package, &f.name),
+                    )
+                    .is_some()
+                {
+                    return Err(format!(
+                        "{}: duplicate definition of `{}` in package `{}` \
+                         (a function name must be unique within its package) [E-DUP-DEF]",
+                        file.display(),
+                        f.name,
+                        if pkg.is_empty() { "main" } else { &pkg }
+                    ));
+                }
             }
         }
         parsed.push((file.clone(), prog));
@@ -148,6 +199,31 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
         },
         diag_src: String::new(),
     })
+}
+
+/// One source file in a project load, paired with the folder=path root it validates against and
+/// whether it came from the vendor tree (a vendored file must be a library — never `package main`).
+struct Source {
+    file: PathBuf,
+    root: PathBuf,
+    vendored: bool,
+}
+
+impl Source {
+    fn first_party(file: PathBuf, source_root: &Path) -> Source {
+        Source {
+            file,
+            root: source_root.to_path_buf(),
+            vendored: false,
+        }
+    }
+    fn vendored(file: PathBuf, dep_root: &Path) -> Source {
+        Source {
+            file,
+            root: dep_root.to_path_buf(),
+            vendored: true,
+        }
+    }
 }
 
 /// The globally-unique name for a top-level definition. `package main` (and the malformed empty
@@ -721,5 +797,35 @@ mod tests {
         let tmp = TempDir::new();
         let err = load(&tmp.path().join("does-not-exist.phg")).unwrap_err();
         assert!(err.contains("cannot read"), "got: {err}");
+    }
+
+    #[test]
+    fn duplicate_function_in_package_is_rejected() {
+        let tmp = TempDir::new();
+        tmp.write("phorge.toml", "name = \"acme/app\"\nsource = \"src\"");
+        let entry = tmp.write("src/main.phg", "package main;\nfunction main() {}");
+        // Two files in the same package each define `f` — collides after the flat merge.
+        tmp.write("src/acme/util/a.phg", "package acme.util;\nfunction f() {}");
+        tmp.write("src/acme/util/b.phg", "package acme.util;\nfunction f() {}");
+        let err = load(&entry).unwrap_err();
+        assert!(err.contains("E-DUP-DEF"), "got: {err}");
+        assert!(err.contains("duplicate definition of `f`"), "got: {err}");
+    }
+
+    #[test]
+    fn vendored_package_main_is_rejected() {
+        let tmp = TempDir::new();
+        tmp.write(
+            "phorge.toml",
+            "name = \"acme/app\"\nsource = \"src\"\n\n[require]\n\"acme/lib\" = { git = \"u\", tag = \"v1\" }",
+        );
+        let entry = tmp.write("src/main.phg", "package main;\nfunction main() {}");
+        // A vendored library must not declare `package main` (it would collide with the entry).
+        tmp.write(
+            "vendor/acme/lib/oops.phg",
+            "package main;\nfunction stray() {}",
+        );
+        let err = load(&entry).unwrap_err();
+        assert!(err.contains("E-VENDOR-MAIN"), "got: {err}");
     }
 }

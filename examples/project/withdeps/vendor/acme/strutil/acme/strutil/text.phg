@@ -1,0 +1,10 @@
+package acme.strutil;
+
+// A tiny string-formatting helper library, vendored as a git dependency.
+function banner(string title) -> string {
+  return "== {title} ==";
+}
+
+function shout(string s) -> string {
+  return "{s}!";
+}
