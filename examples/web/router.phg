@@ -1,0 +1,150 @@
+package main;
+
+// M6 W2 — a static, exact-match HTTP router, written in pure Phorge.
+//
+// This is the in-language dispatch layer that sits on top of W1's `handle(Request) -> Response`
+// model: a data-driven route table (`List<Route>`) is scanned linearly for an exact
+// `(method, path)` match, yielding a `Handler` enum tag that an exhaustive `match` dispatches to a
+// named handler function. There is NO socket here (W3's `phorge serve`) and NO new language
+// feature — routing is expressible today with enums + classes + lists + `match`, so the whole pipe
+// is byte-identical on `run` / `runvm` and round-trips through real PHP.
+//
+// Deferred (noted in docs/specs/2026-06-18-m6-web-design.md §8): path parameters (`/users/{id}`)
+// and middleware/closure routes — both gate on later features (list-length/generics for parallel
+// segment iteration; closures for middleware). The `handle(Request) -> Response` contract does not
+// change when they land — they layer on top of this exact-match core.
+import core.console;
+import core.bytes;
+import core.text;
+
+class Request {
+  constructor(public string method, public string path, public bytes body,
+              private List<string> headerLines) {}
+
+  function header(string name) -> string? {
+    for (string line in headerLines) {
+      if (text.contains(line, ":")) {
+        List<string> kv = text.split_once(line, ":");
+        string key = text.trim(kv[0]);
+        if (key == name) { return text.trim(kv[1]); }
+      }
+    }
+    return null;
+  }
+}
+
+class Response {
+  constructor(public int status, public bytes body, public List<string> headerLines) {}
+}
+
+function reason_phrase(int s) -> string {
+  return if (s == 200) { "OK" }
+    else { if (s == 400) { "Bad Request" }
+    else { if (s == 404) { "Not Found" }
+    else { "Internal Server Error" } } };
+}
+
+// Parse a raw HTTP/1.1 request (identical to W1's parser). `null` ⇒ malformed (→ a 400 at W3).
+function parse_request(bytes raw) -> Request? {
+  string nl = bytes.to_string(b"\x0d\x0a") ?? "";
+  int sep = bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
+  if (sep < 0) { return null; }
+  bytes headBytes = bytes.slice(raw, 0, sep);
+  bytes body = bytes.slice(raw, sep + 4, bytes.len(raw));
+  string head = bytes.to_string(headBytes) ?? "";
+  List<string> lines = text.split(head, nl);
+  string requestLine = lines[0];
+  List<string> rl = text.split(requestLine, " ");
+  string method = rl[0];
+  string path = rl[1];
+  return Request(method, path, body, lines);
+}
+
+// A route's destination, as an enum tag (no first-class functions yet → Track A). The exhaustive
+// `match` in `dispatch` is what makes "every registered route has a handler" a compile-time check.
+enum Handler { Home(), Greet(), Health(), NotFound() }
+
+// One row of the route table: an exact method + path, and the handler tag it dispatches to.
+class Route {
+  constructor(public string method, public string path, public Handler tag) {}
+}
+
+// The route table — pure data. Adding a route is one literal row (+ one `match` arm in `dispatch`,
+// which the exhaustiveness check enforces).
+function routes() -> List<Route> {
+  return [
+    Route("GET", "/", Home()),
+    Route("GET", "/greet", Greet()),
+    Route("GET", "/health", Health()),
+  ];
+}
+
+// Exact-match linear scan: first route whose method AND path both equal the request wins; otherwise
+// `NotFound()`. Method-sensitive (a registered path under the wrong verb falls through to 404).
+function match_route(string method, string path) -> Handler {
+  for (Route r in routes()) {
+    if (r.method == method) {
+      if (r.path == path) { return r.tag; }
+    }
+  }
+  return NotFound();
+}
+
+function handle_home(Request req) -> Response {
+  bytes body = bytes.from_string("Phorge web — home");
+  return Response(200, body, ["Content-Type: text/plain"]);
+}
+
+function handle_greet(Request req) -> Response {
+  string host = req.header("Host") ?? "world";
+  bytes body = bytes.from_string("Hello {host}");
+  return Response(200, body, ["Content-Type: text/plain"]);
+}
+
+function handle_health(Request req) -> Response {
+  bytes body = bytes.from_string("ok");
+  return Response(200, body, ["Content-Type: text/plain"]);
+}
+
+function handle_not_found(Request req) -> Response {
+  string m = req.method;
+  string p = req.path;
+  bytes body = bytes.from_string("not found: {m} {p}");
+  return Response(404, body, ["Content-Type: text/plain"]);
+}
+
+// The router: route the request to its handler. The `match` is exhaustive over `Handler`.
+function dispatch(Request req) -> Response {
+  Handler tag = match_route(req.method, req.path);
+  return match tag {
+    Home() => handle_home(req),
+    Greet() => handle_greet(req),
+    Health() => handle_health(req),
+    NotFound() => handle_not_found(req),
+  };
+}
+
+// Parse one raw request, route it, and print a one-line summary: METHOD PATH -> STATUS REASON: body.
+function show(bytes raw) {
+  if (var req = parse_request(raw)) {
+    Response resp = dispatch(req);
+    string m = req.method;
+    string p = req.path;
+    int st = resp.status;
+    string reason = reason_phrase(st);
+    string body = bytes.to_string(resp.body) ?? "(binary)";
+    console.println("{m} {p} -> {st} {reason}: {body}");
+  } else {
+    console.println("malformed request");
+  }
+}
+
+function main() {
+  // Five raw requests exercising the table: a hit per route, an unknown path (404), and a method
+  // mismatch (POST on a GET-only path → 404). CRLFs as explicit `\x0d\x0a` (deterministic, no file).
+  show(b"GET / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
+  show(b"GET /greet HTTP/1.1\x0d\x0aHost: phorge.dev\x0d\x0a\x0d\x0a");
+  show(b"GET /health HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
+  show(b"GET /missing HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
+  show(b"POST / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
+}
