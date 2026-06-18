@@ -12,6 +12,7 @@ pub mod diagnostic;
 pub mod interpreter;
 pub mod lexer;
 pub mod limits;
+pub mod manifest;
 pub mod mem;
 pub mod native;
 pub mod parser;

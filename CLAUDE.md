@@ -203,10 +203,17 @@ inferred** (even `-e`/stdin); reserved **`package main;`** = runnable entry (Go 
 autoload free functions, and Phorge is function-heavy); project detection = `phorge.toml` walk-up;
 git-based deps pinned + vendored for determinism. **M5 S1 COMPLETE** (single-file `package` decl + parse
 + checker `E-NO-PACKAGE`/`E-RESERVED-PACKAGE` + flat PHP unchanged → byte-identical; all 24 examples +
-every test program migrated to `package main;`; also fixed Wave-1 `README.md` drift). **NEXT: S2a**
-(manifest + source root + walk-up detection) → S2b (multi-file loader + folder=path) → **S2c** (qualified
-cross-package calls in all 4 backends + brace-namespace PHP — the one byte-identity-risky slice) → S2d
-(project-aware harness + `examples/project/`) → S3 (git deps + `phorge.lock` + `phorge vendor`). Then
+every test program migrated to `package main;`; also fixed Wave-1 `README.md` drift). **M5 S2a COMPLETE**
+(`src/manifest.rs`: std-only `phorge.toml` parser → `Manifest`/`Dependency`/`Pin` + `Project::detect`
+walk-up + source-root + PSR-4 `namespace_root()`; 18 unit tests; byte-safe — unconsumed, no backend
+touched). **Manifest = Composer's *vocabulary* in an honest TOML container** (developer-chosen): `name =
+"vendor/package"`, `[require]`/`[require-dev]`, deps `{ git, tag|rev }` or `"url@tag"` shorthand,
+exact-pin only (no `^`/`~` ranges — lockfile pins exact). Literal `composer.json` was **rejected** — the
+`composer` tool can't process it (no Packagist/autoloader Phorge uses), so the filename is a false
+promise; familiarity is vocabulary, not the tool. **NEXT: S2b** (multi-file loader + strict folder=path
+enforcement; consumes `Project::detect`) → **S2c** (qualified cross-package calls in all 4 backends +
+brace-namespace PHP — the one byte-identity-risky slice) → S2d (project-aware harness +
+`examples/project/`) → S3 (git deps + `phorge.lock` + `phorge vendor`). Then
 Track A (S3 lambdas/pipeline), which also unblocks the deferred `core.list`. **Parked:** M2.5 Phase 3 (CI
 stub registry + `--sign`) — `docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`.
 

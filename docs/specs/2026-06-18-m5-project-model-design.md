@@ -43,24 +43,37 @@ runtime, idiomatic PHP on emission.**
   mandatory so an unqualified builtin call inside a namespace block still resolves to the global).
 - **M5-9 — leaf-qualified call sites** (consistent with Wave 1 core.*): `import app.util;` binds leaf
   `util`; call `util.parse(x)`. Leaf collisions resolved by aliasing — `import app.util as autil;` (O-9).
-- **M5-10 — git deps, pinned + vendored.** `[dependencies] x = { git = "…", tag = "v1" }` (tag/rev only
-  — never bare URL/branch). `phorge.lock` pins resolved commit SHA + content hash. A committed
-  `vendor/` (via `phorge vendor`) is **used automatically with zero network** when present — the only
-  way examples stay byte-identical. (Go's `vendor/` + Cargo's lock, fused.)
+- **M5-10 — git deps, pinned + vendored; Composer *vocabulary* in a TOML container.** Deps live under
+  **`[require]` / `[require-dev]`** (Composer's words — the transpile-target audience reads them
+  natively) as `"vendor/pkg" = { git = "…", tag|rev = "v1" }` (tag/rev only — never bare URL/branch),
+  with an optional `"vendor/pkg" = "<git-url>@v1.2.0"` string shorthand. **Exact-pin only — no `^`/`~`
+  ranges** (the lockfile pins exact, so a resolver/SAT-solve is unnecessary; deferred). `phorge.lock`
+  pins resolved commit SHA + content hash. A committed `vendor/` (via `phorge vendor`) is **used
+  automatically with zero network** when present — the only way examples stay byte-identical. (Go's
+  `vendor/` + self-locating import path + Cargo's lock, fused.) **Rejected: literal `composer.json`** —
+  a file the `composer` tool cannot actually process (no Packagist, no autoloader Phorge uses) is a
+  false promise; familiarity is vocabulary, not the filename. (2026-06-18, developer-confirmed.)
 
 ## 3. The project manifest — minimal `phorge.toml`
 
 ```toml
-[package]
-name = "myapp"      # also the root PHP namespace segment on emission
+name = "acme/myapp"   # vendor/package — Composer-style; doubles as the PSR-4 namespace root (Acme\Myapp)
 version = "0.1.0"
-source = "src"      # source root anchoring folder=path (default "src")
+source = "src"        # source root anchoring folder=path (default "src")
 
-[dependencies]
-parse = { git = "https://example.com/parse.phg.git", tag = "v1.2.0" }
+[require]
+"acme/parser"  = { git = "https://github.com/acme/parser.phg", tag = "v1.2.0" }
+"acme/json"    = "https://github.com/acme/json.phg@v0.3.1"   # string shorthand → desugars to { git, tag }
+
+[require-dev]
+"acme/testkit" = { git = "https://github.com/acme/testkit.phg", rev = "a1b2c3d" }
 ```
 
-`name` doubles as the PSR-4-style vendor prefix in emitted PHP. Minimal, Cargo-shaped.
+`name` doubles as the PSR-4-style vendor prefix in emitted PHP (`acme/myapp` ⇒ namespace `Acme\Myapp`).
+**Composer's vocabulary** (`name = "vendor/package"`, `[require]`/`[require-dev]`) over a TOML container
+that `phorge` actually runs — honest, not a `composer.json` the `composer` tool can't process. Each dep
+self-locates via `git` + a pinned `tag`/`rev` (no Packagist, no `repositories` side-table); ranges are
+intentionally absent. **S2a parses + represents this only** — resolution/vendoring is S3.
 
 ## 4. PHP emission (transpile contract D-L9)
 

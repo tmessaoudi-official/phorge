@@ -6,6 +6,27 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### M5 slice S2a — project manifest + source root + project detection
+
+- **`phorge.toml` manifest** — new `src/manifest.rs` parses a minimal, std-only TOML subset into
+  `Manifest { name, version, source, require, require_dev }`. The manifest speaks **Composer's
+  vocabulary in an honest TOML container**: `name = "vendor/package"` (doubles as the PSR-4 namespace
+  root — `acme/myapp` ⇒ `Acme\Myapp`), `[require]` / `[require-dev]` sections, dependency values as
+  `{ git = "…", tag|rev = "…" }` or the `"<git-url>@<tag>"` string shorthand. Each dep self-locates
+  via its git URL (no Packagist, no Composer `repositories` side-table); versions are **exact-pin
+  only** — a `branch` pin, a missing/double pin, an unknown key/section, or an unquoted value are hard
+  errors. A literal `composer.json` was rejected on purpose: the `composer` tool cannot process it, so
+  the filename would be a false promise.
+- **Project detection** — `Project::detect(path)` walks up from a source file/dir for a `phorge.toml`;
+  the first one found marks the project root and resolves the source root (`root/<source>`, default
+  `src`). No manifest above ⇒ `Ok(None)` (loose-script mode). Manifest presence is the sole
+  project-vs-loose signal (Go's model).
+- **Byte-identity preserved** — S2a is parse + represent only; nothing consumes the manifest yet, so no
+  `.phg` execution path changes and `run`/`runvm` stay byte-identical. The multi-file loader +
+  folder=path enforcement (S2b), qualified cross-package calls + brace-namespace PHP (S2c), and the
+  `examples/project/` showcase (S2d) follow. Coverage = 18 `manifest` unit tests (the showcase example
+  ships with the observable behavior at S2d).
+
 ### M5 slice S1 — package declaration (project-model foundation)
 
 - **Mandatory `package` declaration** — every file declares its package as the first line, never

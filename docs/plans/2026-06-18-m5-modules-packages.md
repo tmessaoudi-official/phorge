@@ -27,6 +27,15 @@
   `all_examples_match_between_backends`) globs `examples/**/*.phg` and runs ONE file at a time via
   `cmd_run(&src)`/`cmd_runvm(&src)` — multi-file projects need a project-aware harness. run/check/
   transpile take only `src: &str` (no path); only `cmd_build` gets `input_path` (`src/cli.rs`).
+- [2026-06-18] AGREED (S2a manifest deps — Composer dialect, honest container): keep `phorge.toml`
+  (TOML), but speak Composer's **vocabulary** so a PHP dev reads it natively — `name = "vendor/package"`
+  (Composer-style; doubles as the PSR-4 namespace root, `acme/myapp` ⇒ `Acme\Myapp`), **`[require]` /
+  `[require-dev]`** section names, values `{ git = "…", tag|rev = "…" }` (Go self-location — no Composer
+  `repositories` side-table) plus an optional `"vendor/pkg" = "<git-url>@v1.2.0"` string shorthand.
+  **Exact-pin only — no `^`/`~` ranges** (a resolver is deferred; the lockfile pins exact regardless;
+  M5-10 says tag/rev only, never branch). **Rejected literal `composer.json`** — the developer's own
+  kill-shot: a file the `composer` tool can't actually process (no Packagist, no autoloader Phorge uses)
+  is a false promise. Familiarity comes from vocabulary, not the filename/tool.
 - [2026-06-18] CONTEXT (verified): PSR-4 maps a namespace prefix → base dir; `\`=`/`; FQCN→file path
   (PHP-FIG PSR-4, Composer schema). Phorge's mandatory folder=path = **PSR-4 promoted from convention
   to language rule**; transpile = emit PHP files in PSR-4 layout + a generated autoload/composer block.
@@ -61,7 +70,13 @@ Slices (each: one+ green commit, run==runvm byte-identical, PHP round-tripped, e
   project model). Migrated 24 examples + `sample.phg` + all inline/integration test programs to
   `package main;` (test helpers auto-prepend, line-preserving); fixed pre-existing Wave-1 `README.md`
   drift (`import std.io;` + bare `println`).
-- [ ] **S2a — manifest + source root + project detection** (`phorge.toml`, walk-up discovery).
+- [x] **S2a — manifest + source root + project detection** — DONE (2026-06-18). `src/manifest.rs`:
+  std-only TOML-subset parser → `Manifest`/`Dependency`/`Pin`, Composer vocabulary (`name =
+  "vendor/package"`, `[require]`/`[require-dev]`, git+tag/rev, `"url@tag"` shorthand), exact-pin only,
+  strict rejection (branch/double/missing pin, unknown key/section, unquoted value); `Project::detect`
+  walk-up discovery + source-root resolution (default `src`); `namespace_root()` PSR-4 mapping. 18 unit
+  tests; byte-safe (unconsumed — no backend touched). Rejected literal `composer.json` (tool can't
+  process it). Example showcase deferred to S2d (when behavior is observable).
 - [ ] **S2b — multi-file loader + strict folder=path enforcement**.
 - [ ] **S2c — qualified cross-package calls** (4-backend resolution) + multi-namespace PHP emission +
   import aliasing. *(The one byte-identity-risky slice — gate with multi-file `agree`/`agree_err`.)*
