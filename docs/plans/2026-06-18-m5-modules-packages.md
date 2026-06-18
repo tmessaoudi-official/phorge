@@ -41,6 +41,11 @@
   to language rule**; transpile = emit PHP files in PSR-4 layout + a generated autoload/composer block.
   Contract holds: Phorge package resolution : PHP/PSR-4 :: TS module resolution : JS.
 
+- [2026-06-18] AGREED: after S2d (committed `e54c919`), next = **M5 S3** — git deps + `phorge.lock`
+  + `phorge vendor` + auto-offline, the final M5 slice (developer chose "M5 S3 — close the milestone").
+  Determinism gate: deps pinned (tag/rev → SHA in lockfile) + vendored + resolved offline-only, never
+  live network in tests/examples (same rule as the M6 URL deferral). Design source for S3 details:
+  `docs/specs/2026-06-18-m5-project-model-design.md` M5-10 + O-7.
 - [2026-06-18] AGREED (S2d): next = **project-aware differential harness + public `examples/project/`
   showcase** (the multi-file example deferred from S2a–S2c, satisfying "examples ship with features").
   Harness lives in `tests/differential.rs`: discover every project root under `examples/` (a dir with
