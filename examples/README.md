@@ -32,7 +32,8 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `bench/workload.phg` | a **profiling** workload (CPU recursion + heap allocation) for `phg bench`/`disasm` — see `bench/README.md` |
 | `transpile/demo.phg` | the **Phorge → PHP** bridge — see `transpile/README.md` |
 | `build/app.phg` | **standalone executables** — `phg build` — see `build/README.md` |
-| `cli/demo.phg` | the **`phorge` CLI** — source forms, `check`/`parse`/`lex`, diagnostics, `explain` — see `cli/README.md` |
+| `cli/demo.phg` | the **`phg` CLI** — source forms, `check`/`parse`/`lex`, diagnostics, `explain` — see `cli/README.md` |
+| `web/handler.phg` | the **M6 W1 HTTP handler model** — `Request`/`Response` classes, `parse_request`/`serialize_response` in pure Phorge, `handle(Request) -> Response`; `bytes` bodies, `req.header(name)` lookup, `bytes.find` + `text.split_once`. No socket yet (that's W3's `phg serve`) |
 | `project/tempconv/` | a **multi-file project** (M5) — mandatory packages, folder = path, cross-package qualified calls + import aliasing, namespaced PHP — see `project/README.md` |
 | `project/withdeps/` | a project with a **vendored git dependency** (M5 S3) — `[require]`, `phg vendor`, `phorge.lock`, offline `vendor/` — see `project/withdeps/README.md` |
 
@@ -55,6 +56,8 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `core.math` stdlib: `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` | `guide/math` |
 | `core.text` stdlib: `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace` | `guide/text` |
 | `core.file` stdlib: `read` (→ `string?`), `exists` (fixture-gated) | `guide/file` |
+| `core.bytes`: `find` (→ `int?`); `core.text`: `split_once` (→ `List<string>`) | `web/handler` |
+| HTTP handler model: `Request`/`Response`, `parse_request`/`serialize_response`, `handle()` | `web/handler` |
 | Phorge → PHP transpile | `transpile/demo` |
 | standalone executable (`phg build`) | `build/app` |
 | CLI: source forms, inspection (`check`/`parse`/`lex`), diagnostics, `explain` | `cli/demo` |

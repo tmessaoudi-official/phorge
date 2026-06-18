@@ -6,6 +6,31 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### M6 slice W1 — the HTTP handler model (`handle(Request) -> Response`, pure Phorge)
+
+- **The portable handler contract** — `Request`/`Response` are ordinary Phorge classes and
+  `parse_request(bytes) -> Request?` / `serialize_response(Response) -> bytes` are written in pure
+  Phorge (PSR-7/15 shaped). Bodies are `bytes` (HTTP bodies are octets); the head is decoded ASCII for
+  line/`:` splitting. Headers ride as `List<string>` raw lines with a `req.header(name) -> string?`
+  linear-scan accessor (the method-call API is the public surface; a typed `Header` value arrives with
+  S3). No socket yet — that is W3's `phg serve`. No new `Op`, no new `Value` variant.
+- **`bytes.find(bytes, bytes) -> int?`** — first-occurrence byte search (`null` when absent, `0` for an
+  empty needle, matching PHP 8 `strpos`); locates the CRLFCRLF head/body boundary. Erases to
+  `(($p = strpos(…)) === false ? null : $p)`.
+- **`text.split_once(string, string) -> List<string>`** — split on the first separator → `[head, tail]`
+  (robustly parses `Name: value` headers whose value contains `:`). Erases to `explode($sep, $s, 2)`.
+- **Example** `examples/web/handler.phg` — builds a canonical request as a `b"…"` literal, parses it,
+  runs `handle`, and serializes the response (Content-Length recomputed from the body). Byte-identical
+  on `run`/`runvm` + **real PHP**, auto-gated by the `examples/**/*.phg` glob.
+
+### CLI binary renamed `phorge` → `phg`
+
+- The CLI binary is now **`phg`** (matches the `.phg` extension; ripgrep's model — package `ripgrep`
+  ships binary `rg`). All help/usage/version output, the cross-build `--bin`/artifact/cache names,
+  release-asset naming, and docs use `phg`. The Cargo **package/lib name stays `phorge`**, as do
+  `phorge.toml`/`phorge.lock`, the `.phorge` executable section, `PHORGE_*` env vars, and the
+  `~/.cache/phorge` stub namespace.
+
 ### M6 slice W0 — the `bytes` type
 
 - **`bytes`** — a new primitive: raw octet sequences distinct from UTF-8 `string`. `Value::Bytes`

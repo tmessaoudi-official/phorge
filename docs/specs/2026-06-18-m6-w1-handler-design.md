@@ -1,6 +1,10 @@
 # M6 W1 — Handler Model Design (Shape A)
 
-> **Status:** DESIGN — open decisions in §7 await confirm before build (mirrors the W0 note flow).
+> **Status:** IMPLEMENTED 2026-06-18 (design-locked §7, then built). `bytes.find` + `text.split_once`
+> natives + `examples/web/handler.phg` (Request/Response/parse_request/serialize_response/handle) all
+> landed; byte-identical on `run`/`runvm` + **real PHP**. Two transpile gotchas surfaced + documented
+> in KNOWN_ISSUES (PHP-builtin name collision for `package main` fns; `private` fields aren't externally
+> readable in transpiled PHP — externally-read fields are `public`).
 > Parent: `docs/specs/2026-06-18-m6-web-design.md` §2/§3/§10 (W1 = the pure `handle(Request)->Response`
 > slice, in-spine, Shape A). Predecessor: `docs/specs/2026-06-18-m6-w0-bytes-design.md` (the `bytes`
 > type W1 consumes). W1 ships purely on today's language **plus** at most one small native (`bytes.find`)

@@ -80,6 +80,19 @@ not a panic:
   helper without the source name/line. The *present-value* case is byte-identical; only the null-fault
   message differs (a transpile-only caveat, parallel to the range/index-OOB notes). The differential
   harness excludes fault cases by design.
+- **`package main` function names must avoid PHP built-in names (transpile target).** A top-level
+  function in `package main` transpiles to a *global* PHP function, so naming one `serialize`,
+  `strlen`, `header`, … collides with the PHP builtin (`Cannot redeclare function …`). The Phorge
+  backends are unaffected (everything is namespaced); only the PHP round-trip fails. Library packages
+  are namespaced and immune. Pick non-builtin names for `package main` functions intended to transpile
+  (e.g. `serialize_response`, not `serialize`).
+- **Externally-read fields must be `public`, not `private` (transpile target).** Phorge's
+  `run`/`runvm` do not enforce field visibility, so an external read `obj.field` of a `private`
+  constructor-promoted field works there — but the transpiled PHP enforces `private` and throws
+  `Cannot access private property`. Declare a field `public` in the constructor when it is read from
+  outside the class (a `private` field read only inside the class's own methods is fine). The
+  byte-identity-with-PHP convention used by the examples is: `public` for externally-read fields, or an
+  accessor method (`obj.field_of()`), which is always public.
 
 ## Reporting
 

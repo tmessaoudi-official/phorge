@@ -232,6 +232,20 @@ fn text_split(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("text.split expects (string, string)".into()),
     }
 }
+fn text_split_once(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        // Split on the FIRST occurrence → `[head, tail]`; `[whole]` (1 elem) if `sep` is absent.
+        // Matches PHP `explode($sep, $s, 2)` exactly for a non-empty separator (the only use).
+        [Value::Str(s), Value::Str(sep)] => {
+            let parts: Vec<Value> = match s.split_once(sep.as_str()) {
+                Some((head, tail)) => vec![Value::Str(head.into()), Value::Str(tail.into())],
+                None => vec![Value::Str(s.clone())],
+            };
+            Ok(Value::List(std::rc::Rc::new(parts)))
+        }
+        _ => Err("text.split_once expects (string, string)".into()),
+    }
+}
 fn text_join(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::List(items), Value::Str(sep)] => {
@@ -315,6 +329,15 @@ fn text_natives() -> Vec<NativeFn> {
             eval: text_split,
             // PHP `explode(separator, string)` — separator first.
             php: |a| format!("explode({}, {})", parg(a, 1), parg(a, 0)),
+        },
+        NativeFn {
+            module: "core.text",
+            name: "split_once",
+            params: vec![s(), s()],
+            ret: Ty::List(Box::new(Ty::String)),
+            eval: text_split_once,
+            // PHP `explode(separator, string, 2)` — separator first; the limit-2 yields [head, tail].
+            php: |a| format!("explode({}, {}, 2)", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
             module: "core.text",
@@ -455,6 +478,26 @@ fn bytes_concat(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("bytes.concat expects (bytes, bytes)".into()),
     }
 }
+fn bytes_find(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        // Index of the first occurrence of `needle` in `haystack`, or `null` (the `int?` absent case).
+        // Empty needle → `0` (matches PHP 8 `strpos($h, "")`). Used to locate the HTTP head/body split.
+        [Value::Bytes(haystack), Value::Bytes(needle)] => {
+            let idx = if needle.is_empty() {
+                Some(0)
+            } else {
+                haystack
+                    .windows(needle.len())
+                    .position(|w| w == needle.as_slice())
+            };
+            Ok(match idx {
+                Some(i) => Value::Int(i as i64),
+                None => Value::Null,
+            })
+        }
+        _ => Err("bytes.find expects (bytes, bytes)".into()),
+    }
+}
 fn bytes_slice(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         // Half-open [start, end), bounds clamped to [0, len] — total, no fault.
@@ -497,6 +540,21 @@ fn bytes_natives() -> Vec<NativeFn> {
             eval: bytes_len,
             // BYTE count (strlen), not character count (mb_strlen).
             php: |a| format!("strlen({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "core.bytes",
+            name: "find",
+            params: vec![Ty::Bytes, Ty::Bytes],
+            ret: Ty::Optional(Box::new(Ty::Int)),
+            eval: bytes_find,
+            // strpos returns int|false; map false → null (the `int?` absent case). Empty needle → 0.
+            php: |a| {
+                format!(
+                    "(($__bp = strpos({0}, {1})) === false ? null : $__bp)",
+                    parg(a, 0),
+                    parg(a, 1)
+                )
+            },
         },
         NativeFn {
             module: "core.bytes",

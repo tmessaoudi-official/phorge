@@ -272,7 +272,19 @@ PHP front-controller + docs**. **M6 W0 COMPLETE** (`446bcb9`, `docs/specs/2026-0
 `bytes` primitive + `b"…"` literals (`\xHH`) + `core.bytes` interop (`from_string`/`to_string`→`string?`/`len`
 byte-count/`concat`/`slice` clamped) — **no new `Op`** (literal via `Op::Const`, interop via `Op::CallNative`,
 `==` via `Op::Eq`); erases to PHP `string`; `examples/guide/bytes.phg` byte-identical on run/runvm/**real PHP**.
-W1 (handler model) is next.
+**M6 W1 COMPLETE** (`docs/specs/2026-06-18-m6-w1-handler-design.md`): the portable `handle(Request) ->
+Response` model in **pure Phorge** — `Request`/`Response` classes + `parse_request(bytes) -> Request?` +
+`serialize_response(Response) -> bytes`, bodies are `bytes`, headers as `List<string>` raw lines with a
+`req.header(name)` linear-scan accessor (the method-call API is the one public surface; typed `Header`
+deferred to S3). Two new natives (**no new `Op`** — both `Op::CallNative`): `bytes.find(bytes,bytes) ->
+int?` (CRLFCRLF boundary; `find(h,b"")`=0 per PHP `strpos`) and `text.split_once(string,string) ->
+List<string>` (robust `Name: value`; → PHP `explode($sep,$s,2)`). `examples/web/handler.phg` byte-identical
+run/runvm/**real PHP**. **Two transpile gotchas found + in KNOWN_ISSUES:** (1) `package main` fns become
+*global* PHP fns → a name like `serialize` collides with a PHP builtin (renamed `serialize_response`);
+(2) PHP enforces `private` but the Phorge backends don't → externally-read promoted fields must be
+**`public`** (or use an accessor). **W2 (static exact-match router) is next.** Also this session: **the
+CLI binary was renamed `phorge` → `phg`** (`70ea75d`; package/lib/`PHORGE_*`/`.phorge` section/`phorge.toml`
+stay `phorge` — ripgrep model). See [[binary-renamed-to-phg]].
 
 **Deferred:** **Track A** (S3 lambdas + pipe `|>`), which also unblocks `core.list`/`core.json`
 (`map`/`filter`/`reduce`) and the M6 router's middleware/closure-route layer — sequenced after the web spike

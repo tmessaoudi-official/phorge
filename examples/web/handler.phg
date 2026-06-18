@@ -1,0 +1,129 @@
+package main;
+
+// M6 W1 — the portable HTTP handler model, written in pure Phorge: `handle(Request) -> Response`.
+//
+// This is the value-level contract (PSR-7/15 shaped): a Request and Response are immutable values,
+// and `parse_request` / `serialize_response` are Phorge code — there is NO socket here (W3's
+// `phorge serve`). The same `handle` transpiles to idiomatic PHP and runs under `php -S` via a thin
+// front-controller (W4). The whole pipe is byte-identical on `run` / `runvm` + real PHP.
+//
+// Design notes (docs/specs/2026-06-18-m6-w1-handler-design.md):
+//   * Bodies are `bytes` (HTTP bodies are octets — the reason W0 landed). The head (always ASCII per
+//     RFC 7230) is decoded to a string for line/`:` splitting; the body stays raw bytes.
+//   * Headers are carried as `List<string>` raw lines; `req.header(name)` parses on lookup (a linear
+//     scan). The method-call API is the public surface — a typed `Header` value arrives with S3.
+//   * No mutation / no `core.list` yet, so the serializer folds headers via `text.join` (a native that
+//     iterates internally) rather than a mutable accumulator.
+import core.console;
+import core.bytes;
+import core.text;
+
+class Request {
+  // method/path/body are read externally (→ `public`, so the PHP transpile can read them too);
+  // headerLines is read only inside `header()` (→ `private`).
+  constructor(public string method, public string path, public bytes body,
+              private List<string> headerLines) {}
+
+  // Linear scan, parse on lookup. `split_once` keeps `:` inside a value intact (e.g. a Host:port).
+  // Lines without a `:` (the request-line) are skipped by the `contains` guard.
+  function header(string name) -> string? {
+    for (string line in headerLines) {
+      if (text.contains(line, ":")) {
+        List<string> kv = text.split_once(line, ":");
+        string key = text.trim(kv[0]);
+        if (key == name) { return text.trim(kv[1]); }
+      }
+    }
+    return null;
+  }
+}
+
+class Response {
+  // The handler supplies headers as a fixed `List<string>` literal (Content-Length is added by
+  // `serialize_response`). At least one header is expected for the spike.
+  constructor(public int status, public bytes body, public List<string> headerLines) {}
+}
+
+// status code → reason phrase, as nested expression-`if` (match is over enums, not ints).
+function reason_phrase(int s) -> string {
+  return if (s == 200) { "OK" }
+    else { if (s == 400) { "Bad Request" }
+    else { if (s == 404) { "Not Found" }
+    else { "Internal Server Error" } } };
+}
+
+// Parse a raw HTTP/1.1 request. Returns `null` (→ a 400 at the socket layer) when malformed.
+function parse_request(bytes raw) -> Request? {
+  string nl = bytes.to_string(b"\x0d\x0a") ?? "";
+  // Locate the CRLFCRLF head/body boundary at the BYTE level (the body may be non-UTF-8).
+  int sep = bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
+  if (sep < 0) { return null; }
+  bytes headBytes = bytes.slice(raw, 0, sep);
+  bytes body = bytes.slice(raw, sep + 4, bytes.len(raw));
+
+  string head = bytes.to_string(headBytes) ?? "";
+  List<string> lines = text.split(head, nl);
+  string requestLine = lines[0];
+  List<string> rl = text.split(requestLine, " ");
+  string method = rl[0];
+  string path = rl[1];
+  // Pass ALL lines (incl. the request-line) — header() skips colon-free lines.
+  return Request(method, path, body, lines);
+}
+
+// Serialize a Response to raw HTTP/1.1 bytes. Always (re)computes Content-Length from the body.
+function serialize_response(Response resp) -> bytes {
+  string nl = bytes.to_string(b"\x0d\x0a") ?? "";
+  string reason = reason_phrase(resp.status);
+  int st = resp.status;
+  string statusLine = "HTTP/1.1 {st} {reason}";
+  int bodyLen = bytes.len(resp.body);
+  // `text.join` folds the user headers (no mutation / no list-append needed).
+  string userHeaders = text.join(resp.headerLines, nl);
+  string head = "{statusLine}{nl}Content-Length: {bodyLen}{nl}{userHeaders}{nl}{nl}";
+  return bytes.concat(bytes.from_string(head), resp.body);
+}
+
+// The application: greet by path, echoing the Host header.
+function handle(Request req) -> Response {
+  string host = req.header("Host") ?? "world";
+  string path = req.path;
+  string msg = "Hello {path} (host {host})";
+  bytes body = bytes.from_string(msg);
+  return Response(200, body, ["Content-Type: text/plain"]);
+}
+
+function main() {
+  string nl = bytes.to_string(b"\x0d\x0a") ?? "";
+  // A canonical raw request, built as a `b"…"` literal with explicit `\x0d\x0a` CRLFs — deterministic
+  // (no committed-file autocrlf hazard) and a showcase of W0's byte literals.
+  bytes raw = b"GET /hi HTTP/1.1\x0d\x0aHost: localhost\x0d\x0aAccept: text/plain\x0d\x0a\x0d\x0ahello";
+
+  if (var req = parse_request(raw)) {
+    string m = req.method;
+    string p = req.path;
+    console.println("method={m} path={p}");
+    string host = req.header("Host") ?? "(none)";
+    console.println("host={host}");
+    string accept = req.header("Accept") ?? "(none)";
+    console.println("accept={accept}");
+    string reqBody = bytes.to_string(req.body) ?? "(binary)";
+    console.println("reqbody={reqBody}");
+
+    Response resp = handle(req);
+    int st = resp.status;
+    string reason = reason_phrase(st);
+    console.println("response status={st} {reason}");
+    string respBody = bytes.to_string(resp.body) ?? "(binary)";
+    console.println("respbody={respBody}");
+
+    // The full serialized response, with CRLFs shown as " | " so the output stays one clean ASCII line.
+    bytes wire = serialize_response(resp);
+    int wireLen = bytes.len(wire);
+    string wireStr = bytes.to_string(wire) ?? "(binary)";
+    string oneLine = text.replace(wireStr, nl, " | ");
+    console.println("wire ({wireLen}B): {oneLine}");
+  } else {
+    console.println("malformed request");
+  }
+}
