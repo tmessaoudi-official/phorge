@@ -87,8 +87,21 @@ jobs:
           test -n "$OBJ" || { echo "llvm-objcopy not found in sysroot"; exit 1; }
           echo "PHORGE_OBJCOPY=$OBJ" >> "$GITHUB_ENV"
 
+      # Zig is the cross-linker cargo-zigbuild drives. Installed directly from the official, pinned
+      # STABLE release rather than a setup action: the mirror-based actions default to an *ephemeral*
+      # nightly (0.16.0-dev had rotated off every mirror → 404) and used a stale filename ordering.
+      # A pinned stable release at ziglang.org/download/<ver>/ is permanent + deterministic; only
+      # `zig` on PATH is required.
       - name: Install Zig
-        uses: mlugg/setup-zig@v1
+        run: |
+          ZIG_VERSION=0.16.0
+          curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" -o /tmp/zig.tar.xz
+          mkdir -p "$HOME/zig"
+          tar -xf /tmp/zig.tar.xz -C "$HOME/zig" --strip-components=1
+          echo "$HOME/zig" >> "$GITHUB_PATH"
+
+      - name: Verify zig
+        run: zig version
 
       - name: Install cargo-zigbuild
         run: cargo install --locked cargo-zigbuild
