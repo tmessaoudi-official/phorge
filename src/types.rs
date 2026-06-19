@@ -16,6 +16,12 @@ pub enum Ty {
     /// the audited `core.html.raw`. That non-interchangeability is the whole XSS-safety property, and
     /// it falls out for free from `assignable`'s `from == to` final arm (no coercion added).
     Html,
+    /// A single rendered HTML attribute — e.g. ` href="…"` (note the leading space) — produced by
+    /// `core.html.attr` / `bool_attr` and consumed by `core.html.el` / `void_el`. Like `Html`, a
+    /// distinct nominal type that erases to PHP `string` and rides `Value::Str` at runtime; kept
+    /// separate so an attribute fragment can't be spliced where element content (`Html`) is expected
+    /// and vice versa. core.html Wave 2 (the builders).
+    Attr,
     Unit,
     /// A nominal enum or class type, by name.
     Named(String),
@@ -71,6 +77,7 @@ impl fmt::Display for Ty {
             Ty::String => write!(f, "string"),
             Ty::Bytes => write!(f, "bytes"),
             Ty::Html => write!(f, "Html"),
+            Ty::Attr => write!(f, "Attr"),
             Ty::Unit => write!(f, "unit"),
             Ty::Named(n) => write!(f, "{n}"),
             Ty::List(e) => write!(f, "List<{e}>"),

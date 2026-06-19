@@ -174,6 +174,7 @@ impl Checker {
                 "string" => self.no_args(name, args, *span, Ty::String),
                 "bytes" => self.no_args(name, args, *span, Ty::Bytes),
                 "Html" => self.no_args(name, args, *span, Ty::Html),
+                "Attr" => self.no_args(name, args, *span, Ty::Attr),
                 "List" => Ty::List(Box::new(self.one_arg(name, args, *span))),
                 "Set" => Ty::Set(Box::new(self.one_arg(name, args, *span))),
                 "Map" => {
@@ -1097,6 +1098,24 @@ impl Checker {
         n.ret.clone()
     }
 
+    /// Check a single call argument against its expected parameter type. Identical to `check_expr`
+    /// except that an **empty list literal** `[]` — which has no element to infer a type from —
+    /// adopts the expected `List<T>` element type instead of erroring with "cannot infer element
+    /// type". This is the one place an expected type is threaded into expression checking
+    /// (bidirectional, call-argument-only by design); an empty `[]` in any other position (a
+    /// declaration initializer, a `return`) still requires a non-empty literal. It lets the
+    /// zero-attribute / zero-child HTML builders read naturally — `el("p", [], [text("hi")])`.
+    fn check_arg(&mut self, arg: &crate::ast::Expr, expected: &Ty) -> Ty {
+        if let crate::ast::Expr::List(elems, _) = arg {
+            if elems.is_empty() {
+                if let Ty::List(inner) = expected {
+                    return Ty::List(inner.clone());
+                }
+            }
+        }
+        self.check_expr(arg)
+    }
+
     /// Check call arguments against expected parameter types.
     fn check_args(&mut self, name: &str, params: &[Ty], args: &[crate::ast::Expr], span: Span) {
         if params.len() != args.len() {
@@ -1114,7 +1133,7 @@ impl Checker {
             return;
         }
         for (i, (param, arg)) in params.iter().zip(args).enumerate() {
-            let at = self.check_expr(arg);
+            let at = self.check_arg(arg, param);
             if !Ty::assignable(&at, param) {
                 self.err(
                     span,
@@ -1596,6 +1615,7 @@ fn is_builtin_type_name(name: &str) -> bool {
             | "string"
             | "bytes"
             | "Html"
+            | "Attr"
             | "List"
             | "Map"
             | "Set"

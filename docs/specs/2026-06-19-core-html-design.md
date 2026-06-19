@@ -1,7 +1,7 @@
 # `core.html` — Typed, Auto-Escaping HTML — Design Spec
 
-> **Status:** 🚧 In progress — **Wave 1 (escape kernel) shipped**; builders (Wave 2) + `html"…"`
-> sugar (Wave 3) proposed. See §9.
+> **Status:** 🚧 In progress — **Waves 1 (escape kernel) & 2 (element builders) shipped**; the named
+> convenience set is deferred and the `html"…"` sugar (Wave 3) is proposed. See §9.
 > **Milestone:** M3 ergonomics follow-up / M6 web companion (HTML is what a `Response` body usually
 > carries — this is the authoring layer above `examples/web/handler.phg`).
 > **Trigger:** developer question (2026-06-19) — *"in a `.phg` file, if I want to write HTML, how do
@@ -260,6 +260,6 @@ change proves thorny, Waves 1–2 already deliver safe HTML.
 |-------|-------|
 | This design | ✅ spec landed |
 | `Html` type + escape kernel `text`/`raw`/`render` (Wave 1) | ✅ shipped — byte-identical run/runvm/PHP; `examples/guide/html.phg` |
-| `Attr` + builders + named set + `concat` (Wave 2) | 🔲 proposed |
+| `Attr` + builders `el`/`void_el`/`attr`/`bool_attr`/`concat` (Wave 2) | ✅ shipped — byte-identical run/runvm/PHP; empty `[]` works in call-arg position; named set deferred |
 | `html"…"` sugar + `E-HTML-HOLE` (Wave 3) | 🔲 proposed |
 | Multi-line string literals | ✅ already supported (`scan_string` accepts raw newlines) |

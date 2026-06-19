@@ -1,32 +1,57 @@
 package main;
 
-// core.html Wave 1 — the escape KERNEL: text / raw / render.
-// `Html` is a DISTINCT type from `string`: untrusted text cannot reach rendered HTML
-// except through `html.text` (auto-escape) or the audited `html.raw` (trusted markup).
-// That non-interchangeability is the XSS-safety wall — enforced by the type checker.
-// Builders (html.el/attr/concat) and the `html"…"` literal sugar land in later waves.
+// core.html — typed, auto-escaping HTML.
+// `Html` and `Attr` are DISTINCT types from `string`: untrusted text only reaches
+// rendered HTML through `html.text` (auto-escape) or the audited `html.raw`. That
+// non-interchangeability is the XSS-safety wall — enforced by the type checker.
+//
+//   Wave 1  the escape KERNEL    text / raw / render
+//   Wave 2  the element BUILDERS  attr / bool_attr / el / void_el / concat
+//   Wave 3  the `html"…"` literal sugar  (not yet)
 import core.console;
 import core.html;
 
-// Compose a list item: the dynamic `value` is escaped via html.text; the surrounding
-// markup is author-written, so the assembled string is wrapped with html.raw (trusted).
+// Wave-1 style: hand-written markup wrapped with html.raw; the dynamic value escaped.
 function field(string label, string value) -> Html {
   return html.raw("<li>{label}: {html.render(html.text(value))}</li>");
+}
+
+// Wave-2 style: the same row built from typed fragments — no hand-written markup.
+function row(string label, string value) -> Html {
+  return html.el("li", [html.attr("data-label", label)],
+                 [html.text("{label}: "), html.text(value)]);
 }
 
 function main() {
   string name = "Tom & \"Jerry\"";
   string bio = "<script>alert(1)</script>";
 
-  // html.text escapes untrusted text; html.render lowers finished Html back to a string.
+  // --- Wave 1: the escape kernel ---
   Html safe = html.text(name);
-  console.println(html.render(safe));               // Tom &amp; &quot;Jerry&quot;
-
-  // html.raw is the audited trust opt-out — author markup passes through unescaped.
+  console.println(html.render(safe));                // Tom &amp; &quot;Jerry&quot;
   Html hr = html.raw("<hr/>");
-  console.println(html.render(hr));                  // <hr/>
+  console.println(html.render(hr));                   // <hr/>
+  console.println(html.render(field("name", name)));  // <li>name: Tom &amp; &quot;Jerry&quot;</li>
+  console.println(html.render(field("bio", bio)));    // <li>bio: &lt;script&gt;alert(1)&lt;/script&gt;</li>
 
-  // Compose escaped pieces into trusted markup.
-  console.println(html.render(field("name", name))); // <li>name: Tom &amp; &quot;Jerry&quot;</li>
-  console.println(html.render(field("bio", bio)));   // <li>bio: &lt;script&gt;alert(1)&lt;/script&gt;</li>
+  // --- Wave 2: typed element builders ---
+  // An element with an attribute (value escaped) and escaped text children.
+  Html link = html.el("a", [html.attr("href", "/p?x=1&y=2")], [html.text("Tom & Jerry")]);
+  console.println(html.render(link));   // <a href="/p?x=1&amp;y=2">Tom &amp; Jerry</a>
+
+  // A no-attribute element — empty [] is accepted in call-argument position.
+  Html para = html.el("p", [], [html.text(bio)]);
+  console.println(html.render(para));   // <p>&lt;script&gt;alert(1)&lt;/script&gt;</p>
+
+  // A self-closing void element with an attribute.
+  Html img = html.void_el("img", [html.attr("src", "a&b.png")]);
+  console.println(html.render(img));    // <img src="a&amp;b.png"/>
+
+  // A boolean (valueless) attribute.
+  Html btn = html.el("button", [html.bool_attr("disabled")], [html.text("Go")]);
+  console.println(html.render(btn));    // <button disabled>Go</button>
+
+  // concat joins sibling fragments into one Html.
+  Html doc = html.concat([html.raw("<hr/>"), row("name", name)]);
+  console.println(html.render(doc));    // <hr/><li data-label="name">name: Tom &amp; &quot;Jerry&quot;</li>
 }

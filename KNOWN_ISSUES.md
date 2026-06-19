@@ -43,16 +43,23 @@ or simply unavailable, never a crash):
 - **`core.list` higher-order helpers (`map`/`filter`/`reduce`) are not yet available** — they await
   the `List<T>`-generic native signatures; lambdas can already be passed to *user* functions today.
 
-## core.html (Wave 1 — escape kernel only)
+## core.html (Waves 1–2 — escape kernel + element builders)
 
-- **Only the escape boundary ships so far.** `core.html` currently provides `text` (auto-escape),
-  `raw` (audited trust), and `render`. The typed element **builders** (`el`/`void_el`/`attr`/
-  `bool_attr` + named helpers, plus `Attr` and `concat` over `List<Html>`) are **Wave 2**, and the
-  `html"<h1>{name}</h1>"` interpolation **sugar** is **Wave 3**. Compose pages today with string
-  interpolation around `html.render(html.text(...))` (see `examples/guide/html.phg`).
-- **Escaping covers text and attribute-value contexts only.** `html.text` is correct for HTML text
-  and (Wave 2) quoted attribute values via `htmlspecialchars(_, ENT_QUOTES)`. It is **not** safe for
-  URL contexts (`href="javascript:…"`), inline CSS, or `<script>` bodies — those need
+- **The `html"…"` interpolation sugar is not yet implemented.** `core.html` ships the escape kernel
+  (`text` / `raw` / `render`) and the typed element builders (`el` / `void_el` / `attr` /
+  `bool_attr` / `concat`, with the distinct `Attr` type). The `html"<h1>{name}</h1>"` literal
+  **sugar** is **Wave 3**. Compose pages today with the builders, or with string interpolation
+  around `html.render(html.text(...))` (see `examples/guide/html.phg`).
+- **No named element helpers.** There is one generic `el(tag, attrs, children)`, not a per-tag set
+  (`div(...)`, `p(...)`, …) — fn-pointer natives can't bake a tag name, so a named set would need a
+  different mechanism. Pass the tag as a string. (Deferred, not a regression.)
+- **Tag and attribute *names* are not escaped — only values and text are.** `el`/`void_el` tags and
+  `attr`/`bool_attr` names are treated as trusted author literals (like the surrounding markup);
+  only attribute **values** (via `attr`) and **text** (via `text`) pass through
+  `htmlspecialchars(_, ENT_QUOTES)`. Do not build a tag or attribute name from untrusted input.
+- **Escaping covers text and attribute-value contexts only.** `html.text` / `attr` are correct for
+  HTML text and quoted attribute values via `htmlspecialchars(_, ENT_QUOTES)`. They are **not** safe
+  for URL contexts (`href="javascript:…"`), inline CSS, or `<script>` bodies — those need
   context-specific escaping and are out of scope until a later wave. Use `html.raw` only for markup
   you have audited.
 
@@ -94,6 +101,12 @@ or simply unavailable, never a crash):
 - **Recursion is depth-limited.** Recursion runs on a fixed-size (256 MB) worker stack with explicit
   depth caps (`src/limits.rs`); extremely deep recursion faults cleanly rather than overflowing the
   native stack.
+- **Empty list literal `[]` is only inferred in call-argument position.** An empty list has no
+  element to infer a type from, so it adopts its type from the **expected parameter type** of a call
+  (`el("p", [], […])` works). In a declaration initializer (`List<int> xs = [];`) or a `return`, an
+  empty `[]` still errors with "cannot infer element type" — use a non-empty literal there. (This is
+  the one place an expected type is threaded into expression checking; full bidirectional inference
+  is deliberately out of scope.)
 - **Zero-payload enum variants need call form.** A nullary variant `V` must be written `V()` both to
   construct **and** in a `match` pattern. A bare `V =>` arm is parsed as a catch-all *binding*, not a
   variant match — so it silently matches everything. Always use `V()` in patterns for nullary

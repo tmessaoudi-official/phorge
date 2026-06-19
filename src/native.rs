@@ -588,13 +588,28 @@ fn bytes_natives() -> Vec<NativeFn> {
 }
 
 // ---- core.html ----------------------------------------------------------------------------------
-// Typed, auto-escaping HTML (Wave 1 = the escape kernel). `Html` is a distinct `Ty` (types.rs) that
-// erases to PHP `string` and rides `Value::Str` at runtime; the safety is entirely in the checker's
-// non-interchangeability of `Html` and `string`. Three boundary natives:
+// Typed, auto-escaping HTML. `Html` (and Wave 2's `Attr`) is a distinct `Ty` (types.rs) that erases
+// to PHP `string` and rides `Value::Str` at runtime; the safety is entirely in the checker's
+// non-interchangeability of `Html`/`Attr` and `string`.
+//
+// Wave 1 — the escape kernel (the trust boundary):
 //   * text(string)  -> Html    escape untrusted text IN  (the only safe lift)
 //   * raw(string)   -> Html    audited trust opt-out (greppable: `grep html.raw`)
 //   * render(Html)  -> string  finished HTML OUT, ready to print
-// Builders (el/attr/concat) and the html"…" literal sugar land in later waves.
+//
+// Wave 2 — the element builders (compose typed fragments; tag/attribute NAMES are author literals,
+// so they are not escaped — only attribute *values* and text are, exactly as Wave 1):
+//   * attr(string, string) -> Attr        ` name="ESC(value)"`   (leading space; value escaped)
+//   * bool_attr(string)    -> Attr        ` name`                 (valueless: disabled/checked)
+//   * el(string, List<Attr>, List<Html>) -> Html   `<tag ATTRS>CHILDREN</tag>`
+//   * void_el(string, List<Attr>)        -> Html   `<tag ATTRS/>`   (self-closing: br/hr/img)
+//   * concat(List<Html>)   -> Html        join Html fragments (no separator)
+// Empty `[]` for the attr/child lists is accepted (checker call-arg expected-type rule), so
+// `el("p", [], [text(x)])` reads naturally. The `html"…"` literal sugar is Wave 3.
+//
+// BYTE-IDENTITY: every builder's `eval` (Rust) and `php` emission must produce the same bytes; the
+// `php` for `el`/`void_el` uses an IIFE so the tag expression is evaluated exactly once (no
+// double-eval), matching the single Rust evaluation. The unit test pins each pair.
 
 /// HTML-escape `s` exactly as PHP's `htmlspecialchars($s, ENT_QUOTES, 'UTF-8')` does for valid UTF-8
 /// (Phorge strings are always valid UTF-8, so the invalid-byte/ENT_SUBSTITUTE path is unreachable).
@@ -632,6 +647,76 @@ fn html_identity(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
+/// Concatenate a list of `Html`/`Attr` fragments (each erased to `Value::Str`) with no separator —
+/// the runtime half of `el`/`void_el`/`concat`. PHP-side this is `implode('', $list)`.
+fn html_join_fragments(items: &[Value]) -> Result<String, String> {
+    let mut out = String::new();
+    for it in items {
+        match it {
+            Value::Str(s) => out.push_str(s),
+            other => {
+                return Err(format!(
+                    "html builder expects rendered string fragments, found {}",
+                    other.type_name()
+                ))
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// `attr(name, value)` -> ` name="ESC(value)"` (leading space, so attrs concatenate directly between
+/// the tag and `>`). The NAME is an author literal (trusted, not escaped, like the tag); only the
+/// VALUE is escaped — the same `htmlspecialchars(_, ENT_QUOTES)` boundary as `text`.
+fn html_attr(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(name), Value::Str(value)] => {
+            Ok(Value::Str(format!(" {name}=\"{}\"", html_escape(value))))
+        }
+        _ => Err("html.attr expects (string, string)".into()),
+    }
+}
+
+/// `bool_attr(name)` -> ` name` — a valueless boolean attribute (`disabled`, `checked`, `required`).
+fn html_bool_attr(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(name)] => Ok(Value::Str(format!(" {name}"))),
+        _ => Err("html.bool_attr expects (string)".into()),
+    }
+}
+
+/// `el(tag, attrs, children)` -> `<tag ATTRS>CHILDREN</tag>`. Attrs already carry their leading
+/// space; children are pre-rendered `Html` joined with no separator.
+fn html_el(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(tag), Value::List(attrs), Value::List(children)] => {
+            let a = html_join_fragments(attrs)?;
+            let c = html_join_fragments(children)?;
+            Ok(Value::Str(format!("<{tag}{a}>{c}</{tag}>")))
+        }
+        _ => Err("html.el expects (string, List<Attr>, List<Html>)".into()),
+    }
+}
+
+/// `void_el(tag, attrs)` -> `<tag ATTRS/>` — a self-closing void element (`br`, `hr`, `img`, …).
+fn html_void_el(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(tag), Value::List(attrs)] => {
+            let a = html_join_fragments(attrs)?;
+            Ok(Value::Str(format!("<{tag}{a}/>")))
+        }
+        _ => Err("html.void_el expects (string, List<Attr>)".into()),
+    }
+}
+
+/// `concat(parts)` -> the `Html` parts joined with no separator (combine sibling fragments).
+fn html_concat(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(parts)] => Ok(Value::Str(html_join_fragments(parts)?)),
+        _ => Err("html.concat expects (List<Html>)".into()),
+    }
+}
+
 fn html_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
@@ -659,6 +744,74 @@ fn html_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             eval: html_identity,
             php: |a| format!("({})", parg(a, 0)),
+        },
+        // ---- Wave 2 builders ----
+        NativeFn {
+            module: "core.html",
+            name: "attr",
+            params: vec![Ty::String, Ty::String],
+            ret: Ty::Attr,
+            eval: html_attr,
+            // ` name="ESC(value)"` — name trusted (author literal), value escaped (same boundary as
+            // `text`). Single-quoted PHP literals carry the leading space + `="` + closing `"`.
+            php: |a| {
+                format!(
+                    "' ' . {} . '=\"' . htmlspecialchars({}, ENT_QUOTES, 'UTF-8') . '\"'",
+                    parg(a, 0),
+                    parg(a, 1)
+                )
+            },
+        },
+        NativeFn {
+            module: "core.html",
+            name: "bool_attr",
+            params: vec![Ty::String],
+            ret: Ty::Attr,
+            eval: html_bool_attr,
+            php: |a| format!("' ' . {}", parg(a, 0)),
+        },
+        NativeFn {
+            module: "core.html",
+            name: "el",
+            params: vec![
+                Ty::String,
+                Ty::List(Box::new(Ty::Attr)),
+                Ty::List(Box::new(Ty::Html)),
+            ],
+            ret: Ty::Html,
+            eval: html_el,
+            // IIFE so the tag expr is evaluated once (no double-eval) — byte-identical to the single
+            // Rust evaluation: `<` . tag . implode(attrs) . `>` . implode(children) . `</` . tag . `>`.
+            php: |a| {
+                format!(
+                    "(function($t,$a,$c){{return '<' . $t . implode('', $a) . '>' . implode('', $c) . '</' . $t . '>';}})({}, {}, {})",
+                    parg(a, 0),
+                    parg(a, 1),
+                    parg(a, 2)
+                )
+            },
+        },
+        NativeFn {
+            module: "core.html",
+            name: "void_el",
+            params: vec![Ty::String, Ty::List(Box::new(Ty::Attr))],
+            ret: Ty::Html,
+            eval: html_void_el,
+            php: |a| {
+                format!(
+                    "(function($t,$a){{return '<' . $t . implode('', $a) . '/>';}})({}, {})",
+                    parg(a, 0),
+                    parg(a, 1)
+                )
+            },
+        },
+        NativeFn {
+            module: "core.html",
+            name: "concat",
+            params: vec![Ty::List(Box::new(Ty::Html))],
+            ret: Ty::Html,
+            eval: html_concat,
+            php: |a| format!("implode('', {})", parg(a, 0)),
         },
     ]
 }
@@ -942,6 +1095,77 @@ mod tests {
         assert_eq!(
             index_of_by_leaf("html", "render"),
             index_of("core.html", "render")
+        );
+
+        // ---- Wave 2 builders: eval bytes + PHP emission ----
+        // attr: name trusted, value escaped, leading space + quotes.
+        assert!(
+            matches!(html_attr(&[Value::Str("href".into()), Value::Str("a&b".into())], &mut o), Ok(Value::Str(s)) if s == " href=\"a&amp;b\"")
+        );
+        assert!(
+            matches!(html_bool_attr(&[Value::Str("disabled".into())], &mut o), Ok(Value::Str(s)) if s == " disabled")
+        );
+        // el: tag + joined attrs + joined children. Attrs/children are Html/Attr erased to Value::Str.
+        let attrs = Value::List(std::rc::Rc::new(vec![Value::Str(" class=\"box\"".into())]));
+        let kids = Value::List(std::rc::Rc::new(vec![Value::Str("hi".into())]));
+        assert!(
+            matches!(html_el(&[Value::Str("p".into()), attrs.clone(), kids.clone()], &mut o), Ok(Value::Str(s)) if s == "<p class=\"box\">hi</p>")
+        );
+        // el with EMPTY attr list (the call-arg expected-type case) → no attributes.
+        let empty = Value::List(std::rc::Rc::new(vec![]));
+        assert!(
+            matches!(html_el(&[Value::Str("p".into()), empty.clone(), kids.clone()], &mut o), Ok(Value::Str(s)) if s == "<p>hi</p>")
+        );
+        // void_el: self-closing.
+        let src = Value::List(std::rc::Rc::new(vec![Value::Str(" src=\"x.png\"".into())]));
+        assert!(
+            matches!(html_void_el(&[Value::Str("img".into()), src], &mut o), Ok(Value::Str(s)) if s == "<img src=\"x.png\"/>")
+        );
+        assert!(
+            matches!(html_void_el(&[Value::Str("br".into()), empty.clone()], &mut o), Ok(Value::Str(s)) if s == "<br/>")
+        );
+        // concat: join Html fragments; empty → "".
+        let frags = Value::List(std::rc::Rc::new(vec![
+            Value::Str("<i>".into()),
+            Value::Str("x".into()),
+            Value::Str("</i>".into()),
+        ]));
+        assert!(matches!(html_concat(&[frags], &mut o), Ok(Value::Str(s)) if s == "<i>x</i>"));
+        assert!(matches!(html_concat(&[empty], &mut o), Ok(Value::Str(s)) if s.is_empty()));
+        // A non-string fragment is rejected cleanly (never a panic).
+        assert!(html_concat(
+            &[Value::List(std::rc::Rc::new(vec![Value::Int(1)]))],
+            &mut o
+        )
+        .is_err());
+        // PHP emission — the byte-identity counterparts.
+        let php = |n: &str, a: &[&str]| {
+            let args: Vec<String> = a.iter().map(|s| (*s).to_string()).collect();
+            (registry()[index_of("core.html", n).unwrap()].php)(&args)
+        };
+        assert_eq!(
+            php("attr", &["$n", "$v"]),
+            "' ' . $n . '=\"' . htmlspecialchars($v, ENT_QUOTES, 'UTF-8') . '\"'"
+        );
+        assert_eq!(php("bool_attr", &["$n"]), "' ' . $n");
+        assert_eq!(
+            php("el", &["$t", "$a", "$c"]),
+            "(function($t,$a,$c){return '<' . $t . implode('', $a) . '>' . implode('', $c) . '</' . $t . '>';})($t, $a, $c)"
+        );
+        assert_eq!(
+            php("void_el", &["$t", "$a"]),
+            "(function($t,$a){return '<' . $t . implode('', $a) . '/>';})($t, $a)"
+        );
+        assert_eq!(php("concat", &["$xs"]), "implode('', $xs)");
+        // All builders resolve by both index forms + carry the Attr/Html return types.
+        assert_eq!(index_of_by_leaf("html", "el"), index_of("core.html", "el"));
+        assert_eq!(
+            registry()[index_of("core.html", "attr").unwrap()].ret,
+            Ty::Attr
+        );
+        assert_eq!(
+            registry()[index_of("core.html", "el").unwrap()].ret,
+            Ty::Html
         );
     }
 

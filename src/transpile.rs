@@ -296,9 +296,9 @@ impl Transpiler {
                 "string" => "string".into(),
                 // PHP strings ARE byte arrays — `bytes` erases to `string` (M6 W0).
                 "bytes" => "string".into(),
-                // `Html` (and `Attr`, Wave 2) is render-ready text — erases to `string`. The escaping
+                // `Html` and `Attr` are render-ready text — both erase to `string`. The escaping
                 // boundary lives in the `core.html` natives, not the type (see core.html design spec).
-                "Html" => "string".into(),
+                "Html" | "Attr" => "string".into(),
                 "List" | "Map" | "Set" => "array".into(),
                 other => other.to_string(), // enum / class name
             },

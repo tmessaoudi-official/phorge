@@ -6,9 +6,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
-### core.html — typed auto-escaping HTML (Wave 1: the escape kernel)
+### core.html — typed auto-escaping HTML (Waves 1–2: escape kernel + element builders)
 
-- **`Html` type + `core.html` escape kernel.** The Phorge-idiomatic answer to "how do I write HTML"
+- **Wave 2 — typed element builders.** A new distinct type `Attr` (like `Html`, erases to PHP
+  `string`, non-interchangeable) plus five `core.html` natives compose HTML from typed fragments
+  rather than hand-written markup: `attr(string, string) -> Attr` (value escaped, name trusted),
+  `bool_attr(string) -> Attr` (valueless), `el(string, List<Attr>, List<Html>) -> Html`,
+  `void_el(string, List<Attr>) -> Html` (self-closing), and `concat(List<Html>) -> Html`. Each
+  builder's `eval` and its PHP emission are held byte-identical by a unit test (the `el`/`void_el`
+  PHP uses an IIFE so the tag expression evaluates exactly once). No new `Op`; the safety wall and
+  zero runtime divergence carry over from Wave 1. `examples/guide/html.phg` now also exercises the
+  builders, byte-identical on `run`/`runvm`/**real PHP**.
+- **Empty list literal `[]` as a call argument** now adopts its element type from the expected
+  parameter type (a small, call-argument-only bit of bidirectional checking in `check_args`), so a
+  zero-attribute or zero-child builder call reads naturally — `el("p", [], [text(x)])`. An empty
+  `[]` in a declaration initializer or `return` still requires a non-empty literal.
+- **`Html` type + `core.html` escape kernel (Wave 1).** The Phorge-idiomatic answer to "how do I write HTML"
   (design: `docs/specs/2026-06-19-core-html-design.md`). `Html` is a distinct checker type
   (`Ty::Html`) that erases to PHP `string` and rides `Value::Str` at runtime — but is **not
   interchangeable with `string`**, so untrusted text cannot reach rendered HTML except through
@@ -17,8 +30,8 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   divergence. Boundary natives: `text(string) -> Html`, `raw(string) -> Html`, `render(Html) ->
   string`. Escaping erases to the **pinned** `htmlspecialchars($s, ENT_QUOTES, 'UTF-8')` (tier-1,
   `php -n`-safe) and is mirrored by a Rust five-char table held byte-identical by a unit test.
-  `examples/guide/html.phg` runs byte-identically on `run`/`runvm`/**real PHP**. Builders
-  (`el`/`attr`/`concat`) and the `html"…"` literal sugar land in Waves 2–3.
+  `examples/guide/html.phg` runs byte-identically on `run`/`runvm`/**real PHP**. (Builders shipped in
+  Wave 2, above; the `html"…"` literal sugar is Wave 3.)
 
 ### M9 — Engineering Hygiene (CI enforcement)
 
