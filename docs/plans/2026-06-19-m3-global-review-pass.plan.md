@@ -52,5 +52,28 @@ native/loader/manifest/lock/vendor/bundle/serve/cli/mem/value/chunk/ast), `docs/
 4. After stage 5, run aggregate (stage 6) + synthesis (stage 7).
 5. Then handle post-review cleanup: TODO items 2 & 3 above + this plan file's own disposition (Rule 17 Phase 8).
 
+## Execution Results (2026-06-19, post-compact)
+All 7 stages executed autonomously (user: "Run autonomously to the end"). ~40 subagents across 5 lenses.
+Reports on disk:
+1. /sleuth → `~/.claude/projects/-stack-projects-phorge/sleuth/2026-06-19-1355.md` (29 findings: 8H/10M/11L)
+2+5. /inspect --vision (stages 2+5 collapsed — `--vision` runs health+vision in one pass) →
+   `~/.claude/projects/-stack-projects-phorge/inspections/2026-06-19-1419.md` (health 0 P0/22 P1/36 P2/20 P3; 91 vision proposals)
+3. /gaps → `~/.claude/projects/-stack-projects-phorge/gaps/2026-06-19-1430.md` (37 gaps: 6 Now/14 Soon/12 Later; 4 unblocked-now)
+4. /forge → `~/.claude/projects/-stack-projects-phorge/forge/2026-06-19-1445.md` (15 findings: 3 Unjustified/12 Questionable)
+6. /aggregate-findings → raw slices in `~/.claude/projects/-stack-projects-phorge/review-aggregate-raw/` (13 cross-pass themes, 50 ranked, 20 quick wins)
+7. **FINAL DELIVERABLE** → `~/.claude/projects/-stack-projects-phorge/REVIEW-2026-06-19.md` (4 P0, master priority list, forward roadmap)
+
+Pruning vs the original plan (all benign, noted for the record):
+- Agents F(shell)/I(docker) dropped from /sleuth & /inspect (N/A to a Rust language repo); E(concurrency)/F(persistence)/I(UX) dropped from /forge (single-thread is Chesterton-justified, no persistence, no frontend).
+- /gaps run focused (B/C/E/J) — A/D/F/G/H lenses already saturated by sleuth+inspect.
+- Per-skill self-reflection steps skipped (they tune the skills, not the project).
+
+Headline outcome: run≡runvm spine SOLID; the one systemic weakness is the transpiler→PHP leg being outside the automated correctness loop (4 P0 silent-wrong-output bugs in byte-identity-claimed examples); the one keystone unblock is `Ty::Var`/generics.
+
+## Post-review cleanup (carried, still pending — handle at this plan's Phase 8)
+- TODO#2: delete dangling branch `worktree-agent-a2764d080140ece46` (manual: `! git branch -D ...`).
+- TODO#3: dispose of `docs/plans/2026-06-18-m3-s3-lambdas-pipe.md` (delete-plan-keep-spec).
+- This plan file's own disposition.
+
 ## Status
-STATUS: Designed — not yet executed. Pipeline defined; awaiting post-compact resume to run stages 1–7.
+STATUS: Executed — review complete; REVIEW-2026-06-19.md is the deliverable. Awaiting developer direction on what to act on (report-only; no fixes applied).
