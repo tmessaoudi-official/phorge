@@ -121,7 +121,7 @@ wrong numbers, they produce PHP fatals.
 - [x] `chunk::validate` is **exhaustive** (no `_ => None` fall-through) — every `Op` enumerated; a new variant is a compile error until its EV-7 bound is declared (+ regression tests; INVARIANTS #5 updated). **Re-scoped:** the `Op::meta()`/`OpInfo` descriptor table was investigated and **dropped as unmotivated** — `exec_op` (the interpreter loop) cannot be tabled, and `stack_effect` was *already* exhaustive + state-dependent, so 2 of the 3 matches were never silently coupled. Only `validate` had the hole; closing it exhaustively delivers the EV-7 safety the table was meant to provide, without the indirection.
 - [ ] Single-sourced: runtime fault strings (`faults`/`FaultMsg`), lambda capture-filter (`is_capturable`), native call-head resolution (`resolve_call_head`).
 - [ ] Interpreter runtime faults carry a source line (`Cell<Span>` through eval); fault body unchanged so the oracle stays green.
-- [ ] Doc-SSOT sync complete: MILESTONES.md = human SSOT; M5/M6 status, CLI table (`serve`/`vendor`), pipe `|>`, INVARIANTS "coming", `phorge`→`phg` slips, test-count 332→452 all fixed.
+- [x] Doc-SSOT sync complete: MILESTONES.md = human SSOT (added first-class M5/M6/M7 entries + M8–M12 GA-roadmap pointer + reconciled the superseded ecosystem numbering; removed a floating "today" count); CLI table gained `serve`/`vendor` (`d19d409`). Verified already-clean: pipe `|>` documented in FEATURES.md; no stale `phorge <cmd>` invocations in docs; no INVARIANTS "coming" notes; the hard `332` test-count was fixed in M7.
 - [ ] `phg explain` known-codes list derived from `explain_text` (no omissions).
 
 **Findings included**
