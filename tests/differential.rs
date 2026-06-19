@@ -10,6 +10,7 @@
 
 use phorge::cli::{cmd_run, cmd_runvm};
 use phorge::{cli, loader};
+use std::process::Command;
 
 /// Type-check `src`; return the error diagnostics (empty = well-typed). Auto-prepends
 /// `package main;` if absent. Used to test checker rejections without running a backend.
@@ -82,6 +83,11 @@ enum FaultKind {
     /// substring so the VM's `Op::Fault(ForceUnwrapNull)` and the interpreter's `rt(..)` agree (M3
     /// S2.5).
     ForceUnwrap,
+    /// A range literal wider than `value::MAX_RANGE_LEN` — a checker-valid, runtime-reachable fault
+    /// (the checker proves the bounds are ints, never that the span fits in memory). Both backends
+    /// fault `"range too large"` (P1-#9) instead of OOM-aborting (exit 101); classified by body
+    /// substring so the VM's line prefix doesn't split it from the interpreter's prefix-less render.
+    RangeTooLarge,
     /// Anything the corpus doesn't yet classify — carried verbatim so a mismatch stays legible.
     Other(String),
 }
@@ -102,6 +108,8 @@ fn classify(err: &str) -> FaultKind {
         FaultKind::IndexOob
     } else if err.contains("force-unwrap of null") {
         FaultKind::ForceUnwrap
+    } else if err.contains("range too large") {
+        FaultKind::RangeTooLarge
     } else if err.contains("no field") {
         FaultKind::NoField
     } else if err.contains("unsupported") || err.contains("compile error") {
@@ -1006,4 +1014,211 @@ fn escaping_and_nested_lambdas_agree() {
     // loops number their lambdas from the same trailing block, so this guards that path too.
     agree("import core.console; class Box { constructor(public int v) {} function scaledBy(int k)->int{ var f=fn(int x)->int{ return x*k; }; return f(this.v); } } function main(){ var b=Box(7); console.println(\"{b.scaledBy(3)}\"); }");
     // 21
+}
+
+// ── M7: the PHP oracle — the third correctness leg ───────────────────────────────────────────────
+// `run ≡ runvm` is gated by every test above. This gates `run ≡ php` (⇒ all three byte-identical):
+// the transpiled PHP, executed by a real `php`, must print exactly what the interpreter prints.
+// Gating contract (closes P0-ROOT — no more self-skip-to-PASS):
+//   PHORGE_REQUIRE_PHP=1 → a missing php FAILS the test (CI / enforced mode).
+//   unset/empty          → a missing php skips LOUDLY (dev convenience), never a silent green.
+// Optional PHORGE_PHP=<path> overrides the php binary (non-PATH installs).
+// Scope: stdout-parity over runnable (`Ok`) examples + projects. Fault classes (overflow, OOB,
+// range-too-large) stay `run ≡ runvm` `agree_err` above — they are not runnable examples.
+
+/// Resolve the php binary: `PHORGE_PHP` override, else `php` on PATH if `--version` succeeds.
+fn php_bin() -> Option<String> {
+    let cand = std::env::var("PHORGE_PHP").unwrap_or_else(|_| "php".to_string());
+    let ok = Command::new(&cand)
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    ok.then_some(cand)
+}
+
+/// The fails-not-skips gate. `Some(php)` ⇒ run; `None` ⇒ caller returns (loud skip). Under
+/// `PHORGE_REQUIRE_PHP=1` a missing php panics instead of skipping.
+fn php_or_gate(test: &str) -> Option<String> {
+    if let Some(p) = php_bin() {
+        return Some(p);
+    }
+    assert!(
+        std::env::var("PHORGE_REQUIRE_PHP").as_deref() != Ok("1"),
+        "{test}: php required (PHORGE_REQUIRE_PHP=1) but not found on PATH or $PHORGE_PHP"
+    );
+    eprintln!("SKIP {test}: php not found — set PHORGE_REQUIRE_PHP=1 to make this a failure");
+    None
+}
+
+/// Write `php_src` to a per-label temp file (no collision under parallel `cargo test`), run it with
+/// `php -n` (ignore php.ini → hermetic; notices go to stderr, we read stdout), return its stdout.
+fn run_php(php: &str, php_src: &str, label: &str) -> String {
+    let safe: String = label
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect();
+    let path = std::env::temp_dir().join(format!("phorge_oracle_{safe}.php"));
+    std::fs::write(&path, php_src).expect("write temp php");
+    let out = Command::new(php)
+        .arg("-n")
+        .arg(&path)
+        .output()
+        .expect("spawn php");
+    let _ = std::fs::remove_file(&path);
+    assert!(
+        out.status.success(),
+        "php exited non-zero for {label}:\n{}\n--- transpiled php ---\n{php_src}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8(out.stdout).expect("utf-8 php stdout")
+}
+
+/// Every runnable single-file example: transpiled PHP run by `php` prints exactly what `cmd_run`
+/// (the interpreter) prints. Globbed like `all_examples_match_between_backends`, so a new example is
+/// auto-gated. A non-`Ok` example is skipped here (it's gated by the run≡runvm glob); the oracle is
+/// stdout-parity on success only.
+#[test]
+fn all_examples_transpile_and_match_php() {
+    let Some(php) = php_or_gate("all_examples_transpile_and_match_php") else {
+        return;
+    };
+    let mut files = Vec::new();
+    collect_phg(std::path::Path::new("examples"), &mut files);
+    files.sort();
+    assert!(files.len() >= 3, "expected examples, found {}", files.len());
+    let mut deferred = 0usize;
+    for path in &files {
+        let label = path.display().to_string();
+        let src = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {label}: {e}"));
+        let expected = match cmd_run(&src) {
+            Ok(o) => o,
+            Err(_) => continue, // non-runnable example — gated by the run≡runvm glob, not here
+        };
+        let php_src = match cli::cmd_transpile(&src) {
+            Ok(php) => php,
+            // A transpiler feature the backend explicitly defers (e.g. literal `match` patterns,
+            // expr-position `match`, `is` — all scheduled for M11). This is NOT a silent skip: it's
+            // logged + counted, and a genuine transpile regression (any other error) still panics.
+            // As M11 implements each construct, the deferral error disappears and the example
+            // auto-enrolls in the oracle with no test edit.
+            Err(e) if e.contains("not yet supported") => {
+                eprintln!("DEFER {label}: {e} (M11 transpiler gap — oracle-skipped)");
+                deferred += 1;
+                continue;
+            }
+            Err(e) => panic!("transpile {label}: {e}"),
+        };
+        let got = run_php(&php, &php_src, &label);
+        assert_eq!(got, expected, "PHP ≠ interpreter for example {label}");
+    }
+    eprintln!(
+        "php oracle: {} examples gated, {deferred} deferred to M11 (transpiler feature gaps)",
+        files.len() - deferred
+    );
+}
+
+/// Every multi-file example project: the namespaced transpile (`namespace …{}` + `\Main\main()`
+/// bootstrap — a distinct emit path from the flat single-file one) run by `php` must match the
+/// interpreter's output. Assembled through `loader::load`, mirroring `all_example_projects_match…`.
+#[test]
+fn all_example_projects_transpile_and_match_php() {
+    let Some(php) = php_or_gate("all_example_projects_transpile_and_match_php") else {
+        return;
+    };
+    let mut projects = Vec::new();
+    collect_projects(std::path::Path::new("examples"), &mut projects);
+    projects.sort();
+    assert!(
+        !projects.is_empty(),
+        "expected an example project, found none"
+    );
+    for project in &projects {
+        let entry = find_main_phg(project);
+        let label = project.display().to_string();
+        let unit = loader::load(&entry).unwrap_or_else(|e| panic!("load {label}: {e}"));
+        let expected = cli::run_program(&unit.program, &unit.diag_src)
+            .unwrap_or_else(|e| panic!("run {label}: {e}"));
+        let php_src = cli::transpile_program(&unit.program, &unit.diag_src)
+            .unwrap_or_else(|e| panic!("transpile {label}: {e}"));
+        let got = run_php(&php, &php_src, &label);
+        assert_eq!(got, expected, "PHP ≠ interpreter for project {label}");
+    }
+}
+
+// ── M7: divergence-class regression guards ───────────────────────────────────────────────────────
+
+/// P0-1/P0-2/P0-4/QW-13: the emitter routes `/`, `%`, interpolation, compound operands, and ranges
+/// through the correctness machinery. This pins the *emitted PHP shape* directly (the oracle above
+/// pins the *runtime behavior* over the examples); together they make a P0 regression impossible to
+/// ship silently. `run ≡ runvm` for these was always correct — the bug class was php-leg-only.
+#[test]
+fn m7_emitter_uses_correctness_helpers() {
+    // P0-1 (int `/` ⇒ intdiv) + P0-4 (`%` ⇒ type-driven) route through runtime helpers, not bare ops.
+    let div = transpile_ok(
+        "package main; import core.console; function main(){ console.println(\"{7 / 2}\"); console.println(\"{5 % 2}\"); }",
+    );
+    assert!(div.contains("__phorge_div(7, 2)"), "{div}");
+    assert!(div.contains("__phorge_rem(5, 2)"), "{div}");
+    assert!(
+        div.contains("function __phorge_div") && div.contains("intdiv"),
+        "{div}"
+    );
+    assert!(
+        div.contains("function __phorge_rem") && div.contains("fmod"),
+        "{div}"
+    );
+    // P0-3: an interpolated value is coerced via __phorge_str (bool ⇒ "true"/"false").
+    let b = transpile_ok(
+        "package main; import core.console; function main(){ console.println(\"{1 < 2}\"); }",
+    );
+    assert!(
+        b.contains("__phorge_str(") && b.contains("\"true\" : \"false\""),
+        "{b}"
+    );
+    // P0-2: a compound operand keeps its grouping parens (no PHP re-association).
+    let p = transpile_ok(
+        "package main; import core.console; function main(){ int a=1; int b=2; int c=3; console.println(\"{a - (b - c)}\"); console.println(\"{!(a < b)}\"); }",
+    );
+    assert!(p.contains("$a - ($b - $c)"), "{p}");
+    assert!(p.contains("!($a < $b)"), "{p}");
+    // QW-13: ranges route through the empty/reversed-safe helper (PHP range() descends; Phorge ⇒ []).
+    let r = transpile_ok(
+        "package main; import core.console; function main(){ for (int i in 5..2) { console.println(\"{i}\"); } }",
+    );
+    assert!(r.contains("__phorge_range(5, 2, false)"), "{r}");
+}
+
+/// P0-1: integer division truncates toward zero on both backends, with negative operands. (The php
+/// leg is gated by the oracle over the division-bearing examples.)
+#[test]
+fn m7_int_division_truncates_toward_zero() {
+    let src = "import core.console; function main(){ console.println(\"{7 / 2} {-7 / 2} {7 / -2} {-7 / -2}\"); }";
+    assert_eq!(cmd_run(&with_pkg(src)).as_deref(), Ok("3 -3 -3 3\n"));
+    agree(src);
+}
+
+/// P1-#9: a range too wide to materialize faults cleanly on BOTH backends (`RangeTooLarge`) instead
+/// of OOM-aborting (exit 101). Exclusive and inclusive forms both guard; the cap check precedes any
+/// allocation, so the test is fast.
+#[test]
+fn m7_large_range_faults_identically() {
+    agree_err(
+        "import core.console; function main(){ for (int i in 0..2000000000) { console.println(\"{i}\"); } }",
+    );
+    agree_err("import core.console; function main(){ var xs = 0..=2000000000; console.println(\"{xs[0]}\"); }");
+    // The exactly-at-cap boundary is also a fault (span >= MAX_RANGE_LEN), while a small range is fine.
+    agree(
+        "import core.console; function main(){ var xs = 0..1000; console.println(\"{xs[999]}\"); }",
+    );
+}
+
+/// Divergence-class edge: `i64::MIN / -1` overflows i64 — both backends fault (via the checked
+/// `int_div` kernel) rather than panicking (EV-7). PHP's `intdiv(PHP_INT_MIN, -1)` likewise throws,
+/// so the helper matches; it's a fault case, not a runnable example, so it lives here, not the oracle.
+#[test]
+fn m7_int_min_div_neg_one_faults_identically() {
+    agree_err(
+        "import core.console; function main(){ int x = -9223372036854775807 - 1; console.println(\"{x / -1}\"); }",
+    );
 }

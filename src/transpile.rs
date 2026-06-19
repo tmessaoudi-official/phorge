@@ -29,6 +29,14 @@ struct Transpiler {
     /// Set when an `opt!` force-unwrap is emitted, so the `__phorge_unwrap` helper is defined once
     /// per file (PHP hoists top-level function declarations, so its position is immaterial).
     uses_force: bool,
+    /// Set when `/`, `%`, an interpolation, or a range is emitted — each defines a once-per-file
+    /// runtime helper (M7) that reproduces Phorge's type-driven semantics under PHP's looser rules:
+    /// `__phorge_div` (int `/` ⇒ `intdiv`), `__phorge_rem` (float `%` ⇒ `fmod`), `__phorge_str`
+    /// (bool ⇒ `"true"/"false"`), `__phorge_range` (empty/reversed ⇒ `[]`, never descending).
+    uses_div: bool,
+    uses_rem: bool,
+    uses_str: bool,
+    uses_range: bool,
     /// True when the program carries mangled (`\`-bearing) names — a multi-package project (M5 S2c).
     /// Switches emission from the flat single-package form to one `namespace …{}` brace-block per
     /// package + a nameless bootstrap block, and forces fully-qualified (leading-`\`) call emission.
@@ -90,6 +98,10 @@ impl Transpiler {
             cur_class_fields: None,
             imports: HashMap::new(),
             uses_force: false,
+            uses_div: false,
+            uses_rem: false,
+            uses_str: false,
+            uses_range: false,
             namespaced: false,
         }
     }
@@ -151,11 +163,9 @@ impl Transpiler {
         if self.funcs.contains("main") {
             self.line("main();");
         }
-        // The `opt!` runtime helper, defined once when used. PHP hoists top-level function
-        // declarations, so emitting it after `main();` is still callable from any body (M3 S2.5).
-        if self.uses_force {
-            self.emit_force_helper();
-        }
+        // The runtime helpers, each defined once when used. PHP hoists top-level function
+        // declarations, so emitting them after `main();` is still callable from any body.
+        self.emit_runtime_helpers();
         Ok(())
     }
 
@@ -196,24 +206,61 @@ impl Transpiler {
         if self.funcs.contains("main") {
             self.line("\\Main\\main();");
         }
-        if self.uses_force {
-            self.emit_force_helper();
-        }
+        self.emit_runtime_helpers();
         self.indent -= 1;
         self.line("}");
         Ok(())
     }
 
-    /// The `opt!` runtime helper. In flat mode it is a top-level global; in namespaced mode it is
-    /// emitted inside the nameless block (so its fully-qualified name is `\__phorge_unwrap`, which
-    /// the `Expr::Force` call site emits).
-    fn emit_force_helper(&mut self) {
-        self.line("function __phorge_unwrap($v) {");
-        self.indent += 1;
-        self.line("if ($v === null) { throw new \\RuntimeException(\"force-unwrap of null\"); }");
-        self.line("return $v;");
-        self.indent -= 1;
-        self.line("}");
+    /// The once-per-file runtime helpers (each gated by its `uses_*` flag). In flat mode they are
+    /// top-level globals; in namespaced mode they are emitted inside the nameless block, so their
+    /// fully-qualified names are `\__phorge_*` (which the call sites emit via the `bs` prefix). Each
+    /// mirrors a Phorge value kernel / `as_display` so the PHP leg matches `run`/`runvm` byte-for-byte.
+    fn emit_runtime_helpers(&mut self) {
+        if self.uses_force {
+            self.line("function __phorge_unwrap($v) {");
+            self.indent += 1;
+            self.line(
+                "if ($v === null) { throw new \\RuntimeException(\"force-unwrap of null\"); }",
+            );
+            self.line("return $v;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_div {
+            // Phorge `/`: int/int truncates toward zero (`intdiv`); float/float is real division.
+            self.line("function __phorge_div($a, $b) {");
+            self.indent += 1;
+            self.line("return (is_int($a) && is_int($b)) ? intdiv($a, $b) : $a / $b;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_rem {
+            // Phorge `%`: int/int integer modulo; float/float `fmod` (sign of dividend, like Rust `%`).
+            self.line("function __phorge_rem($a, $b) {");
+            self.indent += 1;
+            self.line("return (is_int($a) && is_int($b)) ? $a % $b : fmod($a, $b);");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_str {
+            // Mirror Value::as_display: bool ⇒ "true"/"false"; everything else PHP string cast.
+            self.line("function __phorge_str($v) {");
+            self.indent += 1;
+            self.line("if (is_bool($v)) { return $v ? \"true\" : \"false\"; }");
+            self.line("return (string)$v;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_range {
+            // Phorge range: empty when start > hi; never descends (PHP `range()` descends — QW-13).
+            self.line("function __phorge_range($a, $b, $inclusive) {");
+            self.indent += 1;
+            self.line("$hi = $inclusive ? $b : $b - 1;");
+            self.line("return ($a <= $hi) ? range($a, $hi) : [];");
+            self.indent -= 1;
+            self.line("}");
+        }
     }
 
     /// Indentation-aware line writer.
@@ -520,6 +567,8 @@ impl Transpiler {
                     UnaryOp::Neg => "-",
                     UnaryOp::Not => "!",
                 };
+                // Wrap a compound operand so the unary binds only to it (P0-2 — `-(a + b)`, `!(a && b)`).
+                let inner = Self::paren_if_compound(expr, inner);
                 Ok(format!("{sym}{inner}"))
             }
             Expr::Binary { op, lhs, rhs, .. } => {
@@ -528,10 +577,27 @@ impl Transpiler {
                 }
                 let l = self.emit_expr(lhs)?;
                 let r = self.emit_expr(rhs)?;
+                let bs = if self.namespaced { "\\" } else { "" };
+                // `/` and `%` are type-driven in Phorge (int vs float) but PHP's `/` is always float
+                // and `%` always integer. Route through a runtime helper that branches on operand
+                // types at PHP-runtime, mirroring the value kernels (P0-1, P0-4). Helper args are
+                // comma-delimited, so the raw operand code needs no precedence parens.
+                if matches!(op, BinaryOp::Div) {
+                    self.uses_div = true;
+                    return Ok(format!("{bs}__phorge_div({l}, {r})"));
+                }
+                if matches!(op, BinaryOp::Rem) {
+                    self.uses_rem = true;
+                    return Ok(format!("{bs}__phorge_rem({l}, {r})"));
+                }
                 if matches!(op, BinaryOp::Coalesce) {
                     // `??` binds loosely in PHP; parenthesize to preserve grouping.
                     return Ok(format!("({l} ?? {r})"));
                 }
+                // Preserve operand grouping: a compound operand is parenthesized so PHP precedence
+                // cannot re-associate it (P0-2 — `a - (b - c)` must not flatten to `a - b - c`).
+                let l = Self::paren_if_compound(lhs, l);
+                let r = Self::paren_if_compound(rhs, r);
                 Ok(format!("{l} {} {r}", Self::binop(op)))
             }
             Expr::List(items, _) => {
@@ -568,10 +634,9 @@ impl Transpiler {
             Expr::Match { .. } => {
                 Err("transpile error: match in this position is not yet supported".into())
             }
-            // PHP `range()` is inclusive, so an exclusive `a..b` emits `range($a, $b - 1)`. NB this
-            // differs from Phorge for an *empty/reversed* range (`a >= b`): PHP `range` descends
-            // instead of yielding `[]` — a transpile-only caveat documented in KNOWN_ISSUES; the
-            // Phorge backends (run/runvm) are byte-identical and unaffected.
+            // `__phorge_range` reproduces Phorge's range semantics under PHP: an empty/reversed range
+            // (`start > hi`) yields `[]`, where PHP's bare `range()` would *descend* (QW-13 — formerly
+            // a transpile-only divergence). The `run`/`runvm` backends were always byte-identical.
             Expr::Range {
                 start,
                 end,
@@ -580,11 +645,12 @@ impl Transpiler {
             } => {
                 let s = self.emit_expr(start)?;
                 let e = self.emit_expr(end)?;
-                Ok(if *inclusive {
-                    format!("range({s}, {e})")
-                } else {
-                    format!("range({s}, {e} - 1)")
-                })
+                self.uses_range = true;
+                let bs = if self.namespaced { "\\" } else { "" };
+                Ok(format!(
+                    "{bs}__phorge_range({s}, {e}, {})",
+                    if *inclusive { "true" } else { "false" }
+                ))
             }
             // Expression `if` → a PHP ternary (the idiomatic conditional expression, the TS→JS
             // analogue); parenthesized so it composes safely inside any larger expression.
@@ -680,7 +746,12 @@ impl Transpiler {
                 StrPart::Literal(s) => chunks.push(format!("\"{}\"", php_escape(s))),
                 StrPart::Expr(e) => {
                     let code = self.emit_expr(e)?;
-                    chunks.push(format!("({code})"));
+                    // Coerce via `__phorge_str` so a `bool` renders `true`/`false` (not PHP's `1`/``)
+                    // — mirrors Value::as_display (P0-3). A no-op for int/float/string. The helper
+                    // call is itself a primary, so it replaces the old grouping parens.
+                    self.uses_str = true;
+                    let bs = if self.namespaced { "\\" } else { "" };
+                    chunks.push(format!("{bs}__phorge_str({code})"));
                 }
             }
         }
@@ -846,14 +917,50 @@ impl Transpiler {
         Ok(())
     }
 
+    /// A PHP "primary" expression: emits self-contained, so it never needs wrapping parens when used
+    /// as an operand. Compound expressions (`Binary`/`Unary`/`If`/`Match`/`Lambda`) are NOT primary
+    /// and get parenthesized by `paren_if_compound` (P0-2). `Force`/`Range`/`Call`/`Member`/`Index`
+    /// emit as `__phorge_unwrap(…)` / `__phorge_range(…)` / `f(…)` / `$o->x` / `$o[$i]` — all primary.
+    fn is_primary(e: &Expr) -> bool {
+        matches!(
+            e,
+            Expr::Int(..)
+                | Expr::Float(..)
+                | Expr::Bool(..)
+                | Expr::Str(..)
+                | Expr::Bytes(..)
+                | Expr::Ident(..)
+                | Expr::This(..)
+                | Expr::Null(..)
+                | Expr::Call { .. }
+                | Expr::Member { .. }
+                | Expr::Index { .. }
+                | Expr::Force { .. }
+                | Expr::Range { .. }
+                | Expr::List(..)
+        )
+    }
+
+    /// Parenthesize an operand's emitted `code` when the operand is compound, so PHP operator
+    /// precedence cannot re-associate it (P0-2). Conservatively over-parenthesizes — correctness
+    /// over minimal parens; a precedence-table refinement is a deferred polish.
+    fn paren_if_compound(e: &Expr, code: String) -> String {
+        if Self::is_primary(e) {
+            code
+        } else {
+            format!("({code})")
+        }
+    }
+
     fn binop(op: &BinaryOp) -> &'static str {
         use BinaryOp::*;
         match op {
             Add => "+",
             Sub => "-",
             Mul => "*",
-            Div => "/",
-            Rem => "%",
+            // `/` and `%` are routed through `__phorge_div`/`__phorge_rem` before binop() (P0-1/P0-4).
+            Div => unreachable!("Div handled via __phorge_div before binop()"),
+            Rem => unreachable!("Rem handled via __phorge_rem before binop()"),
             Eq => "==",
             NotEq => "!=",
             Lt => "<",
@@ -1011,13 +1118,15 @@ mod tests {
 
     #[test]
     fn ranges_emit_php_range() {
-        // PHP `range` is inclusive, so exclusive `0..3` emits `range(0, 3 - 1)`.
+        // Ranges route through `__phorge_range` (QW-13): the helper yields `[]` for an empty/reversed
+        // range, where PHP's bare `range()` would descend. The `inclusive` flag is the third arg.
         let out = php(r#"import core.console;
 function main() { for (int i in 0..3) { console.println("{i}"); } }"#);
-        assert!(out.contains("range(0, 3 - 1)"), "{out}");
+        assert!(out.contains("__phorge_range(0, 3, false)"), "{out}");
+        assert!(out.contains("function __phorge_range"), "{out}");
         let inc = php(r#"import core.console;
 function main() { for (int i in 1..=3) { console.println("{i}"); } }"#);
-        assert!(inc.contains("range(1, 3)"), "{inc}");
+        assert!(inc.contains("__phorge_range(1, 3, true)"), "{inc}");
     }
 
     #[test]
@@ -1028,8 +1137,12 @@ function main() { for (int i in 1..=3) { console.println("{i}"); } }"#);
 
     #[test]
     fn interpolation_emits_concatenation() {
+        // Each interpolated value is coerced via `__phorge_str` (P0-3: bool ⇒ "true"/"false").
         let out = php("function greet(string name) -> string { return \"Hello {name}\"; }");
-        assert!(out.contains(r#"return "Hello " . ($name);"#), "{out}");
+        assert!(
+            out.contains(r#"return "Hello " . __phorge_str($name);"#),
+            "{out}"
+        );
     }
 
     #[test]
@@ -1096,8 +1209,11 @@ function main() { for (int i in 1..=3) { console.println("{i}"); } }"#);
             "{out}"
         );
         assert!(out.contains("function greet(): string {"), "{out}");
-        // bare field ref inside a method resolves to $this->name
-        assert!(out.contains(r#"return "Hello " . ($this->name);"#), "{out}");
+        // bare field ref inside a method resolves to $this->name (coerced via __phorge_str — P0-3)
+        assert!(
+            out.contains(r#"return "Hello " . __phorge_str($this->name);"#),
+            "{out}"
+        );
     }
 
     #[test]
@@ -1141,7 +1257,9 @@ function main() { for (int i in 1..=3) { console.println("{i}"); } }"#);
         ));
         assert!(out.contains("if ($s instanceof Circle) {"), "{out}");
         assert!(out.contains("$r = $s->radius;"), "{out}"); // positional: r <- field 0 (radius)
-        assert!(out.contains("return 3.14159 * $r * $r;"), "{out}");
+                                                            // P0-2: a compound operand keeps grouping parens (`3.14159 * r * r` is left-assoc Mul, so the
+                                                            // left operand of the outer `*` is the inner product, conservatively parenthesized).
+        assert!(out.contains("return (3.14159 * $r) * $r;"), "{out}");
         assert!(out.contains("if ($s instanceof Rect) {"), "{out}");
         assert!(
             out.contains("$w = $s->w;") && out.contains("$h = $s->h;"),

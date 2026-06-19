@@ -230,6 +230,37 @@ pub fn float_rem(a: f64, b: f64) -> f64 {
     a % b
 }
 
+/// Maximum number of elements a range literal may materialize before faulting (P1-#9). An unbounded
+/// `0..n` would otherwise allocate an arbitrarily large `Vec` and abort the process (OOM, exit 101)
+/// instead of producing a clean, byte-identical fault on both backends (EV-7). ~10M × 16 B ≈ 160 MB
+/// ceiling — generous for any realistic program, well below uncontrolled OOM. Tunable.
+pub const MAX_RANGE_LEN: i64 = 10_000_000;
+
+/// Materialize an integer range exactly as both backends do, with a shared size guard (P1-#9). `hi`
+/// is the inclusive upper bound: `end` for `..=`, `end - 1` for `..`. An empty/reversed range
+/// (`start > hi`) yields `[]`. A range wider than [`MAX_RANGE_LEN`] faults `"range too large"` rather
+/// than OOM-aborting. All arithmetic is checked (EV-7): `end - 1` underflow (exclusive `..i64::MIN`)
+/// and `hi - start` overflow both resolve without panicking. Single-sourced so `run`/`runvm` fault
+/// identically (the differential harness classifies the body substring as `RangeTooLarge`).
+pub fn build_range(start: i64, end: i64, inclusive: bool) -> Result<Vec<Value>, String> {
+    let hi = if inclusive {
+        end
+    } else {
+        match end.checked_sub(1) {
+            Some(h) => h,
+            None => return Ok(Vec::new()), // exclusive `start..i64::MIN` — always empty
+        }
+    };
+    if start > hi {
+        return Ok(Vec::new());
+    }
+    let span = hi.checked_sub(start).ok_or("range too large")?;
+    if span >= MAX_RANGE_LEN {
+        return Err("range too large".to_string());
+    }
+    Ok((start..=hi).map(Value::Int).collect())
+}
+
 /// Ordering probe for `< > <= >=`. `Ok(None)` is the NaN case (every ordered comparison of NaN is
 /// `false`); `Err` is a non-comparable operand pairing. The op→bool projection stays backend-local
 /// (the op enums differ); only the ordering and the comparability fault are shared.

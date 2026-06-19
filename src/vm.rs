@@ -253,13 +253,9 @@ impl<'a> Vm<'a> {
                 // `end` was pushed last, so it's on top; `start` is below (compiler emit order).
                 let end = self.pop_int()?;
                 let start = self.pop_int()?;
-                // Rust's native ranges materialize the same list the interpreter builds (byte-
-                // identical), and `start..=i64::MAX` stops cleanly without a counter overflow (EV-7).
-                let list: Vec<Value> = if inclusive {
-                    (start..=end).map(Value::Int).collect()
-                } else {
-                    (start..end).map(Value::Int).collect()
-                };
+                // Shared size-guarded materialization (P1-#9): identical list to the interpreter, and
+                // a range too wide to fit faults `"range too large"` rather than OOM-aborting (EV-7).
+                let list = crate::value::build_range(start, end, inclusive)?;
                 self.stack.push(Value::List(Rc::new(list)));
             }
 

@@ -381,12 +381,12 @@ impl Interp {
                     Value::Int(n) => n,
                     v => return rt(format!("range end must be int, found {}", v.type_name())),
                 };
-                let list: Vec<Value> = if *inclusive {
-                    (s..=e).map(Value::Int).collect()
-                } else {
-                    (s..e).map(Value::Int).collect()
-                };
-                Ok(Value::List(Rc::new(list)))
+                // Shared size-guarded materialization (P1-#9): a range too wide to fit faults
+                // `"range too large"` on both backends instead of OOM-aborting (EV-7).
+                match crate::value::build_range(s, e, *inclusive) {
+                    Ok(list) => Ok(Value::List(Rc::new(list))),
+                    Err(msg) => rt(msg),
+                }
             }
             Expr::If {
                 cond,
