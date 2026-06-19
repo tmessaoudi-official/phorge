@@ -10,6 +10,12 @@ pub enum Ty {
     String,
     /// A sequence of raw octets (not UTF-8). Converts to/from `string` only via `core.bytes`.
     Bytes,
+    /// Escaped, render-ready HTML. A distinct *nominal* type — like `bytes`, it erases to PHP
+    /// `string` at transpile and rides `Value::Str` at runtime, but the checker keeps it separate
+    /// from `string`: untrusted text cannot reach `Html` except through `core.html.text` (escape) or
+    /// the audited `core.html.raw`. That non-interchangeability is the whole XSS-safety property, and
+    /// it falls out for free from `assignable`'s `from == to` final arm (no coercion added).
+    Html,
     Unit,
     /// A nominal enum or class type, by name.
     Named(String),
@@ -64,6 +70,7 @@ impl fmt::Display for Ty {
             Ty::Bool => write!(f, "bool"),
             Ty::String => write!(f, "string"),
             Ty::Bytes => write!(f, "bytes"),
+            Ty::Html => write!(f, "Html"),
             Ty::Unit => write!(f, "unit"),
             Ty::Named(n) => write!(f, "{n}"),
             Ty::List(e) => write!(f, "List<{e}>"),
@@ -102,6 +109,16 @@ mod tests {
             &Ty::List(Box::new(Ty::Int)),
             &Ty::List(Box::new(Ty::Float))
         ));
+    }
+
+    #[test]
+    fn html_is_not_interchangeable_with_string() {
+        // The XSS-safety wall: a raw `string` cannot stand in for `Html`, and vice versa. The only
+        // bridges are `core.html.text`/`raw` (string -> Html) and `core.html.render` (Html -> string).
+        assert!(Ty::assignable(&Ty::Html, &Ty::Html));
+        assert!(!Ty::assignable(&Ty::String, &Ty::Html)); // untrusted text can't become HTML
+        assert!(!Ty::assignable(&Ty::Html, &Ty::String)); // and HTML must be explicitly rendered out
+        assert_eq!(Ty::Html.to_string(), "Html");
     }
 
     #[test]

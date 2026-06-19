@@ -587,6 +587,82 @@ fn bytes_natives() -> Vec<NativeFn> {
     ]
 }
 
+// ---- core.html ----------------------------------------------------------------------------------
+// Typed, auto-escaping HTML (Wave 1 = the escape kernel). `Html` is a distinct `Ty` (types.rs) that
+// erases to PHP `string` and rides `Value::Str` at runtime; the safety is entirely in the checker's
+// non-interchangeability of `Html` and `string`. Three boundary natives:
+//   * text(string)  -> Html    escape untrusted text IN  (the only safe lift)
+//   * raw(string)   -> Html    audited trust opt-out (greppable: `grep html.raw`)
+//   * render(Html)  -> string  finished HTML OUT, ready to print
+// Builders (el/attr/concat) and the html"…" literal sugar land in later waves.
+
+/// HTML-escape `s` exactly as PHP's `htmlspecialchars($s, ENT_QUOTES, 'UTF-8')` does for valid UTF-8
+/// (Phorge strings are always valid UTF-8, so the invalid-byte/ENT_SUBSTITUTE path is unreachable).
+/// `&` MUST be replaced first — otherwise the `&` this function inserts gets double-escaped. This
+/// five-char table is THE byte-identity contract with the `php` emission below; the unit test pins it.
+fn html_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&#039;"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+fn html_text(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => Ok(Value::Str(html_escape(s))),
+        _ => Err("html.text expects (string)".into()),
+    }
+}
+
+/// `raw`/`render` are runtime identities on the underlying `Value::Str` — `raw` lifts a trusted
+/// string to `Html`, `render` lowers finished `Html` back to a `string`; both are pure relabelings,
+/// the type checker is what makes them meaningful.
+fn html_identity(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => Ok(Value::Str(s.clone())),
+        _ => Err("expected (string)".into()),
+    }
+}
+
+fn html_natives() -> Vec<NativeFn> {
+    vec![
+        NativeFn {
+            module: "core.html",
+            name: "text",
+            params: vec![Ty::String],
+            ret: Ty::Html,
+            eval: html_text,
+            // Flags PINNED (not PHP's version-varying default) so the output is stable and `php -n`
+            // safe; htmlspecialchars is tier-1 (ext/standard, always compiled).
+            php: |a| format!("htmlspecialchars({}, ENT_QUOTES, 'UTF-8')", parg(a, 0)),
+        },
+        NativeFn {
+            module: "core.html",
+            name: "raw",
+            params: vec![Ty::String],
+            ret: Ty::Html,
+            eval: html_identity,
+            php: |a| format!("({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "core.html",
+            name: "render",
+            params: vec![Ty::Html],
+            ret: Ty::String,
+            eval: html_identity,
+            php: |a| format!("({})", parg(a, 0)),
+        },
+    ]
+}
+
 /// Construct the native table once. Order is load-bearing: [`CONSOLE_PRINTLN`] pins slot 0; every
 /// other native is resolved by `(module, name)` (or leaf+name) at compile time, so appended order is
 /// free. Modules are grouped by `*_natives()` builders (one per `core.*` leaf).
@@ -608,6 +684,7 @@ fn build() -> Vec<NativeFn> {
     registry.extend(text_natives());
     registry.extend(file_natives());
     registry.extend(bytes_natives());
+    registry.extend(html_natives());
     // Pinned-slot invariant: the constant the compiler bakes into `Op::CallNative` must address the
     // entry it names. Cheap one-time check at first `registry()` access.
     assert_eq!(
@@ -831,6 +908,40 @@ mod tests {
         assert_eq!(
             index_of_by_leaf("text", "len"),
             index_of("core.text", "len")
+        );
+    }
+
+    #[test]
+    fn html_natives_eval_and_emit() {
+        let mut o = String::new();
+        // THE byte-identity contract: the Rust escape table must match `htmlspecialchars(_, ENT_QUOTES,
+        // 'UTF-8')` exactly. All five chars + a realistic XSS payload, with `&` first (no double-escape).
+        assert_eq!(html_escape("&<>\"'"), "&amp;&lt;&gt;&quot;&#039;");
+        assert_eq!(
+            html_escape("<script>alert(\"x\")</script>"),
+            "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;"
+        );
+        assert_eq!(html_escape("a & b"), "a &amp; b"); // inserted `&` is not re-escaped
+        assert_eq!(html_escape("plain text"), "plain text"); // no-op on safe input
+                                                             // text escapes; raw + render are identities on the underlying string.
+        assert!(
+            matches!(html_text(&[Value::Str("a<b".into())], &mut o), Ok(Value::Str(s)) if s == "a&lt;b")
+        );
+        assert!(
+            matches!(html_identity(&[Value::Str("<hr/>".into())], &mut o), Ok(Value::Str(s)) if s == "<hr/>")
+        );
+        // PHP emission: pinned flags on text; identity wrap on raw/render.
+        assert_eq!(
+            (registry()[index_of("core.html", "text").unwrap()].php)(&["$s".into()]),
+            "htmlspecialchars($s, ENT_QUOTES, 'UTF-8')"
+        );
+        assert_eq!(
+            (registry()[index_of("core.html", "raw").unwrap()].php)(&["$s".into()]),
+            "($s)"
+        );
+        assert_eq!(
+            index_of_by_leaf("html", "render"),
+            index_of("core.html", "render")
         );
     }
 

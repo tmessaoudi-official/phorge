@@ -173,6 +173,7 @@ impl Checker {
                 "bool" => self.no_args(name, args, *span, Ty::Bool),
                 "string" => self.no_args(name, args, *span, Ty::String),
                 "bytes" => self.no_args(name, args, *span, Ty::Bytes),
+                "Html" => self.no_args(name, args, *span, Ty::Html),
                 "List" => Ty::List(Box::new(self.one_arg(name, args, *span))),
                 "Set" => Ty::Set(Box::new(self.one_arg(name, args, *span))),
                 "Map" => {
@@ -1594,6 +1595,7 @@ fn is_builtin_type_name(name: &str) -> bool {
             | "bool"
             | "string"
             | "bytes"
+            | "Html"
             | "List"
             | "Map"
             | "Set"

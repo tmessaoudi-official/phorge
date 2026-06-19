@@ -43,6 +43,19 @@ or simply unavailable, never a crash):
 - **`core.list` higher-order helpers (`map`/`filter`/`reduce`) are not yet available** — they await
   the `List<T>`-generic native signatures; lambdas can already be passed to *user* functions today.
 
+## core.html (Wave 1 — escape kernel only)
+
+- **Only the escape boundary ships so far.** `core.html` currently provides `text` (auto-escape),
+  `raw` (audited trust), and `render`. The typed element **builders** (`el`/`void_el`/`attr`/
+  `bool_attr` + named helpers, plus `Attr` and `concat` over `List<Html>`) are **Wave 2**, and the
+  `html"<h1>{name}</h1>"` interpolation **sugar** is **Wave 3**. Compose pages today with string
+  interpolation around `html.render(html.text(...))` (see `examples/guide/html.phg`).
+- **Escaping covers text and attribute-value contexts only.** `html.text` is correct for HTML text
+  and (Wave 2) quoted attribute values via `htmlspecialchars(_, ENT_QUOTES)`. It is **not** safe for
+  URL contexts (`href="javascript:…"`), inline CSS, or `<script>` bodies — those need
+  context-specific escaping and are out of scope until a later wave. Use `html.raw` only for markup
+  you have audited.
+
 ## Git dependencies (M5 S3)
 
 - **Transitive dependencies are not resolved.** `phg vendor` fetches the direct `[require]` set;

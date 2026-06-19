@@ -6,6 +6,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### core.html — typed auto-escaping HTML (Wave 1: the escape kernel)
+
+- **`Html` type + `core.html` escape kernel.** The Phorge-idiomatic answer to "how do I write HTML"
+  (design: `docs/specs/2026-06-19-core-html-design.md`). `Html` is a distinct checker type
+  (`Ty::Html`) that erases to PHP `string` and rides `Value::Str` at runtime — but is **not
+  interchangeable with `string`**, so untrusted text cannot reach rendered HTML except through
+  `core.html.text` (auto-escape) or the audited `core.html.raw` (trusted markup). This makes XSS a
+  *compile error*, not a runtime hazard — enforced by the type checker, zero new `Op`, zero runtime
+  divergence. Boundary natives: `text(string) -> Html`, `raw(string) -> Html`, `render(Html) ->
+  string`. Escaping erases to the **pinned** `htmlspecialchars($s, ENT_QUOTES, 'UTF-8')` (tier-1,
+  `php -n`-safe) and is mirrored by a Rust five-char table held byte-identical by a unit test.
+  `examples/guide/html.phg` runs byte-identically on `run`/`runvm`/**real PHP**. Builders
+  (`el`/`attr`/`concat`) and the `html"…"` literal sugar land in Waves 2–3.
+
 ### M9 — Engineering Hygiene (CI enforcement)
 
 - **GitHub Actions CI (`.github/workflows/ci.yml`) — locks in M7.** A `gate` job runs the same three

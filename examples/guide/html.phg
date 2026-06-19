@@ -1,0 +1,32 @@
+package main;
+
+// core.html Wave 1 — the escape KERNEL: text / raw / render.
+// `Html` is a DISTINCT type from `string`: untrusted text cannot reach rendered HTML
+// except through `html.text` (auto-escape) or the audited `html.raw` (trusted markup).
+// That non-interchangeability is the XSS-safety wall — enforced by the type checker.
+// Builders (html.el/attr/concat) and the `html"…"` literal sugar land in later waves.
+import core.console;
+import core.html;
+
+// Compose a list item: the dynamic `value` is escaped via html.text; the surrounding
+// markup is author-written, so the assembled string is wrapped with html.raw (trusted).
+function field(string label, string value) -> Html {
+  return html.raw("<li>{label}: {html.render(html.text(value))}</li>");
+}
+
+function main() {
+  string name = "Tom & \"Jerry\"";
+  string bio = "<script>alert(1)</script>";
+
+  // html.text escapes untrusted text; html.render lowers finished Html back to a string.
+  Html safe = html.text(name);
+  console.println(html.render(safe));               // Tom &amp; &quot;Jerry&quot;
+
+  // html.raw is the audited trust opt-out — author markup passes through unescaped.
+  Html hr = html.raw("<hr/>");
+  console.println(html.render(hr));                  // <hr/>
+
+  // Compose escaped pieces into trusted markup.
+  console.println(html.render(field("name", name))); // <li>name: Tom &amp; &quot;Jerry&quot;</li>
+  console.println(html.render(field("bio", bio)));   // <li>bio: &lt;script&gt;alert(1)&lt;/script&gt;</li>
+}

@@ -1,6 +1,7 @@
 # `core.html` — Typed, Auto-Escaping HTML — Design Spec
 
-> **Status:** 🔲 Designed — not yet implemented.
+> **Status:** 🚧 In progress — **Wave 1 (escape kernel) shipped**; builders (Wave 2) + `html"…"`
+> sugar (Wave 3) proposed. See §9.
 > **Milestone:** M3 ergonomics follow-up / M6 web companion (HTML is what a `Response` body usually
 > carries — this is the authoring layer above `examples/web/handler.phg`).
 > **Trigger:** developer question (2026-06-19) — *"in a `.phg` file, if I want to write HTML, how do
@@ -55,9 +56,11 @@ Today Phorge has **no** HTML story: a handler builds its body with `bytes`/`stri
 
 ## 3. The kernel — `Html` as an erased newtype
 
-`Html` is a **distinct surface type** (`ast::Type::Html`) and checker type (`types::Ty::Html`) that
-**erases to PHP `string`** — structurally identical to how `bytes` is a distinct `Ty` erasing to PHP
-`string` (M6 W0). At runtime an `Html` value is carried as a `Value::Str` (no new `Value` variant —
+`Html` is a **distinct checker type** (`types::Ty::Html`) that **erases to PHP `string`** —
+structurally identical to how `bytes` is a distinct `Ty` erasing to PHP `string` (M6 W0). There is
+**no new AST variant**: a type annotation is `ast::Type::Named { name: "Html" }` (the parser already
+produces it for any name), and the checker maps `"Html" → Ty::Html` alongside `int`/`string`/`bytes`
+— so the surface change is checker-only. At runtime an `Html` value is carried as a `Value::Str` (no new `Value` variant —
 the safety lives entirely in the *type*, which the checker erases before the backends run, exactly
 like type aliases and `bytes`). This means **zero new `Op`**, zero VM/interpreter divergence surface:
 the kernel is pure `native.rs` + checker + transpiler.
@@ -256,7 +259,7 @@ change proves thorny, Waves 1–2 already deliver safe HTML.
 | Piece | State |
 |-------|-------|
 | This design | ✅ spec landed |
-| `Html`/`Attr` erased newtypes + escape kernel (Wave 1) | 🔲 proposed |
-| Builders + named set (Wave 2) | 🔲 proposed |
+| `Html` type + escape kernel `text`/`raw`/`render` (Wave 1) | ✅ shipped — byte-identical run/runvm/PHP; `examples/guide/html.phg` |
+| `Attr` + builders + named set + `concat` (Wave 2) | 🔲 proposed |
 | `html"…"` sugar + `E-HTML-HOLE` (Wave 3) | 🔲 proposed |
 | Multi-line string literals | ✅ already supported (`scan_string` accepts raw newlines) |
