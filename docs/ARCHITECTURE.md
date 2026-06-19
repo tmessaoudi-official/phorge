@@ -1,7 +1,8 @@
 # Phorge Architecture
 
 A one-page map of the codebase. For the *rules* that keep it correct see `docs/INVARIANTS.md`; for
-the frozen design rationale (the de-facto ADRs — see "Decision records" below) see `docs/specs/`.
+the load-bearing decisions see `docs/adr/`, and for the fuller design rationale see `docs/specs/`
+(see "Decision records" below).
 
 ## Pipeline
 
@@ -61,11 +62,20 @@ it is deferred to the 4th backend (`phg build`, M2.5) per the Rule of Three — 
 spec E-1.
 
 ## Decision records
-Phorge keeps its architecture decisions in two living places rather than a separate `adr/` tree:
-- **`docs/specs/`** — frozen design docs with numbered decisions (e.g. the M2 VM design's
-  `## 11. Decisions Log`, the language and ecosystem specs). These *are* the ADRs.
-- **`docs/plans/*.md`** — per-milestone plans, each with a `## Decisions Log` / execution-decisions
-  log capturing choices made at implementation time.
+Phorge keeps architecture decisions in three complementary places:
+- **`docs/adr/`** — the canonical one-page **Architecture Decision Records** for the load-bearing
+  decisions: the *verdict + consequences*, in Nygard format, **immutable once Accepted**. Start here.
+- **`docs/specs/`** — frozen design docs with numbered decision logs (e.g. the M2 VM design's
+  `## 11. Decisions Log`, the language and ecosystem specs). These hold the *fuller design
+  exploration* each ADR links back to.
+- **`docs/plans/*.md`** — per-milestone plans, each with a `## Decisions Log` capturing
+  implementation-time choices.
 
-A standalone ADR set would duplicate these; new decisions should extend the relevant spec's or
-plan's decisions log.
+**Authority split:** an ADR is canonical for the *decision*; the spec is canonical for the
+*exploration* behind it. A new decision gets an ADR (and may also extend the relevant spec/plan log);
+a reversal **supersedes** the ADR rather than editing it. See `docs/adr/README.md`.
+
+> History: through M8 these decisions lived only in `docs/specs/` + `docs/plans/` (no `adr/` tree),
+> on the reasoning that a standalone set would duplicate them. M9 split that: a 7–16 KB design spec
+> is a design *document*, not a discoverable one-page *record* — so the ADRs now distill the verdict
+> while the specs keep the exploration. See [ADR-0001](adr/0001-no-shared-run-vm-ir.md).

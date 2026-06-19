@@ -117,7 +117,7 @@ wrong numbers, they produce PHP fatals.
 
 **Exit criteria**
 - [x] GitHub Actions CI exists: fmt + clippy + test, a PHP job (`PHORGE_REQUIRE_PHP=1`, fails not skips), a zig cross-build job; pin read from `rust-toolchain.toml`. — `.github/workflows/ci.yml` (`gate` + `cross-build` jobs); the encoded gate verified green locally (453 tests, oracle enforced, fmt+clippy clean) before commit. *(Observed green on a real GitHub run pending first push.)*
-- [ ] ADRs written for the 5 load-bearing decisions (no shared run↔VM IR; erasure-not-monomorphization; Rc-not-GC; single-file brace-namespace PHP; offline-only vendor).
+- [x] ADRs written for the 5 load-bearing decisions (no shared run↔VM IR; erasure-not-monomorphization; Rc-not-GC; single-file brace-namespace PHP; offline-only vendor). — `docs/adr/0001…0005` (Nygard format, Status: Accepted, immutable + spec back-links) + `docs/adr/README.md` index; `ARCHITECTURE.md` "Decision records" policy updated to make `docs/adr/` canonical for the decision (specs stay canonical for the exploration).
 - [ ] Op descriptor table (`Op::meta()` / `OpInfo`) dissolves the 3-coupled-match; `chunk::validate` is **exhaustive** (no `_ => None` fall-through).
 - [ ] Single-sourced: runtime fault strings (`faults`/`FaultMsg`), lambda capture-filter (`is_capturable`), native call-head resolution (`resolve_call_head`).
 - [ ] Interpreter runtime faults carry a source line (`Cell<Span>` through eval); fault body unchanged so the oracle stays green.
@@ -153,7 +153,7 @@ wrong numbers, they produce PHP fatals.
 | P2-#38 / S-24 | `CallValue`/`MakeClosure` scratch-slot arithmetic unchecked | `src/vm.rs:423`, `src/compiler.rs:1154,1364,1387,1667` | Quick |
 | P2-#43 / G-19 / I-49 | Live real-socket serve smoke test `#[ignore]`d | `tests/serve.rs:172` | Quick |
 | P2-#45 / I-38/I-39/I-40 | Interpreter deep-clones whole `FunctionDecl`/`ClassDecl` per call; Rc-share decl tables | `src/interpreter.rs:556,564,533` | Med |
-| Vision / ADR set | ADRs for the 5 load-bearing decisions | `docs/adr/` (new) | Med |
+| Vision / ADR set | ✅ **DONE** — 5 ADRs (Nygard, Accepted, spec-linked) + README index; ARCHITECTURE.md policy updated | `docs/adr/0001…0005` + `README.md` | Med |
 
 **Sequencing notes** — Independent of M8's security work. **Write the ADRs before the descriptor-table refactor
 touches the decisions they record.** The descriptor table + exhaustive `validate` (QW-15 / P2-#37/#38) close the EV-7
