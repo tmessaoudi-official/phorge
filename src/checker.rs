@@ -50,6 +50,11 @@ pub struct Checker {
     /// Drives namespaced native-call resolution (`console.println`) and the shadowing guard that
     /// keeps an imported qualifier disjoint from every value binding (M3 Wave 1).
     imports: HashMap<String, String>,
+    /// Type-directed desugarings for `html"…"` literals (core.html Wave 3), keyed by the literal's
+    /// `Span.start` (byte offset — unique per source occurrence in a single file). Each entry is the
+    /// `html.concat([…])` replacement built while checking, replayed by [`resolve_html`] after a
+    /// successful check so no backend ever sees an [`crate::ast::Expr::Html`] node.
+    html_resolutions: HashMap<usize, crate::ast::Expr>,
 }
 
 impl Checker {
@@ -67,6 +72,7 @@ impl Checker {
             aliases: HashMap::new(),
             alias_stack: Vec::new(),
             imports: HashMap::new(),
+            html_resolutions: HashMap::new(),
         }
     }
 
@@ -698,6 +704,7 @@ impl Checker {
                 body,
                 span,
             } => self.check_lambda(params, ret, body, *span),
+            Expr::Html(parts, span) => self.check_html(parts, *span),
         }
     }
 
@@ -823,6 +830,100 @@ impl Checker {
         Ty::String
     }
 
+    /// Check an `html"…"` literal (core.html Wave 3) and record its type-directed desugaring.
+    ///
+    /// Each literal chunk becomes `html.raw(chunk)` (author markup is trusted); each `{e}` hole is
+    /// resolved **by `e`'s type**: an `Html` value embeds as-is (already safe — lets you nest
+    /// builders / other `html"…"`); a `string` is wrapped in `html.text(e)` (auto-escaped — the safe
+    /// default for raw data); an `int`/`float`/`bool` is stringified then escaped; anything else is a
+    /// clean `E-HTML-HOLE`. The default hole behavior is **escape** — injecting trusted markup
+    /// requires writing `{html.raw(x)}` explicitly (unsafe is long, safe is short). The pieces are
+    /// concatenated with `html.concat([…])`; the whole tree uses only Wave-1/2 natives, which are
+    /// already byte-identical across the three backends, so parity is inherited, not re-proved.
+    ///
+    /// The replacement is stored by the literal's `Span.start` and applied by [`resolve_html`] after
+    /// checking — `check` itself never mutates the AST (it borrows it). Returns [`Ty::Html`].
+    fn check_html(&mut self, parts: &[crate::ast::StrPart], span: Span) -> Ty {
+        use crate::ast::{Expr, StrPart};
+        // `html"…"` desugars to `<leaf>.raw/.text/.concat` calls, so the program must import
+        // core.html. Resolve whatever leaf maps to it (robust to `import core.html as h;`).
+        let leaf = self
+            .imports
+            .iter()
+            .find(|(_, full)| full.as_str() == "core.html")
+            .map(|(leaf, _)| leaf.clone());
+        let leaf = match leaf {
+            Some(l) => l,
+            None => {
+                return self.err_coded(
+                    span,
+                    "`html\"…\"` requires the core.html module",
+                    "E-HTML-IMPORT",
+                    Some("add `import core.html;` (or `import core.html as h;`)".into()),
+                );
+            }
+        };
+        // Build `<leaf>.<name>(args)` as a plain `Member`-headed call (resolved like any namespaced
+        // native by the backends, via the import map). All synthetic nodes carry the literal's span.
+        let call = |name: &str, args: Vec<Expr>| -> Expr {
+            Expr::Call {
+                callee: Box::new(Expr::Member {
+                    object: Box::new(Expr::Ident(leaf.clone(), span)),
+                    name: name.to_string(),
+                    safe: false,
+                    span,
+                }),
+                args,
+                span,
+            }
+        };
+        let str_lit = |s: &str| Expr::Str(vec![StrPart::Literal(s.to_string())], span);
+
+        let mut elems: Vec<Expr> = Vec::with_capacity(parts.len());
+        for part in parts {
+            match part {
+                StrPart::Literal(chunk) => elems.push(call("raw", vec![str_lit(chunk)])),
+                StrPart::Expr(e) => {
+                    let t = self.check_expr(e);
+                    match t {
+                        // already an Html fragment — embed verbatim (no double-escape).
+                        Ty::Html => elems.push((**e).clone()),
+                        // raw text — escape it (the safe default).
+                        Ty::String => elems.push(call("text", vec![(**e).clone()])),
+                        // primitives stringify (via a one-hole string interp) then escape, for
+                        // uniformity — numbers carry no markup but go through the same wall.
+                        Ty::Int | Ty::Float | Ty::Bool => {
+                            let stringified =
+                                Expr::Str(vec![StrPart::Expr(Box::new((**e).clone()))], span);
+                            elems.push(call("text", vec![stringified]));
+                        }
+                        // a poisoned hole already reported its own error; keep going without piling
+                        // on, and emit *something* well-typed so the replacement stays buildable.
+                        Ty::Error => elems.push(call("text", vec![str_lit("")])),
+                        other => {
+                            self.err_coded(
+                                Self::expr_span(e),
+                                format!(
+                                    "cannot interpolate `{other}` into html; render it to a string or Html first"
+                                ),
+                                "E-HTML-HOLE",
+                                Some(
+                                    "wrap it with `html.text(…)`/`html.raw(…)`, or build it with the html builders"
+                                        .into(),
+                                ),
+                            );
+                            elems.push(call("text", vec![str_lit("")]));
+                        }
+                    }
+                }
+            }
+        }
+
+        let replacement = call("concat", vec![Expr::List(elems, span)]);
+        self.html_resolutions.insert(span.start, replacement);
+        Ty::Html
+    }
+
     /// The source span of an expression (used to position errors precisely).
     fn expr_span(e: &crate::ast::Expr) -> Span {
         use crate::ast::Expr;
@@ -844,7 +945,8 @@ impl Checker {
             | Expr::Match { span, .. }
             | Expr::Range { span, .. }
             | Expr::If { span, .. }
-            | Expr::Lambda { span, .. } => *span,
+            | Expr::Lambda { span, .. }
+            | Expr::Html(_, span) => *span,
         }
     }
     fn check_list(&mut self, elems: &[crate::ast::Expr], span: Span) -> Ty {
@@ -1520,7 +1622,7 @@ fn lambda_uses_this(body: &crate::ast::LambdaBody) -> bool {
             | Expr::Null(..)
             | Expr::Bytes(..)
             | Expr::Ident(..) => false,
-            Expr::Str(parts, _) => parts.iter().any(|p| match p {
+            Expr::Str(parts, _) | Expr::Html(parts, _) => parts.iter().any(|p| match p {
                 crate::ast::StrPart::Expr(inner) => in_expr(inner),
                 _ => false,
             }),
@@ -1575,12 +1677,36 @@ fn lambda_uses_this(body: &crate::ast::LambdaBody) -> bool {
 /// Type-check `program`. On success returns the collected non-fatal warnings (the warning channel,
 /// M3 S2.5) — possibly empty; on failure returns the errors. Warnings never gate the build: the CLI
 /// renders them to stderr and proceeds.
-pub fn check(program: &Program) -> Result<Vec<Diagnostic>, Vec<Diagnostic>> {
+/// Run the checker over a program and return the populated `Checker` (errors, warnings, and the
+/// `html"…"` desugarings collected along the way). The single shared entry behind both [`check`]
+/// (gate only) and [`check_resolutions`] (gate + html replacements for the backend pipeline).
+fn run_checker(program: &Program) -> Checker {
     let mut c = Checker::new();
     c.collect(program);
     c.check_program(program);
+    c
+}
+
+pub fn check(program: &Program) -> Result<Vec<Diagnostic>, Vec<Diagnostic>> {
+    let c = run_checker(program);
     if c.errors.is_empty() {
         Ok(c.warnings)
+    } else {
+        Err(c.errors)
+    }
+}
+
+/// Like [`check`], but on success also returns the `html"…"` desugarings keyed by literal
+/// `Span.start` — fed to [`resolve_html`] so the backend-facing program is `Expr::Html`-free. Used
+/// by the run/runvm/transpile pipeline ([`crate::cli::check_and_expand`]); plain [`check`] (e.g.
+/// `phg check`) ignores the map since it never reaches a backend.
+#[allow(clippy::type_complexity)]
+pub fn check_resolutions(
+    program: &Program,
+) -> Result<(Vec<Diagnostic>, HashMap<usize, crate::ast::Expr>), Vec<Diagnostic>> {
+    let c = run_checker(program);
+    if c.errors.is_empty() {
+        Ok((c.warnings, c.html_resolutions))
     } else {
         Err(c.errors)
     }
@@ -1638,6 +1764,225 @@ fn is_builtin_type_name(name: &str) -> bool {
 /// shadowing — so a fixed depth bound is a sufficient guard against a residual self-reference, and
 /// the resolver can be a simple "look the name up, recurse" walk. `Expr` nodes carry no `Type` in
 /// M1, so they are cloned unchanged.
+/// Replace every `html"…"` literal ([`crate::ast::Expr::Html`]) with its checker-built
+/// `html.concat([…])` desugaring (keyed by `Span.start`), so the interpreter, compiler, and
+/// transpiler never see the node — the same "compile-time sugar, erased before backends" treatment
+/// as `type` aliases. Runs after a successful [`check_resolutions`]; mirrors the owned-AST rewrite
+/// walk in `loader::resolve_*`, but also descends into lambda bodies (an `html"…"` may appear there
+/// too). A replacement can itself embed an `html"…"` (an Html-typed hole), so the rewrite recurses
+/// into each substituted subtree. When no literal was found the program is returned untouched, so
+/// programs with no `html"…"` are byte-for-byte identical to the pre-Wave-3 AST.
+pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -> Program {
+    use crate::ast::{ClassMember, Expr, Item, LambdaBody, MatchArm, Stmt, StrPart};
+    if html.is_empty() {
+        return program;
+    }
+    type Map = HashMap<usize, Expr>;
+
+    fn rexpr(e: Expr, h: &Map) -> Expr {
+        match e {
+            Expr::Html(parts, span) => match h.get(&span.start) {
+                // Re-walk the substituted tree: an Html-typed hole embeds another `html"…"`.
+                Some(r) => rexpr(r.clone(), h),
+                None => Expr::Html(parts, span), // defensive; check populated every literal
+            },
+            Expr::Str(parts, span) => Expr::Str(
+                parts
+                    .into_iter()
+                    .map(|p| match p {
+                        StrPart::Expr(e) => StrPart::Expr(Box::new(rexpr(*e, h))),
+                        lit => lit,
+                    })
+                    .collect(),
+                span,
+            ),
+            Expr::List(items, span) => {
+                Expr::List(items.into_iter().map(|e| rexpr(e, h)).collect(), span)
+            }
+            Expr::Unary { op, expr, span } => Expr::Unary {
+                op,
+                expr: Box::new(rexpr(*expr, h)),
+                span,
+            },
+            Expr::Binary { op, lhs, rhs, span } => Expr::Binary {
+                op,
+                lhs: Box::new(rexpr(*lhs, h)),
+                rhs: Box::new(rexpr(*rhs, h)),
+                span,
+            },
+            Expr::Call { callee, args, span } => Expr::Call {
+                callee: Box::new(rexpr(*callee, h)),
+                args: args.into_iter().map(|a| rexpr(a, h)).collect(),
+                span,
+            },
+            Expr::Member {
+                object,
+                name,
+                safe,
+                span,
+            } => Expr::Member {
+                object: Box::new(rexpr(*object, h)),
+                name,
+                safe,
+                span,
+            },
+            Expr::Index {
+                object,
+                index,
+                span,
+            } => Expr::Index {
+                object: Box::new(rexpr(*object, h)),
+                index: Box::new(rexpr(*index, h)),
+                span,
+            },
+            Expr::Force { inner, span } => Expr::Force {
+                inner: Box::new(rexpr(*inner, h)),
+                span,
+            },
+            Expr::Match {
+                scrutinee,
+                arms,
+                span,
+            } => Expr::Match {
+                scrutinee: Box::new(rexpr(*scrutinee, h)),
+                arms: arms
+                    .into_iter()
+                    .map(|a| MatchArm {
+                        pattern: a.pattern,
+                        body: rexpr(a.body, h),
+                        span: a.span,
+                    })
+                    .collect(),
+                span,
+            },
+            Expr::Range {
+                start,
+                end,
+                inclusive,
+                span,
+            } => Expr::Range {
+                start: Box::new(rexpr(*start, h)),
+                end: Box::new(rexpr(*end, h)),
+                inclusive,
+                span,
+            },
+            Expr::If {
+                cond,
+                then_expr,
+                else_expr,
+                span,
+            } => Expr::If {
+                cond: Box::new(rexpr(*cond, h)),
+                then_expr: Box::new(rexpr(*then_expr, h)),
+                else_expr: Box::new(rexpr(*else_expr, h)),
+                span,
+            },
+            Expr::Lambda {
+                params,
+                ret,
+                body,
+                span,
+            } => Expr::Lambda {
+                params,
+                ret,
+                body: match body {
+                    LambdaBody::Expr(e) => LambdaBody::Expr(Box::new(rexpr(*e, h))),
+                    LambdaBody::Block(stmts) => LambdaBody::Block(rblock(stmts, h)),
+                },
+                span,
+            },
+            // leaves carry no nested expression: Int / Float / Bool / Null / Bytes / Ident / This
+            leaf => leaf,
+        }
+    }
+
+    fn rstmt(s: Stmt, h: &Map) -> Stmt {
+        match s {
+            Stmt::VarDecl {
+                ty,
+                name,
+                init,
+                span,
+            } => Stmt::VarDecl {
+                ty,
+                name,
+                init: rexpr(init, h),
+                span,
+            },
+            Stmt::Return { value, span } => Stmt::Return {
+                value: value.map(|e| rexpr(e, h)),
+                span,
+            },
+            Stmt::If {
+                cond,
+                bind,
+                then_block,
+                else_block,
+                span,
+            } => Stmt::If {
+                cond: rexpr(cond, h),
+                bind,
+                then_block: rblock(then_block, h),
+                else_block: else_block.map(|b| rblock(b, h)),
+                span,
+            },
+            Stmt::For {
+                ty,
+                name,
+                iter,
+                body,
+                span,
+            } => Stmt::For {
+                ty,
+                name,
+                iter: rexpr(iter, h),
+                body: rblock(body, h),
+                span,
+            },
+            Stmt::Block(stmts, span) => Stmt::Block(rblock(stmts, h), span),
+            Stmt::Expr(e, span) => Stmt::Expr(rexpr(e, h), span),
+        }
+    }
+
+    fn rblock(stmts: Vec<Stmt>, h: &Map) -> Vec<Stmt> {
+        stmts.into_iter().map(|s| rstmt(s, h)).collect()
+    }
+
+    let items = program
+        .items
+        .into_iter()
+        .map(|item| match item {
+            Item::Function(mut f) => {
+                f.body = rblock(f.body, html);
+                Item::Function(f)
+            }
+            Item::Class(mut c) => {
+                for m in &mut c.members {
+                    match m {
+                        ClassMember::Method(f) => {
+                            let body = std::mem::take(&mut f.body);
+                            f.body = rblock(body, html);
+                        }
+                        ClassMember::Constructor { body, .. } => {
+                            let b = std::mem::take(body);
+                            *body = rblock(b, html);
+                        }
+                        ClassMember::Field { .. } => {}
+                    }
+                }
+                Item::Class(c)
+            }
+            other => other,
+        })
+        .collect();
+
+    Program {
+        package: program.package,
+        items,
+        span: program.span,
+    }
+}
+
 pub fn expand_aliases(program: &Program) -> Program {
     use crate::ast::{
         ClassDecl, ClassMember, CtorParam, EnumDecl, EnumVariant, FunctionDecl, Item, Param, Stmt,
@@ -2336,6 +2681,32 @@ function main() { int console = 0; console.println("{console}"); }"#,
         );
         assert!(
             errs.iter().any(|e| e.code == Some("E-SHADOW-IMPORT")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn html_literal_bad_hole_is_coded() {
+        // A hole whose type is neither Html, string, nor a primitive is `E-HTML-HOLE` (core.html
+        // Wave 3): there is no safe HTML rendering for an enum value.
+        let errs = errors_of(
+            r#"import core.html;
+enum E { A() }
+function main() { var p = html"<h1>{A()}</h1>"; }"#,
+        );
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-HTML-HOLE")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn html_literal_without_import_is_coded() {
+        // `html"…"` desugars to core.html kernel calls, so the module must be imported; otherwise
+        // `E-HTML-IMPORT`.
+        let errs = errors_of(r#"function main() { var p = html"<h1>x</h1>"; }"#);
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-HTML-IMPORT")),
             "{errs:?}"
         );
     }

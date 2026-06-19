@@ -6,7 +6,6 @@
 use std::time::{Duration, Instant};
 
 use crate::ast::Program;
-use crate::checker::check;
 use crate::chunk::{BytecodeProgram, Chunk, Op};
 use crate::compiler::compile;
 use crate::interpreter::interpret;
@@ -280,6 +279,20 @@ pub fn explain_text(code: &str) -> Option<String> {
              `(package, name)` and must be unique. Two files declaring the same `package` cannot both\n\
              define a function of the same name — rename one, or move it to a different package.\n"
         }
+        "E-HTML-HOLE" => {
+            "E-HTML-HOLE — a value of an un-renderable type was interpolated into `html\"…\"`.\n\n\
+             An `html\"…\"` hole `{e}` accepts an `Html` fragment (embedded as-is), a `string`, or a\n\
+             primitive (`int`/`float`/`bool`, escaped). Anything else — a class, enum, list, optional\n\
+             — has no safe HTML rendering. Render it first: build it with the html builders\n\
+             (`html.el(…)`), produce a `string` and let the hole escape it, or wrap audited markup in\n\
+             `html.raw(…)`.\n"
+        }
+        "E-HTML-IMPORT" => {
+            "E-HTML-IMPORT — `html\"…\"` was used without importing core.html.\n\n\
+             The `html\"…\"` literal desugars to `html.raw`/`html.text`/`html.concat` kernel calls, so\n\
+             the module must be in scope. Add `import core.html;` (or `import core.html as h;`) to the\n\
+             file.\n"
+        }
         _ => return None,
     };
     Some(body.to_string())
@@ -369,12 +382,18 @@ fn lex_parse(src: &str) -> Result<Program, String> {
 /// loose program, or `""` for a merged multi-file unit (where no single source aligns, so diagnostics
 /// print message + position without a source line).
 pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, String> {
-    match check(prog) {
-        Ok(warnings) => {
+    match crate::checker::check_resolutions(prog) {
+        Ok((warnings, html)) => {
             for w in &warnings {
                 eprintln!("warning: {}", w.render(diag_src));
             }
-            Ok(crate::checker::expand_aliases(prog))
+            // De-alias types, then erase `html"…"` literals into their `html.concat([…])` kernel
+            // calls (built by the checker, keyed by span) — both are front-end sugar removed before
+            // any backend runs.
+            Ok(crate::checker::resolve_html(
+                crate::checker::expand_aliases(prog),
+                &html,
+            ))
         }
         Err(errs) => {
             let lines: Vec<String> = errs.iter().map(|e| e.render(diag_src)).collect();

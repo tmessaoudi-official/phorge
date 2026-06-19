@@ -436,6 +436,18 @@ fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
                 .collect(),
             span,
         ),
+        // `html"…"` holes can carry cross-package calls, so resolve them like string holes (the
+        // literal itself is desugared later, by the post-check `checker::resolve_html` pass).
+        Expr::Html(parts, span) => Expr::Html(
+            parts
+                .into_iter()
+                .map(|p| match p {
+                    StrPart::Expr(e) => StrPart::Expr(Box::new(resolve_expr(*e, ctx))),
+                    lit => lit,
+                })
+                .collect(),
+            span,
+        ),
         Expr::Match {
             scrutinee,
             arms,

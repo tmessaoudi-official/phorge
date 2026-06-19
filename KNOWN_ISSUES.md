@@ -43,13 +43,13 @@ or simply unavailable, never a crash):
 - **`core.list` higher-order helpers (`map`/`filter`/`reduce`) are not yet available** — they await
   the `List<T>`-generic native signatures; lambdas can already be passed to *user* functions today.
 
-## core.html (Waves 1–2 — escape kernel + element builders)
+## core.html (Waves 1–3 — escape kernel + element builders + `html"…"` sugar)
 
-- **The `html"…"` interpolation sugar is not yet implemented.** `core.html` ships the escape kernel
-  (`text` / `raw` / `render`) and the typed element builders (`el` / `void_el` / `attr` /
-  `bool_attr` / `concat`, with the distinct `Attr` type). The `html"<h1>{name}</h1>"` literal
-  **sugar** is **Wave 3**. Compose pages today with the builders, or with string interpolation
-  around `html.render(html.text(...))` (see `examples/guide/html.phg`).
+- **An `html"…"` hole cannot contain a string literal with quotes.** Like every Phorge
+  interpolation (`"…{e}…"`), the lexer scans to the first closing `"`, so a `"` inside a `{e}` hole
+  ends the literal early — `html"<a href={url}>"` is fine, but `html"{f("x")}"` is not. Bind the
+  value to a local first (`var v = f("x"); html"{v}"`). This is the shared interpolation model, not
+  specific to html.
 - **No named element helpers.** There is one generic `el(tag, attrs, children)`, not a per-tag set
   (`div(...)`, `p(...)`, …) — fn-pointer natives can't bake a tag name, so a named set would need a
   different mechanism. Pass the tag as a string. (Deferred, not a regression.)

@@ -7,7 +7,7 @@ package main;
 //
 //   Wave 1  the escape KERNEL    text / raw / render
 //   Wave 2  the element BUILDERS  attr / bool_attr / el / void_el / concat
-//   Wave 3  the `html"…"` literal sugar  (not yet)
+//   Wave 3  the `html"…"` literal sugar  html"<h1>{name}</h1>"
 import core.console;
 import core.html;
 
@@ -20,6 +20,16 @@ function field(string label, string value) -> Html {
 function row(string label, string value) -> Html {
   return html.el("li", [html.attr("data-label", label)],
                  [html.text("{label}: "), html.text(value)]);
+}
+
+// Wave-3 style: write the markup directly and interpolate by type. Each {hole} escapes
+// unless it is already an Html value — so `{label}`/`{value}` (strings) are escaped, while
+// nesting another html"…" or a builder embeds verbatim. A multi-line literal works too.
+function card(string title, Html bodyHtml) -> Html {
+  return html"<section>
+    <h2>{title}</h2>
+    {bodyHtml}
+  </section>";
 }
 
 function main() {
@@ -54,4 +64,19 @@ function main() {
   // concat joins sibling fragments into one Html.
   Html doc = html.concat([html.raw("<hr/>"), row("name", name)]);
   console.println(html.render(doc));    // <hr/><li data-label="name">name: Tom &amp; &quot;Jerry&quot;</li>
+
+  // --- Wave 3: the html"…" literal sugar ---
+  // String holes auto-escape; a primitive hole stringifies then escapes.
+  int year = 2026;
+  Html h = html"<h1>{name}</h1><p>since {year}</p>";
+  console.println(html.render(h));      // <h1>Tom &amp; &quot;Jerry&quot;</h1><p>since 2026</p>
+
+  // An Html hole embeds verbatim — no double-escape (the value is already safe).
+  Html badge = html.el("span", [html.bool_attr("hidden")], [html.text(bio)]);
+  Html line = html"<div>{badge}</div>";
+  console.println(html.render(line));   // <div><span hidden>&lt;script&gt;alert(1)&lt;/script&gt;</span></div>
+
+  // Compose: pass an html"…" fragment into a helper that wraps it in more (multi-line) markup.
+  Html inner = html"<p>{name}</p>";
+  console.println(html.render(card("Profile", inner)));
 }

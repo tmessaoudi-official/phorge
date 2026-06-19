@@ -325,6 +325,13 @@ impl Parser {
                 self.advance();
                 Ok(Expr::Bytes(b, sp))
             }
+            TokenKind::Html(body) => {
+                self.advance();
+                // Reuse the exact `{expr}` splitter as plain strings; the type-directed desugar
+                // into `html.concat([…])` kernel calls happens in the checker (which has types).
+                let parts = self.split_interpolation(&body, sp)?;
+                Ok(Expr::Html(parts, sp))
+            }
             TokenKind::Match => self.parse_match(sp),
             TokenKind::If => self.parse_if_expr(sp),
             TokenKind::LParen => {

@@ -1016,6 +1016,59 @@ fn escaping_and_nested_lambdas_agree() {
     // 21
 }
 
+#[test]
+fn html_literal_sugar_agrees() {
+    // core.html Wave 3 — `html"…"` desugars to html.raw/html.text/html.concat, all of which are
+    // already byte-identical across backends, so the sugar inherits parity. (run ≡ runvm here; the
+    // glob test below adds run ≡ php on examples/guide/html.phg.)
+    // A string hole auto-escapes; literal chunks pass through.
+    agree(
+        r#"import core.console; import core.html; function main(){ var n="a&<b>"; console.println(html.render(html"<h1>{n}</h1>")); }"#,
+    ); // <h1>a&amp;&lt;b&gt;</h1>
+       // A primitive hole stringifies then escapes.
+    agree(
+        r#"import core.console; import core.html; function main(){ var n=42; console.println(html.render(html"<p>{n}</p>")); }"#,
+    ); // <p>42</p>
+       // An Html hole embeds verbatim (no double-escape).
+    agree(
+        r#"import core.console; import core.html; function main(){ var inner=html.text("a&b"); console.println(html.render(html"<div>{inner}</div>")); }"#,
+    ); // <div>a&amp;b</div>
+       // A nested html"…" as an Html hole — recursion through resolve_html.
+    agree(
+        r#"import core.console; import core.html; function main(){ var n="x"; var inner=html"<b>{n}</b>"; console.println(html.render(html"<p>{inner}</p>")); }"#,
+    ); // <p><b>x</b></p>
+       // Multi-line literal (spans lines for free, like a plain string).
+    agree("import core.console; import core.html; function main(){ var n=\"z\"; console.println(html.render(html\"<ul>\n  <li>{n}</li>\n</ul>\")); }");
+    // A literal with no holes is still Html.
+    agree(
+        r#"import core.console; import core.html; function main(){ console.println(html.render(html"<hr/>")); }"#,
+    ); // <hr/>
+}
+
+#[test]
+fn html_literal_bad_hole_rejected_by_both() {
+    // A non-renderable hole type (an enum value) is `E-HTML-HOLE` — rejected on both backends.
+    agree_err(
+        r#"import core.html; enum E { A() } function main(){ var p = html"<h1>{A()}</h1>"; }"#,
+    );
+    // `html"…"` without `import core.html;` is `E-HTML-IMPORT` — rejected on both backends.
+    agree_err(r#"function main(){ var p = html"<h1>x</h1>"; }"#);
+}
+
+#[test]
+fn transpiles_html_literal_to_kernel_calls() {
+    // The desugaring targets only Wave-1/2 natives, so the PHP is the kernel emission: literal
+    // chunks as strings, a string hole through htmlspecialchars(ENT_QUOTES), all joined by implode.
+    let php = transpile_ok(
+        r#"package main; import core.console; import core.html; function main(){ var n="x"; console.println(html.render(html"<h1>{n}</h1>")); }"#,
+    );
+    assert!(php.contains("implode('', ["), "{php}");
+    assert!(
+        php.contains("htmlspecialchars($n, ENT_QUOTES, 'UTF-8')"),
+        "{php}"
+    );
+}
+
 // ── M7: the PHP oracle — the third correctness leg ───────────────────────────────────────────────
 // `run ≡ runvm` is gated by every test above. This gates `run ≡ php` (⇒ all three byte-identical):
 // the transpiled PHP, executed by a real `php`, must print exactly what the interpreter prints.

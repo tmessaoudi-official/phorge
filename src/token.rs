@@ -17,6 +17,7 @@ pub enum TokenKind {
     Float(f64),
     Str(String),    // processed string body (interpolation split deferred to parser)
     Bytes(Vec<u8>), // `b"…"` raw byte-string literal (no interpolation)
+    Html(String),   // `html"…"` literal body (interpolation split + desugar deferred to parser)
     Ident(String),
     // keywords
     Function,

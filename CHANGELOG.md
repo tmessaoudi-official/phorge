@@ -6,8 +6,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
-### core.html — typed auto-escaping HTML (Waves 1–2: escape kernel + element builders)
+### core.html — typed auto-escaping HTML (Waves 1–3: escape kernel + element builders + `html"…"` sugar)
 
+- **Wave 3 — the `html"…"` literal sugar.** A prefixed literal `html"<h1>{name}</h1>"` (lexed by a
+  dedicated `scan_html`, mirroring `b"…"`; multi-line for free, since string bodies already span
+  lines) that desugars to the Wave-1/2 kernel: literal chunks → `html.raw(chunk)`, and each `{e}`
+  hole is resolved **by `e`'s type** in the checker — an `Html` value embeds verbatim (no
+  double-escape), a `string`/`int`/`float`/`bool` is auto-escaped via `html.text` (the safe
+  default — injecting trusted markup requires writing `{html.raw(x)}` explicitly), anything else is
+  `E-HTML-HOLE`. The whole literal becomes `html.concat([…])` and is **erased before any backend**
+  (`checker::resolve_html`, the `expand_aliases` precedent), so there is **no new `Op`, no new
+  runtime, and no new byte-identity surface** — parity is inherited from the kernel. `html"…"`
+  requires `import core.html;` (`E-HTML-IMPORT`, robust to `import core.html as h;`).
+  `examples/guide/html.phg` now showcases the sugar, byte-identical on `run`/`runvm`/**real PHP**.
 - **Wave 2 — typed element builders.** A new distinct type `Attr` (like `Html`, erases to PHP
   `string`, non-interchangeable) plus five `core.html` natives compose HTML from typed fragments
   rather than hand-written markup: `attr(string, string) -> Attr` (value escaped, name trusted),
@@ -31,7 +42,7 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   string`. Escaping erases to the **pinned** `htmlspecialchars($s, ENT_QUOTES, 'UTF-8')` (tier-1,
   `php -n`-safe) and is mirrored by a Rust five-char table held byte-identical by a unit test.
   `examples/guide/html.phg` runs byte-identically on `run`/`runvm`/**real PHP**. (Builders shipped in
-  Wave 2, above; the `html"…"` literal sugar is Wave 3.)
+  Wave 2 and the `html"…"` literal sugar in Wave 3, both above.)
 
 ### M9 — Engineering Hygiene (CI enforcement)
 

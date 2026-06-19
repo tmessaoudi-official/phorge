@@ -192,6 +192,65 @@ impl<'a> Lexer<'a> {
         })
     }
 
+    /// Scan an `html"…"` literal (the `html` prefix is already consumed). The body is captured
+    /// exactly like [`Self::scan_string`] — same escapes (`\n \t \r \\ \"`), multi-byte UTF-8 and
+    /// raw newlines copied verbatim, so an `html"…"` literal spans lines for free — and `{`/`}` are
+    /// preserved verbatim: the interpolation split *and* the desugar into `core.html` kernel calls
+    /// happen in the parser/checker, not here. The only difference from `scan_string` is the token
+    /// kind, which routes the body to the html desugarer instead of the plain-string one.
+    fn scan_html(&mut self, start: usize, line: u32, col: u32) -> Result<Token, Diagnostic> {
+        self.bump(); // opening quote
+        let mut bytes: Vec<u8> = Vec::new();
+        loop {
+            let (el, ec) = (self.line, self.col);
+            match self.bump() {
+                None => {
+                    return Err(Diagnostic::new(
+                        Stage::Lex,
+                        "unterminated html literal",
+                        line,
+                        col,
+                    ))
+                }
+                Some(b'"') => break,
+                Some(b'\\') => match self.bump() {
+                    Some(b'n') => bytes.push(b'\n'),
+                    Some(b't') => bytes.push(b'\t'),
+                    Some(b'r') => bytes.push(b'\r'),
+                    Some(b'\\') => bytes.push(b'\\'),
+                    Some(b'"') => bytes.push(b'"'),
+                    Some(other) => {
+                        return Err(Diagnostic::new(
+                            Stage::Lex,
+                            format!("invalid escape \\{}", other as char),
+                            el,
+                            ec,
+                        ))
+                    }
+                    None => {
+                        return Err(Diagnostic::new(
+                            Stage::Lex,
+                            "unterminated html literal",
+                            line,
+                            col,
+                        ))
+                    }
+                },
+                Some(other) => bytes.push(other),
+            }
+        }
+        let value = String::from_utf8(bytes).expect("source html body is valid UTF-8");
+        Ok(Token {
+            kind: TokenKind::Html(value),
+            span: Span {
+                start,
+                len: self.pos - start,
+                line,
+                col,
+            },
+        })
+    }
+
     /// Scan a `b"…"` byte-string literal (the `b` prefix is already consumed). Unlike `scan_string`
     /// there is NO interpolation — `{`/`}` are literal bytes. Escapes are `\n \t \r \\ \"` plus
     /// `\xHH` (two hex digits → one arbitrary octet), so a literal can hold non-UTF-8 bytes.
@@ -357,6 +416,18 @@ pub fn lex(src: &str) -> Result<Vec<Token>, Diagnostic> {
                 }
                 if b == b'/' && lx.peek2() == Some(b'*') {
                     lx.skip_block_comment()?;
+                    continue;
+                }
+
+                // `html"…"` literal — must precede the identifier scan (a bare `html` is a valid
+                // identifier, and the module qualifier in `html.text(…)`). Only the exact `html"`
+                // sequence triggers it: `html.` / `htmlx` / a bare `html` are ordinary idents.
+                if b == b'h' && lx.src[lx.pos..].starts_with(b"html\"") {
+                    for _ in 0..4 {
+                        lx.bump(); // consume the `html` prefix
+                    }
+                    let t = lx.scan_html(start, line, col)?;
+                    out.push(t);
                     continue;
                 }
 
@@ -689,6 +760,49 @@ mod tests {
         );
         // a bare `b` is still an identifier; only `b"` triggers a byte literal.
         assert_eq!(kinds("b"), vec![Ident("b".into()), Eof]);
+    }
+
+    #[test]
+    fn html_literals() {
+        use TokenKind::*;
+        assert_eq!(
+            kinds("html\"<h1>Hi</h1>\""),
+            vec![Html("<h1>Hi</h1>".into()), Eof]
+        );
+        // interpolation body preserved verbatim (split + desugar happen later).
+        assert_eq!(
+            kinds("html\"<h1>{name}</h1>\""),
+            vec![Html("<h1>{name}</h1>".into()), Eof]
+        );
+        // ordinary escapes work, including `\"` for an attribute quote.
+        assert_eq!(
+            kinds("html\"<a href=\\\"x\\\">a\\nb</a>\""),
+            vec![Html("<a href=\"x\">a\nb</a>".into()), Eof]
+        );
+        // multi-line for free (raw newline copied verbatim, like a plain string).
+        assert_eq!(
+            kinds("html\"<ul>\n  <li>x</li>\n</ul>\""),
+            vec![Html("<ul>\n  <li>x</li>\n</ul>".into()), Eof]
+        );
+        // only the exact `html"` sequence triggers it: a bare `html`, `html.`, `htmlx` are idents.
+        assert_eq!(kinds("html"), vec![Ident("html".into()), Eof]);
+        assert_eq!(
+            kinds("html.text"),
+            vec![Ident("html".into()), Dot, Ident("text".into()), Eof]
+        );
+        assert_eq!(kinds("htmlx"), vec![Ident("htmlx".into()), Eof]);
+    }
+
+    #[test]
+    fn html_literal_errors() {
+        assert!(lex("html\"oops")
+            .unwrap_err()
+            .message
+            .contains("unterminated html literal"));
+        assert!(lex("html\"\\q\"")
+            .unwrap_err()
+            .message
+            .contains("invalid escape"));
     }
 
     #[test]

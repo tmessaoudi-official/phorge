@@ -175,6 +175,14 @@ pub enum Expr {
         body: LambdaBody,
         span: Span,
     },
+    /// `html"<h1>{name}</h1>"` — a typed HTML literal (core.html Wave 3). The parser captures it as
+    /// interpolation `parts` (literal chunks + `{expr}` holes, exactly like [`Expr::Str`]); the
+    /// **checker** resolves each hole by type (an `Html` hole embeds as-is, a `string`/primitive hole
+    /// is auto-escaped via `html.text`, anything else is `E-HTML-HOLE`) and rewrites the whole node
+    /// into `html.concat([html.raw(chunk), …])` kernel calls, so no backend ever sees this variant —
+    /// it is erased to ordinary native calls before the interpreter/compiler/transpiler run, the same
+    /// "compile-time sugar, expanded out" treatment as `type` aliases.
+    Html(Vec<StrPart>, Span),
 }
 
 /// The body of a lambda: either a single expression (`=> expr`) or a block of statements
@@ -220,7 +228,7 @@ fn collect_free_expr(
         }
         Expr::This(_) => {} // `this` is never captured (E-LAMBDA-THIS rejects it at check time)
         Expr::Int(..) | Expr::Float(..) | Expr::Bool(..) | Expr::Null(..) | Expr::Bytes(..) => {}
-        Expr::Str(parts, _) => {
+        Expr::Str(parts, _) | Expr::Html(parts, _) => {
             for part in parts {
                 if let StrPart::Expr(inner) = part {
                     collect_free_expr(inner, bound, found);

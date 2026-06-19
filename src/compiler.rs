@@ -1084,6 +1084,9 @@ impl<'a> Compiler<'a> {
                 ret,
                 span,
             } => self.compile_lambda(params, body, ret.as_ref(), span.line)?,
+            // `html"…"` literals are erased to `html.concat([…])` kernel calls by
+            // `checker::resolve_html` before compilation; the compiler never sees one.
+            Expr::Html(..) => unreachable!("html literal not resolved before compilation"),
         }
         Ok(())
     }

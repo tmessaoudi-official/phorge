@@ -11,7 +11,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 |---|---|---|
 | Static types: `int`, `float`, `bool`, `string` | ✅ | checked at compile time |
 | Raw bytes: `bytes` + `b"…"` literals (`\xHH`) | ✅ | octet sequences distinct from UTF-8 `string`; `core.bytes` interop (`from_string`/`to_string`/`len`/`concat`/`slice`/`find`) |
-| Typed HTML: `Html`/`Attr` + `core.html` kernel & builders | 🚧 | distinct from `string` (XSS-safe by construction); kernel `text` (auto-escape) / `raw` (audited trust) / `render`; builders `el` / `void_el` / `attr` / `bool_attr` / `concat`; the `html"…"` literal sugar is Wave 3 |
+| Typed HTML: `Html`/`Attr` + `core.html` kernel, builders & `html"…"` sugar | ✅ | distinct from `string` (XSS-safe by construction); kernel `text` (auto-escape) / `raw` (audited trust) / `render`; builders `el` / `void_el` / `attr` / `bool_attr` / `concat`; `html"<h1>{name}</h1>"` literal sugar — holes escape by type unless already `Html`, desugars to kernel calls (no new `Op`) |
 | Empty list literal `[]` in call arguments | ✅ | takes its element type from the expected parameter (e.g. `el("p", [], […])`); other positions still need a non-empty literal |
 | Generic lists: `List<T>` + list literals | ✅ | `[1, 2, 3]` |
 | Immutable-by-default bindings | ✅ | no reassignment; fresh binding instead |

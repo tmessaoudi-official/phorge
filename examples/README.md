@@ -30,7 +30,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/text.phg` | the `core.text` stdlib module — `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace` (M3 Track B Wave 2) |
 | `guide/file.phg` | the `core.file` stdlib module — `read` (→ `string?`), `exists`; reads a committed fixture, composes with S2 `??` / if-let (M3 Track B Wave 2) |
 | `guide/bytes.phg` | the `bytes` type + `b"…"` literals (`\xHH`) + `core.bytes` interop — `from_string`/`to_string` (→ `string?`)/`len`/`concat`/`slice` (M6 W0) |
-| `guide/html.phg` | `core.html` — the escape **kernel** (`text`/`raw`/`render`) plus the typed element **builders** (`el`/`void_el`/`attr`/`bool_attr`/`concat`); `Html`/`Attr` are distinct from `string`, XSS-safe by construction (core.html Waves 1–2) |
+| `guide/html.phg` | `core.html` — the escape **kernel** (`text`/`raw`/`render`), the typed element **builders** (`el`/`void_el`/`attr`/`bool_attr`/`concat`), and the **`html"<h1>{name}</h1>"` literal sugar** (holes escape by type unless already `Html`); `Html`/`Attr` are distinct from `string`, XSS-safe by construction (core.html Waves 1–3) |
 | `bench/workload.phg` | a **profiling** workload (CPU recursion + heap allocation) for `phg bench`/`disasm` — see `bench/README.md` |
 | `transpile/demo.phg` | the **Phorge → PHP** bridge — see `transpile/README.md` |
 | `build/app.phg` | **standalone executables** — `phg build` — see `build/README.md` |
@@ -61,7 +61,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `core.math` stdlib: `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` | `guide/math` |
 | `core.text` stdlib: `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace` | `guide/text` |
 | `core.file` stdlib: `read` (→ `string?`), `exists` (fixture-gated) | `guide/file` |
-| `core.html` kernel (`text`/`raw`/`render`) + builders (`el`/`void_el`/`attr`/`bool_attr`/`concat`); `Html`/`Attr` ≠ `string` (XSS-safe by construction) | `guide/html` |
+| `core.html` kernel (`text`/`raw`/`render`) + builders (`el`/`void_el`/`attr`/`bool_attr`/`concat`) + `html"…"` literal sugar (type-directed hole escaping); `Html`/`Attr` ≠ `string` (XSS-safe by construction) | `guide/html` |
 | `core.bytes`: `find` (→ `int?`); `core.text`: `split_once` (→ `List<string>`) | `web/handler` |
 | HTTP handler model: `Request`/`Response`, `parse_request`/`serialize_response`, `handle()` | `web/handler` |
 | static HTTP router: `List<Route>` table, exact `(method, path)` match → `Handler` enum + exhaustive dispatch | `web/router` |
