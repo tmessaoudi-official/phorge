@@ -48,10 +48,19 @@ kernels (`float_*`), and `compare_ord` live **once**, in `src/value.rs`. Both ba
 both runtimes agree. Don't introduce a second formatting path.
 
 ## 5. Adding an `Op` variant requires its match arm in the same commit
-The per-op dispatch (`vm::Vm::exec_op`) is an **exhaustive** match; `BytecodeProgram::validate`
-(`src/chunk.rs`) is a second match surface (wildcard `_ => None`). A new `Op` that carries an index
-(`Const`, `Call`, jumps, and the coming P4 `MakeInstance`/`GetField`/`MatchTag`) must extend **both**
-in lockstep, or the build breaks (exec) / a validation hole opens (validate).
+A new `Op` touches **three** match surfaces, and as of M9 **all three are exhaustive (no `_`
+wildcard)** — so a missing arm is a *compile error*, never a silent hole:
+- `vm::Vm::exec_op` (`src/vm.rs`) — the per-op execution semantics (irreducibly per-`Op`).
+- `compiler::Compiler::stack_effect` (`src/compiler.rs`) — the net stack delta.
+- `BytecodeProgram::validate` (`src/chunk.rs`) — the operand-index bounds check (EV-7). Until M9
+  this carried a `_ => None` wildcard, so a new index-carrying `Op` could silently skip its bounds
+  check; it now enumerates every variant (index-checked arms via `.then(|| …)` + one explicit
+  no-index `=> None` arm), matching the other two. **Do not reintroduce a `_` wildcard here** — it
+  is the forcing function that makes the bounds check un-skippable.
+
+A new `Op` that carries a *pool* index (`Const`, `Call`, jumps, `MakeInstance`/`GetField`/`MatchTag`,
+`MakeClosure`, …) must add its bounds arm to `validate`; one that carries only a count or local slot
+goes in the no-index arm. Either way the compiler now refuses to build until you choose.
 
 ## 6. No crash on input (EV-7)
 Malformed or adversarial `.phg` must exit 1 with a clean `Diagnostic`, **never** SIGABRT/panic.

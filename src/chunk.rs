@@ -300,36 +300,75 @@ impl BytecodeProgram {
             let code_len = f.chunk.code.len();
             let const_len = f.chunk.consts.len();
             for (ip, op) in f.chunk.code.iter().enumerate() {
+                // Exhaustive over `Op` — deliberately NO `_` wildcard. Every variant either
+                // carries a pool index that is range-checked here, or is listed in the no-index
+                // arm below. A newly added `Op` is therefore a COMPILE ERROR in this match until
+                // its bounds intent is declared, closing the old `_ => None` gap that let a new
+                // index-carrying op skip its EV-7 check (QW-15 / P1-#16). `exec_op` (src/vm.rs)
+                // and `stack_effect` (src/compiler.rs) are already exhaustive; this brings
+                // `validate` to the same guarantee. The `.then(|| …)` arms reject on exactly the
+                // same condition as the previous guarded arms — rejection behaviour is unchanged.
                 let problem = match op {
-                    Op::Const(i) if *i >= const_len => Some(format!(
-                        "const index {i} out of range (pool has {const_len})"
-                    )),
-                    Op::Call(idx) if *idx >= nfns => {
-                        Some(format!("call target {idx} out of range ({nfns} functions)"))
-                    }
-                    Op::MakeEnum(idx) | Op::MatchTag(idx) if *idx >= ndescs => Some(format!(
-                        "enum descriptor index {idx} out of range ({ndescs} descriptors)"
-                    )),
-                    Op::MakeInstance(idx) if *idx >= nclasses => Some(format!(
-                        "class descriptor index {idx} out of range ({nclasses} descriptors)"
-                    )),
-                    Op::GetField(idx) | Op::CallMethod(idx, _) if *idx >= nnames => Some(format!(
-                        "field-name index {idx} out of range (name pool has {nnames})"
-                    )),
-                    Op::CallNative(idx, _) if *idx >= nnatives => Some(format!(
-                        "native index {idx} out of range (registry has {nnatives})"
-                    )),
+                    Op::Const(i) => (*i >= const_len)
+                        .then(|| format!("const index {i} out of range (pool has {const_len})")),
+                    Op::Call(idx) => (*idx >= nfns)
+                        .then(|| format!("call target {idx} out of range ({nfns} functions)")),
+                    Op::MakeEnum(idx) | Op::MatchTag(idx) => (*idx >= ndescs).then(|| {
+                        format!("enum descriptor index {idx} out of range ({ndescs} descriptors)")
+                    }),
+                    Op::MakeInstance(idx) => (*idx >= nclasses).then(|| {
+                        format!(
+                            "class descriptor index {idx} out of range ({nclasses} descriptors)"
+                        )
+                    }),
+                    Op::GetField(idx) | Op::CallMethod(idx, _) => (*idx >= nnames).then(|| {
+                        format!("field-name index {idx} out of range (name pool has {nnames})")
+                    }),
+                    Op::CallNative(idx, _) => (*idx >= nnatives).then(|| {
+                        format!("native index {idx} out of range (registry has {nnatives})")
+                    }),
                     // Absolute targets; `== code_len` is the legal "fall off the end → implicit
                     // return" landing the run loop already handles, so only `>` is invalid.
-                    Op::Jump(t) | Op::JumpIfFalse(t) if *t > code_len => Some(format!(
-                        "jump target {t} out of range (code len {code_len})"
-                    )),
-                    // `MakeClosure` carries a function-table index (must be in range). `CallValue`
-                    // carries only an arg count (no table index) — no validate arm needed.
-                    Op::MakeClosure(idx) if *idx >= nfns => Some(format!(
-                        "closure target {idx} out of range ({nfns} functions)"
-                    )),
-                    _ => None,
+                    Op::Jump(t) | Op::JumpIfFalse(t) => (*t > code_len)
+                        .then(|| format!("jump target {t} out of range (code len {code_len})")),
+                    // `MakeClosure` carries a function-table index (must be in range).
+                    Op::MakeClosure(idx) => (*idx >= nfns)
+                        .then(|| format!("closure target {idx} out of range ({nfns} functions)")),
+                    // No pool index to range-check here. These carry either nothing, a count
+                    // (`Concat`/`MakeList`/`CallValue` arg counts), a local stack slot
+                    // (`GetLocal`/`SetLocal`, bounded by frame sizing, not a pool), or a payload
+                    // index a preceding `MatchTag` already proved (`GetEnumField`). Listed
+                    // explicitly so the match stays exhaustive.
+                    Op::AddI
+                    | Op::SubI
+                    | Op::MulI
+                    | Op::DivI
+                    | Op::RemI
+                    | Op::AddF
+                    | Op::SubF
+                    | Op::MulF
+                    | Op::DivF
+                    | Op::RemF
+                    | Op::Neg
+                    | Op::Not
+                    | Op::Eq
+                    | Op::Ne
+                    | Op::Lt
+                    | Op::Gt
+                    | Op::Le
+                    | Op::Ge
+                    | Op::Pop
+                    | Op::GetLocal(_)
+                    | Op::SetLocal(_)
+                    | Op::Concat(_)
+                    | Op::MakeList(_)
+                    | Op::Index
+                    | Op::Len
+                    | Op::MakeRange(_)
+                    | Op::Return
+                    | Op::GetEnumField(_)
+                    | Op::Fault(_)
+                    | Op::CallValue(_) => None,
                 };
                 if let Some(what) = problem {
                     return Err(format!(
@@ -557,6 +596,57 @@ mod tests {
             methods: HashMap::new(),
         };
         assert!(prog.validate().unwrap_err().contains("native index 9999"));
+    }
+
+    #[test]
+    fn validate_rejects_out_of_range_closure() {
+        // `MakeClosure` carries a function-table index; the only function is `main` (index 0),
+        // so index 4 is out of range. Guards the EV-7 bound that the exhaustive `validate` match
+        // keeps (the closure arm), distinct from `Op::Call`'s.
+        let mut c = Chunk::new();
+        c.emit(Op::MakeClosure(4), 1);
+        c.emit(Op::Return, 1);
+        let prog = BytecodeProgram {
+            functions: vec![Function {
+                name: "main".into(),
+                arity: 0,
+                n_captures: 0,
+                chunk: c,
+            }],
+            main: 0,
+            enum_descs: Vec::new(),
+            class_descs: Vec::new(),
+            names: Vec::new(),
+            methods: HashMap::new(),
+        };
+        let err = prog.validate().unwrap_err();
+        assert!(err.contains("closure target 4"), "{err}");
+    }
+
+    #[test]
+    fn validate_accepts_unchecked_no_index_ops() {
+        // The no-index arm returns `None` (no rejection) for ops that carry a count or local slot
+        // rather than a pool index — e.g. a large `CallValue` arg count and a high `GetLocal`
+        // slot. This pins the "behaviour unchanged" half of making the match exhaustive: these
+        // are validated elsewhere (frame sizing / runtime), never by `validate`.
+        let mut c = Chunk::new();
+        c.emit(Op::GetLocal(9999), 1);
+        c.emit(Op::CallValue(250), 1);
+        c.emit(Op::Return, 1);
+        let prog = BytecodeProgram {
+            functions: vec![Function {
+                name: "main".into(),
+                arity: 0,
+                n_captures: 0,
+                chunk: c,
+            }],
+            main: 0,
+            enum_descs: Vec::new(),
+            class_descs: Vec::new(),
+            names: Vec::new(),
+            methods: HashMap::new(),
+        };
+        assert!(prog.validate().is_ok());
     }
 
     #[test]

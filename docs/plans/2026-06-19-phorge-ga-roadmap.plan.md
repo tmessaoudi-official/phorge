@@ -118,7 +118,7 @@ wrong numbers, they produce PHP fatals.
 **Exit criteria**
 - [x] GitHub Actions CI exists: fmt + clippy + test, a PHP job (`PHORGE_REQUIRE_PHP=1`, fails not skips), a zig cross-build job; pin read from `rust-toolchain.toml`. — `.github/workflows/ci.yml` (`gate` + `cross-build` jobs); the encoded gate verified green locally (453 tests, oracle enforced, fmt+clippy clean) before commit. *(Observed green on a real GitHub run pending first push.)*
 - [x] ADRs written for the 5 load-bearing decisions (no shared run↔VM IR; erasure-not-monomorphization; Rc-not-GC; single-file brace-namespace PHP; offline-only vendor). — `docs/adr/0001…0005` (Nygard format, Status: Accepted, immutable + spec back-links) + `docs/adr/README.md` index; `ARCHITECTURE.md` "Decision records" policy updated to make `docs/adr/` canonical for the decision (specs stay canonical for the exploration).
-- [ ] Op descriptor table (`Op::meta()` / `OpInfo`) dissolves the 3-coupled-match; `chunk::validate` is **exhaustive** (no `_ => None` fall-through).
+- [x] `chunk::validate` is **exhaustive** (no `_ => None` fall-through) — every `Op` enumerated; a new variant is a compile error until its EV-7 bound is declared (+ regression tests; INVARIANTS #5 updated). **Re-scoped:** the `Op::meta()`/`OpInfo` descriptor table was investigated and **dropped as unmotivated** — `exec_op` (the interpreter loop) cannot be tabled, and `stack_effect` was *already* exhaustive + state-dependent, so 2 of the 3 matches were never silently coupled. Only `validate` had the hole; closing it exhaustively delivers the EV-7 safety the table was meant to provide, without the indirection.
 - [ ] Single-sourced: runtime fault strings (`faults`/`FaultMsg`), lambda capture-filter (`is_capturable`), native call-head resolution (`resolve_call_head`).
 - [ ] Interpreter runtime faults carry a source line (`Cell<Span>` through eval); fault body unchanged so the oracle stays green.
 - [ ] Doc-SSOT sync complete: MILESTONES.md = human SSOT; M5/M6 status, CLI table (`serve`/`vendor`), pipe `|>`, INVARIANTS "coming", `phorge`→`phg` slips, test-count 332→452 all fixed.
@@ -129,8 +129,8 @@ wrong numbers, they produce PHP fatals.
 | ID | Finding | file:line | Effort |
 |----|---------|-----------|--------|
 | Theme / I-07/I-29 / VB2/VJ-§1 / forge-H1 / G-19 / P1-#20 | ✅ **DONE** — CI added (`.github/workflows/ci.yml`); `PHORGE_REQUIRE_PHP=1` enforces the oracle (fails, not skips); CONTRIBUTING claim now true | `.github/workflows/ci.yml`, `CONTRIBUTING.md` | Quick |
-| QW-15 / P1-#16 / forge-A2/C2/C6/D3 / I-36 | `chunk::validate` `_ => None` lets a new index/count Op skip its EV-7 bounds check | `src/chunk.rs:303-332` | Quick |
-| Theme / I-36/I-20 / VC-§7/VE-C2 / forge-A1/A2/D7/G1/B1/D3/C6 / S-24 | 3-backend evolution tax → `Op::meta()`/`OpInfo` descriptor table + exhaustive `validate` | `src/{vm,compiler,chunk}.rs` | Low-Med |
+| QW-15 / P1-#16 / forge-A2/C2/C6/D3 / I-36 | ✅ **DONE** — `validate` now exhaustive (no `_ => None`); a new index Op can't skip its EV-7 check | `src/chunk.rs` | Quick |
+| Theme / I-36/I-20 / VC-§7/VE-C2 / forge-A1/A2/D7/G1/B1/D3/C6 / S-24 | ⊘ **DROPPED (re-scoped)** — `Op::meta()`/`OpInfo` table unmotivated: `exec_op` can't be tabled, `stack_effect` already exhaustive; the EV-7 win is the exhaustive `validate` above | `src/{vm,compiler,chunk}.rs` | Low-Med |
 | Theme / I-10 / forge-A1/B1 / P1-#22 | Fault strings hand-written twice + capture-filter duplicated 3-way | `src/interpreter.rs` ↔ `src/vm.rs`; `interpreter.rs:415-417` ↔ `transpile.rs:621-623` | Med |
 | P2-#24 / forge-B5 | Native call-head resolution policy hand-duplicated compiler ↔ interpreter | `src/compiler.rs:~1299`, `src/interpreter.rs:533` | Quick |
 | P1-#18 / I-08 / forge-H5 / G-14 / VC-§2 | Interpreter runtime faults carry no source line; VM faults do | `src/interpreter.rs` (Diagnostic::runtime → line 0) | Med |
