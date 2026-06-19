@@ -441,7 +441,7 @@ fn file_natives() -> Vec<NativeFn> {
 // ---- core.bytes ---------------------------------------------------------------------------------
 // Octet-sequence natives bridging `bytes` ↔ `string` (M6 W0). `to_string` returns `string?` — `null`
 // on invalid UTF-8 (composes with S2 `??` / if-let), never a fault. `len` is the BYTE count
-// (`strlen`), distinct from `core.text.len`'s character count (`mb_strlen`). `slice` is a total,
+// (`strlen`), as is `core.text.len` — the std stays extension-free (no mbstring). `slice` is a total,
 // bounds-clamped half-open `[start, end)` (no fault, unlike list `xs[i]`). PHP strings are byte
 // arrays, so the erasures are exact.
 
@@ -530,7 +530,11 @@ fn bytes_natives() -> Vec<NativeFn> {
             params: vec![Ty::Bytes],
             ret: Ty::Optional(Box::new(Ty::String)),
             eval: bytes_to_string,
-            php: |a| format!("(mb_check_encoding({0}, 'UTF-8') ? {0} : null)", parg(a, 0)),
+            // UTF-8 validity via PCRE (always compiled in), NOT mbstring's mb_check_encoding:
+            // the oracle runs `php -n` and minimal/Alpine PHP drop ini-loaded mbstring, so a core
+            // primitive must stay extension-free. preg_match returns 1 (valid) / 0 / false → keep
+            // the string only on an exact `=== 1`, else null (the `string?` absent case).
+            php: |a| format!("(preg_match('//u', {0}) === 1 ? {0} : null)", parg(a, 0)),
         },
         NativeFn {
             module: "core.bytes",
