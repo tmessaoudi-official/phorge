@@ -124,6 +124,8 @@ phg <command> <source> [options]
 | `disasm` | type-check → compile → dump the bytecode (per-function listings + descriptor tables) | exit 1 on type error |
 | `bench` | median-of-N timing of both backends + memory (peak/current RSS, Linux), output-identity gated | exit 1 if they fault or disagree |
 | `build` | compile to a standalone native executable | exit 1 on type error / build failure |
+| `vendor` | fetch + pin git dependencies into `vendor/` (the only network-touching command), writing `phorge.lock` | exit 1 on fetch/lock failure |
+| `serve` | run an HTTP server that dispatches requests to a Phorge `handle(Request) -> Response` (M6) | exit 1 on bind/handler error |
 | `explain` | look up a diagnostic code (`phg explain E-UNKNOWN-IDENT`) | exit 1 on unknown code |
 
 **Source** (for the run-family commands):
