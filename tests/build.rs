@@ -22,6 +22,24 @@ fn cross_toolchain_ready(target: &str) -> bool {
     ok
 }
 
+/// Skip-aware: true iff `llvm-objcopy` (or `$PHORGE_OBJCOPY`) can run. Host `phg build` shells out
+/// to it to embed the `.phorge` section, so a host-build test must **skip — not fail** where it is
+/// absent (a lean CI runner, a contributor without LLVM tools). The `cross-build` CI job installs
+/// it, so these tests still run for real there; only the lean `gate` job skips them. Mirrors
+/// `cross_toolchain_ready`'s philosophy for the zig / cargo-zigbuild toolchain.
+fn objcopy_available() -> bool {
+    let obj = std::env::var("PHORGE_OBJCOPY").unwrap_or_else(|_| "llvm-objcopy".into());
+    let ok = Command::new(&obj)
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !ok {
+        eprintln!("skipping: {obj} unavailable (host `phg build` needs llvm-objcopy)");
+    }
+    ok
+}
+
 #[test]
 fn cross_musl_binary_matches_runvm() {
     // Tier 3 — native execution: x86_64-musl runs on this x86_64-linux box.
@@ -91,6 +109,9 @@ fn cross_windows_section_round_trips() {
 
 #[test]
 fn built_binary_matches_runvm() {
+    if !objcopy_available() {
+        return;
+    }
     let prog = "examples/realworld/ledger.phg";
     let out_bin = std::env::temp_dir().join(format!("phorge_built_{}", std::process::id()));
     let _ = std::fs::remove_file(&out_bin);
@@ -121,6 +142,9 @@ fn built_binary_matches_runvm() {
 
 #[test]
 fn built_binary_ignores_argv_runs_embedded() {
+    if !objcopy_available() {
+        return;
+    }
     // v1 limitation: the embedded program ignores argv. Passing args must not change behavior.
     let prog = "examples/hello.phg";
     let out_bin = std::env::temp_dir().join(format!("phorge_built_argv_{}", std::process::id()));
