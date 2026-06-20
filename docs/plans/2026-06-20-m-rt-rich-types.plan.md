@@ -179,6 +179,9 @@
   differential PHP oracle + 53 integration green; clippy + fmt clean. Verified limitation documented in
   KNOWN_ISSUES (a generic result is not an arithmetic operand — `id(7)+1` runs on the interpreter but the
   VM rejects it; pre-existing since S7a). **NEXT M-RT slice: S4 unions `A|B`.**
+- [2026-06-20] AGREED (S4 pace): **design first, then stop for review** (developer chose "S4, design
+  first" over autonomous-implement). Produce the S4 union-types design spec; do not implement until
+  approved. Spec: `docs/specs/2026-06-20-s4-union-types-design.md`.
 
 ## Formal Plan
 
