@@ -38,6 +38,10 @@
   `E-IFACE-CYCLE` (interface-extends cycle); also backfilled the missing `E-INSTANCEOF-TYPE` explain
   entry from S1.
 
+- [2026-06-20] AGREED (sequencing): after S2, proceed to **S3 (Map/Set)** next — keep the planned
+  order (chosen over reordering S4 unions ahead). S3 adds Ops (`MakeMap`/`MakeSet`/`IndexMap`) and
+  carries the iteration-order parity risk (insertion-ordered maps in both Rust backends).
+
 ## Formal Plan
 
 See the approved plan (`~/.claude/plans/misty-honking-lynx.md`) and the design spec. Slice table:
