@@ -31,6 +31,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/maps.phg` | `Map<K, V>` literals `[k => v]` + indexing `m[k]` (string- and int-keyed; a map-index result as an arithmetic operand); keys are `int`/`bool`/`string`, insertion-ordered, transpiles to a PHP `[k => v]` array (Rich Types M-RT S3) |
 | `guide/generics.phg` | erased generics — `<T>` type parameters on free functions, inferred at the call site; reuse at many concrete types, a `List<T>` parameter, a `(T) -> T` function-typed parameter; no monomorphization (type params erase to PHP `mixed`/`array`/`\Closure`) (Rich Types M-RT S7) |
 | `guide/collections-query.phg` | the first **generic stdlib natives** — `Core.List` `reverse`/`sum` and `Core.Map` `keys`/`values`/`has`/`size`; type parameters (`reverse(List<T>) -> List<T>`, `keys(Map<K,V>) -> List<K>`) inferred at the call site by the same unifier as a generic free function, erasing to PHP array builtins (Rich Types M-RT S7b) |
+| `guide/sets.phg` | **`Set<T>`** via `Core.Set` — `of(List<T>) -> Set<T>` (dedupe, insertion-ordered), `contains(Set<T>, T) -> bool`, `size(Set<T>) -> int`; generic, erases to a deduped PHP array (`array_unique`/`in_array`/`count`) (Rich Types M-RT S7b) |
 | `guide/lambdas-pipe.phg` | lambdas (expression + statement body), higher-order functions, first-class named-fn references, the pipe operator `\|>` (M3 S3 Track A) |
 | `guide/math.phg` | the `Core.Math` stdlib module — `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` (M3 Track B Wave 2) |
 | `guide/floats.phg` | `float` stringification — shortest-round-trip, always-positional, byte-identical across `run`/`runvm`/PHP for every finite magnitude (irrational, large, small) via the `__phorge_float` transpile helper |
@@ -68,6 +69,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | lambdas (expr + stmt body), higher-order fns, first-class named-fn refs, pipe `\|>` | `guide/lambdas-pipe` |
 | erased generics `<T>` on free functions, call-site inference (incl. `List<T>` + `(T) -> T` params) | `guide/generics` |
 | generic stdlib natives: `Core.List` `reverse`/`sum`, `Core.Map` `keys`/`values`/`has`/`size` | `guide/collections-query` |
+| `Set<T>`: `Core.Set` `of`/`contains`/`size` (insertion-ordered, deduped) | `guide/sets` |
 | `var` local type inference, `type` aliases | `guide/inference` |
 | `Console.println(string)` (after `import Core.Console;`) | every example |
 | `Core.Math` stdlib: `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` | `guide/math` |

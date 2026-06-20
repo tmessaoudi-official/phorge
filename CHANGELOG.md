@@ -20,8 +20,15 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   `php` closure, so no type variable reaches a backend. Byte-identical `run ≡ runvm ≡ real PHP` (new
   `examples/guide/collections-query.phg`, oracle-gated). Caveats (KNOWN_ISSUES): `List.sum` faults on
   i64 overflow where PHP `array_sum` promotes to float; PHP coerces integer-like/bool map keys, so
-  `keys`/`values` round-trip byte-identically only with plain string keys. (`Set` and the higher-order
-  `map`/`filter`/`reduce` build on this path in the next S7b sub-slices.)
+  `keys`/`values` round-trip byte-identically only with plain string keys. (The higher-order
+  `map`/`filter`/`reduce` build on this path in the next S7b sub-slice.)
+- **`Set<T>` (`Core.Set`):** `of(List<T>) -> Set<T>` (deduplicate, insertion-ordered), `contains(Set<T>,
+  T) -> bool`, `size(Set<T>) -> int`. `Value::Set` is realigned from a bare `HashSet<HKey>` to an
+  insertion-ordered, `Rc`-shared `Rc<Vec<HKey>>` (the same byte-identity discipline as `Map`, risk R1),
+  built only through the single `value::build_set` kernel so both backends dedup identically; `Set`
+  equality is order-independent membership. Erases to a deduped PHP array (`array_values(array_unique(
+  $xs, SORT_STRING))` / `in_array(_, _, true)` / `count`). Byte-identical `run ≡ runvm ≡ real PHP` (new
+  `examples/guide/sets.phg`). Set union/intersection and iteration are follow-ups.
 
 ### Changed — stdlib namespace is now PascalCase `Core.*` (namespace reshape)
 

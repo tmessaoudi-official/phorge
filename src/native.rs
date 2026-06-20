@@ -1103,6 +1103,74 @@ fn map_natives() -> Vec<NativeFn> {
     ]
 }
 
+// ---- Core.Set -----------------------------------------------------------------------------------
+// Set natives, all generic over the element type. A `Value::Set` is an insertion-ordered, deduped
+// `Rc<Vec<HKey>>` (the Map discipline — risk R1), built only via `value::build_set`. PHP represents a
+// set as a plain deduped list, so `of` erases to `array_values(array_unique($xs, SORT_STRING))`
+// (SORT_STRING matches `HKey` string-distinctness for a homogeneous `Set<T>` — SORT_REGULAR would
+// loosely collapse e.g. "1"/"01"), `contains` to a strict `in_array`, `size` to `count`. Element type
+// is the hashable subset (`int`/`bool`/`string`); a `float`/composite element is `E-MAP-KEY` at the
+// type level, and a stray one faults cleanly at runtime (EV-7).
+
+fn set_of(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs)] => {
+            let s = crate::value::build_set((**xs).clone())?;
+            Ok(Value::Set(std::rc::Rc::new(s)))
+        }
+        _ => Err("Set.of expects (List<T>)".into()),
+    }
+}
+fn set_contains(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Set(s), elem] => {
+            let hk = crate::value::HKey::from_value(elem)
+                .ok_or_else(|| format!("invalid set element: {}", elem.type_name()))?;
+            Ok(Value::Bool(s.contains(&hk)))
+        }
+        _ => Err("Set.contains expects (Set<T>, T)".into()),
+    }
+}
+fn set_size(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Set(s)] => Ok(Value::Int(s.len() as i64)),
+        _ => Err("Set.size expects (Set<T>)".into()),
+    }
+}
+
+/// The `Core.Set` registry entries (M-RT S7b). All generic over the element type `T`.
+fn set_natives() -> Vec<NativeFn> {
+    let t = || Ty::Param("T".into());
+    vec![
+        NativeFn {
+            module: "Core.Set",
+            name: "of",
+            params: vec![Ty::List(Box::new(t()))],
+            ret: Ty::Set(Box::new(t())),
+            eval: set_of,
+            // Dedup preserving first-occurrence order; SORT_STRING matches HKey string-distinctness.
+            php: |a| format!("array_values(array_unique({}, SORT_STRING))", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Set",
+            name: "contains",
+            params: vec![Ty::Set(Box::new(t())), t()],
+            ret: Ty::Bool,
+            eval: set_contains,
+            // Strict in_array(needle, haystack) — needle first.
+            php: |a| format!("in_array({}, {}, true)", parg(a, 1), parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Set",
+            name: "size",
+            params: vec![Ty::Set(Box::new(t()))],
+            ret: Ty::Int,
+            eval: set_size,
+            php: |a| format!("count({})", parg(a, 0)),
+        },
+    ]
+}
+
 /// Construct the native table once. Order is load-bearing: [`CONSOLE_PRINTLN`] pins slot 0; every
 /// other native is resolved by `(module, name)` (or leaf+name) at compile time, so appended order is
 /// free. Modules are grouped by `*_natives()` builders (one per `core.*` leaf).
@@ -1127,6 +1195,7 @@ fn build() -> Vec<NativeFn> {
     registry.extend(html_natives());
     registry.extend(list_natives());
     registry.extend(map_natives());
+    registry.extend(set_natives());
     // Pinned-slot invariant: the constant the compiler bakes into `Op::CallNative` must address the
     // entry it names. Cheap one-time check at first `registry()` access.
     assert_eq!(
@@ -1666,6 +1735,64 @@ mod tests {
         assert_eq!(
             registry()[index_of("Core.Map", "values").unwrap()].ret,
             Ty::List(Box::new(Ty::Param("V".into())))
+        );
+    }
+
+    #[test]
+    fn set_natives_eval_and_emit() {
+        let mut o = String::new();
+        // of: dedup preserving first-occurrence order.
+        let xs = Value::List(std::rc::Rc::new(vec![
+            Value::Int(3),
+            Value::Int(1),
+            Value::Int(3),
+            Value::Int(2),
+            Value::Int(1),
+        ]));
+        let s = set_of(std::slice::from_ref(&xs), &mut o).unwrap();
+        match &s {
+            Value::Set(elems) => {
+                assert_eq!(elems.len(), 3); // {3, 1, 2}
+                assert_eq!(elems[0], crate::value::HKey::Int(3)); // first-seen order
+                assert_eq!(elems[1], crate::value::HKey::Int(1));
+                assert_eq!(elems[2], crate::value::HKey::Int(2));
+            }
+            other => panic!("of returned {other:?}"),
+        }
+        assert!(matches!(
+            set_contains(&[s.clone(), Value::Int(2)], &mut o),
+            Ok(Value::Bool(true))
+        ));
+        assert!(matches!(
+            set_contains(&[s.clone(), Value::Int(9)], &mut o),
+            Ok(Value::Bool(false))
+        ));
+        assert!(matches!(
+            set_size(std::slice::from_ref(&s), &mut o),
+            Ok(Value::Int(3))
+        ));
+        // a non-hashable element (float) is a clean fault, never a panic (EV-7).
+        assert!(set_contains(&[s, Value::Float(2.0)], &mut o).is_err());
+        assert!(set_of(
+            &[Value::List(std::rc::Rc::new(vec![Value::Float(1.0)]))],
+            &mut o
+        )
+        .is_err());
+        // PHP erasures + generic return type.
+        let php = |n: &str, a: &[&str]| {
+            let args: Vec<String> = a.iter().map(|s| (*s).to_string()).collect();
+            (registry()[index_of("Core.Set", n).unwrap()].php)(&args)
+        };
+        assert_eq!(
+            php("of", &["$xs"]),
+            "array_values(array_unique($xs, SORT_STRING))"
+        );
+        assert_eq!(php("contains", &["$s", "$x"]), "in_array($x, $s, true)");
+        assert_eq!(php("size", &["$s"]), "count($s)");
+        assert_eq!(index_of_by_leaf("Set", "of"), index_of("Core.Set", "of"));
+        assert_eq!(
+            registry()[index_of("Core.Set", "of").unwrap()].ret,
+            Ty::Set(Box::new(Ty::Param("T".into())))
         );
     }
 

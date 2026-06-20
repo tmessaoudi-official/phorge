@@ -6,7 +6,7 @@
 //! deferred to M3, when mutation could create cycles). See `docs/specs/2026-06-16-m2-p5-object-model-design.md`.
 
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
@@ -30,9 +30,12 @@ pub enum Value {
     /// (cloning is a refcount bump). Built and indexed only through the `build_map`/`map_index`
     /// kernels below, so both backends agree on dedup and lookup semantics.
     Map(Rc<Vec<(HKey, Value)>>),
-    /// Constructible in principle; Set ergonomics land with generics (M-RT S7), so the sample never
-    /// builds one yet.
-    Set(HashSet<HKey>),
+    /// An **insertion-ordered** set of hashable keys (M-RT S7b). Like `Map`, the order is part of the
+    /// value (not a `HashSet`): PHP arrays preserve insertion order, so a `Vec` of keys keeps a future
+    /// `Set` iteration / `array_values` byte-identical with the PHP target (risk R1). Shared via `Rc`
+    /// like `List`/`Map` (cloning is a refcount bump). Built only through the `build_set` kernel below,
+    /// so both backends dedup identically.
+    Set(Rc<Vec<HKey>>),
     Instance(Rc<Instance>),
     Enum(Rc<EnumVal>),
     /// A first-class function value: either a tree-walking closure (interpreter),
@@ -129,6 +132,24 @@ pub fn build_map(pairs: Vec<(Value, Value)>) -> Result<Vec<(HKey, Value)>, Strin
     Ok(out)
 }
 
+/// Build an **insertion-ordered, deduplicated** set from evaluated element values, keeping each
+/// element's **first occurrence** and discarding later duplicates (`Set.of([1, 2, 1]) ⇒ {1, 2}`,
+/// in that order) — the same first-seen-order discipline as [`build_map`]'s keys. Single-sourced so
+/// the interpreter and the VM dedup identically (`run ≡ runvm`); a non-`HKey` element
+/// (checker-unreachable, the checker constrains a `Set<T>` element to the hashable subset) faults
+/// cleanly rather than panicking (EV-7).
+pub fn build_set(elems: Vec<Value>) -> Result<Vec<HKey>, String> {
+    let mut out: Vec<HKey> = Vec::with_capacity(elems.len());
+    for e in elems {
+        let key = HKey::from_value(&e)
+            .ok_or_else(|| format!("invalid set element: {}", e.type_name()))?;
+        if !out.contains(&key) {
+            out.push(key);
+        }
+    }
+    Ok(out)
+}
+
 /// Look a key up in an insertion-ordered map. A missing key is a clean fault (`"map key not found"`),
 /// byte-identical across both backends — the differential harness excludes fault cases, and the
 /// present-key path is byte-identical to PHP `$m[$k]`. A non-`HKey` index is checker-unreachable
@@ -204,6 +225,10 @@ impl Value {
                             .is_some_and(|(_, bv)| v.eq_val(bv))
                     })
             }
+            // Sets compare **order-independently** (insertion order is iteration, not identity):
+            // same cardinality and same membership. Both are deduped by `build_set`, so a one-way
+            // containment check at equal length suffices.
+            (Set(a), Set(b)) => a.len() == b.len() && a.iter().all(|k| b.contains(k)),
             (Enum(a), Enum(b)) => {
                 a.ty == b.ty
                     && a.variant == b.variant
@@ -493,5 +518,31 @@ mod tests {
     fn type_name_is_stable() {
         assert_eq!(Value::Unit.type_name(), "unit");
         assert_eq!(Value::List(Rc::new(vec![])).type_name(), "list");
+        assert_eq!(Value::Set(Rc::new(vec![])).type_name(), "set");
+    }
+
+    #[test]
+    fn build_set_dedups_first_seen() {
+        // First occurrence kept, later duplicates dropped, order preserved (M-RT S7b).
+        let s = build_set(vec![
+            Value::Int(3),
+            Value::Int(1),
+            Value::Int(3),
+            Value::Int(2),
+            Value::Int(1),
+        ])
+        .unwrap();
+        assert_eq!(s, vec![HKey::Int(3), HKey::Int(1), HKey::Int(2)]);
+        // a non-hashable element faults cleanly, never panics (EV-7).
+        assert!(build_set(vec![Value::Float(1.0)]).is_err());
+    }
+
+    #[test]
+    fn eq_val_sets_are_order_independent() {
+        let a = Value::Set(Rc::new(vec![HKey::Int(1), HKey::Int(2), HKey::Int(3)]));
+        let b = Value::Set(Rc::new(vec![HKey::Int(3), HKey::Int(1), HKey::Int(2)]));
+        let c = Value::Set(Rc::new(vec![HKey::Int(1), HKey::Int(2)]));
+        assert!(a.eq_val(&b)); // same membership, different order
+        assert!(!a.eq_val(&c)); // different cardinality
     }
 }

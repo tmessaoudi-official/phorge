@@ -164,8 +164,15 @@ caveats (the `run`/`runvm` spine is always byte-identical):
 - **`Map.keys`/`values` key coercion** — see the *Maps* note above: PHP coerces integer-like string
   keys and bools to int keys, so use plain string keys for byte-identical PHP round-tripping.
 
-Still pending on this path: `Set` (construction + `contains`/`size` — next S7b sub-slice) and the
-higher-order `Core.List` `map`/`filter`/`reduce` (the closure-from-native mechanism).
+`Core.Set` now ships too (M-RT S7b): `of(List<T>) -> Set<T>` (insertion-ordered dedupe),
+`contains(Set<T>, T) -> bool`, `size(Set<T>) -> int`. `Value::Set` is an insertion-ordered
+`Rc<Vec<HKey>>` (the Map discipline, not a `HashSet`), so it round-trips byte-identically as a deduped
+PHP array (`array_values(array_unique($xs, SORT_STRING))` / `in_array(_, _, true)` / `count`).
+Element type is the hashable subset (`int`/`bool`/`string`); homogeneous by typing, so the
+SORT_STRING dedupe matches `HKey` equality. Set union/intersection and iteration are follow-ups.
+
+Still pending on this path: the higher-order `Core.List` `map`/`filter`/`reduce` (the
+closure-from-native mechanism — `NativeEval::HigherOrder` + a re-entrant VM closure invoker).
 
 ## Behavioral quirks
 
