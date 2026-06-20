@@ -1,0 +1,57 @@
+// Interfaces + `implements` + `instanceof` against an interface (Rich Types — M-RT S2).
+//
+// An interface is a named contract of method signatures. A class `implements` one (or several),
+// and is then a *subtype* of it: a concrete instance flows into an interface-typed slot, and code
+// written against the interface works for every implementer. `instanceof` tests against a class
+// AND an interface; inside `if (x instanceof T)` the operand is smart-cast to `T`.
+package main;
+
+import core.console;
+
+// A contract: anything that can speak.
+interface Speaker {
+    function speak() -> string;
+}
+
+// Interfaces compose by `extends`: a Pet is a Speaker that also has a name.
+interface Pet extends Speaker {
+    function petName() -> string;
+}
+
+class Dog implements Pet {
+    constructor(public string dogName) {}
+    function speak() -> string { return "Woof"; }
+    function petName() -> string { return this.dogName; }
+}
+
+class Robot implements Speaker {
+    function speak() -> string { return "Beep"; }
+}
+
+// Polymorphism through an interface-typed parameter: `announce` knows only the contract.
+function announce(Speaker s) -> string {
+    return s.speak();
+}
+
+function main() {
+    var d = Dog("Rex");
+    var r = Robot();
+
+    // Called polymorphically — both a Dog and a Robot are Speakers.
+    console.println(announce(d)); // Woof
+    console.println(announce(r)); // Beep
+
+    // `instanceof` against a class and against (extended) interfaces.
+    console.println("{d instanceof Dog}");     // true
+    console.println("{d instanceof Speaker}"); // true  (Dog implements Pet, Pet extends Speaker)
+    console.println("{d instanceof Pet}");     // true
+    console.println("{r instanceof Speaker}"); // true
+    console.println("{r instanceof Pet}");     // false (Robot is only a Speaker)
+
+    // A class instance flows into an interface-typed binding (nominal subtyping).
+    Speaker sp = d;
+    // Smart-cast: a Speaker known to be a Dog reads the Dog's own field.
+    if (sp instanceof Dog) {
+        console.println(sp.dogName); // Rex
+    }
+}

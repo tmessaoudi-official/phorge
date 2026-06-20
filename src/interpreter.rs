@@ -71,6 +71,11 @@ impl CallScopes {
 pub struct Interp {
     funcs: HashMap<String, FunctionDecl>,
     classes: HashMap<String, ClassDecl>,
+    /// Transitively-flattened interface set each class implements — the `instanceof` table, built
+    /// once via [`crate::ast::class_implements`] and shared verbatim with the checker + VM so the
+    /// runtime test never diverges (M-RT S2). Interfaces themselves are erased: there are no
+    /// interface values, only this lookup.
+    class_implements: std::collections::BTreeMap<String, Vec<String>>,
     /// variant name -> (enum name, arity)
     variants: HashMap<String, (String, usize)>,
     frame: CallScopes,
@@ -93,6 +98,7 @@ pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
     let mut interp = Interp {
         funcs: HashMap::new(),
         classes: HashMap::new(),
+        class_implements: std::collections::BTreeMap::new(),
         variants: HashMap::new(),
         frame: CallScopes::new(),
         this: None,
@@ -127,6 +133,7 @@ pub fn call_named(
     let mut interp = Interp {
         funcs: HashMap::new(),
         classes: HashMap::new(),
+        class_implements: std::collections::BTreeMap::new(),
         variants: HashMap::new(),
         frame: CallScopes::new(),
         this: None,
@@ -169,12 +176,17 @@ impl Interp {
                 Item::Class(c) => {
                     self.classes.insert(c.name.clone(), c.clone());
                 }
+                // Interfaces have no runtime instances; they contribute only to the
+                // `class_implements` table built below (used by `instanceof`).
+                Item::Interface(_) => {}
                 Item::Import { .. } => {}
                 // Aliases are expanded out of the AST before any backend runs (checker::
                 // expand_aliases); this arm only satisfies the exhaustive match.
                 Item::TypeAlias { .. } => {}
             }
         }
+        // The single shared interface table (same algorithm as the checker + VM, no divergence).
+        self.class_implements = crate::ast::class_implements(program);
     }
 
     /// Run a callable body in a fresh frame: bind `args` to `names` in the base
@@ -317,14 +329,19 @@ impl Interp {
             Expr::InstanceOf {
                 value, type_name, ..
             } => {
-                // Runtime type test (M-RT S1): true iff `value` is an instance whose class equals
-                // `type_name`. A non-instance value is `false` (never a fault) — matching PHP's
-                // `instanceof`. The class name is single-sourced on `Value::Instance` (P4-4), so all
-                // three backends agree.
+                // Runtime type test (M-RT S1; interfaces added S2): true iff `value` is an instance
+                // whose class equals `type_name` OR whose class implements interface `type_name`
+                // (via the shared `class_implements` table). A non-instance value is `false` (never a
+                // fault) — matching PHP's `instanceof`. The class name is single-sourced on
+                // `Value::Instance` (P4-4), so all three backends agree.
                 let v = self.eval(value)?;
-                Ok(Value::Bool(
-                    matches!(&v, Value::Instance(inst) if inst.class == *type_name),
-                ))
+                let is = matches!(&v, Value::Instance(inst)
+                    if inst.class == *type_name
+                        || self
+                            .class_implements
+                            .get(&inst.class)
+                            .is_some_and(|ifaces| ifaces.iter().any(|i| i == type_name)));
+                Ok(Value::Bool(is))
             }
             Expr::Call { callee, args, .. } => self.eval_call(callee, args),
             Expr::Member {

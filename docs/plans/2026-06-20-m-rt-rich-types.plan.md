@@ -23,6 +23,20 @@
   S5 intersections → S6 extends → S7 generics → S8 traits. Only S1+S3 add Ops.
 - [2026-06-20] AGREED (pace): proceed autonomously, gate per commit; commit green self-contained
   slices (project git autonomy). Plan approved via ExitPlanMode.
+- [2026-06-20] AGREED (S2 design, locked at implementation): (a) interfaces reuse `FunctionDecl`
+  (empty body) for method *signatures* — no new sig struct, no new exhaustive surface beyond
+  `Item::Interface`. (b) `class_implements` is a SINGLE shared pure fn `ast::class_implements(program)`
+  (transitively flattened, sorted, cycle-safe via a visited guard) called by checker + interpreter +
+  compiler — one algorithm, no divergence (the `free_vars` discipline); the VM bakes the compiler's
+  result into `BytecodeProgram.class_implements`. (c) nominal subtyping (class → interface it
+  implements) threads through `Ty::assignable_with(from,to,&subtype_oracle)`; the old
+  `Ty::assignable` is `assignable_with(_,_,|_,_|false)` — keeps the single chokepoint. (d) interfaces
+  are **`package main`-only** this slice (E-PKG-TYPE extended to reject library interfaces), matching
+  the S2c class/enum restriction. (e) interface-typed receivers dispatch via interface method sigs
+  (flattened through `extends`); narrowing `if (x instanceof I)` reuses the S1 push_scope+declare. New
+  codes: `E-IFACE-IMPL` (unknown name in `implements`), `E-IFACE-UNIMPL`/`E-IFACE-SIG` (conformance),
+  `E-IFACE-CYCLE` (interface-extends cycle); also backfilled the missing `E-INSTANCEOF-TYPE` explain
+  entry from S1.
 
 ## Formal Plan
 
@@ -31,7 +45,7 @@ See the approved plan (`~/.claude/plans/misty-honking-lynx.md`) and the design s
 | # | Slice | New Op? | Status |
 |---|-------|---------|--------|
 | S1 | `instanceof` (class-only) + smart-cast, retire `is` | `Op::IsInstance` | **DONE** (gate green: 394 lib + 10 PHP-oracle differential; clippy+fmt clean; example byte-identical run≡runvm≡PHP) |
-| S2 | interfaces + `implements` (+ instanceof interface table) | no | pending |
+| S2 | interfaces + `implements`/`extends` (+ instanceof interface table) | no | **DONE** (404 lib + PHP-oracle differential incl. `guide/interfaces.phg`; clippy+fmt clean; byte-identical run≡runvm≡PHP; subtyping via `Ty::assignable_with`, shared `ast::class_implements`) |
 | S3 | Map/Set values + literals + indexing | `MakeMap/MakeSet/IndexMap` | pending |
 | S4 | union `A\|B` + match-over-union exhaustiveness | no | pending |
 | S5 | intersection `A&B` (requires S2) | no | pending |

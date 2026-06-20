@@ -351,11 +351,18 @@ impl<'a> Vm<'a> {
                 }
             }
             Op::IsInstance(name) => {
-                // `value instanceof name` (M-RT S1): true iff the popped value is an instance whose
-                // class equals `name`. A non-instance is `false`, never a fault — byte-identical to
-                // the interpreter (`Expr::InstanceOf`) and PHP's `instanceof`.
+                // `value instanceof name` (M-RT S1; interfaces S2): true iff the popped value is an
+                // instance whose class equals `name` OR implements interface `name` (via the shared
+                // `class_implements` table). A non-instance is `false`, never a fault — byte-identical
+                // to the interpreter (`Expr::InstanceOf`) and PHP's `instanceof`.
                 let v = self.pop();
-                let is = matches!(&v, Value::Instance(inst) if inst.class == name);
+                let is = matches!(&v, Value::Instance(inst)
+                    if inst.class == name
+                        || self
+                            .program
+                            .class_implements
+                            .get(&inst.class)
+                            .is_some_and(|ifaces| ifaces.contains(&name)));
                 self.stack.push(Value::Bool(is));
             }
 
@@ -580,6 +587,7 @@ mod tests {
             class_descs: Vec::new(),
             names: Vec::new(),
             methods: HashMap::new(),
+            class_implements: std::collections::BTreeMap::new(),
         };
         Vm::new(&program).run().map_err(|d| d.to_string())
     }
@@ -806,6 +814,7 @@ mod tests {
             class_descs: Vec::new(),
             names: Vec::new(),
             methods: HashMap::new(),
+            class_implements: std::collections::BTreeMap::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "7\n");
     }
@@ -844,6 +853,7 @@ mod tests {
             class_descs: Vec::new(),
             names: Vec::new(),
             methods: HashMap::new(),
+            class_implements: std::collections::BTreeMap::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "true\n7\n");
     }
@@ -881,6 +891,7 @@ mod tests {
             class_descs: Vec::new(),
             names: Vec::new(),
             methods: HashMap::new(),
+            class_implements: std::collections::BTreeMap::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "false\n");
     }
@@ -914,6 +925,7 @@ mod tests {
             }],
             names: vec!["x".into()],
             methods: HashMap::new(),
+            class_implements: std::collections::BTreeMap::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "3\n");
     }
@@ -943,6 +955,7 @@ mod tests {
             }],
             names: vec!["tag".into()],
             methods: HashMap::new(),
+            class_implements: std::collections::BTreeMap::new(),
         };
         let err = Vm::new(&program).run().unwrap_err().to_string();
         assert!(err.contains("no field `tag` on `Empty`"), "{err}");

@@ -817,10 +817,14 @@ impl Parser {
             TokenKind::Function => Ok(Item::Function(self.parse_function(Vec::new(), sp)?)),
             TokenKind::Enum => Ok(Item::Enum(self.parse_enum(sp)?)),
             TokenKind::Class => Ok(Item::Class(self.parse_class(sp)?)),
+            TokenKind::Interface => Ok(Item::Interface(self.parse_interface(sp)?)),
             TokenKind::TypeKw => self.parse_type_alias(sp),
             TokenKind::Package => Err(self
                 .error("'package' must be the first declaration, before any import or definition")),
-            _ => Err(self.error("a top-level item (import, function, enum, class, or type)")),
+            _ => {
+                Err(self
+                    .error("a top-level item (import, function, enum, class, interface, or type)"))
+            }
         }
     }
 
@@ -972,10 +976,15 @@ impl Parser {
         })
     }
 
-    /// `class Name { member* }` — assumes current token is `class`.
+    /// `class Name [implements A, B] { member* }` — assumes current token is `class`.
     fn parse_class(&mut self, sp: Span) -> Result<ClassDecl, Diagnostic> {
         self.expect(&TokenKind::Class, "'class'")?;
         let name = self.expect_ident("a class name")?;
+        let implements = if self.eat(&TokenKind::Implements) {
+            self.parse_name_list("an interface name after 'implements'")?
+        } else {
+            Vec::new()
+        };
         self.expect(&TokenKind::LBrace, "'{' to open class body")?;
         let mut members = Vec::new();
         while !self.check(&TokenKind::RBrace) && !self.check(&TokenKind::Eof) {
@@ -984,9 +993,70 @@ impl Parser {
         self.expect(&TokenKind::RBrace, "'}' to close class")?;
         Ok(ClassDecl {
             name,
+            implements,
             members,
             span: sp,
         })
+    }
+
+    /// `interface Name [extends A, B] { (function sig;)* }` — assumes current token is `interface`.
+    /// Each member is a method *signature*: `function name(params) [-> Ret];` with no body, stored as
+    /// a `FunctionDecl` whose body is empty (M-RT S2).
+    fn parse_interface(&mut self, sp: Span) -> Result<crate::ast::InterfaceDecl, Diagnostic> {
+        self.expect(&TokenKind::Interface, "'interface'")?;
+        let name = self.expect_ident("an interface name")?;
+        let extends = if self.eat(&TokenKind::Extends) {
+            self.parse_name_list("an interface name after 'extends'")?
+        } else {
+            Vec::new()
+        };
+        self.expect(&TokenKind::LBrace, "'{' to open interface body")?;
+        let mut methods = Vec::new();
+        while !self.check(&TokenKind::RBrace) && !self.check(&TokenKind::Eof) {
+            let msp = self.peek_span();
+            self.expect(
+                &TokenKind::Function,
+                "'function' for an interface method signature",
+            )?;
+            let mname = self.expect_ident("a method name")?;
+            self.expect(&TokenKind::LParen, "'(' after method name")?;
+            let params = self.parse_params()?;
+            self.expect(&TokenKind::RParen, "')' to close parameters")?;
+            let ret = if self.eat(&TokenKind::Arrow) {
+                Some(self.parse_type()?)
+            } else {
+                None
+            };
+            self.expect(
+                &TokenKind::Semicolon,
+                "';' after an interface method signature",
+            )?;
+            methods.push(FunctionDecl {
+                modifiers: Vec::new(),
+                name: mname,
+                params,
+                ret,
+                body: Vec::new(),
+                span: msp,
+            });
+        }
+        self.expect(&TokenKind::RBrace, "'}' to close interface")?;
+        Ok(crate::ast::InterfaceDecl {
+            name,
+            extends,
+            methods,
+            span: sp,
+        })
+    }
+
+    /// A comma-separated list of one-or-more identifiers (no trailing comma), used for a class's
+    /// `implements` list and an interface's `extends` list.
+    fn parse_name_list(&mut self, what: &str) -> Result<Vec<String>, Diagnostic> {
+        let mut names = vec![self.expect_ident(what)?];
+        while self.eat(&TokenKind::Comma) {
+            names.push(self.expect_ident(what)?);
+        }
+        Ok(names)
     }
 
     /// One class member: a field, a constructor, or a method. Modifiers preceding
@@ -1695,6 +1765,42 @@ mod tests {
                     ClassMember::Method(f) => assert_eq!(f.name, "greet"),
                     other => panic!("member 2: {other:?}"),
                 }
+            }
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_class_implements_list() {
+        // M-RT S2: `implements A, B` is parsed into ClassDecl.implements.
+        match item(
+            "class Dog implements Speaker, Pet { function speak() -> string { return \"w\"; } }",
+        ) {
+            Item::Class(c) => {
+                assert_eq!(c.name, "Dog");
+                assert_eq!(c.implements, vec!["Speaker".to_string(), "Pet".to_string()]);
+                assert_eq!(c.members.len(), 1);
+            }
+            other => panic!("got {other:?}"),
+        }
+        // No `implements` ⇒ empty list.
+        match item("class Plain {}") {
+            Item::Class(c) => assert!(c.implements.is_empty()),
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_interface_decl() {
+        // M-RT S2: an interface is method signatures (no bodies) + an optional `extends` list.
+        match item("interface Pet extends Speaker, Named { function speak() -> string; function age() -> int; }") {
+            Item::Interface(i) => {
+                assert_eq!(i.name, "Pet");
+                assert_eq!(i.extends, vec!["Speaker".to_string(), "Named".to_string()]);
+                assert_eq!(i.methods.len(), 2);
+                assert_eq!(i.methods[0].name, "speak");
+                assert!(i.methods[0].body.is_empty(), "signature has no body");
+                assert_eq!(i.methods[1].name, "age");
             }
             other => panic!("got {other:?}"),
         }

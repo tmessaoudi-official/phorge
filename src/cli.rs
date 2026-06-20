@@ -321,6 +321,36 @@ pub fn explain_text(code: &str) -> Option<String> {
              E-NAME-CASE); both are front-end-only, so they never change the generated PHP. Rename the\n\
              type — the diagnostic suggests the converted form (`shape` → `Shape`).\n"
         }
+        "E-INSTANCEOF-TYPE" => {
+            "E-INSTANCEOF-TYPE — an `instanceof` operand is not valid.\n\n\
+             `value instanceof T` tests whether a class instance is of class/interface `T`. The right\n\
+             operand must name a declared **class or interface** (M-RT S2 added interfaces); the left\n\
+             operand must be a class instance. The result is `bool`, and inside `if (x instanceof T)`\n\
+             the operand `x` is smart-cast to `T` in the then-block.\n"
+        }
+        "E-IFACE-IMPL" => {
+            "E-IFACE-IMPL — a name in `implements`/`extends` is not an interface.\n\n\
+             A class `implements` declared interfaces, and an interface `extends` other interfaces. A\n\
+             name that resolves to a class, enum, or nothing cannot appear there. Declare the missing\n\
+             `interface`, or remove the name.\n"
+        }
+        "E-IFACE-UNIMPL" => {
+            "E-IFACE-UNIMPL — a class does not implement an interface method.\n\n\
+             A class that `implements I` must provide every method of `I` and its `extends` chain. PHP\n\
+             would fatal at class-declaration time, so Phorge rejects it up front. Add the missing\n\
+             method (matching the interface's signature) to the class.\n"
+        }
+        "E-IFACE-SIG" => {
+            "E-IFACE-SIG — a class method's signature does not match the interface's.\n\n\
+             An implementing method must match the interface method's parameter types and return type\n\
+             exactly (no variance this slice). Align the class method's signature with the interface\n\
+             declaration.\n"
+        }
+        "E-IFACE-CYCLE" => {
+            "E-IFACE-CYCLE — interfaces form an `extends` cycle.\n\n\
+             `interface A extends B` while `B extends A` (directly or transitively) has no well-founded\n\
+             method set. Break the cycle so every interface's `extends` chain bottoms out.\n"
+        }
         _ => return None,
     };
     Some(body.to_string())
@@ -331,7 +361,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE)"
         )
     })
 }

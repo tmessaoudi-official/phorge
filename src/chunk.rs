@@ -8,7 +8,7 @@
 //! a deferred, bench-gated perf milestone, not a correctness requirement.
 
 use crate::value::Value;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// Hashable identity of an internable constant. `Value` can't derive `Hash`/`Eq` (it holds `f64`
 /// and composite types), so the constant pool dedups via this projection: floats by their bit
@@ -272,6 +272,12 @@ pub struct BytecodeProgram {
     pub class_descs: Vec<ClassDesc>,
     pub names: Vec<String>,
     pub methods: HashMap<(String, String), usize>,
+    /// The transitively-flattened interface set each class implements, keyed by class name — the
+    /// runtime `instanceof`-against-an-interface table (M-RT S2). Built once by
+    /// [`crate::ast::class_implements`] (the same call the interpreter + checker make), so the
+    /// `Op::IsInstance` test is byte-identical across backends. A `BTreeMap`/sorted values keep it
+    /// deterministic for `disasm`.
+    pub class_implements: BTreeMap<String, Vec<String>>,
 }
 
 impl BytecodeProgram {
@@ -463,6 +469,7 @@ mod tests {
             class_descs: Vec::new(),
             names: Vec::new(),
             methods: HashMap::new(),
+            class_implements: BTreeMap::new(),
         };
         assert_eq!(prog.validate(), Ok(()));
     }
@@ -484,6 +491,7 @@ mod tests {
             class_descs: Vec::new(),
             names: Vec::new(),
             methods: HashMap::new(),
+            class_implements: BTreeMap::new(),
         };
         let err = prog.validate().unwrap_err();
         assert!(err.contains("invalid bytecode"), "{err}");
@@ -507,6 +515,7 @@ mod tests {
             class_descs: Vec::new(),
             names: Vec::new(),
             methods: HashMap::new(),
+            class_implements: BTreeMap::new(),
         };
         assert!(prog.validate().unwrap_err().contains("call target 7"));
 
@@ -517,6 +526,7 @@ mod tests {
             class_descs: Vec::new(),
             names: Vec::new(),
             methods: HashMap::new(),
+            class_implements: BTreeMap::new(),
         };
         assert!(bad_main.validate().unwrap_err().contains("main index 0"));
     }
@@ -538,6 +548,7 @@ mod tests {
             class_descs: Vec::new(),
             names: Vec::new(),
             methods: HashMap::new(),
+            class_implements: BTreeMap::new(),
         };
         let err = prog.validate().unwrap_err();
         assert!(err.contains("enum descriptor index 3"), "{err}");
@@ -560,6 +571,7 @@ mod tests {
             class_descs: Vec::new(),
             names: Vec::new(),
             methods: HashMap::new(),
+            class_implements: BTreeMap::new(),
         };
         assert!(prog
             .validate()
@@ -581,6 +593,7 @@ mod tests {
             class_descs: Vec::new(),
             names: Vec::new(),
             methods: HashMap::new(),
+            class_implements: BTreeMap::new(),
         };
         assert!(prog2.validate().unwrap_err().contains("field-name index 5"));
     }
@@ -602,6 +615,7 @@ mod tests {
             class_descs: Vec::new(),
             names: Vec::new(),
             methods: HashMap::new(),
+            class_implements: BTreeMap::new(),
         };
         assert!(prog.validate().unwrap_err().contains("native index 9999"));
     }
@@ -626,6 +640,7 @@ mod tests {
             class_descs: Vec::new(),
             names: Vec::new(),
             methods: HashMap::new(),
+            class_implements: BTreeMap::new(),
         };
         let err = prog.validate().unwrap_err();
         assert!(err.contains("closure target 4"), "{err}");
@@ -653,6 +668,7 @@ mod tests {
             class_descs: Vec::new(),
             names: Vec::new(),
             methods: HashMap::new(),
+            class_implements: BTreeMap::new(),
         };
         assert!(prog.validate().is_ok());
     }
@@ -673,6 +689,7 @@ mod tests {
             class_descs: Vec::new(),
             names: Vec::new(),
             methods: HashMap::new(),
+            class_implements: BTreeMap::new(),
         };
         assert_eq!(prog.functions[prog.main].name, "main");
         assert_eq!(prog.functions[0].arity, 0);

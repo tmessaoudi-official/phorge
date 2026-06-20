@@ -206,6 +206,8 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
                 }
             }
             Item::Class(c) => class_decls.push(c),
+            // Interfaces emit no bytecode; they feed only the `class_implements` table built below.
+            Item::Interface(_) => {}
             Item::Import { .. } => {}
             // Aliases are expanded out of the AST before compiling (checker::expand_aliases); this
             // arm only satisfies the exhaustive match.
@@ -400,6 +402,9 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
         class_descs,
         names,
         methods,
+        // The single shared interface table — same algorithm as the interpreter + checker, so the
+        // VM's `Op::IsInstance` against an interface is byte-identical (M-RT S2).
+        class_implements: crate::ast::class_implements(program),
     })
 }
 

@@ -26,10 +26,22 @@ struct ClassInfo {
     ctor: Vec<Ty>,
 }
 
+/// An interface's own method signatures plus its declared parent interfaces (`extends`). The
+/// flattened method set (own + every parent's) is computed on demand, cycle-guarded (M-RT S2).
+struct InterfaceInfo {
+    methods: HashMap<String, FnSig>,
+    extends: Vec<String>,
+}
+
 pub struct Checker {
     funcs: HashMap<String, FnSig>,
     enums: HashMap<String, EnumInfo>,
     classes: HashMap<String, ClassInfo>,
+    interfaces: HashMap<String, InterfaceInfo>,
+    /// Transitively-flattened interface set each class implements (the `instanceof`/subtyping table),
+    /// computed once via [`crate::ast::class_implements`] and shared verbatim with the backends so
+    /// the runtime test can never diverge from the static one (M-RT S2).
+    class_implements: std::collections::BTreeMap<String, Vec<String>>,
     /// lexical block scopes; last is innermost
     scopes: Vec<HashMap<String, Ty>>,
     errors: Vec<Diagnostic>,
@@ -63,6 +75,8 @@ impl Checker {
             funcs: HashMap::new(),
             enums: HashMap::new(),
             classes: HashMap::new(),
+            interfaces: HashMap::new(),
+            class_implements: std::collections::BTreeMap::new(),
             scopes: Vec::new(),
             errors: Vec::new(),
             warnings: Vec::new(),
@@ -209,7 +223,10 @@ impl Checker {
                         let ty = self.resolve_type(&aliased);
                         self.alias_stack.pop();
                         ty
-                    } else if self.enums.contains_key(other) || self.classes.contains_key(other) {
+                    } else if self.enums.contains_key(other)
+                        || self.classes.contains_key(other)
+                        || self.interfaces.contains_key(other)
+                    {
                         Ty::Named(other.to_string())
                     } else {
                         self.err_coded(
@@ -256,6 +273,7 @@ impl Checker {
                 Item::Function(f) => self.collect_function(f),
                 Item::Enum(e) => self.collect_enum(e),
                 Item::Class(c) => self.collect_class(c),
+                Item::Interface(i) => self.collect_interface(i),
                 Item::Import { .. } => {} // import map already built above; nothing per-item to hoist
                 Item::TypeAlias { name, ty, span } => {
                     if is_builtin_type_name(name) {
@@ -270,6 +288,250 @@ impl Checker {
                 }
             }
         }
+        // Interfaces are fully registered now: validate the extends graph + every class's
+        // `implements` (cycles, unknown names, method conformance) and build the shared
+        // class→interface table the backends consume verbatim (M-RT S2).
+        self.check_interface_graph(program);
+    }
+
+    fn collect_interface(&mut self, i: &crate::ast::InterfaceDecl) {
+        if self.classes.contains_key(&i.name)
+            || self.enums.contains_key(&i.name)
+            || self.interfaces.contains_key(&i.name)
+        {
+            self.err(i.span, format!("type `{}` is already defined", i.name));
+            return;
+        }
+        // Register the name first so a method signature may reference the interface itself.
+        self.interfaces.insert(
+            i.name.clone(),
+            InterfaceInfo {
+                methods: HashMap::new(),
+                extends: i.extends.clone(),
+            },
+        );
+        let mut methods = HashMap::new();
+        for m in &i.methods {
+            if methods.contains_key(&m.name) {
+                self.err(
+                    m.span,
+                    format!("duplicate method `{}` in interface `{}`", m.name, i.name),
+                );
+                continue;
+            }
+            let params = m.params.iter().map(|p| self.resolve_type(&p.ty)).collect();
+            let ret = match &m.ret {
+                Some(t) => self.resolve_type(t),
+                None => Ty::Unit,
+            };
+            methods.insert(m.name.clone(), FnSig { params, ret });
+        }
+        self.interfaces.get_mut(&i.name).unwrap().methods = methods;
+    }
+
+    /// Validate the interface graph and class conformance, then build [`Self::class_implements`].
+    ///
+    /// Reports `E-IFACE-CYCLE` (an `extends` cycle), `E-IFACE-IMPL` (a name in `implements`/`extends`
+    /// that is not a declared interface), `E-IFACE-UNIMPL` (a class missing an interface method), and
+    /// `E-IFACE-SIG` (a class method whose signature does not match the interface's).
+    fn check_interface_graph(&mut self, program: &crate::ast::Program) {
+        use crate::ast::Item;
+        // Always safe to compute (the shared fn is cycle-guarded); diagnostics below catch malformed
+        // graphs, and the backends only run after a clean check, so a cyclic table never reaches them.
+        self.class_implements = crate::ast::class_implements(program);
+
+        // `extends` targets must be interfaces; detect cycles.
+        for item in &program.items {
+            if let Item::Interface(i) = item {
+                for parent in &i.extends {
+                    if !self.interfaces.contains_key(parent) {
+                        self.err_coded(
+                            i.span,
+                            format!(
+                                "interface `{}` extends `{parent}`, which is not an interface",
+                                i.name
+                            ),
+                            "E-IFACE-IMPL",
+                            Some("`extends` on an interface lists other interfaces".into()),
+                        );
+                    }
+                }
+                let mut visited = std::collections::BTreeSet::new();
+                if self.iface_in_cycle(&i.name, &mut visited) {
+                    self.err_coded(
+                        i.span,
+                        format!("interface `{}` is part of an `extends` cycle", i.name),
+                        "E-IFACE-CYCLE",
+                        Some("interfaces may not extend themselves transitively".into()),
+                    );
+                }
+            }
+        }
+
+        // Class conformance: every interface method (own + inherited) must be provided.
+        for item in &program.items {
+            if let Item::Class(c) = item {
+                for iface in &c.implements {
+                    if !self.interfaces.contains_key(iface) {
+                        self.err_coded(
+                            c.span,
+                            format!(
+                                "class `{}` implements `{iface}`, which is not an interface",
+                                c.name
+                            ),
+                            "E-IFACE-IMPL",
+                            Some("`implements` lists declared interfaces".into()),
+                        );
+                        continue;
+                    }
+                    let required = self.iface_flat_methods(iface);
+                    for (mname, sig) in &required {
+                        match self
+                            .classes
+                            .get(&c.name)
+                            .and_then(|ci| ci.methods.get(mname))
+                        {
+                            None => {
+                                self.err_coded(
+                                    c.span,
+                                    format!(
+                                        "class `{}` does not implement method `{mname}` required by interface `{iface}`",
+                                        c.name
+                                    ),
+                                    "E-IFACE-UNIMPL",
+                                    Some(format!("add `function {mname}(…)` to `{}`", c.name)),
+                                );
+                            }
+                            Some(have) => {
+                                if !self.sig_conforms(have, sig) {
+                                    self.err_coded(
+                                        c.span,
+                                        format!(
+                                            "class `{}` method `{mname}` does not match interface `{iface}`'s signature",
+                                            c.name
+                                        ),
+                                        "E-IFACE-SIG",
+                                        Some("the parameter types and return type must match the interface".into()),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// True if `name`'s `extends` chain reaches `name` again (a cycle). Visited-guarded.
+    fn iface_in_cycle(&self, name: &str, stack: &mut std::collections::BTreeSet<String>) -> bool {
+        fn walk(
+            this: &Checker,
+            cur: &str,
+            target: &str,
+            seen: &mut std::collections::BTreeSet<String>,
+        ) -> bool {
+            let Some(info) = this.interfaces.get(cur) else {
+                return false;
+            };
+            for parent in &info.extends {
+                if parent == target {
+                    return true;
+                }
+                if seen.insert(parent.clone()) && walk(this, parent, target, seen) {
+                    return true;
+                }
+            }
+            false
+        }
+        walk(self, name, name, stack)
+    }
+
+    /// An interface's flattened method set: its own methods plus every (transitive) parent's,
+    /// the child's signature winning on a name clash. Cycle-guarded.
+    fn iface_flat_methods(&self, name: &str) -> Vec<(String, (Vec<Ty>, Ty))> {
+        let mut acc: HashMap<String, (Vec<Ty>, Ty)> = HashMap::new();
+        let mut seen = std::collections::BTreeSet::new();
+        self.iface_collect_methods(name, &mut acc, &mut seen);
+        let mut out: Vec<_> = acc.into_iter().collect();
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out
+    }
+
+    fn iface_collect_methods(
+        &self,
+        name: &str,
+        acc: &mut HashMap<String, (Vec<Ty>, Ty)>,
+        seen: &mut std::collections::BTreeSet<String>,
+    ) {
+        if !seen.insert(name.to_string()) {
+            return;
+        }
+        let Some(info) = self.interfaces.get(name) else {
+            return;
+        };
+        // Parents first, so a child interface's own signature overrides on a clash.
+        for parent in &info.extends {
+            self.iface_collect_methods(parent, acc, seen);
+        }
+        for (m, sig) in &info.methods {
+            acc.insert(m.clone(), (sig.params.clone(), sig.ret.clone()));
+        }
+    }
+
+    /// A class method conforms to an interface signature when arities match and each parameter type
+    /// and the return type are equal (exact — no variance this slice, matching `assignable`'s
+    /// function rule).
+    fn sig_conforms(&self, have: &FnSig, want: &(Vec<Ty>, Ty)) -> bool {
+        have.params.len() == want.0.len()
+            && have.params.iter().zip(&want.0).all(|(a, b)| a == b)
+            && have.ret == want.1
+    }
+
+    /// Nominal subtyping for assignability and `instanceof`: `a` is a subtype of `b` when they are
+    /// equal, when class `a` implements interface `b` (transitively, via [`Self::class_implements`]),
+    /// or when interface `a` extends interface `b` (transitively). The only subtyping in M-RT S2.
+    fn is_subtype(&self, a: &str, b: &str) -> bool {
+        if a == b {
+            return true;
+        }
+        if self
+            .class_implements
+            .get(a)
+            .is_some_and(|ifaces| ifaces.iter().any(|i| i == b))
+        {
+            return true;
+        }
+        // interface `a` extends `b` transitively?
+        if self.interfaces.contains_key(a) {
+            let mut seen = std::collections::BTreeSet::new();
+            return self.iface_in_cycle_to(a, b, &mut seen);
+        }
+        false
+    }
+
+    fn iface_in_cycle_to(
+        &self,
+        cur: &str,
+        target: &str,
+        seen: &mut std::collections::BTreeSet<String>,
+    ) -> bool {
+        let Some(info) = self.interfaces.get(cur) else {
+            return false;
+        };
+        for parent in &info.extends {
+            if parent == target {
+                return true;
+            }
+            if seen.insert(parent.clone()) && self.iface_in_cycle_to(parent, target, seen) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Context-aware assignability: [`Ty::assignable`] plus this checker's nominal subtyping.
+    fn ty_assignable(&self, from: &Ty, to: &Ty) -> bool {
+        Ty::assignable_with(from, to, &|a, b| self.is_subtype(a, b))
     }
 
     fn collect_function(&mut self, f: &crate::ast::FunctionDecl) {
@@ -435,7 +697,12 @@ impl Checker {
                     }
                     self.cur_class = prev;
                 }
-                Item::Enum(_) | Item::Import { .. } | Item::TypeAlias { .. } => {}
+                // Interface method signatures have no body to check (the conformance/graph
+                // validation ran in `collect`); enums/imports/aliases have nothing here.
+                Item::Enum(_)
+                | Item::Interface(_)
+                | Item::Import { .. }
+                | Item::TypeAlias { .. } => {}
             }
         }
     }
@@ -472,6 +739,12 @@ impl Checker {
                     self.want_type_case(&e.name, e.span);
                     for v in &e.variants {
                         self.want_type_case(&v.name, v.span);
+                    }
+                }
+                Item::Interface(i) => {
+                    self.want_type_case(&i.name, i.span);
+                    for m in &i.methods {
+                        self.check_fn_casing(m);
                     }
                 }
                 Item::TypeAlias { name, span, .. } => self.want_type_case(name, *span),
@@ -767,7 +1040,7 @@ impl Checker {
                     }
                     _ => {
                         let declared = self.resolve_type(ty);
-                        if !Ty::assignable(&actual, &declared) {
+                        if !self.ty_assignable(&actual, &declared) {
                             self.err_assign(*span, &actual, &declared);
                         }
                         declared
@@ -781,7 +1054,7 @@ impl Checker {
                     None => Ty::Unit,
                 };
                 let want = self.cur_ret.clone();
-                if !Ty::assignable(&actual, &want) {
+                if !self.ty_assignable(&actual, &want) {
                     self.err_assign(*span, &actual, &want);
                 }
             }
@@ -812,20 +1085,23 @@ impl Checker {
                     self.check_block(then_block);
                     self.pop_scope();
                 } else {
-                    if !Ty::assignable(&c, &Ty::Bool) {
+                    if !self.ty_assignable(&c, &Ty::Bool) {
                         self.err(*span, format!("`if` condition must be `bool`, found `{c}`"));
                     }
-                    // instanceof smart-cast (M-RT S1): inside the then-block, a local tested by
-                    // `if (x instanceof C)` is narrowed to `C`, so member access through it
-                    // type-checks. Reuses the if-let scope mechanism (push_scope + declare). Only a
-                    // bare-identifier operand against a known class narrows.
+                    // instanceof smart-cast (M-RT S1, extended to interfaces in S2): inside the
+                    // then-block, a local tested by `if (x instanceof T)` is narrowed to `T` — a
+                    // class or an interface — so member/method access through it type-checks. Reuses
+                    // the if-let scope mechanism (push_scope + declare). Only a bare-identifier
+                    // operand against a known class/interface narrows.
                     let mut narrowed = false;
                     if let crate::ast::Expr::InstanceOf {
                         value, type_name, ..
                     } = cond
                     {
                         if let crate::ast::Expr::Ident(name, _) = &**value {
-                            if self.classes.contains_key(type_name) {
+                            if self.classes.contains_key(type_name)
+                                || self.interfaces.contains_key(type_name)
+                            {
                                 self.push_scope();
                                 self.declare(name, Ty::Named(type_name.clone()), *span);
                                 self.check_block(then_block);
@@ -1032,10 +1308,10 @@ impl Checker {
                     Ty::Null => r.clone(), // `null ?? b` is always `b`
                     Ty::Optional(inner) => {
                         let inner = (**inner).clone();
-                        if Ty::assignable(&r, &inner) {
+                        if self.ty_assignable(&r, &inner) {
                             inner // `a ?? b` yields the unwrapped `T` when the default is a `T`
                         } else {
-                            if !Ty::assignable(&r, &Ty::Optional(Box::new(inner.clone()))) {
+                            if !self.ty_assignable(&r, &Ty::Optional(Box::new(inner.clone()))) {
                                 self.err(
                                 span,
                                 format!("`??` default of type `{r}` is not compatible with `{inner}?`"),
@@ -1055,17 +1331,19 @@ impl Checker {
     }
 
     /// `value instanceof TypeName` (M-RT S1): a runtime type test that always yields `bool`. The
-    /// right operand must name a known class; the left operand must be a class instance (a
-    /// `Ty::Named`). The smart-cast that narrows the operand inside an `if` then-block lives in
-    /// `check_stmt`'s `Stmt::If` arm (it needs the surrounding block), not here.
+    /// right operand must name a known class **or interface** (M-RT S2); the left operand must be a
+    /// class instance (a `Ty::Named`). The smart-cast that narrows the operand inside an `if`
+    /// then-block lives in `check_stmt`'s `Stmt::If` arm (it needs the surrounding block), not here.
     fn check_instanceof(&mut self, value: &crate::ast::Expr, type_name: &str, span: Span) -> Ty {
         let v = self.check_expr(value);
-        if !self.classes.contains_key(type_name) {
+        if !self.classes.contains_key(type_name) && !self.interfaces.contains_key(type_name) {
             return self.err_coded(
                 span,
-                format!("`instanceof` requires a class name on the right, found `{type_name}`"),
+                format!(
+                    "`instanceof` requires a class or interface name on the right, found `{type_name}`"
+                ),
                 "E-INSTANCEOF-TYPE",
-                Some("only a declared class can be tested with `instanceof`".into()),
+                Some("only a declared class or interface can be tested with `instanceof`".into()),
             );
         }
         match &v {
@@ -1230,7 +1508,7 @@ impl Checker {
         let first = self.check_expr(&elems[0]);
         for e in &elems[1..] {
             let t = self.check_expr(e);
-            if !Ty::assignable(&t, &first) && !Ty::assignable(&first, &t) {
+            if !self.ty_assignable(&t, &first) && !self.ty_assignable(&first, &t) {
                 self.err(
                     span,
                     format!("list elements must share one type; found `{first}` and `{t}`"),
@@ -1249,7 +1527,7 @@ impl Checker {
         let idx = self.check_expr(index);
         match obj {
             Ty::List(elem) => {
-                if !Ty::assignable(&idx, &Ty::Int) {
+                if !self.ty_assignable(&idx, &Ty::Int) {
                     self.err(span, format!("list index must be `int`, found `{idx}`"));
                 }
                 *elem
@@ -1286,12 +1564,16 @@ impl Checker {
         span: Span,
     ) -> Ty {
         let c = self.check_expr(cond);
-        if !Ty::assignable(&c, &Ty::Bool) {
+        if !self.ty_assignable(&c, &Ty::Bool) {
             self.err(span, format!("`if` condition must be `bool`, found `{c}`"));
         }
         let t = self.check_expr(then_e);
         let e = self.check_expr(else_e);
-        if t != Ty::Error && e != Ty::Error && !Ty::assignable(&e, &t) && !Ty::assignable(&t, &e) {
+        if t != Ty::Error
+            && e != Ty::Error
+            && !self.ty_assignable(&e, &t)
+            && !self.ty_assignable(&t, &e)
+        {
             self.err(
                 span,
                 format!("`if` branches must share one type; found `{t}` and `{e}`"),
@@ -1339,7 +1621,7 @@ impl Checker {
                 let inferred = self.check_expr(e);
                 if let Some(rt) = ret {
                     let declared = self.resolve_type(rt);
-                    if !Ty::assignable(&inferred, &declared) {
+                    if !self.ty_assignable(&inferred, &declared) {
                         self.err_assign(span, &inferred, &declared);
                     }
                     declared
@@ -1508,7 +1790,7 @@ impl Checker {
         }
         for (i, (param, arg)) in params.iter().zip(args).enumerate() {
             let at = self.check_arg(arg, param);
-            if !Ty::assignable(&at, param) {
+            if !self.ty_assignable(&at, param) {
                 self.err(
                     span,
                     format!(
@@ -1581,11 +1863,25 @@ impl Checker {
         };
         let ret = match base {
             Ty::Named(cls) => {
+                // A class method, or — when `cls` is an interface (M-RT S2) — an interface method
+                // from its flattened (own + `extends`) signature set. Interface-typed receivers
+                // dispatch polymorphically at runtime through the concrete class, so only the static
+                // signature is needed here.
                 let sig = self
                     .classes
                     .get(&cls)
                     .and_then(|info| info.methods.get(name))
-                    .map(|s| (s.params.clone(), s.ret.clone()));
+                    .map(|s| (s.params.clone(), s.ret.clone()))
+                    .or_else(|| {
+                        if self.interfaces.contains_key(&cls) {
+                            self.iface_flat_methods(&cls)
+                                .into_iter()
+                                .find(|(m, _)| m == name)
+                                .map(|(_, sig)| sig)
+                        } else {
+                            None
+                        }
+                    });
                 match sig {
                     Some((params, ret)) => {
                         self.check_args(name, &params, args, span);
@@ -1716,7 +2012,7 @@ impl Checker {
                     Ty::Error
                 }
             };
-            if !Ty::assignable(&elem, &declared) {
+            if !self.ty_assignable(&elem, &declared) {
                 self.err(
                     *span,
                     format!("loop variable `{name}` declared `{declared}` but iterating `{elem}`"),
@@ -1772,7 +2068,8 @@ impl Checker {
             match &result {
                 None => result = Some(body_ty),
                 Some(first) => {
-                    if !Ty::assignable(&body_ty, first) && !Ty::assignable(first, &body_ty) {
+                    if !self.ty_assignable(&body_ty, first) && !self.ty_assignable(first, &body_ty)
+                    {
                         self.err(
                             span,
                             format!(
@@ -2318,8 +2615,8 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
 
 pub fn expand_aliases(program: &Program) -> Program {
     use crate::ast::{
-        ClassDecl, ClassMember, CtorParam, EnumDecl, EnumVariant, FunctionDecl, Item, Param, Stmt,
-        Type,
+        ClassDecl, ClassMember, CtorParam, EnumDecl, EnumVariant, FunctionDecl, InterfaceDecl,
+        Item, Param, Stmt, Type,
     };
     type Aliases = HashMap<String, Type>;
 
@@ -2461,8 +2758,15 @@ pub fn expand_aliases(program: &Program) -> Program {
             Item::Function(f) => Some(Item::Function(rfunc(f, &aliases))),
             Item::Class(c) => Some(Item::Class(ClassDecl {
                 name: c.name.clone(),
+                implements: c.implements.clone(),
                 members: c.members.iter().map(|m| rmember(m, &aliases)).collect(),
                 span: c.span,
+            })),
+            Item::Interface(i) => Some(Item::Interface(InterfaceDecl {
+                name: i.name.clone(),
+                extends: i.extends.clone(),
+                methods: i.methods.iter().map(|m| rfunc(m, &aliases)).collect(),
+                span: i.span,
             })),
             Item::Enum(e) => Some(Item::Enum(EnumDecl {
                 name: e.name.clone(),
@@ -3445,5 +3749,75 @@ function main() { var dbl = fn(int x) => x + 1000; }"#,
             errs.iter().any(|e| e.message.contains("(int) -> int")),
             "{errs:?}"
         );
+    }
+
+    // ---- M-RT S2: interfaces + implements ----
+
+    #[test]
+    fn interface_conformance_and_subtyping_ok() {
+        // A class providing every interface method type-checks; its instance flows into an
+        // interface-typed parameter (nominal subtyping) and an interface-typed local.
+        let src = "interface Speaker { function speak() -> string; } \
+                   class Dog implements Speaker { function speak() -> string { return \"w\"; } } \
+                   function announce(Speaker s) -> string { return s.speak(); } \
+                   function main() { Speaker sp = Dog(); announce(sp); }";
+        assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    }
+
+    #[test]
+    fn interface_missing_method_is_unimpl() {
+        let src = "interface Speaker { function speak() -> string; } \
+                   class Mute implements Speaker {} \
+                   function main() {}";
+        let e = errors_of(src);
+        assert!(e.iter().any(|d| d.code == Some("E-IFACE-UNIMPL")), "{e:?}");
+    }
+
+    #[test]
+    fn interface_wrong_signature_is_sig() {
+        // `speak` must return `string`; returning `int` is a signature mismatch.
+        let src = "interface Speaker { function speak() -> string; } \
+                   class Dog implements Speaker { function speak() -> int { return 1; } } \
+                   function main() {}";
+        let e = errors_of(src);
+        assert!(e.iter().any(|d| d.code == Some("E-IFACE-SIG")), "{e:?}");
+    }
+
+    #[test]
+    fn implements_a_non_interface_is_impl_error() {
+        // `implements` must name a declared interface, not a class.
+        let src = "class A {} class B implements A {} function main() {}";
+        let e = errors_of(src);
+        assert!(e.iter().any(|d| d.code == Some("E-IFACE-IMPL")), "{e:?}");
+    }
+
+    #[test]
+    fn interface_extends_cycle_is_rejected() {
+        let src = "interface A extends B { function a() -> int; } \
+                   interface B extends A { function b() -> int; } \
+                   function main() {}";
+        let e = errors_of(src);
+        assert!(e.iter().any(|d| d.code == Some("E-IFACE-CYCLE")), "{e:?}");
+    }
+
+    #[test]
+    fn interface_is_not_assignable_to_unrelated_class() {
+        // A Speaker is not a Dog: interface → concrete class is not a subtype.
+        let src = "interface Speaker { function speak() -> string; } \
+                   class Dog implements Speaker { function speak() -> string { return \"w\"; } } \
+                   function main() { Speaker s = Dog(); Dog d = s; }";
+        let e = errors_of(src);
+        assert!(!e.is_empty(), "expected an assignability error, got none");
+    }
+
+    #[test]
+    fn instanceof_against_interface_narrows() {
+        // `instanceof` accepts an interface RHS, and inside the then-block the operand is
+        // smart-cast to the interface so its methods resolve.
+        let src = "interface Speaker { function speak() -> string; } \
+                   class Dog implements Speaker { function speak() -> string { return \"w\"; } } \
+                   function main() { Dog d = Dog(); \
+                     if (d instanceof Speaker) { d.speak(); } }";
+        assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
     }
 }

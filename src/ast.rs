@@ -224,6 +224,58 @@ pub fn free_vars(params: &[Param], body: &LambdaBody) -> Vec<String> {
     found.into_iter().collect()
 }
 
+/// The transitively-flattened interface set each concrete class implements, keyed by class name.
+///
+/// `class Dog implements Speaker` where `interface Speaker extends Named` ⇒ `Dog → [Named, Speaker]`
+/// (every interface in the `implements` set *and* the `extends` closure of each). This is the single
+/// runtime table behind `instanceof` against an interface: `x instanceof I` is true iff `I` is in
+/// `class_implements[class_of(x)]`. It is computed **once** by this shared function and consumed
+/// identically by the checker (subtyping + conformance), the interpreter, and the compiler/VM — one
+/// algorithm, so the three backends can never diverge (the same discipline as [`free_vars`]).
+///
+/// The per-class list is **sorted** (invariant #8: deterministic order for all backends) and the
+/// `extends` walk is **cycle-safe** via a visited set, so a malformed cyclic interface graph (which
+/// the checker rejects as `E-IFACE-CYCLE` before any backend runs) can never make this loop forever.
+/// Names are whatever the (already loader-mangled, if multi-package) AST carries — consistent across
+/// every consumer.
+pub fn class_implements(program: &Program) -> std::collections::BTreeMap<String, Vec<String>> {
+    use std::collections::{BTreeMap, BTreeSet};
+    // Direct `extends` edges for every interface.
+    let mut iface_extends: BTreeMap<&str, &[String]> = BTreeMap::new();
+    for item in &program.items {
+        if let Item::Interface(i) = item {
+            iface_extends.insert(i.name.as_str(), &i.extends);
+        }
+    }
+    // Transitive closure of one interface's `extends` chain (the interface itself included),
+    // visited-guarded against cycles.
+    fn closure<'a>(
+        name: &'a str,
+        edges: &BTreeMap<&'a str, &'a [String]>,
+        acc: &mut BTreeSet<String>,
+    ) {
+        if !acc.insert(name.to_string()) {
+            return; // already visited — also breaks any cycle
+        }
+        if let Some(parents) = edges.get(name) {
+            for p in parents.iter() {
+                closure(p, edges, acc);
+            }
+        }
+    }
+    let mut out: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for item in &program.items {
+        if let Item::Class(c) = item {
+            let mut ifaces: BTreeSet<String> = BTreeSet::new();
+            for i in &c.implements {
+                closure(i, &iface_extends, &mut ifaces);
+            }
+            out.insert(c.name.clone(), ifaces.into_iter().collect());
+        }
+    }
+    out
+}
+
 fn collect_free_expr(
     e: &Expr,
     bound: &mut std::collections::HashSet<String>,
@@ -493,7 +545,26 @@ pub enum ClassMember {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassDecl {
     pub name: String,
+    /// Interfaces this class declares it implements (`class Dog implements Speaker, Named`). The
+    /// checker (`E-IFACE-IMPL`/`E-IFACE-UNIMPL`/`E-IFACE-SIG`) validates each name resolves to an
+    /// interface and the class provides every method of it and its `extends` chain (M-RT S2).
+    pub implements: Vec<String>,
     pub members: Vec<ClassMember>,
+    pub span: Span,
+}
+
+/// An interface declaration (`interface Speaker { method-sigs } [extends A, B]`). Methods are
+/// signatures only — a `FunctionDecl` with an empty body (M-RT S2). Interfaces are nominal types
+/// usable as a variable/parameter type; a class that `implements` one is a subtype of it. PHP-absent
+/// at runtime: there are no interface instances, so the backends only use interfaces for the
+/// `instanceof` table and (the transpiler) for emitting a PHP `interface`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct InterfaceDecl {
+    pub name: String,
+    /// Parent interfaces (`interface Animal extends Speaker, Named`) — flattened transitively.
+    pub extends: Vec<String>,
+    /// Method signatures (each a `FunctionDecl` with an empty body).
+    pub methods: Vec<FunctionDecl>,
     pub span: Span,
 }
 
@@ -511,6 +582,7 @@ pub enum Item {
     Function(FunctionDecl),
     Enum(EnumDecl),
     Class(ClassDecl),
+    Interface(InterfaceDecl),
     /// `type Name = Type;` — a compile-time alias, erased after checking (resolved by the checker
     /// and expanded out of the AST before any backend runs).
     TypeAlias {

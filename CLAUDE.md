@@ -319,9 +319,19 @@ Each slice ships independently green + byte-identical (`run≡runvm≡real PHP`)
 **S1 COMPLETE:** real `instanceof` type test (`value instanceof ClassName` → `bool`, smart-cast
 narrowing in `if`, transpiles to PHP `instanceof`) replacing the retired value-equality `is` stub;
 one new `Op::IsInstance(String)` (carries the name inline, no pool entry); `is` is no longer a
-keyword. `examples/guide/instanceof.phg`. Class operands only this slice (interface/union/intersection
-tests land with those features). Locked design decisions + slice order live in the plan's Decisions
-Log; the full design is `~/.claude/plans/misty-honking-lynx.md`.
+keyword. `examples/guide/instanceof.phg`. **S2 COMPLETE:** interfaces + `implements`/`extends`
+(`Item::Interface`, `ClassDecl.implements`) — a class that implements an interface is a **nominal
+subtype** (instances flow into interface-typed slots; polymorphic calls through an interface type),
+and `instanceof` now accepts an interface RHS (with smart-cast). **No new `Op`** (the table powers
+S1's `Op::IsInstance`): a single shared `ast::class_implements(program)` (transitively flattened,
+sorted, cycle-safe) is computed once and consumed verbatim by checker + interpreter + VM
+(`BytecodeProgram.class_implements`); subtyping threads through `Ty::assignable_with(_, _, &oracle)`
+(old `Ty::assignable` = no-subtype delegate). Transpiles to PHP `interface`/`implements`/`extends`,
+byte-identical run≡runvm≡real PHP; `examples/guide/interfaces.phg`; codes `E-IFACE-IMPL`/`-UNIMPL`/
+`-SIG`/`-CYCLE` (+ backfilled `E-INSTANCEOF-TYPE` explain). Interfaces are `package main`-only this
+slice (`E-PKG-TYPE`); exact signature match (no variance yet). **Next: S3 Map/Set.** Locked design
+decisions + slice order live in the plan's Decisions Log; the full design is
+`~/.claude/plans/misty-honking-lynx.md`.
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing
 correctness rules — read before touching backends, value kernels, or the `Op` set) and

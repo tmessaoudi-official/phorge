@@ -34,8 +34,9 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | `Map` / `Set` / tuples | 🔲 M3 | |
 | Null safety / optionals (`T?`) | ✅ | `??`, `?.`, `if (var x = opt)`, checked `opt!`, `match` over `T?`; non-optional `T` is never null (compile-time) |
 | Pipe operator `\|>` | ✅ | `x \|> f ≡ f(x)`; left-associative, lowered to a call in the parser; transpiles to a plain PHP call |
-| Type test `instanceof` | ✅ | `value instanceof ClassName` → `bool`; smart-casts the operand inside `if (x instanceof C)`; transpiles to PHP `instanceof` (M-RT S1; class operands today — interface/union tests land with those features) |
-| Interfaces, unions `A\|B`, intersections `A&B`, generics `<T>`, `extends` | 🚧 M-RT | the Rich Types milestone — `instanceof` is its first slice |
+| Type test `instanceof` | ✅ | `value instanceof T` → `bool` where `T` is a class **or interface** (M-RT S2); smart-casts the operand inside `if (x instanceof T)`; transpiles to PHP `instanceof` |
+| Interfaces + `implements` / `extends` | ✅ | `interface I { method sigs }`, `class C implements I, J`, `interface K extends I`; nominal subtyping (a class flows into an interface-typed slot), polymorphic calls through an interface type; transpiles to a PHP `interface`/`implements`/`extends` (M-RT S2) |
+| Unions `A\|B`, intersections `A&B`, generics `<T>`, class `extends` | 🚧 M-RT | the Rich Types milestone — `instanceof` (S1) and interfaces (S2) shipped; these are later slices |
 | Exceptions (try/catch/throw) | 🔲 M3 | |
 | Mutation (reassignment, field writes) | 🔲 M3 | triggers the tracing GC |
 | Traits, operator overloading, method overloading | 🔲 future | |

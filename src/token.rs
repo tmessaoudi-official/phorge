@@ -45,6 +45,9 @@ pub enum TokenKind {
     Null,
     New,
     Instanceof,
+    Interface,
+    Implements,
+    Extends,
     Var,
     TypeKw,
     // punctuation / operators

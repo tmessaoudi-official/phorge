@@ -382,6 +382,9 @@ fn keyword(s: &str) -> Option<TokenKind> {
         "null" => Null,
         "new" => New,
         "instanceof" => Instanceof,
+        "interface" => Interface,
+        "implements" => Implements,
+        "extends" => Extends,
         "var" => Var,
         "type" => TypeKw,
         _ => return None,
@@ -710,6 +713,18 @@ mod tests {
         assert_eq!(kinds("fn"), vec![Fn, Eof]);
         // contextual sanity: `fn (` still lexes as the keyword then a paren
         assert_eq!(kinds("fn ("), vec![Fn, LParen, Eof]);
+    }
+
+    #[test]
+    fn interface_keywords_are_recognized() {
+        use TokenKind::*;
+        // M-RT S2 keywords: `interface`, `implements`, `extends`.
+        assert_eq!(
+            kinds("interface implements extends"),
+            vec![Interface, Implements, Extends, Eof]
+        );
+        // still idents when embedded in a longer word
+        assert_eq!(kinds("interfaces"), vec![Ident("interfaces".into()), Eof]);
     }
 
     #[test]

@@ -116,6 +116,9 @@ impl Transpiler {
                 Item::Class(c) => {
                     self.classes.insert(c.name.clone());
                 }
+                // Interfaces are not callable/constructible, so they need no resolution index;
+                // they are emitted as PHP `interface` blocks in pass 2.
+                Item::Interface(_) => {}
                 Item::Enum(e) => {
                     for v in &e.variants {
                         self.variants.insert(v.name.clone());
@@ -154,6 +157,7 @@ impl Transpiler {
                 Item::Function(f) => self.emit_function(f, false)?,
                 Item::Enum(e) => self.emit_enum(e)?,
                 Item::Class(c) => self.emit_class(c)?,
+                Item::Interface(i) => self.emit_interface(i)?,
                 // Aliases are expanded out of the AST before transpiling; arm only for exhaustiveness.
                 Item::TypeAlias { .. } => {}
             }
@@ -182,7 +186,7 @@ impl Transpiler {
         for item in &program.items {
             let ns = match item {
                 Item::Function(f) => namespace_of(&f.name),
-                Item::Enum(_) | Item::Class(_) => "Main".to_string(),
+                Item::Enum(_) | Item::Class(_) | Item::Interface(_) => "Main".to_string(),
                 _ => continue,
             };
             buckets.entry(ns).or_default().push(item);
@@ -195,6 +199,7 @@ impl Transpiler {
                     Item::Function(f) => self.emit_function(f, false)?,
                     Item::Enum(e) => self.emit_enum(e)?,
                     Item::Class(c) => self.emit_class(c)?,
+                    Item::Interface(i) => self.emit_interface(i)?,
                     _ => {}
                 }
             }
@@ -438,7 +443,12 @@ impl Transpiler {
                 fields.insert(name.clone());
             }
         }
-        self.line(&format!("class {} {{", c.name));
+        let implements = if c.implements.is_empty() {
+            String::new()
+        } else {
+            format!(" implements {}", c.implements.join(", "))
+        };
+        self.line(&format!("class {}{} {{", c.name, implements));
         self.indent += 1;
         let prev = self.cur_class_fields.replace(fields);
         for m in &c.members {
@@ -493,6 +503,35 @@ impl Transpiler {
             }
         }
         self.cur_class_fields = prev;
+        self.indent -= 1;
+        self.line("}");
+        Ok(())
+    }
+
+    /// Emit a PHP `interface` (M-RT S2): the name, an optional `extends A, B` clause, and one
+    /// abstract method signature per declared method (`public function name(params): ret;`). PHP
+    /// interface methods are implicitly public + abstract, so only the signature is emitted.
+    fn emit_interface(&mut self, i: &crate::ast::InterfaceDecl) -> Result<(), String> {
+        let extends = if i.extends.is_empty() {
+            String::new()
+        } else {
+            format!(" extends {}", i.extends.join(", "))
+        };
+        self.line(&format!("interface {}{} {{", i.name, extends));
+        self.indent += 1;
+        for m in &i.methods {
+            let params: Vec<String> = m
+                .params
+                .iter()
+                .map(|p| format!("{} ${}", Self::emit_type(&p.ty), p.name))
+                .collect();
+            self.line(&format!(
+                "public function {}({}): {};",
+                m.name,
+                params.join(", "),
+                Self::ret_hint(&m.ret)
+            ));
+        }
         self.indent -= 1;
         self.line("}");
         Ok(())

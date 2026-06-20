@@ -11,9 +11,11 @@ These are designed but not in the current surface; using them produces a clean c
 not a panic:
 
 - `Map` / `Set` / tuples
-- `instanceof` against **interfaces, unions, or intersections** (the class-instance type test ships
-  in M-RT S1 — see *Behavioral quirks* below; testing against those richer types lands with the
-  features themselves in later M-RT slices)
+- `instanceof` against **unions or intersections** (class operands ship in M-RT S1 and interface
+  operands in M-RT S2 — see *Behavioral quirks* below; testing against unions/intersections lands
+  with those features in later M-RT slices)
+- **interfaces in a library (non-`main`) package** — like classes/enums, an interface must live in
+  `package main` this slice (`E-PKG-TYPE`); cross-package types are a later slice
 - Exceptions (try / catch / throw)
 - Mutation (reassignment and field writes) — Phorge is immutable-by-default today
 - Method/function overloading, traits, operator overloading, property accessors
@@ -119,12 +121,12 @@ or simply unavailable, never a crash):
   `value instanceof ClassName` parses (the right operand is a class *type name*, not an expression),
   evaluates to `bool` on `run`/`runvm`, and transpiles to PHP `$value instanceof ClassName` —
   byte-identical across all three backends (see `guide/instanceof.phg`). Inside
-  `if (x instanceof C) { … }` the checker smart-casts `x` to `C` in the then-block. Two scope notes
-  for this first slice: (1) the right operand must be a **class** — interface / union / intersection
-  tests arrive with those features in later M-RT slices; (2) because Phorge has no subtyping yet, a
-  class value's static type already equals its runtime type, so the test is most *useful* once
-  interfaces/unions land (today it can only ever compare a concrete class to a concrete class). The
-  old `is` keyword is gone — `is` is now an ordinary identifier. *(Literal
+  `if (x instanceof T) { … }` the checker smart-casts `x` to `T` in the then-block. As of **M-RT S2**
+  the right operand may be a **class or an interface** (`guide/interfaces.phg`); a class that
+  `implements` an interface is a *subtype* of it, so an instance flows into an interface-typed slot
+  and `x instanceof SomeInterface` is true for every implementer. Union / intersection operands still
+  arrive with those features in later M-RT slices. The old `is` keyword is gone — `is` is now an
+  ordinary identifier. *(Literal
   `match` patterns and expression-position `match` — previously listed here as transpile gaps — were
   **completed in M11**: both now transpile and are PHP-oracle byte-identity-gated, so
   `examples/guide/enums-match.phg` and `examples/guide/match-expr.phg` are enrolled in the oracle, not

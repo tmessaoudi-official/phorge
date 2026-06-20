@@ -285,6 +285,7 @@ fn reject_library_types(prog: &Program, file: &Path) -> Result<(), String> {
         let kind = match item {
             Item::Class(_) => "class",
             Item::Enum(_) => "enum",
+            Item::Interface(_) => "interface",
             _ => continue,
         };
         return Err(format!(

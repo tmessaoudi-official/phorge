@@ -6,6 +6,30 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — interfaces + `implements`/`extends` (Rich Types milestone, M-RT S2)
+
+- **`interface I { method sigs }`**, **`class C implements I, J`**, and **`interface K extends I`**.
+  An interface is a named contract of method signatures (no bodies). A class that `implements` an
+  interface is a **nominal subtype** of it: a concrete instance flows into an interface-typed binding,
+  parameter, or return, and code written against the interface works for every implementer
+  (polymorphism). Interface-typed receivers resolve methods through the interface's flattened
+  (`extends`-closure) signature set.
+- **`instanceof` now accepts an interface** on the right (extending M-RT S1's class-only operand):
+  `x instanceof SomeInterface` is true for every implementer (transitively, through interface
+  `extends`), and inside `if (x instanceof I)` the operand smart-casts to `I`.
+- **One shared `class_implements` table.** The transitively-flattened, sorted class→interface map is
+  computed once by `ast::class_implements(program)` and consumed verbatim by the checker (subtyping +
+  conformance), the interpreter, and the VM (`BytecodeProgram.class_implements`) — one algorithm, so
+  the runtime `instanceof` test can never diverge across backends. **No new `Op`** (S1's
+  `Op::IsInstance` gained the table lookup). Nominal subtyping threads through a new
+  `Ty::assignable_with(from, to, &subtype_oracle)` (the old `Ty::assignable` is the no-subtype
+  delegate), keeping the optional/function recursion in one chokepoint.
+- **Transpiles to a PHP `interface` / `implements` / `extends`** — byte-identical `run ≡ runvm ≡ real
+  PHP` (verified). New `examples/guide/interfaces.phg` (oracle-gated). New diagnostics
+  `E-IFACE-IMPL` / `E-IFACE-UNIMPL` / `E-IFACE-SIG` / `E-IFACE-CYCLE` (+ the missing `E-INSTANCEOF-TYPE`
+  explain entry, backfilled from S1) are in `phg explain`. Scope this slice: interfaces are
+  `package main`-only (`E-PKG-TYPE`), and method signatures match exactly (no variance yet).
+
 ### Added — `instanceof` type test, retiring the `is` stub (Rich Types milestone, M-RT S1)
 
 - **`value instanceof ClassName`** is now a real runtime type test that evaluates to `bool` on

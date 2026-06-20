@@ -48,6 +48,19 @@ impl Ty {
     /// `T?` (and `U?` -> `T?` when `U` -> `T`), but a `T?` never widens to a
     /// non-optional `T` — it must be unwrapped (`??`/`?.`/`if (var …)`/`!`).
     pub fn assignable(from: &Ty, to: &Ty) -> bool {
+        // No nominal subtyping by default; callers with a class/interface table use
+        // [`Ty::assignable_with`] to supply one (M-RT S2).
+        Ty::assignable_with(from, to, &|_, _| false)
+    }
+
+    /// Like [`Ty::assignable`] but consults a nominal-subtyping oracle for two named types:
+    /// `subtype(a, b)` answers whether the type named `a` is a subtype of the type named `b`
+    /// (a class implementing interface `b`, or an interface extending `b`, transitively). Threading
+    /// the oracle here keeps the optional/function recursion in one chokepoint, so subtyping flows
+    /// through covariant positions (`Dog -> Speaker?` works because `Dog -> Speaker` does). The
+    /// checker passes a closure over its `class_implements`/interface tables; everyone else passes
+    /// `|_, _| false`.
+    pub fn assignable_with(from: &Ty, to: &Ty, subtype: &dyn Fn(&str, &str) -> bool) -> bool {
         if *from == Ty::Error || *to == Ty::Error {
             return true;
         }
@@ -56,13 +69,15 @@ impl Ty {
             (Ty::Null, Ty::Optional(_) | Ty::Null) => true,
             (Ty::Null, _) => false,
             // `U? -> T?` when `U -> T`; a non-optional `T -> T?` (covariant widening).
-            (Ty::Optional(f), Ty::Optional(t)) => Ty::assignable(f, t),
-            (other, Ty::Optional(t)) => Ty::assignable(other, t),
+            (Ty::Optional(f), Ty::Optional(t)) => Ty::assignable_with(f, t, subtype),
+            (other, Ty::Optional(t)) => Ty::assignable_with(other, t, subtype),
             // Function types are exact-match only — no co/contra-variance (spec A6).
             (Ty::Function(fp, fr), Ty::Function(tp, tr)) => {
                 fp.len() == tp.len() && fp.iter().zip(tp.iter()).all(|(a, b)| a == b) && fr == tr
             }
-            // A `T?` never widens to a non-optional `T` — it must be unwrapped.
+            // Nominal types: equal, or `from` is a subtype of `to` (class→interface, interface→
+            // parent interface). A `T?` never widens to a non-optional `T` — handled above.
+            (Ty::Named(a), Ty::Named(b)) => a == b || subtype(a, b),
             _ => from == to,
         }
     }
