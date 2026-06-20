@@ -122,14 +122,17 @@ or simply unavailable, never a crash):
   each construct the deferral disappears and the example auto-enrolls in the oracle. (The
   empty/reversed-range and integer-division transpile divergences that used to live here were **fixed
   in M7**, when the oracle began executing the transpiled PHP of every example.)
-- **Irrational `float` values render with more digits on the Phorge backends than in transpiled PHP.**
-  The Phorge backends stringify a `float` with Rust's shortest-round-trip formatting (e.g.
-  `sqrt(2.0)` → `1.4142135623730951`), while the transpiled PHP relies on PHP's default `echo`
-  precision (`precision=14` → `1.4142135623731`). For *exactly representable* values (integers-as-
-  floats, short terminating decimals) both render identically, so `guide/math.phg` keeps to such
-  values. This is a transpile-only caveat — the `run`/`runvm` spine is byte-identical (both Rust); it
-  predates `core.math` (any irrational float interpolation hits it) and `core.math` merely makes it
-  easy to reach via `sqrt`/`pow`. Round-trip through PHP only with exactly-representable floats.
+- **Float division by zero diverges in the fault domain (transpile target).** A finite `float` now
+  renders **byte-identically** across all three backends — the transpiler's `__phorge_float` runtime
+  helper reproduces Rust's shortest-round-trip, always-positional `f64` Display exactly (so
+  `sqrt(2.0)` → `1.4142135623730951`, `1234567890123456.0` → `1234567890123456`, and `0.00001` →
+  `0.00001` all match, with no PHP `precision=14` rounding or scientific-notation switch — see
+  `guide/floats.phg`, which round-trips every magnitude through real PHP). The *one* remaining float
+  caveat is non-finite: Phorge float `1.0 / 0.0` yields `inf`/`NaN` on `run`/`runvm` (a valid `f64`,
+  never a fault), but the transpiled PHP's `/` throws `DivisionByZeroError`. This is a fault-domain
+  divergence only — the differential harness excludes fault cases by design, and no byte-identity
+  example produces a non-finite float. (`__phorge_float` itself renders `inf`/`-inf`/`NaN` the Rust
+  way if one is reached through other means.)
 - **`opt!`-on-null transpiles to a different message than the Phorge backends.** A null force-unwrap
   faults `force-unwrap of null` on `run`/`runvm` (located, classified `FaultKind::ForceUnwrap`); the
   transpiled PHP throws a `RuntimeException("force-unwrap of null")` via the `__phorge_unwrap()`

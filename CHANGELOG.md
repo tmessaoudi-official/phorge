@@ -6,6 +6,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — transpiled `float` now byte-identical to the Rust backends (GA P1-a)
+
+- A finite `float` rendered through the transpiler previously diverged from `run`/`runvm`: PHP's
+  default string cast uses `precision=14` and switches to scientific notation for large/small
+  magnitudes (`sqrt(2.0)` → `1.4142135623731`, `1e15` → `1.0E+15`, `0.00001` → `1.0E-5`), while the
+  Rust backends print the shortest round-trip, always positional. The transpiler now routes every
+  float through a new **`__phorge_float`** runtime helper that reproduces Rust's `f64` Display exactly
+  (shortest round-trip, positional for any magnitude, integer-valued floats drop the trailing `.0`,
+  `inf`/`-inf`/`NaN` spelled the Rust way). Tier-1 PHP functions only, so it stays correct under
+  `php -n`. New `examples/guide/floats.phg` round-trips irrational/large/small magnitudes through real
+  PHP. The earlier KNOWN_ISSUES "exactly-representable floats only" caveat is **resolved** for all
+  finite floats; the sole remaining float caveat is the fault-domain float-÷-by-zero divergence
+  (PHP throws vs. Rust `inf`/`NaN`), which the differential harness excludes by design.
+
 ### Security — `phg serve` made DoS-resilient (GA blockers B3, B4 + P1-d)
 
 - **One connection can no longer take the server down (B3).** A per-connection `recv`/`send` error

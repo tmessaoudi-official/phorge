@@ -1,0 +1,34 @@
+package main;
+import core.console;
+import core.math;
+
+// Float stringification is byte-identical across all three backends. The Phorge interpreter and VM
+// render a `float` with Rust's shortest-round-trip formatting (always positional, never scientific;
+// an integer-valued float drops its `.0`). The transpiler reproduces exactly that in PHP via the
+// `__phorge_float` runtime helper — so large/small magnitudes that PHP's default `echo` would print
+// in scientific notation (`1.0E+15`, `1.0E-5`) and many-digit values it would round to 14 figures
+// instead render identically to the Rust backends. (Earlier this was a transpile-only caveat; it is
+// now closed for every finite float — see KNOWN_ISSUES for the one remaining fault-domain note.)
+
+function main() {
+    // Irrational result — 17 significant digits. `sqrt` is IEEE-correctly-rounded, so the Rust
+    // backends and PHP compute the same double; both now render all of its digits.
+    float irrational = math.sqrt(2.0);
+
+    // Large integer-valued float (16 digits) — PHP's default `echo` would show `1.2345...E+15`.
+    float big = 1234567890123456.0;
+
+    // Small magnitudes — PHP's default `echo` would show `1.23E-5` / `1.0E-5`.
+    float small = 0.0000123;
+    float tiny = 0.00001;
+
+    // A high-precision terminating literal, and the integer-valued / short cases for good measure.
+    float pi = 3.141592653589793;
+    float whole = 42.0;
+    float half = 12.5;
+
+    console.println("sqrt(2) = {irrational}");
+    console.println("big = {big}");
+    console.println("small = {small}, tiny = {tiny}");
+    console.println("pi = {pi}, whole = {whole}, half = {half}");
+}

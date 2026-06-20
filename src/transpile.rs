@@ -244,11 +244,56 @@ impl Transpiler {
             self.line("}");
         }
         if self.uses_str {
-            // Mirror Value::as_display: bool ⇒ "true"/"false"; everything else PHP string cast.
+            // Mirror Value::as_display: bool ⇒ "true"/"false"; float ⇒ Rust `{}` formatting (via
+            // __phorge_float); everything else PHP string cast. A naked `(string)$float` uses PHP's
+            // `precision=14` and switches to scientific notation for large/small magnitudes — both
+            // diverge from the Rust backends, which print the shortest round-trip, always positional.
             self.line("function __phorge_str($v) {");
             self.indent += 1;
             self.line("if (is_bool($v)) { return $v ? \"true\" : \"false\"; }");
+            self.line("if (is_float($v)) { return __phorge_float($v); }");
             self.line("return (string)$v;");
+            self.indent -= 1;
+            self.line("}");
+            // Reproduce Rust's `f64` Display exactly (EV-6): the shortest decimal that round-trips to
+            // the same double, in positional notation (never scientific, for any magnitude), with an
+            // integer-valued float rendered without a trailing `.0`. The `%.{p}e` loop finds the
+            // minimal precision that round-trips (Ryū/Grisu shortest is unique); the mantissa digits
+            // are then placed positionally. Only tier-1 PHP functions, so it is correct under `php -n`.
+            self.line("function __phorge_float($v) {");
+            self.indent += 1;
+            self.line("if (is_nan($v)) { return \"NaN\"; }");
+            self.line("if (is_infinite($v)) { return $v < 0 ? \"-inf\" : \"inf\"; }");
+            self.line("if ($v == 0.0) { return (fdiv(1.0, $v) < 0) ? \"-0\" : \"0\"; }");
+            self.line("$neg = $v < 0;");
+            self.line("$a = $neg ? -$v : $v;");
+            self.line("$repr = sprintf(\"%.16e\", $a);");
+            self.line("for ($p = 0; $p <= 16; $p++) {");
+            self.indent += 1;
+            self.line("$cand = sprintf(\"%.{$p}e\", $a);");
+            self.line("if ((float)$cand === $a) { $repr = $cand; break; }");
+            self.indent -= 1;
+            self.line("}");
+            self.line("$epos = strpos($repr, \"e\");");
+            self.line("$exp = (int)substr($repr, $epos + 1);");
+            self.line("$mant = str_replace(\".\", \"\", substr($repr, 0, $epos));");
+            self.line("$mant = rtrim($mant, \"0\");");
+            self.line("if ($mant === \"\") { $mant = \"0\"; }");
+            self.line("$ndig = strlen($mant);");
+            self.line("if ($exp >= $ndig - 1) {");
+            self.indent += 1;
+            self.line("$s = $mant . str_repeat(\"0\", $exp - ($ndig - 1));");
+            self.indent -= 1;
+            self.line("} elseif ($exp >= 0) {");
+            self.indent += 1;
+            self.line("$s = substr($mant, 0, $exp + 1) . \".\" . substr($mant, $exp + 1);");
+            self.indent -= 1;
+            self.line("} else {");
+            self.indent += 1;
+            self.line("$s = \"0.\" . str_repeat(\"0\", -$exp - 1) . $mant;");
+            self.indent -= 1;
+            self.line("}");
+            self.line("return $neg ? \"-\" . $s : $s;");
             self.indent -= 1;
             self.line("}");
         }
@@ -1149,6 +1194,34 @@ function main() { for (int i in 1..=3) { console.println("{i}"); } }"#);
             out.contains(r#"return "Hello " . __phorge_str($name);"#),
             "{out}"
         );
+    }
+
+    #[test]
+    fn float_interpolation_emits_phorge_float_helper() {
+        // A float reaches PHP only through interpolation (`console.println` takes `string`), so the
+        // `__phorge_str` chokepoint routes floats through `__phorge_float`, which reproduces Rust's
+        // shortest-round-trip positional `f64` Display (no PHP precision-14 / scientific divergence).
+        let out = php("function f(float x) -> string { return \"v={x}\"; }");
+        assert!(
+            out.contains(r#"return "v=" . __phorge_str($x);"#),
+            "call site routes through __phorge_str: {out}"
+        );
+        assert!(
+            out.contains("if (is_float($v)) { return __phorge_float($v); }"),
+            "__phorge_str delegates floats to __phorge_float: {out}"
+        );
+        assert!(
+            out.contains("function __phorge_float($v) {")
+                && out.contains(r#"$cand = sprintf("%.{$p}e", $a);"#),
+            "__phorge_float helper is defined with the shortest-round-trip loop: {out}"
+        );
+        // Only tier-1 PHP functions — must stay correct under `php -n` (extension policy).
+        for forbidden in ["mb_", "ctype_", "iconv", "bcadd"] {
+            assert!(
+                !out.contains(forbidden),
+                "__phorge_float must use tier-1 functions only, found `{forbidden}`: {out}"
+            );
+        }
     }
 
     #[test]

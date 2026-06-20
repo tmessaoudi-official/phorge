@@ -27,6 +27,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/null-safety.phg` | optionals `T?`, `??`, `?.`, `if (var x = opt)`, `opt!`, `match` over `T?` (M3 S2) |
 | `guide/lambdas-pipe.phg` | lambdas (expression + statement body), higher-order functions, first-class named-fn references, the pipe operator `\|>` (M3 S3 Track A) |
 | `guide/math.phg` | the `core.math` stdlib module — `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` (M3 Track B Wave 2) |
+| `guide/floats.phg` | `float` stringification — shortest-round-trip, always-positional, byte-identical across `run`/`runvm`/PHP for every finite magnitude (irrational, large, small) via the `__phorge_float` transpile helper |
 | `guide/text.phg` | the `core.text` stdlib module — `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace` (M3 Track B Wave 2) |
 | `guide/file.phg` | the `core.file` stdlib module — `read` (→ `string?`), `exists`; reads a committed fixture, composes with S2 `??` / if-let (M3 Track B Wave 2) |
 | `guide/bytes.phg` | the `bytes` type + `b"…"` literals (`\xHH`) + `core.bytes` interop — `fromString`/`toString` (→ `string?`)/`len`/`concat`/`slice` (M6 W0) |
@@ -59,6 +60,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `var` local type inference, `type` aliases | `guide/inference` |
 | `console.println(string)` (after `import core.console;`) | every example |
 | `core.math` stdlib: `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` | `guide/math` |
+| `float` shortest-round-trip rendering, byte-identical across backends + PHP | `guide/floats` |
 | `core.text` stdlib: `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace` | `guide/text` |
 | `core.file` stdlib: `read` (→ `string?`), `exists` (fixture-gated) | `guide/file` |
 | `core.html` kernel (`text`/`raw`/`render`) + builders (`el`/`voidEl`/`attr`/`boolAttr`/`concat`) + named per-tag helpers (`div`/`p`/`a`/`ul`/`li`/`br`/…) + `html"…"` literal sugar (type-directed hole escaping); `Html`/`Attr` ≠ `string` (XSS-safe by construction) | `guide/html` |
