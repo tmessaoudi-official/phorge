@@ -451,12 +451,11 @@ pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, Strin
             for w in &warnings {
                 eprintln!("warning: {}", w.render(diag_src));
             }
-            // De-alias types, then erase `html"…"` literals into their `html.concat([…])` kernel
-            // calls (built by the checker, keyed by span) — both are front-end sugar removed before
-            // any backend runs.
-            Ok(crate::checker::resolve_html(
-                crate::checker::expand_aliases(prog),
-                &html,
+            // De-alias types, erase `html"…"` literals into their `html.concat([…])` kernel calls
+            // (built by the checker, keyed by span), then erase generic type parameters — all three
+            // are front-end sugar removed before any backend runs (M-RT S7 adds the last).
+            Ok(crate::checker::erase_generics(
+                crate::checker::resolve_html(crate::checker::expand_aliases(prog), &html),
             ))
         }
         Err(errs) => {

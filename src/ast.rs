@@ -25,6 +25,13 @@ pub enum Type {
         ret: Box<Type>,
         span: Span,
     },
+    /// An **erased** generic type parameter (M-RT S7). Produced *only* by `checker::erase_generics`,
+    /// which rewrites every `Type::Named` that refers to an in-scope type parameter (`T`) into this
+    /// after type-checking. No parser ever emits it and no checker pass before erasure sees it; the
+    /// backends consume it as the erasure target — the compiler treats it as `CTy::Other`, the
+    /// transpiler emits PHP `mixed`. This is the same "compile-time-only, expanded out before any
+    /// backend" discipline as `type` aliases (which become their target) and `html"…"`.
+    Erased(Span),
 }
 
 /// Patterns in `match` arms.
@@ -514,6 +521,11 @@ pub enum Stmt {
 pub struct FunctionDecl {
     pub modifiers: Vec<Modifier>,
     pub name: String,
+    /// Generic type parameters, in declaration order — `["T", "U"]` for
+    /// `function pair<T, U>(T a, U b) -> …` (M-RT S7). Empty for a non-generic function. A type
+    /// annotation naming one of these (e.g. `T`) resolves to `Ty::Param("T")` while checking this
+    /// function, and is erased to `Type::Erased` before any backend runs.
+    pub type_params: Vec<String>,
     pub params: Vec<Param>,
     pub ret: Option<Type>,
     pub body: Vec<Stmt>,
@@ -683,6 +695,7 @@ mod tests {
         let f = FunctionDecl {
             modifiers: vec![Modifier::Private],
             name: "area".into(),
+            type_params: vec![],
             params: vec![Param {
                 ty: Type::Named {
                     name: "Shape".into(),

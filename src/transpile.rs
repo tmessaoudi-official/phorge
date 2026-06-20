@@ -354,6 +354,9 @@ impl Transpiler {
             },
             // A function-typed parameter/return erases to PHP `\Closure` (M3 S3).
             Type::Function { .. } => "\\Closure".into(),
+            // An erased generic type parameter (M-RT S7) → PHP `mixed` (the runtime is untyped; the
+            // checker already proved the program well-typed before erasure).
+            Type::Erased(_) => "mixed".into(),
             // Optional types are a deferred corner the checker already rejects; be defensive.
             _ => "mixed".into(),
         }

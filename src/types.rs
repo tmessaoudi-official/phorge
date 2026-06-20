@@ -34,6 +34,14 @@ pub enum Ty {
     /// The type of the bare `null` literal: assignable to any `T?` and to nothing else. Lets
     /// `null` flow into an optional with no element type, while `var x = null;` stays an error.
     Null,
+    /// A generic type *parameter* — `T` in `function id<T>(T x) -> T` (M-RT S7). It appears only in
+    /// the *stored signature* of a generic function (so a call site can [`unify`](crate::checker)
+    /// it against concrete argument types) and inside that function's body (where it behaves as an
+    /// opaque nominal type — assignable only to the same-named parameter, no coercion). It is fully
+    /// **erased** before any backend runs (`checker::erase_generics` rewrites the AST `Type::Named`
+    /// for a param into `Type::Erased`), so the interpreter/compiler/transpiler never see it — the
+    /// same "compile-time-only, expanded out" discipline as `type` aliases and `html"…"`.
+    Param(String),
     /// Poison type: a failed sub-expression yields this. Assignable both ways so a
     /// single error does not cascade into many.
     Error,
@@ -78,6 +86,10 @@ impl Ty {
             // Nominal types: equal, or `from` is a subtype of `to` (class→interface, interface→
             // parent interface). A `T?` never widens to a non-optional `T` — handled above.
             (Ty::Named(a), Ty::Named(b)) => a == b || subtype(a, b),
+            // A type parameter is opaque inside its generic body: assignable only to the same
+            // parameter (by name), with no coercion to/from any concrete type. Call sites do not
+            // reach here — they unify the parameter away first (M-RT S7).
+            (Ty::Param(a), Ty::Param(b)) => a == b,
             _ => from == to,
         }
     }
@@ -100,6 +112,7 @@ impl fmt::Display for Ty {
             Ty::Set(e) => write!(f, "Set<{e}>"),
             Ty::Optional(e) => write!(f, "{e}?"),
             Ty::Null => write!(f, "null"),
+            Ty::Param(n) => write!(f, "{n}"),
             Ty::Error => write!(f, "<error>"),
             Ty::Function(params, ret) => {
                 let ps = params
@@ -166,6 +179,26 @@ mod tests {
             Ty::List(Box::new(Ty::Named("Shape".into()))).to_string(),
             "List<Shape>"
         );
+    }
+
+    #[test]
+    fn type_param_is_opaque() {
+        // A type parameter is assignable only to the same-named parameter — no coercion to/from
+        // any concrete type. Call sites unify it away before it reaches `assignable` (M-RT S7).
+        let t = Ty::Param("T".into());
+        let t2 = Ty::Param("T".into());
+        let u = Ty::Param("U".into());
+        assert!(Ty::assignable(&t, &t2)); // same name
+        assert!(!Ty::assignable(&t, &u)); // distinct params
+        assert!(!Ty::assignable(&t, &Ty::Int)); // no concretization
+        assert!(!Ty::assignable(&Ty::Int, &t));
+        assert!(Ty::assignable(&t, &Ty::Error)); // poison still unifies
+        assert_eq!(t.to_string(), "T");
+        // A `List<T>` matches only an identical `List<T>`.
+        assert!(Ty::assignable(
+            &Ty::List(Box::new(Ty::Param("T".into()))),
+            &Ty::List(Box::new(Ty::Param("T".into())))
+        ));
     }
 
     #[test]

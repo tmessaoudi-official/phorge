@@ -12,6 +12,11 @@ use crate::types::Ty;
 struct FnSig {
     params: Vec<Ty>,
     ret: Ty,
+    /// Generic type parameters this function declares (`["T"]` for `function id<T>(T x) -> T`).
+    /// Empty for a non-generic function — the common case. When non-empty, `params`/`ret` contain
+    /// `Ty::Param` occurrences that a call site unifies away (M-RT S7). Methods and interface method
+    /// signatures are non-generic this slice, so theirs is always empty.
+    type_params: Vec<String>,
 }
 
 struct EnumInfo {
@@ -67,6 +72,11 @@ pub struct Checker {
     /// `html.concat([…])` replacement built while checking, replayed by [`resolve_html`] after a
     /// successful check so no backend ever sees an [`crate::ast::Expr::Html`] node.
     html_resolutions: HashMap<usize, crate::ast::Expr>,
+    /// Type parameters in scope while resolving the signature/body of the generic function currently
+    /// being checked (`["T", "U"]`). A bare type name in this set resolves to `Ty::Param` rather than
+    /// being looked up as an alias/enum/class. Set around each generic function and cleared after;
+    /// empty for everything else (M-RT S7).
+    active_type_params: Vec<String>,
 }
 
 impl Checker {
@@ -87,6 +97,7 @@ impl Checker {
             alias_stack: Vec::new(),
             imports: HashMap::new(),
             html_resolutions: HashMap::new(),
+            active_type_params: Vec::new(),
         }
     }
 
@@ -187,6 +198,10 @@ impl Checker {
                 *span,
                 "`var` type inference is only valid for a local variable declaration",
             ),
+            // Defensive: `Type::Erased` is produced by `erase_generics` *after* a successful check,
+            // so a normal pipeline never resolves it. Treat it as poison so a stray re-check of an
+            // already-erased program can't cascade (M-RT S7).
+            Type::Erased(_) => Ty::Error,
             Type::Named { name, args, span } => match name.as_str() {
                 "int" => self.no_args(name, args, *span, Ty::Int),
                 "float" => self.no_args(name, args, *span, Ty::Float),
@@ -214,7 +229,19 @@ impl Checker {
                     format!("the numeric type `{name}` is not yet supported in M1"),
                 ),
                 other => {
-                    if self.aliases.contains_key(other) {
+                    if self.active_type_params.iter().any(|p| p == other) {
+                        // A generic type parameter in scope (`T` in `function id<T>(T x)`) is an
+                        // opaque `Ty::Param`, unified away at call sites and erased before backends.
+                        // A type arg on it (`T<int>`) is meaningless — reject it.
+                        if args.is_empty() {
+                            Ty::Param(other.to_string())
+                        } else {
+                            self.err(
+                                *span,
+                                format!("type parameter `{other}` takes no type arguments"),
+                            )
+                        }
+                    } else if self.aliases.contains_key(other) {
                         if self.alias_stack.iter().any(|n| n == other) {
                             return self.err(*span, format!("type alias cycle through `{other}`"));
                         }
@@ -324,7 +351,14 @@ impl Checker {
                 Some(t) => self.resolve_type(t),
                 None => Ty::Unit,
             };
-            methods.insert(m.name.clone(), FnSig { params, ret });
+            methods.insert(
+                m.name.clone(),
+                FnSig {
+                    params,
+                    ret,
+                    type_params: Vec::new(),
+                },
+            );
         }
         self.interfaces.get_mut(&i.name).unwrap().methods = methods;
     }
@@ -545,12 +579,47 @@ impl Checker {
             );
             return;
         }
+        self.validate_type_params(&f.type_params, f.span);
+        // Resolve the signature with the type parameters in scope so `T` becomes `Ty::Param("T")`.
+        self.active_type_params = f.type_params.clone();
         let params = f.params.iter().map(|p| self.resolve_type(&p.ty)).collect();
         let ret = match &f.ret {
             Some(t) => self.resolve_type(t),
             None => Ty::Unit,
         };
-        self.funcs.insert(f.name.clone(), FnSig { params, ret });
+        self.active_type_params.clear();
+        self.funcs.insert(
+            f.name.clone(),
+            FnSig {
+                params,
+                ret,
+                type_params: f.type_params.clone(),
+            },
+        );
+    }
+
+    /// Validate a function's declared generic parameters: reject duplicates (`E-GENERIC-PARAM`) and
+    /// names that shadow a built-in type (`int`, `List`, …), which would be silently ineffective
+    /// because `resolve_type` matches the built-in first (M-RT S7).
+    fn validate_type_params(&mut self, type_params: &[String], span: Span) {
+        let mut seen: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+        for tp in type_params {
+            if is_builtin_type_name(tp) {
+                self.err_coded(
+                    span,
+                    format!("type parameter `{tp}` shadows a built-in type"),
+                    "E-GENERIC-PARAM",
+                    Some("pick a distinct name, e.g. `T`, `U`, `Elem`".into()),
+                );
+            } else if !seen.insert(tp.as_str()) {
+                self.err_coded(
+                    span,
+                    format!("duplicate type parameter `{tp}`"),
+                    "E-GENERIC-PARAM",
+                    None,
+                );
+            }
+        }
     }
 
     fn collect_enum(&mut self, e: &crate::ast::EnumDecl) {
@@ -628,7 +697,14 @@ impl Checker {
                         Some(t) => self.resolve_type(t),
                         None => Ty::Unit,
                     };
-                    methods.insert(f.name.clone(), FnSig { params: p, ret });
+                    methods.insert(
+                        f.name.clone(),
+                        FnSig {
+                            params: p,
+                            ret,
+                            type_params: Vec::new(),
+                        },
+                    );
                 }
             }
         }
@@ -757,6 +833,10 @@ impl Checker {
     /// is walked for `var` bindings and lambda parameters.
     fn check_fn_casing(&mut self, f: &crate::ast::FunctionDecl) {
         self.want_name_case(&f.name, f.span);
+        // Generic type parameters are type names — PascalCase, like classes/enums (M-RT S7).
+        for tp in &f.type_params {
+            self.want_type_case(tp, f.span);
+        }
         for p in &f.params {
             self.want_name_case(&p.name, p.span);
         }
@@ -932,8 +1012,11 @@ impl Checker {
         }
     }
 
-    /// Check one free function or method body. Seeds a fresh scope with params.
+    /// Check one free function or method body. Seeds a fresh scope with params. A generic function's
+    /// type parameters are made active for the whole body so `T`-typed params/locals resolve to
+    /// `Ty::Param` (M-RT S7). Functions never nest, so a flat set + clear is sufficient.
     fn check_function(&mut self, f: &crate::ast::FunctionDecl) {
+        self.active_type_params = f.type_params.clone();
         let ret = match &f.ret {
             Some(t) => self.resolve_type(t),
             None => Ty::Unit,
@@ -949,6 +1032,7 @@ impl Checker {
         }
         self.pop_scope();
         self.cur_ret = prev_ret;
+        self.active_type_params.clear();
     }
 
     // ---- scopes ----
@@ -1781,7 +1865,7 @@ impl Checker {
             return t;
         }
         let sig = match self.funcs.get(name) {
-            Some(s) => (s.params.clone(), s.ret.clone()),
+            Some(s) => (s.params.clone(), s.ret.clone(), s.type_params.clone()),
             None => {
                 for a in args {
                     self.check_expr(a);
@@ -1789,8 +1873,90 @@ impl Checker {
                 return self.err(span, format!("unknown function `{name}`"));
             }
         };
-        self.check_args(name, &sig.0, args, span);
-        sig.1
+        if sig.2.is_empty() {
+            self.check_args(name, &sig.0, args, span);
+            sig.1
+        } else {
+            self.check_generic_call(name, &sig.0, &sig.1, args, span)
+        }
+    }
+
+    /// Check a call to a *generic* function (M-RT S7). Unifies each declared parameter type (which
+    /// contains `Ty::Param` occurrences) against the inferred argument type to build a substitution
+    /// `θ`, then applies `θ` to the declared return type. First-binding-wins, structural; `θ` lives
+    /// only here and never touches the AST (the function's type params are erased separately, before
+    /// any backend). A unification failure is a normal argument-type error.
+    fn check_generic_call(
+        &mut self,
+        name: &str,
+        params: &[Ty],
+        ret: &Ty,
+        args: &[crate::ast::Expr],
+        span: Span,
+    ) -> Ty {
+        if params.len() != args.len() {
+            self.err(
+                span,
+                format!(
+                    "`{name}` expects {} argument(s), found {}",
+                    params.len(),
+                    args.len()
+                ),
+            );
+            for a in args {
+                self.check_expr(a);
+            }
+            return Ty::Error;
+        }
+        let mut theta: HashMap<String, Ty> = HashMap::new();
+        let mut ok = true;
+        for (i, (param, arg)) in params.iter().zip(args).enumerate() {
+            let at = self.check_arg(arg, param);
+            if !self.unify(param, &at, &mut theta) {
+                ok = false;
+                let want = apply_subst(param, &theta);
+                self.err(
+                    span,
+                    format!("`{name}` argument {} expects `{want}`, found `{at}`", i + 1),
+                );
+            }
+        }
+        if !ok {
+            return Ty::Error;
+        }
+        apply_subst(ret, &theta)
+    }
+
+    /// Structural unification of a declared type (possibly containing `Ty::Param`) against a concrete
+    /// argument type, accumulating bindings in `θ`. Returns false on a mismatch. A parameter binds
+    /// the first concrete type it meets; a later occurrence must be *consistent* (assignable either
+    /// way, so subtyping is tolerated). A non-parameter position falls back to ordinary
+    /// assignability. `Ty::Error` (poison) unifies with anything (M-RT S7).
+    fn unify(&self, declared: &Ty, actual: &Ty, theta: &mut HashMap<String, Ty>) -> bool {
+        if matches!(declared, Ty::Error) || matches!(actual, Ty::Error) {
+            return true;
+        }
+        match (declared, actual) {
+            (Ty::Param(p), a) => match theta.get(p) {
+                None => {
+                    theta.insert(p.clone(), a.clone());
+                    true
+                }
+                Some(bound) => self.ty_assignable(a, bound) || self.ty_assignable(bound, a),
+            },
+            (Ty::List(d), Ty::List(a)) | (Ty::Set(d), Ty::Set(a)) => self.unify(d, a, theta),
+            (Ty::Optional(d), Ty::Optional(a)) => self.unify(d, a, theta),
+            (Ty::Map(dk, dv), Ty::Map(ak, av)) => {
+                self.unify(dk, ak, theta) && self.unify(dv, av, theta)
+            }
+            (Ty::Function(dp, dr), Ty::Function(ap, ar)) => {
+                dp.len() == ap.len()
+                    && dp.iter().zip(ap).all(|(d, a)| self.unify(d, a, theta))
+                    && self.unify(dr, ar, theta)
+            }
+            // No type parameter at this position — ordinary assignability (actual → declared).
+            (d, a) => self.ty_assignable(a, d),
+        }
     }
 
     /// `console.println(args)` — a namespaced native call resolved through the import map (M3
@@ -2413,6 +2579,30 @@ fn to_pascal(s: &str) -> String {
 
 /// True for the built-in type names `resolve_type` handles directly — a `type` alias may not
 /// shadow them (else the checker and the backend expansion would disagree; see `collect`).
+/// Apply a unification substitution `θ` to a type, replacing each `Ty::Param(p)` by `θ[p]` (an
+/// unbound parameter is left as-is). Used to compute a generic call's result type from the bindings
+/// inferred at the call site (M-RT S7).
+fn apply_subst(ty: &Ty, theta: &HashMap<String, Ty>) -> Ty {
+    match ty {
+        Ty::Param(p) => theta
+            .get(p)
+            .cloned()
+            .unwrap_or_else(|| Ty::Param(p.clone())),
+        Ty::List(e) => Ty::List(Box::new(apply_subst(e, theta))),
+        Ty::Set(e) => Ty::Set(Box::new(apply_subst(e, theta))),
+        Ty::Optional(e) => Ty::Optional(Box::new(apply_subst(e, theta))),
+        Ty::Map(k, v) => Ty::Map(
+            Box::new(apply_subst(k, theta)),
+            Box::new(apply_subst(v, theta)),
+        ),
+        Ty::Function(ps, r) => Ty::Function(
+            ps.iter().map(|p| apply_subst(p, theta)).collect(),
+            Box::new(apply_subst(r, theta)),
+        ),
+        other => other.clone(),
+    }
+}
+
 fn is_builtin_type_name(name: &str) -> bool {
     matches!(
         name,
@@ -2671,6 +2861,276 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
     }
 }
 
+/// Erase generic type parameters from a checked program (M-RT S7). For every generic free function,
+/// every type annotation that names one of *that function's* type parameters is rewritten to
+/// `Type::Erased` and the parameter list is cleared, so the interpreter, compiler, and transpiler
+/// all see an ordinary, type-variable-free function (PHP `mixed` at the boundary). This is the same
+/// "compile-time-only, expanded out before any backend" discipline as `type` aliases and `html"…"`,
+/// and it is what keeps generics zero-cost and byte-identical across the three backends: there is no
+/// monomorphization, the type variables simply disappear after checking. Type parameters are scoped
+/// to their own function, so only `Item::Function` items with a non-empty `type_params` are
+/// rewritten; everything else is returned untouched (a program with no generics is byte-for-byte the
+/// pre-S7 AST). Runs after a successful [`check`], so the `T`-bearing types it erases were already
+/// validated.
+pub fn erase_generics(program: Program) -> Program {
+    use crate::ast::{Expr, FunctionDecl, Item, LambdaBody, MatchArm, Param, Stmt, StrPart, Type};
+    use std::collections::HashSet;
+
+    type Params<'a> = HashSet<&'a str>;
+
+    fn rty(ty: &Type, params: &Params) -> Type {
+        match ty {
+            Type::Named { name, args, span } => {
+                // A bare reference to a type parameter erases; a real generic container (`List<T>`)
+                // keeps its head and recurses into its arguments.
+                if args.is_empty() && params.contains(name.as_str()) {
+                    Type::Erased(*span)
+                } else {
+                    Type::Named {
+                        name: name.clone(),
+                        args: args.iter().map(|a| rty(a, params)).collect(),
+                        span: *span,
+                    }
+                }
+            }
+            Type::Optional { inner, span } => Type::Optional {
+                inner: Box::new(rty(inner, params)),
+                span: *span,
+            },
+            Type::Function {
+                params: ps,
+                ret,
+                span,
+            } => Type::Function {
+                params: ps.iter().map(|p| rty(p, params)).collect(),
+                ret: Box::new(rty(ret, params)),
+                span: *span,
+            },
+            Type::Infer(s) => Type::Infer(*s),
+            Type::Erased(s) => Type::Erased(*s),
+        }
+    }
+    fn rparam(p: &Param, params: &Params) -> Param {
+        Param {
+            ty: rty(&p.ty, params),
+            name: p.name.clone(),
+            span: p.span,
+        }
+    }
+    fn rparts(parts: &[StrPart], params: &Params) -> Vec<StrPart> {
+        parts
+            .iter()
+            .map(|p| match p {
+                StrPart::Expr(e) => StrPart::Expr(Box::new(rexpr(e, params))),
+                StrPart::Literal(s) => StrPart::Literal(s.clone()),
+            })
+            .collect()
+    }
+    fn rexpr(e: &Expr, params: &Params) -> Expr {
+        match e {
+            // The only expression that carries types: a lambda's parameters and return annotation.
+            Expr::Lambda {
+                params: lp,
+                ret,
+                body,
+                span,
+            } => Expr::Lambda {
+                params: lp.iter().map(|p| rparam(p, params)).collect(),
+                ret: ret.as_ref().map(|t| rty(t, params)),
+                body: match body {
+                    LambdaBody::Expr(inner) => LambdaBody::Expr(Box::new(rexpr(inner, params))),
+                    LambdaBody::Block(stmts) => {
+                        LambdaBody::Block(stmts.iter().map(|s| rstmt(s, params)).collect())
+                    }
+                },
+                span: *span,
+            },
+            Expr::Str(parts, span) => Expr::Str(rparts(parts, params), *span),
+            Expr::Html(parts, span) => Expr::Html(rparts(parts, params), *span),
+            Expr::List(items, span) => {
+                Expr::List(items.iter().map(|i| rexpr(i, params)).collect(), *span)
+            }
+            Expr::Map(pairs, span) => Expr::Map(
+                pairs
+                    .iter()
+                    .map(|(k, v)| (rexpr(k, params), rexpr(v, params)))
+                    .collect(),
+                *span,
+            ),
+            Expr::Unary { op, expr, span } => Expr::Unary {
+                op: *op,
+                expr: Box::new(rexpr(expr, params)),
+                span: *span,
+            },
+            Expr::Binary { op, lhs, rhs, span } => Expr::Binary {
+                op: *op,
+                lhs: Box::new(rexpr(lhs, params)),
+                rhs: Box::new(rexpr(rhs, params)),
+                span: *span,
+            },
+            Expr::InstanceOf {
+                value,
+                type_name,
+                span,
+            } => Expr::InstanceOf {
+                value: Box::new(rexpr(value, params)),
+                type_name: type_name.clone(),
+                span: *span,
+            },
+            Expr::Call { callee, args, span } => Expr::Call {
+                callee: Box::new(rexpr(callee, params)),
+                args: args.iter().map(|a| rexpr(a, params)).collect(),
+                span: *span,
+            },
+            Expr::Member {
+                object,
+                name,
+                safe,
+                span,
+            } => Expr::Member {
+                object: Box::new(rexpr(object, params)),
+                name: name.clone(),
+                safe: *safe,
+                span: *span,
+            },
+            Expr::Index {
+                object,
+                index,
+                span,
+            } => Expr::Index {
+                object: Box::new(rexpr(object, params)),
+                index: Box::new(rexpr(index, params)),
+                span: *span,
+            },
+            Expr::Force { inner, span } => Expr::Force {
+                inner: Box::new(rexpr(inner, params)),
+                span: *span,
+            },
+            Expr::Match {
+                scrutinee,
+                arms,
+                span,
+            } => Expr::Match {
+                scrutinee: Box::new(rexpr(scrutinee, params)),
+                arms: arms
+                    .iter()
+                    .map(|a| MatchArm {
+                        pattern: a.pattern.clone(),
+                        body: rexpr(&a.body, params),
+                        span: a.span,
+                    })
+                    .collect(),
+                span: *span,
+            },
+            Expr::Range {
+                start,
+                end,
+                inclusive,
+                span,
+            } => Expr::Range {
+                start: Box::new(rexpr(start, params)),
+                end: Box::new(rexpr(end, params)),
+                inclusive: *inclusive,
+                span: *span,
+            },
+            Expr::If {
+                cond,
+                then_expr,
+                else_expr,
+                span,
+            } => Expr::If {
+                cond: Box::new(rexpr(cond, params)),
+                then_expr: Box::new(rexpr(then_expr, params)),
+                else_expr: Box::new(rexpr(else_expr, params)),
+                span: *span,
+            },
+            // leaves carry no type and no nested expression: Int / Float / Bool / Null / Bytes /
+            // Ident / This — clone unchanged.
+            leaf => leaf.clone(),
+        }
+    }
+    fn rstmt(s: &Stmt, params: &Params) -> Stmt {
+        match s {
+            Stmt::VarDecl {
+                ty,
+                name,
+                init,
+                span,
+            } => Stmt::VarDecl {
+                ty: rty(ty, params),
+                name: name.clone(),
+                init: rexpr(init, params),
+                span: *span,
+            },
+            Stmt::Return { value, span } => Stmt::Return {
+                value: value.as_ref().map(|e| rexpr(e, params)),
+                span: *span,
+            },
+            Stmt::If {
+                cond,
+                bind,
+                then_block,
+                else_block,
+                span,
+            } => Stmt::If {
+                cond: rexpr(cond, params),
+                bind: bind.clone(),
+                then_block: then_block.iter().map(|s| rstmt(s, params)).collect(),
+                else_block: else_block
+                    .as_ref()
+                    .map(|b| b.iter().map(|s| rstmt(s, params)).collect()),
+                span: *span,
+            },
+            Stmt::For {
+                ty,
+                name,
+                iter,
+                body,
+                span,
+            } => Stmt::For {
+                ty: rty(ty, params),
+                name: name.clone(),
+                iter: rexpr(iter, params),
+                body: body.iter().map(|s| rstmt(s, params)).collect(),
+                span: *span,
+            },
+            Stmt::Block(stmts, span) => {
+                Stmt::Block(stmts.iter().map(|s| rstmt(s, params)).collect(), *span)
+            }
+            Stmt::Expr(e, span) => Stmt::Expr(rexpr(e, params), *span),
+        }
+    }
+
+    let Program {
+        package,
+        items,
+        span,
+    } = program;
+    let items = items
+        .into_iter()
+        .map(|item| match item {
+            Item::Function(f) if !f.type_params.is_empty() => {
+                let params: Params = f.type_params.iter().map(String::as_str).collect();
+                Item::Function(FunctionDecl {
+                    modifiers: f.modifiers.clone(),
+                    name: f.name.clone(),
+                    type_params: Vec::new(), // erased
+                    params: f.params.iter().map(|p| rparam(p, &params)).collect(),
+                    ret: f.ret.as_ref().map(|t| rty(t, &params)),
+                    body: f.body.iter().map(|s| rstmt(s, &params)).collect(),
+                    span: f.span,
+                })
+            }
+            other => other,
+        })
+        .collect();
+    Program {
+        package,
+        items,
+        span,
+    }
+}
+
 pub fn expand_aliases(program: &Program) -> Program {
     use crate::ast::{
         ClassDecl, ClassMember, CtorParam, EnumDecl, EnumVariant, FunctionDecl, InterfaceDecl,
@@ -2711,6 +3171,7 @@ pub fn expand_aliases(program: &Program) -> Program {
                 span: *span,
             },
             Type::Infer(s) => Type::Infer(*s),
+            Type::Erased(s) => Type::Erased(*s),
         }
     }
     fn rparam(p: &Param, a: &Aliases) -> Param {
@@ -2771,6 +3232,7 @@ pub fn expand_aliases(program: &Program) -> Program {
         FunctionDecl {
             modifiers: f.modifiers.clone(),
             name: f.name.clone(),
+            type_params: f.type_params.clone(),
             params: f.params.iter().map(|p| rparam(p, a)).collect(),
             ret: f.ret.as_ref().map(|t| rt(t, a, 0)),
             body: f.body.iter().map(|s| rstmt(s, a)).collect(),
@@ -2893,6 +3355,101 @@ mod tests {
             Ok(_) => Vec::new(),
             Err(e) => e,
         }
+    }
+
+    // --- M-RT S7: erased generics ---
+
+    #[test]
+    fn generic_identity_typechecks_and_infers() {
+        // A generic function used at two distinct concrete types — both inferred clean.
+        let ok = errors_of(
+            "function id<T>(T x) -> T { return x; } \
+             function main() { int n = id(42); string s = id(\"hi\"); }",
+        );
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn generic_call_result_is_substituted() {
+        // `id(42)` returns `int`, so binding it to a `string` is a type error (the return type was
+        // unified to the concrete argument type, not left abstract).
+        let bad = errors_of(
+            "function id<T>(T x) -> T { return x; } function main() { string s = id(42); }",
+        );
+        assert!(!bad.is_empty(), "expected a type error, got none");
+    }
+
+    #[test]
+    fn generic_unifies_through_list_and_function() {
+        // `firstOr<T>(List<T>, T) -> T` binds T from the list element; `applyTwice<T>(T, (T)->T) -> T`
+        // unifies a function-typed parameter. Both infer clean against concrete arguments.
+        let ok = errors_of(
+            "function firstOr<T>(List<T> xs, T fallback) -> T { for (T x in xs) { return x; } return fallback; } \
+             function applyTwice<T>(T x, (T) -> T f) -> T { return f(f(x)); } \
+             function main() { List<int> xs = [1, 2]; int a = firstOr(xs, 0); int b = applyTwice(5, fn(int v) => v + 1); }",
+        );
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn generic_argument_must_unify_consistently() {
+        // Two `T` parameters bound to incompatible concrete types — the second arg cannot match the
+        // `int` bound from the first.
+        let bad = errors_of(
+            "function pairEq<T>(T a, T b) -> bool { return true; } \
+             function main() { bool r = pairEq(1, \"x\"); }",
+        );
+        assert!(!bad.is_empty(), "expected a unification error, got none");
+    }
+
+    #[test]
+    fn type_param_shadowing_builtin_is_rejected() {
+        let e = errors_of("function f<int>(int x) -> int { return x; } function main() {}");
+        assert!(
+            e.iter().any(|d| d.code == Some("E-GENERIC-PARAM")),
+            "got {e:?}"
+        );
+    }
+
+    #[test]
+    fn duplicate_type_param_is_rejected() {
+        let e = errors_of("function f<T, T>(T x) -> T { return x; } function main() {}");
+        assert!(
+            e.iter().any(|d| d.code == Some("E-GENERIC-PARAM")),
+            "got {e:?}"
+        );
+    }
+
+    #[test]
+    fn type_param_must_be_pascalcase() {
+        let e = errors_of("function f<t>(t x) -> t { return x; } function main() {}");
+        assert!(e.iter().any(|d| d.code == Some("E-TYPE-CASE")), "got {e:?}");
+    }
+
+    #[test]
+    fn erase_generics_strips_type_params_and_rewrites_types() {
+        use crate::ast::{Item, Type};
+        let p = prog("function id<T>(T x) -> T { return x; } function main() {}");
+        let e = erase_generics(p);
+        let f = e
+            .items
+            .iter()
+            .find_map(|it| match it {
+                Item::Function(f) if f.name == "id" => Some(f),
+                _ => None,
+            })
+            .expect("id present");
+        assert!(f.type_params.is_empty(), "type params not erased");
+        assert!(
+            matches!(f.params[0].ty, Type::Erased(_)),
+            "param type not erased: {:?}",
+            f.params[0].ty
+        );
+        assert!(
+            matches!(f.ret, Some(Type::Erased(_))),
+            "return type not erased: {:?}",
+            f.ret
+        );
     }
 
     #[test]

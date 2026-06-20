@@ -340,9 +340,26 @@ accepts, the documented CTy-operand trap). Build/lookup single-sourced in `value
 kernels (`run≡runvm`); transpiles to a PHP `[k=>v]` array. `examples/guide/maps.phg` byte-identical
 run≡runvm≡**real PHP**. **Set + the generic-typed query ops (`keys`/`has`/`size`/`contains`/iteration)
 are deferred to erased generics (S7), which is REORDERED to immediately follow S3** — they hit the same
-no-type-variable wall that defers `core.list`. **Next: S7 erased generics** (then S4 unions → S5 →
-S6 → S8). Locked design decisions + slice order live in the plan's Decisions Log; the full design is
-`~/.claude/plans/misty-honking-lynx.md`.
+no-type-variable wall that defers `core.list`.
+
+**S7a COMPLETE — erased generics core** (pace: **fully autonomous**, `_AUTONOMOUS_3C=1`; design-locked
+in the plan's Decisions Log). TypeScript-style `<T>` type parameters on **free functions**
+(`function id<T>(T x) -> T`, `firstOr<T>(List<T>, T)`, `applyTwice<T>(T, (T)->T)`), inferred at the
+call site by a structural first-binding-wins `unify` that descends `List`/`Map`/`Set`/`Optional`/
+`Function`; the call's result is the substituted return type. **No new `Op`, no monomorphization:** a
+new `Ty::Param(String)` lives only in a generic fn's stored signature + body (opaque there), and a new
+post-check pass `checker::erase_generics` rewrites every type-param annotation to the new `Type::Erased`
+and clears the param list **before any backend** (wired into the single `cli::check_and_expand`
+chokepoint — covers all backends + the project loader), the same "expanded out before backends"
+discipline as `type` aliases / `html"…"`. Erased types → compiler `CTy::Other` / PHP `mixed`
+(containers `array`, fns `\Closure`). Free functions only (generic *methods* = clean parse error;
+`E-GENERIC-PARAM` on a built-in-shadowing/duplicate param; type params are PascalCase). Byte-identical
+run≡runvm≡**real PHP** (`examples/guide/generics.phg`); 424 lib + PHP-oracle differential + 48 integration
+green, clippy+fmt clean. Deferred (KNOWN_ISSUES): generic methods/types/classes, a generic fn as a
+first-class *value*, an empty `[]` into a generic param, bounds, variance. **Next: S7b** — Set + Map/Set
+query ops + `core.list` (`map`/`filter`/`reduce`; the closure-callback-from-native question is the open
+design point) — then S4 unions → S5 → S6 → S8. Locked design decisions + slice order live in the plan's
+Decisions Log; the full design is `~/.claude/plans/misty-honking-lynx.md`.
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing
 correctness rules — read before touching backends, value kernels, or the `Op` set) and

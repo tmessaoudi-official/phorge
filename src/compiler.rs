@@ -596,6 +596,9 @@ fn resolve_cty(ty: &Type) -> CTy {
         Type::Optional { inner, .. } => resolve_cty(inner),
         // `var` carries no annotation; operand inference reads the initializer expression instead.
         Type::Infer(_) => CTy::Other,
+        // An erased generic type parameter (M-RT S7): the value is of an unknown concrete type, so
+        // it is never a specialized numeric operand — exactly the `Other` case.
+        Type::Erased(_) => CTy::Other,
         // A function type — carry its structure for future lambda support; not a numeric operand.
         Type::Function { params, ret, .. } => CTy::Fn {
             params: params.iter().map(resolve_cty).collect(),

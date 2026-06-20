@@ -6,6 +6,28 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — erased generics `<T>` on free functions (Rich Types milestone, M-RT S7)
+
+- **TypeScript-style generic type parameters** on free functions: `function id<T>(T x) -> T`,
+  `function firstOr<T>(List<T> xs, T fallback) -> T`, `function applyTwice<T>(T x, (T) -> T f) -> T`.
+  The type parameter is **inferred at each call site** from the argument types (structural,
+  first-binding-wins unification that descends into `List<T>`, `Map<K,V>`, `T?`, and function types),
+  and the call's result type is the substituted return type — so `id(42)` is `int` and `id("x")` is
+  `string` from one definition. Byte-identical `run ≡ runvm ≡ real PHP` (new `examples/guide/generics.phg`,
+  oracle-gated).
+- **Full erasure, no monomorphization, no new `Op`.** A new `Ty::Param(String)` exists *only* in a
+  generic function's stored signature + body (it is opaque there — assignable only to the same
+  parameter); a new post-check pass `checker::erase_generics` rewrites every type annotation that
+  names a type parameter into the new `Type::Erased` and clears the parameter list **before any
+  backend runs** — the same "compile-time-only, expanded out" discipline as `type` aliases and
+  `html"…"`. The interpreter, VM, and transpiler never see a type variable: erased types compile to
+  `CTy::Other` and emit PHP `mixed` (containers stay `array`, function values `\Closure`).
+- **Scope this slice:** free functions only (`E-GENERIC-PARAM` on a type param that shadows a built-in
+  or is duplicated; generic *methods* are a clean parse error; type params are PascalCase like all type
+  names). Bounds, variance, generic types/classes, generic functions as first-class *values*, and an
+  empty `[]` literal passed straight to a generic parameter are deferred (see KNOWN_ISSUES). This is
+  the unblocker for `Set`, the generic-typed Map/Set query ops, and `core.list` — built on it next.
+
 ### Added — `Map<K, V>` foundation: literals + indexing (Rich Types milestone, M-RT S3)
 
 - **`Map<K, V>` literals `[k => v, …]`** and **indexing `m[k]`**, byte-identical `run ≡ runvm ≡ real

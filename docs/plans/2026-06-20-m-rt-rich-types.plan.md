@@ -65,6 +65,27 @@
   demonstrable only through equality. Since generics lands next and gives Set its full ergonomics, Set
   ships *complete* there in one go. **S3 = Map foundation only** (`Op::MakeMap`, polymorphic `Index`).
 
+- [2026-06-20] AGREED (S7 pace): run S7 **fully autonomously** (`_AUTONOMOUS_3C=1`) — design → plan →
+  implement → commit green self-contained sub-slices without per-phase stops; only risky/destructive
+  actions pause. Chosen over S3's "full gates per phase" because S7 adds **zero new `Op`s** (pure
+  erasure), so its bytecode-surface risk is low; the residual risk (a type variable leaking into a
+  backend) is covered structurally by the erase-before-backend pass + byte-identity oracle.
+- [2026-06-20] AGREED (S7 sub-slicing): ship S7 as green sub-commits rather than one change. **S7a =
+  erased-generics core** (the headline + the unblocker): `Ty::Param`, `<T>` on free functions,
+  call-site unification, the `erase_generics` pass, backend erasure (`CTy::Other`/PHP `mixed`). **S7b
+  = the consumers** built on it (Set + Map/Set query ops + `core.list`). S7a landed first.
+- [2026-06-20] AGREED (S7a design, locked at implementation): (a) the parser emits `T` as an ordinary
+  `Type::Named`; the **checker** turns a name into `Ty::Param` only while a function's `type_params`
+  are active (`resolve_type` `other` arm), so no scope state threads into the parser. (b) Call-site
+  inference is a structural first-binding-wins `unify(declared, actual, θ)` descending `List`/`Map`/
+  `Set`/`Optional`/`Function`; the result type is `apply_subst(ret, θ)`; `θ` never touches the AST.
+  (c) Erasure mirrors `expand_aliases`/`resolve_html`: a new `Type::Erased` AST node + `erase_generics`
+  pass wired into the single `cli::check_and_expand` chokepoint, so all four backends + the project
+  loader are covered. (d) **Free functions only** this slice — generic *methods* are a clean parse
+  error; type params shadowing a built-in or duplicated → `E-GENERIC-PARAM`; type params are PascalCase
+  (`E-TYPE-CASE`). (e) Deferred (KNOWN_ISSUES): generic methods/types/classes, a generic function used
+  as a first-class *value*, an empty `[]` passed straight to a generic parameter, bounds, and variance.
+
 ## Formal Plan
 
 See the approved plan (`~/.claude/plans/misty-honking-lynx.md`) and the design spec. Slice table:
@@ -74,7 +95,7 @@ See the approved plan (`~/.claude/plans/misty-honking-lynx.md`) and the design s
 | S1 | `instanceof` (class-only) + smart-cast, retire `is` | `Op::IsInstance` | **DONE** (gate green: 394 lib + 10 PHP-oracle differential; clippy+fmt clean; example byte-identical run≡runvm≡PHP) |
 | S2 | interfaces + `implements`/`extends` (+ instanceof interface table) | no | **DONE** (404 lib + PHP-oracle differential incl. `guide/interfaces.phg`; clippy+fmt clean; byte-identical run≡runvm≡PHP; subtyping via `Ty::assignable_with`, shared `ast::class_implements`) |
 | S3 | **Map foundation**: `Map<K,V>` literals `[k=>v]` + `m[k]` indexing (fault on miss); insertion-ordered `Rc<Vec>` rep; `CTy::Map` so `m[k]` is an arithmetic operand. Set + all generic-typed ops (keys/has/size/contains/iter) → S7. | `MakeMap` (Index made polymorphic, no `IndexMap`) | **DONE** (413 lib + PHP-oracle differential incl. `guide/maps.phg`; clippy+fmt clean; byte-identical run≡runvm≡PHP) |
-| S7 | erased generics `<T>` (+ unblock `core.list` **and** full Map/Set: keys/has/size/contains/map/filter, **plus Set itself**) — **reordered to follow S3** | no (erase) | pending (next) |
+| S7 | erased generics `<T>` (+ unblock `core.list` **and** full Map/Set: keys/has/size/contains/map/filter, **plus Set itself**) — **reordered to follow S3** | no (erase) | **S7a DONE** (generics core: `Ty::Param` + `<T>` on free functions + call-site unify + `erase_generics` pass; 424 lib + PHP-oracle differential incl. `guide/generics.phg`; clippy+fmt clean; byte-identical run≡runvm≡PHP). **S7b** (Set + Map/Set query ops + `core.list`) = next |
 | S4 | union `A\|B` + match-over-union exhaustiveness | no | pending |
 | S5 | intersection `A&B` (requires S2) | no | pending |
 | S6 | `extends` (final-by-default, `override`) | no (flatten) | pending |

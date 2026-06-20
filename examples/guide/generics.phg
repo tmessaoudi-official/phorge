@@ -1,0 +1,58 @@
+// Erased generics (M-RT S7) — TypeScript-style `<T>` type parameters on free functions.
+//
+// A generic function is written once and used at many concrete types; the type parameter is
+// inferred at each call site from the argument types. There is NO monomorphization: after
+// type-checking, the type parameters are *erased* (every `T` becomes PHP `mixed` / a plain runtime
+// value), so the interpreter, the bytecode VM, and the transpiled PHP all run the exact same
+// type-variable-free code — byte-for-byte identical output.
+
+package main;
+
+import core.console;
+
+// The classic: returns its argument unchanged, at whatever type it was called with.
+function identity<T>(T x) -> T {
+  return x;
+}
+
+// `T` is inferred from the list's element type; the fallback shares it, so the whole call is
+// checked against one consistent `T`.
+function firstOr<T>(List<T> xs, T fallback) -> T {
+  for (T x in xs) {
+    return x;
+  }
+  return fallback;
+}
+
+// A type parameter can appear inside a *function-typed* parameter too: `f` maps a `T` to a `T`.
+// Unification descends into the `(T) -> T` shape to bind `T` from the function value passed in.
+function applyTwice<T>(T x, (T) -> T f) -> T {
+  return f(f(x));
+}
+
+// Two occurrences of the same parameter must agree: both `a` and `b` are the inferred `T`.
+function lastOfTwo<T>(T a, T b) -> T {
+  return b;
+}
+
+function main() {
+  // `identity` reused at three different concrete types — one definition, no duplication.
+  int n = identity(7);
+  string s = identity("phorge");
+  bool flag = identity(true);
+
+  // `firstOr` over a non-empty `List<int>` → `T = int`, returns the first element.
+  List<int> xs = [10, 20, 30];
+  int head = firstOr(xs, -1);
+
+  // `applyTwice` with an inline lambda: increments 5 twice → 7.
+  int bumped = applyTwice(5, fn(int v) => v + 1);
+
+  // `lastOfTwo` over strings.
+  string last = lastOfTwo("alpha", "omega");
+
+  console.println("identity: {n} {s} {flag}");
+  console.println("firstOr head: {head}");
+  console.println("applyTwice: {bumped}");
+  console.println("lastOfTwo: {last}");
+}

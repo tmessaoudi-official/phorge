@@ -836,7 +836,7 @@ impl Parser {
         let sp = self.peek_span();
         match self.peek() {
             TokenKind::Import => self.parse_import(sp),
-            TokenKind::Function => Ok(Item::Function(self.parse_function(Vec::new(), sp)?)),
+            TokenKind::Function => Ok(Item::Function(self.parse_function(Vec::new(), sp, true)?)),
             TokenKind::Enum => Ok(Item::Enum(self.parse_enum(sp)?)),
             TokenKind::Class => Ok(Item::Class(self.parse_class(sp)?)),
             TokenKind::Interface => Ok(Item::Interface(self.parse_interface(sp)?)),
@@ -921,9 +921,11 @@ impl Parser {
         &mut self,
         modifiers: Vec<Modifier>,
         sp: Span,
+        allow_generics: bool,
     ) -> Result<FunctionDecl, Diagnostic> {
         self.expect(&TokenKind::Function, "'function'")?;
         let name = self.expect_ident("a function name")?;
+        let type_params = self.parse_type_params(allow_generics)?;
         self.expect(&TokenKind::LParen, "'(' after function name")?;
         let params = self.parse_params()?;
         self.expect(&TokenKind::RParen, "')' to close parameters")?;
@@ -936,11 +938,34 @@ impl Parser {
         Ok(FunctionDecl {
             modifiers,
             name,
+            type_params,
             params,
             ret,
             body,
             span: sp,
         })
+    }
+
+    /// Optional generic parameter list `<T, U>` immediately after a function name (M-RT S7).
+    /// Absent ⇒ empty vec. Only free functions may be generic this slice; a method
+    /// (`allow_generics = false`) that opens a `<` gets a targeted error rather than a confusing
+    /// "expected '('".
+    fn parse_type_params(&mut self, allow_generics: bool) -> Result<Vec<String>, Diagnostic> {
+        if !self.check(&TokenKind::Lt) {
+            return Ok(Vec::new());
+        }
+        if !allow_generics {
+            return Err(self.error(
+                "generic type parameters are only allowed on free functions (M-RT S7), not methods",
+            ));
+        }
+        self.advance(); // consume '<'
+        let mut params = vec![self.expect_ident("a type parameter name")?];
+        while self.eat(&TokenKind::Comma) {
+            params.push(self.expect_ident("a type parameter name")?);
+        }
+        self.expect(&TokenKind::Gt, "'>' to close type parameters")?;
+        Ok(params)
     }
 
     /// Comma-separated `Type name` parameters up to (not including) `)`.
@@ -1056,6 +1081,7 @@ impl Parser {
             methods.push(FunctionDecl {
                 modifiers: Vec::new(),
                 name: mname,
+                type_params: Vec::new(),
                 params,
                 ret,
                 body: Vec::new(),
@@ -1099,7 +1125,9 @@ impl Parser {
                     span: sp,
                 })
             }
-            TokenKind::Function => Ok(ClassMember::Method(self.parse_function(modifiers, sp)?)),
+            TokenKind::Function => Ok(ClassMember::Method(
+                self.parse_function(modifiers, sp, false)?,
+            )),
             _ => {
                 // field: [modifiers] Type name ;
                 let ty = self.parse_type()?;
@@ -1419,6 +1447,28 @@ mod tests {
         // Once list-or-map is chosen by the first element, a mismatched separator errors cleanly.
         assert!(parser("[1, 2 => 3]").parse_expr().is_err()); // list mode, stray `=>`
         assert!(parser("[\"a\" => 1, \"b\"]").parse_expr().is_err()); // map mode, missing `=> v`
+    }
+
+    #[test]
+    fn parses_generic_function_type_params() {
+        // `function id<T>(T x) -> T { … }` records the type parameter list (M-RT S7).
+        match item("function id<T, U>(T a, U b) -> T { return a; }") {
+            Item::Function(f) => assert_eq!(f.type_params, vec!["T".to_string(), "U".to_string()]),
+            other => panic!("expected a generic function, got {other:?}"),
+        }
+        // A non-generic function has an empty type-param list.
+        match item("function plain(int x) -> int { return x; }") {
+            Item::Function(f) => assert!(f.type_params.is_empty()),
+            other => panic!("expected a function, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_generic_methods() {
+        // Only free functions may be generic this slice; a generic method is a parse error.
+        assert!(parser("class C { function m<T>(T x) -> T { return x; } }")
+            .parse_item()
+            .is_err());
     }
 
     #[test]

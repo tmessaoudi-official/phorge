@@ -32,12 +32,13 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Lambdas / closures | ✅ | `fn(int x) => x * 2` (expression body) and `fn(int x) -> int { … }` (statement body, `-> T` required); capture enclosing locals by value |
 | First-class function values | ✅ | a bare named function is a value (`twice(3, dbl)`); function types `(int) -> int`; transpile to PHP arrow fn / `function(){} use()` / first-class callable |
 | `Map<K, V>` literals `[k => v]` + indexing `m[k]` | ✅ | keys are `int`/`bool`/`string`; insertion-ordered; a missing key faults cleanly; transpiles to a PHP `[k => v]` array (M-RT S3) |
-| `Set` / tuples / map `keys`/`has`/`size`/iteration | 🚧 M-RT | the generic-typed Map/Set query ops + `Set` itself land with erased generics (S7, reordered to follow S3) |
+| `Set` / tuples / map `keys`/`has`/`size`/iteration | 🚧 M-RT | the erased-generics mechanism shipped (S7); the generic-typed Map/Set query ops + `Set` itself + `core.list` (`map`/`filter`/`reduce`) build on it next |
 | Null safety / optionals (`T?`) | ✅ | `??`, `?.`, `if (var x = opt)`, checked `opt!`, `match` over `T?`; non-optional `T` is never null (compile-time) |
 | Pipe operator `\|>` | ✅ | `x \|> f ≡ f(x)`; left-associative, lowered to a call in the parser; transpiles to a plain PHP call |
 | Type test `instanceof` | ✅ | `value instanceof T` → `bool` where `T` is a class **or interface** (M-RT S2); smart-casts the operand inside `if (x instanceof T)`; transpiles to PHP `instanceof` |
 | Interfaces + `implements` / `extends` | ✅ | `interface I { method sigs }`, `class C implements I, J`, `interface K extends I`; nominal subtyping (a class flows into an interface-typed slot), polymorphic calls through an interface type; transpiles to a PHP `interface`/`implements`/`extends` (M-RT S2) |
-| Unions `A\|B`, intersections `A&B`, generics `<T>`, class `extends` | 🚧 M-RT | the Rich Types milestone — `instanceof` (S1) and interfaces (S2) shipped; these are later slices |
+| Erased generics `<T>` on free functions | ✅ | `function id<T>(T x) -> T`, inferred at the call site (incl. `List<T>` and `(T) -> T` parameters); no monomorphization — type params erase to PHP `mixed`/`array`/`\Closure` before any backend (M-RT S7) |
+| Unions `A\|B`, intersections `A&B`, class `extends`, traits | 🚧 M-RT | the Rich Types milestone — `instanceof` (S1), interfaces (S2), `Map` (S3) and generics (S7) shipped; these are later slices |
 | Exceptions (try/catch/throw) | 🔲 M3 | |
 | Mutation (reassignment, field writes) | 🔲 M3 | triggers the tracing GC |
 | Traits, operator overloading, method overloading | 🔲 future | |

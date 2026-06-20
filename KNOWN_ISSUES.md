@@ -10,9 +10,10 @@ parse error, non-zero exit) — never a crash.
 These are designed but not in the current surface; using them produces a clean compile-time error,
 not a panic:
 
-- `Set` / tuples (and the generic-typed Map/Set query ops — `keys`/`has`/`size`/`contains`/iteration —
-  which await erased generics; `Map<K,V>` literals + `m[k]` indexing ship in M-RT S3 — see the
-  *Maps* note below)
+- `Set` / tuples (and the generic-typed Map/Set query ops — `keys`/`has`/`size`/`contains`/iteration,
+  plus `core.list` `map`/`filter`/`reduce`. The erased-generics *mechanism* now ships in M-RT S7 — see
+  the *Generics* note below — so these build on it next; `Map<K,V>` literals + `m[k]` indexing ship in
+  M-RT S3 — see the *Maps* note below)
 - `instanceof` against **unions or intersections** (class operands ship in M-RT S1 and interface
   operands in M-RT S2 — see *Behavioral quirks* below; testing against unions/intersections lands
   with those features in later M-RT slices)
@@ -23,6 +24,25 @@ not a panic:
 - Method/function overloading, traits, operator overloading, property accessors
 - Sized integers / `decimal`, `const`/`final` enforcement
 - `match` outside return / variable-declaration-initializer position
+
+## Generics (M-RT S7) — deferred refinements
+
+Erased generics ship for **free functions**: `function id<T>(T x) -> T`, inferred at the call site,
+byte-identical `run ≡ runvm ≡ real PHP` (see `examples/guide/generics.phg`). There is no
+monomorphization — type parameters are erased to PHP `mixed` before any backend. These refinements are
+deliberately deferred (each rejected cleanly or simply unavailable, never a crash):
+
+- **Generic methods** are a clean parse error — only free functions may declare `<T>` this slice.
+- **Generic types/classes/enums/interfaces** (`class Box<T>`) are not yet supported — the type
+  parameter list is a free-function feature for now.
+- **A generic function used as a first-class *value*** (`var f = id;` then `f(x)`) is not supported —
+  call a generic function directly so the call site can infer its type parameters. (A monomorphic
+  named function as a value already works — M3 S3.)
+- **An empty list literal `[]` passed straight to a generic parameter** (`firstOr([], x)`) cannot
+  infer the element type and is rejected — pass a non-empty list, or bind it to a typed local first.
+- **No bounds and no variance** — a type parameter is unconstrained, and generic instantiations are
+  invariant (matching the rest of the type system; sound variance needs in/out annotations and carries
+  no runtime information under erasure).
 
 ## Lambdas & first-class functions (M3 S3) — deferred refinements
 
