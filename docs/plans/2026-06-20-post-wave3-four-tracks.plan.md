@@ -35,6 +35,33 @@
   helper so transpiled PHP emits positional shortest-round-trip floats (no sci-notation divergence for
   more values). `run≡runvm` is unaffected (spine-safe); this is a transpile-leg fidelity fix.
   `src/transpile.rs:251`, `src/native.rs:963`. Add oracle cases at `1e-5`/`1e15`/`1e20`.
+- [2026-06-20] DONE (P1-a) @ `8eae410`: `__phorge_float` helper shipped; finite floats byte-identical
+  on run/runvm/PHP; `examples/guide/floats.phg`; KNOWN_ISSUES corrected. Pre-commit gate green.
+- [2026-06-20] DONE (P1-b match arms) @ `8579323`: literal-pattern + expression-position `match`
+  transpile (IIFE for expr position); fixed a pre-existing Assign-position match unconditional-throw
+  bug (now if/elseif/else); `examples/guide/match-expr.phg` + enums-match.phg un-deferred; 394 lib +
+  10 oracle green.
+- [2026-06-20] AGREED (P1-b `is` operator): user chose **Option 1 — make `is` a real `instanceof`
+  type-test** (parser: RHS as a TYPE; checker: validate + smart-cast narrow like S2 if-let;
+  interpreter + VM: real type test; transpile: PHP `instanceof`; byte-identity-gated example).
+  Discovery: `is` is currently value-equality aliased to `==` (interpreter `Is => l.eq_val(&r)`),
+  broken as a type test (`x is T` → E-UNKNOWN-IDENT). **Claude's dissent (recorded, non-binding):**
+  recommended RETIRING the alias instead — `is` is largely redundant with Phorge's sealed enums +
+  exhaustiveness-checked `match`, and a boolean `is` invites un-checkable if/elseif ladders; PHP needs
+  `instanceof` only because it lacks sealed-match. User to confirm Option 1 stands after reading the
+  challenge (asked me to challenge). **Post-compact implementation plan for Option 1 (if confirmed):**
+  (1) parser — parse `is` RHS as a Type (new grammar) not an Expr; (2) AST — represent type operand
+  (e.g. `Expr::Is { value, ty }` or keep BinaryOp::Is with a Type rhs); (3) checker — validate the
+  type exists, result `Bool`, smart-cast narrow the value in the `if`-true branch (reuse S2 narrowing);
+  (4) interpreter + VM — real type membership test (enum-variant / class instanceof); (5) transpile —
+  `$x instanceof T` (de-mangle namespaced type names); (6) example `examples/guide/is-operator.phg`
+  byte-identity-gated; (7) update KNOWN_ISSUES (remove the "not a type test" note) + FEATURES.
+  GOTCHA: the value-eq `Is` arms in interpreter:515, checker:963/1003, compiler:1192 must be replaced
+  (this is a semantics change to a parsed operator — confirm no example relies on `a is b` value-eq).
+- [2026-06-20] AGREED (pace): continue GA punch-list autonomously, gate per commit, checkpoint only on
+  real forks/failures. After `is`: remaining Gate-2 (P1-c ext-policy CI scan, core.file size cap +
+  no-sandbox doc, built-binary exit-status propagation, serve eager respond presence/arity check) →
+  reshape slices 2b→3→4 → Gate 3/4/5.
 
 ## Track 1 — core.html Option 1 (named per-tag helpers)
 **Approach:** two `macro_rules!` (`tag_el!`, `tag_void!`) in `src/native.rs`, each producing a
