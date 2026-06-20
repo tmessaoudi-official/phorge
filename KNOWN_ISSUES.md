@@ -50,9 +50,11 @@ or simply unavailable, never a crash):
   ends the literal early — `html"<a href={url}>"` is fine, but `html"{f("x")}"` is not. Bind the
   value to a local first (`var v = f("x"); html"{v}"`). This is the shared interpolation model, not
   specific to html.
-- **No named element helpers.** There is one generic `el(tag, attrs, children)`, not a per-tag set
-  (`div(...)`, `p(...)`, …) — fn-pointer natives can't bake a tag name, so a named set would need a
-  different mechanism. Pass the tag as a string. (Deferred, not a regression.)
+- **Named element helpers cover a curated set, not every HTML tag.** `html.div`/`html.p`/`html.br`/…
+  are a hand-picked common subset (flow + sectioning + list + table + inline + the void elements);
+  for a tag outside the set use the generic `el(tag, attrs, children)` / `void_el(tag, attrs)`. The
+  set is macro-driven (each tag is monomorphized), so extending it is a one-line addition — not a
+  limitation, just a scope choice. (The earlier "no named helpers at all" deferral is resolved.)
 - **Tag and attribute *names* are not escaped — only values and text are.** `el`/`void_el` tags and
   `attr`/`bool_attr` names are treated as trusted author literals (like the surrounding markup);
   only attribute **values** (via `attr`) and **text** (via `text`) pass through

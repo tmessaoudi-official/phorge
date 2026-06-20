@@ -717,6 +717,90 @@ fn html_concat(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
+// Named per-tag helpers (`div`/`p`/`br`/…) — sugar over `el`/`void_el` with the tag baked in, so
+// `html.div([], [text(x)])` reads like `<div>…</div>` without repeating the tag string. The blocker
+// that deferred these (the `eval`/`php` are bare `fn` pointers and cannot close over a runtime tag)
+// is dissolved by MONOMORPHIZING: each macro invocation emits its own `ev`/`php` pair with the tag
+// literal compiled in via `concat!`, so every tag is a uniform registry entry with a real, byte-
+// identity-testable eval+php — no new runtime surface, no checker/parser/backend change. Tag names
+// are single lowercase words, so they need no casing migration in the namespace reshape.
+
+/// A normal (content) element helper: `tag_el!("div")` ⇒ a `NativeFn` for
+/// `html.div(List<Attr>, List<Html>) -> Html` emitting `<div ATTRS>CHILDREN</div>`. Byte-identical to
+/// `el("div", attrs, children)` on both Rust backends and PHP (same IIFE-free baked form).
+macro_rules! tag_el {
+    ($tag:literal) => {{
+        fn ev(args: &[Value], _: &mut String) -> Result<Value, String> {
+            match args {
+                [Value::List(attrs), Value::List(children)] => {
+                    let a = html_join_fragments(attrs)?;
+                    let c = html_join_fragments(children)?;
+                    Ok(Value::Str(format!(
+                        concat!("<", $tag, "{}>{}</", $tag, ">"),
+                        a, c
+                    )))
+                }
+                _ => Err(concat!("html.", $tag, " expects (List<Attr>, List<Html>)").into()),
+            }
+        }
+        fn php(a: &[String]) -> String {
+            format!(
+                concat!(
+                    "(function($a,$c){{return '<",
+                    $tag,
+                    "' . implode('', $a) . '>' . implode('', $c) . '</",
+                    $tag,
+                    ">';}})({}, {})"
+                ),
+                parg(a, 0),
+                parg(a, 1)
+            )
+        }
+        NativeFn {
+            module: "core.html",
+            name: $tag,
+            params: vec![Ty::List(Box::new(Ty::Attr)), Ty::List(Box::new(Ty::Html))],
+            ret: Ty::Html,
+            eval: ev,
+            php,
+        }
+    }};
+}
+
+/// A void (self-closing) element helper: `tag_void!("br")` ⇒ `html.br(List<Attr>) -> Html` emitting
+/// `<br ATTRS/>`. Byte-identical to `void_el("br", attrs)`.
+macro_rules! tag_void {
+    ($tag:literal) => {{
+        fn ev(args: &[Value], _: &mut String) -> Result<Value, String> {
+            match args {
+                [Value::List(attrs)] => {
+                    let a = html_join_fragments(attrs)?;
+                    Ok(Value::Str(format!(concat!("<", $tag, "{}/>"), a)))
+                }
+                _ => Err(concat!("html.", $tag, " expects (List<Attr>)").into()),
+            }
+        }
+        fn php(a: &[String]) -> String {
+            format!(
+                concat!(
+                    "(function($a){{return '<",
+                    $tag,
+                    "' . implode('', $a) . '/>';}})({})"
+                ),
+                parg(a, 0)
+            )
+        }
+        NativeFn {
+            module: "core.html",
+            name: $tag,
+            params: vec![Ty::List(Box::new(Ty::Attr))],
+            ret: Ty::Html,
+            eval: ev,
+            php,
+        }
+    }};
+}
+
 fn html_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
@@ -813,6 +897,52 @@ fn html_natives() -> Vec<NativeFn> {
             eval: html_concat,
             php: |a| format!("implode('', {})", parg(a, 0)),
         },
+        // ---- Option 1: named per-tag helpers (curated common HTML5 set) ----
+        // Content elements `html.<tag>(attrs, children) -> Html`.
+        tag_el!("div"),
+        tag_el!("span"),
+        tag_el!("p"),
+        tag_el!("a"),
+        tag_el!("ul"),
+        tag_el!("ol"),
+        tag_el!("li"),
+        tag_el!("h1"),
+        tag_el!("h2"),
+        tag_el!("h3"),
+        tag_el!("h4"),
+        tag_el!("h5"),
+        tag_el!("h6"),
+        tag_el!("section"),
+        tag_el!("article"),
+        tag_el!("header"),
+        tag_el!("footer"),
+        tag_el!("nav"),
+        tag_el!("main"),
+        tag_el!("aside"),
+        tag_el!("button"),
+        tag_el!("label"),
+        tag_el!("form"),
+        tag_el!("table"),
+        tag_el!("thead"),
+        tag_el!("tbody"),
+        tag_el!("tr"),
+        tag_el!("td"),
+        tag_el!("th"),
+        tag_el!("em"),
+        tag_el!("strong"),
+        tag_el!("b"),
+        tag_el!("i"),
+        tag_el!("small"),
+        tag_el!("code"),
+        tag_el!("pre"),
+        tag_el!("blockquote"),
+        // Void (self-closing) elements `html.<tag>(attrs) -> Html`.
+        tag_void!("br"),
+        tag_void!("hr"),
+        tag_void!("img"),
+        tag_void!("input"),
+        tag_void!("meta"),
+        tag_void!("link"),
     ]
 }
 
@@ -1165,6 +1295,57 @@ mod tests {
         );
         assert_eq!(
             registry()[index_of("core.html", "el").unwrap()].ret,
+            Ty::Html
+        );
+    }
+
+    #[test]
+    fn tag_helpers_eval_and_emit() {
+        // Option 1 named tags are macro-monomorphized registry entries — exercise them through the
+        // registered `eval`/`php` (not the local macro fns) so the test pins what callers actually hit.
+        let eval = |n: &str, args: &[Value]| -> Result<Value, String> {
+            (registry()[index_of("core.html", n).unwrap()].eval)(args, &mut String::new())
+        };
+        let php = |n: &str, a: &[&str]| {
+            let args: Vec<String> = a.iter().map(|s| (*s).to_string()).collect();
+            (registry()[index_of("core.html", n).unwrap()].php)(&args)
+        };
+        let attrs = Value::List(std::rc::Rc::new(vec![Value::Str(" class=\"box\"".into())]));
+        let kids = Value::List(std::rc::Rc::new(vec![Value::Str("hi".into())]));
+        let empty = Value::List(std::rc::Rc::new(vec![]));
+        // Content element `div`: baked tag, byte-identical to el("div", attrs, children).
+        assert!(
+            matches!(eval("div", &[attrs.clone(), kids.clone()]), Ok(Value::Str(s)) if s == "<div class=\"box\">hi</div>")
+        );
+        assert!(matches!(eval("p", &[empty.clone(), kids]), Ok(Value::Str(s)) if s == "<p>hi</p>"));
+        // Void elements `img`/`br`: self-closing, byte-identical to void_el(tag, attrs).
+        let src = Value::List(std::rc::Rc::new(vec![Value::Str(" src=\"x.png\"".into())]));
+        assert!(matches!(eval("img", &[src]), Ok(Value::Str(s)) if s == "<img src=\"x.png\"/>"));
+        assert!(
+            matches!(eval("br", std::slice::from_ref(&empty)), Ok(Value::Str(s)) if s == "<br/>")
+        );
+        // Wrong arity is a clean fault, never a panic.
+        assert!(eval("div", &[empty]).is_err());
+        // PHP emission — the byte-identity counterparts (baked tag, so no `$t` parameter).
+        assert_eq!(
+            php("div", &["$a", "$c"]),
+            "(function($a,$c){return '<div' . implode('', $a) . '>' . implode('', $c) . '</div>';})($a, $c)"
+        );
+        assert_eq!(
+            php("br", &["$a"]),
+            "(function($a){return '<br' . implode('', $a) . '/>';})($a)"
+        );
+        // Resolve by both index forms + carry the Html return type.
+        assert_eq!(
+            index_of_by_leaf("html", "div"),
+            index_of("core.html", "div")
+        );
+        assert_eq!(
+            registry()[index_of("core.html", "section").unwrap()].ret,
+            Ty::Html
+        );
+        assert_eq!(
+            registry()[index_of("core.html", "hr").unwrap()].ret,
             Ty::Html
         );
     }

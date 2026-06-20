@@ -1,7 +1,8 @@
 # `core.html` — Typed, Auto-Escaping HTML — Design Spec
 
 > **Status:** ✅ **Waves 1 (escape kernel), 2 (element builders) & 3 (`html"…"` literal sugar) all
-> shipped** — the design is fully realized. Only the named per-tag convenience set is deferred. See §9.
+> shipped, plus the named per-tag helper set (Option 1)** — the design is fully realized. The per-tag
+> set is a curated common subset (extending it is a one-line macro addition). See §9.
 > **Milestone:** M3 ergonomics follow-up / M6 web companion (HTML is what a `Response` body usually
 > carries — this is the authoring layer above `examples/web/handler.phg`).
 > **Trigger:** developer question (2026-06-19) — *"in a `.phg` file, if I want to write HTML, how do
@@ -260,6 +261,7 @@ change proves thorny, Waves 1–2 already deliver safe HTML.
 |-------|-------|
 | This design | ✅ spec landed |
 | `Html` type + escape kernel `text`/`raw`/`render` (Wave 1) | ✅ shipped — byte-identical run/runvm/PHP; `examples/guide/html.phg` |
-| `Attr` + builders `el`/`void_el`/`attr`/`bool_attr`/`concat` (Wave 2) | ✅ shipped — byte-identical run/runvm/PHP; empty `[]` works in call-arg position; named set deferred |
+| `Attr` + builders `el`/`void_el`/`attr`/`bool_attr`/`concat` (Wave 2) | ✅ shipped — byte-identical run/runvm/PHP; empty `[]` works in call-arg position |
 | `html"…"` sugar + `E-HTML-HOLE` (Wave 3) | ✅ shipped |
+| Named per-tag helpers `div`/`p`/`a`/`br`/… (Option 1) | ✅ shipped — macro-monomorphized registry entries (real eval+php, byte-identity-tested); curated common set, one-line to extend |
 | Multi-line string literals | ✅ already supported (`scan_string` accepts raw newlines) |

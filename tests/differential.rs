@@ -1069,6 +1069,38 @@ fn transpiles_html_literal_to_kernel_calls() {
     );
 }
 
+#[test]
+fn named_tag_helpers_agree() {
+    // core.html Option 1 — `html.<tag>(attrs, children)` bakes the tag, byte-identical to el/void_el,
+    // so it inherits parity. (run ≡ runvm here; the glob test adds run ≡ php on the guide example.)
+    // Content element: attribute value escaped, text child escaped.
+    agree(
+        r#"import core.console; import core.html; function main(){ console.println(html.render(html.a([html.attr("href","/?x=1&y=2")],[html.text("A & B")]))); }"#,
+    ); // <a href="/?x=1&amp;y=2">A &amp; B</a>
+       // Empty attr list accepted in call-arg position; tags nest.
+    agree(
+        r#"import core.console; import core.html; function main(){ console.println(html.render(html.ul([],[html.li([],[html.text("x")])]))); }"#,
+    ); // <ul><li>x</li></ul>
+       // A void (self-closing) element.
+    agree(
+        r#"import core.console; import core.html; function main(){ console.println(html.render(html.hr([]))); }"#,
+    ); // <hr/>
+       // A tag helper and the equivalent el() call produce identical bytes.
+    agree(
+        r#"import core.console; import core.html; function main(){ console.println(html.render(html.p([],[html.text("hi")]))); console.println(html.render(html.el("p",[],[html.text("hi")]))); }"#,
+    ); // <p>hi</p>\n<p>hi</p>
+}
+
+#[test]
+fn transpiles_named_tag_to_baked_php() {
+    // A named tag erases to the same baked closure the kernel uses, with the tag compiled in (no $t).
+    let php = transpile_ok(
+        r#"package main; import core.console; import core.html; function main(){ console.println(html.render(html.div([],[html.text("x")]))); }"#,
+    );
+    assert!(php.contains("'<div'"), "{php}");
+    assert!(php.contains("'</div>'"), "{php}");
+}
+
 // ── M7: the PHP oracle — the third correctness leg ───────────────────────────────────────────────
 // `run ≡ runvm` is gated by every test above. This gates `run ≡ php` (⇒ all three byte-identical):
 // the transpiled PHP, executed by a real `php`, must print exactly what the interpreter prints.

@@ -8,6 +8,15 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ### core.html — typed auto-escaping HTML (Waves 1–3: escape kernel + element builders + `html"…"` sugar)
 
+- **Named per-tag helpers (Option 1).** A curated common HTML5 tag set — `html.div`/`html.p`/`html.a`/
+  `html.ul`/`html.li`/`html.h1`–`h6`/`html.section`/`html.table`/… and the void elements
+  `html.br`/`html.hr`/`html.img`/`html.input`/… — each `html.<tag>(attrs, children) -> Html` (or
+  `(attrs) -> Html` for void), sugar over `el`/`void_el` with the tag baked in. Resolved the deferred
+  "fn-pointer natives can't bake a tag" blocker by **monomorphizing**: two `macro_rules!` emit a
+  per-tag `eval`+`php` pair with the tag literal compiled in via `concat!`, so every tag is a uniform,
+  byte-identity-tested registry entry — **no new `Op`, no lexer/parser/checker/backend change** (the
+  four-backend native call path is already registry-generic, like Wave 2). `examples/guide/html.phg`
+  showcases them, byte-identical on `run`/`runvm`/**real PHP**.
 - **Wave 3 — the `html"…"` literal sugar.** A prefixed literal `html"<h1>{name}</h1>"` (lexed by a
   dedicated `scan_html`, mirroring `b"…"`; multi-line for free, since string bodies already span
   lines) that desugars to the Wave-1/2 kernel: literal chunks → `html.raw(chunk)`, and each `{e}`

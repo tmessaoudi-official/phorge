@@ -79,4 +79,18 @@ function main() {
   // Compose: pass an html"…" fragment into a helper that wraps it in more (multi-line) markup.
   Html inner = html"<p>{name}</p>";
   console.println(html.render(card("Profile", inner)));
+
+  // --- Option 1: named per-tag helpers ---
+  // Each tag is sugar over el/void_el with the tag baked in: html.div(attrs, children),
+  // html.hr(attrs). Same auto-escaping (attribute values + text), same byte output.
+  Html bar = html.nav([html.attr("class", "top")],
+                      [html.a([html.attr("href", "/?a=1&b=2")], [html.text("Home & Away")])]);
+  console.println(html.render(bar));   // <nav class="top"><a href="/?a=1&amp;b=2">Home &amp; Away</a></nav>
+
+  Html items = html.ul([], [html.li([], [html.text(name)]), html.li([], [html.text(bio)])]);
+  // <ul><li>Tom &amp; &quot;Jerry&quot;</li><li>&lt;script&gt;alert(1)&lt;/script&gt;</li></ul>
+  console.println(html.render(items));
+
+  Html rule = html.hr([]);              // a void element: <hr/>
+  console.println(html.render(rule));
 }
