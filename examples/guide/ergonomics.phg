@@ -1,20 +1,20 @@
 package main;
-import core.console;
+import Core.Console;
 
 // M3 S1 "core ergonomics": list indexing, integer ranges, and expression `if`.
 function main() {
     // Indexing: read elements out of a list by position.
     List<int> xs = [10, 20, 30];
-    console.println("first={xs[0]} last={xs[2]}");
+    Console.println("first={xs[0]} last={xs[2]}");
 
     // Ranges: `0..3` is exclusive (0, 1, 2). Expression `if` produces a value inline.
     for (int i in 0..3) {
         string kind = if (i == 1) { "mid" } else { "edge" };
-        console.println("xs[{i}]={xs[i]} ({kind})");
+        Console.println("xs[{i}]={xs[i]} ({kind})");
     }
 
     // `..=` is inclusive (1, 2, 3).
     for (int n in 1..=3) {
-        console.println("n={n}");
+        Console.println("n={n}");
     }
 }

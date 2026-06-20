@@ -5,7 +5,7 @@
 // the old value-equality `is` alias. Inside an `if (x instanceof C) { … }`, the checker smart-casts
 // `x` to `C` in the then-block, so member access through it type-checks.
 package main;
-import core.console;
+import Core.Console;
 
 class Circle {
     constructor(public int radius) {}
@@ -27,8 +27,8 @@ function main() {
     Circle c = Circle(2);
     Square s = Square(3);
 
-    console.println("{c instanceof Circle}"); // true  — c is a Circle
-    console.println("{c instanceof Square}");  // false — a Circle is not a Square
-    console.println("{s instanceof Square}");  // true  — s is a Square
-    console.println(describe(c));              // circle r=2
+    Console.println("{c instanceof Circle}"); // true  — c is a Circle
+    Console.println("{c instanceof Square}");  // false — a Circle is not a Square
+    Console.println("{s instanceof Square}");  // true  — s is a Square
+    Console.println(describe(c));              // circle r=2
 }

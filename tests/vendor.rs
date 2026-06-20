@@ -111,8 +111,8 @@ fn vendor_fetches_and_loads_offline() {
     );
     let entry = consumer.write(
         "src/main.phg",
-        "package main;\nimport core.console;\nimport acme.greet;\n\
-         function main() { console.println(greet.hi(\"phorge\")); }\n",
+        "package main;\nimport Core.Console;\nimport acme.greet;\n\
+         function main() { Console.println(greet.hi(\"phorge\")); }\n",
     );
 
     // --- vendor (the network/git path, here over file://) ------------------

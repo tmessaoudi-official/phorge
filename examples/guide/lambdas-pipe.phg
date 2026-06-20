@@ -1,5 +1,5 @@
 package main;
-import core.console;
+import Core.Console;
 
 function dbl(int x) -> int { return x * 2; }
 function inc(int x) -> int { return x + 1; }
@@ -13,10 +13,10 @@ function main() {
         var t = x * x;
         return t + 1;
     };
-    console.println("{add10(5)}");            // 15
-    console.println("{scaled(4)}");           // 17
-    console.println("{twice(3, add10)}");     // 23
-    console.println("{5 |> dbl |> inc}");     // inc(dbl(5)) = 11
-    console.println("{3 |> fn(int v) => v + 100}"); // 103
-    console.println("{twice(2, dbl)}");       // dbl(dbl(2)) = 8  (named-fn ref)
+    Console.println("{add10(5)}");            // 15
+    Console.println("{scaled(4)}");           // 17
+    Console.println("{twice(3, add10)}");     // 23
+    Console.println("{5 |> dbl |> inc}");     // inc(dbl(5)) = 11
+    Console.println("{3 |> fn(int v) => v + 100}"); // 103
+    Console.println("{twice(2, dbl)}");       // dbl(dbl(2)) = 8  (named-fn ref)
 }

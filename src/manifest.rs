@@ -230,7 +230,7 @@ fn strip_comment(line: &str) -> &str {
 }
 
 /// A key may be bare (`name`) or quoted (`"acme/parser"`). Strip surrounding quotes if
-/// present; otherwise return the trimmed text.
+/// present; otherwise return the trimmed Text.
 fn unquote_key(raw: &str) -> String {
     let k = raw.trim();
     if k.len() >= 2 && k.starts_with('"') && k.ends_with('"') {

@@ -1,5 +1,5 @@
 package main;
-import core.console;
+import Core.Console;
 
 // A self-contained program built into a standalone executable with `phg build`.
 // The produced binary embeds this source (in a CRC-guarded `.phorge` object-file
@@ -13,8 +13,8 @@ function fib(int n) -> int {
 }
 
 function main() {
-    console.println("phorge standalone build");
+    Console.println("phorge standalone build");
     for (int i in 0..10) {
-        console.println("fib({i}) = {fib(i)}");
+        Console.println("fib({i}) = {fib(i)}");
     }
 }

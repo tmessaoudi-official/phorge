@@ -17,9 +17,9 @@ use phorge::value::Value;
 /// `package main` entry, but the tests call `respond`/`serve`, never `main`.
 const SERVE_PROGRAM: &str = r#"
 package main;
-import core.console;
-import core.bytes;
-import core.text;
+import Core.Console;
+import Core.Bytes;
+import Core.Text;
 
 class Request {
   constructor(public string method, public string path, public bytes body) {}
@@ -36,42 +36,42 @@ function reasonPhrase(int s) -> string {
 }
 
 function parseRequest(bytes raw) -> Request? {
-  string nl = bytes.toString(b"\x0d\x0a") ?? "";
-  int sep = bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
+  string nl = Bytes.toString(b"\x0d\x0a") ?? "";
+  int sep = Bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
   if (sep < 0) { return null; }
-  bytes headBytes = bytes.slice(raw, 0, sep);
-  bytes body = bytes.slice(raw, sep + 4, bytes.len(raw));
-  string head = bytes.toString(headBytes) ?? "";
-  List<string> lines = text.split(head, nl);
+  bytes headBytes = Bytes.slice(raw, 0, sep);
+  bytes body = Bytes.slice(raw, sep + 4, Bytes.len(raw));
+  string head = Bytes.toString(headBytes) ?? "";
+  List<string> lines = Text.split(head, nl);
   string requestLine = lines[0];
-  List<string> rl = text.split(requestLine, " ");
+  List<string> rl = Text.split(requestLine, " ");
   string method = rl[0];
   string path = rl[1];
   return Request(method, path, body);
 }
 
 function serializeResponse(Response resp) -> bytes {
-  string nl = bytes.toString(b"\x0d\x0a") ?? "";
+  string nl = Bytes.toString(b"\x0d\x0a") ?? "";
   string reason = reasonPhrase(resp.status);
   int st = resp.status;
   string statusLine = "HTTP/1.1 {st} {reason}";
-  int bodyLen = bytes.len(resp.body);
-  string userHeaders = text.join(resp.headerLines, nl);
+  int bodyLen = Bytes.len(resp.body);
+  string userHeaders = Text.join(resp.headerLines, nl);
   string head = "{statusLine}{nl}Content-Length: {bodyLen}{nl}{userHeaders}{nl}{nl}";
-  return bytes.concat(bytes.fromString(head), resp.body);
+  return Bytes.concat(Bytes.fromString(head), resp.body);
 }
 
 function dispatch(Request req) -> Response {
   if (req.method == "GET") {
     if (req.path == "/") {
-      return Response(200, bytes.fromString("home"), ["Content-Type: text/plain"]);
+      return Response(200, Bytes.fromString("home"), ["Content-Type: text/plain"]);
     }
   }
-  return Response(404, bytes.fromString("not found"), ["Content-Type: text/plain"]);
+  return Response(404, Bytes.fromString("not found"), ["Content-Type: text/plain"]);
 }
 
 function badRequest() -> Response {
-  return Response(400, bytes.fromString("bad request"), ["Content-Type: text/plain"]);
+  return Response(400, Bytes.fromString("bad request"), ["Content-Type: text/plain"]);
 }
 
 function respond(bytes raw) -> bytes {
@@ -84,8 +84,8 @@ function respond(bytes raw) -> bytes {
 
 function main() {
   bytes raw = b"GET / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a";
-  int len = bytes.len(respond(raw));
-  console.println("served {len} bytes");
+  int len = Bytes.len(respond(raw));
+  Console.println("served {len} bytes");
 }
 "#;
 

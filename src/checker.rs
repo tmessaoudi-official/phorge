@@ -734,10 +734,10 @@ impl Checker {
                 "E-NO-PACKAGE",
                 Some("add `package main;` at the top of the file".into()),
             );
-        } else if program.package[0] == "core" {
+        } else if program.package[0] == "Core" {
             self.err_coded(
                 program.span,
-                "`core` is a reserved package root (the standard library)",
+                "`Core` is a reserved package root (the standard library)",
                 "E-RESERVED-PACKAGE",
                 Some("use a different root, e.g. `package app;`".into()),
             );
@@ -1490,16 +1490,16 @@ impl Checker {
         let leaf = self
             .imports
             .iter()
-            .find(|(_, full)| full.as_str() == "core.html")
+            .find(|(_, full)| full.as_str() == "Core.Html")
             .map(|(leaf, _)| leaf.clone());
         let leaf = match leaf {
             Some(l) => l,
             None => {
                 return self.err_coded(
                     span,
-                    "`html\"…\"` requires the core.html module",
+                    "`html\"…\"` requires the Core.Html module",
                     "E-HTML-IMPORT",
-                    Some("add `import core.html;` (or `import core.html as h;`)".into()),
+                    Some("add `import Core.Html;` (or `import Core.Html as h;`)".into()),
                 );
             }
         };
@@ -1548,7 +1548,7 @@ impl Checker {
                                 ),
                                 "E-HTML-HOLE",
                                 Some(
-                                    "wrap it with `html.text(…)`/`html.raw(…)`, or build it with the html builders"
+                                    "wrap it with `Html.text(…)`/`Html.raw(…)`, or build it with the html builders"
                                         .into(),
                                 ),
                             );
@@ -3481,13 +3481,13 @@ mod tests {
             e.iter().any(|d| d.code == Some("E-NO-PACKAGE")),
             "got {e:?}"
         );
-        // The `core` root is reserved for the standard library → E-RESERVED-PACKAGE.
-        let e2 = errors_of_raw("package core; function main() {}");
+        // The `Core` root is reserved for the standard library → E-RESERVED-PACKAGE.
+        let e2 = errors_of_raw("package Core; function main() {}");
         assert!(
             e2.iter().any(|d| d.code == Some("E-RESERVED-PACKAGE")),
             "got {e2:?}"
         );
-        let e3 = errors_of_raw("package core.evil; function main() {}");
+        let e3 = errors_of_raw("package Core.evil; function main() {}");
         assert!(
             e3.iter().any(|d| d.code == Some("E-RESERVED-PACKAGE")),
             "got {e3:?}"
@@ -3676,7 +3676,7 @@ mod tests {
     fn unknown_identifier_suggests_the_nearest_in_scope_name() {
         // `cont` is one edit from the in-scope `count` → the diagnostic carries a code + hint.
         let errs = errors_of(
-            "import core.console; function main() { int count = 0; console.println(\"{cont}\"); }",
+            "import Core.Console; function main() { int count = 0; Console.println(\"{cont}\"); }",
         );
         let d = errs
             .iter()
@@ -3978,8 +3978,8 @@ mod tests {
     #[test]
     fn println_accepts_string() {
         assert!(errors_of(
-            r#"import core.console;
-function main() { console.println("hi"); }"#
+            r#"import Core.Console;
+function main() { Console.println("hi"); }"#
         )
         .is_empty());
     }
@@ -3988,11 +3988,11 @@ function main() { console.println("hi"); }"#
     fn console_println_rejects_non_string() {
         // The native's signature is `(string)`, so an `int` argument is a type error (M3 Wave 1).
         let errs = errors_of(
-            r#"import core.console;
-function main() { console.println(42); }"#,
+            r#"import Core.Console;
+function main() { Console.println(42); }"#,
         );
         assert!(
-            errs.iter().any(|e| e.message.contains("console.println")),
+            errs.iter().any(|e| e.message.contains("Console.println")),
             "{errs:?}"
         );
     }
@@ -4010,19 +4010,21 @@ function main() { console.println(42); }"#,
 
     #[test]
     fn console_println_without_import_errors() {
-        // "nothing in the wind": without `import core.console;`, the qualifier is unbound, so the
+        // "nothing in the wind": without `import Core.Console;`, the qualifier is unbound, so the
         // member call cannot resolve to the native and is an error.
-        let errs = errors_of(r#"function main() { console.println("hi"); }"#);
+        let errs = errors_of(r#"function main() { Console.println("hi"); }"#);
         assert!(!errs.is_empty(), "expected an error without the import");
     }
 
     #[test]
     fn local_shadowing_imported_qualifier_errors() {
         // A value binding may not shadow an imported module qualifier (keeps all backends
-        // consistent — see `declare`). Coded `E-SHADOW-IMPORT`.
+        // consistent — see `declare`). Coded `E-SHADOW-IMPORT`. (Stdlib qualifiers are now
+        // PascalCase, so a camelCase local can never collide with one — the guard still bites a
+        // lowercase user-package leaf, which is what this exercises.)
         let errs = errors_of(
-            r#"import core.console;
-function main() { int console = 0; console.println("{console}"); }"#,
+            r#"import acme.helper;
+function main() { int helper = 0; int x = helper; }"#,
         );
         assert!(
             errs.iter().any(|e| e.code == Some("E-SHADOW-IMPORT")),
@@ -4032,10 +4034,10 @@ function main() { int console = 0; console.println("{console}"); }"#,
 
     #[test]
     fn html_literal_bad_hole_is_coded() {
-        // A hole whose type is neither Html, string, nor a primitive is `E-HTML-HOLE` (core.html
+        // A hole whose type is neither Html, string, nor a primitive is `E-HTML-HOLE` (Core.Html
         // Wave 3): there is no safe HTML rendering for an enum value.
         let errs = errors_of(
-            r#"import core.html;
+            r#"import Core.Html;
 enum E { A() }
 function main() { var p = html"<h1>{A()}</h1>"; }"#,
         );
@@ -4047,7 +4049,7 @@ function main() { var p = html"<h1>{A()}</h1>"; }"#,
 
     #[test]
     fn html_literal_without_import_is_coded() {
-        // `html"…"` desugars to core.html kernel calls, so the module must be imported; otherwise
+        // `html"…"` desugars to Core.Html kernel calls, so the module must be imported; otherwise
         // `E-HTML-IMPORT`.
         let errs = errors_of(r#"function main() { var p = html"<h1>x</h1>"; }"#);
         assert!(

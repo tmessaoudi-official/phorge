@@ -6,7 +6,7 @@
 // AND an interface; inside `if (x instanceof T)` the operand is smart-cast to `T`.
 package main;
 
-import core.console;
+import Core.Console;
 
 // A contract: anything that can speak.
 interface Speaker {
@@ -38,20 +38,20 @@ function main() {
     var r = Robot();
 
     // Called polymorphically — both a Dog and a Robot are Speakers.
-    console.println(announce(d)); // Woof
-    console.println(announce(r)); // Beep
+    Console.println(announce(d)); // Woof
+    Console.println(announce(r)); // Beep
 
     // `instanceof` against a class and against (extended) interfaces.
-    console.println("{d instanceof Dog}");     // true
-    console.println("{d instanceof Speaker}"); // true  (Dog implements Pet, Pet extends Speaker)
-    console.println("{d instanceof Pet}");     // true
-    console.println("{r instanceof Speaker}"); // true
-    console.println("{r instanceof Pet}");     // false (Robot is only a Speaker)
+    Console.println("{d instanceof Dog}");     // true
+    Console.println("{d instanceof Speaker}"); // true  (Dog implements Pet, Pet extends Speaker)
+    Console.println("{d instanceof Pet}");     // true
+    Console.println("{r instanceof Speaker}"); // true
+    Console.println("{r instanceof Pet}");     // false (Robot is only a Speaker)
 
     // A class instance flows into an interface-typed binding (nominal subtyping).
     Speaker sp = d;
     // Smart-cast: a Speaker known to be a Dog reads the Dog's own field.
     if (sp instanceof Dog) {
-        console.println(sp.dogName); // Rex
+        Console.println(sp.dogName); // Rex
     }
 }

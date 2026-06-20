@@ -69,7 +69,7 @@ or simply unavailable, never a crash):
 - **`core.list` higher-order helpers (`map`/`filter`/`reduce`) are not yet available** — they await
   the `List<T>`-generic native signatures; lambdas can already be passed to *user* functions today.
 
-## core.html (Waves 1–3 — escape kernel + element builders + `html"…"` sugar)
+## Core.Html (Waves 1–3 — escape kernel + element builders + `html"…"` sugar)
 
 - **An `html"…"` hole cannot contain a string literal with quotes.** Like every Phorge
   interpolation (`"…{e}…"`), the lexer scans to the first closing `"`, so a `"` inside a `{e}` hole
@@ -140,7 +140,7 @@ byte-identical on `run`/`runvm` and round-tripped through real PHP. These are de
   defers `core.list` — native signatures have no type variables. They (and `Set` itself) land with
   erased generics (M-RT S7, reordered to immediately follow S3).
 - **A string-literal index inside a `"{…}"` interpolation nests quotes.** `"{m["k"]}"` ends the
-  string early (the shared interpolation rule — see core.html). Bind the lookup to a local first:
+  string early (the shared interpolation rule — see Core.Html). Bind the lookup to a local first:
   `var v = m["k"]; "{v}"`. An `int`/identifier index inside `{…}` is fine.
 - **Bool map keys: PHP coerces `true`/`false` to `1`/`0` as array keys; Phorge keeps them distinct.**
   A `Map<bool, V>` works and is byte-identical *as long as you don't also use `0`/`1` int keys in the

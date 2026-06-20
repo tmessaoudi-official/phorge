@@ -6,6 +6,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — stdlib namespace is now PascalCase `Core.*` (namespace reshape)
+
+- **The standard-library root and leaf modules are PascalCase**: `Core.Console` → **`Core.Console`**,
+  and likewise `Core.Math` / `Core.Text` / `Core.File` / `Core.Bytes` / `Core.Html`. Function names stay
+  camelCase (`println`, `sqrt`, `splitOnce`). `import Core.Console;` becomes `import Core.Console;` and
+  the call site `Console.println(...)` becomes `Console.println(...)`. `Core` is the reserved package
+  root (`E-RESERVED-PACKAGE`). This aligns the stdlib with the namespace-reshape rule that package
+  *segments* are PascalCase. A repo-wide breaking codemod across every example, fixture, test program,
+  and the native registry; byte-identical `run ≡ runvm ≡ real PHP` preserved (the namespace is a
+  compile-time organizing layer — natives still erase to flat PHP builtins). *Consequence:* a stdlib
+  qualifier (PascalCase) can no longer be shadowed by a camelCase local, so `E-SHADOW-IMPORT` now only
+  bites a lowercase **user**-package leaf. (The broader reshape — `package main` → `package Main`,
+  user-package-segment casing enforcement, manifest `name`→`module` — remains pending.)
+
 ### Added — erased generics `<T>` on free functions (Rich Types milestone, M-RT S7)
 
 - **TypeScript-style generic type parameters** on free functions: `function id<T>(T x) -> T`,
@@ -171,9 +185,9 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   lowercase first letter with no `_` (a single lowercase word like `main` is valid); PascalCase is an
   uppercase first letter with no `_`. Each diagnostic suggests the converted form (`split_once` →
   `splitOnce`, `shape` → `Shape`) and both have `phg explain` entries.
-- **The shipped stdlib public API is migrated to camelCase:** `core.text.split_once` → `splitOnce`,
-  `core.html.bool_attr` → `boolAttr`, `core.html.void_el` → `voidEl`, `core.bytes.from_string` →
-  `fromString`, `core.bytes.to_string` → `toString`. The native `eval`/PHP mappings are unchanged —
+- **The shipped stdlib public API is migrated to camelCase:** `Core.Text.split_once` → `splitOnce`,
+  `Core.Html.bool_attr` → `boolAttr`, `Core.Html.void_el` → `voidEl`, `Core.Bytes.from_string` →
+  `fromString`, `Core.Bytes.to_string` → `toString`. The native `eval`/PHP mappings are unchanged —
   only the call-site name.
 - **Front-end-only, so byte-identity is untouched.** The casing pass lives in the checker (shared by
   all three backends) and only gates *which* programs are accepted; the AST every backend sees is
@@ -205,7 +219,7 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   std-only (RFC-8259 escaping, no serde) on the existing `Diagnostic` type — no backend touched, no
   byte-identity surface. Plain `phg check` is unchanged.
 
-### core.html — typed auto-escaping HTML (Waves 1–3: escape kernel + element builders + `html"…"` sugar)
+### Core.Html — typed auto-escaping HTML (Waves 1–3: escape kernel + element builders + `html"…"` sugar)
 
 - **Named per-tag helpers (Option 1).** A curated common HTML5 tag set — `html.div`/`html.p`/`html.a`/
   `html.ul`/`html.li`/`html.h1`–`h6`/`html.section`/`html.table`/… and the void elements
@@ -225,10 +239,10 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   `E-HTML-HOLE`. The whole literal becomes `html.concat([…])` and is **erased before any backend**
   (`checker::resolve_html`, the `expand_aliases` precedent), so there is **no new `Op`, no new
   runtime, and no new byte-identity surface** — parity is inherited from the kernel. `html"…"`
-  requires `import core.html;` (`E-HTML-IMPORT`, robust to `import core.html as h;`).
+  requires `import Core.Html;` (`E-HTML-IMPORT`, robust to `import Core.Html as h;`).
   `examples/guide/html.phg` now showcases the sugar, byte-identical on `run`/`runvm`/**real PHP**.
 - **Wave 2 — typed element builders.** A new distinct type `Attr` (like `Html`, erases to PHP
-  `string`, non-interchangeable) plus five `core.html` natives compose HTML from typed fragments
+  `string`, non-interchangeable) plus five `Core.Html` natives compose HTML from typed fragments
   rather than hand-written markup: `attr(string, string) -> Attr` (value escaped, name trusted),
   `bool_attr(string) -> Attr` (valueless), `el(string, List<Attr>, List<Html>) -> Html`,
   `void_el(string, List<Attr>) -> Html` (self-closing), and `concat(List<Html>) -> Html`. Each
@@ -240,11 +254,11 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   parameter type (a small, call-argument-only bit of bidirectional checking in `check_args`), so a
   zero-attribute or zero-child builder call reads naturally — `el("p", [], [text(x)])`. An empty
   `[]` in a declaration initializer or `return` still requires a non-empty literal.
-- **`Html` type + `core.html` escape kernel (Wave 1).** The Phorge-idiomatic answer to "how do I write HTML"
+- **`Html` type + `Core.Html` escape kernel (Wave 1).** The Phorge-idiomatic answer to "how do I write HTML"
   (design: `docs/specs/2026-06-19-core-html-design.md`). `Html` is a distinct checker type
   (`Ty::Html`) that erases to PHP `string` and rides `Value::Str` at runtime — but is **not
   interchangeable with `string`**, so untrusted text cannot reach rendered HTML except through
-  `core.html.text` (auto-escape) or the audited `core.html.raw` (trusted markup). This makes XSS a
+  `Core.Html.text` (auto-escape) or the audited `Core.Html.raw` (trusted markup). This makes XSS a
   *compile error*, not a runtime hazard — enforced by the type checker, zero new `Op`, zero runtime
   divergence. Boundary natives: `text(string) -> Html`, `raw(string) -> Html`, `render(Html) ->
   string`. Escaping erases to the **pinned** `htmlspecialchars($s, ENT_QUOTES, 'UTF-8')` (tier-1,
@@ -389,9 +403,9 @@ risk. `run ≡ runvm` was always correct; the bug class was php-leg-only.
   rides the constant pool (`Op::Const`), interop rides `Op::CallNative`, `==` rides `Op::Eq`.
 - **`b"…"` literals** — raw byte strings (no interpolation), escapes `\n \t \r \\ \"` plus `\xHH`
   (two hex digits → one arbitrary octet, so a literal can hold non-UTF-8 bytes).
-- **`core.bytes`** interop module (`import core.bytes;`): `from_string(string) -> bytes`,
+- **`Core.Bytes`** interop module (`import Core.Bytes;`): `from_string(string) -> bytes`,
   `to_string(bytes) -> string?` (UTF-8 decode; `null` on invalid — composes with S2 `??`/if-let,
-  never a fault), `len(bytes) -> int` (BYTE count, vs `core.text.len`'s character count),
+  never a fault), `len(bytes) -> int` (BYTE count, vs `Core.Text.len`'s character count),
   `concat(bytes, bytes) -> bytes`, `slice(bytes, int, int) -> bytes` (half-open, bounds-clamped —
   total, no fault).
 - **Transpile** — `bytes` erases to PHP `string` (PHP strings are byte arrays); `b"…"` → a PHP
@@ -521,7 +535,7 @@ risk. `run ≡ runvm` was always correct; the bug class was php-leg-only.
   brace-namespace PHP emission arrive in later M5 slices
   (`docs/specs/2026-06-18-m5-project-model-design.md`).
 - All 24 examples + every test program migrated to `package main;`; the minimal program is now
-  `package main;` + `import core.console;` + `console.println`. (Also fixed pre-existing Wave-1 doc
+  `package main;` + `import Core.Console;` + `Console.println`. (Also fixed pre-existing Wave-1 doc
   drift: `README.md` showed `import std.io;` + bare `println`.)
 
 ### M3 slice S0 — developer experience
@@ -590,41 +604,41 @@ nullable runtime). `T?` is the existing `null` value at runtime; the guarantee l
 ### M3 Track B Wave 1 — namespaced native foundation
 
 - **Everything is namespaced — "nothing in the wind".** The free global `println` is retired. A
-  program now `import core.console;` and calls `console.println(...)`. Stdlib modules are reserved
+  program now `import Core.Console;` and calls `Console.println(...)`. Stdlib modules are reserved
   under the `core.*` root; the root lives in the import and the leaf qualifies the call (Go's
   `import "fmt"` → `fmt.Println`). Explicit import is required even for the stdlib.
 - **`native` registry** (`src/native.rs`) — each built-in single-sources its four facets in one
   entry keyed by `(module, name)`: checker signature (`params`/`ret`), a runtime `eval` shared
   verbatim by the interpreter *and* the VM (structural parity, like the value kernels), and a PHP
-  emission mapping (`console.println` → `echo … . "\n"`). Built once via `OnceLock`.
+  emission mapping (`Console.println` → `echo … . "\n"`). Built once via `OnceLock`.
 - **`Op::Print` → `Op::CallNative(idx, argc)`** — the migrated former print op now indexes the
   registry and pushes the native's result (extends the three coupled `Op` matches + a `validate`
   bound on the native index). No separate `Const(Unit)`.
-- **Import-driven resolution across all four backends** — a member call `console.println(x)` whose
+- **Import-driven resolution across all four backends** — a member call `Console.println(x)` whose
   head is an imported module qualifier dispatches to the native: the interpreter and compiler resolve
   locals-first then by leaf (they track scope); the checker and transpiler use the import map.
 - **Shadowing guard** — a value binding may not shadow an imported module qualifier (`E-SHADOW-IMPORT`),
   keeping the import-map-driven transpiler consistent with the locals-first run backends.
 - Migrated every `println` call site — all examples, fixtures, and inline test programs — to
-  `import core.console;` + `console.println`. The example differential test now also asserts each
+  `import Core.Console;` + `Console.println`. The example differential test now also asserts each
   example *runs* (`Ok`), not merely that the backends agree (closing a vacuous-green gap).
 
-### M3 Track B Wave 2 — stdlib breadth (`core.math` / `core.text` / `core.file`)
+### M3 Track B Wave 2 — stdlib breadth (`Core.Math` / `Core.Text` / `Core.File`)
 
-- **`core.math`** — `sqrt`/`pow`/`floor`/`ceil` (float) and `abs`/`min`/`max` (int). Concrete-typed
+- **`Core.Math`** — `sqrt`/`pow`/`floor`/`ceil` (float) and `abs`/`min`/`max` (int). Concrete-typed
   (the registry's `params`/`ret` have no type variable, so no overloading); each erases to the PHP
   builtin of the same name. `abs` faults cleanly on `i64::MIN` (EV-7).
-- **`core.text`** — `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace`. `split` returns
+- **`Core.Text`** — `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace`. `split` returns
   `List<string>` and `join` consumes one (the type system already carries `List<string>` end to end).
   The PHP erasures reorder args where PHP differs (`explode`/`implode` separator-first, `str_replace`
   search-first).
-- **`core.file`** — `read` (→ `string?`, `null` on any failure — composes with the S2 `??` / if-let),
+- **`Core.File`** — `read` (→ `string?`, `null` on any failure — composes with the S2 `??` / if-let),
   `exists`, and `write`. File *reads* stay byte-identical by reading a **committed fixture**
   (`examples/guide/fixtures/poem.txt`); `write` is a non-deterministic side effect, unit-tested but
   kept out of the byte-identity-gated example set.
 - Each module ships a byte-identity-gated guide example (`examples/guide/math|text|file.phg`),
   round-tripped through real PHP. `KNOWN_ISSUES` now documents the pre-existing irrational-`float`
-  precision divergence that `core.math` makes easy to reach (Rust shortest-round-trip vs PHP's
+  precision divergence that `Core.Math` makes easy to reach (Rust shortest-round-trip vs PHP's
   default `echo` precision); examples keep to exactly-representable values.
 - **Deferred:** `core.list` (needs S3 lambdas / `List<T>` generics) and `core.json` (needs a dynamic
   `Json` type) — they land once generics or S3 exist.

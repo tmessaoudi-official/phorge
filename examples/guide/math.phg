@@ -1,8 +1,8 @@
 package main;
-import core.console;
-import core.math;
+import Core.Console;
+import Core.Math;
 
-// M3 Track B Wave 2 — the `core.math` stdlib module. Each function erases to the PHP builtin of
+// M3 Track B Wave 2 — the `Core.Math` stdlib module. Each function erases to the PHP builtin of
 // the same name. Float ops (`sqrt`/`pow`/`floor`/`ceil`) return `float`; `abs`/`min`/`max` are
 // `int`. Every finite float renders byte-identically across all three backends (the transpiler's
 // `__phorge_float` helper reproduces Rust's shortest-round-trip `f64` Display) — see
@@ -10,15 +10,15 @@ import core.math;
 
 function main() {
     // float math
-    float root = math.sqrt(16.0);
-    float power = math.pow(2.0, 10.0);
-    float down = math.floor(3.7);
-    float up = math.ceil(3.2);
-    console.println("sqrt(16) = {root}, 2^10 = {power}, floor(3.7) = {down}, ceil(3.2) = {up}");
+    float root = Math.sqrt(16.0);
+    float power = Math.pow(2.0, 10.0);
+    float down = Math.floor(3.7);
+    float up = Math.ceil(3.2);
+    Console.println("sqrt(16) = {root}, 2^10 = {power}, floor(3.7) = {down}, ceil(3.2) = {up}");
 
     // int math
-    int magnitude = math.abs(-7);
-    int smaller = math.min(3, 8);
-    int larger = math.max(3, 8);
-    console.println("abs(-7) = {magnitude}, min(3,8) = {smaller}, max(3,8) = {larger}");
+    int magnitude = Math.abs(-7);
+    int smaller = Math.min(3, 8);
+    int larger = Math.max(3, 8);
+    Console.println("abs(-7) = {magnitude}, min(3,8) = {smaller}, max(3,8) = {larger}");
 }

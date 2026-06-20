@@ -13,9 +13,9 @@ package main;
 // and middleware/closure routes — both gate on later features (list-length/generics for parallel
 // segment iteration; closures for middleware). The `handle(Request) -> Response` contract does not
 // change when they land — they layer on top of this exact-match core.
-import core.console;
-import core.bytes;
-import core.text;
+import Core.Console;
+import Core.Bytes;
+import Core.Text;
 
 class Request {
   constructor(public string method, public string path, public bytes body,
@@ -23,10 +23,10 @@ class Request {
 
   function header(string name) -> string? {
     for (string line in headerLines) {
-      if (text.contains(line, ":")) {
-        List<string> kv = text.splitOnce(line, ":");
-        string key = text.trim(kv[0]);
-        if (key == name) { return text.trim(kv[1]); }
+      if (Text.contains(line, ":")) {
+        List<string> kv = Text.splitOnce(line, ":");
+        string key = Text.trim(kv[0]);
+        if (key == name) { return Text.trim(kv[1]); }
       }
     }
     return null;
@@ -46,15 +46,15 @@ function reasonPhrase(int s) -> string {
 
 // Parse a raw HTTP/1.1 request (identical to W1's parser). `null` ⇒ malformed (→ a 400 at W3).
 function parseRequest(bytes raw) -> Request? {
-  string nl = bytes.toString(b"\x0d\x0a") ?? "";
-  int sep = bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
+  string nl = Bytes.toString(b"\x0d\x0a") ?? "";
+  int sep = Bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
   if (sep < 0) { return null; }
-  bytes headBytes = bytes.slice(raw, 0, sep);
-  bytes body = bytes.slice(raw, sep + 4, bytes.len(raw));
-  string head = bytes.toString(headBytes) ?? "";
-  List<string> lines = text.split(head, nl);
+  bytes headBytes = Bytes.slice(raw, 0, sep);
+  bytes body = Bytes.slice(raw, sep + 4, Bytes.len(raw));
+  string head = Bytes.toString(headBytes) ?? "";
+  List<string> lines = Text.split(head, nl);
   string requestLine = lines[0];
-  List<string> rl = text.split(requestLine, " ");
+  List<string> rl = Text.split(requestLine, " ");
   string method = rl[0];
   string path = rl[1];
   return Request(method, path, body, lines);
@@ -91,25 +91,25 @@ function matchRoute(string method, string path) -> Handler {
 }
 
 function handleHome(Request req) -> Response {
-  bytes body = bytes.fromString("Phorge web — home");
+  bytes body = Bytes.fromString("Phorge web — home");
   return Response(200, body, ["Content-Type: text/plain"]);
 }
 
 function handleGreet(Request req) -> Response {
   string host = req.header("Host") ?? "world";
-  bytes body = bytes.fromString("Hello {host}");
+  bytes body = Bytes.fromString("Hello {host}");
   return Response(200, body, ["Content-Type: text/plain"]);
 }
 
 function handleHealth(Request req) -> Response {
-  bytes body = bytes.fromString("ok");
+  bytes body = Bytes.fromString("ok");
   return Response(200, body, ["Content-Type: text/plain"]);
 }
 
 function handleNotFound(Request req) -> Response {
   string m = req.method;
   string p = req.path;
-  bytes body = bytes.fromString("not found: {m} {p}");
+  bytes body = Bytes.fromString("not found: {m} {p}");
   return Response(404, body, ["Content-Type: text/plain"]);
 }
 
@@ -132,10 +132,10 @@ function show(bytes raw) {
     string p = req.path;
     int st = resp.status;
     string reason = reasonPhrase(st);
-    string body = bytes.toString(resp.body) ?? "(binary)";
-    console.println("{m} {p} -> {st} {reason}: {body}");
+    string body = Bytes.toString(resp.body) ?? "(binary)";
+    Console.println("{m} {p} -> {st} {reason}: {body}");
   } else {
-    console.println("malformed request");
+    Console.println("malformed request");
   }
 }
 

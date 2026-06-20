@@ -1,6 +1,6 @@
 package main;
-import core.console;
+import Core.Console;
 
 function main() {
-    console.println("Hello, Phorge!");
+    Console.println("Hello, Phorge!");
 }

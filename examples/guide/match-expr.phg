@@ -1,5 +1,5 @@
 package main;
-import core.console;
+import Core.Console;
 
 // `match` in EXPRESSION position (M11) — usable as a sub-expression, not only as a whole
 // `return`/`var =` statement. It transpiles to an immediately-invoked PHP closure wrapping the same
@@ -24,7 +24,7 @@ function main() {
     string picked = name(match base { 100 => Blue(), x => Red() });
 
     // literal-pattern match in return position, via a helper
-    console.println("code={code} picked={picked} sign={sign(0)} sign2={sign(7)}");
+    Console.println("code={code} picked={picked} sign={sign(0)} sign2={sign(7)}");
 }
 
 function sign(int n) -> string {

@@ -1,5 +1,5 @@
 package main;
-import core.console;
+import Core.Console;
 
 class Engine {
     constructor(private int power) {}
@@ -17,5 +17,5 @@ class Car {
 
 function main() {
     Car c = Car("Phorge", Engine(250));
-    console.println("{c.makeOf()} has {c.horsepower()} hp");
+    Console.println("{c.makeOf()} has {c.horsepower()} hp");
 }

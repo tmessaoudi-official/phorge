@@ -1,5 +1,5 @@
 package main;
-import core.console;
+import Core.Console;
 
 // A turn-based RPG. Characters are immutable: `act` returns a new Character.
 
@@ -36,10 +36,10 @@ function main() {
     Character hero = Character("Hero", 30);
     Character hurt = hero.act(Attack(12));
     Character healed = hurt.act(Heal(5));
-    console.println("{healed.nameOf()} hp = {healed.hpOf()}");
+    Console.println("{healed.nameOf()} hp = {healed.hpOf()}");
 
     List<Action> turns = [Attack(12), Heal(5), Defend()];
     for (Action a in turns) {
-        console.println(resolve(a));
+        Console.println(resolve(a));
     }
 }

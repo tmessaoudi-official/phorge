@@ -9,14 +9,14 @@ package main;
 //
 // Design notes (docs/specs/2026-06-18-m6-w1-handler-design.md):
 //   * Bodies are `bytes` (HTTP bodies are octets — the reason W0 landed). The head (always ASCII per
-//     RFC 7230) is decoded to a string for line/`:` splitting; the body stays raw bytes.
+//     RFC 7230) is decoded to a string for line/`:` splitting; the body stays raw Bytes.
 //   * Headers are carried as `List<string>` raw lines; `req.header(name)` parses on lookup (a linear
 //     scan). The method-call API is the public surface — a typed `Header` value arrives with S3.
-//   * No mutation / no `core.list` yet, so the serializer folds headers via `text.join` (a native that
+//   * No mutation / no `core.list` yet, so the serializer folds headers via `Text.join` (a native that
 //     iterates internally) rather than a mutable accumulator.
-import core.console;
-import core.bytes;
-import core.text;
+import Core.Console;
+import Core.Bytes;
+import Core.Text;
 
 class Request {
   // method/path/body are read externally (→ `public`, so the PHP transpile can read them too);
@@ -28,10 +28,10 @@ class Request {
   // Lines without a `:` (the request-line) are skipped by the `contains` guard.
   function header(string name) -> string? {
     for (string line in headerLines) {
-      if (text.contains(line, ":")) {
-        List<string> kv = text.splitOnce(line, ":");
-        string key = text.trim(kv[0]);
-        if (key == name) { return text.trim(kv[1]); }
+      if (Text.contains(line, ":")) {
+        List<string> kv = Text.splitOnce(line, ":");
+        string key = Text.trim(kv[0]);
+        if (key == name) { return Text.trim(kv[1]); }
       }
     }
     return null;
@@ -54,34 +54,34 @@ function reasonPhrase(int s) -> string {
 
 // Parse a raw HTTP/1.1 request. Returns `null` (→ a 400 at the socket layer) when malformed.
 function parseRequest(bytes raw) -> Request? {
-  string nl = bytes.toString(b"\x0d\x0a") ?? "";
+  string nl = Bytes.toString(b"\x0d\x0a") ?? "";
   // Locate the CRLFCRLF head/body boundary at the BYTE level (the body may be non-UTF-8).
-  int sep = bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
+  int sep = Bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
   if (sep < 0) { return null; }
-  bytes headBytes = bytes.slice(raw, 0, sep);
-  bytes body = bytes.slice(raw, sep + 4, bytes.len(raw));
+  bytes headBytes = Bytes.slice(raw, 0, sep);
+  bytes body = Bytes.slice(raw, sep + 4, Bytes.len(raw));
 
-  string head = bytes.toString(headBytes) ?? "";
-  List<string> lines = text.split(head, nl);
+  string head = Bytes.toString(headBytes) ?? "";
+  List<string> lines = Text.split(head, nl);
   string requestLine = lines[0];
-  List<string> rl = text.split(requestLine, " ");
+  List<string> rl = Text.split(requestLine, " ");
   string method = rl[0];
   string path = rl[1];
   // Pass ALL lines (incl. the request-line) — header() skips colon-free lines.
   return Request(method, path, body, lines);
 }
 
-// Serialize a Response to raw HTTP/1.1 bytes. Always (re)computes Content-Length from the body.
+// Serialize a Response to raw HTTP/1.1 Bytes. Always (re)computes Content-Length from the body.
 function serializeResponse(Response resp) -> bytes {
-  string nl = bytes.toString(b"\x0d\x0a") ?? "";
+  string nl = Bytes.toString(b"\x0d\x0a") ?? "";
   string reason = reasonPhrase(resp.status);
   int st = resp.status;
   string statusLine = "HTTP/1.1 {st} {reason}";
-  int bodyLen = bytes.len(resp.body);
-  // `text.join` folds the user headers (no mutation / no list-append needed).
-  string userHeaders = text.join(resp.headerLines, nl);
+  int bodyLen = Bytes.len(resp.body);
+  // `Text.join` folds the user headers (no mutation / no list-append needed).
+  string userHeaders = Text.join(resp.headerLines, nl);
   string head = "{statusLine}{nl}Content-Length: {bodyLen}{nl}{userHeaders}{nl}{nl}";
-  return bytes.concat(bytes.fromString(head), resp.body);
+  return Bytes.concat(Bytes.fromString(head), resp.body);
 }
 
 // The application: greet by path, echoing the Host header.
@@ -89,12 +89,12 @@ function handle(Request req) -> Response {
   string host = req.header("Host") ?? "world";
   string path = req.path;
   string msg = "Hello {path} (host {host})";
-  bytes body = bytes.fromString(msg);
+  bytes body = Bytes.fromString(msg);
   return Response(200, body, ["Content-Type: text/plain"]);
 }
 
 function main() {
-  string nl = bytes.toString(b"\x0d\x0a") ?? "";
+  string nl = Bytes.toString(b"\x0d\x0a") ?? "";
   // A canonical raw request, built as a `b"…"` literal with explicit `\x0d\x0a` CRLFs — deterministic
   // (no committed-file autocrlf hazard) and a showcase of W0's byte literals.
   bytes raw = b"GET /hi HTTP/1.1\x0d\x0aHost: localhost\x0d\x0aAccept: text/plain\x0d\x0a\x0d\x0ahello";
@@ -102,28 +102,28 @@ function main() {
   if (var req = parseRequest(raw)) {
     string m = req.method;
     string p = req.path;
-    console.println("method={m} path={p}");
+    Console.println("method={m} path={p}");
     string host = req.header("Host") ?? "(none)";
-    console.println("host={host}");
+    Console.println("host={host}");
     string accept = req.header("Accept") ?? "(none)";
-    console.println("accept={accept}");
-    string reqBody = bytes.toString(req.body) ?? "(binary)";
-    console.println("reqbody={reqBody}");
+    Console.println("accept={accept}");
+    string reqBody = Bytes.toString(req.body) ?? "(binary)";
+    Console.println("reqbody={reqBody}");
 
     Response resp = handle(req);
     int st = resp.status;
     string reason = reasonPhrase(st);
-    console.println("response status={st} {reason}");
-    string respBody = bytes.toString(resp.body) ?? "(binary)";
-    console.println("respbody={respBody}");
+    Console.println("response status={st} {reason}");
+    string respBody = Bytes.toString(resp.body) ?? "(binary)";
+    Console.println("respbody={respBody}");
 
     // The full serialized response, with CRLFs shown as " | " so the output stays one clean ASCII line.
     bytes wire = serializeResponse(resp);
-    int wireLen = bytes.len(wire);
-    string wireStr = bytes.toString(wire) ?? "(binary)";
-    string oneLine = text.replace(wireStr, nl, " | ");
-    console.println("wire ({wireLen}B): {oneLine}");
+    int wireLen = Bytes.len(wire);
+    string wireStr = Bytes.toString(wire) ?? "(binary)";
+    string oneLine = Text.replace(wireStr, nl, " | ");
+    Console.println("wire ({wireLen}B): {oneLine}");
   } else {
-    console.println("malformed request");
+    Console.println("malformed request");
   }
 }

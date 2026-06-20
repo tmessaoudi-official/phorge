@@ -1,5 +1,5 @@
 //! Namespaced native (built-in) function registry — the stdlib's runtime + type + transpile
-//! surface, addressed by `(module, name)` (e.g. module `core.console`, name `println`). One entry
+//! surface, addressed by `(module, name)` (e.g. module `Core.Console`, name `println`). One entry
 //! single-sources all four facets of a native, so the four backends cannot drift:
 //!   * `params` / `ret` — the checker's signature for a call to this native;
 //!   * `eval` — the runtime behavior, shared by the tree-walking interpreter *and* the VM (the
@@ -7,9 +7,9 @@
 //!   * `php` — the transpile-time PHP emission (a `core.*` native erases to PHP's flat builtins;
 //!     the namespace is a compile-time organizing layer, decisions N-2/D-L9).
 //!
-//! The registry is the load-bearing target of `import core.console;` (M3 namespace reshape, Wave 1,
+//! The registry is the load-bearing target of `import Core.Console;` (M3 namespace reshape, Wave 1,
 //! `docs/specs/2026-06-18-m3-namespace-system-design.md`). The former free global `println` is
-//! retired in favor of `core.console.println`, and `Op::Print` in favor of
+//! retired in favor of `Core.Console.println`, and `Op::Print` in favor of
 //! `Op::CallNative(index, argc)` indexing this table.
 
 use crate::ast::Item;
@@ -20,7 +20,7 @@ use std::sync::OnceLock;
 
 /// One built-in function, addressed by `(module, name)`. See the module docs for the four facets.
 pub struct NativeFn {
-    /// Dotted module path the native lives under — e.g. `"core.console"`.
+    /// Dotted module path the native lives under — e.g. `"Core.Console"`.
     pub module: &'static str,
     /// Bare function name — e.g. `"println"`.
     pub name: &'static str,
@@ -29,15 +29,15 @@ pub struct NativeFn {
     /// Return type.
     pub ret: Ty,
     /// Runtime behavior, shared by the interpreter and the VM. Threads the program's output buffer
-    /// so a side-effecting native (`console.println`) can append to it; pure natives ignore it. The
+    /// so a side-effecting native (`Console.println`) can append to it; pure natives ignore it. The
     /// arguments arrive in source order.
     pub eval: fn(&[Value], &mut String) -> Result<Value, String>,
     /// PHP emission: given the already-emitted PHP for each argument, return the PHP snippet this
-    /// native erases to (decision N-2). For `console.println`: `echo {a} . "\n"`.
+    /// native erases to (decision N-2). For `Console.println`: `echo {a} . "\n"`.
     pub php: fn(&[String]) -> String,
 }
 
-/// Pinned registry slot for `core.console.println` — the migrated former `Op::Print`. The compiler
+/// Pinned registry slot for `Core.Console.println` — the migrated former `Op::Print`. The compiler
 /// bakes `Op::CallNative(CONSOLE_PRINTLN, 1)`; [`build`] self-checks this slot so the constant can
 /// never silently drift from the table.
 pub const CONSOLE_PRINTLN: usize = 0;
@@ -68,7 +68,7 @@ fn parg(args: &[String], i: usize) -> &str {
     args.get(i).map_or("", String::as_str)
 }
 
-// ---- core.math ----------------------------------------------------------------------------------
+// ---- Core.Math ----------------------------------------------------------------------------------
 // Concrete-typed numeric natives (`Ty` has no type variable, so no overloading): the float ops
 // `sqrt`/`pow`/`floor`/`ceil` are `float -> float`; `abs`/`min`/`max` are `int`. Each erases to the
 // PHP builtin of the same name (D-L9). NOTE (KNOWN_ISSUES, float precision): an *irrational* result
@@ -78,25 +78,25 @@ fn parg(args: &[String], i: usize) -> &str {
 fn math_sqrt(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Float(x)] => Ok(Value::Float(x.sqrt())),
-        _ => Err("math.sqrt expects (float)".into()),
+        _ => Err("Math.sqrt expects (float)".into()),
     }
 }
 fn math_pow(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Float(b), Value::Float(e)] => Ok(Value::Float(b.powf(*e))),
-        _ => Err("math.pow expects (float, float)".into()),
+        _ => Err("Math.pow expects (float, float)".into()),
     }
 }
 fn math_floor(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Float(x)] => Ok(Value::Float(x.floor())),
-        _ => Err("math.floor expects (float)".into()),
+        _ => Err("Math.floor expects (float)".into()),
     }
 }
 fn math_ceil(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Float(x)] => Ok(Value::Float(x.ceil())),
-        _ => Err("math.ceil expects (float)".into()),
+        _ => Err("Math.ceil expects (float)".into()),
     }
 }
 fn math_abs(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -105,28 +105,28 @@ fn math_abs(args: &[Value], _: &mut String) -> Result<Value, String> {
         [Value::Int(n)] => n
             .checked_abs()
             .map(Value::Int)
-            .ok_or_else(|| "integer overflow in math.abs".to_string()),
-        _ => Err("math.abs expects (int)".into()),
+            .ok_or_else(|| "integer overflow in Math.abs".to_string()),
+        _ => Err("Math.abs expects (int)".into()),
     }
 }
 fn math_min(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Int(a), Value::Int(b)] => Ok(Value::Int((*a).min(*b))),
-        _ => Err("math.min expects (int, int)".into()),
+        _ => Err("Math.min expects (int, int)".into()),
     }
 }
 fn math_max(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Int(a), Value::Int(b)] => Ok(Value::Int((*a).max(*b))),
-        _ => Err("math.max expects (int, int)".into()),
+        _ => Err("Math.max expects (int, int)".into()),
     }
 }
 
-/// The `core.math` registry entries (M3 Track B Wave 2).
+/// The `Core.Math` registry entries (M3 Track B Wave 2).
 fn math_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
-            module: "core.math",
+            module: "Core.Math",
             name: "sqrt",
             params: vec![Ty::Float],
             ret: Ty::Float,
@@ -134,7 +134,7 @@ fn math_natives() -> Vec<NativeFn> {
             php: |a| format!("sqrt({})", parg(a, 0)),
         },
         NativeFn {
-            module: "core.math",
+            module: "Core.Math",
             name: "pow",
             params: vec![Ty::Float, Ty::Float],
             ret: Ty::Float,
@@ -142,7 +142,7 @@ fn math_natives() -> Vec<NativeFn> {
             php: |a| format!("pow({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
-            module: "core.math",
+            module: "Core.Math",
             name: "floor",
             params: vec![Ty::Float],
             ret: Ty::Float,
@@ -150,7 +150,7 @@ fn math_natives() -> Vec<NativeFn> {
             php: |a| format!("floor({})", parg(a, 0)),
         },
         NativeFn {
-            module: "core.math",
+            module: "Core.Math",
             name: "ceil",
             params: vec![Ty::Float],
             ret: Ty::Float,
@@ -158,7 +158,7 @@ fn math_natives() -> Vec<NativeFn> {
             php: |a| format!("ceil({})", parg(a, 0)),
         },
         NativeFn {
-            module: "core.math",
+            module: "Core.Math",
             name: "abs",
             params: vec![Ty::Int],
             ret: Ty::Int,
@@ -166,7 +166,7 @@ fn math_natives() -> Vec<NativeFn> {
             php: |a| format!("abs({})", parg(a, 0)),
         },
         NativeFn {
-            module: "core.math",
+            module: "Core.Math",
             name: "min",
             params: vec![Ty::Int, Ty::Int],
             ret: Ty::Int,
@@ -174,7 +174,7 @@ fn math_natives() -> Vec<NativeFn> {
             php: |a| format!("min({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
-            module: "core.math",
+            module: "Core.Math",
             name: "max",
             params: vec![Ty::Int, Ty::Int],
             ret: Ty::Int,
@@ -184,7 +184,7 @@ fn math_natives() -> Vec<NativeFn> {
     ]
 }
 
-// ---- core.text ----------------------------------------------------------------------------------
+// ---- Core.Text ----------------------------------------------------------------------------------
 // String natives, all concrete-typed. Each erases to a PHP string builtin (D-L9). ASCII-oriented to
 // stay byte-identical with PHP: `len` is the *byte* length (PHP `strlen`), and `upper`/`lower` are
 // ASCII-case (PHP `strtoupper`/`strtolower`), so multi-byte text could differ between the Rust
@@ -193,31 +193,31 @@ fn math_natives() -> Vec<NativeFn> {
 fn text_len(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Int(s.len() as i64)),
-        _ => Err("text.len expects (string)".into()),
+        _ => Err("Text.len expects (string)".into()),
     }
 }
 fn text_upper(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.to_ascii_uppercase())),
-        _ => Err("text.upper expects (string)".into()),
+        _ => Err("Text.upper expects (string)".into()),
     }
 }
 fn text_lower(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.to_ascii_lowercase())),
-        _ => Err("text.lower expects (string)".into()),
+        _ => Err("Text.lower expects (string)".into()),
     }
 }
 fn text_trim(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.trim().to_string())),
-        _ => Err("text.trim expects (string)".into()),
+        _ => Err("Text.trim expects (string)".into()),
     }
 }
 fn text_contains(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(sub)] => Ok(Value::Bool(s.contains(sub.as_str()))),
-        _ => Err("text.contains expects (string, string)".into()),
+        _ => Err("Text.contains expects (string, string)".into()),
     }
 }
 fn text_split(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -229,7 +229,7 @@ fn text_split(args: &[Value], _: &mut String) -> Result<Value, String> {
                 .collect();
             Ok(Value::List(std::rc::Rc::new(parts)))
         }
-        _ => Err("text.split expects (string, string)".into()),
+        _ => Err("Text.split expects (string, string)".into()),
     }
 }
 fn text_split_once(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -243,7 +243,7 @@ fn text_split_once(args: &[Value], _: &mut String) -> Result<Value, String> {
             };
             Ok(Value::List(std::rc::Rc::new(parts)))
         }
-        _ => Err("text.split_once expects (string, string)".into()),
+        _ => Err("Text.split_once expects (string, string)".into()),
     }
 }
 fn text_join(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -255,7 +255,7 @@ fn text_join(args: &[Value], _: &mut String) -> Result<Value, String> {
                     Value::Str(s) => parts.push(s.clone()),
                     other => {
                         return Err(format!(
-                            "text.join expects List<string>, found element of type {}",
+                            "Text.join expects List<string>, found element of type {}",
                             other.type_name()
                         ))
                     }
@@ -263,7 +263,7 @@ fn text_join(args: &[Value], _: &mut String) -> Result<Value, String> {
             }
             Ok(Value::Str(parts.join(sep)))
         }
-        _ => Err("text.join expects (List<string>, string)".into()),
+        _ => Err("Text.join expects (List<string>, string)".into()),
     }
 }
 fn text_replace(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -271,18 +271,18 @@ fn text_replace(args: &[Value], _: &mut String) -> Result<Value, String> {
         [Value::Str(s), Value::Str(from), Value::Str(to)] => {
             Ok(Value::Str(s.replace(from.as_str(), to.as_str())))
         }
-        _ => Err("text.replace expects (string, string, string)".into()),
+        _ => Err("Text.replace expects (string, string, string)".into()),
     }
 }
 
-/// The `core.text` registry entries (M3 Track B Wave 2). NOTE the PHP arg order: `explode`/`implode`
+/// The `Core.Text` registry entries (M3 Track B Wave 2). NOTE the PHP arg order: `explode`/`implode`
 /// take the separator first, and `str_replace` is `(search, replace, subject)` — the `php` closures
 /// reorder accordingly so the erasure matches Phorge's `(subject, …)` argument order.
 fn text_natives() -> Vec<NativeFn> {
     let s = || Ty::String;
     vec![
         NativeFn {
-            module: "core.text",
+            module: "Core.Text",
             name: "len",
             params: vec![s()],
             ret: Ty::Int,
@@ -290,7 +290,7 @@ fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("strlen({})", parg(a, 0)),
         },
         NativeFn {
-            module: "core.text",
+            module: "Core.Text",
             name: "upper",
             params: vec![s()],
             ret: Ty::String,
@@ -298,7 +298,7 @@ fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("strtoupper({})", parg(a, 0)),
         },
         NativeFn {
-            module: "core.text",
+            module: "Core.Text",
             name: "lower",
             params: vec![s()],
             ret: Ty::String,
@@ -306,7 +306,7 @@ fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("strtolower({})", parg(a, 0)),
         },
         NativeFn {
-            module: "core.text",
+            module: "Core.Text",
             name: "trim",
             params: vec![s()],
             ret: Ty::String,
@@ -314,7 +314,7 @@ fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("trim({})", parg(a, 0)),
         },
         NativeFn {
-            module: "core.text",
+            module: "Core.Text",
             name: "contains",
             params: vec![s(), s()],
             ret: Ty::Bool,
@@ -322,7 +322,7 @@ fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("str_contains({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
-            module: "core.text",
+            module: "Core.Text",
             name: "split",
             params: vec![s(), s()],
             ret: Ty::List(Box::new(Ty::String)),
@@ -331,7 +331,7 @@ fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("explode({}, {})", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
-            module: "core.text",
+            module: "Core.Text",
             name: "splitOnce",
             params: vec![s(), s()],
             ret: Ty::List(Box::new(Ty::String)),
@@ -340,7 +340,7 @@ fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("explode({}, {}, 2)", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
-            module: "core.text",
+            module: "Core.Text",
             name: "join",
             params: vec![Ty::List(Box::new(Ty::String)), s()],
             ret: Ty::String,
@@ -349,7 +349,7 @@ fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("implode({}, {})", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
-            module: "core.text",
+            module: "Core.Text",
             name: "replace",
             params: vec![s(), s(), s()],
             ret: Ty::String,
@@ -367,7 +367,7 @@ fn text_natives() -> Vec<NativeFn> {
     ]
 }
 
-// ---- core.file ----------------------------------------------------------------------------------
+// ---- Core.File ----------------------------------------------------------------------------------
 // Filesystem natives (std::fs ↔ PHP file builtins, D-L9). `read` returns `string?` — `null` on any
 // failure (missing file, permission, non-UTF-8) — exercising S2 null-safety (`??` / `if (var x =
 // read(p))`). DETERMINISM: a file *read* is byte-identical across backends iff every backend reads
@@ -382,30 +382,30 @@ fn file_read(args: &[Value], _: &mut String) -> Result<Value, String> {
             Ok(s) => Value::Str(s),
             Err(_) => Value::Null,
         }),
-        _ => Err("file.read expects (string)".into()),
+        _ => Err("File.read expects (string)".into()),
     }
 }
 fn file_exists(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(path)] => Ok(Value::Bool(std::path::Path::new(path).exists())),
-        _ => Err("file.exists expects (string)".into()),
+        _ => Err("File.exists expects (string)".into()),
     }
 }
 fn file_write(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(path), Value::Str(contents)] => match std::fs::write(path, contents) {
             Ok(()) => Ok(Value::Unit),
-            Err(e) => Err(format!("file.write failed: {e}")),
+            Err(e) => Err(format!("File.write failed: {e}")),
         },
-        _ => Err("file.write expects (string, string)".into()),
+        _ => Err("File.write expects (string, string)".into()),
     }
 }
 
-/// The `core.file` registry entries (M3 Track B Wave 2).
+/// The `Core.File` registry entries (M3 Track B Wave 2).
 fn file_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
-            module: "core.file",
+            module: "Core.File",
             name: "read",
             params: vec![Ty::String],
             ret: Ty::Optional(Box::new(Ty::String)),
@@ -420,7 +420,7 @@ fn file_natives() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "core.file",
+            module: "Core.File",
             name: "exists",
             params: vec![Ty::String],
             ret: Ty::Bool,
@@ -428,7 +428,7 @@ fn file_natives() -> Vec<NativeFn> {
             php: |a| format!("file_exists({})", parg(a, 0)),
         },
         NativeFn {
-            module: "core.file",
+            module: "Core.File",
             name: "write",
             params: vec![Ty::String, Ty::String],
             ret: Ty::Unit,
@@ -438,17 +438,17 @@ fn file_natives() -> Vec<NativeFn> {
     ]
 }
 
-// ---- core.bytes ---------------------------------------------------------------------------------
+// ---- Core.Bytes ---------------------------------------------------------------------------------
 // Octet-sequence natives bridging `bytes` ↔ `string` (M6 W0). `to_string` returns `string?` — `null`
 // on invalid UTF-8 (composes with S2 `??` / if-let), never a fault. `len` is the BYTE count
-// (`strlen`), as is `core.text.len` — the std stays extension-free (no mbstring). `slice` is a total,
+// (`strlen`), as is `Core.Text.len` — the std stays extension-free (no mbstring). `slice` is a total,
 // bounds-clamped half-open `[start, end)` (no fault, unlike list `xs[i]`). PHP strings are byte
 // arrays, so the erasures are exact.
 
 fn bytes_from_string(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Bytes(std::rc::Rc::new(s.clone().into_bytes()))),
-        _ => Err("bytes.from_string expects (string)".into()),
+        _ => Err("Bytes.from_string expects (string)".into()),
     }
 }
 fn bytes_to_string(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -458,13 +458,13 @@ fn bytes_to_string(args: &[Value], _: &mut String) -> Result<Value, String> {
             Ok(s) => Value::Str(s.to_string()),
             Err(_) => Value::Null,
         }),
-        _ => Err("bytes.to_string expects (bytes)".into()),
+        _ => Err("Bytes.to_string expects (bytes)".into()),
     }
 }
 fn bytes_len(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Bytes(b)] => Ok(Value::Int(b.len() as i64)),
-        _ => Err("bytes.len expects (bytes)".into()),
+        _ => Err("Bytes.len expects (bytes)".into()),
     }
 }
 fn bytes_concat(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -475,7 +475,7 @@ fn bytes_concat(args: &[Value], _: &mut String) -> Result<Value, String> {
             out.extend_from_slice(b);
             Ok(Value::Bytes(std::rc::Rc::new(out)))
         }
-        _ => Err("bytes.concat expects (bytes, bytes)".into()),
+        _ => Err("Bytes.concat expects (bytes, bytes)".into()),
     }
 }
 fn bytes_find(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -495,7 +495,7 @@ fn bytes_find(args: &[Value], _: &mut String) -> Result<Value, String> {
                 None => Value::Null,
             })
         }
-        _ => Err("bytes.find expects (bytes, bytes)".into()),
+        _ => Err("Bytes.find expects (bytes, bytes)".into()),
     }
 }
 fn bytes_slice(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -508,15 +508,15 @@ fn bytes_slice(args: &[Value], _: &mut String) -> Result<Value, String> {
             let out = if s >= e { Vec::new() } else { b[s..e].to_vec() };
             Ok(Value::Bytes(std::rc::Rc::new(out)))
         }
-        _ => Err("bytes.slice expects (bytes, int, int)".into()),
+        _ => Err("Bytes.slice expects (bytes, int, int)".into()),
     }
 }
 
-/// The `core.bytes` registry entries (M6 W0).
+/// The `Core.Bytes` registry entries (M6 W0).
 fn bytes_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
-            module: "core.bytes",
+            module: "Core.Bytes",
             name: "fromString",
             params: vec![Ty::String],
             ret: Ty::Bytes,
@@ -525,7 +525,7 @@ fn bytes_natives() -> Vec<NativeFn> {
             php: |a| parg(a, 0).to_string(),
         },
         NativeFn {
-            module: "core.bytes",
+            module: "Core.Bytes",
             name: "toString",
             params: vec![Ty::Bytes],
             ret: Ty::Optional(Box::new(Ty::String)),
@@ -537,7 +537,7 @@ fn bytes_natives() -> Vec<NativeFn> {
             php: |a| format!("(preg_match('//u', {0}) === 1 ? {0} : null)", parg(a, 0)),
         },
         NativeFn {
-            module: "core.bytes",
+            module: "Core.Bytes",
             name: "len",
             params: vec![Ty::Bytes],
             ret: Ty::Int,
@@ -546,7 +546,7 @@ fn bytes_natives() -> Vec<NativeFn> {
             php: |a| format!("strlen({})", parg(a, 0)),
         },
         NativeFn {
-            module: "core.bytes",
+            module: "Core.Bytes",
             name: "find",
             params: vec![Ty::Bytes, Ty::Bytes],
             ret: Ty::Optional(Box::new(Ty::Int)),
@@ -561,7 +561,7 @@ fn bytes_natives() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "core.bytes",
+            module: "Core.Bytes",
             name: "concat",
             params: vec![Ty::Bytes, Ty::Bytes],
             ret: Ty::Bytes,
@@ -569,7 +569,7 @@ fn bytes_natives() -> Vec<NativeFn> {
             php: |a| format!("({} . {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
-            module: "core.bytes",
+            module: "Core.Bytes",
             name: "slice",
             params: vec![Ty::Bytes, Ty::Int, Ty::Int],
             ret: Ty::Bytes,
@@ -587,7 +587,7 @@ fn bytes_natives() -> Vec<NativeFn> {
     ]
 }
 
-// ---- core.html ----------------------------------------------------------------------------------
+// ---- Core.Html ----------------------------------------------------------------------------------
 // Typed, auto-escaping HTML. `Html` (and Wave 2's `Attr`) is a distinct `Ty` (types.rs) that erases
 // to PHP `string` and rides `Value::Str` at runtime; the safety is entirely in the checker's
 // non-interchangeability of `Html`/`Attr` and `string`.
@@ -633,7 +633,7 @@ fn html_escape(s: &str) -> String {
 fn html_text(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(html_escape(s))),
-        _ => Err("html.text expects (string)".into()),
+        _ => Err("Html.text expects (string)".into()),
     }
 }
 
@@ -673,7 +673,7 @@ fn html_attr(args: &[Value], _: &mut String) -> Result<Value, String> {
         [Value::Str(name), Value::Str(value)] => {
             Ok(Value::Str(format!(" {name}=\"{}\"", html_escape(value))))
         }
-        _ => Err("html.attr expects (string, string)".into()),
+        _ => Err("Html.attr expects (string, string)".into()),
     }
 }
 
@@ -681,7 +681,7 @@ fn html_attr(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn html_bool_attr(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(name)] => Ok(Value::Str(format!(" {name}"))),
-        _ => Err("html.bool_attr expects (string)".into()),
+        _ => Err("Html.bool_attr expects (string)".into()),
     }
 }
 
@@ -694,7 +694,7 @@ fn html_el(args: &[Value], _: &mut String) -> Result<Value, String> {
             let c = html_join_fragments(children)?;
             Ok(Value::Str(format!("<{tag}{a}>{c}</{tag}>")))
         }
-        _ => Err("html.el expects (string, List<Attr>, List<Html>)".into()),
+        _ => Err("Html.el expects (string, List<Attr>, List<Html>)".into()),
     }
 }
 
@@ -705,7 +705,7 @@ fn html_void_el(args: &[Value], _: &mut String) -> Result<Value, String> {
             let a = html_join_fragments(attrs)?;
             Ok(Value::Str(format!("<{tag}{a}/>")))
         }
-        _ => Err("html.void_el expects (string, List<Attr>)".into()),
+        _ => Err("Html.void_el expects (string, List<Attr>)".into()),
     }
 }
 
@@ -713,12 +713,12 @@ fn html_void_el(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn html_concat(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::List(parts)] => Ok(Value::Str(html_join_fragments(parts)?)),
-        _ => Err("html.concat expects (List<Html>)".into()),
+        _ => Err("Html.concat expects (List<Html>)".into()),
     }
 }
 
 // Named per-tag helpers (`div`/`p`/`br`/…) — sugar over `el`/`void_el` with the tag baked in, so
-// `html.div([], [text(x)])` reads like `<div>…</div>` without repeating the tag string. The blocker
+// `Html.div([], [text(x)])` reads like `<div>…</div>` without repeating the tag string. The blocker
 // that deferred these (the `eval`/`php` are bare `fn` pointers and cannot close over a runtime tag)
 // is dissolved by MONOMORPHIZING: each macro invocation emits its own `ev`/`php` pair with the tag
 // literal compiled in via `concat!`, so every tag is a uniform registry entry with a real, byte-
@@ -726,7 +726,7 @@ fn html_concat(args: &[Value], _: &mut String) -> Result<Value, String> {
 // are single lowercase words, so they need no casing migration in the namespace reshape.
 
 /// A normal (content) element helper: `tag_el!("div")` ⇒ a `NativeFn` for
-/// `html.div(List<Attr>, List<Html>) -> Html` emitting `<div ATTRS>CHILDREN</div>`. Byte-identical to
+/// `Html.div(List<Attr>, List<Html>) -> Html` emitting `<div ATTRS>CHILDREN</div>`. Byte-identical to
 /// `el("div", attrs, children)` on both Rust backends and PHP (same IIFE-free baked form).
 macro_rules! tag_el {
     ($tag:literal) => {{
@@ -740,7 +740,7 @@ macro_rules! tag_el {
                         a, c
                     )))
                 }
-                _ => Err(concat!("html.", $tag, " expects (List<Attr>, List<Html>)").into()),
+                _ => Err(concat!("Html.", $tag, " expects (List<Attr>, List<Html>)").into()),
             }
         }
         fn php(a: &[String]) -> String {
@@ -757,7 +757,7 @@ macro_rules! tag_el {
             )
         }
         NativeFn {
-            module: "core.html",
+            module: "Core.Html",
             name: $tag,
             params: vec![Ty::List(Box::new(Ty::Attr)), Ty::List(Box::new(Ty::Html))],
             ret: Ty::Html,
@@ -767,7 +767,7 @@ macro_rules! tag_el {
     }};
 }
 
-/// A void (self-closing) element helper: `tag_void!("br")` ⇒ `html.br(List<Attr>) -> Html` emitting
+/// A void (self-closing) element helper: `tag_void!("br")` ⇒ `Html.br(List<Attr>) -> Html` emitting
 /// `<br ATTRS/>`. Byte-identical to `void_el("br", attrs)`.
 macro_rules! tag_void {
     ($tag:literal) => {{
@@ -777,7 +777,7 @@ macro_rules! tag_void {
                     let a = html_join_fragments(attrs)?;
                     Ok(Value::Str(format!(concat!("<", $tag, "{}/>"), a)))
                 }
-                _ => Err(concat!("html.", $tag, " expects (List<Attr>)").into()),
+                _ => Err(concat!("Html.", $tag, " expects (List<Attr>)").into()),
             }
         }
         fn php(a: &[String]) -> String {
@@ -791,7 +791,7 @@ macro_rules! tag_void {
             )
         }
         NativeFn {
-            module: "core.html",
+            module: "Core.Html",
             name: $tag,
             params: vec![Ty::List(Box::new(Ty::Attr))],
             ret: Ty::Html,
@@ -804,7 +804,7 @@ macro_rules! tag_void {
 fn html_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
-            module: "core.html",
+            module: "Core.Html",
             name: "text",
             params: vec![Ty::String],
             ret: Ty::Html,
@@ -814,7 +814,7 @@ fn html_natives() -> Vec<NativeFn> {
             php: |a| format!("htmlspecialchars({}, ENT_QUOTES, 'UTF-8')", parg(a, 0)),
         },
         NativeFn {
-            module: "core.html",
+            module: "Core.Html",
             name: "raw",
             params: vec![Ty::String],
             ret: Ty::Html,
@@ -822,7 +822,7 @@ fn html_natives() -> Vec<NativeFn> {
             php: |a| format!("({})", parg(a, 0)),
         },
         NativeFn {
-            module: "core.html",
+            module: "Core.Html",
             name: "render",
             params: vec![Ty::Html],
             ret: Ty::String,
@@ -831,7 +831,7 @@ fn html_natives() -> Vec<NativeFn> {
         },
         // ---- Wave 2 builders ----
         NativeFn {
-            module: "core.html",
+            module: "Core.Html",
             name: "attr",
             params: vec![Ty::String, Ty::String],
             ret: Ty::Attr,
@@ -847,7 +847,7 @@ fn html_natives() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "core.html",
+            module: "Core.Html",
             name: "boolAttr",
             params: vec![Ty::String],
             ret: Ty::Attr,
@@ -855,7 +855,7 @@ fn html_natives() -> Vec<NativeFn> {
             php: |a| format!("' ' . {}", parg(a, 0)),
         },
         NativeFn {
-            module: "core.html",
+            module: "Core.Html",
             name: "el",
             params: vec![
                 Ty::String,
@@ -876,7 +876,7 @@ fn html_natives() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "core.html",
+            module: "Core.Html",
             name: "voidEl",
             params: vec![Ty::String, Ty::List(Box::new(Ty::Attr))],
             ret: Ty::Html,
@@ -890,7 +890,7 @@ fn html_natives() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "core.html",
+            module: "Core.Html",
             name: "concat",
             params: vec![Ty::List(Box::new(Ty::Html))],
             ret: Ty::Html,
@@ -951,7 +951,7 @@ fn html_natives() -> Vec<NativeFn> {
 /// free. Modules are grouped by `*_natives()` builders (one per `core.*` leaf).
 fn build() -> Vec<NativeFn> {
     let mut registry = vec![NativeFn {
-        module: "core.console",
+        module: "Core.Console",
         name: "println",
         params: vec![Ty::String],
         ret: Ty::Unit,
@@ -971,7 +971,7 @@ fn build() -> Vec<NativeFn> {
     // Pinned-slot invariant: the constant the compiler bakes into `Op::CallNative` must address the
     // entry it names. Cheap one-time check at first `registry()` access.
     assert_eq!(
-        registry[CONSOLE_PRINTLN].module, "core.console",
+        registry[CONSOLE_PRINTLN].module, "Core.Console",
         "CONSOLE_PRINTLN slot drifted"
     );
     assert_eq!(registry[CONSOLE_PRINTLN].name, "println");
@@ -1006,7 +1006,7 @@ pub fn index_of_by_leaf(leaf: &str, name: &str) -> Option<usize> {
 }
 
 /// Build the active import map (leaf qualifier → full dotted module path) from a program's items:
-/// `import core.console;` binds the call-site qualifier `console` to module `core.console`. Carried
+/// `import Core.Console;` binds the call-site qualifier `console` to module `Core.Console`. Carried
 /// by the checker (import-required + shadowing enforcement) and the transpiler (which has no
 /// variable-scope tracking to tell a qualifier from a value).
 pub fn import_map(items: &[Item]) -> HashMap<String, String> {
@@ -1031,18 +1031,18 @@ mod tests {
     #[test]
     fn pinned_console_println_slot() {
         let r = registry();
-        assert_eq!(r[CONSOLE_PRINTLN].module, "core.console");
+        assert_eq!(r[CONSOLE_PRINTLN].module, "Core.Console");
         assert_eq!(r[CONSOLE_PRINTLN].name, "println");
     }
 
     #[test]
     fn index_lookups_resolve_console_println() {
-        assert_eq!(index_of("core.console", "println"), Some(CONSOLE_PRINTLN));
+        assert_eq!(index_of("Core.Console", "println"), Some(CONSOLE_PRINTLN));
         assert_eq!(
-            index_of_by_leaf("console", "println"),
+            index_of_by_leaf("Console", "println"),
             Some(CONSOLE_PRINTLN)
         );
-        assert_eq!(index_of("core.console", "nope"), None);
+        assert_eq!(index_of("Core.Console", "nope"), None);
         assert_eq!(index_of_by_leaf("nope", "println"), None);
     }
 
@@ -1099,14 +1099,14 @@ mod tests {
         // EV-7: abs of i64::MIN faults, never panics
         assert!(math_abs(&[Value::Int(i64::MIN)], &mut out).is_err());
         // resolvable by both index forms + PHP erasure to the same-named builtin
-        let i = index_of("core.math", "pow").expect("pow registered");
-        assert_eq!(index_of_by_leaf("math", "pow"), Some(i));
+        let i = index_of("Core.Math", "pow").expect("pow registered");
+        assert_eq!(index_of_by_leaf("Math", "pow"), Some(i));
         assert_eq!(
             (registry()[i].php)(&["2.0".into(), "10.0".into()]),
             "pow(2.0, 10.0)"
         );
         assert_eq!(
-            (registry()[index_of("core.math", "min").unwrap()].php)(&["$a".into(), "$b".into()]),
+            (registry()[index_of("Core.Math", "min").unwrap()].php)(&["$a".into(), "$b".into()]),
             "min($a, $b)"
         );
     }
@@ -1167,21 +1167,21 @@ mod tests {
         .is_err());
         // PHP arg-order reordering (the sharp edge): explode/implode separator-first, str_replace search-first
         assert_eq!(
-            (registry()[index_of("core.text", "split").unwrap()].php)(&[
+            (registry()[index_of("Core.Text", "split").unwrap()].php)(&[
                 "$s".into(),
                 "\",\"".into()
             ]),
             "explode(\",\", $s)"
         );
         assert_eq!(
-            (registry()[index_of("core.text", "join").unwrap()].php)(&[
+            (registry()[index_of("Core.Text", "join").unwrap()].php)(&[
                 "$xs".into(),
                 "\"-\"".into()
             ]),
             "implode(\"-\", $xs)"
         );
         assert_eq!(
-            (registry()[index_of("core.text", "replace").unwrap()].php)(&[
+            (registry()[index_of("Core.Text", "replace").unwrap()].php)(&[
                 "$s".into(),
                 "$a".into(),
                 "$b".into()
@@ -1189,8 +1189,8 @@ mod tests {
             "str_replace($a, $b, $s)"
         );
         assert_eq!(
-            index_of_by_leaf("text", "len"),
-            index_of("core.text", "len")
+            index_of_by_leaf("Text", "len"),
+            index_of("Core.Text", "len")
         );
     }
 
@@ -1215,16 +1215,16 @@ mod tests {
         );
         // PHP emission: pinned flags on text; identity wrap on raw/render.
         assert_eq!(
-            (registry()[index_of("core.html", "text").unwrap()].php)(&["$s".into()]),
+            (registry()[index_of("Core.Html", "text").unwrap()].php)(&["$s".into()]),
             "htmlspecialchars($s, ENT_QUOTES, 'UTF-8')"
         );
         assert_eq!(
-            (registry()[index_of("core.html", "raw").unwrap()].php)(&["$s".into()]),
+            (registry()[index_of("Core.Html", "raw").unwrap()].php)(&["$s".into()]),
             "($s)"
         );
         assert_eq!(
-            index_of_by_leaf("html", "render"),
-            index_of("core.html", "render")
+            index_of_by_leaf("Html", "render"),
+            index_of("Core.Html", "render")
         );
 
         // ---- Wave 2 builders: eval bytes + PHP emission ----
@@ -1271,7 +1271,7 @@ mod tests {
         // PHP emission — the byte-identity counterparts.
         let php = |n: &str, a: &[&str]| {
             let args: Vec<String> = a.iter().map(|s| (*s).to_string()).collect();
-            (registry()[index_of("core.html", n).unwrap()].php)(&args)
+            (registry()[index_of("Core.Html", n).unwrap()].php)(&args)
         };
         assert_eq!(
             php("attr", &["$n", "$v"]),
@@ -1288,13 +1288,13 @@ mod tests {
         );
         assert_eq!(php("concat", &["$xs"]), "implode('', $xs)");
         // All builders resolve by both index forms + carry the Attr/Html return types.
-        assert_eq!(index_of_by_leaf("html", "el"), index_of("core.html", "el"));
+        assert_eq!(index_of_by_leaf("Html", "el"), index_of("Core.Html", "el"));
         assert_eq!(
-            registry()[index_of("core.html", "attr").unwrap()].ret,
+            registry()[index_of("Core.Html", "attr").unwrap()].ret,
             Ty::Attr
         );
         assert_eq!(
-            registry()[index_of("core.html", "el").unwrap()].ret,
+            registry()[index_of("Core.Html", "el").unwrap()].ret,
             Ty::Html
         );
     }
@@ -1304,11 +1304,11 @@ mod tests {
         // Option 1 named tags are macro-monomorphized registry entries — exercise them through the
         // registered `eval`/`php` (not the local macro fns) so the test pins what callers actually hit.
         let eval = |n: &str, args: &[Value]| -> Result<Value, String> {
-            (registry()[index_of("core.html", n).unwrap()].eval)(args, &mut String::new())
+            (registry()[index_of("Core.Html", n).unwrap()].eval)(args, &mut String::new())
         };
         let php = |n: &str, a: &[&str]| {
             let args: Vec<String> = a.iter().map(|s| (*s).to_string()).collect();
-            (registry()[index_of("core.html", n).unwrap()].php)(&args)
+            (registry()[index_of("Core.Html", n).unwrap()].php)(&args)
         };
         let attrs = Value::List(std::rc::Rc::new(vec![Value::Str(" class=\"box\"".into())]));
         let kids = Value::List(std::rc::Rc::new(vec![Value::Str("hi".into())]));
@@ -1337,15 +1337,15 @@ mod tests {
         );
         // Resolve by both index forms + carry the Html return type.
         assert_eq!(
-            index_of_by_leaf("html", "div"),
-            index_of("core.html", "div")
+            index_of_by_leaf("Html", "div"),
+            index_of("Core.Html", "div")
         );
         assert_eq!(
-            registry()[index_of("core.html", "section").unwrap()].ret,
+            registry()[index_of("Core.Html", "section").unwrap()].ret,
             Ty::Html
         );
         assert_eq!(
-            registry()[index_of("core.html", "hr").unwrap()].ret,
+            registry()[index_of("Core.Html", "hr").unwrap()].ret,
             Ty::Html
         );
     }
@@ -1381,16 +1381,16 @@ mod tests {
         let _ = std::fs::remove_file(&tmp);
         // `read` returns `string?`; PHP erasure distinguishes empty file from missing.
         assert_eq!(
-            crate::native::registry()[index_of("core.file", "read").unwrap()].ret,
+            crate::native::registry()[index_of("Core.File", "read").unwrap()].ret,
             Ty::Optional(Box::new(Ty::String))
         );
         assert_eq!(
-            (registry()[index_of("core.file", "read").unwrap()].php)(&["$p".into()]),
+            (registry()[index_of("Core.File", "read").unwrap()].php)(&["$p".into()]),
             "(($__c = @file_get_contents($p)) === false ? null : $__c)"
         );
         assert_eq!(
-            index_of_by_leaf("file", "exists"),
-            index_of("core.file", "exists")
+            index_of_by_leaf("File", "exists"),
+            index_of("Core.File", "exists")
         );
     }
 
@@ -1404,12 +1404,12 @@ mod tests {
             col: 1,
         };
         let items = vec![Item::Import {
-            path: vec!["core".into(), "console".into()],
+            path: vec!["Core".into(), "Console".into()],
             alias: None,
             span: sp,
         }];
         let m = import_map(&items);
-        assert_eq!(m.get("console").map(String::as_str), Some("core.console"));
+        assert_eq!(m.get("Console").map(String::as_str), Some("Core.Console"));
 
         // An alias overrides the bound qualifier (M5 S2c).
         let aliased = vec![Item::Import {

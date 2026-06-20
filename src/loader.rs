@@ -254,15 +254,15 @@ fn pascal(s: &str) -> String {
     }
 }
 
-/// A file's **user** import map: bound qualifier ⇒ target package segments, for non-`core` imports
-/// only. Native (`core.*`) imports are excluded — their member calls stay native and are resolved by
+/// A file's **user** import map: bound qualifier ⇒ target package segments, for non-`Core` imports
+/// only. Native (`Core.*`) imports are excluded — their member calls stay native and are resolved by
 /// the backends (and the transpiler) as before. An alias (`import a.b as c;`) binds `c`, else the
 /// path's last segment.
 fn user_import_map(items: &[Item]) -> HashMap<String, Vec<String>> {
     let mut map = HashMap::new();
     for item in items {
         if let Item::Import { path, alias, .. } = item {
-            if path.first().map(String::as_str) == Some("core") {
+            if path.first().map(String::as_str) == Some("Core") {
                 continue;
             }
             let qualifier = alias.clone().or_else(|| path.last().cloned());

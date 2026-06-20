@@ -1,43 +1,43 @@
 package main;
 
 // M6 W0 — the `bytes` type: raw octet sequences distinct from UTF-8 `string`.
-// `b"…"` literals (with `\xHH`), and the `core.bytes` interop module.
-import core.console;
-import core.bytes;
+// `b"…"` literals (with `\xHH`), and the `Core.Bytes` interop module.
+import Core.Console;
+import Core.Bytes;
 
 function main() {
   // fromString + len (BYTE count) + toString round-trip.
-  bytes hello = bytes.fromString("hello");
-  int n = bytes.len(hello);
-  console.println("len={n}");                         // len=5
-  console.println(bytes.toString(hello) ?? "?");     // hello
+  bytes hello = Bytes.fromString("hello");
+  int n = Bytes.len(hello);
+  Console.println("len={n}");                         // len=5
+  Console.println(Bytes.toString(hello) ?? "?");     // hello
 
   // A `b"…"` literal with \xHH escapes — 0x48 0x69 = "Hi".
   bytes raw = b"\x48\x69";
-  console.println(bytes.toString(raw) ?? "?");       // Hi
-  int rn = bytes.len(raw);
-  console.println("rawlen={rn}");                     // rawlen=2
+  Console.println(Bytes.toString(raw) ?? "?");       // Hi
+  int rn = Bytes.len(raw);
+  Console.println("rawlen={rn}");                     // rawlen=2
 
   // Invalid UTF-8 decodes to `null` (never a fault) — composes with `??`.
   bytes bad = b"\xff\xfe";
-  console.println(bytes.toString(bad) ?? "<non-utf8>"); // <non-utf8>
+  Console.println(Bytes.toString(bad) ?? "<non-utf8>"); // <non-utf8>
 
   // concat + slice (half-open, bounds-clamped).
-  bytes ab = bytes.concat(b"foo", b"bar");
-  console.println(bytes.toString(ab) ?? "?");        // foobar
-  int abn = bytes.len(ab);
-  console.println("ablen={abn}");                     // ablen=6
+  bytes ab = Bytes.concat(b"foo", b"bar");
+  Console.println(Bytes.toString(ab) ?? "?");        // foobar
+  int abn = Bytes.len(ab);
+  Console.println("ablen={abn}");                     // ablen=6
 
-  bytes sl = bytes.slice(ab, 1, 4);
-  console.println(bytes.toString(sl) ?? "?");        // oob
+  bytes sl = Bytes.slice(ab, 1, 4);
+  Console.println(Bytes.toString(sl) ?? "?");        // oob
 
   // start > end clamps to an empty slice (total, no fault).
-  bytes empty = bytes.slice(ab, 5, 2);
-  int en = bytes.len(empty);
-  console.println("slempty={en}");                    // slempty=0
+  bytes empty = Bytes.slice(ab, 5, 2);
+  int en = Bytes.len(empty);
+  Console.println("slempty={en}");                    // slempty=0
 
   // byte-vector equality.
   bytes eq1 = b"abc";
-  bytes eq2 = bytes.fromString("abc");
-  if (eq1 == eq2) { console.println("eq"); } else { console.println("ne"); } // eq
+  bytes eq2 = Bytes.fromString("abc");
+  if (eq1 == eq2) { Console.println("eq"); } else { Console.println("ne"); } // eq
 }

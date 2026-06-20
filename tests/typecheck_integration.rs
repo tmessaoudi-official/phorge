@@ -4,7 +4,7 @@ use phorge::parser::Parser;
 
 /// The complete sample program from the design spec (§6), verbatim.
 const SAMPLE: &str = r#"package main;
-import core.console;
+import Core.Console;
 
 enum Shape {
     Circle(float radius),
@@ -30,11 +30,11 @@ class Greeter {
 
 function main() {
     Greeter g = Greeter("Tak");
-    console.println(g.greet());
+    Console.println(g.greet());
 
     List<Shape> shapes = [Circle(2.0), Rect(3.0, 4.0)];
     for (Shape s in shapes) {
-        console.println("area = {area(s)}");
+        Console.println("area = {area(s)}");
     }
 }
 "#;

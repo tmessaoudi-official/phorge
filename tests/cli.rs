@@ -150,8 +150,8 @@ fn run_reads_program_from_stdin() {
         .unwrap()
         .write_all(
             br#"package main;
-import core.console;
-function main() { console.println("{1 + 2}"); }"#,
+import Core.Console;
+function main() { Console.println("{1 + 2}"); }"#,
         )
         .unwrap();
     let out = child.wait_with_output().expect("wait");
@@ -167,8 +167,8 @@ fn run_eval_inline_code() {
                 "run",
                 flag,
                 r#"package main;
-import core.console;
-function main() { console.println("{2 * 3}"); }"#,
+import Core.Console;
+function main() { Console.println("{2 * 3}"); }"#,
             ])
             .output()
             .expect("spawn phorge");
@@ -182,8 +182,8 @@ fn run_double_dash_then_path_is_a_file() {
     let path = write_temp(
         "dashdash",
         r#"package main;
-import core.console;
-function main() { console.println("ok"); }"#,
+import Core.Console;
+function main() { Console.println("ok"); }"#,
     );
     let out = Command::new(BIN)
         .args(["run", "--", path.to_str().unwrap()])
@@ -241,8 +241,8 @@ fn run_runtime_error_exits_1() {
     let path = write_temp(
         "runtime_err",
         r#"package main;
-import core.console;
-function main() { console.println("{1 / 0}"); }"#,
+import Core.Console;
+function main() { Console.println("{1 / 0}"); }"#,
     );
     let out = Command::new(BIN)
         .args(["run", path.to_str().unwrap()])
@@ -258,8 +258,8 @@ fn runvm_simple_program_exits_0() {
     let path = write_temp(
         "runvm_ok",
         r#"package main;
-import core.console;
-function main() { console.println("{1 + 1}"); }"#,
+import Core.Console;
+function main() { Console.println("{1 + 1}"); }"#,
     );
     let out = Command::new(BIN)
         .args(["runvm", path.to_str().unwrap()])
@@ -275,8 +275,8 @@ fn runvm_runtime_error_exits_1() {
     let path = write_temp(
         "runvm_rt",
         r#"package main;
-import core.console;
-function main() { console.println("{1 / 0}"); }"#,
+import Core.Console;
+function main() { Console.println("{1 / 0}"); }"#,
     );
     let out = Command::new(BIN)
         .args(["runvm", path.to_str().unwrap()])

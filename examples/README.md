@@ -8,7 +8,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 
 | Example | What it shows |
 |---|---|
-| `hello.phg` | the minimal program — `package main;` + `import core.console;` + `console.println` |
+| `hello.phg` | the minimal program — `package main;` + `import Core.Console;` + `Console.println` |
 | `fib.phg` | recursion, `for…in`, `List<int>` |
 | `grades.phg` | enums + `match`, a class with a method, `List`, `for…in` |
 | `realworld/ledger.phg` | bank accounts: classes + methods + `this`, payload enum + `match`, recursion (compound interest), integer-cents arithmetic, immutability (`apply` returns a fresh `Account`) |
@@ -31,12 +31,12 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/maps.phg` | `Map<K, V>` literals `[k => v]` + indexing `m[k]` (string- and int-keyed; a map-index result as an arithmetic operand); keys are `int`/`bool`/`string`, insertion-ordered, transpiles to a PHP `[k => v]` array (Rich Types M-RT S3) |
 | `guide/generics.phg` | erased generics — `<T>` type parameters on free functions, inferred at the call site; reuse at many concrete types, a `List<T>` parameter, a `(T) -> T` function-typed parameter; no monomorphization (type params erase to PHP `mixed`/`array`/`\Closure`) (Rich Types M-RT S7) |
 | `guide/lambdas-pipe.phg` | lambdas (expression + statement body), higher-order functions, first-class named-fn references, the pipe operator `\|>` (M3 S3 Track A) |
-| `guide/math.phg` | the `core.math` stdlib module — `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` (M3 Track B Wave 2) |
+| `guide/math.phg` | the `Core.Math` stdlib module — `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` (M3 Track B Wave 2) |
 | `guide/floats.phg` | `float` stringification — shortest-round-trip, always-positional, byte-identical across `run`/`runvm`/PHP for every finite magnitude (irrational, large, small) via the `__phorge_float` transpile helper |
-| `guide/text.phg` | the `core.text` stdlib module — `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace` (M3 Track B Wave 2) |
-| `guide/file.phg` | the `core.file` stdlib module — `read` (→ `string?`), `exists`; reads a committed fixture, composes with S2 `??` / if-let (M3 Track B Wave 2) |
-| `guide/bytes.phg` | the `bytes` type + `b"…"` literals (`\xHH`) + `core.bytes` interop — `fromString`/`toString` (→ `string?`)/`len`/`concat`/`slice` (M6 W0) |
-| `guide/html.phg` | `core.html` — the escape **kernel** (`text`/`raw`/`render`), the typed element **builders** (`el`/`voidEl`/`attr`/`boolAttr`/`concat`), **named per-tag helpers** (`div`/`p`/`a`/`ul`/`li`/`br`/…), and the **`html"<h1>{name}</h1>"` literal sugar** (holes escape by type unless already `Html`); `Html`/`Attr` are distinct from `string`, XSS-safe by construction (core.html Waves 1–3) |
+| `guide/text.phg` | the `Core.Text` stdlib module — `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace` (M3 Track B Wave 2) |
+| `guide/file.phg` | the `Core.File` stdlib module — `read` (→ `string?`), `exists`; reads a committed fixture, composes with S2 `??` / if-let (M3 Track B Wave 2) |
+| `guide/bytes.phg` | the `bytes` type + `b"…"` literals (`\xHH`) + `Core.Bytes` interop — `fromString`/`toString` (→ `string?`)/`len`/`concat`/`slice` (M6 W0) |
+| `guide/html.phg` | `Core.Html` — the escape **kernel** (`text`/`raw`/`render`), the typed element **builders** (`el`/`voidEl`/`attr`/`boolAttr`/`concat`), **named per-tag helpers** (`div`/`p`/`a`/`ul`/`li`/`br`/…), and the **`html"<h1>{name}</h1>"` literal sugar** (holes escape by type unless already `Html`); `Html`/`Attr` are distinct from `string`, XSS-safe by construction (Core.Html Waves 1–3) |
 | `bench/workload.phg` | a **profiling** workload (CPU recursion + heap allocation) for `phg bench`/`disasm` — see `bench/README.md` |
 | `transpile/demo.phg` | the **Phorge → PHP** bridge — see `transpile/README.md` |
 | `build/app.phg` | **standalone executables** — `phg build` — see `build/README.md` |
@@ -67,13 +67,13 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | lambdas (expr + stmt body), higher-order fns, first-class named-fn refs, pipe `\|>` | `guide/lambdas-pipe` |
 | erased generics `<T>` on free functions, call-site inference (incl. `List<T>` + `(T) -> T` params) | `guide/generics` |
 | `var` local type inference, `type` aliases | `guide/inference` |
-| `console.println(string)` (after `import core.console;`) | every example |
-| `core.math` stdlib: `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` | `guide/math` |
+| `Console.println(string)` (after `import Core.Console;`) | every example |
+| `Core.Math` stdlib: `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` | `guide/math` |
 | `float` shortest-round-trip rendering, byte-identical across backends + PHP | `guide/floats` |
-| `core.text` stdlib: `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace` | `guide/text` |
-| `core.file` stdlib: `read` (→ `string?`), `exists` (fixture-gated) | `guide/file` |
-| `core.html` kernel (`text`/`raw`/`render`) + builders (`el`/`voidEl`/`attr`/`boolAttr`/`concat`) + named per-tag helpers (`div`/`p`/`a`/`ul`/`li`/`br`/…) + `html"…"` literal sugar (type-directed hole escaping); `Html`/`Attr` ≠ `string` (XSS-safe by construction) | `guide/html` |
-| `core.bytes`: `find` (→ `int?`); `core.text`: `splitOnce` (→ `List<string>`) | `web/handler` |
+| `Core.Text` stdlib: `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace` | `guide/text` |
+| `Core.File` stdlib: `read` (→ `string?`), `exists` (fixture-gated) | `guide/file` |
+| `Core.Html` kernel (`text`/`raw`/`render`) + builders (`el`/`voidEl`/`attr`/`boolAttr`/`concat`) + named per-tag helpers (`div`/`p`/`a`/`ul`/`li`/`br`/…) + `html"…"` literal sugar (type-directed hole escaping); `Html`/`Attr` ≠ `string` (XSS-safe by construction) | `guide/html` |
+| `Core.Bytes`: `find` (→ `int?`); `Core.Text`: `splitOnce` (→ `List<string>`) | `web/handler` |
 | HTTP handler model: `Request`/`Response`, `parseRequest`/`serializeResponse`, `handle()` | `web/handler` |
 | static HTTP router: `List<Route>` table, exact `(method, path)` match → `Handler` enum + exhaustive dispatch | `web/router` |
 | HTTP serve runtime: `phg serve` (native socket) + `php -S` front-controller, one `respond(bytes) -> bytes` entry | `web/server` |
@@ -93,9 +93,9 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 - **Zero-payload enum variants use call form `V()` everywhere** — to construct (`Defend()`) *and* in
   a `match` arm (`Defend() =>`). A bare `Defend =>` arm is a catch-all *binding*, not a variant
   pattern, so it silently swallows every case.
-- **`import core.console;` is load-bearing (M3 Wave 1).** Everything is namespaced — "nothing in the
-  wind" — so there is no free global `println`: a program must `import core.console;` and call
-  `console.println(...)`. Stdlib modules are reserved under `core.*`; the root lives in the import and
+- **`import Core.Console;` is load-bearing (M3 Wave 1).** Everything is namespaced — "nothing in the
+  wind" — so there is no free global `println`: a program must `import Core.Console;` and call
+  `Console.println(...)`. Stdlib modules are reserved under `core.*`; the root lives in the import and
   the leaf qualifies the call (Go's `import "fmt"` → `fmt.Println`). The same leaf-qualified `import`
   resolves user `.phg` packages in a project (M5) — see `project/tempconv/`.
 

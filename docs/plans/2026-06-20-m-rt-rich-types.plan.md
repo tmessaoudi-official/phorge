@@ -86,6 +86,31 @@
   (`E-TYPE-CASE`). (e) Deferred (KNOWN_ISSUES): generic methods/types/classes, a generic function used
   as a first-class *value*, an empty `[]` passed straight to a generic parameter, bounds, and variance.
 
+- [2026-06-20] AGREED (generics reach): generics will cover **all of free functions, methods, and
+  generic types/classes** — not just free functions (developer: "I want generics all options").
+  Implemented incrementally on top of S7a; all stay fully erased (a generic class `Box<T>` erases its
+  `<T>` and instances carry no type argument at runtime — `instanceof Box<int>` is just `instanceof Box`).
+- [2026-06-20] AGREED (stdlib namespace casing): the standard-library root and its leaf modules become
+  **PascalCase** — `core.console` → `Core.Console`, `core.text` → `Core.Text`, etc. (developer: "even
+  native core should be PascalCase Core"), consistent with the namespace-reshape rule that package
+  *segments* are PascalCase. Function names stay camelCase (`println`, `splitOnce`). `import core.console;`
+  → `import Core.Console;`, call site `console.println` → `Console.println`. A milestone-scale breaking
+  codemod across every `.phg`, fixture, inline test program, and doc.
+- [2026-06-20] AGREED (`core.list` HOF mechanism): **Option B — a higher-order native variant**
+  (`NativeEval::HigherOrder(fn(&[Value], &mut dyn FnMut(&Value,&[Value])->Result<Value,String>))`) that
+  receives a backend-supplied closure-invoker. **No new `Op`**, pure natives keep their signature, and
+  `map`/`filter`/`reduce` transpile to `array_map`/`array_filter`/`array_reduce`. Needs a re-entrant
+  `vm.run_until(depth)` + `call_closure_value` mirroring `Op::CallValue` [Verified feasible: vm.rs call
+  model inspected]. Chosen over backend intrinsics (would force a VM list-builder op) and dedicated Ops
+  (pollutes the Op set with stdlib concerns). All of `map`/`filter`/`reduce` ship.
+- [2026-06-20] AGREED (sequence): **Core rename → S7b → generics-all**, each a green byte-identical
+  commit. Core-first so the new `Core.List`/`Core.Set` land PascalCase and are not renamed twice.
+- [2026-06-20] AGREED (Core-rename scope): this slice renames the **stdlib namespace only** — `core.*`
+  → `Core.*` with PascalCase leaf modules (`Core.Console`/`Core.Math`/`Core.Text`/`Core.File`/
+  `Core.Bytes`/`Core.Html`; function names stay camelCase), reserve `Core` as the package root, sweep
+  every `.phg`/fixture/inline-test/doc. The broader namespace reshape (`package main` → `package Main`,
+  `E-PKG-CASE` on user package segments, manifest `name`→`module`, lifting `E-PKG-TYPE`) stays pending.
+
 ## Formal Plan
 
 See the approved plan (`~/.claude/plans/misty-honking-lynx.md`) and the design spec. Slice table:

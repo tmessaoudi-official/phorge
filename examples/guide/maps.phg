@@ -1,5 +1,5 @@
 package main;
-import core.console;
+import Core.Console;
 
 // M-RT S3 "Map foundation": `Map<K, V>` literals `[k => v]` and indexing `m[k]`.
 // Keys are the hashable subset (int / bool / string); a missing key faults cleanly.
@@ -10,18 +10,18 @@ function main() {
     // so bind the lookup to a local first, then interpolate the local.
     var alice = ages["alice"];
     var carol = ages["carol"];
-    console.println("alice={alice} carol={carol}");
+    Console.println("alice={alice} carol={carol}");
 
     // A map-index result is a first-class arithmetic operand — it specializes on both backends.
     var bobNext = ages["bob"] + 1;
-    console.println("bob next year={bobNext}");
+    Console.println("bob next year={bobNext}");
 
     // Int-keyed map (Map<int, string>). An int-literal index interpolates directly.
     Map<int, string> names = [1 => "one", 2 => "two", 3 => "three"];
-    console.println("names[2]={names[2]} names[3]={names[3]}");
+    Console.println("names[2]={names[2]} names[3]={names[3]}");
 
     // `var` infers the map type from the literal.
     var caps = ["fr" => "Paris", "jp" => "Tokyo"];
     var jp = caps["jp"];
-    console.println("jp capital={jp}");
+    Console.println("jp capital={jp}");
 }

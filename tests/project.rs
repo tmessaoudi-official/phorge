@@ -47,8 +47,8 @@ fn multi_file_project_qualified_call_runs_byte_identically() {
     // S2b bare form. The loader resolves it against the imported package's mangled symbol.
     let entry = tmp.write(
         "src/main.phg",
-        "package main;\nimport core.console;\nimport acme.util;\n\
-         function main() {\n    console.println(\"{util.compute(20)}\");\n}",
+        "package main;\nimport Core.Console;\nimport acme.util;\n\
+         function main() {\n    Console.println(\"{util.compute(20)}\");\n}",
     );
     tmp.write(
         "src/acme/util/compute.phg",
@@ -67,8 +67,8 @@ fn import_alias_resolves_qualified_call() {
     // `import acme.util as u;` binds the leaf `u`; the call qualifies on the alias.
     let entry = tmp.write(
         "src/main.phg",
-        "package main;\nimport core.console;\nimport acme.util as u;\n\
-         function main() {\n    console.println(\"{u.compute(20)}\");\n}",
+        "package main;\nimport Core.Console;\nimport acme.util as u;\n\
+         function main() {\n    Console.println(\"{u.compute(20)}\");\n}",
     );
     tmp.write(
         "src/acme/util/compute.phg",
@@ -88,8 +88,8 @@ fn same_package_cross_file_bare_call_resolves() {
     tmp.write("phorge.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package main;\nimport core.console;\nimport acme.util;\n\
-         function main() {\n    console.println(\"{util.outer(20)}\");\n}",
+        "package main;\nimport Core.Console;\nimport acme.util;\n\
+         function main() {\n    Console.println(\"{util.outer(20)}\");\n}",
     );
     tmp.write(
         "src/acme/util/outer.phg",
@@ -112,8 +112,8 @@ fn unqualified_cross_package_call_is_rejected() {
     tmp.write("phorge.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package main;\nimport core.console;\nimport acme.util;\n\
-         function main() {\n    console.println(\"{compute(20)}\");\n}",
+        "package main;\nimport Core.Console;\nimport acme.util;\n\
+         function main() {\n    Console.println(\"{compute(20)}\");\n}",
     );
     tmp.write(
         "src/acme/util/compute.phg",
@@ -149,8 +149,8 @@ fn multi_package_transpiles_to_brace_namespaces() {
     tmp.write("phorge.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package main;\nimport core.console;\nimport acme.util;\n\
-         function main() {\n    console.println(\"{util.compute(20)}\");\n}",
+        "package main;\nimport Core.Console;\nimport acme.util;\n\
+         function main() {\n    Console.println(\"{util.compute(20)}\");\n}",
     );
     tmp.write(
         "src/acme/util/compute.phg",

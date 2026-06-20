@@ -195,7 +195,7 @@ impl<'a> Lexer<'a> {
     /// Scan an `html"…"` literal (the `html` prefix is already consumed). The body is captured
     /// exactly like [`Self::scan_string`] — same escapes (`\n \t \r \\ \"`), multi-byte UTF-8 and
     /// raw newlines copied verbatim, so an `html"…"` literal spans lines for free — and `{`/`}` are
-    /// preserved verbatim: the interpolation split *and* the desugar into `core.html` kernel calls
+    /// preserved verbatim: the interpolation split *and* the desugar into `Core.Html` kernel calls
     /// happen in the parser/checker, not here. The only difference from `scan_string` is the token
     /// kind, which routes the body to the html desugarer instead of the plain-string one.
     fn scan_html(&mut self, start: usize, line: u32, col: u32) -> Result<Token, Diagnostic> {
@@ -253,7 +253,7 @@ impl<'a> Lexer<'a> {
 
     /// Scan a `b"…"` byte-string literal (the `b` prefix is already consumed). Unlike `scan_string`
     /// there is NO interpolation — `{`/`}` are literal bytes. Escapes are `\n \t \r \\ \"` plus
-    /// `\xHH` (two hex digits → one arbitrary octet), so a literal can hold non-UTF-8 bytes.
+    /// `\xHH` (two hex digits → one arbitrary octet), so a literal can hold non-UTF-8 Bytes.
     fn scan_bytes(&mut self, start: usize, line: u32, col: u32) -> Result<Token, Diagnostic> {
         self.bump(); // opening quote
         let mut bytes: Vec<u8> = Vec::new();
@@ -424,7 +424,7 @@ pub fn lex(src: &str) -> Result<Vec<Token>, Diagnostic> {
 
                 // `html"…"` literal — must precede the identifier scan (a bare `html` is a valid
                 // identifier, and the module qualifier in `html.text(…)`). Only the exact `html"`
-                // sequence triggers it: `html.` / `htmlx` / a bare `html` are ordinary idents.
+                // sequence triggers it: `Html.` / `htmlx` / a bare `html` are ordinary idents.
                 if b == b'h' && lx.src[lx.pos..].starts_with(b"html\"") {
                     for _ in 0..4 {
                         lx.bump(); // consume the `html` prefix
@@ -801,7 +801,7 @@ mod tests {
             kinds("html\"<ul>\n  <li>x</li>\n</ul>\""),
             vec![Html("<ul>\n  <li>x</li>\n</ul>".into()), Eof]
         );
-        // only the exact `html"` sequence triggers it: a bare `html`, `html.`, `htmlx` are idents.
+        // only the exact `html"` sequence triggers it: a bare `html`, `Html.`, `htmlx` are idents.
         assert_eq!(kinds("html"), vec![Ident("html".into()), Eof]);
         assert_eq!(
             kinds("html.text"),

@@ -8,7 +8,7 @@
 
 package main;
 
-import core.console;
+import Core.Console;
 
 // The classic: returns its argument unchanged, at whatever type it was called with.
 function identity<T>(T x) -> T {
@@ -51,8 +51,8 @@ function main() {
   // `lastOfTwo` over strings.
   string last = lastOfTwo("alpha", "omega");
 
-  console.println("identity: {n} {s} {flag}");
-  console.println("firstOr head: {head}");
-  console.println("applyTwice: {bumped}");
-  console.println("lastOfTwo: {last}");
+  Console.println("identity: {n} {s} {flag}");
+  Console.println("firstOr head: {head}");
+  Console.println("applyTwice: {bumped}");
+  Console.println("lastOfTwo: {last}");
 }

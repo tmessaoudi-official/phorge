@@ -1305,12 +1305,12 @@ mod tests {
     fn ranges_emit_php_range() {
         // Ranges route through `__phorge_range` (QW-13): the helper yields `[]` for an empty/reversed
         // range, where PHP's bare `range()` would descend. The `inclusive` flag is the third arg.
-        let out = php(r#"import core.console;
-function main() { for (int i in 0..3) { console.println("{i}"); } }"#);
+        let out = php(r#"import Core.Console;
+function main() { for (int i in 0..3) { Console.println("{i}"); } }"#);
         assert!(out.contains("__phorge_range(0, 3, false)"), "{out}");
         assert!(out.contains("function __phorge_range"), "{out}");
-        let inc = php(r#"import core.console;
-function main() { for (int i in 1..=3) { console.println("{i}"); } }"#);
+        let inc = php(r#"import Core.Console;
+function main() { for (int i in 1..=3) { Console.println("{i}"); } }"#);
         assert!(inc.contains("__phorge_range(1, 3, true)"), "{inc}");
     }
 
@@ -1332,7 +1332,7 @@ function main() { for (int i in 1..=3) { console.println("{i}"); } }"#);
 
     #[test]
     fn float_interpolation_emits_phorge_float_helper() {
-        // A float reaches PHP only through interpolation (`console.println` takes `string`), so the
+        // A float reaches PHP only through interpolation (`Console.println` takes `string`), so the
         // `__phorge_str` chokepoint routes floats through `__phorge_float`, which reproduces Rust's
         // shortest-round-trip positional `f64` Display (no PHP precision-14 / scientific divergence).
         let out = php("function f(float x) -> string { return \"v={x}\"; }");
@@ -1394,13 +1394,13 @@ function main() { for (int i in 1..=3) { console.println("{i}"); } }"#);
 
     #[test]
     fn println_becomes_echo() {
-        let out = php("import core.console; function main() { console.println(\"hi\"); }");
+        let out = php("import Core.Console; function main() { Console.println(\"hi\"); }");
         assert!(out.contains(r#"echo "hi" . "\n";"#), "{out}");
     }
 
     #[test]
     fn main_is_invoked_when_present() {
-        let out = php("import core.console; function main() { console.println(\"hi\"); }");
+        let out = php("import Core.Console; function main() { Console.println(\"hi\"); }");
         assert!(out.trim_end().ends_with("main();"), "{out}");
         // no main -> no call
         let no_main = php("function helper() -> int { return 1; }");
@@ -1484,7 +1484,7 @@ function main() { for (int i in 1..=3) { console.println("{i}"); } }"#);
         let out = php(
             "import core.console; class Greeter { constructor(private string name) {} \
                function greet() -> string { return name; } } \
-             function main() { Greeter g = Greeter(\"Tak\"); console.println(g.greet()); }",
+             function main() { Greeter g = Greeter(\"Tak\"); Console.println(g.greet()); }",
         );
         assert!(out.contains(r#"$g = new Greeter("Tak");"#), "{out}");
         assert!(out.contains("$g->greet()"), "{out}");
@@ -1556,7 +1556,7 @@ function main() { for (int i in 1..=3) { console.println("{i}"); } }"#);
 
     #[test]
     fn transpiles_expression_lambda_to_arrow_fn() {
-        let php_out = php("package main; import core.console; function main(){ var d = fn(int x) => x*2; console.println(\"{d(5)}\"); }");
+        let php_out = php("package main; import Core.Console; function main(){ var d = fn(int x) => x*2; Console.println(\"{d(5)}\"); }");
         assert!(php_out.contains("fn($x) => $x * 2"), "{php_out}");
     }
 

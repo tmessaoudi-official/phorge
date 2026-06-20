@@ -162,11 +162,11 @@ developer chose **everything namespaced, "nothing in the wind", as the default**
 globals. Locked: **Go-style module-qualified** calls (the Java `System.out.println` object-path was
 rejected — no idiomatic PHP target, breaks D-L9); **reserved `core.` root** for the stdlib; jargon-free
 leaf modules **`console`** (was io) + **`file`** (was fs) + `math`/`text`/`list`/`json`/`time`; **`println`
-→ `console.println` after `import core.console;`** (the bare global is RETIRED); **leaf-qualified call
+→ `Console.println` after `import Core.Console;`** (the bare global is RETIRED); **leaf-qualified call
 sites** (root in the import, leaf at the call — Go's `import "fmt"` → `fmt.Println`); **explicit import
 required** even for stdlib; **user code mandatorily packaged** (stricter than PHP/TS by choice, emits real
 PHP `namespace`s — leaning explicit `package a.b;` + strict folder=path, final syntax deferred). Native
-registry is keyed by `(module, name)`; `import core.console` becomes load-bearing.
+registry is keyed by `(module, name)`; `import Core.Console` becomes load-bearing.
 
 **Track B Wave 1 — namespaced native foundation — COMPLETE** (reshaped Task 1) — plan
 `docs/plans/2026-06-18-trackB-stdlib-io-imports.md`, design spec above. Landed: `src/native.rs`
@@ -176,7 +176,7 @@ native's checker sig + shared `eval: fn(&[Value], &mut String)->Result<Value,Str
 result, no `emit_const(Unit)`); import-driven resolution in all four backends (interpreter+compiler
 resolve a `Member`-call's head qualifier **locals-first then `index_of_by_leaf`**; checker+transpiler use
 the import map — only they lack scope tracking); the **global `println` is RETIRED** (bare `println` →
-unknown fn) and `console.println` requires `import core.console;`; an **`E-SHADOW-IMPORT`** guard keeps a
+unknown fn) and `Console.println` requires `import Core.Console;`; an **`E-SHADOW-IMPORT`** guard keeps a
 value binding from shadowing an imported qualifier (else transpiler vs run-backends diverge); the example
 differential test now also asserts each example **runs** (`Ok`), not just that backends agree. Full
 migration done (all `.phg`, fixtures, ~189 inline test programs via `tools/wave1_migrate.py`). 367 tests
@@ -184,15 +184,15 @@ green, clippy + fmt clean, real-PHP round-tripped.
 
 **Track B Wave 2 — stdlib breadth — COMPLETE (buildable subset).** Three modules landed as `(module,
 name)` registry entries (shared `eval` + PHP erasure), each with a byte-identity-gated guide example
-round-tripped through real PHP: **`core.math`** (`548e1d0` — `sqrt`/`pow`/`floor`/`ceil` float,
-`abs`/`min`/`max` int), **`core.text`** (`026094c` — `len`/`upper`/`lower`/`trim`/`contains`/`split`/
-`join`/`replace`; `split`↔`join` carry `List<string>`), **`core.file`** (`read`→`string?`/`exists`/
+round-tripped through real PHP: **`Core.Math`** (`548e1d0` — `sqrt`/`pow`/`floor`/`ceil` float,
+`abs`/`min`/`max` int), **`Core.Text`** (`026094c` — `len`/`upper`/`lower`/`trim`/`contains`/`split`/
+`join`/`replace`; `split`↔`join` carry `List<string>`), **`Core.File`** (`read`→`string?`/`exists`/
 `write`; reads a committed fixture for determinism, composes with S2 `??`/if-let). The four-backend
 call path was already fully generic (multi-arg, typed, value-returning), so each module was purely
 additive — no plumbing changes. **`core.list` and `core.json` are DEFERRED**: `core.list` needs S3
 lambdas (`map`/`filter`/`reduce`) or `List<T>` generics (`reverse`/`sum`/…), and `core.json` needs a
 dynamic `Json`/`Any` type (`Ty` has no type variable) — both land once generics or S3 exist.
-**Gotcha (this wave):** a guide example importing `core.text`/`core.file` must not name a local `text`/
+**Gotcha (this wave):** a guide example importing `Core.Text`/`Core.File` must not name a local `text`/
 `file`/`console` — that trips `E-SHADOW-IMPORT` (the Wave 1 guard). And irrational floats (`sqrt(2.0)`)
 diverge between the Rust backends (full round-trip) and PHP's 14-digit `echo` — examples keep to
 exactly-representable values (now in KNOWN_ISSUES; the run↔runvm spine is always identical).
@@ -272,7 +272,7 @@ isn't `Send`), real concurrency = M6 green-threads under an unchanged contract; 
 `src/serve.rs` behind a `Transport` trait, tested outside `differential.rs`. Build order (tasks #16–#20):
 **W0 bytes → W1 handler(Shape A) → W2 static router → W3 `src/serve.rs`+Transport → W4 `phg serve` CLI +
 PHP front-controller + docs**. **M6 W0 COMPLETE** (`446bcb9`, `docs/specs/2026-06-18-m6-w0-bytes-design.md`):
-`bytes` primitive + `b"…"` literals (`\xHH`) + `core.bytes` interop (`from_string`/`to_string`→`string?`/`len`
+`bytes` primitive + `b"…"` literals (`\xHH`) + `Core.Bytes` interop (`from_string`/`to_string`→`string?`/`len`
 byte-count/`concat`/`slice` clamped) — **no new `Op`** (literal via `Op::Const`, interop via `Op::CallNative`,
 `==` via `Op::Eq`); erases to PHP `string`; `examples/guide/bytes.phg` byte-identical on run/runvm/**real PHP**.
 **M6 W1 COMPLETE** (`docs/specs/2026-06-18-m6-w1-handler-design.md`): the portable `handle(Request) ->

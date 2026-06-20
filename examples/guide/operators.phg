@@ -1,5 +1,5 @@
 package main;
-import core.console;
+import Core.Console;
 
 // Arithmetic, comparison, logical, and unary operators.
 // Integer arithmetic is overflow-checked (a real overflow faults cleanly on both backends).
@@ -7,21 +7,21 @@ import core.console;
 function main() {
     int a = 7;
     int b = 3;
-    console.println("a + b = {a + b}");
-    console.println("a - b = {a - b}");
-    console.println("a * b = {a * b}");
-    console.println("a / b = {a / b}");   // integer division
-    console.println("a % b = {a % b}");
+    Console.println("a + b = {a + b}");
+    Console.println("a - b = {a - b}");
+    Console.println("a * b = {a * b}");
+    Console.println("a / b = {a / b}");   // integer division
+    Console.println("a % b = {a % b}");
 
     float x = 7.0;
     float y = 2.0;
-    console.println("x / y = {x / y}");   // float division
+    Console.println("x / y = {x / y}");   // float division
 
-    console.println("a < b   = {a < b}");
-    console.println("a == 7  = {a == 7}");
-    console.println("a != b  = {a != b}");
-    console.println("and     = {(a > b) && (x > y)}");
-    console.println("or      = {(a < b) || (x > y)}");
-    console.println("not     = {!(a < b)}");
-    console.println("neg     = {-a}");
+    Console.println("a < b   = {a < b}");
+    Console.println("a == 7  = {a == 7}");
+    Console.println("a != b  = {a != b}");
+    Console.println("and     = {(a > b) && (x > y)}");
+    Console.println("or      = {(a < b) || (x > y)}");
+    Console.println("not     = {!(a < b)}");
+    Console.println("neg     = {-a}");
 }

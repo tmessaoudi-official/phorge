@@ -1,8 +1,8 @@
 package main;
-import core.console;
-import core.text;
+import Core.Console;
+import Core.Text;
 
-// M3 Track B Wave 2 — the `core.text` stdlib module. Each function erases to a PHP string builtin
+// M3 Track B Wave 2 — the `Core.Text` stdlib module. Each function erases to a PHP string builtin
 // (`strlen`/`strtoupper`/`explode`/`implode`/`strReplace`/…). ASCII text keeps the Rust backends
 // and PHP byte-identical (`len` is the byte length; `upper`/`lower` are ASCII-case).
 //
@@ -12,21 +12,21 @@ import core.text;
 function main() {
     string greeting = "Hello, Phorge";
 
-    int n = text.len(greeting);
-    string up = text.upper(greeting);
-    string down = text.lower(greeting);
-    string padded = text.trim("   padded   ");
-    console.println("len = {n}, upper = {up}, lower = {down}, trimmed = {padded}");
+    int n = Text.len(greeting);
+    string up = Text.upper(greeting);
+    string down = Text.lower(greeting);
+    string padded = Text.trim("   padded   ");
+    Console.println("len = {n}, upper = {up}, lower = {down}, trimmed = {padded}");
 
     // `contains` returns a bool; render it through an expression-`if` so the output is a string.
-    string has = if (text.contains(greeting, "Phorge")) { "yes" } else { "no" };
-    console.println("contains 'Phorge' = {has}");
+    string has = if (Text.contains(greeting, "Phorge")) { "yes" } else { "no" };
+    Console.println("contains 'Phorge' = {has}");
 
     // split → List<string>, then join with a different separator (the inverse op).
-    List<string> parts = text.split("a,b,c", ",");
-    string rejoined = text.join(parts, " - ");
-    console.println("rejoined = {rejoined}");
+    List<string> parts = Text.split("a,b,c", ",");
+    string rejoined = Text.join(parts, " - ");
+    Console.println("rejoined = {rejoined}");
 
-    string swapped = text.replace(greeting, "Phorge", "World");
-    console.println("replaced = {swapped}");
+    string swapped = Text.replace(greeting, "Phorge", "World");
+    Console.println("replaced = {swapped}");
 }

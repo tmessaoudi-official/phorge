@@ -229,7 +229,7 @@ fn main() {
     // `bench` accepts an optional `--vs-php` flag (transpile + median-time the PHP backend too).
     // Strip it before source resolution so it isn't mistaken for a file/flag.
     let bench_vs_php = cmd == "bench" && args[2..].iter().any(|a| a == "--vs-php");
-    // `check --json` emits machine-readable diagnostics (LSP foothold) instead of the "OK" text.
+    // `check --json` emits machine-readable diagnostics (LSP foothold) instead of the "OK" Text.
     let check_json = cmd == "check" && args[2..].iter().any(|a| a == "--json");
     let rest: Vec<String> = args[2..]
         .iter()

@@ -1,5 +1,5 @@
 package main;
-import core.console;
+import Core.Console;
 
 // Functions in Phorge: typed parameters and a return type.
 // A function with no `-> T` (like `main`) returns nothing.
@@ -26,20 +26,20 @@ function upTo(int n) -> List<int> {
 
 // No return type: this function just prints.
 function banner(string title) {
-    console.println("== {title} ==");
+    Console.println("== {title} ==");
 }
 
 function main() {
     banner("functions");
-    console.println("add(2, 3) = {add(2, 3)}");
-    console.println(greet("phorge"));
-    console.println(shout("phorge"));
+    Console.println("add(2, 3) = {add(2, 3)}");
+    Console.println(greet("phorge"));
+    Console.println(shout("phorge"));
 
     // Call results feed directly into other expressions.
     int total = add(add(1, 2), add(3, 4));
-    console.println("nested add = {total}");
+    Console.println("nested add = {total}");
 
     for (int i in upTo(4)) {
-        console.println("i = {i}");
+        Console.println("i = {i}");
     }
 }

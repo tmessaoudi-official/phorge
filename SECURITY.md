@@ -49,7 +49,7 @@ Phorge is a language toolchain, so the relevant attack surface is **untrusted in
   or send error, a request fault (→ 500), or a slow/idle client (bounded by `--timeout`, default 30s)
   never ends the server; only a persistently failing listener does. **Bind `127.0.0.1` (the default)
   on untrusted networks** and keep `--timeout` set. Note: the request body is capped (8 MiB) but the
-  `core.file` natives a handler may call do **no path sandboxing** — a served program that opens
+  `Core.File` natives a handler may call do **no path sandboxing** — a served program that opens
   caller-influenced paths can read/write any file the server process can. Treat a `phg serve` program
   as you would any unsandboxed web app.
 

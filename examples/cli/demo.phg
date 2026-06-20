@@ -1,11 +1,11 @@
 package main;
-import core.console;
+import Core.Console;
 
 // A tiny program used by ../cli/README.md to demonstrate the phorge CLI:
 // source forms (file / stdin / inline), inspection (check / parse / lex),
 // the diagnostic dictionary (explain), and clean compile/runtime faults.
 function main() {
     int n = 6;
-    console.println("phorge CLI demo");
-    console.println("n doubled = {n * 2}");
+    Console.println("phorge CLI demo");
+    Console.println("n doubled = {n * 2}");
 }

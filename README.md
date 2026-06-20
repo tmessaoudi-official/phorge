@@ -19,7 +19,7 @@ the road to GA.
 
 ```phorge
 package main;
-import core.console;
+import Core.Console;
 
 enum Shape {
     Circle(float radius),
@@ -36,7 +36,7 @@ function area(Shape s) -> float {
 function main() {
     List<Shape> shapes = [Circle(2.0), Rect(3.0, 4.0)];
     for (Shape s in shapes) {
-        console.println("area = {area(s)}");
+        Console.println("area = {area(s)}");
     }
 }
 ```
@@ -104,10 +104,10 @@ chmod +x phg-*-linux-x86_64-musl
 $ phg run examples/hello.phg
 Hello, Phorge!
 
-$ echo 'package main; import core.console; function main() { console.println("{1 + 2}"); }' | phg run -
+$ echo 'package main; import Core.Console; function main() { Console.println("{1 + 2}"); }' | phg run -
 3
 
-$ phg run -e 'package main; import core.console; function main() { console.println("inline!"); }'
+$ phg run -e 'package main; import Core.Console; function main() { Console.println("inline!"); }'
 inline!
 ```
 

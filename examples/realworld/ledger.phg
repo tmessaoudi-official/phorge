@@ -1,5 +1,5 @@
 package main;
-import core.console;
+import Core.Console;
 
 // A bank ledger. Phorge values are immutable, so `apply` returns a *new* Account
 // rather than mutating in place — state evolves by binding fresh names.
@@ -47,12 +47,12 @@ function main() {
     Account a2 = a1.apply(Withdraw(200));
     Account a3 = a2.apply(Transfer(100, "Bob"));
 
-    console.println("{a3.ownerName()} balance = {a3.balance()}c");
+    Console.println("{a3.ownerName()} balance = {a3.balance()}c");
 
     List<Tx> log = [Deposit(500), Withdraw(200), Transfer(100, "Bob")];
     for (Tx t in log) {
-        console.println(describe(t));
+        Console.println(describe(t));
     }
 
-    console.println("1000c after 3y at 5% = {grow(1000, 3)}c");
+    Console.println("1000c after 3y at 5% = {grow(1000, 3)}c");
 }

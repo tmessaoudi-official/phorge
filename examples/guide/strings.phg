@@ -1,5 +1,5 @@
 package main;
-import core.console;
+import Core.Console;
 
 function greet(string who) -> string {
     return "Hello, {who}!";
@@ -9,11 +9,11 @@ function main() {
     string name = "Phorge";
     int n = 3;
     float pi = 3.14;
-    console.println("name = {name}, n = {n}, pi = {pi}");
-    console.println("n + 1 = {n + 1}");
-    console.println(greet(name));
+    Console.println("name = {name}, n = {n}, pi = {pi}");
+    Console.println("n + 1 = {n + 1}");
+    Console.println(greet(name));
 
     // bind first — the interpolation sub-lexer does not nest string literals inside {…}
     string w = "world";
-    console.println("nested call: {greet(w)}");
+    Console.println("nested call: {greet(w)}");
 }

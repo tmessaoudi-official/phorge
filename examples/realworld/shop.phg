@@ -1,5 +1,5 @@
 package main;
-import core.console;
+import Core.Console;
 
 // A shopping cart with per-item discounts.
 
@@ -38,7 +38,7 @@ function main() {
         Item("Gizmo", 1500, Flat(300)),
     ];
     for (Item it in cart) {
-        console.println("{it.nameOf()} = {it.price()}c");
+        Console.println("{it.nameOf()} = {it.price()}c");
     }
-    console.println("5x Widget = {bulk(1000, 5)}c");
+    Console.println("5x Widget = {bulk(1000, 5)}c");
 }

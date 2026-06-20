@@ -1,6 +1,6 @@
 package main;
-import core.console;
-import core.math;
+import Core.Console;
+import Core.Math;
 
 // Float stringification is byte-identical across all three backends. The Phorge interpreter and VM
 // render a `float` with Rust's shortest-round-trip formatting (always positional, never scientific;
@@ -13,7 +13,7 @@ import core.math;
 function main() {
     // Irrational result — 17 significant digits. `sqrt` is IEEE-correctly-rounded, so the Rust
     // backends and PHP compute the same double; both now render all of its digits.
-    float irrational = math.sqrt(2.0);
+    float irrational = Math.sqrt(2.0);
 
     // Large integer-valued float (16 digits) — PHP's default `echo` would show `1.2345...E+15`.
     float big = 1234567890123456.0;
@@ -27,8 +27,8 @@ function main() {
     float whole = 42.0;
     float half = 12.5;
 
-    console.println("sqrt(2) = {irrational}");
-    console.println("big = {big}");
-    console.println("small = {small}, tiny = {tiny}");
-    console.println("pi = {pi}, whole = {whole}, half = {half}");
+    Console.println("sqrt(2) = {irrational}");
+    Console.println("big = {big}");
+    Console.println("small = {small}, tiny = {tiny}");
+    Console.println("pi = {pi}, whole = {whole}, half = {half}");
 }

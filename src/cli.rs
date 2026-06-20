@@ -59,15 +59,15 @@ pub fn help_for(cmd: &str) -> String {
                   usage:\n  phg run <file | - | -e code> [--]\n\n\
                   examples:\n  \
                   phg run hello.phg\n  \
-                  phg run -e 'function main() { console.println(\"hi\"); }'\n  \
-                  echo 'function main(){console.println(\"hi\");}' | phg run -\n"
+                  phg run -e 'function main() { Console.println(\"hi\"); }'\n  \
+                  echo 'function main(){Console.println(\"hi\");}' | phg run -\n"
         }
         "runvm" => {
             "runvm — run the program on the bytecode VM (byte-identical to `run`).\n\n\
                     usage:\n  phg runvm <file | - | -e code>\n\n\
                     examples:\n  \
                     phg runvm hello.phg\n  \
-                    phg runvm -e 'function main() { console.println(\"{2 + 2}\"); }'\n"
+                    phg runvm -e 'function main() { Console.println(\"{2 + 2}\"); }'\n"
         }
         "check" => {
             "check — type-check only; print OK or the type errors, run nothing.\n\n\
@@ -211,8 +211,8 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-RESERVED-PACKAGE" => {
             "E-RESERVED-PACKAGE — a user file claimed a `core` package root.\n\n\
-             The `core.` root is reserved for the standard library (`core.console`, `core.math`,\n\
-             `core.file`, …), like a built-in type name. Root your own packages elsewhere, e.g.\n\
+             The `core.` root is reserved for the standard library (`Core.Console`, `Core.Math`,\n\
+             `Core.File`, …), like a built-in type name. Root your own packages elsewhere, e.g.\n\
              `package app;` or `package app.util;`.\n"
         }
         "E-PKG-PATH" => {
@@ -229,9 +229,9 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-SHADOW-IMPORT" => {
             "E-SHADOW-IMPORT — a local binding shadows an imported module qualifier.\n\n\
-             Everything is namespaced (\"nothing in the wind\"): after `import core.console;` the\n\
+             Everything is namespaced (\"nothing in the wind\"): after `import Core.Console;` the\n\
              name `console` is a module qualifier, so a value binding (variable, parameter, loop or\n\
-             match binding) of the same name would make `console.x()` ambiguous — the run backends\n\
+             match binding) of the same name would make `Console.x()` ambiguous — the run backends\n\
              would read a method call, the transpiler a native. Rename the binding, or drop the\n\
              matching import.\n"
         }
@@ -289,7 +289,7 @@ pub fn explain_text(code: &str) -> Option<String> {
             "E-VENDOR-MAIN — a vendored dependency declared `package main`.\n\n\
              A dependency is a library: it exports dotted packages (e.g. `package acme.strutil;`),\n\
              never the reserved `package main` (which would collide with the consuming program's\n\
-             entry). Fix the dependency to use a dotted package, or remove the stray `main` file.\n"
+             entry). Fix the dependency to use a dotted package, or remove the stray `main` File.\n"
         }
         "E-DUP-DEF" => {
             "E-DUP-DEF — two functions share a name within one package.\n\n\
@@ -302,14 +302,14 @@ pub fn explain_text(code: &str) -> Option<String> {
              An `html\"…\"` hole `{e}` accepts an `Html` fragment (embedded as-is), a `string`, or a\n\
              primitive (`int`/`float`/`bool`, escaped). Anything else — a class, enum, list, optional\n\
              — has no safe HTML rendering. Render it first: build it with the html builders\n\
-             (`html.el(…)`), produce a `string` and let the hole escape it, or wrap audited markup in\n\
-             `html.raw(…)`.\n"
+             (`Html.el(…)`), produce a `string` and let the hole escape it, or wrap audited markup in\n\
+             `Html.raw(…)`.\n"
         }
         "E-HTML-IMPORT" => {
-            "E-HTML-IMPORT — `html\"…\"` was used without importing core.html.\n\n\
-             The `html\"…\"` literal desugars to `html.raw`/`html.text`/`html.concat` kernel calls, so\n\
-             the module must be in scope. Add `import core.html;` (or `import core.html as h;`) to the\n\
-             file.\n"
+            "E-HTML-IMPORT — `html\"…\"` was used without importing Core.Html.\n\n\
+             The `html\"…\"` literal desugars to `Html.raw`/`Html.text`/`Html.concat` kernel calls, so\n\
+             the module must be in scope. Add `import Core.Html;` (or `import Core.Html as h;`) to the\n\
+             File.\n"
         }
         "E-NAME-CASE" => {
             "E-NAME-CASE — a value identifier is not camelCase.\n\n\
@@ -451,7 +451,7 @@ pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, Strin
             for w in &warnings {
                 eprintln!("warning: {}", w.render(diag_src));
             }
-            // De-alias types, erase `html"…"` literals into their `html.concat([…])` kernel calls
+            // De-alias types, erase `html"…"` literals into their `Html.concat([…])` kernel calls
             // (built by the checker, keyed by span), then erase generic type parameters — all three
             // are front-end sugar removed before any backend runs (M-RT S7 adds the last).
             Ok(crate::checker::erase_generics(
@@ -1018,7 +1018,7 @@ mod tests {
     }
 
     const SAMPLE: &str = r#"package main;
-import core.console;
+import Core.Console;
 
 enum Shape {
     Circle(float radius),
@@ -1040,10 +1040,10 @@ class Greeter {
 
 function main() {
     Greeter g = Greeter("Tak");
-    console.println(g.greet());
+    Console.println(g.greet());
     List<Shape> shapes = [Circle(2.0), Rect(3.0, 4.0)];
     for (Shape s in shapes) {
-        console.println("area = {area(s)}");
+        Console.println("area = {area(s)}");
     }
 }
 "#;
@@ -1093,16 +1093,16 @@ function main() {
     #[test]
     fn run_reports_type_error_and_does_not_execute() {
         // `area` returns float; returning an int literal is a type error.
-        let src = wp(r#"import core.console;
-function area() -> float { return 1; } function main() { console.println("{area()}"); }"#);
+        let src = wp(r#"import Core.Console;
+function area() -> float { return 1; } function main() { Console.println("{area()}"); }"#);
         let err = cmd_run(&src).unwrap_err();
         assert!(err.contains("type error"), "{err}");
     }
 
     #[test]
     fn run_reports_runtime_error() {
-        let err = cmd_run(&wp(r#"import core.console;
-function main() { console.println("{1 / 0}"); }"#))
+        let err = cmd_run(&wp(r#"import Core.Console;
+function main() { Console.println("{1 / 0}"); }"#))
         .unwrap_err();
         assert!(err.contains("runtime error"), "{err}");
     }
@@ -1156,8 +1156,8 @@ function main() { console.println("{1 / 0}"); }"#))
 
     #[test]
     fn runvm_matches_run_on_simple_program() {
-        let src = wp(r#"import core.console;
-function main() { int x = 21; console.println("{x + x}"); }"#);
+        let src = wp(r#"import Core.Console;
+function main() { int x = 21; Console.println("{x + x}"); }"#);
         assert_eq!(cmd_runvm(&src).unwrap(), cmd_run(&src).unwrap());
         assert_eq!(cmd_runvm(&src).unwrap(), "42\n");
     }
@@ -1170,8 +1170,8 @@ function main() { int x = 21; console.println("{x + x}"); }"#);
 
     #[test]
     fn runvm_reports_runtime_error_with_prefix() {
-        let err = cmd_runvm(&wp(r#"import core.console;
-function main() { console.println("{1 / 0}"); }"#))
+        let err = cmd_runvm(&wp(r#"import Core.Console;
+function main() { Console.println("{1 / 0}"); }"#))
         .unwrap_err();
         assert!(err.contains("runtime error"), "{err}");
     }
@@ -1185,7 +1185,7 @@ function main() { console.println("{1 / 0}"); }"#))
         // re-lexes interpolated sub-expressions with a fresh lexer that resets to line 1, so a
         // fault inside `"{…}"` reports line 1 (a pre-existing interpolation-position limitation,
         // orthogonal to this task — see the M2 P3.5 roadmap decisions log).
-        let src = wp("import core.console; function main() {\n    int z = 0;\n    int x = 1 / z;\n    console.println(\"{x}\");\n}");
+        let src = wp("import Core.Console; function main() {\n    int z = 0;\n    int x = 1 / z;\n    Console.println(\"{x}\");\n}");
         let err = cmd_runvm(&src).unwrap_err();
         assert!(err.contains("division by zero"), "{err}");
         assert!(err.starts_with("runtime error at 3:"), "{err}");
@@ -1195,7 +1195,7 @@ function main() { console.println("{1 / 0}"); }"#))
     fn run_runtime_error_has_no_line() {
         // The tree-walking interpreter tracks no source position, so its runtime errors keep
         // the position-less `runtime error: …` form (deliberate asymmetry — documented).
-        let src = wp("import core.console; function main() {\n    int z = 0;\n    int x = 1 / z;\n    console.println(\"{x}\");\n}");
+        let src = wp("import Core.Console; function main() {\n    int z = 0;\n    int x = 1 / z;\n    Console.println(\"{x}\");\n}");
         let err = cmd_run(&src).unwrap_err();
         assert!(err.starts_with("runtime error: "), "{err}");
         assert!(!err.contains(" at "), "{err}");
@@ -1205,8 +1205,8 @@ function main() { console.println("{1 / 0}"); }"#))
     fn bench_reports_both_backends_with_identical_output() {
         // Small iteration count keeps the test fast; the report must name both backends, confirm
         // output identity (and the byte count it asserted), and end in a verdict comparing them.
-        let src = wp(r#"import core.console;
-function main() { int x = 21; console.println("{x + x}"); }"#);
+        let src = wp(r#"import Core.Console;
+function main() { int x = 21; Console.println("{x + x}"); }"#);
         let out = bench_report(&src, 5).expect("bench");
         assert!(out.contains("tree-walk run"), "{out}");
         assert!(out.contains("vm run"), "{out}");
@@ -1220,8 +1220,8 @@ function main() { int x = 21; console.println("{x + x}"); }"#);
     fn bench_vs_php_emits_a_php_section() {
         // `--vs-php` always emits a "vs PHP" section — either the comparison (php present) or a
         // graceful skip note (php absent). Both start with "vs PHP", so the test is host-agnostic.
-        let src = wp(r#"import core.console;
-function main() { int x = 21; console.println("{x + x}"); }"#);
+        let src = wp(r#"import Core.Console;
+function main() { int x = 21; Console.println("{x + x}"); }"#);
         let out = bench_report_opts(&src, 3, true).expect("bench");
         assert!(out.contains("vs PHP"), "{out}");
         // The standard report is still present.
@@ -1233,8 +1233,8 @@ function main() { int x = 21; console.println("{x + x}"); }"#);
         // Beyond timing, the report carries a memory block. The header is printed unconditionally
         // (the per-phase numbers are present on Linux, "unavailable" elsewhere), so asserting the
         // header keeps the test platform-independent.
-        let src = wp(r#"import core.console;
-function main() { console.println("hi"); }"#);
+        let src = wp(r#"import Core.Console;
+function main() { Console.println("hi"); }"#);
         let out = bench_report(&src, 5).expect("bench");
         assert!(out.contains("memory"), "{out}");
     }
@@ -1244,15 +1244,15 @@ function main() { console.println("hi"); }"#);
         // The disassembler names the function, prints the type-specialized int-add op, the native
         // call op (the migrated former `Print`), and annotates a constant load with its value.
         let out = cmd_disasm(&wp(
-            r#"import core.console; function main() { int x = 1 + 2; console.println("{x}"); }"#,
+            r#"import Core.Console; function main() { int x = 1 + 2; Console.println("{x}"); }"#,
         ))
         .expect("disasm");
         assert!(out.contains("fn #"), "{out}");
         assert!(out.contains("main/0"), "{out}");
         assert!(out.contains("AddI"), "{out}");
-        // `console.println` lowers to `Op::CallNative`, annotated with the resolved native path.
+        // `Console.println` lowers to `Op::CallNative`, annotated with the resolved native path.
         assert!(out.contains("CallNative"), "{out}");
-        assert!(out.contains("core.console.println"), "{out}");
+        assert!(out.contains("Core.Console.println"), "{out}");
         // Const loads carry a `; <value>` annotation resolved from the pool.
         assert!(out.contains("Const(") && out.contains("; "), "{out}");
     }
@@ -1300,8 +1300,8 @@ function main() { console.println("hi"); }"#);
     #[test]
     fn bench_default_entry_uses_101_samples() {
         // The public entry runs the default-N path end to end (smoke test of `cmd_bench`).
-        let out = cmd_bench(&wp(r#"import core.console;
-function main() { console.println("hi"); }"#))
+        let out = cmd_bench(&wp(r#"import Core.Console;
+function main() { Console.println("hi"); }"#))
         .expect("bench");
         assert!(out.starts_with("phg bench — median of 101"), "{out}");
     }
@@ -1322,7 +1322,7 @@ function main() { console.println("hi"); }"#))
     fn var_transpiles_to_plain_php_assignment() {
         // `var` is erased; PHP locals are untyped, so it emits a bare `$x = …;`.
         let php = cmd_transpile(&wp(
-            "import core.console; function main() { var x = 1; console.println(\"{x}\"); }",
+            "import Core.Console; function main() { var x = 1; Console.println(\"{x}\"); }",
         ))
         .unwrap();
         assert!(php.contains("$x = 1;"), "{php}");
