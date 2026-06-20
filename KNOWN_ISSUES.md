@@ -10,10 +10,11 @@ parse error, non-zero exit) — never a crash.
 These are designed but not in the current surface; using them produces a clean compile-time error,
 not a panic:
 
-- `Set` / tuples (and the generic-typed Map/Set query ops — `keys`/`has`/`size`/`contains`/iteration,
-  plus `core.list` `map`/`filter`/`reduce`. The erased-generics *mechanism* now ships in M-RT S7 — see
-  the *Generics* note below — so these build on it next; `Map<K,V>` literals + `m[k]` indexing ship in
-  M-RT S3 — see the *Maps* note below)
+- `Set` / tuples / map iteration, and `Core.List` `map`/`filter`/`reduce`. The erased-generics
+  *mechanism* ships in M-RT S7, and the first **generic stdlib natives** — `Core.Map` `keys`/`values`/
+  `has`/`size` and `Core.List` `reverse`/`sum` — ship in M-RT S7b (see the *Maps*/*Generic natives*
+  notes below); `Set` itself and the higher-order list ops (the closure-from-native mechanism) build on
+  that path next. `Map<K,V>` literals + `m[k]` indexing ship in M-RT S3 — see the *Maps* note below.
 - `instanceof` against **unions or intersections** (class operands ship in M-RT S1 and interface
   operands in M-RT S2 — see *Behavioral quirks* below; testing against unions/intersections lands
   with those features in later M-RT slices)
@@ -135,16 +136,36 @@ byte-identical on `run`/`runvm` and round-tripped through real PHP. These are de
   a clean, byte-identical fault on both backends; the present-key path is byte-identical to PHP
   `$m[$k]`, and the differential harness excludes the fault case by design. A safe `has`/`get`
   accessor awaits generics.
-- **`keys` / `has` / `size` / iteration / `Set` are not available yet.** These ops are generically
-  typed (`keys(Map<K,V>) -> List<K>`, `has(Map<K,V>, K) -> bool`, …) and hit the same wall that
-  defers `core.list` — native signatures have no type variables. They (and `Set` itself) land with
-  erased generics (M-RT S7, reordered to immediately follow S3).
+- **`keys` / `values` / `has` / `size` now ship as `Core.Map` natives (M-RT S7b).** They are generic
+  (`keys(Map<K,V>) -> List<K>`, `has(Map<K,V>, K) -> bool`, …), inferred at the call site like a
+  generic free function, and erase to `array_keys`/`array_values`/`array_key_exists`/`count`. **Map
+  *iteration* and `Set` itself are still pending** (Set construction is the next S7b sub-slice). Key
+  coercion caveat: PHP arrays coerce integer-like string keys (and bools) to int keys, so `keys()`/
+  `values()` over such a map render differently under PHP than on the Rust backends — use plain
+  (non-numeric) string keys when transpiling, which PHP keeps verbatim. The `run`/`runvm` spine is
+  always byte-identical.
 - **A string-literal index inside a `"{…}"` interpolation nests quotes.** `"{m["k"]}"` ends the
   string early (the shared interpolation rule — see Core.Html). Bind the lookup to a local first:
   `var v = m["k"]; "{v}"`. An `int`/identifier index inside `{…}` is fine.
 - **Bool map keys: PHP coerces `true`/`false` to `1`/`0` as array keys; Phorge keeps them distinct.**
   A `Map<bool, V>` works and is byte-identical *as long as you don't also use `0`/`1` int keys in the
   same map* (PHP would collapse `true` and `1`). Prefer string/int keys when transpiling to PHP.
+
+## Generic natives (M-RT S7b — `Core.List` / `Core.Map`)
+
+The first generic stdlib natives ship this slice: `Core.List` `reverse`/`sum` and `Core.Map`
+`keys`/`values`/`has`/`size`. Their signatures carry `Ty::Param` and unify at the call site exactly
+like a generic free function; the parameter is registry-only and never reaches a backend. Two PHP-leg
+caveats (the `run`/`runvm` spine is always byte-identical):
+
+- **`List.sum` faults on i64 overflow; PHP `array_sum` promotes to float instead.** The checked sum
+  keeps EV-7 (never panics), so a sum exceeding `i64::MAX` is a clean Phorge fault, whereas PHP would
+  silently widen to float. Keep sums within i64 range when transpiling (examples do).
+- **`Map.keys`/`values` key coercion** — see the *Maps* note above: PHP coerces integer-like string
+  keys and bools to int keys, so use plain string keys for byte-identical PHP round-tripping.
+
+Still pending on this path: `Set` (construction + `contains`/`size` — next S7b sub-slice) and the
+higher-order `Core.List` `map`/`filter`/`reduce` (the closure-from-native mechanism).
 
 ## Behavioral quirks
 

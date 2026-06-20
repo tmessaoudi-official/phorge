@@ -32,7 +32,8 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Lambdas / closures | ✅ | `fn(int x) => x * 2` (expression body) and `fn(int x) -> int { … }` (statement body, `-> T` required); capture enclosing locals by value |
 | First-class function values | ✅ | a bare named function is a value (`twice(3, dbl)`); function types `(int) -> int`; transpile to PHP arrow fn / `function(){} use()` / first-class callable |
 | `Map<K, V>` literals `[k => v]` + indexing `m[k]` | ✅ | keys are `int`/`bool`/`string`; insertion-ordered; a missing key faults cleanly; transpiles to a PHP `[k => v]` array (M-RT S3) |
-| `Set` / tuples / map `keys`/`has`/`size`/iteration | 🚧 M-RT | the erased-generics mechanism shipped (S7); the generic-typed Map/Set query ops + `Set` itself + `core.list` (`map`/`filter`/`reduce`) build on it next |
+| `Core.Map` query: `keys`/`values`/`has`/`size`; `Core.List` `reverse`/`sum` | ✅ | the first generic stdlib natives — type params inferred at the call site, erased to PHP `array_keys`/`array_values`/`array_key_exists`/`count`/`array_reverse`/`array_sum` (M-RT S7b) |
+| `Set` / tuples / map iteration; `Core.List` `map`/`filter`/`reduce` | 🚧 M-RT | `Set` itself (S7b next) and the higher-order list ops (the closure-from-native mechanism) build on the shipped generic-native path |
 | Null safety / optionals (`T?`) | ✅ | `??`, `?.`, `if (var x = opt)`, checked `opt!`, `match` over `T?`; non-optional `T` is never null (compile-time) |
 | Pipe operator `\|>` | ✅ | `x \|> f ≡ f(x)`; left-associative, lowered to a call in the parser; transpiles to a plain PHP call |
 | Type test `instanceof` | ✅ | `value instanceof T` → `bool` where `T` is a class **or interface** (M-RT S2); smart-casts the operand inside `if (x instanceof T)`; transpiles to PHP `instanceof` |

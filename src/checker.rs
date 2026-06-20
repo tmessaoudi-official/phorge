@@ -1966,8 +1966,19 @@ impl Checker {
         let n = &crate::native::registry()[idx];
         let leaf = n.module.rsplit('.').next().unwrap_or(n.module);
         let label = format!("{leaf}.{}", n.name);
-        self.check_args(&label, &n.params, args, span);
-        n.ret.clone()
+        // A native whose stored signature carries a type parameter (`Map.keys(Map<K,V>) -> List<K>`,
+        // `List.reverse(List<T>) -> List<T>`) is checked exactly like a generic free function: unify
+        // the declared params against the argument types, then substitute into the return (M-RT S7b).
+        // `θ` lives only in `check_generic_call`; the native's `Ty::Param` is registry-only and never
+        // reaches a backend (the compiler types a native call by expression shape → `CTy::Other`, and
+        // the transpiler emits via the `php` closure). `n` borrows the `'static` registry, so passing
+        // `&n.params`/`&n.ret` alongside `&mut self` does not alias.
+        if n.params.iter().any(ty_has_param) || ty_has_param(&n.ret) {
+            self.check_generic_call(&label, &n.params, &n.ret, args, span)
+        } else {
+            self.check_args(&label, &n.params, args, span);
+            n.ret.clone()
+        }
     }
 
     /// Check a single call argument against its expected parameter type. Identical to `check_expr`
@@ -2600,6 +2611,19 @@ fn apply_subst(ty: &Ty, theta: &HashMap<String, Ty>) -> Ty {
             Box::new(apply_subst(r, theta)),
         ),
         other => other.clone(),
+    }
+}
+
+/// Whether a type contains a `Ty::Param` anywhere (recursing through containers/optionals/functions).
+/// A native whose stored signature contains one is checked via call-site unification, exactly like a
+/// generic free function (M-RT S7b).
+fn ty_has_param(ty: &Ty) -> bool {
+    match ty {
+        Ty::Param(_) => true,
+        Ty::List(e) | Ty::Set(e) | Ty::Optional(e) => ty_has_param(e),
+        Ty::Map(k, v) => ty_has_param(k) || ty_has_param(v),
+        Ty::Function(ps, r) => ps.iter().any(ty_has_param) || ty_has_param(r),
+        _ => false,
     }
 }
 
@@ -4014,6 +4038,48 @@ function main() { Console.println(42); }"#,
         // member call cannot resolve to the native and is an error.
         let errs = errors_of(r#"function main() { Console.println("hi"); }"#);
         assert!(!errs.is_empty(), "expected an error without the import");
+    }
+
+    #[test]
+    fn generic_native_call_infers_and_substitutes() {
+        // A generic native (`Map.keys(Map<K,V>) -> List<K>`, `List.reverse(List<T>) -> List<T>`) is
+        // unified at the call site exactly like a generic free function — its `Ty::Param` resolves to
+        // the concrete argument types, so a well-typed program type-checks clean (M-RT S7b).
+        assert!(errors_of(
+            r#"package main;
+import Core.Console;
+import Core.List;
+import Core.Map;
+function main() {
+    var nums = [1, 2, 3];
+    var rev = List.reverse(nums);
+    var total = List.sum(rev);
+    var ages = ["a" => 10, "b" => 20];
+    var ks = Map.keys(ages);
+    var n = Map.size(ages);
+    Console.println("{total} {n}");
+    for (string k in ks) { Console.println(k); }
+}"#
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn generic_native_key_type_mismatch_errors() {
+        // `Map.has(Map<string,int>, K)` unifies `K = string` from the receiver, so an `int` key is a
+        // type error — the unifier propagates the binding across arguments.
+        let errs = errors_of(
+            r#"package main;
+import Core.Map;
+function main() {
+    var ages = ["a" => 10];
+    var bad = Map.has(ages, 7);
+}"#,
+        );
+        assert!(
+            errs.iter().any(|e| e.message.contains("Map.has")),
+            "{errs:?}"
+        );
     }
 
     #[test]

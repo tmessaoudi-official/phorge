@@ -1,0 +1,41 @@
+// Core.List + Core.Map query natives (M-RT S7b) — the first *generic* stdlib natives. Their
+// signatures carry type parameters (`List.reverse(List<T>) -> List<T>`, `Map.keys(Map<K,V>) ->
+// List<K>`), inferred at the call site by the same unifier as a generic free function — no
+// monomorphization, the type params never reach a backend. Byte-identical on run / runvm / real PHP.
+//
+// Map keys here are plain (non-numeric) strings: PHP arrays coerce integer-like string keys and
+// bools to int keys, so `Map.keys` over such a map would render differently under PHP (KNOWN_ISSUES);
+// plain string keys are kept verbatim. Integer arithmetic only (PHP's float `/` never enters).
+package main;
+
+import Core.Console;
+import Core.List;
+import Core.Map;
+
+function main() {
+    // --- Core.List: reverse (generic) + sum (concrete List<int> -> int) ---
+    var nums = [1, 2, 3, 4, 5];
+    var rev = List.reverse(nums);
+    var head = rev[0];
+    Console.println("sum        = {List.sum(nums)}");
+    Console.println("reversed[0] = {head}");
+    Console.println("sum(rev)   = {List.sum(rev)}");
+
+    // --- Core.Map: size / has / keys / values, insertion-ordered ---
+    var ages = ["alice" => 30, "bob" => 25, "carol" => 41];
+    var hasBob = Map.has(ages, "bob");
+    var hasDave = Map.has(ages, "dave");
+    Console.println("size       = {Map.size(ages)}");
+    Console.println("has bob    = {hasBob}");
+    Console.println("has dave   = {hasDave}");
+
+    // keys() preserves insertion order; index back into the map by each key.
+    for (string name in Map.keys(ages)) {
+        var age = ages[name];
+        Console.println("{name} -> {age}");
+    }
+
+    // values() feeds straight into List.sum.
+    var total = List.sum(Map.values(ages));
+    Console.println("total age  = {total}");
+}

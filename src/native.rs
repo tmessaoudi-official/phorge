@@ -946,6 +946,163 @@ fn html_natives() -> Vec<NativeFn> {
     ]
 }
 
+// ---- Core.List ----------------------------------------------------------------------------------
+// List query natives. These are the first *generic* natives: their signatures carry `Ty::Param`
+// (`reverse(List<T>) -> List<T>`), so the checker routes a call through the same call-site
+// unification as a generic free function (`check_native_call` → `check_generic_call` when the sig
+// has a type parameter). The registry's `Ty::Param` lives only in the stored signature (consumed by
+// the checker's unifier); it never reaches a backend — the compiler types a native call by its
+// *expression shape* (→ `CTy::Other`) and the transpiler emits via the `php` closure, so neither
+// materializes the native's `ret` (M-RT S7b). `sum` is concrete `List<int> -> int` and routes through
+// the ordinary non-generic path. The higher-order ops (`map`/`filter`/`reduce`) land in a later slice.
+
+fn list_reverse(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs)] => {
+            let mut v = (**xs).clone();
+            v.reverse();
+            Ok(Value::List(std::rc::Rc::new(v)))
+        }
+        _ => Err("List.reverse expects (List<T>)".into()),
+    }
+}
+fn list_sum(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs)] => {
+            let mut acc: i64 = 0;
+            for x in xs.iter() {
+                match x {
+                    // Checked: an overflowing sum faults cleanly (EV-7), like the int arithmetic
+                    // kernels. PHP `array_sum` would instead promote to float on overflow — examples
+                    // stay well within i64 range (caveat in KNOWN_ISSUES).
+                    Value::Int(n) => {
+                        acc = acc
+                            .checked_add(*n)
+                            .ok_or_else(|| "integer overflow in List.sum".to_string())?;
+                    }
+                    other => {
+                        return Err(format!(
+                            "List.sum expects List<int>, found element of type {}",
+                            other.type_name()
+                        ))
+                    }
+                }
+            }
+            Ok(Value::Int(acc))
+        }
+        _ => Err("List.sum expects (List<int>)".into()),
+    }
+}
+
+/// The `Core.List` registry entries (M-RT S7b). `reverse` is generic over the element type; `sum` is
+/// concrete `List<int> -> int`. Both erase to the PHP array builtin of the same shape (D-L9).
+fn list_natives() -> Vec<NativeFn> {
+    let t = || Ty::Param("T".into());
+    vec![
+        NativeFn {
+            module: "Core.List",
+            name: "reverse",
+            params: vec![Ty::List(Box::new(t()))],
+            ret: Ty::List(Box::new(t())),
+            eval: list_reverse,
+            // array_reverse re-indexes a list (sequential keys) — byte-identical to the Rust Vec.
+            php: |a| format!("array_reverse({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "sum",
+            params: vec![Ty::List(Box::new(Ty::Int))],
+            ret: Ty::Int,
+            eval: list_sum,
+            php: |a| format!("array_sum({})", parg(a, 0)),
+        },
+    ]
+}
+
+// ---- Core.Map -----------------------------------------------------------------------------------
+// Map query natives, all generic over the key/value types (`keys(Map<K,V>) -> List<K>`). They read
+// the insertion-ordered `Value::Map` rep (a `Vec<(HKey, Value)>`, not a `HashMap` — risk R1), so
+// `keys`/`values` are byte-identical with PHP's order-preserving `array_keys`/`array_values`. KEY
+// COERCION CAVEAT (KNOWN_ISSUES): PHP arrays coerce integer-like string keys and bools to int keys,
+// so a `keys()` over such a map renders differently under PHP than on the Rust backends; examples use
+// plain (non-numeric) string keys, which PHP keeps verbatim. The run↔runvm spine is always identical.
+
+fn map_keys(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Map(m)] => Ok(Value::List(std::rc::Rc::new(
+            m.iter().map(|(k, _)| k.to_value()).collect(),
+        ))),
+        _ => Err("Map.keys expects (Map<K, V>)".into()),
+    }
+}
+fn map_values(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Map(m)] => Ok(Value::List(std::rc::Rc::new(
+            m.iter().map(|(_, v)| v.clone()).collect(),
+        ))),
+        _ => Err("Map.values expects (Map<K, V>)".into()),
+    }
+}
+fn map_has(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Map(m), key] => {
+            let hk = crate::value::HKey::from_value(key)
+                .ok_or_else(|| format!("invalid map key: {}", key.type_name()))?;
+            Ok(Value::Bool(m.iter().any(|(k, _)| *k == hk)))
+        }
+        _ => Err("Map.has expects (Map<K, V>, K)".into()),
+    }
+}
+fn map_size(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Map(m)] => Ok(Value::Int(m.len() as i64)),
+        _ => Err("Map.size expects (Map<K, V>)".into()),
+    }
+}
+
+/// The `Core.Map` registry entries (M-RT S7b). All generic over `K`/`V`; each erases to a PHP array
+/// builtin (D-L9). NOTE the PHP arg order for `has`: `array_key_exists(key, array)` — key first.
+fn map_natives() -> Vec<NativeFn> {
+    let k = || Ty::Param("K".into());
+    let v = || Ty::Param("V".into());
+    let map = || Ty::Map(Box::new(k()), Box::new(v()));
+    vec![
+        NativeFn {
+            module: "Core.Map",
+            name: "keys",
+            params: vec![map()],
+            ret: Ty::List(Box::new(k())),
+            eval: map_keys,
+            php: |a| format!("array_keys({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Map",
+            name: "values",
+            params: vec![map()],
+            ret: Ty::List(Box::new(v())),
+            eval: map_values,
+            php: |a| format!("array_values({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Map",
+            name: "has",
+            params: vec![map(), k()],
+            ret: Ty::Bool,
+            eval: map_has,
+            // PHP `array_key_exists(key, array)` — key first.
+            php: |a| format!("array_key_exists({}, {})", parg(a, 1), parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Map",
+            name: "size",
+            params: vec![map()],
+            ret: Ty::Int,
+            eval: map_size,
+            php: |a| format!("count({})", parg(a, 0)),
+        },
+    ]
+}
+
 /// Construct the native table once. Order is load-bearing: [`CONSOLE_PRINTLN`] pins slot 0; every
 /// other native is resolved by `(module, name)` (or leaf+name) at compile time, so appended order is
 /// free. Modules are grouped by `*_natives()` builders (one per `core.*` leaf).
@@ -968,6 +1125,8 @@ fn build() -> Vec<NativeFn> {
     registry.extend(file_natives());
     registry.extend(bytes_natives());
     registry.extend(html_natives());
+    registry.extend(list_natives());
+    registry.extend(map_natives());
     // Pinned-slot invariant: the constant the compiler bakes into `Op::CallNative` must address the
     // entry it names. Cheap one-time check at first `registry()` access.
     assert_eq!(
@@ -1391,6 +1550,122 @@ mod tests {
         assert_eq!(
             index_of_by_leaf("File", "exists"),
             index_of("Core.File", "exists")
+        );
+    }
+
+    #[test]
+    fn list_natives_eval_and_emit() {
+        let mut o = String::new();
+        // reverse: generic over the element type — works on any List, byte-identical to array_reverse.
+        let nums = Value::List(std::rc::Rc::new(vec![
+            Value::Int(1),
+            Value::Int(2),
+            Value::Int(3),
+        ]));
+        match list_reverse(std::slice::from_ref(&nums), &mut o).unwrap() {
+            Value::List(xs) => {
+                assert_eq!(xs.len(), 3);
+                assert!(matches!(xs[0], Value::Int(3)));
+                assert!(matches!(xs[2], Value::Int(1)));
+            }
+            other => panic!("reverse returned {other:?}"),
+        }
+        // sum: concrete List<int> -> int.
+        assert!(matches!(
+            list_sum(std::slice::from_ref(&nums), &mut o),
+            Ok(Value::Int(6))
+        ));
+        // sum over the empty list is 0.
+        assert!(matches!(
+            list_sum(&[Value::List(std::rc::Rc::new(vec![]))], &mut o),
+            Ok(Value::Int(0))
+        ));
+        // EV-7: an overflowing sum faults cleanly, never panics.
+        let huge = Value::List(std::rc::Rc::new(vec![Value::Int(i64::MAX), Value::Int(1)]));
+        assert!(list_sum(&[huge], &mut o).is_err());
+        // a non-int element is a clean fault.
+        assert!(list_sum(
+            &[Value::List(std::rc::Rc::new(vec![Value::Str("x".into())]))],
+            &mut o
+        )
+        .is_err());
+        // PHP erasure + both index forms + the generic return type is carried in the registry.
+        assert_eq!(
+            (registry()[index_of("Core.List", "reverse").unwrap()].php)(&["$xs".into()]),
+            "array_reverse($xs)"
+        );
+        assert_eq!(
+            (registry()[index_of("Core.List", "sum").unwrap()].php)(&["$xs".into()]),
+            "array_sum($xs)"
+        );
+        assert_eq!(
+            index_of_by_leaf("List", "reverse"),
+            index_of("Core.List", "reverse")
+        );
+        assert_eq!(
+            registry()[index_of("Core.List", "reverse").unwrap()].ret,
+            Ty::List(Box::new(Ty::Param("T".into())))
+        );
+    }
+
+    #[test]
+    fn map_natives_eval_and_emit() {
+        use crate::value::HKey;
+        let mut o = String::new();
+        // insertion-ordered map ["a"=>1, "b"=>2]; keys/values preserve that order.
+        let m = Value::Map(std::rc::Rc::new(vec![
+            (HKey::Str("a".into()), Value::Int(1)),
+            (HKey::Str("b".into()), Value::Int(2)),
+        ]));
+        match map_keys(std::slice::from_ref(&m), &mut o).unwrap() {
+            Value::List(ks) => {
+                assert_eq!(ks.len(), 2);
+                assert!(matches!(&ks[0], Value::Str(s) if s == "a"));
+                assert!(matches!(&ks[1], Value::Str(s) if s == "b"));
+            }
+            other => panic!("keys returned {other:?}"),
+        }
+        match map_values(std::slice::from_ref(&m), &mut o).unwrap() {
+            Value::List(vs) => {
+                assert!(matches!(vs[0], Value::Int(1)));
+                assert!(matches!(vs[1], Value::Int(2)));
+            }
+            other => panic!("values returned {other:?}"),
+        }
+        assert!(matches!(
+            map_has(&[m.clone(), Value::Str("a".into())], &mut o),
+            Ok(Value::Bool(true))
+        ));
+        assert!(matches!(
+            map_has(&[m.clone(), Value::Str("z".into())], &mut o),
+            Ok(Value::Bool(false))
+        ));
+        // a non-hashable key (float) is a clean fault, never a panic (EV-7).
+        assert!(map_has(&[m.clone(), Value::Float(1.0)], &mut o).is_err());
+        assert!(matches!(
+            map_size(std::slice::from_ref(&m), &mut o),
+            Ok(Value::Int(2))
+        ));
+        // PHP erasures (note has: array_key_exists(key, array) — key first) + generic return types.
+        let php = |n: &str, a: &[&str]| {
+            let args: Vec<String> = a.iter().map(|s| (*s).to_string()).collect();
+            (registry()[index_of("Core.Map", n).unwrap()].php)(&args)
+        };
+        assert_eq!(php("keys", &["$m"]), "array_keys($m)");
+        assert_eq!(php("values", &["$m"]), "array_values($m)");
+        assert_eq!(php("has", &["$m", "$k"]), "array_key_exists($k, $m)");
+        assert_eq!(php("size", &["$m"]), "count($m)");
+        assert_eq!(
+            index_of_by_leaf("Map", "keys"),
+            index_of("Core.Map", "keys")
+        );
+        assert_eq!(
+            registry()[index_of("Core.Map", "keys").unwrap()].ret,
+            Ty::List(Box::new(Ty::Param("K".into())))
+        );
+        assert_eq!(
+            registry()[index_of("Core.Map", "values").unwrap()].ret,
+            Ty::List(Box::new(Ty::Param("V".into())))
         );
     }
 

@@ -6,6 +6,23 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — generic stdlib natives: `Core.List` & `Core.Map` query ops (Rich Types, M-RT S7b)
+
+- **The first generic native functions**: `Core.List` `reverse(List<T>) -> List<T>` and
+  `sum(List<int>) -> int`; `Core.Map` `keys(Map<K,V>) -> List<K>`, `values(Map<K,V>) -> List<V>`,
+  `has(Map<K,V>, K) -> bool`, `size(Map<K,V>) -> int`. A native whose stored signature carries a
+  `Ty::Param` is now checked at the call site by the **same unifier as a generic free function**
+  (`check_native_call` routes through `check_generic_call` when the signature has a type parameter),
+  so the parameter resolves to the concrete argument types and the result type is substituted. No new
+  `Op`, no `Value` change: each erases to a PHP array builtin (`array_reverse`/`array_sum`/`array_keys`/
+  `array_values`/`array_key_exists`/`count`), and the native's `Ty::Param` is registry-only — the
+  compiler types a native call by expression shape (`CTy::Other`) and the transpiler emits via the
+  `php` closure, so no type variable reaches a backend. Byte-identical `run ≡ runvm ≡ real PHP` (new
+  `examples/guide/collections-query.phg`, oracle-gated). Caveats (KNOWN_ISSUES): `List.sum` faults on
+  i64 overflow where PHP `array_sum` promotes to float; PHP coerces integer-like/bool map keys, so
+  `keys`/`values` round-trip byte-identically only with plain string keys. (`Set` and the higher-order
+  `map`/`filter`/`reduce` build on this path in the next S7b sub-slices.)
+
 ### Changed — stdlib namespace is now PascalCase `Core.*` (namespace reshape)
 
 - **The standard-library root and leaf modules are PascalCase**: `Core.Console` → **`Core.Console`**,
