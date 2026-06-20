@@ -25,7 +25,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::bundle::cross::fnv1a_64;
 use crate::lock::{Lock, LockEntry};
-use crate::manifest::{Manifest, Pin, Project};
+use crate::manifest::{validate_path_component, Manifest, Pin, Project};
 
 /// Vendor every `[require]` dependency of `project` and (re)write `phorge.lock`. Returns a short
 /// human-readable summary. Network access happens here and nowhere else.
@@ -46,10 +46,34 @@ pub fn vendor(project: &Project) -> Result<String, String> {
             Pin::Tag(t) => t,
             Pin::Rev(r) => r,
         };
+        // Security boundary (GA blocker B1): a `git`/`pin` value from an attacker-authored
+        // `phorge.toml` reaches the `git` CLI. Reject anything that would be read as a git option
+        // (leading `-`) or a command-executing remote helper (`ext::`/`file::`) before it is passed.
+        validate_git_arg("dependency git URL", &dep.git)?;
+        validate_git_arg("dependency pin", pin)?;
+        // Defensive re-check of the name at the join boundary (already validated at parse time, but a
+        // `Manifest` constructed by other means must not be trusted) — GA blocker B2.
+        validate_path_component("dependency name", &dep.name)?;
         // Clone into a unique temp dir, check out the pin, resolve it to a full SHA.
         let clone_dir = unique_temp_dir(&dep.name);
         let _guard = TempDirGuard(clone_dir.clone());
-        git(&["clone", "--quiet", &dep.git, path_str(&clone_dir)?], None)?;
+        // `--` ends option parsing so a hostile URL can never be an option; `protocol.ext.allow=never`
+        // disables the command-executing `ext::` remote helper at the git level (the standard
+        // `file://` scheme, used by the offline test fixtures, is a different protocol and stays
+        // enabled). `checkout` takes no `--` (that would force the ref to be read as a pathspec); the
+        // leading-`-` rejection above is its guard.
+        git(
+            &[
+                "-c",
+                "protocol.ext.allow=never",
+                "clone",
+                "--quiet",
+                "--",
+                &dep.git,
+                path_str(&clone_dir)?,
+            ],
+            None,
+        )?;
         git(&["checkout", "--quiet", pin], Some(&clone_dir))?;
         let rev = git(&["rev-parse", "HEAD"], Some(&clone_dir))?
             .trim()
@@ -145,6 +169,32 @@ fn git(args: &[&str], cwd: Option<&Path>) -> Result<String, String> {
         ));
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// Reject a `git` URL or a `pin` (tag/rev) value that could subvert the `git` invocation. Combined
+/// with the `--` separator and `-c protocol.ext.allow=never` at the call site, this closes the
+/// `phg vendor` argument-injection / arbitrary-command-execution vector (GA blocker B1):
+/// - a leading `-` would be parsed as a git option (e.g. `--upload-pack=…`);
+/// - `ext::` / `file::` are git *remote-helper transports* — `ext::sh -c '…'` runs an arbitrary
+///   command on clone. (The standard `file://` URL scheme is NOT one of these and stays allowed:
+///   `"file://…".starts_with("file::")` is false, so the offline `file://` test fixtures pass.)
+fn validate_git_arg(kind: &str, value: &str) -> Result<(), String> {
+    if value.is_empty() {
+        return Err(format!("{kind} must not be empty"));
+    }
+    if value.starts_with('-') {
+        return Err(format!(
+            "{kind} `{value}` must not start with `-` (it would be parsed as a git option)"
+        ));
+    }
+    let lower = value.to_ascii_lowercase();
+    if lower.starts_with("ext::") || lower.starts_with("file::") {
+        return Err(format!(
+            "{kind} `{value}` uses a disallowed git transport \
+             (`ext::`/`file::` can execute arbitrary commands)"
+        ));
+    }
+    Ok(())
 }
 
 /// Recursively copy every `.phg` file under `src` into `dest`, preserving relative paths. Returns
@@ -269,7 +319,7 @@ impl Drop for TempDirGuard {
 
 #[cfg(test)]
 mod tests {
-    use super::unique_temp_dir;
+    use super::{unique_temp_dir, validate_git_arg};
 
     /// Two clones of the SAME dependency within one process must target distinct paths — otherwise
     /// parallel `cargo test` (one process, shared pid) races on `git clone` into a non-empty dir.
@@ -278,5 +328,24 @@ mod tests {
         let a = unique_temp_dir("acme/greet");
         let b = unique_temp_dir("acme/greet");
         assert_ne!(a, b, "same-dep clone dirs must differ per call");
+    }
+
+    /// B1: option-injection and command-executing remote helpers are rejected; legitimate URLs
+    /// (including the `file://` scheme the offline fixtures use) and pins are accepted.
+    #[test]
+    fn validate_git_arg_blocks_injection_allows_real_urls() {
+        // Rejected: leading-dash option injection, and the ext::/file:: command transports.
+        assert!(validate_git_arg("git", "--upload-pack=/bin/sh").is_err());
+        assert!(validate_git_arg("git", "ext::sh -c 'touch pwned'").is_err());
+        assert!(validate_git_arg("git", "EXT::sh -c x").is_err()); // case-insensitive
+        assert!(validate_git_arg("git", "file::/tmp/evil").is_err());
+        assert!(validate_git_arg("pin", "-v9").is_err());
+        assert!(validate_git_arg("git", "").is_err());
+        // Accepted: the file:// scheme (NOT file::), https, ssh shorthand, ordinary tags/revs.
+        assert!(validate_git_arg("git", "file:///tmp/upstream").is_ok());
+        assert!(validate_git_arg("git", "https://github.com/acme/lib.phg").is_ok());
+        assert!(validate_git_arg("git", "git@github.com:acme/lib.phg").is_ok());
+        assert!(validate_git_arg("pin", "v1.2.0").is_ok());
+        assert!(validate_git_arg("pin", "a1b2c3d4e5").is_ok());
     }
 }

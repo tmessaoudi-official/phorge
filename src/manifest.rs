@@ -145,6 +145,9 @@ impl Manifest {
             return Err("phorge.toml: `module` must not be empty".to_string());
         }
         let source = source.unwrap_or_else(|| Self::DEFAULT_SOURCE.to_string());
+        // `source` is joined onto the project root (`<root>/<source>`) — same boundary as a
+        // dependency name (GA blocker B2): no `..`, no absolute escape.
+        validate_path_component("source", &source).map_err(|e| format!("phorge.toml: {e}"))?;
         Ok(Manifest {
             module,
             version,
@@ -257,9 +260,57 @@ fn pascal_case(seg: &str) -> String {
     }
 }
 
+/// Validate a manifest value that is later joined onto a filesystem path (a dependency `name` or the
+/// `source` root). The value MUST stay inside the project / vendor tree: it is rejected if it is
+/// absolute (`/…`, `\…`, or a `X:` drive prefix), contains a `..` traversal segment, has an empty
+/// segment (leading / trailing / double `/`), has a segment beginning with `-` (would be read as an
+/// option by a downstream tool), or contains a character outside the conservative portable set
+/// `[A-Za-z0-9._-]`. This is the parse-time security boundary for `phg vendor`'s path joins
+/// (`vendor/<name>`, `<root>/<source>`) — GA blocker B2. A single `.` segment (i.e. `source = "."`)
+/// is allowed (current directory, no escape).
+pub(crate) fn validate_path_component(kind: &str, value: &str) -> Result<(), String> {
+    if value.is_empty() {
+        return Err(format!("{kind} must not be empty"));
+    }
+    if value.starts_with('/') || value.starts_with('\\') || value.as_bytes().get(1) == Some(&b':') {
+        return Err(format!(
+            "{kind} `{value}` must be a relative path inside the project, not absolute"
+        ));
+    }
+    for seg in value.split('/') {
+        if seg.is_empty() {
+            return Err(format!(
+                "{kind} `{value}` has an empty path segment (leading, trailing, or double `/`)"
+            ));
+        }
+        if seg == ".." {
+            return Err(format!(
+                "{kind} `{value}` must not contain a `..` path-traversal segment"
+            ));
+        }
+        if seg.starts_with('-') {
+            return Err(format!(
+                "{kind} `{value}` segment `{seg}` must not start with `-`"
+            ));
+        }
+        if !seg
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+        {
+            return Err(format!(
+                "{kind} `{value}` segment `{seg}` has an invalid character (allowed: A-Z a-z 0-9 . _ -)"
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Parse one dependency value — either an inline table `{ git = "…", tag|rev = "…" }`
 /// or the `"<git-url>@<tag>"` string shorthand.
 fn parse_dep(name: String, val: &str) -> Result<Dependency, String> {
+    // The name becomes a path component (`vendor/<name>`) at vendor/load time — validate it here at
+    // the boundary so a traversal/absolute name can never reach a filesystem join (GA blocker B2).
+    validate_path_component("dependency name", &name)?;
     let v = val.trim();
     let (git, pin) = if v.starts_with('{') {
         parse_inline_table(&name, v)?
@@ -474,6 +525,66 @@ mod tests {
     fn unquoted_value_errors() {
         let err = Manifest::parse("module = acme/app").unwrap_err();
         assert!(err.contains("expected a quoted string"), "got: {err}");
+    }
+
+    // --- B2: path-traversal / injection rejection -------------------------
+
+    #[test]
+    fn dep_name_traversal_rejected() {
+        let src = "module = \"a/b\"\n[require]\n\"../../etc\" = \"u@v1\"";
+        let err = Manifest::parse(src).unwrap_err();
+        assert!(err.contains("path-traversal"), "got: {err}");
+    }
+
+    #[test]
+    fn dep_name_absolute_rejected() {
+        let src = "module = \"a/b\"\n[require]\n\"/etc/evil\" = \"u@v1\"";
+        let err = Manifest::parse(src).unwrap_err();
+        assert!(err.contains("not absolute"), "got: {err}");
+    }
+
+    #[test]
+    fn dep_name_bad_char_rejected() {
+        // A `..`-free but still escaping/odd character (`$`) must be rejected by the charset gate.
+        let src = "module = \"a/b\"\n[require]\n\"acme/p$wn\" = \"u@v1\"";
+        let err = Manifest::parse(src).unwrap_err();
+        assert!(err.contains("invalid character"), "got: {err}");
+    }
+
+    #[test]
+    fn dep_name_empty_segment_rejected() {
+        let src = "module = \"a/b\"\n[require]\n\"acme//pkg\" = \"u@v1\"";
+        let err = Manifest::parse(src).unwrap_err();
+        assert!(err.contains("empty path segment"), "got: {err}");
+    }
+
+    #[test]
+    fn source_traversal_rejected() {
+        let err = Manifest::parse("module = \"a/b\"\nsource = \"../outside\"").unwrap_err();
+        assert!(err.contains("path-traversal"), "got: {err}");
+    }
+
+    #[test]
+    fn source_absolute_rejected() {
+        let err = Manifest::parse("module = \"a/b\"\nsource = \"/tmp/x\"").unwrap_err();
+        assert!(err.contains("not absolute"), "got: {err}");
+    }
+
+    #[test]
+    fn source_dot_is_allowed() {
+        // `source = "."` (project root as source root) is a legitimate, non-escaping value.
+        let m = Manifest::parse("module = \"a/b\"\nsource = \".\"").unwrap();
+        assert_eq!(m.source, ".");
+    }
+
+    #[test]
+    fn valid_dep_names_still_accepted() {
+        // Composer-style and dotted/underscored/hyphenated names all pass the boundary.
+        for name in ["acme/parser", "acme/json.phg", "tool_box", "a-b/c.d_e"] {
+            let src = format!("module = \"a/b\"\n[require]\n\"{name}\" = \"u@v1\"");
+            let m = Manifest::parse(&src).unwrap_or_else(|e| panic!("`{name}` rejected: {e}"));
+            assert_eq!(m.require[0].name, name);
+        }
     }
 
     #[test]

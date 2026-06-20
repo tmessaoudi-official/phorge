@@ -28,7 +28,7 @@ use std::path::{Path, PathBuf};
 
 use crate::ast::{ClassMember, Expr, Item, MatchArm, Program, Stmt, StrPart};
 use crate::lexer::lex;
-use crate::manifest::Project;
+use crate::manifest::{validate_path_component, Project};
 use crate::parser::Parser;
 use crate::token::Span;
 
@@ -108,6 +108,9 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
     // Vendored dependencies (M5 S3): consulted only when `[require]` is non-empty, always offline —
     // each declared dependency must already be vendored under `vendor/<name>/` (run `phg vendor`).
     for dep in &project.manifest.require {
+        // Defensive re-check before joining the name onto a path (validated at parse time too) — a
+        // traversal name must never reach `collect_phg` on an out-of-tree directory (GA blocker B2).
+        validate_path_component("dependency name", &dep.name)?;
         let dep_root = vendor_root.join(&dep.name);
         let dep_files = collect_phg(&dep_root)?;
         if dep_files.is_empty() {

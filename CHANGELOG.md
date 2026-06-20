@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Security — `phg vendor` supply-chain hardening (GA blockers B1, B2)
+
+- **Git argument-injection / arbitrary-command-execution closed.** `phg vendor` passed a
+  dependency's `git` URL and `tag`/`rev` pin straight to the `git` CLI. An attacker-authored
+  `phorge.toml` could therefore inject git options (a leading `-`, e.g. `--upload-pack=…`) or a
+  command-executing remote helper (`ext::sh -c '…'`). The clone now uses a `--` end-of-options
+  separator and `-c protocol.ext.allow=never`, and both the URL and the pin are rejected up front if
+  they start with `-` or use the `ext::`/`file::` transports. The ordinary `file://` URL scheme (used
+  by the offline test fixtures) is unaffected.
+- **Path traversal via dependency name / `source` closed.** A `[require]` key or a `source` value was
+  joined verbatim onto a filesystem path (`vendor/<name>`, `<root>/<source>`), so `"../../.."` or an
+  absolute path could make `phg vendor`'s `remove_dir_all`/`rename` — or the loader's scan — operate
+  outside the project tree. Both are now validated at manifest-parse time (rejecting `..` traversal,
+  absolute paths, empty/`-`-leading segments, and characters outside `[A-Za-z0-9._-]`) and
+  defensively re-checked at every path-join site. `source = "."` stays valid.
+- Both fixes are confined to the `phg vendor` / loader supply-chain path; the `run ≡ runvm ≡
+  transpiled-PHP` byte-identity spine is untouched.
+
 ### Packaging — identifier casing enforced (namespace reshape, slice 2a)
 
 - **Identifier casing is now a hard, checked rule.** Value identifiers — functions, methods,
