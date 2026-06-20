@@ -135,6 +135,29 @@
   own `<T>` is the next sub-slice). Deferred (KNOWN_ISSUES): generic interface methods, generic
   classes/types, a generic method referenced as a first-class value.
 
+- [2026-06-20] AGREED (generics-all sub-slice 1 — generic methods — DONE, `bd8782c`): reused the entire
+  S7a free-fn machinery, zero backend changes (parser un-gate + checker sig-registration/call-routing +
+  one `erase_generics` `Item::Class` arm). No new `Op`/`Value`. Deferred: generic interface methods,
+  generic types/classes, generic method as a value.
+- [2026-06-20] AGREED (generics-all next = **"both 1 and 2"**): do the **E-PKG-TYPE lift / cross-package
+  types design pass FIRST**, then implement **generic types/classes `Box<T>`** on top of it. Sequencing:
+  (a) design + implement the E-PKG-TYPE lift so a *library* package may declare types/enums/interfaces
+  and another package may use them qualified (extending the S2c function name-mangling+resolution model
+  to types — the loader-side approach, no backend-aware resolution), unblocking the adopted selective
+  type import; (b) design + implement generic types/classes (`class Box<T>`, erased — an instance carries
+  no type argument, `instanceof Box<int>` is just `instanceof Box`). Each its own green byte-identical
+  commit; fully autonomous pace.
+
+- [2026-06-20] AGREED (E-PKG-TYPE lift design + scope): design written
+  (`docs/specs/2026-06-20-epkgtype-lift-crosspackage-types-design.md`) — extend the cross-package
+  *function* mangle/resolve pass to *types* (loader `types` symbol table + per-file `type_import_map` from
+  a new `import type a.b.C [as D];`; Pass-2 rewrite of every type-name position to the mangled FQN;
+  transpiler namespaces the def + emits FQN refs; checker/backends see mangled names, no new Op/Value).
+  **Scope: all three kinds (class + enum + interface) cross-package in ONE commit** (developer chose "all
+  three at once" over classes-first). New diagnostics `E-TYPE-IMPORT-{UNKNOWN,CONFLICT,BUILTIN,SHADOW}`;
+  `E-PKG-TYPE` retired. One new `examples/project/<name>/` exercising a cross-package class+enum+interface,
+  byte-identical run≡runvm≡real PHP.
+
 ## Formal Plan
 
 See the approved plan (`~/.claude/plans/misty-honking-lynx.md`) and the design spec. Slice table:
