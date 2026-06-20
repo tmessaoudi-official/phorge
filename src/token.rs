@@ -67,6 +67,10 @@ pub enum TokenKind {
     /// `||` (`OrOr`); the lexer's two-char dispatch claims those first, so a bare `|` falls through
     /// to this single-char token.
     Bar,
+    /// A lone `&` — the intersection-type separator `A & B` (M-RT S5). Distinct from `&&` (`AndAnd`),
+    /// which the lexer's two-char dispatch claims first, so a bare `&` falls through to this
+    /// single-char token. Binds tighter than `|` in `parse_type` (`A | B & C` ≡ `A | (B & C)`).
+    Amp,
     LParen,
     RParen,
     LBrace,

@@ -17,8 +17,18 @@ not a panic:
   natives* notes below). Set union/intersection and map iteration build on that path next. `Map<K,V>`
   literals + `m[k]` indexing ship in M-RT S3 — see the *Maps* note below.
 - ~~`instanceof` against a **union**~~ — **now supported** (M-RT S4): a union-typed value is a valid
-  `instanceof` left operand, and `if (s instanceof Circle)` narrows it. `instanceof` against an
-  **intersection** is still pending (intersections are a later M-RT slice).
+  `instanceof` left operand, and `if (s instanceof Circle)` narrows it. A union-typed *operand* and an
+  intersection-typed *operand* are both accepted; what is still deferred is `instanceof` whose **right
+  side** is an intersection (`x instanceof (A & B)`) — `Op::IsInstance` carries a single name, so this
+  needs a new op or a lowering to `x instanceof A && x instanceof B` (M-RT S5 deferral).
+- **Intersection types (M-RT S5) — deferred corners** (each rejected cleanly, never a panic): **two or
+  more concrete classes** (`Cat & Dog` → `E-INTERSECT-MULTI-CLASS`; a value has exactly one class — this
+  becomes meaningful only once class `extends` lands in S6), **primitive/enum/optional/function members**
+  (`E-INTERSECT-MEMBER`), a **shared method with conflicting signatures** across members
+  (`E-INTERSECT-SIG`; uninhabited because Phorge has no overloading **yet** — overloading is the next
+  M-RT slice, after which this rule is revisited), `instanceof` with an **intersection right side**
+  (above), and the **whole-intersection optional** `(A & B)?`. There is no match-over-intersection
+  (an intersection is not a sum type).
 - **Union types (M-RT S4) — deferred corners** (each rejected cleanly, never a panic): **enum members**
   in a union (`Color | Circle` → `E-UNION-MEMBER`; an enum is already a closed sum — match its variants
   directly), **optional/function members** (`E-UNION-MEMBER`), a **type pattern nested in a variant
@@ -230,8 +240,9 @@ closure-from-native mechanism — `NativeEval::HigherOrder` + a re-entrant VM cl
   `if (x instanceof T) { … }` the checker smart-casts `x` to `T` in the then-block. As of **M-RT S2**
   the right operand may be a **class or an interface** (`guide/interfaces.phg`); a class that
   `implements` an interface is a *subtype* of it, so an instance flows into an interface-typed slot
-  and `x instanceof SomeInterface` is true for every implementer. Union / intersection operands still
-  arrive with those features in later M-RT slices. The old `is` keyword is gone — `is` is now an
+  and `x instanceof SomeInterface` is true for every implementer. Union (**S4**) and intersection
+  (**S5**) *left* operands are now both accepted; only an intersection on the **right** is deferred
+  (above). The old `is` keyword is gone — `is` is now an
   ordinary identifier. *(Literal
   `match` patterns and expression-position `match` — previously listed here as transpile gaps — were
   **completed in M11**: both now transpile and are PHP-oracle byte-identity-gated, so

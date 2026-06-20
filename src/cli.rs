@@ -379,6 +379,38 @@ pub fn explain_text(code: &str) -> Option<String> {
              pattern is allowed only at the **top level** of a match arm, not nested inside a variant\n\
              pattern. Use it to match over a union scrutinee.\n"
         }
+        "E-INTERSECT-MEMBER" => {
+            "E-INTERSECT-MEMBER — an intersection member is not an allowed type.\n\n\
+             An intersection `A & B` (M-RT S5) combines interfaces, plus *at most one* concrete class\n\
+             (`Cls & I & J`). Primitives, enums, optional `T?` members, and function-typed members are\n\
+             not allowed — a value satisfies an intersection by being a single instance that conforms to\n\
+             every member, which only interfaces (and one class) express. Replace the member.\n"
+        }
+        "E-INTERSECT-MULTI-CLASS" => {
+            "E-INTERSECT-MULTI-CLASS — an intersection names two or more concrete classes.\n\n\
+             A value has exactly one class, so it can never be an instance of two distinct classes at\n\
+             once — `Cat & Dog` is uninhabited. Name at most one class and compose the rest with\n\
+             interfaces. (A second class becomes meaningful only once class `extends` lands in S6.)\n"
+        }
+        "E-INTERSECT-ARITY" => {
+            "E-INTERSECT-ARITY — an intersection needs two or more distinct types.\n\n\
+             `A & A` (or any intersection whose members are all the same after normalization) collapses\n\
+             to a single type, so it is not an intersection. Give it at least two distinct members, or\n\
+             use the single type directly.\n"
+        }
+        "E-INTERSECT-SIG" => {
+            "E-INTERSECT-SIG — intersection members share a method with conflicting signatures.\n\n\
+             Two members of `A & B` declare the same method with different parameter or return types.\n\
+             Phorge has no overloading, so a class has exactly one such method — it cannot satisfy both\n\
+             members at once, making the intersection uninhabited. Align the shared method's signature\n\
+             across the members (or drop one).\n"
+        }
+        "E-INTERSECT-NO-MEMBER" => {
+            "E-INTERSECT-NO-MEMBER — a member access on an intersection resolves to nothing.\n\n\
+             A method/field call on an `A & B` value searches every member (each interface, plus the\n\
+             lone class for fields). None of them declares the named method or field. Check the name, or\n\
+             add it to one of the intersection's members.\n"
+        }
         _ => return None,
     };
     Some(body.to_string())
@@ -389,7 +421,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER)"
         )
     })
 }

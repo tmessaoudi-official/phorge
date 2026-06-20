@@ -6,6 +6,29 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — intersection types `A & B` (Rich Types, M-RT S5)
+
+- **Intersection types:** `A & B` is a value that satisfies *all* members at once — the narrowing dual
+  of a union. Members are interfaces plus **at most one** concrete class (two distinct classes are the
+  bottom type — a value has exactly one class). A value flows into `Drawable & Named` iff it implements
+  both, and **inside, every member's methods are in scope** (member access searches each member, the
+  one genuinely new mechanism vs. S4). Lexes a lone `&` to a new `TokenKind::Amp` (distinct from `&&`),
+  which **binds tighter than `|`** (`A | B & C` ≡ `A | (B & C)`); normalized like a union
+  (`Ty::intersection_of`); the assignability arms are the exact dual of S4's. **No new `Op`, no `Value`
+  change** — an intersection is checker- and PHP-signature-only; the runtime value is always a concrete
+  instance. Transpiles to PHP 8.1 native `A&B`. Byte-identical `run ≡ runvm ≡ real PHP`
+  (new `examples/guide/intersections.phg`).
+- New codes (all with `phg explain`): `E-INTERSECT-MEMBER` (a primitive/enum/optional/function member),
+  `E-INTERSECT-MULTI-CLASS` (two or more concrete classes — uninhabited until S6 `extends`),
+  `E-INTERSECT-ARITY` (collapses to one member), `E-INTERSECT-SIG` (two members share a method with
+  conflicting signatures — no class can implement both, since Phorge has no overloading **yet**), and
+  `E-INTERSECT-NO-MEMBER` (a member access resolves on no member). `instanceof` now also accepts an
+  intersection-typed operand. **Deferred** (see KNOWN_ISSUES): `instanceof` against an intersection,
+  optional/function members, whole-intersection optional `(A & B)?`.
+- **Method overloading confirmed for M-RT** (sequenced next, right after S5): a Phorge-level feature
+  lowered to a single dispatching PHP method (PHP forbids same-name redeclaration) — the
+  TypeScript-over-JavaScript relationship the transpile contract is built for.
+
 ### Added — union types `A | B` + match-over-union (Rich Types, M-RT S4)
 
 - **Union types:** `A | B | C` is a value that is *one of* several types — the open-composition

@@ -1,0 +1,55 @@
+// Intersection types `A & B` (Rich Types — M-RT S5).
+//
+// An intersection `A & B` is the narrowing dual of a union: a value that satisfies *both* members at
+// once. A parameter typed `Drawable & Named` accepts only a value whose class implements BOTH
+// interfaces — and inside, BOTH interfaces' methods are in scope on it. Members are interfaces (plus
+// at most one concrete class — a value has exactly one class). Transpiles 1:1 to PHP 8.1 `A&B`.
+package main;
+
+import Core.Console;
+
+// Two independent contracts.
+interface Drawable {
+    function draw() -> string;
+}
+
+interface Named {
+    function name() -> string;
+}
+
+// A class can implement several interfaces, making it a subtype of each.
+class Badge implements Drawable, Named {
+    constructor(public string label) {}
+    function draw() -> string { return "[{this.label}]"; }
+    function name() -> string { return this.label; }
+}
+
+class Sticker implements Drawable, Named {
+    constructor(public string text) {}
+    function draw() -> string { return "<{this.text}>"; }
+    function name() -> string { return this.text; }
+}
+
+// The intersection in action: `x` is known to be BOTH Drawable and Named, so a method from EACH
+// interface is callable on it — no narrowing needed (that is the whole point of an intersection).
+function describe(Drawable & Named x) -> string {
+    return "{x.name()} => {x.draw()}";
+}
+
+// some-member-out: an `A & B` value flows into a slot typed as just one of its members.
+function justDraw(Drawable d) -> string {
+    return d.draw();
+}
+
+function main() {
+    var badge = Badge("ok");
+    var sticker = Sticker("hi");
+
+    // Both implement Drawable AND Named, so both flow into `Drawable & Named`.
+    Console.println(describe(badge));   // ok => [ok]
+    Console.println(describe(sticker)); // hi => <hi>
+
+    // A & B narrows out to a single member without a cast.
+    Console.println(justDraw(badge));   // [ok]
+    Console.println(justDraw(sticker)); // <hi>
+}

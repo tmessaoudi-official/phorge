@@ -240,6 +240,26 @@
     loader `Type::Intersection` arms; **NO new `Op`, no `Value` change, no new pattern kind, no
     instanceof change**. New codes `E-INTERSECT-MEMBER`/`-ARITY`/`-SIG` (+`-UNINHABITED` if D1 allows
     classes) + `phg explain`. Example `examples/guide/intersections.phg`.
+- [2026-06-21] AGREED (S5 — DONE; **S5 COMPLETE**) + D1/D2/overloading resolved (developer, two rounds
+  of challenge + a third on overloading):
+  - **D1 = ≤1 concrete class + N interfaces** (developer overruled my interface-only rec, correctly):
+    nothing forbids a class member; `C & D` (≥2 classes) is the bottom type ∅ → `E-INTERSECT-MULTI-CLASS`,
+    but `C & I & J` is inhabitable and future-proofs S6. Primitive/enum/optional/function member →
+    `E-INTERSECT-MEMBER`.
+  - **D2 = require-agreement, `E-INTERSECT-SIG`** (two members' shared method must have identical sig —
+    uninhabited otherwise, no overloading yet). Revisited when overloading lands.
+  - **OVERLOADING confirmed for M-RT, sequenced NEXT (right after S5)**: lowers to one dispatching PHP
+    method (PHP forbids same-name redeclaration) — the TS-over-JS contract. Developer rejected the
+    "stay PHP-aligned / don't add it" option explicitly ("this language should be equal or better than
+    PHP").
+  - **As-built:** new `TokenKind::Amp` (binds tighter than `|`); `Type::Intersection`/`Ty::Intersection`
+    + `intersection_of`; two dual `assignable_with` arms (all-in / some-out; intersection∩intersection
+    composes — no third arm); member access searches all members (`check_method_call`/`check_member`
+    arm) → `E-INTERSECT-NO-MEMBER`; `resolve_cty`→`Other`; `emit_type`→PHP 8.1 `A&B`; erase/expand/loader
+    arms; `instanceof` accepts an intersection operand. **NO new `Op`/`Value`/pattern.** Gate green: 474
+    lib + PHP-oracle differential + 53 integration; clippy+fmt clean; `examples/guide/intersections.phg`
+    byte-identical run≡runvm≡real PHP. Codes `E-INTERSECT-MEMBER`/`-MULTI-CLASS`/`-ARITY`/`-SIG`/
+    `-NO-MEMBER` (+ `phg explain`). **NEXT: overloading → S6 `extends` → S8 traits.**
 
 ## Formal Plan
 
@@ -251,8 +271,9 @@ See the approved plan (`~/.claude/plans/misty-honking-lynx.md`) and the design s
 | S2 | interfaces + `implements`/`extends` (+ instanceof interface table) | no | **DONE** (404 lib + PHP-oracle differential incl. `guide/interfaces.phg`; clippy+fmt clean; byte-identical run≡runvm≡PHP; subtyping via `Ty::assignable_with`, shared `ast::class_implements`) |
 | S3 | **Map foundation**: `Map<K,V>` literals `[k=>v]` + `m[k]` indexing (fault on miss); insertion-ordered `Rc<Vec>` rep; `CTy::Map` so `m[k]` is an arithmetic operand. Set + all generic-typed ops (keys/has/size/contains/iter) → S7. | `MakeMap` (Index made polymorphic, no `IndexMap`) | **DONE** (413 lib + PHP-oracle differential incl. `guide/maps.phg`; clippy+fmt clean; byte-identical run≡runvm≡PHP) |
 | S7 | erased generics `<T>` (+ unblock `core.list` **and** full Map/Set: keys/has/size/contains/map/filter, **plus Set itself**) — **reordered to follow S3** | no (erase) | **S7a DONE** (generics core: `Ty::Param` + `<T>` on free functions + call-site unify + `erase_generics` pass; 424 lib + PHP-oracle differential incl. `guide/generics.phg`; clippy+fmt clean; byte-identical run≡runvm≡PHP). **S7b** (Set + Map/Set query ops + `core.list`) = next |
-| S4 | union `A\|B` + match-over-union exhaustiveness | no | pending |
-| S5 | intersection `A&B` (requires S2) | no | pending |
+| S4 | union `A\|B` + match-over-union exhaustiveness | no | **DONE** (`08b7b12`; `Ty::Union` + `Pattern::Type` reusing `Op::IsInstance`; `guide/unions.phg` byte-identical run≡runvm≡PHP) |
+| S5 | intersection `A&B` (requires S2) | no | **DONE** (`Ty::Intersection` + `intersection_of` + dual assignability + member-access search; ≤1 class + N interfaces; `E-INTERSECT-*`; `guide/intersections.phg` byte-identical run≡runvm≡PHP; 474 lib + oracle + 53 integration green) |
+| — | **method overloading** (inserted 2026-06-21, NEXT) — `foo(int)`/`foo(string)` → one dispatching PHP method | no (lower) | pending |
 | S6 | `extends` (final-by-default, `override`) | no (flatten) | pending |
 | S8 | traits/mixins | no (flatten) | pending |
 

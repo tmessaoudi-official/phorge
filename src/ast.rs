@@ -21,6 +21,13 @@ pub enum Type {
     /// checker normalizes (flatten/dedupe/canonical-sort) into `Ty::Union`. Members are restricted to
     /// classes, interfaces, and primitives (`E-UNION-MEMBER`); transpiles to PHP 8.0 `A|B`.
     Union(Vec<Type>, Span),
+    /// `A & B & C` — an intersection type (M-RT S5): a value that satisfies *all* members
+    /// simultaneously, the narrowing dual of a union. Members are in source order here; the checker
+    /// normalizes (flatten/dedupe/canonical-sort) into `Ty::Intersection`. Members are restricted to
+    /// interfaces, plus at most one concrete class (`E-INTERSECT-MEMBER`/`E-INTERSECT-MULTI-CLASS`) —
+    /// a value has exactly one class, so two distinct classes are uninhabited. Transpiles to PHP 8.1
+    /// `A&B`. `&` binds tighter than `|` in `parse_type`.
+    Intersection(Vec<Type>, Span),
     /// `var` — placeholder for an inferred local binding type (resolved by the checker from the
     /// initializer, erased everywhere else). Only valid as a `Stmt::VarDecl` type.
     Infer(Span),

@@ -245,6 +245,91 @@ impl Checker {
                 }
                 norm
             }
+            Type::Intersection(members, span) => {
+                // M-RT S5: resolve each member, validate kinds (D1: interfaces, plus *at most one*
+                // concrete class — a value has exactly one class, so two distinct classes are the
+                // bottom type), then enforce shared-method signature agreement (D2: no overloading
+                // yet, so two members whose shared method differs is uninhabited) and normalize.
+                let resolved: Vec<Ty> = members.iter().map(|m| self.resolve_type(m)).collect();
+                let mut class_count = 0;
+                for ty in &resolved {
+                    match ty {
+                        Ty::Error => {}
+                        Ty::Named(n, _) if self.interfaces.contains_key(n) => {}
+                        Ty::Named(n, _) if self.classes.contains_key(n) => class_count += 1,
+                        _ => {
+                            self.err_coded(
+                                *span,
+                                format!(
+                                    "intersection member `{ty}` is not allowed — members must be interfaces, with at most one concrete class"
+                                ),
+                                "E-INTERSECT-MEMBER",
+                                Some("primitives, enums, optionals, and function types cannot be intersection members".into()),
+                            );
+                        }
+                    }
+                }
+                if class_count >= 2 {
+                    self.err_coded(
+                        *span,
+                        "an intersection may name at most one concrete class — no value can be two distinct classes at once".to_string(),
+                        "E-INTERSECT-MULTI-CLASS",
+                        Some("compose with interfaces instead; a second class becomes possible only when class `extends` lands (S6)".into()),
+                    );
+                }
+                // D2: a method declared by two members with differing signatures can be satisfied by no
+                // class (Phorge has no overloading — a class has exactly one `foo`), so the intersection
+                // is uninhabited. Reject it here, where it is honest about *why*.
+                let mut method_sigs: HashMap<String, (Vec<Ty>, Ty)> = HashMap::new();
+                let mut sig_conflict: Option<String> = None;
+                for ty in &resolved {
+                    if let Ty::Named(n, _) = ty {
+                        let methods: Vec<(String, (Vec<Ty>, Ty))> =
+                            if self.interfaces.contains_key(n) {
+                                self.iface_flat_methods(n)
+                            } else if let Some(info) = self.classes.get(n) {
+                                info.methods
+                                    .iter()
+                                    .map(|(m, s)| (m.clone(), (s.params.clone(), s.ret.clone())))
+                                    .collect()
+                            } else {
+                                Vec::new()
+                            };
+                        for (m, sig) in methods {
+                            match method_sigs.get(&m) {
+                                Some(existing) if *existing != sig && sig_conflict.is_none() => {
+                                    sig_conflict = Some(m.clone());
+                                }
+                                Some(_) => {}
+                                None => {
+                                    method_sigs.insert(m, sig);
+                                }
+                            }
+                        }
+                    }
+                }
+                if let Some(m) = sig_conflict {
+                    self.err_coded(
+                        *span,
+                        format!(
+                            "intersection members declare method `{m}` with conflicting signatures — no class could implement both"
+                        ),
+                        "E-INTERSECT-SIG",
+                        Some("a method shared across intersection members must have identical parameter and return types (Phorge has no overloading)".into()),
+                    );
+                }
+                let norm = Ty::intersection_of(resolved);
+                if !matches!(norm, Ty::Intersection(_) | Ty::Error) {
+                    // ≥2 source members collapsed to one (`A & A`): an intersection needs ≥2 distinct.
+                    self.err_coded(
+                        *span,
+                        "an intersection needs two or more distinct types".to_string(),
+                        "E-INTERSECT-ARITY",
+                        None,
+                    );
+                }
+                norm
+            }
             Type::Function { params, ret, .. } => Ty::Function(
                 params.iter().map(|p| self.resolve_type(p)).collect(),
                 Box::new(self.resolve_type(ret)),
@@ -1584,8 +1669,9 @@ impl Checker {
         match &v {
             // A poisoned operand already reported its own error; still type the test as `bool`.
             Ty::Error => {}
-            // A class instance — or a union of them (M-RT S4) — is the meaningful left operand.
-            Ty::Named(..) | Ty::Union(..) => {}
+            // A class instance — or a union (M-RT S4) / intersection (M-RT S5) of them — is the
+            // meaningful left operand.
+            Ty::Named(..) | Ty::Union(..) | Ty::Intersection(..) => {}
             other => {
                 self.err_coded(
                     span,
@@ -2324,6 +2410,65 @@ impl Checker {
                     }
                 }
             }
+            Ty::Intersection(members) => {
+                // Member access over an intersection (M-RT S5): search each member (an interface, or
+                // the lone class) for `name`, resolving from the *first* member that declares it; a
+                // method present in two members agrees on its signature (E-INTERSECT-SIG at the type
+                // site), so first-found is unambiguous. None → E-INTERSECT-NO-MEMBER. The value is a
+                // concrete instance underneath, so dispatch is polymorphic at runtime — no Op change.
+                let mut found: Option<(Vec<Ty>, Ty)> = None;
+                for m in &members {
+                    if let Ty::Named(mn, margs) = m {
+                        let sig = self
+                            .classes
+                            .get(mn)
+                            .and_then(|info| info.methods.get(name))
+                            .map(|s| (s.params.clone(), s.ret.clone()))
+                            .or_else(|| {
+                                if self.interfaces.contains_key(mn) {
+                                    self.iface_flat_methods(mn)
+                                        .into_iter()
+                                        .find(|(mm, _)| mm == name)
+                                        .map(|(_, sig)| sig)
+                                } else {
+                                    None
+                                }
+                            });
+                        if let Some((params, ret)) = sig {
+                            let theta = self.class_subst(mn, margs);
+                            found = Some((
+                                params.iter().map(|p| apply_subst(p, &theta)).collect(),
+                                apply_subst(&ret, &theta),
+                            ));
+                            break;
+                        }
+                    }
+                }
+                match found {
+                    Some((params, ret)) => {
+                        if params.iter().any(ty_has_param) || ty_has_param(&ret) {
+                            self.check_generic_call(name, &params, &ret, args, span)
+                        } else {
+                            self.check_args(name, &params, args, span);
+                            ret
+                        }
+                    }
+                    None => {
+                        for a in args {
+                            self.check_expr(a);
+                        }
+                        self.err_coded(
+                            span,
+                            format!(
+                                "no member of `{}` has method `{name}`",
+                                Ty::Intersection(members)
+                            ),
+                            "E-INTERSECT-NO-MEMBER",
+                            None,
+                        )
+                    }
+                }
+            }
             Ty::Error => Ty::Error,
             other => {
                 for a in args {
@@ -2369,6 +2514,35 @@ impl Checker {
                     // non-generic class (M-RT generics-all).
                     Some(t) => apply_subst(&t, &self.class_subst(&cls, &cargs)),
                     None => self.err(span, format!("type `{cls}` has no field `{name}`")),
+                }
+            }
+            Ty::Intersection(members) => {
+                // Only the lone class member can carry fields (interfaces have none, M-RT S5). Search
+                // for the field on the class member; none → E-INTERSECT-NO-MEMBER.
+                let mut found: Option<Ty> = None;
+                for m in &members {
+                    if let Ty::Named(mn, margs) = m {
+                        if let Some(t) = self
+                            .classes
+                            .get(mn)
+                            .and_then(|info| info.fields.get(name).cloned())
+                        {
+                            found = Some(apply_subst(&t, &self.class_subst(mn, margs)));
+                            break;
+                        }
+                    }
+                }
+                match found {
+                    Some(t) => t,
+                    None => self.err_coded(
+                        span,
+                        format!(
+                            "no member of `{}` has field `{name}`",
+                            Ty::Intersection(members)
+                        ),
+                        "E-INTERSECT-NO-MEMBER",
+                        None,
+                    ),
                 }
             }
             Ty::Error => Ty::Error,
@@ -3256,6 +3430,11 @@ pub fn erase_generics(program: Program) -> Program {
             Type::Union(members, span) => {
                 Type::Union(members.iter().map(|m| rty(m, params)).collect(), *span)
             }
+            // An intersection erases each member (a type-param member becomes `Type::Erased`); the
+            // intersection itself is structural and survives to the backend (M-RT S5).
+            Type::Intersection(members, span) => {
+                Type::Intersection(members.iter().map(|m| rty(m, params)).collect(), *span)
+            }
             Type::Infer(s) => Type::Infer(*s),
             Type::Erased(s) => Type::Erased(*s),
         }
@@ -3594,6 +3773,10 @@ pub fn expand_aliases(program: &Program) -> Program {
             // A union expands each member (an alias used as a member dealiases here), M-RT S4.
             Type::Union(members, span) => {
                 Type::Union(members.iter().map(|m| rt(m, a, depth + 1)).collect(), *span)
+            }
+            // An intersection expands each member likewise (M-RT S5).
+            Type::Intersection(members, span) => {
+                Type::Intersection(members.iter().map(|m| rt(m, a, depth + 1)).collect(), *span)
             }
             Type::Infer(s) => Type::Infer(*s),
             Type::Erased(s) => Type::Erased(*s),
@@ -4069,6 +4252,114 @@ mod tests {
         ));
         assert!(
             bad.iter().any(|e| e.code == Some("E-MATCH-TYPE")),
+            "{bad:?}"
+        );
+    }
+
+    // M-RT S5 — intersection types. Two interfaces and a class implementing both.
+    const IFACES: &str = "interface Drawable { function draw() -> string; } \
+        interface Named { function name() -> string; } \
+        class Badge implements Drawable, Named { \
+            constructor(public string label) {} \
+            function draw() -> string { return \"[]\"; } \
+            function name() -> string { return this.label; } }";
+
+    #[test]
+    fn intersection_param_accepts_a_class_implementing_both() {
+        // all-members-required-in: a Badge (implements Drawable AND Named) flows into the intersection.
+        let ok = errors_of(&format!(
+            "{IFACES} function describe(Drawable & Named x) -> string {{ return x.draw(); }} \
+             function main() {{ string s = describe(Badge(\"b\")); }}"
+        ));
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn intersection_member_access_reaches_each_member() {
+        // A method from *each* member interface is in scope on the intersection value.
+        let ok = errors_of(&format!(
+            "{IFACES} function f(Drawable & Named x) -> string {{ return \"{{x.draw()}} {{x.name()}}\"; }} \
+             function main() {{ string s = f(Badge(\"b\")); }}"
+        ));
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn intersection_flows_out_to_a_single_member() {
+        // some-member-out: A & B is assignable to a slot typed as just one member.
+        let ok = errors_of(&format!(
+            "{IFACES} function onlyDraw(Drawable d) -> string {{ return d.draw(); }} \
+             function f(Drawable & Named x) -> string {{ return onlyDraw(x); }} \
+             function main() {{}}"
+        ));
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn intersection_one_class_plus_interface_is_allowed() {
+        // D1: at most one concrete class plus interfaces is a well-formed intersection.
+        let ok = errors_of(&format!(
+            "{IFACES} function f(Badge & Drawable x) -> string {{ return x.draw(); }} \
+             function main() {{ string s = f(Badge(\"b\")); }}"
+        ));
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn intersection_rejects_two_classes() {
+        let bad = errors_of(&format!(
+            "{SHAPES} function f(Circle & Square x) {{}} function main() {{}}"
+        ));
+        assert!(
+            bad.iter()
+                .any(|e| e.code == Some("E-INTERSECT-MULTI-CLASS")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn intersection_rejects_primitive_member() {
+        let bad = errors_of(&format!(
+            "{IFACES} function f(int & Drawable x) {{}} function main() {{}}"
+        ));
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-INTERSECT-MEMBER")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn intersection_arity_collapse_is_error() {
+        let bad = errors_of(&format!(
+            "{IFACES} function f(Drawable & Drawable x) {{}} function main() {{}}"
+        ));
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-INTERSECT-ARITY")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn intersection_rejects_conflicting_shared_method_signature() {
+        // D2: two members declare `tag` with differing return types — no class can implement both.
+        let bad = errors_of(
+            "interface A { function tag() -> string; } \
+             interface B { function tag() -> int; } \
+             function f(A & B x) {} function main() {}",
+        );
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-INTERSECT-SIG")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn intersection_member_access_unknown_is_error() {
+        let bad = errors_of(&format!(
+            "{IFACES} function f(Drawable & Named x) -> int {{ return x.nope(); }} function main() {{}}"
+        ));
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-INTERSECT-NO-MEMBER")),
             "{bad:?}"
         );
     }

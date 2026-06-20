@@ -550,6 +550,9 @@ pub fn lex(src: &str) -> Result<Vec<Token>, Diagnostic> {
                     // A lone `|` is the union-type separator (`A | B`, M-RT S4). `|>` and `||` are
                     // claimed by the two-char dispatch above, so reaching here means a single `|`.
                     b'|' => Some(TokenKind::Bar),
+                    // A lone `&` is the intersection-type separator (`A & B`, M-RT S5). `&&` is
+                    // claimed by the two-char dispatch above, so reaching here means a single `&`.
+                    b'&' => Some(TokenKind::Amp),
                     _ => None,
                 };
                 match kind {

@@ -392,6 +392,20 @@ impl Transpiler {
                 }
                 parts.join("|")
             }
+            // An intersection → PHP 8.1 native `A&B` (M-RT S5). Members emit via `emit_type` (a
+            // cross-package member carries its FQN); dedup defensively. The checker guarantees ≥2
+            // distinct members, all interfaces plus at most one class — all valid PHP intersection
+            // operands.
+            Type::Intersection(members, _) => {
+                let mut parts: Vec<String> = Vec::new();
+                for m in members {
+                    let p = Self::emit_type(m);
+                    if !parts.contains(&p) {
+                        parts.push(p);
+                    }
+                }
+                parts.join("&")
+            }
             // A function-typed parameter/return erases to PHP `\Closure` (M3 S3).
             Type::Function { .. } => "\\Closure".into(),
             // An erased generic type parameter (M-RT S7) → PHP `mixed` (the runtime is untyped; the

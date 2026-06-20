@@ -1,10 +1,25 @@
 # S5 — Intersection Types `A & B` — Design
 
-> Status: **DESIGN — not implemented** (developer chose "S5, design first", mirroring the S4 flow).
-> The next M-RT slice after S4 unions (COMPLETE, `08b7b12`). **Hard-depends on S2** (interfaces +
-> nominal subtyping + the shared `class_implements` table); composes with S4 (unions). Transpile
-> target: PHP 8.1+ **pure intersection types** (`A&B`) — the oracle runs php-master (8.6), which
-> supports them. A front-end-only, **zero-`Op`** slice (the dual of S4 unions).
+> Status: **IMPLEMENTED — S5 COMPLETE.** Front-end-only, **zero new `Op`/`Value`** (the dual of S4
+> unions). Hard-depends on S2 (interfaces + nominal subtyping + `class_implements`); composes with S4.
+> Transpile target: PHP 8.1 pure intersection types `A&B` (oracle runs php-master 8.6).
+>
+> **As-built decisions (developer-resolved, supersede §10's recommendations):**
+> - **D1 = ≤1 concrete class + N interfaces** (NOT interface-only). The developer challenged the
+>   interface-only line: nothing *forbids* a class member; under nominal single-class-per-value typing
+>   `C & D` (two classes) is provably the bottom type ∅, but `C & I & J` (one class + interfaces) is
+>   inhabitable (and becomes load-bearing once S6 `extends` lands). So members are interfaces plus **at
+>   most one** class; two or more classes → `E-INTERSECT-MULTI-CLASS`; a primitive/enum/optional/function
+>   member → `E-INTERSECT-MEMBER`.
+> - **D2 = require-agreement, `E-INTERSECT-SIG`** (NOT first-member-wins). Two members declaring a shared
+>   method with differing signatures cannot both be satisfied by one class (Phorge has no overloading
+>   *yet*), so the intersection is uninhabited and is rejected at the type site. **Overloading is now
+>   confirmed for M-RT, sequenced immediately after S5** (lowers to one dispatching PHP method); when it
+>   lands, this rule is revisited.
+> - **D3 = autonomous** (design → implement → commit in one green byte-identical slice).
+>
+> The rest of this document is the original design; where §2/§5/§6/§10 say "interfaces only," read
+> "interfaces plus at most one class" per D1 above.
 
 ## 1. Goal
 

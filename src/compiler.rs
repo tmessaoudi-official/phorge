@@ -607,6 +607,9 @@ fn resolve_cty(ty: &Type) -> CTy {
         // A union value is not a specialized arithmetic operand (M-RT S4); after `instanceof`/type-
         // pattern narrowing the *narrowed local* carries the concrete `CTy`, not the union local.
         Type::Union(..) => CTy::Other,
+        // An intersection value is likewise not a specialized arithmetic operand (M-RT S5); member
+        // access dispatches through the concrete instance with no specialization.
+        Type::Intersection(..) => CTy::Other,
     }
 }
 

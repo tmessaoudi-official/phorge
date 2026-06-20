@@ -314,7 +314,8 @@ middleware/closure-route layer. **Parked:** M2.5 Phase 3 (CI stub registry + `--
 **M-RT (Rich Types) is the active milestone** (approved plan
 `docs/plans/2026-06-20-m-rt-rich-types.plan.md`): a TypeScript-grade type system mapped to PHP
 8.0/8.1 — slices **S1 `instanceof`** → S2 interfaces+`implements` → S3 Map/Set → S4 unions `A|B` →
-S5 intersections `A&B` → S6 `extends` (`final`-by-default) → S7 erased generics `<T>` → S8 traits.
+S5 intersections `A&B` → **method overloading** (inserted 2026-06-21) → S6 `extends`
+(`final`-by-default) → S7 erased generics `<T>` (already shipped, generics-all) → S8 traits.
 Each slice ships independently green + byte-identical (`run≡runvm≡real PHP`) with a guide example.
 **S1 COMPLETE:** real `instanceof` type test (`value instanceof ClassName` → `bool`, smart-cast
 narrowing in `if`, transpiles to PHP `instanceof`) replacing the retired value-equality `is` stub;
@@ -453,8 +454,36 @@ disambiguates a type pattern as two idents (`Circle c`); a lone `Circle =>` stay
 `E-UNION-MEMBER`/`E-UNION-ARITY`/`E-MATCH-TYPE` (+ `phg explain`). Scope: `package main` only; union
 members are classes/interfaces/primitives (enum/optional/function members rejected). **Deferred**
 (KNOWN_ISSUES): enum-in-union, intersection/negative-flow narrowing, common-member access on a raw
-union, whole-union optional `(A|B)?`, type pattern nested in a variant payload. **NEXT (M-RT slice
-order): S5 intersections `A&B`** → S6 `extends` (final-by-default) → S8 traits.
+union, whole-union optional `(A|B)?`, type pattern nested in a variant payload.
+
+**M-RT S5 — intersection types `A & B` — COMPLETE** (design
+`docs/specs/2026-06-20-s5-intersection-types-design.md`; developer-resolved D1/D2 after two rounds of
+challenge, autonomous). An intersection value satisfies *all* members at once — the narrowing dual of a
+union. Lexes a lone `&` to a new **`TokenKind::Amp`** (`&&` claimed first), which **binds tighter than
+`|`** (`A | B & C` ≡ `A | (B & C)`); `parse_type_intersection` sits between the union and atom levels.
+`Ty::Intersection(Vec<Ty>)` is normalized by `Ty::intersection_of` (mirror of `union_of`); the two new
+`assignable_with` arms are the **exact dual** of S4's (all-members-required-in / some-member-out; the
+intersection∩intersection case composes — no third arm). **No new `Op`, no `Value` change** — an
+intersection is checker- + PHP-signature-only; the runtime value is always a concrete instance. **D1
+(developer overruled my interface-only rec): members are interfaces plus AT MOST ONE concrete class**
+(`C & D` two classes = bottom type ∅ → `E-INTERSECT-MULTI-CLASS`; one class + interfaces is inhabitable
+and future-proofs S6 `extends`); primitive/enum/optional/function member → `E-INTERSECT-MEMBER`. **D2:
+require-agreement** — two members sharing a method with differing signatures → `E-INTERSECT-SIG` (no
+class can implement both: Phorge has no overloading *yet*). **Member access over an intersection** (the
+one genuinely new mechanism) searches every member (`check_method_call`/`check_member` gain an
+`Ty::Intersection` arm; `E-INTERSECT-NO-MEMBER` when none match). `instanceof` now also accepts an
+intersection *operand*. Transpiles to PHP 8.1 native `A&B`. Byte-identical run≡runvm≡**real PHP**
+(`examples/guide/intersections.phg`); 474 lib + differential PHP oracle + 53 integration green. New
+codes `E-INTERSECT-MEMBER`/`-MULTI-CLASS`/`-ARITY`/`-SIG`/`-NO-MEMBER` (+ `phg explain`). Scope:
+`package main` plus cross-package interface members (for free). **Deferred** (KNOWN_ISSUES): `instanceof`
+with an intersection *right side*, optional/function members, whole-intersection optional `(A & B)?`, no
+match-over-intersection (not a sum type).
+
+**OVERLOADING confirmed for M-RT, sequenced NEXT (right after S5)** (developer decision, 2026-06-21):
+method overloading (`foo(int)` / `foo(string)` as distinct signatures) lowers at compile time to **one
+dispatching PHP method** (PHP forbids same-name redeclaration) — the TypeScript-over-JavaScript
+relationship the transpile contract is built for. When it lands, S5's `E-INTERSECT-SIG` rule is
+revisited. **NEXT (M-RT slice order): overloading → S6 `extends` (final-by-default) → S8 traits.**
 
 **SELECTIVE TYPE IMPORT — designed + ADOPTED, NOT impl** (`23dbe83`, spec
 `docs/specs/2026-06-20-selective-type-import-design.md`): **`import type Pkg.Path.TypeName [as A];`** for

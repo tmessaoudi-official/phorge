@@ -431,6 +431,11 @@ fn resolve_type(ty: &Type, ctx: &ResolveCtx) -> Type {
             members.iter().map(|m| resolve_type(m, ctx)).collect(),
             *span,
         ),
+        // An intersection resolves each member likewise (M-RT S5).
+        Type::Intersection(members, span) => Type::Intersection(
+            members.iter().map(|m| resolve_type(m, ctx)).collect(),
+            *span,
+        ),
         Type::Infer(s) => Type::Infer(*s),
         Type::Erased(s) => Type::Erased(*s),
     }

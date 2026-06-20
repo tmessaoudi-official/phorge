@@ -437,18 +437,35 @@ impl Parser {
     /// `?` binds to its immediate member (`A | B?` ≡ `A | (B?)`).
     pub fn parse_type(&mut self) -> Result<Type, Diagnostic> {
         let sp = self.peek_span();
-        let first = self.parse_type_atom()?;
+        let first = self.parse_type_intersection()?;
         if !self.check(&TokenKind::Bar) {
             return Ok(first);
         }
         let mut members = vec![first];
         while self.eat(&TokenKind::Bar) {
-            members.push(self.parse_type_atom()?);
+            members.push(self.parse_type_intersection()?);
         }
         Ok(Type::Union(members, sp))
     }
 
-    /// Parse a single (non-union) type: `Name`, `Name<T, U>`, `T?`, or `(T, U) -> R`. Type arguments
+    /// Parse an intersection level `A & B & C` (M-RT S5), which binds **tighter than** `|` — so
+    /// `A | B & C` ≡ `A | (B & C)`. A single atom is returned unchanged (so a non-intersection
+    /// program's AST is byte-identical). Sits between [`Self::parse_type`] (union) and
+    /// [`Self::parse_type_atom`].
+    fn parse_type_intersection(&mut self) -> Result<Type, Diagnostic> {
+        let sp = self.peek_span();
+        let first = self.parse_type_atom()?;
+        if !self.check(&TokenKind::Amp) {
+            return Ok(first);
+        }
+        let mut members = vec![first];
+        while self.eat(&TokenKind::Amp) {
+            members.push(self.parse_type_atom()?);
+        }
+        Ok(Type::Intersection(members, sp))
+    }
+
+    /// Parse a single (non-union, non-intersection) type: `Name`, `Name<T, U>`, `T?`, or `(T, U) -> R`. Type arguments
     /// and function params recurse through [`Self::parse_type`], so a union nests inside them
     /// (`List<A | B>`, `(A | B) -> C`).
     fn parse_type_atom(&mut self) -> Result<Type, Diagnostic> {
@@ -1263,6 +1280,28 @@ mod tests {
         }
         // a union nests inside a generic argument.
         assert!(matches!(ty("List<A | B>"), Type::Named { .. }));
+    }
+
+    #[test]
+    fn parse_type_intersection_and_precedence() {
+        // An intersection of three; a single type is returned unchanged.
+        match ty("A & B & C") {
+            Type::Intersection(members, _) => assert_eq!(members.len(), 3),
+            other => panic!("expected intersection, got {other:?}"),
+        }
+        // `&` binds tighter than `|`: `A | B & C` ≡ `A | (B & C)` — a union whose 2nd member is an
+        // intersection.
+        match ty("A | B & C") {
+            Type::Union(m, _) => {
+                assert_eq!(m.len(), 2);
+                assert!(matches!(m[0], Type::Named { .. }));
+                assert!(matches!(m[1], Type::Intersection(_, _)));
+            }
+            other => panic!("expected union, got {other:?}"),
+        }
+        // an intersection nests inside a generic argument and a function param.
+        assert!(matches!(ty("List<A & B>"), Type::Named { .. }));
+        assert!(matches!(ty("(A & B) -> C"), Type::Function { .. }));
     }
 
     #[test]

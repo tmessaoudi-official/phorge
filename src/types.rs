@@ -57,6 +57,14 @@ pub enum Ty {
     /// PHP 8.0 `A|B`; the backends never see a union as a runtime *value* shape (a value is always a
     /// concrete instance/primitive) — the annotation gates only the checker and the PHP signature.
     Union(Vec<Ty>),
+    /// An intersection of two or more distinct types — `A & B & C` (M-RT S5), the narrowing dual of a
+    /// union. **Normalized** like a union (flatten/dedupe/canonical-sort by `Display`), so `A & B` and
+    /// `B & A` are the *same* `Ty` and assignability is order-independent. A collapse to one member *is*
+    /// that member (built via [`Ty::intersection_of`]). Members are interfaces plus at most one class
+    /// (the checker enforces the kind rule). Erased to PHP 8.1 `A&B`; the backends never see an
+    /// intersection as a runtime *value* shape (a value is always a concrete instance) — the annotation
+    /// gates only the checker and the PHP signature, and member access searches every member.
+    Intersection(Vec<Ty>),
     /// Poison type: a failed sub-expression yields this. Assignable both ways so a
     /// single error does not cascade into many.
     Error,
@@ -107,6 +115,36 @@ impl Ty {
         }
     }
 
+    /// Build a normalized intersection from `members` (M-RT S5) — the exact mirror of [`Ty::union_of`]:
+    /// flatten nested intersections, dedupe, canonical-sort by `Display`. A 0-member input yields
+    /// `Error`; a 1-member input (after dedupe) *is* that member (so `A & A` ≡ `A`, the
+    /// `E-INTERSECT-ARITY` degenerate case). The shared normalizer makes `A & B` and `B & A` identical.
+    pub fn intersection_of(members: Vec<Ty>) -> Ty {
+        let mut flat: Vec<Ty> = Vec::new();
+        for m in members {
+            match m {
+                Ty::Intersection(inner) => {
+                    for i in inner {
+                        if !flat.contains(&i) {
+                            flat.push(i);
+                        }
+                    }
+                }
+                other => {
+                    if !flat.contains(&other) {
+                        flat.push(other);
+                    }
+                }
+            }
+        }
+        flat.sort_by_key(std::string::ToString::to_string);
+        match flat.len() {
+            0 => Ty::Error,
+            1 => flat.into_iter().next().expect("len checked == 1"),
+            _ => Ty::Intersection(flat),
+        }
+    }
+
     /// Like [`Ty::assignable`] but consults a nominal-subtyping oracle for two named types:
     /// `subtype(a, b)` answers whether the type named `a` is a subtype of the type named `b`
     /// (a class implementing interface `b`, or an interface extending `b`, transitively). Threading
@@ -133,6 +171,16 @@ impl Ty {
             (Ty::Union(fs), Ty::Union(_)) => fs.iter().all(|f| Ty::assignable_with(f, to, subtype)),
             (_, Ty::Union(ts)) => ts.iter().any(|t| Ty::assignable_with(from, t, subtype)),
             (Ty::Union(fs), _) => fs.iter().all(|f| Ty::assignable_with(f, to, subtype)),
+            // Intersection types (M-RT S5) — the dual of the union arms, placed after them so a
+            // union-on-either-side mix is already handled (a union `from` to an intersection `to` is
+            // caught by `(Ty::Union(fs), _)`, recursing here per member). Into an intersection: `from`
+            // must fit *every* member (all-members-required-in) — so a `Dog` flows into
+            // `Drawable & Named` iff it implements both. Out of an intersection to a non-intersection
+            // `to`: *some* member must fit (some-member-out) — so `A & B -> A` and `A & B -> B` hold.
+            // The `(Intersection, Intersection)` case composes: `(_, Intersection(ts))` fires first
+            // and recurses each `t` into `(Intersection(fs), _)`, giving `ts.all(|t| fs.any(…))`.
+            (_, Ty::Intersection(ts)) => ts.iter().all(|t| Ty::assignable_with(from, t, subtype)),
+            (Ty::Intersection(fs), _) => fs.iter().any(|f| Ty::assignable_with(f, to, subtype)),
             // Function types are exact-match only — no co/contra-variance (spec A6).
             (Ty::Function(fp, fr), Ty::Function(tp, tr)) => {
                 fp.len() == tp.len() && fp.iter().zip(tp.iter()).all(|(a, b)| a == b) && fr == tr
@@ -186,6 +234,14 @@ impl fmt::Display for Ty {
                     .map(|t| t.to_string())
                     .collect::<Vec<_>>()
                     .join(" | ");
+                write!(f, "{m}")
+            }
+            Ty::Intersection(members) => {
+                let m = members
+                    .iter()
+                    .map(|t| t.to_string())
+                    .collect::<Vec<_>>()
+                    .join(" & ");
                 write!(f, "{m}")
             }
             Ty::Error => write!(f, "<error>"),
@@ -332,6 +388,70 @@ mod tests {
         let oracle = |x: &str, t: &str| t == "Speaker" && (x == "A" || x == "B");
         assert!(Ty::assignable_with(&ab, &speaker, &oracle)); // both implement Speaker
         assert!(!Ty::assignable_with(&ab, &speaker, &|_, _| false)); // without the edge, no
+    }
+
+    #[test]
+    fn intersection_of_normalizes() {
+        // Flatten nested, dedupe, canonical-sort by Display; a 1-member collapse is that member.
+        let a = Ty::Named("A".into(), vec![]);
+        let b = Ty::Named("B".into(), vec![]);
+        let c = Ty::Named("C".into(), vec![]);
+        // B & A & B  →  A & B  (sorted, deduped)
+        let i = Ty::intersection_of(vec![b.clone(), a.clone(), b.clone()]);
+        assert_eq!(i.to_string(), "A & B");
+        // nested intersections flatten: (A & B) & C  →  A & B & C
+        let nested = Ty::intersection_of(vec![i.clone(), c]);
+        assert_eq!(nested.to_string(), "A & B & C");
+        // collapse: A & A  ≡  A (not an Intersection)
+        assert_eq!(Ty::intersection_of(vec![a.clone(), a.clone()]), a);
+        // order-independence: A & B == B & A
+        assert_eq!(
+            Ty::intersection_of(vec![a.clone(), b.clone()]),
+            Ty::intersection_of(vec![b, a])
+        );
+    }
+
+    #[test]
+    fn intersection_assignability_all_in_some_out() {
+        // The dual of the union rules. `Dog` flows into `Drawable & Named` iff it (via the oracle)
+        // is a subtype of *both*; out of `A & B`, *some* member must fit the target.
+        let drawable = Ty::Named("Drawable".into(), vec![]);
+        let named = Ty::Named("Named".into(), vec![]);
+        let dn = Ty::intersection_of(vec![drawable.clone(), named.clone()]);
+        // all-members-required-in: a class implementing both is assignable; one is not.
+        let both = |x: &str, t: &str| x == "Dog" && (t == "Drawable" || t == "Named");
+        let one = |x: &str, t: &str| x == "Cat" && t == "Drawable"; // implements only Drawable
+        let dog = Ty::Named("Dog".into(), vec![]);
+        let cat = Ty::Named("Cat".into(), vec![]);
+        assert!(Ty::assignable_with(&dog, &dn, &both)); // Dog: Drawable & Named ✓
+        assert!(!Ty::assignable_with(&cat, &dn, &one)); // Cat: only Drawable ✗
+                                                        // some-member-out: A & B fits A and fits B.
+        assert!(Ty::assignable(&dn, &drawable)); // A & B -> A
+        assert!(Ty::assignable(&dn, &named)); // A & B -> B
+        let other = Ty::Named("Other".into(), vec![]);
+        assert!(!Ty::assignable(&dn, &other)); // A & B -/-> Other
+                                               // intersection ⊆ intersection: A & B & C -> A & B (every target member met by some source).
+        let c = Ty::Named("C".into(), vec![]);
+        let dnc = Ty::intersection_of(vec![drawable, named, c]);
+        assert!(Ty::assignable(&dnc, &dn)); // {A,B,C} satisfies {A,B}
+        assert!(!Ty::assignable(&dn, &dnc)); // {A,B} cannot satisfy C
+    }
+
+    #[test]
+    fn union_intersection_cross_assignability() {
+        // A union `from` flows into an intersection `to` iff EVERY union member fits the intersection,
+        // i.e. every member satisfies every intersection member. Here both A and B implement I and J.
+        let a = Ty::Named("A".into(), vec![]);
+        let b = Ty::Named("B".into(), vec![]);
+        let ab = Ty::union_of(vec![a.clone(), b.clone()]);
+        let i = Ty::Named("I".into(), vec![]);
+        let j = Ty::Named("J".into(), vec![]);
+        let ij = Ty::intersection_of(vec![i.clone(), j.clone()]);
+        let both_impl = |x: &str, t: &str| (x == "A" || x == "B") && (t == "I" || t == "J");
+        assert!(Ty::assignable_with(&ab, &ij, &both_impl)); // (A|B) -> (I&J)
+                                                            // If only A implements both, the union no longer fits (B fails).
+        let only_a = |x: &str, t: &str| x == "A" && (t == "I" || t == "J");
+        assert!(!Ty::assignable_with(&ab, &ij, &only_a));
     }
 
     #[test]

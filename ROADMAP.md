@@ -52,8 +52,13 @@ Grow the language beyond the M1 surface. **Landed so far:** developer-experience
 inference, `type` aliases, sharper diagnostics, `phg explain`), core ergonomics (S1 — indexing
 `xs[i]`, integer ranges `0..n`/`0..=n`, expression `if`), and **null safety** (S2 — optionals `T?`,
 `??`, `?.`, `if (var x = opt)`, checked `opt!`, `match` over `T?`; a non-optional `T` is never null,
-enforced at compile time). Planned next, roughly in order: `Map`/`Set`, the pipe operator (`|>`),
-exceptions (try/catch/throw), and **mutation**. Mutation is the trigger for the **real tracing garbage collector** — once values can
+enforced at compile time). The **Rich Types (M-RT)** track within M3 has shipped `instanceof` + smart
+cast, interfaces, `Map`/`Set`, erased generics (incl. methods and classes), unions `A | B`, and
+**intersections `A & B`**; next in that track is **method overloading** (`foo(int)` / `foo(string)` as
+distinct signatures — a Phorge-level feature lowered to one dispatching PHP method, since PHP forbids
+same-name redeclaration; the TypeScript-over-JavaScript relationship the transpile contract is built
+for), then class `extends` and traits. Planned next beyond M-RT, roughly in order: the pipe operator
+(`|>`), exceptions (try/catch/throw), and **mutation**. Mutation is the trigger for the **real tracing garbage collector** — once values can
 be reassigned and fields mutated, the `Rc` graph can form cycles that refcounting alone would leak, so
 M3 is where the mark-sweep collector finally earns its place.
 
