@@ -213,7 +213,33 @@
 - [2026-06-20] AGREED (S5 pace): **design first, then stop for review** (developer chose "S5, design
   first" over autonomous-implement, mirroring the S4 flow). Produce the S5 intersection-types design
   spec; do not implement until the open decisions are resolved. Spec:
-  `docs/specs/2026-06-20-s5-intersection-types-design.md`.
+  `docs/specs/2026-06-20-s5-intersection-types-design.md` (committed `ee7efc4`). **D3 = autonomous**
+  (locked) once D1/D2 settle.
+- [2026-06-20] S5 DESIGN DISCUSSION — **D1 & D2 STILL OPEN (resume point)**. The S5 spec is written +
+  committed (`ee7efc4`); NOTHING implemented. Developer is challenging both member-scope (D1) and the
+  method-conflict rule (D2). My standing analysis, grounded in two verified facts — **(i) no class
+  `extends` yet (S6); (ii) interface conformance is exact-match, no variance; (iii) no method
+  overloading (PHP has none either, FEATURES 🔲)**:
+  - **D1 (members):** `C & D` (two classes) is the **bottom type ∅** under nominal single-class-per-value
+    typing — disjoint value sets, empty intersection; `C & I` is either ≡`C` (C implements I) or ∅.
+    So every class-bearing intersection is redundant-or-uninhabited **until S6** (`extends` gives a class
+    >1 type). Nothing *forbids* accepting the syntax; it's just provably empty. My rec: **interface-only
+    now**, class form lights up at S6. Developer pushing to also allow classes — unresolved.
+  - **D2 (method conflict):** a method shared by two members with differing signatures (return OR params)
+    ⇒ no single class method can conform to both (no overloading + exact-match) ⇒ **intersection is
+    uninhabited**. Developer's `foo(int)->string` vs `foo(string)->string` "overloading" case is ALSO
+    uninhabited *here* precisely because Phorge lacks overloading. My rec: **require agreement — reject
+    as `E-INTERSECT-SIG`** (revised from first-member-wins). Would become legal iff overloading/variance
+    is ever added. Unresolved.
+  - **ON RESUME: re-ask D1 & D2 via AskUserQuestion** incorporating the above, then (D3=autonomous)
+    implement S5 per the spec. Build shape (from spec, unchanged): new `TokenKind::Amp` (lone `&`, binds
+    tighter than `|`); `Type::Intersection`/`Ty::Intersection` (+ `intersection_of` normalizer mirroring
+    `union_of`); dual `assignable_with` arms (all-members-in / some-member-out); member access searches
+    all member interfaces (`check_method_call`/`check_member` `Ty::Intersection` arm via
+    `iface_flat_methods`); `resolve_cty`→`Other`, `emit_type`→PHP `A&B`; erase_generics/expand_aliases/
+    loader `Type::Intersection` arms; **NO new `Op`, no `Value` change, no new pattern kind, no
+    instanceof change**. New codes `E-INTERSECT-MEMBER`/`-ARITY`/`-SIG` (+`-UNINHABITED` if D1 allows
+    classes) + `phg explain`. Example `examples/guide/intersections.phg`.
 
 ## Formal Plan
 
