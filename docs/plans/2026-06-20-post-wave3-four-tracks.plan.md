@@ -23,6 +23,18 @@
   in the parent; dispatch a subagent to run the wide mechanical codemod over all `.phg`/fixtures/
   inline test programs and bring the full gate green. Verify master HEAD advanced after the subagent
   commits (worktree git-env gotcha [[agent-worktree-vendor-git-corruption]]).
+- [2026-06-20] AGREED (GA blockers): B1–B4 + P1-d done INLINE on master (8a0672e, b2b047c) — full
+  gate green incl. PHP oracle. The literal tag gate is cleared.
+- [2026-06-20] AGREED (P1-b transpile claim): **DO BOTH** — (a) down-scope the README/docs "transpiles
+  the whole language" claim now + list the M11 gaps in KNOWN_ISSUES (honesty), AND (b) complete the
+  transpiler arms for literal-pattern `match`, expression-position `match`, and `is` (with PHP-oracle
+  byte-identity tests) so the full claim can be restored. Spine-sensitive — verify each arm on
+  run≡runvm≡php.
+- [2026-06-20] AGREED (P1-a float fidelity): **fix the formatting too** — correct the false
+  KNOWN_ISSUES "exactly-representable floats are byte-identical" claim AND add a `__phorge_float`
+  helper so transpiled PHP emits positional shortest-round-trip floats (no sci-notation divergence for
+  more values). `run≡runvm` is unaffected (spine-safe); this is a transpile-leg fidelity fix.
+  `src/transpile.rs:251`, `src/native.rs:963`. Add oracle cases at `1e-5`/`1e15`/`1e20`.
 
 ## Track 1 — core.html Option 1 (named per-tag helpers)
 **Approach:** two `macro_rules!` (`tag_el!`, `tag_void!`) in `src/native.rs`, each producing a
