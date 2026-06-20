@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/tmessaoudi-official/phorge/actions/workflows/ci.yml/badge.svg)](https://github.com/tmessaoudi-official/phorge/actions/workflows/ci.yml)
 
-**A small, statically-typed, PHP-inspired programming language — implemented in Rust, std-only, with
+**A statically-typed, PHP-inspired programming language — implemented in Rust, std-only, with
 zero external crates.**
 
 Phorge takes the ergonomics that make PHP pleasant to write (familiar syntax, string interpolation,
@@ -10,6 +10,12 @@ classes) and puts them on a **statically-typed, immutable-by-default** footing w
 pipeline. It runs on **two byte-identical backends** — a tree-walking interpreter and a bytecode
 stack VM — transpiles to **real PHP**, and can compile a program into a **single standalone native
 executable** with no runtime to install.
+
+Phorge is built to grow into a **full, general-purpose language** — aiming to match the breadth that
+makes PHP productive (and then some), not a toy DSL. **Performance is a first-class goal:** programs
+run on a bytecode VM, and an early three-way benchmark (`phg bench --vs-php`) already shows the VM
+ahead of PHP on a sample workload — with rigorous, comprehensive benchmarks a tracked milestone on
+the road to GA.
 
 ```phorge
 package main;
