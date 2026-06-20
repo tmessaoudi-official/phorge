@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Packaging — manifest distributable key renamed `name` → `module` (namespace reshape, slice 1)
+
+- **`phorge.toml`'s top-level distributable is now `module = "vendor/package"`** (was `name`). The
+  *keyword* `package` names the code unit (folder=path, `Main` entry) while `module` names the
+  distributable — Go's `go.mod` split — removing the `package`-keyword vs `name = "vendor/package"`
+  overload (reshape design D1). The `[require]`/`[require-dev]` dependency keys and the `phorge.lock`
+  `name` field are unchanged (they are *dependency coordinates*, not the project's own identity).
+  Rename-only and output-preserving: the emitted PHP namespace root (`namespace_root()`) and the
+  `run≡runvm≡php` byte-identity spine are untouched. This is the first slice of the
+  package/namespace reshape (`docs/specs/2026-06-20-package-namespace-reshape-design.md`); the
+  example projects' `phorge.toml` files are migrated.
+
 ### Tooling — `phg check --json` (machine-readable diagnostics, LSP foothold)
 
 - **`phg check --json`** emits the checker's diagnostics as a single-line JSON array to stdout (the

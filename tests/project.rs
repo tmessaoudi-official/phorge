@@ -42,7 +42,7 @@ fn run_both(entry: &Path) -> (String, String) {
 #[test]
 fn multi_file_project_qualified_call_runs_byte_identically() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "name = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
     // S2c: cross-package calls are *qualified* via an import leaf (`util.compute`), no longer the
     // S2b bare form. The loader resolves it against the imported package's mangled symbol.
     let entry = tmp.write(
@@ -63,7 +63,7 @@ fn multi_file_project_qualified_call_runs_byte_identically() {
 #[test]
 fn import_alias_resolves_qualified_call() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "name = \"acme/app\"");
+    tmp.write("phorge.toml", "module = \"acme/app\"");
     // `import acme.util as u;` binds the leaf `u`; the call qualifies on the alias.
     let entry = tmp.write(
         "src/main.phg",
@@ -85,7 +85,7 @@ fn same_package_cross_file_bare_call_resolves() {
     // Two files in the *same* library package: one calls the other by its bare (same-package) name;
     // the loader mangles both consistently so the intra-package call still resolves.
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "name = \"acme/app\"");
+    tmp.write("phorge.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
         "package main;\nimport core.console;\nimport acme.util;\n\
@@ -109,7 +109,7 @@ fn same_package_cross_file_bare_call_resolves() {
 fn unqualified_cross_package_call_is_rejected() {
     // The S2b interim (bare cross-package call) is gone: a library function must be qualified.
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "name = \"acme/app\"");
+    tmp.write("phorge.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
         "package main;\nimport core.console;\nimport acme.util;\n\
@@ -133,7 +133,7 @@ fn unqualified_cross_package_call_is_rejected() {
 #[test]
 fn library_package_type_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "name = \"acme/app\"");
+    tmp.write("phorge.toml", "module = \"acme/app\"");
     let entry = tmp.write("src/main.phg", "package main;\nfunction main() {}");
     tmp.write(
         "src/acme/util/shape.phg",
@@ -146,7 +146,7 @@ fn library_package_type_is_rejected() {
 #[test]
 fn multi_package_transpiles_to_brace_namespaces() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "name = \"acme/app\"");
+    tmp.write("phorge.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
         "package main;\nimport core.console;\nimport acme.util;\n\
@@ -170,7 +170,7 @@ fn multi_package_transpiles_to_brace_namespaces() {
 #[test]
 fn folder_path_violation_is_reported() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "name = \"acme/app\"");
+    tmp.write("phorge.toml", "module = \"acme/app\"");
     let entry = tmp.write("src/main.phg", "package main;\nfunction main() {}");
     tmp.write("src/acme/util/x.phg", "package acme.bad;\nfunction x() {}");
     let err = loader::load(&entry).unwrap_err();

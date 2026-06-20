@@ -1,9 +1,13 @@
 //! Project manifest (`phorge.toml`) — Composer's *vocabulary* in a TOML container.
 //!
 //! The manifest speaks the words a PHP/Composer developer reads natively —
-//! `name = "vendor/package"`, `[require]` / `[require-dev]` — but it is an honest
+//! `module = "vendor/package"`, `[require]` / `[require-dev]` — but it is an honest
 //! `phorge.toml` that the `phorge` tool actually runs (a literal `composer.json` would
-//! be a false promise: no Packagist, no autoloader Phorge uses). Each dependency
+//! be a false promise: no Packagist, no autoloader Phorge uses). The distributable is
+//! keyed `module` (not `name`): the *keyword* `package` names the code unit (folder=path,
+//! `Main` entry) while `module` names the distributable, mirroring Go's `go.mod` split and
+//! removing the `package`-keyword vs `name = "vendor/package"` overload (reshape D1). Each
+//! dependency
 //! self-locates via `git` + a pinned `tag`/`rev` (Go-style — no central registry, no
 //! Composer `repositories` side-table); version *ranges* are intentionally absent
 //! (the lockfile pins exact, so no resolver is needed).
@@ -43,8 +47,10 @@ pub struct Dependency {
 /// A parsed `phorge.toml`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Manifest {
-    /// `vendor/package` project name; doubles as the emitted PHP namespace root.
-    pub name: String,
+    /// `vendor/package` distributable identity (the `module` key); doubles as the emitted
+    /// PHP namespace root. Named `module`, not `name`, to separate the distributable from
+    /// the `package` keyword (reshape D1).
+    pub module: String,
     /// Project version (empty string if the manifest omits it).
     pub version: String,
     /// Source root that anchors folder=path (default [`Manifest::DEFAULT_SOURCE`]).
@@ -64,7 +70,7 @@ impl Manifest {
     /// Parse a `phorge.toml` from its text. Returns a human-readable, line-numbered
     /// error on any malformed or unsupported construct.
     pub fn parse(text: &str) -> Result<Manifest, String> {
-        let mut name: Option<String> = None;
+        let mut module: Option<String> = None;
         let mut version = String::new();
         let mut source: Option<String> = None;
         let mut require: Vec<Dependency> = Vec::new();
@@ -104,8 +110,8 @@ impl Manifest {
             let val = v.trim();
             match sec {
                 Sec::Meta => match key.as_str() {
-                    "name" => {
-                        name = Some(
+                    "module" => {
+                        module = Some(
                             parse_string(val).map_err(|e| format!("phorge.toml:{lineno}: {e}"))?,
                         );
                     }
@@ -121,7 +127,7 @@ impl Manifest {
                     other => {
                         return Err(format!(
                             "phorge.toml:{lineno}: unknown key `{other}` \
-                             (expected name, version, or source)"
+                             (expected module, version, or source)"
                         ));
                     }
                 },
@@ -132,15 +138,15 @@ impl Manifest {
             }
         }
 
-        let name = name.ok_or_else(|| {
-            "phorge.toml: missing required `name` (e.g. name = \"acme/myapp\")".to_string()
+        let module = module.ok_or_else(|| {
+            "phorge.toml: missing required `module` (e.g. module = \"acme/myapp\")".to_string()
         })?;
-        if name.trim().is_empty() {
-            return Err("phorge.toml: `name` must not be empty".to_string());
+        if module.trim().is_empty() {
+            return Err("phorge.toml: `module` must not be empty".to_string());
         }
         let source = source.unwrap_or_else(|| Self::DEFAULT_SOURCE.to_string());
         Ok(Manifest {
-            name,
+            module,
             version,
             source,
             require,
@@ -148,10 +154,10 @@ impl Manifest {
         })
     }
 
-    /// The PSR-4 namespace root derived from `name`: `"acme/myapp"` ⇒ `"Acme\\Myapp"`
+    /// The PSR-4 namespace root derived from `module`: `"acme/myapp"` ⇒ `"Acme\\Myapp"`
     /// (each `/`-segment PascalCased, joined with the PHP namespace separator `\`).
     pub fn namespace_root(&self) -> String {
-        self.name
+        self.module
             .split('/')
             .map(pascal_case)
             .collect::<Vec<_>>()
@@ -346,9 +352,9 @@ mod tests {
     // --- Manifest::parse ---------------------------------------------------
 
     #[test]
-    fn parses_name_only_with_defaults() {
-        let m = Manifest::parse("name = \"acme/myapp\"").unwrap();
-        assert_eq!(m.name, "acme/myapp");
+    fn parses_module_only_with_defaults() {
+        let m = Manifest::parse("module = \"acme/myapp\"").unwrap();
+        assert_eq!(m.module, "acme/myapp");
         assert_eq!(m.version, "");
         assert_eq!(m.source, "src"); // DEFAULT_SOURCE
         assert!(m.require.is_empty());
@@ -358,7 +364,7 @@ mod tests {
     #[test]
     fn parses_full_manifest() {
         let src = r#"
-            name = "acme/myapp"
+            module = "acme/myapp"
             version = "0.1.0"
             source = "lib"
 
@@ -370,7 +376,7 @@ mod tests {
             "acme/testkit" = { git = "https://github.com/acme/testkit.phg", rev = "a1b2c3d" }
         "#;
         let m = Manifest::parse(src).unwrap();
-        assert_eq!(m.name, "acme/myapp");
+        assert_eq!(m.module, "acme/myapp");
         assert_eq!(m.version, "0.1.0");
         assert_eq!(m.source, "lib");
 
@@ -390,15 +396,15 @@ mod tests {
 
     #[test]
     fn package_section_header_is_accepted() {
-        let src = "[package]\nname = \"acme/app\"\nversion = \"2.0.0\"";
+        let src = "[package]\nmodule = \"acme/app\"\nversion = \"2.0.0\"";
         let m = Manifest::parse(src).unwrap();
-        assert_eq!(m.name, "acme/app");
+        assert_eq!(m.module, "acme/app");
         assert_eq!(m.version, "2.0.0");
     }
 
     #[test]
     fn shorthand_handles_ssh_url_with_at() {
-        let src = "name = \"a/b\"\n[require]\n\"a/dep\" = \"git@github.com:acme/dep.phg@v9.9.9\"";
+        let src = "module = \"a/b\"\n[require]\n\"a/dep\" = \"git@github.com:acme/dep.phg@v9.9.9\"";
         let m = Manifest::parse(src).unwrap();
         assert_eq!(m.require[0].git, "git@github.com:acme/dep.phg");
         assert_eq!(m.require[0].pin, Pin::Tag("v9.9.9".to_string()));
@@ -406,26 +412,26 @@ mod tests {
 
     #[test]
     fn comments_and_blank_lines_ignored() {
-        let src = "# top comment\n\nname = \"acme/app\"  # trailing comment\n\n";
+        let src = "# top comment\n\nmodule = \"acme/app\"  # trailing comment\n\n";
         let m = Manifest::parse(src).unwrap();
-        assert_eq!(m.name, "acme/app");
+        assert_eq!(m.module, "acme/app");
     }
 
     #[test]
     fn hash_inside_quotes_is_not_a_comment() {
-        let m = Manifest::parse("name = \"acme/a#b\"").unwrap();
-        assert_eq!(m.name, "acme/a#b");
+        let m = Manifest::parse("module = \"acme/a#b\"").unwrap();
+        assert_eq!(m.module, "acme/a#b");
     }
 
     #[test]
-    fn missing_name_errors() {
+    fn missing_module_errors() {
         let err = Manifest::parse("version = \"1.0.0\"").unwrap_err();
-        assert!(err.contains("missing required `name`"), "got: {err}");
+        assert!(err.contains("missing required `module`"), "got: {err}");
     }
 
     #[test]
     fn branch_pin_rejected() {
-        let src = "name = \"a/b\"\n[require]\n\"a/d\" = { git = \"u\", branch = \"main\" }";
+        let src = "module = \"a/b\"\n[require]\n\"a/d\" = { git = \"u\", branch = \"main\" }";
         let err = Manifest::parse(src).unwrap_err();
         assert!(err.contains("`branch` is not allowed"), "got: {err}");
     }
@@ -433,48 +439,48 @@ mod tests {
     #[test]
     fn tag_and_rev_together_errors() {
         let src =
-            "name = \"a/b\"\n[require]\n\"a/d\" = { git = \"u\", tag = \"v1\", rev = \"abc\" }";
+            "module = \"a/b\"\n[require]\n\"a/d\" = { git = \"u\", tag = \"v1\", rev = \"abc\" }";
         let err = Manifest::parse(src).unwrap_err();
         assert!(err.contains("exactly one of `tag` or `rev`"), "got: {err}");
     }
 
     #[test]
     fn missing_pin_errors() {
-        let src = "name = \"a/b\"\n[require]\n\"a/d\" = { git = \"u\" }";
+        let src = "module = \"a/b\"\n[require]\n\"a/d\" = { git = \"u\" }";
         let err = Manifest::parse(src).unwrap_err();
         assert!(err.contains("missing pin"), "got: {err}");
     }
 
     #[test]
     fn missing_git_errors() {
-        let src = "name = \"a/b\"\n[require]\n\"a/d\" = { tag = \"v1\" }";
+        let src = "module = \"a/b\"\n[require]\n\"a/d\" = { tag = \"v1\" }";
         let err = Manifest::parse(src).unwrap_err();
         assert!(err.contains("missing `git`"), "got: {err}");
     }
 
     #[test]
     fn unknown_section_errors() {
-        let err = Manifest::parse("name = \"a/b\"\n[bogus]\nx = \"y\"").unwrap_err();
+        let err = Manifest::parse("module = \"a/b\"\n[bogus]\nx = \"y\"").unwrap_err();
         assert!(err.contains("unknown section `[bogus]`"), "got: {err}");
     }
 
     #[test]
     fn unknown_meta_key_errors() {
-        let err = Manifest::parse("name = \"a/b\"\nauthors = \"x\"").unwrap_err();
+        let err = Manifest::parse("module = \"a/b\"\nauthors = \"x\"").unwrap_err();
         assert!(err.contains("unknown key `authors`"), "got: {err}");
     }
 
     #[test]
     fn unquoted_value_errors() {
-        let err = Manifest::parse("name = acme/app").unwrap_err();
+        let err = Manifest::parse("module = acme/app").unwrap_err();
         assert!(err.contains("expected a quoted string"), "got: {err}");
     }
 
     #[test]
     fn namespace_root_pascalcases_segments() {
-        let m = Manifest::parse("name = \"acme/myapp\"").unwrap();
+        let m = Manifest::parse("module = \"acme/myapp\"").unwrap();
         assert_eq!(m.namespace_root(), "Acme\\Myapp");
-        let single = Manifest::parse("name = \"toolbox\"").unwrap();
+        let single = Manifest::parse("module = \"toolbox\"").unwrap();
         assert_eq!(single.namespace_root(), "Toolbox");
     }
 
@@ -509,7 +515,7 @@ mod tests {
         let root = tmp.path();
         std::fs::write(
             root.join("phorge.toml"),
-            "name = \"acme/app\"\nsource = \"src\"",
+            "module = \"acme/app\"\nsource = \"src\"",
         )
         .unwrap();
         let nested = root.join("src").join("acme").join("util");
@@ -519,7 +525,7 @@ mod tests {
 
         let project = Project::detect(&file).unwrap().expect("project detected");
         assert_eq!(project.root, root);
-        assert_eq!(project.manifest.name, "acme/app");
+        assert_eq!(project.manifest.module, "acme/app");
         assert_eq!(project.source_root, root.join("src"));
     }
 
@@ -538,9 +544,9 @@ mod tests {
     fn detect_propagates_malformed_manifest_error() {
         let tmp = TempDir::new();
         let root = tmp.path();
-        // Missing required `name`.
+        // Missing required `module`.
         std::fs::write(root.join("phorge.toml"), "version = \"1.0\"").unwrap();
         let err = Project::detect(root).unwrap_err();
-        assert!(err.contains("missing required `name`"), "got: {err}");
+        assert!(err.contains("missing required `module`"), "got: {err}");
     }
 }

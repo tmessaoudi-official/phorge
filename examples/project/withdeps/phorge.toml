@@ -1,4 +1,4 @@
-name = "acme/withdeps"
+module = "acme/withdeps"
 version = "0.1.0"
 source = "src"
 

@@ -734,7 +734,7 @@ mod tests {
     #[test]
     fn project_merges_files_flat() {
         let tmp = TempDir::new();
-        tmp.write("phorge.toml", "name = \"acme/app\"\nsource = \"src\"");
+        tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
         let entry = tmp.write(
             "src/main.phg",
             "package main;\nfunction main() {}\nfunction local() {}",
@@ -757,7 +757,7 @@ mod tests {
     #[test]
     fn project_main_is_folder_exempt_at_root() {
         let tmp = TempDir::new();
-        tmp.write("phorge.toml", "name = \"acme/app\"");
+        tmp.write("phorge.toml", "module = \"acme/app\"");
         // main lives at the project root, outside src/ — allowed.
         let entry = tmp.write("main.phg", "package main;\nfunction main() {}");
         let u = load(&entry).unwrap();
@@ -767,7 +767,7 @@ mod tests {
     #[test]
     fn folder_path_mismatch_is_rejected() {
         let tmp = TempDir::new();
-        tmp.write("phorge.toml", "name = \"acme/app\"");
+        tmp.write("phorge.toml", "module = \"acme/app\"");
         let entry = tmp.write("src/main.phg", "package main;\nfunction main() {}");
         // File sits in src/acme/util but declares the wrong package.
         tmp.write(
@@ -782,7 +782,7 @@ mod tests {
     #[test]
     fn non_main_directly_in_source_root_is_rejected() {
         let tmp = TempDir::new();
-        tmp.write("phorge.toml", "name = \"acme/app\"");
+        tmp.write("phorge.toml", "module = \"acme/app\"");
         let entry = tmp.write("src/main.phg", "package main;\nfunction main() {}");
         tmp.write("src/loose.phg", "package app;\nfunction f() {}");
         let err = load(&entry).unwrap_err();
@@ -795,7 +795,7 @@ mod tests {
     #[test]
     fn library_package_outside_source_root_is_rejected() {
         let tmp = TempDir::new();
-        tmp.write("phorge.toml", "name = \"acme/app\"\nsource = \"src\"");
+        tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
         tmp.write("src/main.phg", "package main;\nfunction main() {}");
         // A dotted package living outside the source root entirely.
         tmp.write("lib/parse.phg", "package acme.util;\nfunction parse() {}");
@@ -814,7 +814,7 @@ mod tests {
     #[test]
     fn duplicate_function_in_package_is_rejected() {
         let tmp = TempDir::new();
-        tmp.write("phorge.toml", "name = \"acme/app\"\nsource = \"src\"");
+        tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
         let entry = tmp.write("src/main.phg", "package main;\nfunction main() {}");
         // Two files in the same package each define `f` — collides after the flat merge.
         tmp.write("src/acme/util/a.phg", "package acme.util;\nfunction f() {}");
@@ -829,7 +829,7 @@ mod tests {
         let tmp = TempDir::new();
         tmp.write(
             "phorge.toml",
-            "name = \"acme/app\"\nsource = \"src\"\n\n[require]\n\"acme/lib\" = { git = \"u\", tag = \"v1\" }",
+            "module = \"acme/app\"\nsource = \"src\"\n\n[require]\n\"acme/lib\" = { git = \"u\", tag = \"v1\" }",
         );
         let entry = tmp.write("src/main.phg", "package main;\nfunction main() {}");
         // A vendored library must not declare `package main` (it would collide with the entry).

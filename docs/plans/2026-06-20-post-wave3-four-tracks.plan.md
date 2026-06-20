@@ -48,5 +48,15 @@ tree, or run a fresh pass. Hardening, not features.
 - **Track 2 — DONE**: `phg check --json` — std-only diagnostics serializer on `Diagnostic`
   (`diagnostic.rs`), `cli::check_json_program`, `--json` wired in `main.rs` (stdout + exit 0/1),
   unit + 2 CLI tests, FEATURES/CHANGELOG/`--help` updated. Gate green (FMT/CLIPPY 0, tests pass).
-- **Track 3 — next** (namespace reshape, slice 1: manifest `name` → `module`).
+- **Track 3 — in progress** (namespace reshape):
+  - **Slice 1 — DONE**: manifest distributable `name` → `module` (`src/manifest.rs` struct/parser/
+    `namespace_root`; `src/loader.rs` + `tests/project.rs` + `tests/vendor.rs` fixtures; both example
+    `phorge.toml`; CHANGELOG + spec §5.1 + example README). Lockfile `name` (dep coordinate) and
+    `[require]` keys unchanged. Rename-only, output-preserving; 471 tests green, PHP oracle ran,
+    clippy + fmt clean.
+  - Slice 2 — next: PascalCase enforcement (`E-PKG-CASE`) + identifier-casing lint + codemod across
+    all `.phg`/stdlib/fixtures (keyword stays `package`; entry stays `main` temporarily).
+  - Slice 3: entry `package main` → `package Main`.
+  - Slice 4: types in libraries (lift `E-PKG-TYPE` + cross-package type mangling + namespaced PHP +
+    D5b type-vs-leaf guard).
 - Track 4 planned above; refined at its turn.

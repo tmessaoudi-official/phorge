@@ -13,7 +13,7 @@ project root and asserts `run` ≡ `runvm` (and that it runs at all).
 
 ```
 tempconv/
-├── phorge.toml                     # name = "acme/tempconv", source = "src"
+├── phorge.toml                     # module = "acme/tempconv", source = "src"
 └── src/
     ├── main.phg                    # package main   — the runnable entry
     └── acme/

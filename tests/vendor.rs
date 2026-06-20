@@ -82,7 +82,7 @@ fn git(args: &[&str], cwd: &Path) -> String {
 fn build_upstream(dir: &TempDir) {
     dir.write(
         "phorge.toml",
-        "name = \"acme/greet\"\nversion = \"1.0.0\"\nsource = \"src\"\n",
+        "module = \"acme/greet\"\nversion = \"1.0.0\"\nsource = \"src\"\n",
     );
     dir.write(
         "src/acme/greet/hello.phg",
@@ -107,7 +107,7 @@ fn vendor_fetches_and_loads_offline() {
     let consumer = TempDir::new("consumer");
     consumer.write(
         "phorge.toml",
-        &format!("name = \"acme/app\"\nsource = \"src\"\n\n[require]\n\"acme/greet\" = {{ git = \"{url}\", tag = \"v1.0.0\" }}\n"),
+        &format!("module = \"acme/app\"\nsource = \"src\"\n\n[require]\n\"acme/greet\" = {{ git = \"{url}\", tag = \"v1.0.0\" }}\n"),
     );
     let entry = consumer.write(
         "src/main.phg",
@@ -157,7 +157,7 @@ fn vendor_is_idempotent() {
     let consumer = TempDir::new("consumer2");
     consumer.write(
         "phorge.toml",
-        &format!("name = \"acme/app\"\nsource = \"src\"\n\n[require]\n\"acme/greet\" = {{ git = \"{url}\", tag = \"v1.0.0\" }}\n"),
+        &format!("module = \"acme/app\"\nsource = \"src\"\n\n[require]\n\"acme/greet\" = {{ git = \"{url}\", tag = \"v1.0.0\" }}\n"),
     );
     let project = Project::detect(consumer.path()).unwrap().expect("project");
 
@@ -175,7 +175,7 @@ fn missing_vendor_is_rejected() {
     let consumer = TempDir::new("consumer3");
     consumer.write(
         "phorge.toml",
-        "name = \"acme/app\"\nsource = \"src\"\n\n[require]\n\"acme/greet\" = { git = \"file:///nonexistent\", tag = \"v1.0.0\" }\n",
+        "module = \"acme/app\"\nsource = \"src\"\n\n[require]\n\"acme/greet\" = { git = \"file:///nonexistent\", tag = \"v1.0.0\" }\n",
     );
     let entry = consumer.write("src/main.phg", "package main;\nfunction main() {}\n");
     let err = loader::load(&entry).unwrap_err();

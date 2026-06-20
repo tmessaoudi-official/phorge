@@ -1,8 +1,9 @@
 # Package / Namespace Reshape — Design Spec
 
-> **Status:** ✅ Design locked (decisions ratified in a 2026-06-20 brainstorm); ⛔ **not yet
-> implemented** — this is a sizeable, breaking, milestone-scale reshape (touches lexer, parser,
-> checker, loader, transpiler, every `.phg` file, the stdlib, fixtures, and docs).
+> **Status:** ✅ Design locked (decisions ratified in a 2026-06-20 brainstorm); 🚧 **in progress** —
+> **slice 1 (manifest `name` → `module`, §5.1) is DONE**; slices 2–4 pending. This is a sizeable,
+> breaking, milestone-scale reshape (touches lexer, parser, checker, loader, transpiler, every `.phg`
+> file, the stdlib, fixtures, and docs).
 > **Date:** 2026-06-20 · **Code state at spec time:** master `8676d1d` (core.html Wave 3), tree clean.
 > **Decider:** the developer (each decision below was an explicit, adversarially-challenged choice).
 > **Supersedes / extends:** `docs/specs/2026-06-18-m3-namespace-system-design.md` (the original
@@ -122,7 +123,10 @@ needed; this is **not** a single-sitting change.
 
 ## 5. Suggested build order (each slice independently green)
 
-1. **Manifest `name` → `module`** (C-word fix) — smallest, isolated.
+1. **Manifest `name` → `module`** (C-word fix) — smallest, isolated. ✅ **DONE** — `Manifest.module`
+   (struct + parser key + error messages + `namespace_root`), `phorge.toml` `module = …`, all manifest/
+   loader/project/vendor fixtures + example projects migrated; lockfile `name` (dependency coordinate)
+   and the `[require]` keys unchanged; 471 tests green, PHP oracle ran, clippy + fmt clean.
 2. **Casing enforcement** (`E-PKG-CASE` for segments + identifier-casing lint) + migrate all `.phg` /
    stdlib / fixtures / docs to the conventions (codemod). Keyword stays `package`; entry stays
    `main` *temporarily* to isolate churn.
