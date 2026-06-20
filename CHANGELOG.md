@@ -6,6 +6,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — erased generics `<T>` on methods (Rich Types, M-RT generics-all)
+
+- **Generic methods:** a class method may declare type parameters (`class U { function id<T>(T x) -> T
+  { return x; } }`), inferred at the call site from the arguments exactly like a generic free function
+  (`u.id(7)` → `int`, `u.firstOr(xs, -1)`, `u.applyTwice(5, fn(int v) => v + 1)`). The class itself is
+  not generic — only the method introduces `T`. Byte-identical `run ≡ runvm ≡ real PHP` (new
+  `examples/guide/generic-methods.phg`).
+- **Reuses the S7a free-function machinery, zero backend changes.** The parser drops the now-vestigial
+  "methods can't be generic" gate; the checker registers a method signature with its `type_params` in
+  scope (so a bare `T` resolves to `Ty::Param`) and routes a generic method call through the same
+  first-binding-wins `check_generic_call`/`unify`; `erase_generics` gains a class arm that rewrites
+  each generic method's signature + body to `Type::Erased` (PHP `mixed`/`array`/`\Closure`) before any
+  backend — so the interpreter, VM, and transpiler never see a type variable. **No new `Op`, no
+  `Value` change.** Generic *interface* methods stay deferred (their signatures are built with an empty
+  type-param list); generic types/classes (`Box<T>`) are the next generics-all sub-slice.
+
 ### Added — generic stdlib natives: `Core.List` & `Core.Map` query ops (Rich Types, M-RT S7b)
 
 - **The first generic native functions**: `Core.List` `reverse(List<T>) -> List<T>` and

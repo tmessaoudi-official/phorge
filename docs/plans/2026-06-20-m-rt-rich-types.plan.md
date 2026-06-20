@@ -111,6 +111,30 @@
   every `.phg`/fixture/inline-test/doc. The broader namespace reshape (`package main` → `package Main`,
   `E-PKG-CASE` on user package segments, manifest `name`→`module`, lifting `E-PKG-TYPE`) stays pending.
 
+- [2026-06-20] AGREED (generics-all pace + sub-slicing): proceed **fully autonomously**
+  (`_AUTONOMOUS_3C=1`), sub-slice by sub-slice — **(1) generic methods → (2) generic types/classes
+  `Box<T>` → (3) E-PKG-TYPE lift / cross-package types** — each its own green byte-identical commit.
+  Developer chose "Autonomous, sub-slice by sub-slice" over a design-pass-first gate.
+- [2026-06-20] AGREED (generic-methods design, locked at implementation): generic methods **reuse the
+  entire S7a free-fn machinery, zero backend changes** (the type variable is erased before any backend,
+  exactly like free-fn generics). Mechanism: (a) **parser** — drop the now-vestigial `allow_generics`
+  gate (both callers allow generics), so a method may declare `<T>` via the existing `parse_type_params`
+  [Verified: parser.rs:1129 is the only `false` caller; interface methods build `FunctionDecl` directly
+  at parser.rs:1081 with empty `type_params`, so generic *interface* methods stay a non-parse — naturally
+  deferred]. (b) **checker registration** (the class-collect phase, checker.rs:694–708) — mirror the
+  free-fn path: `validate_type_params` + set `active_type_params` before resolving the method sig + store
+  `type_params: f.type_params.clone()` in the `FnSig` (was hardcoded `Vec::new()`), so `T` in a method
+  param/ret becomes `Ty::Param`. (c) **call-site** (`check_method_call`, checker.rs:2112) — when the
+  method sig is generic (`params/ret` contain `Ty::Param`), route through the existing `check_generic_call`
+  (same first-binding-wins `unify`); else the unchanged `check_args` path — identical to how
+  `check_native_call` branches. (d) **body** already handled — `check_function` (shared by methods) sets
+  `active_type_params` from `f.type_params`. (e) **erasure** — extend `erase_generics` with an
+  `Item::Class` arm that rewrites any method with non-empty `type_params` (reusing the existing
+  `rty`/`rparam`/`rstmt` helpers), guarded so a class with no generic method is returned byte-for-byte
+  untouched. Scope: generic methods on a **non-generic class**, inferred from arguments only (the class's
+  own `<T>` is the next sub-slice). Deferred (KNOWN_ISSUES): generic interface methods, generic
+  classes/types, a generic method referenced as a first-class value.
+
 ## Formal Plan
 
 See the approved plan (`~/.claude/plans/misty-honking-lynx.md`) and the design spec. Slice table:

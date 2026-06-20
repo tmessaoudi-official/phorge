@@ -836,7 +836,7 @@ impl Parser {
         let sp = self.peek_span();
         match self.peek() {
             TokenKind::Import => self.parse_import(sp),
-            TokenKind::Function => Ok(Item::Function(self.parse_function(Vec::new(), sp, true)?)),
+            TokenKind::Function => Ok(Item::Function(self.parse_function(Vec::new(), sp)?)),
             TokenKind::Enum => Ok(Item::Enum(self.parse_enum(sp)?)),
             TokenKind::Class => Ok(Item::Class(self.parse_class(sp)?)),
             TokenKind::Interface => Ok(Item::Interface(self.parse_interface(sp)?)),
@@ -921,11 +921,10 @@ impl Parser {
         &mut self,
         modifiers: Vec<Modifier>,
         sp: Span,
-        allow_generics: bool,
     ) -> Result<FunctionDecl, Diagnostic> {
         self.expect(&TokenKind::Function, "'function'")?;
         let name = self.expect_ident("a function name")?;
-        let type_params = self.parse_type_params(allow_generics)?;
+        let type_params = self.parse_type_params()?;
         self.expect(&TokenKind::LParen, "'(' after function name")?;
         let params = self.parse_params()?;
         self.expect(&TokenKind::RParen, "')' to close parameters")?;
@@ -947,17 +946,12 @@ impl Parser {
     }
 
     /// Optional generic parameter list `<T, U>` immediately after a function name (M-RT S7).
-    /// Absent ⇒ empty vec. Only free functions may be generic this slice; a method
-    /// (`allow_generics = false`) that opens a `<` gets a targeted error rather than a confusing
-    /// "expected '('".
-    fn parse_type_params(&mut self, allow_generics: bool) -> Result<Vec<String>, Diagnostic> {
+    /// Absent ⇒ empty vec. Both free functions and methods may be generic (M-RT generics-all);
+    /// generic *interface* methods are still a non-parse because interface methods build their
+    /// `FunctionDecl` directly with an empty `type_params` (no `<…>` is consumed there).
+    fn parse_type_params(&mut self) -> Result<Vec<String>, Diagnostic> {
         if !self.check(&TokenKind::Lt) {
             return Ok(Vec::new());
-        }
-        if !allow_generics {
-            return Err(self.error(
-                "generic type parameters are only allowed on free functions (M-RT S7), not methods",
-            ));
         }
         self.advance(); // consume '<'
         let mut params = vec![self.expect_ident("a type parameter name")?];
@@ -1125,9 +1119,7 @@ impl Parser {
                     span: sp,
                 })
             }
-            TokenKind::Function => Ok(ClassMember::Method(
-                self.parse_function(modifiers, sp, false)?,
-            )),
+            TokenKind::Function => Ok(ClassMember::Method(self.parse_function(modifiers, sp)?)),
             _ => {
                 // field: [modifiers] Type name ;
                 let ty = self.parse_type()?;
@@ -1464,11 +1456,20 @@ mod tests {
     }
 
     #[test]
-    fn rejects_generic_methods() {
-        // Only free functions may be generic this slice; a generic method is a parse error.
-        assert!(parser("class C { function m<T>(T x) -> T { return x; } }")
+    fn parses_generic_methods() {
+        // M-RT generics-all: a method may declare `<T>` just like a free function.
+        let item = parser("class C { function m<T>(T x) -> T { return x; } }")
             .parse_item()
-            .is_err());
+            .expect("generic method should parse");
+        match item {
+            Item::Class(c) => match &c.members[0] {
+                crate::ast::ClassMember::Method(f) => {
+                    assert_eq!(f.type_params, vec!["T".to_string()]);
+                }
+                _ => panic!("expected a method"),
+            },
+            _ => panic!("expected a class"),
+        }
     }
 
     #[test]

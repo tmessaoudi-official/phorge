@@ -389,9 +389,18 @@ sequence = Core rename✓ → **S7b** → generics-all → S4 unions → S5 → 
   init is Phorge's 2nd arg). `guide/higher-order.phg`; differential adds fault-parity + named-fn-ref +
   re-entrancy (map-in-reduce) cases. 432 lib + oracle + 51 integration green. See [[higher-order-natives-reentrant-vm]].
 
-**Developer next-step intent (2026-06-20):** S7b done → **generics-all** is NEXT (generic methods, then
-generic types/classes `Box<T>` — also lifts `E-PKG-TYPE`/cross-package types), AND keep brainstorming
-the **E-PKG-TYPE lift / cross-package types** (the prerequisite that unblocks selective type import).
+**GENERICS-ALL is ACTIVE** (pace: **fully autonomous**, sub-slice by sub-slice). **Sub-slice 1 — generic
+methods — COMPLETE:** a class method may declare `<T>` (`class U { function id<T>(T x) -> T … }`),
+inferred from the call's arguments, reusing the **entire S7a free-fn machinery with zero backend
+changes** — the parser drops the vestigial "methods can't be generic" gate; the checker registers a
+method sig with its `type_params` in scope (bare `T` → `Ty::Param`) and routes a generic method call
+through the same `check_generic_call`/`unify`; `erase_generics` gains an `Item::Class` arm that rewrites
+each generic method's sig+body to `Type::Erased` (PHP `mixed`/`array`/`\Closure`) before any backend.
+**No new `Op`, no `Value` change.** Byte-identical run≡runvm≡**real PHP** (`examples/guide/generic-methods.phg`);
+437 lib + PHP-oracle differential + 53 integration green. Deferred (KNOWN_ISSUES): generic *interface*
+methods (sig built with empty type-params), generic types/classes, a generic method as a first-class value.
+**NEXT sub-slice: generic types/classes `Box<T>`** — also lifts `E-PKG-TYPE`/cross-package types (which
+unblocks the adopted selective type import). Keep brainstorming the **E-PKG-TYPE lift** alongside it.
 
 **SELECTIVE TYPE IMPORT — designed + ADOPTED, NOT impl** (`23dbe83`, spec
 `docs/specs/2026-06-20-selective-type-import-design.md`): **`import type Pkg.Path.TypeName [as A];`** for

@@ -1028,6 +1028,32 @@ fn transpiles_higher_order_natives() {
 }
 
 #[test]
+fn generic_methods_agree() {
+    // A generic method (`<T>` on a method of a non-generic class) inferred from arguments must run
+    // byte-identically on both backends — the type variable is erased before either backend, like a
+    // generic free function (M-RT generics-all). `identity` reused at three concrete types.
+    agree("import Core.Console; class U { function id<T>(T x)->T { return x; } } function main(){ var u=U(); Console.println(\"{u.id(7)} {u.id(\\\"hi\\\")} {u.id(true)}\"); }"); // 7 hi true
+                                                                                                                                                                                  // `T` inferred from a `List<T>` argument; the fallback shares it.
+    agree("import Core.Console; class U { function firstOr<T>(List<T> xs, T d)->T { for (T x in xs) { return x; } return d; } } function main(){ var u=U(); Console.println(\"{u.firstOr([10,20], -1)} {u.firstOr([], 99)}\"); }"); // 10 99
+                                                                                                                                                                                                                                    // A type parameter inside a function-typed parameter, and the closure invoked in the method body
+                                                                                                                                                                                                                                    // (exercises the VM's re-entrant closure path from inside a generic method).
+    agree("import Core.Console; class U { function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } function main(){ var u=U(); Console.println(\"{u.applyTwice(5, fn(int v)=>v+1)}\"); }");
+    // 7
+}
+
+#[test]
+fn transpiles_generic_method_to_mixed() {
+    // A generic method erases to `mixed`-typed PHP (params and return), exactly as a generic free
+    // function does; `List<T>` → `array`, `(T)->T` → `\Closure`. No type variable reaches the output.
+    let php = transpile_ok("package main; class U { function id<T>(T x)->T { return x; } function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } function main(){ var u=U(); var n = u.id(1); var m = u.applyTwice(2, fn(int v)=>v+1); }");
+    assert!(php.contains("function id(mixed $x): mixed"), "{php}");
+    assert!(
+        php.contains("function applyTwice(mixed $x, \\Closure $f): mixed"),
+        "{php}"
+    );
+}
+
+#[test]
 fn escaping_and_nested_lambdas_agree() {
     // A closure that ESCAPES its defining frame: a named function returns a lambda capturing its
     // param, then it is called after the function has returned. Captures live in the closure's Rc,

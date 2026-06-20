@@ -29,14 +29,17 @@ not a panic:
 
 ## Generics (M-RT S7) — deferred refinements
 
-Erased generics ship for **free functions**: `function id<T>(T x) -> T`, inferred at the call site,
-byte-identical `run ≡ runvm ≡ real PHP` (see `examples/guide/generics.phg`). There is no
-monomorphization — type parameters are erased to PHP `mixed` before any backend. These refinements are
-deliberately deferred (each rejected cleanly or simply unavailable, never a crash):
+Erased generics ship for **free functions and class methods**: `function id<T>(T x) -> T` and
+`class U { function id<T>(T x) -> T … }`, inferred at the call site, byte-identical
+`run ≡ runvm ≡ real PHP` (see `examples/guide/generics.phg`, `examples/guide/generic-methods.phg`).
+There is no monomorphization — type parameters are erased to PHP `mixed` before any backend. These
+refinements are deliberately deferred (each rejected cleanly or simply unavailable, never a crash):
 
-- **Generic methods** are a clean parse error — only free functions may declare `<T>` this slice.
-- **Generic types/classes/enums/interfaces** (`class Box<T>`) are not yet supported — the type
-  parameter list is a free-function feature for now.
+- **Generic *interface* methods** are a non-parse — an interface method's signature is built with an
+  empty type-parameter list, so a `<T>` there is never consumed. Generic methods on *classes* work.
+- **Generic types/classes/enums** (`class Box<T>`) are not yet supported — the type parameter list is
+  a function/method feature for now (the next generics-all sub-slice; it also lifts `E-PKG-TYPE` so
+  library/cross-package types become declarable).
 - **A generic function used as a first-class *value*** (`var f = id;` then `f(x)`) is not supported —
   call a generic function directly so the call site can infer its type parameters. (A monomorphic
   named function as a value already works — M3 S3.)

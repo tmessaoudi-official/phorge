@@ -1,0 +1,56 @@
+// Generic methods (M-RT generics-all) — TypeScript-style `<T>` type parameters on *methods*.
+//
+// A method can be generic just like a free function: the type parameter is declared after the
+// method name (`identity<T>`) and inferred at each call site from the argument types. The class
+// itself is NOT generic here — only the method introduces `T`. As with generic free functions
+// there is NO monomorphization: after type-checking every `T` is erased to a plain runtime value
+// (PHP `mixed`), so the interpreter, the bytecode VM, and the transpiled PHP run identical code —
+// byte-for-byte identical output.
+
+package main;
+
+import Core.Console;
+
+// A stateless utility — no fields, no constructor (instantiated as `Util()`).
+class Util {
+  // The classic: returns its argument unchanged, at whatever type it was called with.
+  function identity<T>(T x) -> T {
+    return x;
+  }
+
+  // `T` is inferred from the list's element type; the fallback shares it, so the whole call is
+  // checked against one consistent `T`.
+  function firstOr<T>(List<T> xs, T fallback) -> T {
+    for (T x in xs) {
+      return x;
+    }
+    return fallback;
+  }
+
+  // A type parameter can appear inside a *function-typed* parameter too: `f` maps a `T` to a `T`.
+  // Unification descends into the `(T) -> T` shape to bind `T`, and the closure is invoked inside
+  // the method body.
+  function applyTwice<T>(T x, (T) -> T f) -> T {
+    return f(f(x));
+  }
+}
+
+function main() {
+  var u = Util();
+
+  // `identity` reused at three different concrete types — one method definition, no duplication.
+  int n = u.identity(7);
+  string s = u.identity("phorge");
+  bool flag = u.identity(true);
+
+  // `firstOr` over a non-empty `List<int>` → `T = int`, returns the first element.
+  List<int> xs = [10, 20, 30];
+  int head = u.firstOr(xs, -1);
+
+  // A generic method taking an inline lambda: increments 5 twice → 7.
+  int bumped = u.applyTwice(5, fn(int v) => v + 1);
+
+  Console.println("identity: {n} {s} {flag}");
+  Console.println("firstOr head: {head}");
+  Console.println("applyTwice: {bumped}");
+}

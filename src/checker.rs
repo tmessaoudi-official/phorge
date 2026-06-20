@@ -14,8 +14,9 @@ struct FnSig {
     ret: Ty,
     /// Generic type parameters this function declares (`["T"]` for `function id<T>(T x) -> T`).
     /// Empty for a non-generic function — the common case. When non-empty, `params`/`ret` contain
-    /// `Ty::Param` occurrences that a call site unifies away (M-RT S7). Methods and interface method
-    /// signatures are non-generic this slice, so theirs is always empty.
+    /// `Ty::Param` occurrences that a call site unifies away (M-RT S7). Free functions AND class
+    /// methods may be generic (M-RT generics-all); interface method signatures stay non-generic
+    /// (the parser builds them with empty `type_params`), so theirs is always empty.
     type_params: Vec<String>,
 }
 
@@ -692,17 +693,24 @@ impl Checker {
                         .collect();
                 }
                 ClassMember::Method(f) => {
+                    // Generic methods reuse the free-fn machinery (M-RT generics-all): with the
+                    // method's `type_params` in scope, a bare `T` resolves to `Ty::Param("T")`, the
+                    // sig is stored with its type params, and `check_method_call` routes a generic
+                    // call through `check_generic_call`. Erased before any backend by `erase_generics`.
+                    self.validate_type_params(&f.type_params, f.span);
+                    self.active_type_params = f.type_params.clone();
                     let p = f.params.iter().map(|p| self.resolve_type(&p.ty)).collect();
                     let ret = match &f.ret {
                         Some(t) => self.resolve_type(t),
                         None => Ty::Unit,
                     };
+                    self.active_type_params.clear();
                     methods.insert(
                         f.name.clone(),
                         FnSig {
                             params: p,
                             ret,
-                            type_params: Vec::new(),
+                            type_params: f.type_params.clone(),
                         },
                     );
                 }
@@ -2110,6 +2118,15 @@ impl Checker {
                         }
                     });
                 match sig {
+                    // A generic method (its signature still carries `Ty::Param`) infers its type
+                    // arguments from the call's arguments via the same first-binding-wins unifier as
+                    // a generic free function / native (M-RT generics-all). Interface methods are
+                    // never generic this slice, so an interface receiver always takes the plain path.
+                    Some((params, ret))
+                        if params.iter().any(ty_has_param) || ty_has_param(&ret) =>
+                    {
+                        self.check_generic_call(name, &params, &ret, args, span)
+                    }
                     Some((params, ret)) => {
                         self.check_args(name, &params, args, span);
                         ret
@@ -2897,10 +2914,17 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
 /// pre-S7 AST). Runs after a successful [`check`], so the `T`-bearing types it erases were already
 /// validated.
 pub fn erase_generics(program: Program) -> Program {
-    use crate::ast::{Expr, FunctionDecl, Item, LambdaBody, MatchArm, Param, Stmt, StrPart, Type};
+    use crate::ast::{
+        ClassDecl, ClassMember, Expr, FunctionDecl, Item, LambdaBody, MatchArm, Param, Stmt,
+        StrPart, Type,
+    };
     use std::collections::HashSet;
 
     type Params<'a> = HashSet<&'a str>;
+
+    fn member_is_generic(m: &ClassMember) -> bool {
+        matches!(m, ClassMember::Method(f) if !f.type_params.is_empty())
+    }
 
     fn rty(ty: &Type, params: &Params) -> Type {
         match ty {
@@ -3143,6 +3167,37 @@ pub fn erase_generics(program: Program) -> Program {
                     ret: f.ret.as_ref().map(|t| rty(t, &params)),
                     body: f.body.iter().map(|s| rstmt(s, &params)).collect(),
                     span: f.span,
+                })
+            }
+            // A class with at least one generic method (M-RT generics-all): erase each generic
+            // method's `<T>` and rewrite its signature + body, exactly as for a generic free
+            // function. Non-generic members (and classes with no generic method) pass through
+            // untouched, so a non-generic program is returned byte-for-byte.
+            Item::Class(c) if c.members.iter().any(member_is_generic) => {
+                let members = c
+                    .members
+                    .into_iter()
+                    .map(|m| match m {
+                        ClassMember::Method(f) if !f.type_params.is_empty() => {
+                            let params: Params = f.type_params.iter().map(String::as_str).collect();
+                            ClassMember::Method(FunctionDecl {
+                                modifiers: f.modifiers.clone(),
+                                name: f.name.clone(),
+                                type_params: Vec::new(), // erased
+                                params: f.params.iter().map(|p| rparam(p, &params)).collect(),
+                                ret: f.ret.as_ref().map(|t| rty(t, &params)),
+                                body: f.body.iter().map(|s| rstmt(s, &params)).collect(),
+                                span: f.span,
+                            })
+                        }
+                        other => other,
+                    })
+                    .collect();
+                Item::Class(ClassDecl {
+                    name: c.name,
+                    implements: c.implements,
+                    members,
+                    span: c.span,
                 })
             }
             other => other,
@@ -3448,6 +3503,75 @@ mod tests {
     fn type_param_must_be_pascalcase() {
         let e = errors_of("function f<t>(t x) -> t { return x; } function main() {}");
         assert!(e.iter().any(|d| d.code == Some("E-TYPE-CASE")), "got {e:?}");
+    }
+
+    // --- M-RT generics-all: generic *methods* ---
+
+    #[test]
+    fn generic_method_typechecks_and_infers() {
+        // A generic method on a non-generic class, inferred from arguments at two distinct types.
+        let ok = errors_of(
+            "class U { function id<T>(T x) -> T { return x; } } \
+             function main() { var u = U(); int n = u.id(42); string s = u.id(\"hi\"); }",
+        );
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn generic_method_result_is_substituted() {
+        // `u.id(42)` returns `int`; binding it to a `string` is a type error — proving the method
+        // sig was treated as generic (return unified to the concrete arg), not left abstract or
+        // checked by the plain non-generic path.
+        let bad = errors_of(
+            "class U { function id<T>(T x) -> T { return x; } } \
+             function main() { var u = U(); string s = u.id(42); }",
+        );
+        assert!(!bad.is_empty(), "expected a type error, got none");
+    }
+
+    #[test]
+    fn generic_method_argument_must_unify_consistently() {
+        // Two `T` parameters of a method bound to incompatible concrete types.
+        let bad = errors_of(
+            "class U { function pairEq<T>(T a, T b) -> bool { return true; } } \
+             function main() { var u = U(); bool r = u.pairEq(1, \"x\"); }",
+        );
+        assert!(!bad.is_empty(), "expected a unification error, got none");
+    }
+
+    #[test]
+    fn generic_method_param_must_be_pascalcase() {
+        let e = errors_of("class U { function f<t>(t x) -> t { return x; } } function main() {}");
+        assert!(e.iter().any(|d| d.code == Some("E-TYPE-CASE")), "got {e:?}");
+    }
+
+    #[test]
+    fn erase_generics_strips_method_type_params() {
+        use crate::ast::{ClassMember, Item, Type};
+        let p = prog("class U { function id<T>(T x) -> T { return x; } } function main() {}");
+        let e = erase_generics(p);
+        let m = e
+            .items
+            .iter()
+            .find_map(|it| match it {
+                Item::Class(c) => c.members.iter().find_map(|mem| match mem {
+                    ClassMember::Method(f) if f.name == "id" => Some(f),
+                    _ => None,
+                }),
+                _ => None,
+            })
+            .expect("method id present");
+        assert!(m.type_params.is_empty(), "method type params not erased");
+        assert!(
+            matches!(m.params[0].ty, Type::Erased(_)),
+            "param type not erased: {:?}",
+            m.params[0].ty
+        );
+        assert!(
+            matches!(m.ret, Some(Type::Erased(_))),
+            "return type not erased: {:?}",
+            m.ret
+        );
     }
 
     #[test]
