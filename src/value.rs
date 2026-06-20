@@ -24,8 +24,14 @@ pub enum Value {
     Null,
     /// Shared (M2 P5a): cloning a list value is a refcount bump, not a deep element copy.
     List(Rc<Vec<Value>>),
-    /// Constructible in principle; the M1 sample never builds or indexes one.
-    Map(HashMap<HKey, Value>),
+    /// An **insertion-ordered** key→value map (M-RT S3). The order is part of the value: PHP arrays
+    /// preserve insertion order, so a `Vec` of pairs (not a `HashMap`) is what keeps a future
+    /// `keys()`/iteration byte-identical with the PHP target (risk R1). Shared via `Rc` like `List`
+    /// (cloning is a refcount bump). Built and indexed only through the `build_map`/`map_index`
+    /// kernels below, so both backends agree on dedup and lookup semantics.
+    Map(Rc<Vec<(HKey, Value)>>),
+    /// Constructible in principle; Set ergonomics land with generics (M-RT S7), so the sample never
+    /// builds one yet.
     Set(HashSet<HKey>),
     Instance(Rc<Instance>),
     Enum(Rc<EnumVal>),
@@ -79,6 +85,63 @@ pub enum HKey {
     Str(String),
 }
 
+impl HKey {
+    /// Project a runtime `Value` onto the hashable key subset, or `None` if it isn't a valid map key
+    /// (`float`, list, instance, …). The checker forbids non-`{int,bool,string}` key *types*
+    /// (`E-MAP-KEY`) and types the index of `m[k]` against the map's key type, so a `None` here is
+    /// checker-unreachable — the callers turn it into a clean fault rather than a panic (EV-7).
+    pub fn from_value(v: &Value) -> Option<HKey> {
+        match v {
+            Value::Int(n) => Some(HKey::Int(*n)),
+            Value::Bool(b) => Some(HKey::Bool(*b)),
+            Value::Str(s) => Some(HKey::Str(s.clone())),
+            _ => None,
+        }
+    }
+
+    /// Inverse of [`HKey::from_value`] — used when a key flows back out as a `Value` (a future
+    /// `keys()` native). Total: every `HKey` variant maps to exactly one `Value`.
+    pub fn to_value(&self) -> Value {
+        match self {
+            HKey::Int(n) => Value::Int(*n),
+            HKey::Bool(b) => Value::Bool(*b),
+            HKey::Str(s) => Value::Str(s.clone()),
+        }
+    }
+}
+
+/// Build an **insertion-ordered** map from evaluated `(key, value)` pairs, matching PHP literal
+/// semantics: a duplicate key keeps its **first position** but takes the **last value**
+/// (`["a" => 1, "a" => 2]` ⇒ `["a" => 2]`, position of the first `"a"`). Single-sourced so the
+/// interpreter (`Expr::Map`) and the VM (`Op::MakeMap`) dedup identically — `run ≡ runvm` (and a
+/// non-`HKey` key, checker-unreachable, faults cleanly rather than panicking, EV-7).
+pub fn build_map(pairs: Vec<(Value, Value)>) -> Result<Vec<(HKey, Value)>, String> {
+    let mut out: Vec<(HKey, Value)> = Vec::with_capacity(pairs.len());
+    for (k, v) in pairs {
+        let key =
+            HKey::from_value(&k).ok_or_else(|| format!("invalid map key: {}", k.type_name()))?;
+        if let Some(slot) = out.iter_mut().find(|(ek, _)| *ek == key) {
+            slot.1 = v; // existing key: keep first position, take last value (PHP semantics)
+        } else {
+            out.push((key, v));
+        }
+    }
+    Ok(out)
+}
+
+/// Look a key up in an insertion-ordered map. A missing key is a clean fault (`"map key not found"`),
+/// byte-identical across both backends — the differential harness excludes fault cases, and the
+/// present-key path is byte-identical to PHP `$m[$k]`. A non-`HKey` index is checker-unreachable
+/// (`m[k]` types `k` against the map's key type) but handled defensively (EV-7).
+pub fn map_index(map: &[(HKey, Value)], index: &Value) -> Result<Value, String> {
+    let key =
+        HKey::from_value(index).ok_or_else(|| format!("invalid map key: {}", index.type_name()))?;
+    map.iter()
+        .find(|(k, _)| *k == key)
+        .map(|(_, v)| v.clone())
+        .ok_or_else(|| "map key not found".to_string())
+}
+
 impl Value {
     /// Short name for diagnostics. Composite types fold to a constant so the
     /// return can stay `&'static str`.
@@ -130,6 +193,16 @@ impl Value {
             (Unit, Unit) => true,
             (List(a), List(b)) => {
                 a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| x.eq_val(y))
+            }
+            // Maps compare **order-independently** (insertion order is part of iteration, not of
+            // identity): same key set with `eq_val` values. This matches PHP associative `==`.
+            (Map(a), Map(b)) => {
+                a.len() == b.len()
+                    && a.iter().all(|(k, v)| {
+                        b.iter()
+                            .find(|(bk, _)| bk == k)
+                            .is_some_and(|(_, bv)| v.eq_val(bv))
+                    })
             }
             (Enum(a), Enum(b)) => {
                 a.ty == b.ty
@@ -279,6 +352,70 @@ pub fn compare_ord(a: &Value, b: &Value) -> Result<Option<Ordering>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn build_map_dedups_first_position_last_value() {
+        // PHP semantics: a duplicate key keeps its first position but takes the last value.
+        let m = build_map(vec![
+            (Value::Str("a".into()), Value::Int(1)),
+            (Value::Str("b".into()), Value::Int(2)),
+            (Value::Str("a".into()), Value::Int(9)),
+        ])
+        .unwrap();
+        // `Value` isn't `PartialEq` (holds `f64`), so compare keys directly + values via `eq_val`.
+        assert_eq!(m.len(), 2);
+        assert_eq!(m[0].0, HKey::Str("a".into())); // first position kept
+        assert!(m[0].1.eq_val(&Value::Int(9))); // last value taken
+        assert_eq!(m[1].0, HKey::Str("b".into()));
+        assert!(m[1].1.eq_val(&Value::Int(2)));
+    }
+
+    #[test]
+    fn build_map_rejects_non_hashable_key() {
+        let e = build_map(vec![(Value::Float(1.0), Value::Int(1))]).unwrap_err();
+        assert!(e.contains("invalid map key"), "{e}");
+    }
+
+    #[test]
+    fn map_index_found_and_missing() {
+        let m = vec![
+            (HKey::Str("x".into()), Value::Int(10)),
+            (HKey::Int(2), Value::Str("two".into())),
+        ];
+        assert!(map_index(&m, &Value::Str("x".into()))
+            .unwrap()
+            .eq_val(&Value::Int(10)));
+        assert!(map_index(&m, &Value::Int(2))
+            .unwrap()
+            .eq_val(&Value::Str("two".into())));
+        match map_index(&m, &Value::Str("missing".into())) {
+            Err(e) => assert_eq!(e, "map key not found"),
+            Ok(_) => panic!("expected missing-key fault"),
+        }
+    }
+
+    #[test]
+    fn hkey_value_round_trip() {
+        for v in [Value::Int(7), Value::Bool(true), Value::Str("k".into())] {
+            assert!(HKey::from_value(&v).unwrap().to_value().eq_val(&v));
+        }
+        assert!(HKey::from_value(&Value::Float(1.0)).is_none());
+    }
+
+    #[test]
+    fn map_eq_is_order_independent() {
+        let a = Value::Map(Rc::new(vec![
+            (HKey::Str("a".into()), Value::Int(1)),
+            (HKey::Str("b".into()), Value::Int(2)),
+        ]));
+        let b = Value::Map(Rc::new(vec![
+            (HKey::Str("b".into()), Value::Int(2)),
+            (HKey::Str("a".into()), Value::Int(1)),
+        ]));
+        let c = Value::Map(Rc::new(vec![(HKey::Str("a".into()), Value::Int(1))]));
+        assert!(a.eq_val(&b)); // same entries, different order → equal
+        assert!(!a.eq_val(&c)); // different key set → not equal
+    }
 
     #[test]
     fn int_kernels_fault_and_overflow() {

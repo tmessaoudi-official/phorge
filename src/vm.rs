@@ -230,20 +230,38 @@ impl<'a> Vm<'a> {
                 let items = self.split_off(n);
                 self.stack.push(Value::List(Rc::new(items)));
             }
+            Op::MakeMap(n) => {
+                // The 2n operands are k1,v1,…,kn,vn (vn on top). Pair them up and build the
+                // insertion-ordered map via the shared kernel (same dedup as the interpreter).
+                let flat = self.split_off(2 * n);
+                let mut pairs = Vec::with_capacity(n);
+                let mut it = flat.into_iter();
+                while let (Some(k), Some(v)) = (it.next(), it.next()) {
+                    pairs.push((k, v));
+                }
+                let map = crate::value::build_map(pairs)?;
+                self.stack.push(Value::Map(Rc::new(map)));
+            }
             Op::Index => {
-                let idx = match self.pop() {
-                    Value::Int(n) => n,
-                    v => return Err(format!("expected int index, found {}", v.type_name())),
-                };
-                let list = match self.pop() {
-                    Value::List(xs) => xs,
+                // Polymorphic (M-RT S3): a list uses an int index with bounds; a map looks the key up.
+                let index = self.pop();
+                match self.pop() {
+                    Value::List(xs) => {
+                        let idx = match index {
+                            Value::Int(n) => n,
+                            v => {
+                                return Err(format!("expected int index, found {}", v.type_name()))
+                            }
+                        };
+                        let i = usize::try_from(idx)
+                            .ok()
+                            .filter(|i| *i < xs.len())
+                            .ok_or_else(|| "list index out of range".to_string())?;
+                        self.stack.push(xs[i].clone());
+                    }
+                    Value::Map(m) => self.stack.push(crate::value::map_index(&m, &index)?),
                     v => return Err(format!("cannot index {}", v.type_name())),
-                };
-                let i = usize::try_from(idx)
-                    .ok()
-                    .filter(|i| *i < list.len())
-                    .ok_or_else(|| "list index out of range".to_string())?;
-                self.stack.push(list[i].clone());
+                }
             }
             Op::Len => match self.pop() {
                 Value::List(xs) => self.stack.push(Value::Int(xs.len() as i64)),

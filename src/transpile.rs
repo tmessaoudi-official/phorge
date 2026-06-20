@@ -699,6 +699,14 @@ impl Transpiler {
                 let parts: Result<Vec<_>, _> = items.iter().map(|i| self.emit_expr(i)).collect();
                 Ok(format!("[{}]", parts?.join(", ")))
             }
+            // A map literal → a PHP `[k => v, …]` array (insertion-ordered, like Phorge), M-RT S3.
+            Expr::Map(pairs, _) => {
+                let mut parts = Vec::with_capacity(pairs.len());
+                for (k, v) in pairs {
+                    parts.push(format!("{} => {}", self.emit_expr(k)?, self.emit_expr(v)?));
+                }
+                Ok(format!("[{}]", parts.join(", ")))
+            }
             Expr::Null(_) => Ok("null".into()),
             Expr::Index { object, index, .. } => {
                 let o = self.emit_expr(object)?;
@@ -1112,6 +1120,7 @@ impl Transpiler {
                 | Expr::Force { .. }
                 | Expr::Range { .. }
                 | Expr::List(..)
+                | Expr::Map(..)
         )
     }
 

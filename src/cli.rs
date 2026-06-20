@@ -197,6 +197,12 @@ pub fn explain_text(code: &str) -> Option<String> {
              `List<int>` (its role this slice is `for (int i in 0..n)`). Use integer bounds, or\n\
              build a `List` explicitly if you need other element types.\n"
         }
+        "E-MAP-KEY" => {
+            "E-MAP-KEY — a map's key type is not hashable.\n\n\
+             A `Map<K, V>` key must be `int`, `bool`, or `string` (the hashable subset) — a\n\
+             `float`, list, instance, or other composite can't be a key. Change the key type, or\n\
+             model the lookup differently (e.g. key by a `string` id).\n"
+        }
         "E-NO-PACKAGE" => {
             "E-NO-PACKAGE — a file has no `package` declaration.\n\n\
              Everything is namespaced (\"nothing in the wind\"): every file must declare its package\n\
@@ -361,7 +367,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY)"
         )
     })
 }

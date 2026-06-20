@@ -324,6 +324,21 @@ impl Interp {
                 }
                 Ok(Value::List(Rc::new(out)))
             }
+            Expr::Map(pairs, _) => {
+                // Evaluate key then value (source order — matches the compiler's emit and the VM's
+                // pop order, so side effects fire identically), then build via the shared kernel so
+                // dedup is byte-identical to `Op::MakeMap` (M-RT S3).
+                let mut evaled = Vec::with_capacity(pairs.len());
+                for (k, v) in pairs {
+                    let kv = self.eval(k)?;
+                    let vv = self.eval(v)?;
+                    evaled.push((kv, vv));
+                }
+                match crate::value::build_map(evaled) {
+                    Ok(m) => Ok(Value::Map(Rc::new(m))),
+                    Err(e) => rt(e),
+                }
+            }
             Expr::Unary { op, expr, .. } => self.eval_unary(*op, expr),
             Expr::Binary { op, lhs, rhs, .. } => self.eval_binary(*op, lhs, rhs),
             Expr::InstanceOf {
@@ -363,21 +378,29 @@ impl Interp {
             Expr::Index { object, index, .. } => {
                 // Evaluate the object before the index (matches the compiler's emit order and the
                 // VM's pop order, so any side effects fire in the same sequence — byte-identity).
+                // Polymorphic (M-RT S3): a list bounds-checks an int index; a map looks the key up.
                 let obj = self.eval(object)?;
                 let idx = self.eval(index)?;
-                let i = match idx {
-                    Value::Int(n) => n,
-                    v => return rt(format!("expected int index, found {}", v.type_name())),
-                };
-                let list = match obj {
-                    Value::List(xs) => xs,
-                    v => return rt(format!("cannot index {}", v.type_name())),
-                };
-                // Bounds-checked: an out-of-range read is a clean fault with the *same* body the VM
-                // emits (`vm.rs` `Op::Index`), so `agree_err` classifies both as `IndexOob` (D-L8).
-                match usize::try_from(i).ok().filter(|i| *i < list.len()) {
-                    Some(i) => Ok(list[i].clone()),
-                    None => rt("list index out of range"),
+                match obj {
+                    Value::List(list) => {
+                        let i = match idx {
+                            Value::Int(n) => n,
+                            v => return rt(format!("expected int index, found {}", v.type_name())),
+                        };
+                        // Bounds-checked: an out-of-range read faults with the *same* body the VM
+                        // emits (`vm.rs` `Op::Index`), so `agree_err` classifies both as `IndexOob`.
+                        match usize::try_from(i).ok().filter(|i| *i < list.len()) {
+                            Some(i) => Ok(list[i].clone()),
+                            None => rt("list index out of range"),
+                        }
+                    }
+                    // Key lookup via the shared kernel — a missing key faults with the same body as
+                    // the VM (`map_index`), so the two backends agree.
+                    Value::Map(m) => match crate::value::map_index(&m, &idx) {
+                        Ok(v) => Ok(v),
+                        Err(e) => rt(e),
+                    },
+                    v => rt(format!("cannot index {}", v.type_name())),
                 }
             }
             Expr::Force { inner, .. } => {

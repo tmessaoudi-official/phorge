@@ -836,6 +836,12 @@ impl Checker {
                     self.check_expr_casing(it);
                 }
             }
+            Expr::Map(pairs, _) => {
+                for (k, v) in pairs {
+                    self.check_expr_casing(k);
+                    self.check_expr_casing(v);
+                }
+            }
             Expr::Unary { expr, .. } => self.check_expr_casing(expr),
             Expr::Binary { lhs, rhs, .. } => {
                 self.check_expr_casing(lhs);
@@ -1182,6 +1188,7 @@ impl Checker {
                 None => self.err(*span, "`this` is only valid inside a method"),
             },
             Expr::List(elems, span) => self.check_list(elems, *span), // Task 5
+            Expr::Map(pairs, span) => self.check_map(pairs, *span),   // M-RT S3
             Expr::Unary { op, expr, span } => self.check_unary(*op, expr, *span),
             Expr::Binary { op, lhs, rhs, span } => self.check_binary(*op, lhs, rhs, *span),
             Expr::InstanceOf {
@@ -1483,7 +1490,8 @@ impl Checker {
             | Expr::Str(_, s)
             | Expr::Bytes(_, s)
             | Expr::Ident(_, s)
-            | Expr::List(_, s) => *s,
+            | Expr::List(_, s)
+            | Expr::Map(_, s) => *s,
             Expr::Null(s) | Expr::This(s) => *s,
             Expr::Unary { span, .. }
             | Expr::Binary { span, .. }
@@ -1517,6 +1525,40 @@ impl Checker {
         }
         Ty::List(Box::new(first))
     }
+    /// `[k => v, …]` (M-RT S3): infer the key type `K` and value type `V`, unifying across pairs
+    /// (each must share one type, like list elements). The parser guarantees ≥1 pair (an empty `[]`
+    /// is the empty *list*). Keys must be the hashable subset — `int`/`bool`/`string` — else
+    /// `E-MAP-KEY` (a `float`/instance/list key has no `HKey`). Result: `Ty::Map(K, V)`.
+    fn check_map(&mut self, pairs: &[(crate::ast::Expr, crate::ast::Expr)], span: Span) -> Ty {
+        let (k0, v0) = &pairs[0];
+        let key_ty = self.check_expr(k0);
+        let val_ty = self.check_expr(v0);
+        for (k, v) in &pairs[1..] {
+            let kt = self.check_expr(k);
+            if !self.ty_assignable(&kt, &key_ty) && !self.ty_assignable(&key_ty, &kt) {
+                self.err(
+                    span,
+                    format!("map keys must share one type; found `{key_ty}` and `{kt}`"),
+                );
+            }
+            let vt = self.check_expr(v);
+            if !self.ty_assignable(&vt, &val_ty) && !self.ty_assignable(&val_ty, &vt) {
+                self.err(
+                    span,
+                    format!("map values must share one type; found `{val_ty}` and `{vt}`"),
+                );
+            }
+        }
+        if !matches!(key_ty, Ty::Int | Ty::Bool | Ty::String | Ty::Error) {
+            return self.err_coded(
+                span,
+                format!("map key type must be `int`, `bool`, or `string`, found `{key_ty}`"),
+                "E-MAP-KEY",
+                None,
+            );
+        }
+        Ty::Map(Box::new(key_ty), Box::new(val_ty))
+    }
     fn check_index(
         &mut self,
         object: &crate::ast::Expr,
@@ -1532,7 +1574,15 @@ impl Checker {
                 }
                 *elem
             }
-            Ty::Map(..) => self.err(span, "Map indexing is not yet supported in M1"),
+            // `m[k]` (M-RT S3): the index must match the key type; the result is the value type. A
+            // missing key faults at runtime (byte-identical present-key, like list-OOB the fault path
+            // is excluded from differential gating).
+            Ty::Map(k, v) => {
+                if !self.ty_assignable(&idx, &k) {
+                    self.err(span, format!("map index must be `{k}`, found `{idx}`"));
+                }
+                *v
+            }
             Ty::Error => Ty::Error,
             other => self.err(span, format!("type `{other}` cannot be indexed")),
         }
@@ -2196,6 +2246,7 @@ fn lambda_uses_this(body: &crate::ast::LambdaBody) -> bool {
                 _ => false,
             }),
             Expr::List(items, _) => items.iter().any(in_expr),
+            Expr::Map(pairs, _) => pairs.iter().any(|(k, v)| in_expr(k) || in_expr(v)),
             Expr::Unary { expr, .. } => in_expr(expr),
             Expr::Binary { lhs, rhs, .. } => in_expr(lhs) || in_expr(rhs),
             Expr::InstanceOf { value, .. } => in_expr(value),
@@ -2429,6 +2480,13 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
             Expr::List(items, span) => {
                 Expr::List(items.into_iter().map(|e| rexpr(e, h)).collect(), span)
             }
+            Expr::Map(pairs, span) => Expr::Map(
+                pairs
+                    .into_iter()
+                    .map(|(k, v)| (rexpr(k, h), rexpr(v, h)))
+                    .collect(),
+                span,
+            ),
             Expr::Unary { op, expr, span } => Expr::Unary {
                 op,
                 expr: Box::new(rexpr(*expr, h)),
@@ -2835,6 +2893,27 @@ mod tests {
             Ok(_) => Vec::new(),
             Err(e) => e,
         }
+    }
+
+    #[test]
+    fn map_literal_and_indexing_typecheck() {
+        // A well-typed map literal + index of the right key type checks clean.
+        let ok =
+            errors_of("function main() { Map<string, int> m = [\"a\" => 1]; int x = m[\"a\"]; }");
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+        // Indexing with the wrong key type is an error.
+        let bad = errors_of("function main() { Map<string, int> m = [\"a\" => 1]; int x = m[0]; }");
+        assert!(
+            bad.iter().any(|d| d.message.contains("map index must be")),
+            "got {bad:?}"
+        );
+    }
+
+    #[test]
+    fn map_key_must_be_hashable() {
+        // A `float` key is not hashable → E-MAP-KEY.
+        let e = errors_of("function main() { Map<float, int> m = [1.0 => 1]; }");
+        assert!(e.iter().any(|d| d.code == Some("E-MAP-KEY")), "got {e:?}");
     }
 
     #[test]

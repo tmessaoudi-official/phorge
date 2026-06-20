@@ -329,8 +329,19 @@ sorted, cycle-safe) is computed once and consumed verbatim by checker + interpre
 (old `Ty::assignable` = no-subtype delegate). Transpiles to PHP `interface`/`implements`/`extends`,
 byte-identical run≡runvm≡real PHP; `examples/guide/interfaces.phg`; codes `E-IFACE-IMPL`/`-UNIMPL`/
 `-SIG`/`-CYCLE` (+ backfilled `E-INSTANCEOF-TYPE` explain). Interfaces are `package main`-only this
-slice (`E-PKG-TYPE`); exact signature match (no variance yet). **Next: S3 Map/Set.** Locked design
-decisions + slice order live in the plan's Decisions Log; the full design is
+slice (`E-PKG-TYPE`); exact signature match (no variance yet). **S3 COMPLETE (Map foundation):**
+`Map<K,V>` literals `[k => v]` + indexing `m[k]` — keys are the hashable subset (`int`/`bool`/`string`,
+else `E-MAP-KEY`), a missing key faults cleanly (`"map key not found"`, like list-OOB), insertion-ordered
+`Value::Map(Rc<Vec<(HKey,Value)>>)` rep (future-proofs R1 iteration order). **One new `Op::MakeMap`**;
+the existing `Op::Index` is made **runtime-polymorphic** (List→int-bounds; Map→`map_index` kernel) rather
+than a separate `IndexMap`; compiler gains **`CTy::Map(K,V)`** so a map-index result is a first-class
+arithmetic operand (`m["k"]+1` specializes on the VM — without it the VM would reject what the interpreter
+accepts, the documented CTy-operand trap). Build/lookup single-sourced in `value::build_map`/`map_index`
+kernels (`run≡runvm`); transpiles to a PHP `[k=>v]` array. `examples/guide/maps.phg` byte-identical
+run≡runvm≡**real PHP**. **Set + the generic-typed query ops (`keys`/`has`/`size`/`contains`/iteration)
+are deferred to erased generics (S7), which is REORDERED to immediately follow S3** — they hit the same
+no-type-variable wall that defers `core.list`. **Next: S7 erased generics** (then S4 unions → S5 →
+S6 → S8). Locked design decisions + slice order live in the plan's Decisions Log; the full design is
 `~/.claude/plans/misty-honking-lynx.md`.
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing

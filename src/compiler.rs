@@ -52,6 +52,11 @@ enum CTy {
     /// A `List<elem>`, carrying its element type so `ctype(Index)` (`xs[i]`) resolves to the element
     /// — which can be an arithmetic operand since M3 S1.1 (e.g. `xs[0] + 1` → `AddI`).
     List(Box<CTy>),
+    /// A `Map<key, val>`, carrying both so `ctype(Index)` (`m[k]`) resolves to the **value** type —
+    /// which can be an arithmetic operand (e.g. `m["a"] + 1` → `AddI`). Without this, a map-index
+    /// operand collapses to `Other` and `num_ty` errors on the VM only — a `run`↔`runvm` break
+    /// (M-RT S3, the same reason `List` carries its element type).
+    Map(Box<CTy>, Box<CTy>),
     /// A function type `(params) -> ret` — not a numeric operand; carried for future lambda support.
     Fn {
         params: Vec<CTy>,
@@ -575,7 +580,13 @@ fn resolve_cty(ty: &Type) -> CTy {
             // Track the element type so `xs[i]` can be an arithmetic operand (M3 S1.1); a bare
             // `List` (no arg) defaults its element to `Other`.
             "List" => CTy::List(Box::new(args.first().map_or(CTy::Other, resolve_cty))),
-            "bool" | "string" | "void" | "Map" | "Set" => CTy::Other,
+            // Track key+value types so `m[k]` can be an arithmetic operand (M-RT S3); a bare `Map`
+            // (no args) defaults both to `Other`.
+            "Map" => CTy::Map(
+                Box::new(args.first().map_or(CTy::Other, resolve_cty)),
+                Box::new(args.get(1).map_or(CTy::Other, resolve_cty)),
+            ),
+            "bool" | "string" | "void" | "Set" => CTy::Other,
             other => CTy::Class(other.to_string()),
         },
         // An optional carries its inner's `CTy` (not `Other`): once narrowed (if-let, `??`, `?.`,
@@ -656,6 +667,7 @@ impl<'a> Compiler<'a> {
             Op::Neg | Op::Not | Op::Len | Op::Jump(_) => 0,
             Op::MatchTag(_) | Op::GetEnumField(_) => 0, // pop one, push one
             Op::Concat(n) | Op::MakeList(n) => 1 - *n as isize,
+            Op::MakeMap(n) => 1 - 2 * *n as isize, // pops 2n (key+value pairs), pushes the map
             // Pops `argc` args, pushes the native's return value (the old `Print` + `Const(Unit)`
             // pair collapses into one op, net delta unchanged).
             Op::CallNative(_, argc) => 1 - *argc as isize,
@@ -778,8 +790,18 @@ impl<'a> Compiler<'a> {
             // receiver collapses to `Other` (checker-unreachable as an arithmetic operand).
             Expr::Index { object, .. } => match self.ctype(object)? {
                 CTy::List(elem) => Ok(*elem),
+                CTy::Map(_, val) => Ok(*val), // `m[k]` resolves to the value type (M-RT S3)
                 _ => Ok(CTy::Other),
             },
+            // A map literal's key/value types come from its first pair (≥1, parser-guaranteed), so a
+            // `var m = ["a" => 1]; m["a"] + 1` specializes the arithmetic (M-RT S3).
+            Expr::Map(pairs, _) => {
+                let (k0, v0) = &pairs[0];
+                Ok(CTy::Map(
+                    Box::new(self.ctype(k0).unwrap_or(CTy::Other)),
+                    Box::new(self.ctype(v0).unwrap_or(CTy::Other)),
+                ))
+            }
             Expr::Ident(name, _) => {
                 if let Some(b) = self.match_bindings.iter().rev().find(|b| b.name == *name) {
                     Ok(b.ty.clone())
@@ -877,7 +899,7 @@ impl<'a> Compiler<'a> {
         match ty {
             CTy::Int => Some(NumTy::Int),
             CTy::Float => Some(NumTy::Float),
-            CTy::Class(_) | CTy::Other | CTy::List(_) | CTy::Fn { .. } => None,
+            CTy::Class(_) | CTy::Other | CTy::List(_) | CTy::Map(..) | CTy::Fn { .. } => None,
         }
     }
 
@@ -1002,6 +1024,15 @@ impl<'a> Compiler<'a> {
                     self.expr(it)?;
                 }
                 self.emit(Op::MakeList(items.len()), sp.line);
+            }
+            Expr::Map(pairs, sp) => {
+                // Push each key then its value (source order); `Op::MakeMap(n)` pops the 2n values and
+                // builds the insertion-ordered map via the shared `build_map` kernel (M-RT S3).
+                for (k, v) in pairs {
+                    self.expr(k)?;
+                    self.expr(v)?;
+                }
+                self.emit(Op::MakeMap(pairs.len()), sp.line);
             }
             Expr::Unary { op, expr, span } => {
                 self.expr(expr)?;

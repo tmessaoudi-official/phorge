@@ -102,7 +102,13 @@ pub enum Op {
     Concat(usize),
     /// Pop `n` values into a `List` (top-of-stack is the last element).
     MakeList(usize),
-    /// Pop an int index and a list; push the element clone (bounds-checked).
+    /// Pop `2n` values (key/value pairs, in source order: …, k_n, v_n on top) into an
+    /// insertion-ordered `Map` via the shared `value::build_map` kernel (M-RT S3). Carries a count,
+    /// not a pool index — like `MakeList`, no `validate` index-bounds arm is needed.
+    MakeMap(usize),
+    /// Pop an index and a container; push the element clone. **Polymorphic** (M-RT S3): a `List`
+    /// uses a bounds-checked int index ("list index out of range" on OOB); a `Map` does a key lookup
+    /// via `value::map_index` ("map key not found" when absent).
     Index,
     /// Pop a list; push its length as an `Int`.
     Len,
@@ -374,6 +380,7 @@ impl BytecodeProgram {
                     | Op::SetLocal(_)
                     | Op::Concat(_)
                     | Op::MakeList(_)
+                    | Op::MakeMap(_)
                     | Op::Index
                     | Op::Len
                     | Op::MakeRange(_)

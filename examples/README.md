@@ -28,6 +28,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/null-safety.phg` | optionals `T?`, `??`, `?.`, `if (var x = opt)`, `opt!`, `match` over `T?` (M3 S2) |
 | `guide/instanceof.phg` | the `instanceof` runtime type test (`value instanceof ClassName` → `bool`) + smart-cast narrowing inside `if`; transpiles to PHP `instanceof` (Rich Types M-RT S1) |
 | `guide/interfaces.phg` | `interface` + `class … implements …` + `interface … extends …`; nominal subtyping (a class instance flows into an interface-typed slot), polymorphic calls through an interface-typed parameter, and `instanceof` against an interface (with smart-cast narrowing); transpiles to a PHP `interface`/`implements`/`extends` (Rich Types M-RT S2) |
+| `guide/maps.phg` | `Map<K, V>` literals `[k => v]` + indexing `m[k]` (string- and int-keyed; a map-index result as an arithmetic operand); keys are `int`/`bool`/`string`, insertion-ordered, transpiles to a PHP `[k => v]` array (Rich Types M-RT S3) |
 | `guide/lambdas-pipe.phg` | lambdas (expression + statement body), higher-order functions, first-class named-fn references, the pipe operator `\|>` (M3 S3 Track A) |
 | `guide/math.phg` | the `core.math` stdlib module — `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` (M3 Track B Wave 2) |
 | `guide/floats.phg` | `float` stringification — shortest-round-trip, always-positional, byte-identical across `run`/`runvm`/PHP for every finite magnitude (irrational, large, small) via the `__phorge_float` transpile helper |

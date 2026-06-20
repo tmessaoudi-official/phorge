@@ -6,6 +6,26 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `Map<K, V>` foundation: literals + indexing (Rich Types milestone, M-RT S3)
+
+- **`Map<K, V>` literals `[k => v, …]`** and **indexing `m[k]`**, byte-identical `run ≡ runvm ≡ real
+  PHP` (verified; new `examples/guide/maps.phg`, oracle-gated). The map literal is distinguished from a
+  list literal by the `=>` after the first element; `[]` stays the empty *list* (an empty map literal
+  is deferred). Keys are the hashable subset — `int`/`bool`/`string` (`E-MAP-KEY` otherwise) — and a
+  missing key is a clean, byte-identical fault (`"map key not found"`), like list out-of-range.
+- **Insertion-ordered representation.** `Value::Map` is now an `Rc<Vec<(HKey, Value)>>` (not a
+  `HashMap`), so map order is part of the value — keeping a future `keys()`/iteration byte-identical
+  with PHP's insertion-ordered arrays. Building (first-position/last-value dedup) and lookup are
+  single-sourced in `value::build_map` / `value::map_index` kernels, so the two backends agree.
+- **One new `Op::MakeMap(n)`** (across the three coupled matches + `validate`); the existing
+  `Op::Index` is made **runtime-polymorphic** (a `List` bounds-checks an int index; a `Map` does a key
+  lookup) rather than adding a separate `IndexMap`. The compiler gains `CTy::Map(K, V)` so a map-index
+  result is a first-class arithmetic operand (`m["k"] + 1` specializes on the VM — without it the VM
+  would fail to compile what the interpreter accepts). Transpiles to a PHP `[k => v]` array; `$m[$k]`.
+- **Scope this slice (foundation only):** `Set`, and the generic-typed query ops (`keys`/`has`/`size`/
+  `contains`/iteration), are deferred to **erased generics (S7, reordered to immediately follow S3)** —
+  they hit the same no-type-variable wall that defers `core.list`. New `E-MAP-KEY` in `phg explain`.
+
 ### Added — interfaces + `implements`/`extends` (Rich Types milestone, M-RT S2)
 
 - **`interface I { method sigs }`**, **`class C implements I, J`**, and **`interface K extends I`**.

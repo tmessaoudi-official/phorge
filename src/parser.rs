@@ -364,20 +364,42 @@ impl Parser {
             }
             TokenKind::LBracket => {
                 self.advance();
-                let mut items = Vec::new();
-                if !self.check(&TokenKind::RBracket) {
-                    loop {
-                        items.push(self.parse_expr()?);
-                        if !self.eat(&TokenKind::Comma) {
-                            break;
+                // `[]` is the empty *list* (an empty map literal is deferred — it needs a builder).
+                if self.check(&TokenKind::RBracket) {
+                    self.advance();
+                    Ok(Expr::List(Vec::new(), sp))
+                } else {
+                    // Parse the first element, then disambiguate: a following `=>` makes this a map
+                    // literal (`[k => v, …]`); otherwise it's a list (`[a, b, …]`). A lambda element
+                    // (`fn(x) => x`) consumes its own `=>` inside `parse_expr`, so it never trips the
+                    // map peek. Once chosen, a mismatched separator errors cleanly at `expect`.
+                    let first = self.parse_expr()?;
+                    if self.eat(&TokenKind::FatArrow) {
+                        let val = self.parse_expr()?;
+                        let mut pairs = vec![(first, val)];
+                        while self.eat(&TokenKind::Comma) {
+                            if self.check(&TokenKind::RBracket) {
+                                break; // trailing comma
+                            }
+                            let k = self.parse_expr()?;
+                            self.expect(&TokenKind::FatArrow, "'=>' in map literal")?;
+                            let v = self.parse_expr()?;
+                            pairs.push((k, v));
                         }
-                        if self.check(&TokenKind::RBracket) {
-                            break; // trailing comma
+                        self.expect(&TokenKind::RBracket, "']' to close map literal")?;
+                        Ok(Expr::Map(pairs, sp))
+                    } else {
+                        let mut items = vec![first];
+                        while self.eat(&TokenKind::Comma) {
+                            if self.check(&TokenKind::RBracket) {
+                                break; // trailing comma
+                            }
+                            items.push(self.parse_expr()?);
                         }
+                        self.expect(&TokenKind::RBracket, "']' to close list literal")?;
+                        Ok(Expr::List(items, sp))
                     }
                 }
-                self.expect(&TokenKind::RBracket, "']' to close list literal")?;
-                Ok(Expr::List(items, sp))
             }
             // Lambda expression: `fn(int x, int y) -> int => x + y` (expression body only;
             // statement-body lambdas land in S3 Task 6).
@@ -1363,6 +1385,40 @@ mod tests {
         }
         // postfix binds tighter than unary: -a.b  ==  -(a.b)
         assert_eq!(sexpr(&expr("-a.b")), "(- a.b)");
+    }
+
+    #[test]
+    fn parses_map_and_list_literals() {
+        // A `=>` after the first element makes it a map literal.
+        match expr("[\"a\" => 1, \"b\" => 2]") {
+            Expr::Map(pairs, _) => assert_eq!(pairs.len(), 2),
+            other => panic!("got {other:?}"),
+        }
+        // No `=>` → a list literal (unchanged).
+        match expr("[1, 2, 3]") {
+            Expr::List(items, _) => assert_eq!(items.len(), 3),
+            other => panic!("got {other:?}"),
+        }
+        // `[]` stays the empty *list* (an empty map literal is deferred).
+        match expr("[]") {
+            Expr::List(items, _) => assert!(items.is_empty()),
+            other => panic!("got {other:?}"),
+        }
+        // A lambda element consumes its own `=>`, so `[fn(int x) => x]` is a one-element list.
+        match expr("[fn(int x) => x]") {
+            Expr::List(items, _) => {
+                assert_eq!(items.len(), 1);
+                assert!(matches!(items[0], Expr::Lambda { .. }));
+            }
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_mixed_list_map_separators() {
+        // Once list-or-map is chosen by the first element, a mismatched separator errors cleanly.
+        assert!(parser("[1, 2 => 3]").parse_expr().is_err()); // list mode, stray `=>`
+        assert!(parser("[\"a\" => 1, \"b\"]").parse_expr().is_err()); // map mode, missing `=> v`
     }
 
     #[test]

@@ -105,6 +105,10 @@ pub enum Expr {
     This(Span),
     /// `[a, b, c]`
     List(Vec<Expr>, Span),
+    /// `[k => v, k2 => v2]` — a map literal (M-RT S3). Distinguished from `List` by the `=>` after the
+    /// first element; at least one pair (an empty map literal is deferred — `[]` is the empty *list*).
+    /// Keys must be `int`/`bool`/`string` (`E-MAP-KEY`); transpiles to a PHP `[k => v]` array.
+    Map(Vec<(Expr, Expr)>, Span),
     Unary {
         op: UnaryOp,
         expr: Box<Expr>,
@@ -299,6 +303,12 @@ fn collect_free_expr(
         Expr::List(items, _) => {
             for it in items {
                 collect_free_expr(it, bound, found);
+            }
+        }
+        Expr::Map(pairs, _) => {
+            for (k, v) in pairs {
+                collect_free_expr(k, bound, found);
+                collect_free_expr(v, bound, found);
             }
         }
         Expr::Unary { expr, .. } => collect_free_expr(expr, bound, found),

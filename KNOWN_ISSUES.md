@@ -10,7 +10,9 @@ parse error, non-zero exit) — never a crash.
 These are designed but not in the current surface; using them produces a clean compile-time error,
 not a panic:
 
-- `Map` / `Set` / tuples
+- `Set` / tuples (and the generic-typed Map/Set query ops — `keys`/`has`/`size`/`contains`/iteration —
+  which await erased generics; `Map<K,V>` literals + `m[k]` indexing ship in M-RT S3 — see the
+  *Maps* note below)
 - `instanceof` against **unions or intersections** (class operands ship in M-RT S1 and interface
   operands in M-RT S2 — see *Behavioral quirks* below; testing against unions/intersections lands
   with those features in later M-RT slices)
@@ -96,6 +98,33 @@ or simply unavailable, never a crash):
   features of the `phorge` CLI itself, not of built binaries.)
 - **aarch64 / Windows artifacts aren't executed in CI here.** They're validated by an object-section
   round-trip; native execution is verified for the host-runnable `x86_64-musl` target.
+
+## Maps (M-RT S3 — foundation)
+
+`Map<K, V>` ships its **foundation** this slice: literals `[k => v, …]` and indexing `m[k]`,
+byte-identical on `run`/`runvm` and round-tripped through real PHP. These are deliberately deferred
+(each rejected cleanly or simply unavailable, never a crash):
+
+- **No empty map literal yet.** `[]` is the empty *list*; a map literal needs at least one `k => v`
+  pair (the parser can't tell an empty map from an empty list, and there's no element to infer `K`/`V`
+  from). An empty/growable map awaits a builder native — which, like the query ops below, needs
+  generics. Mixing forms in one literal (`[a, b => c]`) is a clean parse error.
+- **Keys are the hashable subset only — `int`/`bool`/`string`.** A `float`, list, instance, or other
+  composite key is `E-MAP-KEY` (`phg explain E-MAP-KEY`). This mirrors the runtime `HKey` set.
+- **A missing key faults (`"map key not found"`).** Like list out-of-range, `m[k]` on an absent key is
+  a clean, byte-identical fault on both backends; the present-key path is byte-identical to PHP
+  `$m[$k]`, and the differential harness excludes the fault case by design. A safe `has`/`get`
+  accessor awaits generics.
+- **`keys` / `has` / `size` / iteration / `Set` are not available yet.** These ops are generically
+  typed (`keys(Map<K,V>) -> List<K>`, `has(Map<K,V>, K) -> bool`, …) and hit the same wall that
+  defers `core.list` — native signatures have no type variables. They (and `Set` itself) land with
+  erased generics (M-RT S7, reordered to immediately follow S3).
+- **A string-literal index inside a `"{…}"` interpolation nests quotes.** `"{m["k"]}"` ends the
+  string early (the shared interpolation rule — see core.html). Bind the lookup to a local first:
+  `var v = m["k"]; "{v}"`. An `int`/identifier index inside `{…}` is fine.
+- **Bool map keys: PHP coerces `true`/`false` to `1`/`0` as array keys; Phorge keeps them distinct.**
+  A `Map<bool, V>` works and is byte-identical *as long as you don't also use `0`/`1` int keys in the
+  same map* (PHP would collapse `true` and `1`). Prefer string/int keys when transpiling to PHP.
 
 ## Behavioral quirks
 
