@@ -356,10 +356,22 @@ discipline as `type` aliases / `html"…"`. Erased types → compiler `CTy::Othe
 `E-GENERIC-PARAM` on a built-in-shadowing/duplicate param; type params are PascalCase). Byte-identical
 run≡runvm≡**real PHP** (`examples/guide/generics.phg`); 424 lib + PHP-oracle differential + 48 integration
 green, clippy+fmt clean. Deferred (KNOWN_ISSUES): generic methods/types/classes, a generic fn as a
-first-class *value*, an empty `[]` into a generic param, bounds, variance. **Next: S7b** — Set + Map/Set
-query ops + `core.list` (`map`/`filter`/`reduce`; the closure-callback-from-native question is the open
-design point) — then S4 unions → S5 → S6 → S8. Locked design decisions + slice order live in the plan's
-Decisions Log; the full design is `~/.claude/plans/misty-honking-lynx.md`.
+first-class *value*, an empty `[]` into a generic param, bounds, variance.
+
+**STDLIB NAMESPACE RENAME COMPLETE** (`c4479d6`, namespace reshape part 1): the stdlib is now PascalCase
+— `Core.Console`/`Core.Math`/`Core.Text`/`Core.File`/`Core.Bytes`/`Core.Html` (fn names stay camelCase);
+`import Core.Console;` + `Console.println(...)`; `Core` reserved. E-SHADOW-IMPORT now only bites a
+lowercase **user**-package leaf. Codemod `tools/core_rename*.py` retained. *Pending broader reshape:*
+`package main`→`package Main`, user-package casing (E-PKG-CASE), manifest `name`→`module`, lift E-PKG-TYPE.
+
+**Developer decisions (2026-06-20, post-S7a):** generics reach = **ALL** (methods + generic types/classes
+too); `core.list` map/filter/reduce = **higher-order native** (`NativeEval::HigherOrder` + backend
+closure-invoker + re-entrant `vm.run_until`/`call_closure_value`, no new Op, → array_map/filter/reduce);
+sequence = Core rename✓ → **S7b** → generics-all. **Next: S7b** — `Core.List` (map/filter/reduce via the
+HOF native + reverse/sum), `Set` (Value::Set + construction native + contains/size), Map keys/values/has/
+size; no-callback ops are `Ty::Param`-sig natives unified in `check_native_call`. Then generics-all
+(methods → `Box<T>`) → S4 unions → S5 → S6 → S8. Locked decisions + slice order live in the plan's
+Decisions Log; full design `~/.claude/plans/misty-honking-lynx.md`. See [[m-rt-progress]] memory.
 
 Project invariants and layout now live in-repo: **`docs/INVARIANTS.md`** (the load-bearing
 correctness rules — read before touching backends, value kernels, or the `Op` set) and
