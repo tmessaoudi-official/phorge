@@ -823,13 +823,13 @@ fn s2_coalesce_is_byte_identical() {
 fn s2_safe_access_is_byte_identical() {
     // `?.` short-circuits to null on a null receiver (→ the `?? -1` default) and reads through when
     // the receiver is present. Field read and method call both go through `?.`.
-    let cls = "class Box { constructor(private int v) {} function v_of() -> int { return v; } function plus(int n) -> int { return v + n; } }";
+    let cls = "class Box { constructor(private int v) {} function vOf() -> int { return v; } function plus(int n) -> int { return v + n; } }";
     let field = cls.to_string()
         + "import core.console;  function main() { Box? a = null; console.println(\"{(a?.v) ?? -1}\"); Box? b = Box(7); console.println(\"{(b?.v) ?? -1}\"); }";
     assert_eq!(cmd_run(&with_pkg(&field)).as_deref(), Ok("-1\n7\n"));
     agree(&field);
     let method = cls.to_string()
-        + "import core.console;  function main() { Box? a = null; console.println(\"{(a?.v_of()) ?? -1}\"); Box? b = Box(9); console.println(\"{(b?.v_of()) ?? -1}\"); }";
+        + "import core.console;  function main() { Box? a = null; console.println(\"{(a?.vOf()) ?? -1}\"); Box? b = Box(9); console.println(\"{(b?.vOf()) ?? -1}\"); }";
     assert_eq!(cmd_run(&with_pkg(&method)).as_deref(), Ok("-1\n9\n"));
     agree(&method);
     // short-circuit: a safe call on a null receiver must NOT evaluate its arguments (no "SIDE").

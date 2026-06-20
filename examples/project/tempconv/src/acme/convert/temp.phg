@@ -1,8 +1,8 @@
 package acme.convert;
 
-// One package may span several files. `c_to_f` calls `scale` by its bare name — a *same-package*
+// One package may span several files. `cToF` calls `scale` by its bare name — a *same-package*
 // call across files (`scale` is defined in scale.phg, also `package acme.convert`). The loader
 // resolves both to the same namespaced symbol, so the call works without qualification.
-function c_to_f(int c) -> int {
+function cToF(int c) -> int {
     return scale(c) + 32;
 }

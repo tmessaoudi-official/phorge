@@ -24,7 +24,7 @@ $body = file_get_contents('php://input') ?: '';
 $headerLines = [];
 foreach ($_SERVER as $k => $v) {
     if (str_starts_with($k, 'HTTP_')) {
-        $name = str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($k, 5)))));
+        $name = strReplace(' ', '-', ucwords(strtolower(strReplace('_', ' ', substr($k, 5)))));
         $headerLines[] = "$name: $v";
     }
 }

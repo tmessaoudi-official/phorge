@@ -10,7 +10,7 @@ tool; this page documents that mechanism.)
 | Section | Cost center |
 |---|---|
 | `fib(18)` | **CPU** — exponential call volume, shallow recursion. Where the bytecode VM's per-call overhead advantage over the tree-walker shows up. |
-| `allocate_chain(1000)` | **Heap + stack** — 1000 `Cell` instances simultaneously live (each recursion frame keeps its `c` alive across the call) on the `Rc`-shared object heap, 1000-deep recursion. |
+| `allocateChain(1000)` | **Heap + stack** — 1000 `Cell` instances simultaneously live (each recursion frame keeps its `c` alive across the call) on the `Rc`-shared object heap, 1000-deep recursion. |
 | `for (Cell c in […])` | **Object access** — a method call + field read per list element. |
 
 It runs byte-identically on `phg run` and `phg runvm` (gated by `tests/differential.rs`, which

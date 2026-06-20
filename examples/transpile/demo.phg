@@ -11,7 +11,7 @@ enum Shape {
 
 class Named {
     constructor(private string label) {}
-    function label_of() -> string { return label; }
+    function labelOf() -> string { return label; }
 }
 
 function area(Shape s) -> float {
@@ -23,5 +23,5 @@ function area(Shape s) -> float {
 
 function main() {
     Named n = Named("demo");
-    console.println("{n.label_of()}: circle area = {area(Circle(2.0))}");
+    console.println("{n.labelOf()}: circle area = {area(Circle(2.0))}");
 }

@@ -12,6 +12,17 @@
   eval+php, byte-identity-testable). Solves the deferred "fn-ptr can't bake a tag" blocker without
   any lexer/parser/checker/backend change — purely additive, like Wave 2. Tag names are single
   lowercase words ⇒ already reshape-safe (no camelCase migration later).
+- [2026-06-20] AGREED (Track 3 slice 1): manifest distributable key `name` → `module` (committed
+  `ce588e3`); lockfile/`[require]` keys unchanged (dependency coordinates).
+- [2026-06-20] AGREED (Track 3 slice 2): **casing is a HARD ERROR for all** — package/folder
+  segments PascalCase (`E-PKG-CASE`), types/enums/variants PascalCase, functions/methods/vars/params
+  camelCase (single lowercase word counts as camelCase). No `W-CASE` lint fallback. Settles spec §6.
+- [2026-06-20] AGREED (Track 3 slice 2): execution is **subagent-driven** — implement the checker
+  casing rules + `phg explain` entries + the stdlib public-API rename (`split_once`→`splitOnce`,
+  `bool_attr`→`boolAttr`, `void_el`→`voidEl`, `from_string`→`fromString`, `to_string`→`toString`, …)
+  in the parent; dispatch a subagent to run the wide mechanical codemod over all `.phg`/fixtures/
+  inline test programs and bring the full gate green. Verify master HEAD advanced after the subagent
+  commits (worktree git-env gotcha [[agent-worktree-vendor-git-corruption]]).
 
 ## Track 1 — core.html Option 1 (named per-tag helpers)
 **Approach:** two `macro_rules!` (`tag_el!`, `tag_void!`) in `src/native.rs`, each producing a
@@ -54,8 +65,16 @@ tree, or run a fresh pass. Hardening, not features.
     `phorge.toml`; CHANGELOG + spec §5.1 + example README). Lockfile `name` (dep coordinate) and
     `[require]` keys unchanged. Rename-only, output-preserving; 471 tests green, PHP oracle ran,
     clippy + fmt clean.
-  - Slice 2 — next: PascalCase enforcement (`E-PKG-CASE`) + identifier-casing lint + codemod across
-    all `.phg`/stdlib/fixtures (keyword stays `package`; entry stays `main` temporarily).
+  - Slice 2 — SPLIT for safety into 2a + 2b (smaller green commits; the package-segment rule forces
+    folder renames, structurally riskier than identifier casing):
+    - **2a (in progress)**: identifier + type casing as HARD errors — `E-NAME-CASE` (camelCase for
+      functions/methods/params/vars/lambda-params) + `E-TYPE-CASE` (PascalCase for class/enum/
+      type-alias/enum-variant names) + `phg explain` entries; rename the 5 snake stdlib natives
+      (`split_once`→`splitOnce`, `bool_attr`→`boolAttr`, `void_el`→`voidEl`, `from_string`→
+      `fromString`, `to_string`→`toString`); migrate all identifier violations across `.phg`,
+      fixtures, inline test programs, docs. Package declarations stay lowercase here.
+    - **2b**: `E-PKG-CASE` (PascalCase package/folder segments) — exempt reserved `core` root +
+      `main` entry; rename example project folders + test fixtures to match folder=path.
   - Slice 3: entry `package main` → `package Main`.
   - Slice 4: types in libraries (lift `E-PKG-TYPE` + cross-package type mangling + namespaced PHP +
     D5b type-vs-leaf guard).

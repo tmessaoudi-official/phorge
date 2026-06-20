@@ -13,7 +13,7 @@ enum Tx {
 class Account {
     constructor(private string owner, private int cents) {}
 
-    function owner_name() -> string { return owner; }
+    function ownerName() -> string { return owner; }
     function balance() -> int { return cents; }
 
     function apply(Tx t) -> Account {
@@ -47,7 +47,7 @@ function main() {
     Account a2 = a1.apply(Withdraw(200));
     Account a3 = a2.apply(Transfer(100, "Bob"));
 
-    console.println("{a3.owner_name()} balance = {a3.balance()}c");
+    console.println("{a3.ownerName()} balance = {a3.balance()}c");
 
     List<Tx> log = [Deposit(500), Withdraw(200), Transfer(100, "Bob")];
     for (Tx t in log) {

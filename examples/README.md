@@ -29,13 +29,13 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/math.phg` | the `core.math` stdlib module — `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` (M3 Track B Wave 2) |
 | `guide/text.phg` | the `core.text` stdlib module — `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace` (M3 Track B Wave 2) |
 | `guide/file.phg` | the `core.file` stdlib module — `read` (→ `string?`), `exists`; reads a committed fixture, composes with S2 `??` / if-let (M3 Track B Wave 2) |
-| `guide/bytes.phg` | the `bytes` type + `b"…"` literals (`\xHH`) + `core.bytes` interop — `from_string`/`to_string` (→ `string?`)/`len`/`concat`/`slice` (M6 W0) |
-| `guide/html.phg` | `core.html` — the escape **kernel** (`text`/`raw`/`render`), the typed element **builders** (`el`/`void_el`/`attr`/`bool_attr`/`concat`), **named per-tag helpers** (`div`/`p`/`a`/`ul`/`li`/`br`/…), and the **`html"<h1>{name}</h1>"` literal sugar** (holes escape by type unless already `Html`); `Html`/`Attr` are distinct from `string`, XSS-safe by construction (core.html Waves 1–3) |
+| `guide/bytes.phg` | the `bytes` type + `b"…"` literals (`\xHH`) + `core.bytes` interop — `fromString`/`toString` (→ `string?`)/`len`/`concat`/`slice` (M6 W0) |
+| `guide/html.phg` | `core.html` — the escape **kernel** (`text`/`raw`/`render`), the typed element **builders** (`el`/`voidEl`/`attr`/`boolAttr`/`concat`), **named per-tag helpers** (`div`/`p`/`a`/`ul`/`li`/`br`/…), and the **`html"<h1>{name}</h1>"` literal sugar** (holes escape by type unless already `Html`); `Html`/`Attr` are distinct from `string`, XSS-safe by construction (core.html Waves 1–3) |
 | `bench/workload.phg` | a **profiling** workload (CPU recursion + heap allocation) for `phg bench`/`disasm` — see `bench/README.md` |
 | `transpile/demo.phg` | the **Phorge → PHP** bridge — see `transpile/README.md` |
 | `build/app.phg` | **standalone executables** — `phg build` — see `build/README.md` |
 | `cli/demo.phg` | the **`phg` CLI** — source forms, `check`/`parse`/`lex`, diagnostics, `explain` — see `cli/README.md` |
-| `web/handler.phg` | the **M6 W1 HTTP handler model** — `Request`/`Response` classes, `parse_request`/`serialize_response` in pure Phorge, `handle(Request) -> Response`; `bytes` bodies, `req.header(name)` lookup, `bytes.find` + `text.split_once`. No socket yet (that's W3's `phg serve`) |
+| `web/handler.phg` | the **M6 W1 HTTP handler model** — `Request`/`Response` classes, `parseRequest`/`serializeResponse` in pure Phorge, `handle(Request) -> Response`; `bytes` bodies, `req.header(name)` lookup, `bytes.find` + `text.splitOnce`. No socket yet (that's W3's `phg serve`) |
 | `web/router.phg` | the **M6 W2 static router** — a data-driven `List<Route>` table, linear exact-match `(method, path)` scan → a `Handler` enum tag, dispatched by exhaustive `match` to named handler functions; method-sensitive 404 fallback. Pure Phorge (no new feature); path params + middleware deferred (Track A / generics) |
 | `web/server.phg` | the **M6 W4 served app** — W1 parse/serialize + W2 routing + the single entry `respond(bytes) -> bytes` that **`phg serve`** runs over a real socket. `web/server.php` is the **`php -S`** front-controller bridge (both call the same `handle(Request) -> Response`) — see `web/README.md` |
 | `project/tempconv/` | a **multi-file project** (M5) — mandatory packages, folder = path, cross-package qualified calls + import aliasing, namespaced PHP — see `project/README.md` |
@@ -61,9 +61,9 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `core.math` stdlib: `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` | `guide/math` |
 | `core.text` stdlib: `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace` | `guide/text` |
 | `core.file` stdlib: `read` (→ `string?`), `exists` (fixture-gated) | `guide/file` |
-| `core.html` kernel (`text`/`raw`/`render`) + builders (`el`/`void_el`/`attr`/`bool_attr`/`concat`) + named per-tag helpers (`div`/`p`/`a`/`ul`/`li`/`br`/…) + `html"…"` literal sugar (type-directed hole escaping); `Html`/`Attr` ≠ `string` (XSS-safe by construction) | `guide/html` |
-| `core.bytes`: `find` (→ `int?`); `core.text`: `split_once` (→ `List<string>`) | `web/handler` |
-| HTTP handler model: `Request`/`Response`, `parse_request`/`serialize_response`, `handle()` | `web/handler` |
+| `core.html` kernel (`text`/`raw`/`render`) + builders (`el`/`voidEl`/`attr`/`boolAttr`/`concat`) + named per-tag helpers (`div`/`p`/`a`/`ul`/`li`/`br`/…) + `html"…"` literal sugar (type-directed hole escaping); `Html`/`Attr` ≠ `string` (XSS-safe by construction) | `guide/html` |
+| `core.bytes`: `find` (→ `int?`); `core.text`: `splitOnce` (→ `List<string>`) | `web/handler` |
+| HTTP handler model: `Request`/`Response`, `parseRequest`/`serializeResponse`, `handle()` | `web/handler` |
 | static HTTP router: `List<Route>` table, exact `(method, path)` match → `Handler` enum + exhaustive dispatch | `web/router` |
 | HTTP serve runtime: `phg serve` (native socket) + `php -S` front-controller, one `respond(bytes) -> bytes` entry | `web/server` |
 | Phorge → PHP transpile | `transpile/demo` |

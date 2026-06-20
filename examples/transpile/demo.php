@@ -8,7 +8,7 @@ final class Square extends Shape {
 }
 class Named {
     function __construct(private string $label) {}
-    function label_of(): string {
+    function labelOf(): string {
         return $this->label;
     }
 }
@@ -19,7 +19,7 @@ function area(Shape $s): float {
 }
 function main(): void {
     $n = new Named("demo");
-    echo __phorge_str($n->label_of()) . ": circle area = " . __phorge_str(area(new Circle(2.0))) . "\n";
+    echo __phorge_str($n->labelOf()) . ": circle area = " . __phorge_str(area(new Circle(2.0))) . "\n";
 }
 main();
 function __phorge_str($v) {

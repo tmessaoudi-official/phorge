@@ -11,9 +11,9 @@ import acme.convert;
 import acme.label as fmt;
 
 function main() {
-    // `convert.c_to_f` is a cross-package qualified call; `fmt.tag` is a call on the *aliased* leaf.
-    int freezing = convert.c_to_f(0);
-    int boiling = convert.c_to_f(100);
+    // `convert.cToF` is a cross-package qualified call; `fmt.tag` is a call on the *aliased* leaf.
+    int freezing = convert.cToF(0);
+    int boiling = convert.cToF(100);
     console.println(fmt.tag("freezing", freezing));
     console.println(fmt.tag("boiling", boiling));
 }

@@ -332,7 +332,7 @@ fn text_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "core.text",
-            name: "split_once",
+            name: "splitOnce",
             params: vec![s(), s()],
             ret: Ty::List(Box::new(Ty::String)),
             eval: text_split_once,
@@ -517,7 +517,7 @@ fn bytes_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
             module: "core.bytes",
-            name: "from_string",
+            name: "fromString",
             params: vec![Ty::String],
             ret: Ty::Bytes,
             eval: bytes_from_string,
@@ -526,7 +526,7 @@ fn bytes_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "core.bytes",
-            name: "to_string",
+            name: "toString",
             params: vec![Ty::Bytes],
             ret: Ty::Optional(Box::new(Ty::String)),
             eval: bytes_to_string,
@@ -848,7 +848,7 @@ fn html_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "core.html",
-            name: "bool_attr",
+            name: "boolAttr",
             params: vec![Ty::String],
             ret: Ty::Attr,
             eval: html_bool_attr,
@@ -877,7 +877,7 @@ fn html_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "core.html",
-            name: "void_el",
+            name: "voidEl",
             params: vec![Ty::String, Ty::List(Box::new(Ty::Attr))],
             ret: Ty::Html,
             eval: html_void_el,
@@ -1277,13 +1277,13 @@ mod tests {
             php("attr", &["$n", "$v"]),
             "' ' . $n . '=\"' . htmlspecialchars($v, ENT_QUOTES, 'UTF-8') . '\"'"
         );
-        assert_eq!(php("bool_attr", &["$n"]), "' ' . $n");
+        assert_eq!(php("boolAttr", &["$n"]), "' ' . $n");
         assert_eq!(
             php("el", &["$t", "$a", "$c"]),
             "(function($t,$a,$c){return '<' . $t . implode('', $a) . '>' . implode('', $c) . '</' . $t . '>';})($t, $a, $c)"
         );
         assert_eq!(
-            php("void_el", &["$t", "$a"]),
+            php("voidEl", &["$t", "$a"]),
             "(function($t,$a){return '<' . $t . implode('', $a) . '/>';})($t, $a)"
         );
         assert_eq!(php("concat", &["$xs"]), "implode('', $xs)");

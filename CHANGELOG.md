@@ -6,6 +6,27 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Packaging — identifier casing enforced (namespace reshape, slice 2a)
+
+- **Identifier casing is now a hard, checked rule.** Value identifiers — functions, methods,
+  parameters, fields, `var`/typed local bindings, `for`-loop variables, if-let bindings, and lambda
+  parameters — must be **camelCase** (`E-NAME-CASE`); type identifiers — class names, enum names,
+  enum variant names, and `type` alias names — must be **PascalCase** (`E-TYPE-CASE`). camelCase is a
+  lowercase first letter with no `_` (a single lowercase word like `main` is valid); PascalCase is an
+  uppercase first letter with no `_`. Each diagnostic suggests the converted form (`split_once` →
+  `splitOnce`, `shape` → `Shape`) and both have `phg explain` entries.
+- **The shipped stdlib public API is migrated to camelCase:** `core.text.split_once` → `splitOnce`,
+  `core.html.bool_attr` → `boolAttr`, `core.html.void_el` → `voidEl`, `core.bytes.from_string` →
+  `fromString`, `core.bytes.to_string` → `toString`. The native `eval`/PHP mappings are unchanged —
+  only the call-site name.
+- **Front-end-only, so byte-identity is untouched.** The casing pass lives in the checker (shared by
+  all three backends) and only gates *which* programs are accepted; the AST every backend sees is
+  identical, so the `run ≡ runvm ≡ transpiled-PHP` spine is unaffected. Casing applies to the original
+  source identifier, so a loader-mangled cross-package name (`Acme\Util\compute`) is validated on its
+  leaf (`compute`). All examples, fixtures, and inline test programs are migrated.
+- This is reshape slice 2a (`docs/specs/2026-06-20-package-namespace-reshape-design.md`);
+  **package-segment casing (`E-PKG-CASE`) is deferred to slice 2b.**
+
 ### Packaging — manifest distributable key renamed `name` → `module` (namespace reshape, slice 1)
 
 - **`phorge.toml`'s top-level distributable is now `module = "vendor/package"`** (was `name`). The

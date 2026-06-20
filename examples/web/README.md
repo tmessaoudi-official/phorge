@@ -7,7 +7,7 @@ a real socket — one native, one PHP — and both call the *same* `handle`.
 
 | File | What it is |
 |---|---|
-| `handler.phg` | **W1** — the handler model: `Request`/`Response` classes, `parse_request(bytes) -> Request?`, `serialize_response(Response) -> bytes`, `handle(Request) -> Response`. Bodies are `bytes`; headers are raw `List<string>` lines behind `req.header(name)`. No socket. |
+| `handler.phg` | **W1** — the handler model: `Request`/`Response` classes, `parseRequest(bytes) -> Request?`, `serializeResponse(Response) -> bytes`, `handle(Request) -> Response`. Bodies are `bytes`; headers are raw `List<string>` lines behind `req.header(name)`. No socket. |
 | `router.phg` | **W2** — a static exact-match router: a `List<Route>` table + linear `(method, path)` scan → a `Handler` enum tag → exhaustive `match` dispatch. Pure Phorge, no new language feature. |
 | `server.phg` | **W4** — the full served app: W1 parse/serialize + W2 routing + the single entry `respond(bytes) -> bytes`. This is what `phg serve` runs. |
 | `server.php` | **W4** — the PHP front-controller bridge: builds a `Request` from PHP superglobals, calls the transpiled `handle`, emits the `Response`. Runnable under `php -S`. |

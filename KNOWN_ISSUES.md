@@ -52,11 +52,11 @@ or simply unavailable, never a crash):
   specific to html.
 - **Named element helpers cover a curated set, not every HTML tag.** `html.div`/`html.p`/`html.br`/…
   are a hand-picked common subset (flow + sectioning + list + table + inline + the void elements);
-  for a tag outside the set use the generic `el(tag, attrs, children)` / `void_el(tag, attrs)`. The
+  for a tag outside the set use the generic `el(tag, attrs, children)` / `voidEl(tag, attrs)`. The
   set is macro-driven (each tag is monomorphized), so extending it is a one-line addition — not a
   limitation, just a scope choice. (The earlier "no named helpers at all" deferral is resolved.)
-- **Tag and attribute *names* are not escaped — only values and text are.** `el`/`void_el` tags and
-  `attr`/`bool_attr` names are treated as trusted author literals (like the surrounding markup);
+- **Tag and attribute *names* are not escaped — only values and text are.** `el`/`voidEl` tags and
+  `attr`/`boolAttr` names are treated as trusted author literals (like the surrounding markup);
   only attribute **values** (via `attr`) and **text** (via `text`) pass through
   `htmlspecialchars(_, ENT_QUOTES)`. Do not build a tag or attribute name from untrusted input.
 - **Escaping covers text and attribute-value contexts only.** `html.text` / `attr` are correct for
@@ -141,7 +141,7 @@ or simply unavailable, never a crash):
   `strlen`, `header`, … collides with the PHP builtin (`Cannot redeclare function …`). The Phorge
   backends are unaffected (everything is namespaced); only the PHP round-trip fails. Library packages
   are namespaced and immune. Pick non-builtin names for `package main` functions intended to transpile
-  (e.g. `serialize_response`, not `serialize`).
+  (e.g. `serializeResponse`, not `serialize`).
 - **Externally-read fields must be `public`, not `private` (transpile target).** Phorge's
   `run`/`runvm` do not enforce field visibility, so an external read `obj.field` of a `private`
   constructor-promoted field works there — but the transpiled PHP enforces `private` and throws

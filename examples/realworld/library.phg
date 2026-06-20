@@ -13,8 +13,8 @@ enum Availability {
 class Book {
     constructor(private string title, private Availability status) {}
 
-    function title_of() -> string { return title; }
-    function status_of() -> Availability { return status; }
+    function titleOf() -> string { return title; }
+    function statusOf() -> Availability { return status; }
 }
 
 function describe(Availability a) -> string {
@@ -37,7 +37,7 @@ function main() {
         Book("SICP", Lost()),
     ];
     for (Book b in shelf) {
-        console.println("{b.title_of()}: {describe(b.status_of())}");
+        console.println("{b.titleOf()}: {describe(b.statusOf())}");
     }
     console.println("late fee for 3.0 days = {fee(3.0)}c");
 }

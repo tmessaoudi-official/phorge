@@ -12,7 +12,7 @@ enum Discount {
 class Item {
     constructor(private string name, private int cents, private Discount disc) {}
 
-    function name_of() -> string { return name; }
+    function nameOf() -> string { return name; }
 
     function price() -> int {
         return match disc {
@@ -38,7 +38,7 @@ function main() {
         Item("Gizmo", 1500, Flat(300)),
     ];
     for (Item it in cart) {
-        console.println("{it.name_of()} = {it.price()}c");
+        console.println("{it.nameOf()} = {it.price()}c");
     }
     console.println("5x Widget = {bulk(1000, 5)}c");
 }

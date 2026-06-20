@@ -24,7 +24,7 @@ class Request {
   function header(string name) -> string? {
     for (string line in headerLines) {
       if (text.contains(line, ":")) {
-        List<string> kv = text.split_once(line, ":");
+        List<string> kv = text.splitOnce(line, ":");
         string key = text.trim(kv[0]);
         if (key == name) { return text.trim(kv[1]); }
       }
@@ -37,7 +37,7 @@ class Response {
   constructor(public int status, public bytes body, public List<string> headerLines) {}
 }
 
-function reason_phrase(int s) -> string {
+function reasonPhrase(int s) -> string {
   return if (s == 200) { "OK" }
     else { if (s == 400) { "Bad Request" }
     else { if (s == 404) { "Not Found" }
@@ -45,13 +45,13 @@ function reason_phrase(int s) -> string {
 }
 
 // Parse a raw HTTP/1.1 request (identical to W1's parser). `null` ⇒ malformed (→ a 400 at W3).
-function parse_request(bytes raw) -> Request? {
-  string nl = bytes.to_string(b"\x0d\x0a") ?? "";
+function parseRequest(bytes raw) -> Request? {
+  string nl = bytes.toString(b"\x0d\x0a") ?? "";
   int sep = bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
   if (sep < 0) { return null; }
   bytes headBytes = bytes.slice(raw, 0, sep);
   bytes body = bytes.slice(raw, sep + 4, bytes.len(raw));
-  string head = bytes.to_string(headBytes) ?? "";
+  string head = bytes.toString(headBytes) ?? "";
   List<string> lines = text.split(head, nl);
   string requestLine = lines[0];
   List<string> rl = text.split(requestLine, " ");
@@ -81,7 +81,7 @@ function routes() -> List<Route> {
 
 // Exact-match linear scan: first route whose method AND path both equal the request wins; otherwise
 // `NotFound()`. Method-sensitive (a registered path under the wrong verb falls through to 404).
-function match_route(string method, string path) -> Handler {
+function matchRoute(string method, string path) -> Handler {
   for (Route r in routes()) {
     if (r.method == method) {
       if (r.path == path) { return r.tag; }
@@ -90,49 +90,49 @@ function match_route(string method, string path) -> Handler {
   return NotFound();
 }
 
-function handle_home(Request req) -> Response {
-  bytes body = bytes.from_string("Phorge web — home");
+function handleHome(Request req) -> Response {
+  bytes body = bytes.fromString("Phorge web — home");
   return Response(200, body, ["Content-Type: text/plain"]);
 }
 
-function handle_greet(Request req) -> Response {
+function handleGreet(Request req) -> Response {
   string host = req.header("Host") ?? "world";
-  bytes body = bytes.from_string("Hello {host}");
+  bytes body = bytes.fromString("Hello {host}");
   return Response(200, body, ["Content-Type: text/plain"]);
 }
 
-function handle_health(Request req) -> Response {
-  bytes body = bytes.from_string("ok");
+function handleHealth(Request req) -> Response {
+  bytes body = bytes.fromString("ok");
   return Response(200, body, ["Content-Type: text/plain"]);
 }
 
-function handle_not_found(Request req) -> Response {
+function handleNotFound(Request req) -> Response {
   string m = req.method;
   string p = req.path;
-  bytes body = bytes.from_string("not found: {m} {p}");
+  bytes body = bytes.fromString("not found: {m} {p}");
   return Response(404, body, ["Content-Type: text/plain"]);
 }
 
 // The router: route the request to its handler. The `match` is exhaustive over `Handler`.
 function dispatch(Request req) -> Response {
-  Handler tag = match_route(req.method, req.path);
+  Handler tag = matchRoute(req.method, req.path);
   return match tag {
-    Home() => handle_home(req),
-    Greet() => handle_greet(req),
-    Health() => handle_health(req),
-    NotFound() => handle_not_found(req),
+    Home() => handleHome(req),
+    Greet() => handleGreet(req),
+    Health() => handleHealth(req),
+    NotFound() => handleNotFound(req),
   };
 }
 
 // Parse one raw request, route it, and print a one-line summary: METHOD PATH -> STATUS REASON: body.
 function show(bytes raw) {
-  if (var req = parse_request(raw)) {
+  if (var req = parseRequest(raw)) {
     Response resp = dispatch(req);
     string m = req.method;
     string p = req.path;
     int st = resp.status;
-    string reason = reason_phrase(st);
-    string body = bytes.to_string(resp.body) ?? "(binary)";
+    string reason = reasonPhrase(st);
+    string body = bytes.toString(resp.body) ?? "(binary)";
     console.println("{m} {p} -> {st} {reason}: {body}");
   } else {
     console.println("malformed request");

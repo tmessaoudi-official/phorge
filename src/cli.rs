@@ -297,6 +297,22 @@ pub fn explain_text(code: &str) -> Option<String> {
              the module must be in scope. Add `import core.html;` (or `import core.html as h;`) to the\n\
              file.\n"
         }
+        "E-NAME-CASE" => {
+            "E-NAME-CASE — a value identifier is not camelCase.\n\n\
+             Functions, methods, parameters, fields, variable bindings, and lambda parameters must be\n\
+             camelCase: a lowercase first letter and no underscores (e.g. `splitOnce`, `cToF`, `area`).\n\
+             This is the value half of Phorge's casing rule (types/enums/variants are PascalCase via\n\
+             E-TYPE-CASE); both are front-end-only, so they never change the generated PHP. Rename the\n\
+             identifier — the diagnostic suggests the converted form (`split_once` → `splitOnce`).\n"
+        }
+        "E-TYPE-CASE" => {
+            "E-TYPE-CASE — a type identifier is not PascalCase.\n\n\
+             Class names, enum names, enum variant names, and `type` alias names must be PascalCase: an\n\
+             uppercase first letter and no underscores (e.g. `Shape`, `Circle`, `HttpRequest`). This is\n\
+             the type half of Phorge's casing rule (functions/variables/params are camelCase via\n\
+             E-NAME-CASE); both are front-end-only, so they never change the generated PHP. Rename the\n\
+             type — the diagnostic suggests the converted form (`shape` → `Shape`).\n"
+        }
         _ => return None,
     };
     Some(body.to_string())
@@ -307,7 +323,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE)"
         )
     })
 }

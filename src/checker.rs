@@ -383,6 +383,9 @@ impl Checker {
     /// Phase 2 — check every function/method body.
     fn check_program(&mut self, program: &Program) {
         use crate::ast::{ClassMember, Item};
+        // Reshape slice 2a: identifier casing is a hard, front-end-only rule. Run it first so its
+        // diagnostics surface regardless of body-level errors (it is purely declaration-shaped).
+        self.check_casing(program);
         // M5 S1: every file is packaged, never inferred. Empty ⇒ no declaration; a `core` root is
         // reserved for the standard library. (Strict folder=path and loose-mode `main`-only land
         // with the project model in S2 — `docs/specs/2026-06-18-m5-project-model-design.md`.)
@@ -434,6 +437,218 @@ impl Checker {
                 }
                 Item::Enum(_) | Item::Import { .. } | Item::TypeAlias { .. } => {}
             }
+        }
+    }
+
+    // ---- identifier casing (reshape slice 2a) ----
+    /// Enforce the casing discipline as **hard** errors (front-end-only, so it cannot affect
+    /// byte-identity — every backend sees the same AST, the rule just gates which programs reach
+    /// them). Value identifiers (functions, methods, parameters, fields, `var` bindings, lambda
+    /// parameters) must be camelCase (`E-NAME-CASE`); type identifiers (class, enum, enum variant,
+    /// `type` alias names) must be PascalCase (`E-TYPE-CASE`). Package segments are NOT checked here
+    /// — that is reshape slice 2b (`E-PKG-CASE`).
+    fn check_casing(&mut self, program: &Program) {
+        use crate::ast::{ClassMember, Item};
+        for item in &program.items {
+            match item {
+                Item::Function(f) => self.check_fn_casing(f),
+                Item::Class(c) => {
+                    self.want_type_case(&c.name, c.span);
+                    for m in &c.members {
+                        match m {
+                            ClassMember::Field { name, span, .. } => {
+                                self.want_name_case(name, *span);
+                            }
+                            ClassMember::Constructor { params, .. } => {
+                                for p in params {
+                                    self.want_name_case(&p.name, p.span);
+                                }
+                            }
+                            ClassMember::Method(f) => self.check_fn_casing(f),
+                        }
+                    }
+                }
+                Item::Enum(e) => {
+                    self.want_type_case(&e.name, e.span);
+                    for v in &e.variants {
+                        self.want_type_case(&v.name, v.span);
+                    }
+                }
+                Item::TypeAlias { name, span, .. } => self.want_type_case(name, *span),
+                Item::Import { .. } => {}
+            }
+        }
+    }
+
+    /// Casing for a function/method declaration: its name + parameters are camelCase, and its body
+    /// is walked for `var` bindings and lambda parameters.
+    fn check_fn_casing(&mut self, f: &crate::ast::FunctionDecl) {
+        self.want_name_case(&f.name, f.span);
+        for p in &f.params {
+            self.want_name_case(&p.name, p.span);
+        }
+        for s in &f.body {
+            self.check_stmt_casing(s);
+        }
+    }
+
+    /// Walk a statement for value-binding casing (`var` declarations, `for`-loop variables,
+    /// if-let bindings) and any nested lambda parameters.
+    fn check_stmt_casing(&mut self, s: &crate::ast::Stmt) {
+        use crate::ast::Stmt;
+        match s {
+            Stmt::VarDecl {
+                name, init, span, ..
+            } => {
+                self.want_name_case(name, *span);
+                self.check_expr_casing(init);
+            }
+            Stmt::Return { value, .. } => {
+                if let Some(e) = value {
+                    self.check_expr_casing(e);
+                }
+            }
+            Stmt::If {
+                cond,
+                then_block,
+                else_block,
+                ..
+            } => {
+                self.check_expr_casing(cond);
+                for st in then_block {
+                    self.check_stmt_casing(st);
+                }
+                if let Some(eb) = else_block {
+                    for st in eb {
+                        self.check_stmt_casing(st);
+                    }
+                }
+            }
+            Stmt::For { iter, body, .. } => {
+                self.check_expr_casing(iter);
+                for st in body {
+                    self.check_stmt_casing(st);
+                }
+            }
+            Stmt::Block(stmts, _) => {
+                for st in stmts {
+                    self.check_stmt_casing(st);
+                }
+            }
+            Stmt::Expr(e, _) => self.check_expr_casing(e),
+        }
+    }
+
+    /// Walk an expression for lambda parameters (the only value bindings introduced inside an
+    /// expression) and recurse through every sub-expression.
+    fn check_expr_casing(&mut self, e: &crate::ast::Expr) {
+        use crate::ast::{Expr, LambdaBody, StrPart};
+        match e {
+            Expr::Int(..)
+            | Expr::Float(..)
+            | Expr::Bool(..)
+            | Expr::Null(..)
+            | Expr::Bytes(..)
+            | Expr::Ident(..)
+            | Expr::This(..) => {}
+            Expr::Str(parts, _) | Expr::Html(parts, _) => {
+                for p in parts {
+                    if let StrPart::Expr(inner) = p {
+                        self.check_expr_casing(inner);
+                    }
+                }
+            }
+            Expr::List(items, _) => {
+                for it in items {
+                    self.check_expr_casing(it);
+                }
+            }
+            Expr::Unary { expr, .. } => self.check_expr_casing(expr),
+            Expr::Binary { lhs, rhs, .. } => {
+                self.check_expr_casing(lhs);
+                self.check_expr_casing(rhs);
+            }
+            Expr::Call { callee, args, .. } => {
+                self.check_expr_casing(callee);
+                for a in args {
+                    self.check_expr_casing(a);
+                }
+            }
+            Expr::Member { object, .. } => self.check_expr_casing(object),
+            Expr::Index { object, index, .. } => {
+                self.check_expr_casing(object);
+                self.check_expr_casing(index);
+            }
+            Expr::Force { inner, .. } => self.check_expr_casing(inner),
+            Expr::Match {
+                scrutinee, arms, ..
+            } => {
+                self.check_expr_casing(scrutinee);
+                for arm in arms {
+                    self.check_expr_casing(&arm.body);
+                }
+            }
+            Expr::Range { start, end, .. } => {
+                self.check_expr_casing(start);
+                self.check_expr_casing(end);
+            }
+            Expr::If {
+                cond,
+                then_expr,
+                else_expr,
+                ..
+            } => {
+                self.check_expr_casing(cond);
+                self.check_expr_casing(then_expr);
+                self.check_expr_casing(else_expr);
+            }
+            Expr::Lambda { params, body, .. } => {
+                for p in params {
+                    self.want_name_case(&p.name, p.span);
+                }
+                match body {
+                    LambdaBody::Expr(inner) => self.check_expr_casing(inner),
+                    LambdaBody::Block(stmts) => {
+                        for st in stmts {
+                            self.check_stmt_casing(st);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// A value identifier must be camelCase; otherwise `E-NAME-CASE` with a converted-form hint.
+    ///
+    /// The loader's cross-package mangling (M5 S2c) rewrites a library def name to a PHP-FQN key
+    /// (`acme.util` + `compute` ⇒ `Acme\Util\compute`) *before* the checker runs. Casing applies to
+    /// the **original source identifier**, so validate only the last `\`-segment — the leaf — which
+    /// is byte-for-byte the name the developer wrote.
+    fn want_name_case(&mut self, name: &str, span: Span) {
+        let leaf = leaf_ident(name);
+        if !is_camel(leaf) {
+            self.err_coded(
+                span,
+                format!("`{leaf}` must be camelCase"),
+                "E-NAME-CASE",
+                Some(format!("did you mean `{}`?", to_camel(leaf))),
+            );
+        }
+    }
+
+    /// A type identifier must be PascalCase; otherwise `E-TYPE-CASE` with a converted-form hint.
+    /// Validates the leaf identifier (see [`Self::want_name_case`] for why the FQN prefix is
+    /// stripped). Cross-package types do not exist yet (`E-PKG-TYPE`), so a type name is never
+    /// mangled today — but the leaf-strip keeps this robust if that changes.
+    fn want_type_case(&mut self, name: &str, span: Span) {
+        let leaf = leaf_ident(name);
+        if !is_pascal(leaf) {
+            self.err_coded(
+                span,
+                format!("`{leaf}` must be PascalCase"),
+                "E-TYPE-CASE",
+                Some(format!("did you mean `{}`?", to_pascal(leaf))),
+            );
         }
     }
 
@@ -1730,6 +1945,66 @@ fn levenshtein(a: &str, b: &str) -> usize {
     prev[b.len()]
 }
 
+/// The original leaf identifier of a possibly loader-mangled name: the substring after the last
+/// `\` (`Acme\Util\compute` ⇒ `compute`), or the whole string when unmangled. Casing is a property
+/// of the source identifier, not the FQN the loader synthesizes (M5 S2c).
+fn leaf_ident(name: &str) -> &str {
+    name.rsplit('\\').next().unwrap_or(name)
+}
+
+/// camelCase: a lowercase ASCII first letter and no `_`. A single lowercase word (`main`, `area`,
+/// `hi`) qualifies. Empty strings are not valid (the parser never produces them, but be total).
+fn is_camel(s: &str) -> bool {
+    s.chars().next().is_some_and(|c| c.is_ascii_lowercase()) && !s.contains('_')
+}
+
+/// PascalCase: an uppercase ASCII first letter and no `_` (`Shape`, `Circle`, `HttpRequest`).
+fn is_pascal(s: &str) -> bool {
+    s.chars().next().is_some_and(|c| c.is_ascii_uppercase()) && !s.contains('_')
+}
+
+/// Split a snake_case-or-otherwise identifier into its `_`-delimited words, dropping empties (so a
+/// leading/trailing/doubled `_` does not yield a blank word). Shared by both converters.
+fn case_words(s: &str) -> Vec<&str> {
+    s.split('_').filter(|w| !w.is_empty()).collect()
+}
+
+/// Uppercase the first ASCII letter of a word, leaving the rest unchanged (`shape` → `Shape`,
+/// `once` → `Once`). Non-alphabetic leads pass through.
+fn upper_first(w: &str) -> String {
+    let mut cs = w.chars();
+    match cs.next() {
+        Some(c) => c.to_ascii_uppercase().to_string() + cs.as_str(),
+        None => String::new(),
+    }
+}
+
+/// Convert an identifier to the suggested camelCase form (`split_once` → `splitOnce`,
+/// `c_to_f` → `cToF`, `shape` → `shape`): the first word lowercased-first, each later word
+/// capitalized, joined with no separator.
+fn to_camel(s: &str) -> String {
+    let words = case_words(s);
+    let mut out = String::new();
+    for (i, w) in words.iter().enumerate() {
+        if i == 0 {
+            let mut cs = w.chars();
+            if let Some(c) = cs.next() {
+                out.push(c.to_ascii_lowercase());
+                out.push_str(cs.as_str());
+            }
+        } else {
+            out.push_str(&upper_first(w));
+        }
+    }
+    out
+}
+
+/// Convert an identifier to the suggested PascalCase form (`shape` → `Shape`,
+/// `http_request` → `HttpRequest`): every word capitalized, joined with no separator.
+fn to_pascal(s: &str) -> String {
+    case_words(s).iter().map(|w| upper_first(w)).collect()
+}
+
 /// True for the built-in type names `resolve_type` handles directly — a `type` alias may not
 /// shadow them (else the checker and the backend expansion would disagree; see `collect`).
 fn is_builtin_type_name(name: &str) -> bool {
@@ -2320,7 +2595,7 @@ mod tests {
     #[test]
     fn safe_member_access_typing() {
         let cls =
-            "class Box { constructor(private int v) {} function v_of() -> int { return v; } } ";
+            "class Box { constructor(private int v) {} function vOf() -> int { return v; } } ";
         // `?.` on an optional yields an optional member, usable via `??`.
         let ok_field = cls.to_string() + "function main() { Box? b = null; int y = (b?.v) ?? -1; }";
         assert!(
@@ -2329,7 +2604,7 @@ mod tests {
             errors_of(&ok_field)
         );
         let ok_method =
-            cls.to_string() + "function main() { Box? b = null; int y = (b?.v_of()) ?? -1; }";
+            cls.to_string() + "function main() { Box? b = null; int y = (b?.vOf()) ?? -1; }";
         assert!(
             errors_of(&ok_method).is_empty(),
             "{:?}",
@@ -2339,7 +2614,7 @@ mod tests {
         let bad_field = cls.to_string() + "function main() { Box? b = null; int y = b.v; }";
         let e = errors_of(&bad_field);
         assert!(e.iter().any(|d| d.code == Some("E-OPT-USE")), "got {e:?}");
-        let bad_method = cls.to_string() + "function main() { Box? b = null; int y = b.v_of(); }";
+        let bad_method = cls.to_string() + "function main() { Box? b = null; int y = b.vOf(); }";
         let em = errors_of(&bad_method);
         assert!(em.iter().any(|d| d.code == Some("E-OPT-USE")), "got {em:?}");
     }
@@ -2415,6 +2690,78 @@ mod tests {
             "hint: {:?}",
             d.hint
         );
+    }
+
+    #[test]
+    fn snake_case_function_is_rejected() {
+        // A function name with `_` is not camelCase → E-NAME-CASE, with a converted-form hint.
+        let errs = errors_of("function c_to_f(int c) -> int { return c; } function main() {}");
+        let d = errs
+            .iter()
+            .find(|d| d.code == Some("E-NAME-CASE"))
+            .unwrap_or_else(|| panic!("expected E-NAME-CASE, got {errs:?}"));
+        assert!(
+            d.hint.as_deref().unwrap_or("").contains("cToF"),
+            "hint: {:?}",
+            d.hint
+        );
+    }
+
+    #[test]
+    fn snake_case_var_binding_is_rejected() {
+        // A `var`/typed local binding with `_` is a value identifier → E-NAME-CASE.
+        let errs = errors_of("function main() { int my_count = 0; }");
+        assert!(
+            errs.iter().any(|d| d.code == Some("E-NAME-CASE")),
+            "got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn non_pascal_type_enum_variant_is_rejected() {
+        // class name, enum name, and a variant name that are not PascalCase → E-TYPE-CASE.
+        let cls = errors_of("class box {} function main() {}");
+        assert!(
+            cls.iter().any(|d| d.code == Some("E-TYPE-CASE")),
+            "class: {cls:?}"
+        );
+        let en = errors_of("enum color { red() } function main() {}");
+        // both the enum name `color` and the variant `red` violate PascalCase.
+        assert!(
+            en.iter().filter(|d| d.code == Some("E-TYPE-CASE")).count() >= 2,
+            "enum: {en:?}"
+        );
+        let alias = errors_of("type myInt = int; function main() {}");
+        assert!(
+            alias.iter().any(|d| d.code == Some("E-TYPE-CASE")),
+            "alias: {alias:?}"
+        );
+    }
+
+    #[test]
+    fn conformant_casing_is_clean() {
+        // camelCase fns/params/vars + PascalCase types/enums/variants type-check with no casing error.
+        let src = "enum Shape { Circle(float r) } \
+                   class Box { constructor(private int width) {} function widthOf() -> int { return width; } } \
+                   function areaOf(Shape s) -> int { int localCount = 0; return localCount; } \
+                   function main() {}";
+        let errs = errors_of(src);
+        assert!(
+            !errs
+                .iter()
+                .any(|d| d.code == Some("E-NAME-CASE") || d.code == Some("E-TYPE-CASE")),
+            "expected no casing errors, got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn case_converters() {
+        assert!(is_camel("main") && is_camel("splitOnce") && !is_camel("split_once"));
+        assert!(is_pascal("Shape") && !is_pascal("shape") && !is_pascal("Http_Request"));
+        assert_eq!(to_camel("split_once"), "splitOnce");
+        assert_eq!(to_camel("c_to_f"), "cToF");
+        assert_eq!(to_pascal("shape"), "Shape");
+        assert_eq!(to_pascal("http_request"), "HttpRequest");
     }
 
     #[test]

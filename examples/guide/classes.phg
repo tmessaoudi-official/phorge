@@ -3,19 +3,19 @@ import core.console;
 
 class Engine {
     constructor(private int power) {}
-    function power_of() -> int { return power; }
+    function powerOf() -> int { return power; }
 }
 
 class Car {
     // composition: a Car *has an* Engine
     constructor(private string make, private Engine engine) {}
 
-    function make_of() -> string { return make; }
+    function makeOf() -> string { return make; }
     // a method that calls a method on a field (the Wave-4 class-aware path)
-    function horsepower() -> int { return engine.power_of(); }
+    function horsepower() -> int { return engine.powerOf(); }
 }
 
 function main() {
     Car c = Car("Phorge", Engine(250));
-    console.println("{c.make_of()} has {c.horsepower()} hp");
+    console.println("{c.makeOf()} has {c.horsepower()} hp");
 }

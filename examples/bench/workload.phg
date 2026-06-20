@@ -19,12 +19,12 @@ class Cell {
 // `c` alive across the recursive call — so peak resident memory scales with `n`. Phorge is
 // immutable (no accumulator mutation), so the running sum is threaded through the return value.
 // Depth stays well under MAX_CALL_DEPTH (4096).
-function allocate_chain(int n) -> int {
+function allocateChain(int n) -> int {
     if (n <= 0) {
         return 0;
     }
     Cell c = Cell(n);
-    int rest = allocate_chain(n - 1);
+    int rest = allocateChain(n - 1);
     return c.squared() + rest;
 }
 
@@ -44,7 +44,7 @@ function main() {
     console.println("fib(18) = {fib(18)}");
 
     // Allocation-bound: 1000 live Cells at peak, 1000 method calls.
-    console.println("chain(1000) = {allocate_chain(1000)}");
+    console.println("chain(1000) = {allocateChain(1000)}");
 
     // Object iteration: a method call + field read per element of a list literal.
     for (Cell c in [Cell(3), Cell(4), Cell(5)]) {

@@ -28,20 +28,20 @@ class Response {
   constructor(public int status, public bytes body, public List<string> headerLines) {}
 }
 
-function reason_phrase(int s) -> string {
+function reasonPhrase(int s) -> string {
   return if (s == 200) { "OK" }
     else { if (s == 400) { "Bad Request" }
     else { if (s == 404) { "Not Found" }
     else { "Internal Server Error" } } };
 }
 
-function parse_request(bytes raw) -> Request? {
-  string nl = bytes.to_string(b"\x0d\x0a") ?? "";
+function parseRequest(bytes raw) -> Request? {
+  string nl = bytes.toString(b"\x0d\x0a") ?? "";
   int sep = bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
   if (sep < 0) { return null; }
   bytes headBytes = bytes.slice(raw, 0, sep);
   bytes body = bytes.slice(raw, sep + 4, bytes.len(raw));
-  string head = bytes.to_string(headBytes) ?? "";
+  string head = bytes.toString(headBytes) ?? "";
   List<string> lines = text.split(head, nl);
   string requestLine = lines[0];
   List<string> rl = text.split(requestLine, " ");
@@ -50,35 +50,35 @@ function parse_request(bytes raw) -> Request? {
   return Request(method, path, body);
 }
 
-function serialize_response(Response resp) -> bytes {
-  string nl = bytes.to_string(b"\x0d\x0a") ?? "";
-  string reason = reason_phrase(resp.status);
+function serializeResponse(Response resp) -> bytes {
+  string nl = bytes.toString(b"\x0d\x0a") ?? "";
+  string reason = reasonPhrase(resp.status);
   int st = resp.status;
   string statusLine = "HTTP/1.1 {st} {reason}";
   int bodyLen = bytes.len(resp.body);
   string userHeaders = text.join(resp.headerLines, nl);
   string head = "{statusLine}{nl}Content-Length: {bodyLen}{nl}{userHeaders}{nl}{nl}";
-  return bytes.concat(bytes.from_string(head), resp.body);
+  return bytes.concat(bytes.fromString(head), resp.body);
 }
 
 function dispatch(Request req) -> Response {
   if (req.method == "GET") {
     if (req.path == "/") {
-      return Response(200, bytes.from_string("home"), ["Content-Type: text/plain"]);
+      return Response(200, bytes.fromString("home"), ["Content-Type: text/plain"]);
     }
   }
-  return Response(404, bytes.from_string("not found"), ["Content-Type: text/plain"]);
+  return Response(404, bytes.fromString("not found"), ["Content-Type: text/plain"]);
 }
 
-function bad_request() -> Response {
-  return Response(400, bytes.from_string("bad request"), ["Content-Type: text/plain"]);
+function badRequest() -> Response {
+  return Response(400, bytes.fromString("bad request"), ["Content-Type: text/plain"]);
 }
 
 function respond(bytes raw) -> bytes {
-  if (var req = parse_request(raw)) {
-    return serialize_response(dispatch(req));
+  if (var req = parseRequest(raw)) {
+    return serializeResponse(dispatch(req));
   } else {
-    return serialize_response(bad_request());
+    return serializeResponse(badRequest());
   }
 }
 

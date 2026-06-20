@@ -18,7 +18,7 @@ tempconv/
     ├── main.phg                    # package main   — the runnable entry
     └── acme/
         ├── convert/                # package acme.convert  (folder = path)
-        │   ├── temp.phg            #   c_to_f(c) = scale(c) + 32
+        │   ├── temp.phg            #   cToF(c) = scale(c) + 32
         │   └── scale.phg           #   scale(c)  = c * 9 / 5
         └── label/                  # package acme.label
             └── label.phg           #   tag(name, v) -> "{name} = {v}F"
@@ -43,11 +43,11 @@ boiling = 212F
    `package acme.convert;` ⇒ `src/acme/convert/`. The reserved `package main;` is the runnable entry
    and is folder-exempt. A mismatch is a load error (`E-PKG-PATH`).
 2. **Cross-package qualified calls + aliasing.** `main` imports a package and calls its functions
-   *leaf-qualified* — `import acme.convert;` then `convert.c_to_f(0)` (Go's `import "fmt"` →
+   *leaf-qualified* — `import acme.convert;` then `convert.cToF(0)` (Go's `import "fmt"` →
    `fmt.Println`). An import can be renamed with `as`: `import acme.label as fmt;` binds the leaf
    `fmt`, so the call is `fmt.tag(...)`.
 3. **Same-package calls across files.** A package may span multiple files. In `acme.convert`,
-   `c_to_f` (temp.phg) calls `scale` (scale.phg) by its **bare** name — same package, no
+   `cToF` (temp.phg) calls `scale` (scale.phg) by its **bare** name — same package, no
    qualification — and the loader resolves both consistently.
 
 ### The PHP it transpiles to
@@ -59,7 +59,7 @@ plus a bootstrap that invokes `main` last (so every function is declared before 
 <?php
 namespace Acme\Convert {
     function scale(int $c): int { return $c * 9 / 5; }
-    function c_to_f(int $c): int { return \Acme\Convert\scale($c) + 32; }
+    function cToF(int $c): int { return \Acme\Convert\scale($c) + 32; }
 }
 namespace Acme\Label {
     function tag(string $name, int $value): string { return ($name) . " = " . ($value) . "F"; }
@@ -73,7 +73,7 @@ namespace {
 ```
 
 Package segments PascalCase into PHP namespaces (`acme.convert` ⇒ `Acme\Convert`); cross-package
-calls emit fully-qualified (`\Acme\Convert\c_to_f`). It runs under a bare `php out.php` — no Composer
+calls emit fully-qualified (`\Acme\Convert\cToF`). It runs under a bare `php out.php` — no Composer
 and no autoloader (PSR-4 can't autoload free functions, and Phorge is function-heavy).
 
 > The conversions use **exact integer arithmetic** (0→32, 100→212) on purpose: a non-whole result

@@ -20,7 +20,7 @@ function shout(string name) -> string {
 }
 
 // A function may return a List<int>; a range materializes into one.
-function up_to(int n) -> List<int> {
+function upTo(int n) -> List<int> {
     return 0..n;
 }
 
@@ -39,7 +39,7 @@ function main() {
     int total = add(add(1, 2), add(3, 4));
     console.println("nested add = {total}");
 
-    for (int i in up_to(4)) {
+    for (int i in upTo(4)) {
         console.println("i = {i}");
     }
 }

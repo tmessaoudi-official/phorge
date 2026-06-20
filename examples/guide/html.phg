@@ -6,7 +6,7 @@ package main;
 // non-interchangeability is the XSS-safety wall — enforced by the type checker.
 //
 //   Wave 1  the escape KERNEL    text / raw / render
-//   Wave 2  the element BUILDERS  attr / bool_attr / el / void_el / concat
+//   Wave 2  the element BUILDERS  attr / boolAttr / el / voidEl / concat
 //   Wave 3  the `html"…"` literal sugar  html"<h1>{name}</h1>"
 import core.console;
 import core.html;
@@ -54,11 +54,11 @@ function main() {
   console.println(html.render(para));   // <p>&lt;script&gt;alert(1)&lt;/script&gt;</p>
 
   // A self-closing void element with an attribute.
-  Html img = html.void_el("img", [html.attr("src", "a&b.png")]);
+  Html img = html.voidEl("img", [html.attr("src", "a&b.png")]);
   console.println(html.render(img));    // <img src="a&amp;b.png"/>
 
   // A boolean (valueless) attribute.
-  Html btn = html.el("button", [html.bool_attr("disabled")], [html.text("Go")]);
+  Html btn = html.el("button", [html.boolAttr("disabled")], [html.text("Go")]);
   console.println(html.render(btn));    // <button disabled>Go</button>
 
   // concat joins sibling fragments into one Html.
@@ -72,7 +72,7 @@ function main() {
   console.println(html.render(h));      // <h1>Tom &amp; &quot;Jerry&quot;</h1><p>since 2026</p>
 
   // An Html hole embeds verbatim — no double-escape (the value is already safe).
-  Html badge = html.el("span", [html.bool_attr("hidden")], [html.text(bio)]);
+  Html badge = html.el("span", [html.boolAttr("hidden")], [html.text(bio)]);
   Html line = html"<div>{badge}</div>";
   console.println(html.render(line));   // <div><span hidden>&lt;script&gt;alert(1)&lt;/script&gt;</span></div>
 
@@ -81,7 +81,7 @@ function main() {
   console.println(html.render(card("Profile", inner)));
 
   // --- Option 1: named per-tag helpers ---
-  // Each tag is sugar over el/void_el with the tag baked in: html.div(attrs, children),
+  // Each tag is sugar over el/voidEl with the tag baked in: html.div(attrs, children),
   // html.hr(attrs). Same auto-escaping (attribute values + text), same byte output.
   Html bar = html.nav([html.attr("class", "top")],
                       [html.a([html.attr("href", "/?a=1&b=2")], [html.text("Home & Away")])]);

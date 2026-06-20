@@ -10,8 +10,8 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Feature | Status | Notes |
 |---|---|---|
 | Static types: `int`, `float`, `bool`, `string` | ✅ | checked at compile time |
-| Raw bytes: `bytes` + `b"…"` literals (`\xHH`) | ✅ | octet sequences distinct from UTF-8 `string`; `core.bytes` interop (`from_string`/`to_string`/`len`/`concat`/`slice`/`find`) |
-| Typed HTML: `Html`/`Attr` + `core.html` kernel, builders & `html"…"` sugar | ✅ | distinct from `string` (XSS-safe by construction); kernel `text` (auto-escape) / `raw` (audited trust) / `render`; builders `el` / `void_el` / `attr` / `bool_attr` / `concat` + named per-tag helpers (`div`/`p`/`a`/`ul`/`li`/`br`/`img`/…, macro-baked); `html"<h1>{name}</h1>"` literal sugar — holes escape by type unless already `Html`, desugars to kernel calls (no new `Op`) |
+| Raw bytes: `bytes` + `b"…"` literals (`\xHH`) | ✅ | octet sequences distinct from UTF-8 `string`; `core.bytes` interop (`fromString`/`toString`/`len`/`concat`/`slice`/`find`) |
+| Typed HTML: `Html`/`Attr` + `core.html` kernel, builders & `html"…"` sugar | ✅ | distinct from `string` (XSS-safe by construction); kernel `text` (auto-escape) / `raw` (audited trust) / `render`; builders `el` / `voidEl` / `attr` / `boolAttr` / `concat` + named per-tag helpers (`div`/`p`/`a`/`ul`/`li`/`br`/`img`/…, macro-baked); `html"<h1>{name}</h1>"` literal sugar — holes escape by type unless already `Html`, desugars to kernel calls (no new `Op`) |
 | Empty list literal `[]` in call arguments | ✅ | takes its element type from the expected parameter (e.g. `el("p", [], […])`); other positions still need a non-empty literal |
 | Generic lists: `List<T>` + list literals | ✅ | `[1, 2, 3]` |
 | Immutable-by-default bindings | ✅ | no reassignment; fresh binding instead |
@@ -39,6 +39,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Traits, operator overloading, method overloading | 🔲 future | |
 | Modules / packages | 🚧 M5 | multi-file projects, folder=path, cross-package `import` + aliasing, namespaced PHP, **git dependencies** (`[require]` + `phg vendor` + `phorge.lock`, offline) — shipped; transitive deps next |
 | Concurrency (`spawn` + channels) | 🔲 M6 | uncolored, green-threaded |
+| Identifier casing (enforced) | ✅ | camelCase functions/methods/params/vars (`E-NAME-CASE`), PascalCase classes/enums/variants/type aliases (`E-TYPE-CASE`); front-end-only — never affects the generated PHP |
 
 ## Backends & tooling
 

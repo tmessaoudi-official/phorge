@@ -10,18 +10,18 @@ function fact(int n) -> int {
 }
 
 // mutual recursion
-function is_even(int n) -> bool {
+function isEven(int n) -> bool {
     if (n == 0) {
         return true;
     }
-    return is_odd(n - 1);
+    return isOdd(n - 1);
 }
 
-function is_odd(int n) -> bool {
+function isOdd(int n) -> bool {
     if (n == 0) {
         return false;
     }
-    return is_even(n - 1);
+    return isEven(n - 1);
 }
 
 function main() {
@@ -32,6 +32,6 @@ function main() {
     }
 
     for (int i in [0, 1, 2, 3, 4]) {
-        console.println("is_even({i}) = {is_even(i)}");
+        console.println("isEven({i}) = {isEven(i)}");
     }
 }
