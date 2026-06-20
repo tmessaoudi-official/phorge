@@ -28,6 +28,17 @@ fn rt<T>(msg: impl Into<String>) -> R<T> {
     Err(Signal::Runtime(Diagnostic::runtime(msg)))
 }
 
+/// Flatten a runtime `Signal` to its message body for the higher-order-native callback boundary (a
+/// [`crate::native::ClosureInvoker`] returns `Result<_, String>`, the backend-shared fault contract).
+/// A `Return` escaping `call_closure` would be an interpreter bug — a closure's return value is
+/// consumed inside the call, never surfaced — so it maps to a defensive internal-error string.
+fn signal_msg(sig: Signal) -> String {
+    match sig {
+        Signal::Runtime(d) => d.message,
+        Signal::Return(_) => "internal error: closure return escaped".to_string(),
+    }
+}
+
 fn as_bool(v: &Value) -> R<bool> {
     match v {
         Value::Bool(b) => Ok(*b),
@@ -587,9 +598,26 @@ impl Interp {
                         if let Some(idx) = crate::native::index_of_by_leaf(q, name) {
                             let argv = self.eval_args(args)?;
                             // The native reports failures as a plain `String` (the backend-shared
-                            // contract); lift it into the interpreter's runtime `Signal`.
-                            return match (crate::native::registry()[idx].eval)(&argv, &mut self.out)
-                            {
+                            // contract); lift it into the interpreter's runtime `Signal`. A
+                            // higher-order native (`List.map`/etc.) is handed an invoker that runs a
+                            // closure argument via `call_closure` — the same body the VM drives with
+                            // its re-entrant `call_closure_value` (structural parity, M-RT S7b-3).
+                            let result = match crate::native::registry()[idx].eval {
+                                crate::native::NativeEval::Pure(f) => f(&argv, &mut self.out),
+                                crate::native::NativeEval::HigherOrder(f) => {
+                                    let mut invoke = |fv: &Value, cargs: Vec<Value>| match fv {
+                                        Value::Closure(rc) => {
+                                            self.call_closure(rc.clone(), cargs).map_err(signal_msg)
+                                        }
+                                        v => Err(format!(
+                                            "cannot call {} as a function",
+                                            v.type_name()
+                                        )),
+                                    };
+                                    f(&argv, &mut invoke)
+                                }
+                            };
+                            return match result {
                                 Ok(v) => Ok(v),
                                 Err(msg) => rt(msg),
                             };

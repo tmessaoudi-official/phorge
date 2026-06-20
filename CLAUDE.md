@@ -369,7 +369,7 @@ too); `core.list` map/filter/reduce = **higher-order native** (`NativeEval::High
 closure-invoker + re-entrant `vm.run_until`/`call_closure_value`, no new Op, → array_map/filter/reduce);
 sequence = Core rename✓ → **S7b** → generics-all → S4 unions → S5 → S6 → S8.
 
-**S7b IN PROGRESS (2 of 3 sub-slices done):**
+**S7b COMPLETE (all 3 sub-slices done):**
 - **S7b-1 DONE (`1a5e72e`):** generic-typed native-call path (`check_native_call` routes through
   `check_generic_call` when the native sig has a `Ty::Param`; helper `ty_has_param`) + `Core.Map`
   keys/values/has/size + `Core.List` reverse/sum. A native's `Ty::Param` is registry-only, never erased,
@@ -378,10 +378,19 @@ sequence = Core rename✓ → **S7b** → generics-all → S4 unions → S5 → 
 - **S7b-2 DONE (`81bf98c`):** `Set<T>` via `Core.Set` of/contains/size; realigned `Value::Set`
   `HashSet<HKey>` → insertion-ordered `Rc<Vec<HKey>>` (Map discipline, R1) + `value::build_set` kernel +
   order-independent `eq_val` Set arm. Erases to deduped PHP array. `guide/sets.phg`. 431 lib tests.
-- **S7b-3 NEXT:** `Core.List` map/filter/reduce via Option-B `NativeEval::HigherOrder` (eval enum +
-  backend closure-invoker + re-entrant VM `run_until`/`call_closure_value`). No new Op. The hard one.
+- **S7b-3 DONE — higher-order natives:** `Core.List` map/filter/reduce, the first natives taking a
+  **closure** arg. A native's `eval` is now a **`NativeEval` enum** — `Pure(fn(args,out))` (every
+  existing native, mechanically wrapped) | `HigherOrder(fn(args, &mut ClosureInvoker))`. The invoker is
+  backend-supplied: interpreter wraps `call_closure`; the **VM gains re-entrant `call_closure_value` +
+  `run_until`** that pushes the closure frame and drives the *shared* `exec_op` until it returns — so a
+  closure's result AND any fault are byte-identical to the interpreter (parity discipline extended to
+  control flow). **No new Op, no Value change.** Generic (same call-site unifier); erase to PHP
+  `array_map`/`array_values(array_filter(…))`/`array_reduce` (note: array_map arg order swapped, reduce
+  init is Phorge's 2nd arg). `guide/higher-order.phg`; differential adds fault-parity + named-fn-ref +
+  re-entrancy (map-in-reduce) cases. 432 lib + oracle + 51 integration green. See [[higher-order-natives-reentrant-vm]].
 
-**Developer next-step intent (2026-06-20):** do **S7b-3 then generics-all**, AND keep brainstorming
+**Developer next-step intent (2026-06-20):** S7b done → **generics-all** is NEXT (generic methods, then
+generic types/classes `Box<T>` — also lifts `E-PKG-TYPE`/cross-package types), AND keep brainstorming
 the **E-PKG-TYPE lift / cross-package types** (the prerequisite that unblocks selective type import).
 
 **SELECTIVE TYPE IMPORT — designed + ADOPTED, NOT impl** (`23dbe83`, spec

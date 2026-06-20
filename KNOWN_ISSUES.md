@@ -10,11 +10,12 @@ parse error, non-zero exit) — never a crash.
 These are designed but not in the current surface; using them produces a clean compile-time error,
 not a panic:
 
-- `Set` / tuples / map iteration, and `Core.List` `map`/`filter`/`reduce`. The erased-generics
-  *mechanism* ships in M-RT S7, and the first **generic stdlib natives** — `Core.Map` `keys`/`values`/
-  `has`/`size` and `Core.List` `reverse`/`sum` — ship in M-RT S7b (see the *Maps*/*Generic natives*
-  notes below); `Set` itself and the higher-order list ops (the closure-from-native mechanism) build on
-  that path next. `Map<K,V>` literals + `m[k]` indexing ship in M-RT S3 — see the *Maps* note below.
+- Tuples / map iteration, and `Set` union & intersection. The erased-generics *mechanism* ships in
+  M-RT S7; the **generic stdlib natives** — `Core.Map` `keys`/`values`/`has`/`size`, `Core.List`
+  `reverse`/`sum`, `Set` `of`/`contains`/`size`, and the **higher-order** `Core.List` `map`/`filter`/
+  `reduce` (a closure run from a native, M-RT S7b-3) — all ship in M-RT S7b (see the *Maps*/*Generic
+  natives* notes below). Set union/intersection and map iteration build on that path next. `Map<K,V>`
+  literals + `m[k]` indexing ship in M-RT S3 — see the *Maps* note below.
 - `instanceof` against **unions or intersections** (class operands ship in M-RT S1 and interface
   operands in M-RT S2 — see *Behavioral quirks* below; testing against unions/intersections lands
   with those features in later M-RT slices)

@@ -28,13 +28,37 @@ pub struct NativeFn {
     pub params: Vec<Ty>,
     /// Return type.
     pub ret: Ty,
-    /// Runtime behavior, shared by the interpreter and the VM. Threads the program's output buffer
-    /// so a side-effecting native (`Console.println`) can append to it; pure natives ignore it. The
-    /// arguments arrive in source order.
-    pub eval: fn(&[Value], &mut String) -> Result<Value, String>,
+    /// Runtime behavior, shared by the interpreter and the VM (the structural parity guarantee —
+    /// one body, two callers). See [`NativeEval`].
+    pub eval: NativeEval,
     /// PHP emission: given the already-emitted PHP for each argument, return the PHP snippet this
     /// native erases to (decision N-2). For `Console.println`: `echo {a} . "\n"`.
     pub php: fn(&[String]) -> String,
+}
+
+/// A backend's re-entrant closure invoker, handed to a [`NativeEval::HigherOrder`] body: given a
+/// `Value::Closure` and its call arguments, run it on the calling backend and return its result (or
+/// a fault as a plain `String`, the backend-shared contract). The interpreter wraps `call_closure`;
+/// the VM wraps `call_closure_value` (a nested `run_until` over the shared `exec_op`).
+pub type ClosureInvoker<'a> = dyn FnMut(&Value, Vec<Value>) -> Result<Value, String> + 'a;
+
+/// How a native computes its result (M-RT S7b-3). Most natives are [`Pure`](NativeEval::Pure): a
+/// function of their argument values, threading the program output buffer so a side-effecting native
+/// (`Console.println`) can append to it. A [`HigherOrder`](NativeEval::HigherOrder) native instead
+/// needs to *call back* into the calling backend to invoke a `Value::Closure` argument
+/// (`Core.List.map`/`filter`/`reduce`); the backend supplies the invoker so the one `eval` body
+/// drives both the interpreter and the VM — exactly the parity discipline of the pure path. Both
+/// variants are `fn` pointers, so the enum stays `Copy` (a `CallNative` dispatch reads it by value,
+/// ending the registry borrow before the invoker captures the backend).
+#[derive(Clone, Copy)]
+pub enum NativeEval {
+    /// `(args, out) -> result`. Arguments arrive in source order; `out` is the program's output
+    /// buffer (ignored by pure natives, appended to by side-effecting ones).
+    Pure(fn(&[Value], &mut String) -> Result<Value, String>),
+    /// `(args, invoke) -> result`, where `invoke(closure, call_args)` executes a `Value::Closure`
+    /// on the calling backend and returns its value. The native never touches the output buffer
+    /// directly — any side effect happens inside the invoked closure.
+    HigherOrder(fn(&[Value], &mut ClosureInvoker) -> Result<Value, String>),
 }
 
 /// Pinned registry slot for `Core.Console.println` — the migrated former `Op::Print`. The compiler
@@ -130,7 +154,7 @@ fn math_natives() -> Vec<NativeFn> {
             name: "sqrt",
             params: vec![Ty::Float],
             ret: Ty::Float,
-            eval: math_sqrt,
+            eval: NativeEval::Pure(math_sqrt),
             php: |a| format!("sqrt({})", parg(a, 0)),
         },
         NativeFn {
@@ -138,7 +162,7 @@ fn math_natives() -> Vec<NativeFn> {
             name: "pow",
             params: vec![Ty::Float, Ty::Float],
             ret: Ty::Float,
-            eval: math_pow,
+            eval: NativeEval::Pure(math_pow),
             php: |a| format!("pow({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -146,7 +170,7 @@ fn math_natives() -> Vec<NativeFn> {
             name: "floor",
             params: vec![Ty::Float],
             ret: Ty::Float,
-            eval: math_floor,
+            eval: NativeEval::Pure(math_floor),
             php: |a| format!("floor({})", parg(a, 0)),
         },
         NativeFn {
@@ -154,7 +178,7 @@ fn math_natives() -> Vec<NativeFn> {
             name: "ceil",
             params: vec![Ty::Float],
             ret: Ty::Float,
-            eval: math_ceil,
+            eval: NativeEval::Pure(math_ceil),
             php: |a| format!("ceil({})", parg(a, 0)),
         },
         NativeFn {
@@ -162,7 +186,7 @@ fn math_natives() -> Vec<NativeFn> {
             name: "abs",
             params: vec![Ty::Int],
             ret: Ty::Int,
-            eval: math_abs,
+            eval: NativeEval::Pure(math_abs),
             php: |a| format!("abs({})", parg(a, 0)),
         },
         NativeFn {
@@ -170,7 +194,7 @@ fn math_natives() -> Vec<NativeFn> {
             name: "min",
             params: vec![Ty::Int, Ty::Int],
             ret: Ty::Int,
-            eval: math_min,
+            eval: NativeEval::Pure(math_min),
             php: |a| format!("min({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -178,7 +202,7 @@ fn math_natives() -> Vec<NativeFn> {
             name: "max",
             params: vec![Ty::Int, Ty::Int],
             ret: Ty::Int,
-            eval: math_max,
+            eval: NativeEval::Pure(math_max),
             php: |a| format!("max({}, {})", parg(a, 0), parg(a, 1)),
         },
     ]
@@ -286,7 +310,7 @@ fn text_natives() -> Vec<NativeFn> {
             name: "len",
             params: vec![s()],
             ret: Ty::Int,
-            eval: text_len,
+            eval: NativeEval::Pure(text_len),
             php: |a| format!("strlen({})", parg(a, 0)),
         },
         NativeFn {
@@ -294,7 +318,7 @@ fn text_natives() -> Vec<NativeFn> {
             name: "upper",
             params: vec![s()],
             ret: Ty::String,
-            eval: text_upper,
+            eval: NativeEval::Pure(text_upper),
             php: |a| format!("strtoupper({})", parg(a, 0)),
         },
         NativeFn {
@@ -302,7 +326,7 @@ fn text_natives() -> Vec<NativeFn> {
             name: "lower",
             params: vec![s()],
             ret: Ty::String,
-            eval: text_lower,
+            eval: NativeEval::Pure(text_lower),
             php: |a| format!("strtolower({})", parg(a, 0)),
         },
         NativeFn {
@@ -310,7 +334,7 @@ fn text_natives() -> Vec<NativeFn> {
             name: "trim",
             params: vec![s()],
             ret: Ty::String,
-            eval: text_trim,
+            eval: NativeEval::Pure(text_trim),
             php: |a| format!("trim({})", parg(a, 0)),
         },
         NativeFn {
@@ -318,7 +342,7 @@ fn text_natives() -> Vec<NativeFn> {
             name: "contains",
             params: vec![s(), s()],
             ret: Ty::Bool,
-            eval: text_contains,
+            eval: NativeEval::Pure(text_contains),
             php: |a| format!("str_contains({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -326,7 +350,7 @@ fn text_natives() -> Vec<NativeFn> {
             name: "split",
             params: vec![s(), s()],
             ret: Ty::List(Box::new(Ty::String)),
-            eval: text_split,
+            eval: NativeEval::Pure(text_split),
             // PHP `explode(separator, string)` — separator first.
             php: |a| format!("explode({}, {})", parg(a, 1), parg(a, 0)),
         },
@@ -335,7 +359,7 @@ fn text_natives() -> Vec<NativeFn> {
             name: "splitOnce",
             params: vec![s(), s()],
             ret: Ty::List(Box::new(Ty::String)),
-            eval: text_split_once,
+            eval: NativeEval::Pure(text_split_once),
             // PHP `explode(separator, string, 2)` — separator first; the limit-2 yields [head, tail].
             php: |a| format!("explode({}, {}, 2)", parg(a, 1), parg(a, 0)),
         },
@@ -344,7 +368,7 @@ fn text_natives() -> Vec<NativeFn> {
             name: "join",
             params: vec![Ty::List(Box::new(Ty::String)), s()],
             ret: Ty::String,
-            eval: text_join,
+            eval: NativeEval::Pure(text_join),
             // PHP `implode(glue, array)` — glue first.
             php: |a| format!("implode({}, {})", parg(a, 1), parg(a, 0)),
         },
@@ -353,7 +377,7 @@ fn text_natives() -> Vec<NativeFn> {
             name: "replace",
             params: vec![s(), s(), s()],
             ret: Ty::String,
-            eval: text_replace,
+            eval: NativeEval::Pure(text_replace),
             // PHP `str_replace(search, replace, subject)`.
             php: |a| {
                 format!(
@@ -409,7 +433,7 @@ fn file_natives() -> Vec<NativeFn> {
             name: "read",
             params: vec![Ty::String],
             ret: Ty::Optional(Box::new(Ty::String)),
-            eval: file_read,
+            eval: NativeEval::Pure(file_read),
             // `@` suppresses the missing-file warning; the assign-and-compare distinguishes a missing
             // file (`false` → null) from a legitimately empty one (`""`), which a bare `?:` would not.
             php: |a| {
@@ -424,7 +448,7 @@ fn file_natives() -> Vec<NativeFn> {
             name: "exists",
             params: vec![Ty::String],
             ret: Ty::Bool,
-            eval: file_exists,
+            eval: NativeEval::Pure(file_exists),
             php: |a| format!("file_exists({})", parg(a, 0)),
         },
         NativeFn {
@@ -432,7 +456,7 @@ fn file_natives() -> Vec<NativeFn> {
             name: "write",
             params: vec![Ty::String, Ty::String],
             ret: Ty::Unit,
-            eval: file_write,
+            eval: NativeEval::Pure(file_write),
             php: |a| format!("file_put_contents({}, {})", parg(a, 0), parg(a, 1)),
         },
     ]
@@ -520,7 +544,7 @@ fn bytes_natives() -> Vec<NativeFn> {
             name: "fromString",
             params: vec![Ty::String],
             ret: Ty::Bytes,
-            eval: bytes_from_string,
+            eval: NativeEval::Pure(bytes_from_string),
             // PHP strings are byte arrays → identity.
             php: |a| parg(a, 0).to_string(),
         },
@@ -529,7 +553,7 @@ fn bytes_natives() -> Vec<NativeFn> {
             name: "toString",
             params: vec![Ty::Bytes],
             ret: Ty::Optional(Box::new(Ty::String)),
-            eval: bytes_to_string,
+            eval: NativeEval::Pure(bytes_to_string),
             // UTF-8 validity via PCRE (always compiled in), NOT mbstring's mb_check_encoding:
             // the oracle runs `php -n` and minimal/Alpine PHP drop ini-loaded mbstring, so a core
             // primitive must stay extension-free. preg_match returns 1 (valid) / 0 / false → keep
@@ -541,7 +565,7 @@ fn bytes_natives() -> Vec<NativeFn> {
             name: "len",
             params: vec![Ty::Bytes],
             ret: Ty::Int,
-            eval: bytes_len,
+            eval: NativeEval::Pure(bytes_len),
             // BYTE count (strlen), not character count (mb_strlen).
             php: |a| format!("strlen({})", parg(a, 0)),
         },
@@ -550,7 +574,7 @@ fn bytes_natives() -> Vec<NativeFn> {
             name: "find",
             params: vec![Ty::Bytes, Ty::Bytes],
             ret: Ty::Optional(Box::new(Ty::Int)),
-            eval: bytes_find,
+            eval: NativeEval::Pure(bytes_find),
             // strpos returns int|false; map false → null (the `int?` absent case). Empty needle → 0.
             php: |a| {
                 format!(
@@ -565,7 +589,7 @@ fn bytes_natives() -> Vec<NativeFn> {
             name: "concat",
             params: vec![Ty::Bytes, Ty::Bytes],
             ret: Ty::Bytes,
-            eval: bytes_concat,
+            eval: NativeEval::Pure(bytes_concat),
             php: |a| format!("({} . {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
@@ -573,7 +597,7 @@ fn bytes_natives() -> Vec<NativeFn> {
             name: "slice",
             params: vec![Ty::Bytes, Ty::Int, Ty::Int],
             ret: Ty::Bytes,
-            eval: bytes_slice,
+            eval: NativeEval::Pure(bytes_slice),
             // Total, bounds-clamped half-open slice via an IIFE — matches the Rust clamp exactly.
             php: |a| {
                 format!(
@@ -761,7 +785,7 @@ macro_rules! tag_el {
             name: $tag,
             params: vec![Ty::List(Box::new(Ty::Attr)), Ty::List(Box::new(Ty::Html))],
             ret: Ty::Html,
-            eval: ev,
+            eval: NativeEval::Pure(ev),
             php,
         }
     }};
@@ -795,7 +819,7 @@ macro_rules! tag_void {
             name: $tag,
             params: vec![Ty::List(Box::new(Ty::Attr))],
             ret: Ty::Html,
-            eval: ev,
+            eval: NativeEval::Pure(ev),
             php,
         }
     }};
@@ -808,7 +832,7 @@ fn html_natives() -> Vec<NativeFn> {
             name: "text",
             params: vec![Ty::String],
             ret: Ty::Html,
-            eval: html_text,
+            eval: NativeEval::Pure(html_text),
             // Flags PINNED (not PHP's version-varying default) so the output is stable and `php -n`
             // safe; htmlspecialchars is tier-1 (ext/standard, always compiled).
             php: |a| format!("htmlspecialchars({}, ENT_QUOTES, 'UTF-8')", parg(a, 0)),
@@ -818,7 +842,7 @@ fn html_natives() -> Vec<NativeFn> {
             name: "raw",
             params: vec![Ty::String],
             ret: Ty::Html,
-            eval: html_identity,
+            eval: NativeEval::Pure(html_identity),
             php: |a| format!("({})", parg(a, 0)),
         },
         NativeFn {
@@ -826,7 +850,7 @@ fn html_natives() -> Vec<NativeFn> {
             name: "render",
             params: vec![Ty::Html],
             ret: Ty::String,
-            eval: html_identity,
+            eval: NativeEval::Pure(html_identity),
             php: |a| format!("({})", parg(a, 0)),
         },
         // ---- Wave 2 builders ----
@@ -835,7 +859,7 @@ fn html_natives() -> Vec<NativeFn> {
             name: "attr",
             params: vec![Ty::String, Ty::String],
             ret: Ty::Attr,
-            eval: html_attr,
+            eval: NativeEval::Pure(html_attr),
             // ` name="ESC(value)"` — name trusted (author literal), value escaped (same boundary as
             // `text`). Single-quoted PHP literals carry the leading space + `="` + closing `"`.
             php: |a| {
@@ -851,7 +875,7 @@ fn html_natives() -> Vec<NativeFn> {
             name: "boolAttr",
             params: vec![Ty::String],
             ret: Ty::Attr,
-            eval: html_bool_attr,
+            eval: NativeEval::Pure(html_bool_attr),
             php: |a| format!("' ' . {}", parg(a, 0)),
         },
         NativeFn {
@@ -863,7 +887,7 @@ fn html_natives() -> Vec<NativeFn> {
                 Ty::List(Box::new(Ty::Html)),
             ],
             ret: Ty::Html,
-            eval: html_el,
+            eval: NativeEval::Pure(html_el),
             // IIFE so the tag expr is evaluated once (no double-eval) — byte-identical to the single
             // Rust evaluation: `<` . tag . implode(attrs) . `>` . implode(children) . `</` . tag . `>`.
             php: |a| {
@@ -880,7 +904,7 @@ fn html_natives() -> Vec<NativeFn> {
             name: "voidEl",
             params: vec![Ty::String, Ty::List(Box::new(Ty::Attr))],
             ret: Ty::Html,
-            eval: html_void_el,
+            eval: NativeEval::Pure(html_void_el),
             php: |a| {
                 format!(
                     "(function($t,$a){{return '<' . $t . implode('', $a) . '/>';}})({}, {})",
@@ -894,7 +918,7 @@ fn html_natives() -> Vec<NativeFn> {
             name: "concat",
             params: vec![Ty::List(Box::new(Ty::Html))],
             ret: Ty::Html,
-            eval: html_concat,
+            eval: NativeEval::Pure(html_concat),
             php: |a| format!("implode('', {})", parg(a, 0)),
         },
         // ---- Option 1: named per-tag helpers (curated common HTML5 set) ----
@@ -994,17 +1018,75 @@ fn list_sum(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
+// The higher-order `Core.List` ops (M-RT S7b-3). Each takes a `Value::Closure` argument and calls it
+// once per element via the backend-supplied `call` invoker ([`ClosureInvoker`]) — so the one body
+// runs on the interpreter *and* the VM (parity), and any fault the closure raises propagates as a
+// plain `String` that both backends classify identically. The element type `T` (and `map`/`reduce`'s
+// result type `U`) are inferred at the call site by the generic-native path; the registry's
+// `Ty::Param` never reaches a backend (M-RT S7b). They erase to PHP's `array_map`/`array_filter`/
+// `array_reduce` (D-L9). `filter` wraps `array_filter` in `array_values` to re-index the result to a
+// sequential list (PHP's `array_filter` preserves the original keys), matching the Rust `Vec`.
+
+fn list_map(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), f] => {
+            let mut out = Vec::with_capacity(xs.len());
+            for x in xs.iter() {
+                out.push(call(f, vec![x.clone()])?);
+            }
+            Ok(Value::List(std::rc::Rc::new(out)))
+        }
+        _ => Err("List.map expects (List<T>, (T) -> U)".into()),
+    }
+}
+fn list_filter(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), f] => {
+            let mut out = Vec::new();
+            for x in xs.iter() {
+                match call(f, vec![x.clone()])? {
+                    Value::Bool(true) => out.push(x.clone()),
+                    Value::Bool(false) => {}
+                    other => {
+                        return Err(format!(
+                            "List.filter predicate must return bool, got {}",
+                            other.type_name()
+                        ))
+                    }
+                }
+            }
+            Ok(Value::List(std::rc::Rc::new(out)))
+        }
+        _ => Err("List.filter expects (List<T>, (T) -> bool)".into()),
+    }
+}
+fn list_reduce(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), init, f] => {
+            let mut acc = init.clone();
+            for x in xs.iter() {
+                acc = call(f, vec![acc, x.clone()])?;
+            }
+            Ok(acc)
+        }
+        _ => Err("List.reduce expects (List<T>, U, (U, T) -> U)".into()),
+    }
+}
+
 /// The `Core.List` registry entries (M-RT S7b). `reverse` is generic over the element type; `sum` is
-/// concrete `List<int> -> int`. Both erase to the PHP array builtin of the same shape (D-L9).
+/// concrete `List<int> -> int`; `map`/`filter`/`reduce` are the higher-order ops (S7b-3). All erase
+/// to the PHP array builtin of the same shape (D-L9).
 fn list_natives() -> Vec<NativeFn> {
     let t = || Ty::Param("T".into());
+    let u = || Ty::Param("U".into());
+    let list = |e: Ty| Ty::List(Box::new(e));
     vec![
         NativeFn {
             module: "Core.List",
             name: "reverse",
             params: vec![Ty::List(Box::new(t()))],
             ret: Ty::List(Box::new(t())),
-            eval: list_reverse,
+            eval: NativeEval::Pure(list_reverse),
             // array_reverse re-indexes a list (sequential keys) — byte-identical to the Rust Vec.
             php: |a| format!("array_reverse({})", parg(a, 0)),
         },
@@ -1013,8 +1095,42 @@ fn list_natives() -> Vec<NativeFn> {
             name: "sum",
             params: vec![Ty::List(Box::new(Ty::Int))],
             ret: Ty::Int,
-            eval: list_sum,
+            eval: NativeEval::Pure(list_sum),
             php: |a| format!("array_sum({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "map",
+            params: vec![list(t()), Ty::Function(vec![t()], Box::new(u()))],
+            ret: list(u()),
+            eval: NativeEval::HigherOrder(list_map),
+            // array_map(callable, array) — note the order is swapped vs Phorge's map(list, f).
+            php: |a| format!("array_map({}, {})", parg(a, 1), parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "filter",
+            params: vec![list(t()), Ty::Function(vec![t()], Box::new(Ty::Bool))],
+            ret: list(t()),
+            eval: NativeEval::HigherOrder(list_filter),
+            // array_filter preserves original keys; array_values re-indexes to a sequential list.
+            php: |a| format!("array_values(array_filter({}, {}))", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "reduce",
+            params: vec![list(t()), u(), Ty::Function(vec![u(), t()], Box::new(u()))],
+            ret: u(),
+            eval: NativeEval::HigherOrder(list_reduce),
+            // array_reduce(array, callback, initial) — initial is Phorge's 2nd arg, fn its 3rd.
+            php: |a| {
+                format!(
+                    "array_reduce({}, {}, {})",
+                    parg(a, 0),
+                    parg(a, 2),
+                    parg(a, 1)
+                )
+            },
         },
     ]
 }
@@ -1072,7 +1188,7 @@ fn map_natives() -> Vec<NativeFn> {
             name: "keys",
             params: vec![map()],
             ret: Ty::List(Box::new(k())),
-            eval: map_keys,
+            eval: NativeEval::Pure(map_keys),
             php: |a| format!("array_keys({})", parg(a, 0)),
         },
         NativeFn {
@@ -1080,7 +1196,7 @@ fn map_natives() -> Vec<NativeFn> {
             name: "values",
             params: vec![map()],
             ret: Ty::List(Box::new(v())),
-            eval: map_values,
+            eval: NativeEval::Pure(map_values),
             php: |a| format!("array_values({})", parg(a, 0)),
         },
         NativeFn {
@@ -1088,7 +1204,7 @@ fn map_natives() -> Vec<NativeFn> {
             name: "has",
             params: vec![map(), k()],
             ret: Ty::Bool,
-            eval: map_has,
+            eval: NativeEval::Pure(map_has),
             // PHP `array_key_exists(key, array)` — key first.
             php: |a| format!("array_key_exists({}, {})", parg(a, 1), parg(a, 0)),
         },
@@ -1097,7 +1213,7 @@ fn map_natives() -> Vec<NativeFn> {
             name: "size",
             params: vec![map()],
             ret: Ty::Int,
-            eval: map_size,
+            eval: NativeEval::Pure(map_size),
             php: |a| format!("count({})", parg(a, 0)),
         },
     ]
@@ -1147,7 +1263,7 @@ fn set_natives() -> Vec<NativeFn> {
             name: "of",
             params: vec![Ty::List(Box::new(t()))],
             ret: Ty::Set(Box::new(t())),
-            eval: set_of,
+            eval: NativeEval::Pure(set_of),
             // Dedup preserving first-occurrence order; SORT_STRING matches HKey string-distinctness.
             php: |a| format!("array_values(array_unique({}, SORT_STRING))", parg(a, 0)),
         },
@@ -1156,7 +1272,7 @@ fn set_natives() -> Vec<NativeFn> {
             name: "contains",
             params: vec![Ty::Set(Box::new(t())), t()],
             ret: Ty::Bool,
-            eval: set_contains,
+            eval: NativeEval::Pure(set_contains),
             // Strict in_array(needle, haystack) — needle first.
             php: |a| format!("in_array({}, {}, true)", parg(a, 1), parg(a, 0)),
         },
@@ -1165,7 +1281,7 @@ fn set_natives() -> Vec<NativeFn> {
             name: "size",
             params: vec![Ty::Set(Box::new(t()))],
             ret: Ty::Int,
-            eval: set_size,
+            eval: NativeEval::Pure(set_size),
             php: |a| format!("count({})", parg(a, 0)),
         },
     ]
@@ -1180,7 +1296,7 @@ fn build() -> Vec<NativeFn> {
         name: "println",
         params: vec![Ty::String],
         ret: Ty::Unit,
-        eval: console_println,
+        eval: NativeEval::Pure(console_println),
         php: |args| {
             let a = args
                 .first()
@@ -1532,7 +1648,10 @@ mod tests {
         // Option 1 named tags are macro-monomorphized registry entries — exercise them through the
         // registered `eval`/`php` (not the local macro fns) so the test pins what callers actually hit.
         let eval = |n: &str, args: &[Value]| -> Result<Value, String> {
-            (registry()[index_of("Core.Html", n).unwrap()].eval)(args, &mut String::new())
+            match registry()[index_of("Core.Html", n).unwrap()].eval {
+                NativeEval::Pure(f) => f(args, &mut String::new()),
+                NativeEval::HigherOrder(_) => panic!("{n} is not a pure native"),
+            }
         };
         let php = |n: &str, a: &[&str]| {
             let args: Vec<String> = a.iter().map(|s| (*s).to_string()).collect();
@@ -1674,6 +1793,105 @@ mod tests {
         assert_eq!(
             registry()[index_of("Core.List", "reverse").unwrap()].ret,
             Ty::List(Box::new(Ty::Param("T".into())))
+        );
+    }
+
+    #[test]
+    fn list_higher_order_eval_and_emit() {
+        // The HOF natives drive the closure via the backend-supplied invoker; here a stub invoker
+        // stands in for a backend (the `f` Value is a placeholder the stub ignores). The end-to-end
+        // closure path is covered by the differential harness; this pins the iteration/collect logic.
+        let nums = Value::List(std::rc::Rc::new(vec![
+            Value::Int(1),
+            Value::Int(2),
+            Value::Int(3),
+            Value::Int(4),
+        ]));
+        let placeholder = Value::Int(0);
+
+        // map: double each element.
+        let mut dbl = |_f: &Value, a: Vec<Value>| match a.as_slice() {
+            [Value::Int(n)] => Ok(Value::Int(n * 2)),
+            _ => Err("bad arity".to_string()),
+        };
+        match list_map(&[nums.clone(), placeholder.clone()], &mut dbl).unwrap() {
+            Value::List(xs) => {
+                assert_eq!(xs.len(), 4);
+                assert!(matches!(xs[0], Value::Int(2)));
+                assert!(matches!(xs[3], Value::Int(8)));
+            }
+            other => panic!("map returned {other:?}"),
+        }
+
+        // filter: keep the even elements (predicate returns bool).
+        let mut even = |_f: &Value, a: Vec<Value>| match a.as_slice() {
+            [Value::Int(n)] => Ok(Value::Bool(n % 2 == 0)),
+            _ => Err("bad arity".to_string()),
+        };
+        match list_filter(&[nums.clone(), placeholder.clone()], &mut even).unwrap() {
+            Value::List(xs) => {
+                assert_eq!(xs.len(), 2);
+                assert!(matches!(xs[0], Value::Int(2)));
+                assert!(matches!(xs[1], Value::Int(4)));
+            }
+            other => panic!("filter returned {other:?}"),
+        }
+
+        // filter: a non-bool predicate result is a clean fault, never a panic.
+        let mut bad = |_f: &Value, _a: Vec<Value>| Ok(Value::Int(7));
+        assert!(list_filter(&[nums.clone(), placeholder.clone()], &mut bad).is_err());
+
+        // reduce: sum, seeded with 100.
+        let mut add = |_f: &Value, a: Vec<Value>| match a.as_slice() {
+            [Value::Int(acc), Value::Int(x)] => Ok(Value::Int(acc + x)),
+            _ => Err("bad arity".to_string()),
+        };
+        assert!(matches!(
+            list_reduce(
+                &[nums.clone(), Value::Int(100), placeholder.clone()],
+                &mut add
+            ),
+            Ok(Value::Int(110))
+        ));
+
+        // reduce over the empty list returns the seed unchanged (the closure is never called).
+        let empty = Value::List(std::rc::Rc::new(vec![]));
+        let mut never = |_f: &Value, _a: Vec<Value>| Err("must not be called".to_string());
+        assert!(matches!(
+            list_reduce(&[empty, Value::Int(42), placeholder.clone()], &mut never),
+            Ok(Value::Int(42))
+        ));
+
+        // A fault from the closure propagates as a plain `String` (the backend-shared contract).
+        let mut boom = |_f: &Value, _a: Vec<Value>| Err("kaboom".to_string());
+        assert_eq!(
+            list_map(&[nums, placeholder], &mut boom).unwrap_err(),
+            "kaboom"
+        );
+
+        // PHP erasure: array_map (arg order swapped), array_values(array_filter), array_reduce.
+        assert_eq!(
+            (registry()[index_of("Core.List", "map").unwrap()].php)(&["$xs".into(), "$f".into()]),
+            "array_map($f, $xs)"
+        );
+        assert_eq!(
+            (registry()[index_of("Core.List", "filter").unwrap()].php)(&[
+                "$xs".into(),
+                "$f".into()
+            ]),
+            "array_values(array_filter($xs, $f))"
+        );
+        assert_eq!(
+            (registry()[index_of("Core.List", "reduce").unwrap()].php)(&[
+                "$xs".into(),
+                "$init".into(),
+                "$f".into()
+            ]),
+            "array_reduce($xs, $f, $init)"
+        );
+        assert_eq!(
+            index_of_by_leaf("List", "map"),
+            index_of("Core.List", "map")
         );
     }
 

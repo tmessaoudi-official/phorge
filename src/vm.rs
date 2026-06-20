@@ -279,10 +279,23 @@ impl<'a> Vm<'a> {
 
             Op::CallNative(idx, argc) => {
                 // The native's `eval` is shared verbatim with the interpreter (structural parity).
-                // `validate` has already bounded `idx`; the args sit on top in source order.
+                // `validate` has already bounded `idx`; the args sit on top in source order. The
+                // enum is `Copy`, so reading it ends the `'static` registry borrow before the
+                // higher-order invoker captures `&mut self`.
                 let args = self.split_off(argc);
-                let native = &crate::native::registry()[idx];
-                let result = (native.eval)(&args, &mut self.out)?;
+                let eval = crate::native::registry()[idx].eval;
+                let result = match eval {
+                    crate::native::NativeEval::Pure(f) => f(&args, &mut self.out)?,
+                    crate::native::NativeEval::HigherOrder(f) => {
+                        // A closure argument is run re-entrantly on *this* VM via
+                        // `call_closure_value` — the same `exec_op` core the main loop drives, so a
+                        // closure fault and its result are byte-identical to the interpreter's
+                        // `call_closure` path (M-RT S7b-3).
+                        let mut invoke =
+                            |fv: &Value, cargs: Vec<Value>| self.call_closure_value(fv, cargs);
+                        f(&args, &mut invoke)?
+                    }
+                };
                 self.stack.push(result);
             }
 
@@ -484,6 +497,77 @@ impl<'a> Vm<'a> {
         if !self.frames.is_empty() {
             self.stack.push(rv);
         }
+    }
+
+    /// Invoke a first-class closure VALUE re-entrantly and return its result. Unlike [`Op::CallValue`]
+    /// (which pushes a frame and lets the main `run` loop drive it), this is called from *inside* a
+    /// higher-order native (`Core.List.map`/`filter`/`reduce`) that needs the closure's result
+    /// synchronously: it pushes the closure's frame, runs a nested loop until exactly that frame (and
+    /// any frames it spawns) returns, then pops and returns the value left on the stack. The slot math
+    /// mirrors `Op::CallValue`; execution shares `exec_op` with the main loop — one execution core, no
+    /// second interpreter (the parity analogue of the tree-walker's `call_closure`). M-RT S7b-3.
+    fn call_closure_value(&mut self, callee: &Value, args: Vec<Value>) -> Result<Value, String> {
+        let (func_idx, captures) = match callee {
+            Value::Closure(cd) => match cd.as_ref() {
+                crate::value::ClosureData::Byte { func, captures } => (*func, captures.clone()),
+                _ => return Err("expected a bytecode closure".to_string()),
+            },
+            v => return Err(format!("cannot call {} as a function", v.type_name())),
+        };
+        let func_arity = self.program.functions[func_idx].arity;
+        let n_captures = self.program.functions[func_idx].n_captures;
+        let n_params = func_arity - n_captures;
+        if args.len() != n_params {
+            return Err(format!(
+                "wrong number of arguments: expected {n_params}, got {}",
+                args.len()
+            ));
+        }
+        if self.frames.len() >= MAX_CALL_DEPTH {
+            return Err("stack overflow".to_string());
+        }
+        // Frame layout `[captures.., args..]` — identical to `Op::CallValue`.
+        let slot_base = self.stack.len();
+        self.stack.extend(captures);
+        self.stack.extend(args);
+        let target_depth = self.frames.len();
+        self.frames.push(Frame {
+            func: func_idx,
+            ip: 0,
+            slot_base,
+        });
+        self.run_until(target_depth)?;
+        // The closure's `Return` (frames shrank back to `target_depth`, which is >= 1 so the caller
+        // is non-empty) left its value on top of the stack via `do_return`.
+        Ok(self.pop())
+    }
+
+    /// Drive `exec_op` until the frame stack shrinks back to `target_depth` (the depth *before* the
+    /// frame to run was pushed). Used only by [`Vm::call_closure_value`] for re-entrant native
+    /// callbacks; the top-level `run` loop is the `target_depth == 0` analogue that additionally
+    /// captures output and returns it. A fault propagates as a raw `String` — the outer `run` loop
+    /// (still executing the `CallNative` op) attaches the source line, exactly as for any native fault.
+    fn run_until(&mut self, target_depth: usize) -> Result<(), String> {
+        while self.frames.len() > target_depth {
+            let fr = self.frames.len() - 1;
+            let func = self.frames[fr].func;
+            let ip = self.frames[fr].ip;
+            let code = &self.program.functions[func].chunk.code;
+            if ip >= code.len() {
+                self.do_return(Value::Unit);
+                continue;
+            }
+            let op = code[ip].clone();
+            self.frames[fr].ip += 1;
+            match self.exec_op(op, fr, func)? {
+                Flow::Next => {}
+                // `Flow::Done` is only ever returned by `main`'s `Return`; at `target_depth >= 1`
+                // (always, since a native runs inside at least `main`) it is unreachable, but exit
+                // cleanly rather than spin if a future caller passes `target_depth == 0`.
+                Flow::Done => return Ok(()),
+            }
+        }
+        Ok(())
     }
 
     fn pop(&mut self) -> Value {

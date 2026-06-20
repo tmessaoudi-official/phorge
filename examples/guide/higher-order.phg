@@ -1,0 +1,41 @@
+// Core.List higher-order natives (M-RT S7b-3): map / filter / reduce. These are the first natives
+// that take a *closure* argument — the runtime calls the closure once per element, on whichever
+// backend is running, via one shared native body (the interpreter wraps `call_closure`; the VM wraps
+// a re-entrant `call_closure_value`). They are generic (the element type `T`, and map/reduce's result
+// type `U`, are inferred at the call site like any generic free function) and erase to PHP's
+// `array_map` / `array_filter` / `array_reduce`. Byte-identical on run / runvm / real PHP.
+//
+// Results are shown via `List.sum` and indexing — PHP cannot `echo` an array directly, so no example
+// prints a whole list. Integer arithmetic only (PHP's float `/` never enters).
+package main;
+
+import Core.Console;
+import Core.List;
+
+function main() {
+    var nums = [1, 2, 3, 4, 5];
+
+    // map: double each element.
+    var doubled = List.map(nums, fn(int x) => x * 2);
+    Console.println("map sum     = {List.sum(doubled)}");
+    Console.println("map[0]      = {doubled[0]}");
+
+    // filter: keep the even elements (the predicate returns bool).
+    var evens = List.filter(nums, fn(int x) => x % 2 == 0);
+    Console.println("filter sum  = {List.sum(evens)}");
+    Console.println("filter[0]   = {evens[0]}");
+
+    // reduce: product over the list, seeded with 1.
+    var product = List.reduce(nums, 1, fn(int acc, int x) => acc * x);
+    Console.println("reduce prod = {product}");
+
+    // closures capture enclosing locals by value — `factor` is captured into the lambda.
+    var factor = 10;
+    var scaled = List.map(nums, fn(int x) => x * factor);
+    Console.println("scaled sum  = {List.sum(scaled)}");
+
+    // composition: filter, then map, then reduce — higher-order natives chain like any call.
+    var kept = List.filter(nums, fn(int x) => x > 2);
+    var squared = List.map(kept, fn(int x) => x * x);
+    Console.println("compose sum = {List.sum(squared)}");
+}

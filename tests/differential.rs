@@ -996,6 +996,38 @@ fn transpiles_lambda_literal_call_target() {
 }
 
 #[test]
+fn higher_order_natives_agree() {
+    // map / filter / reduce with inline lambdas (results shown via List.sum — PHP can't echo arrays).
+    agree("import Core.Console; import Core.List; function main(){ var d=List.map([1,2,3], fn(int x)=>x*2); Console.println(\"{List.sum(d)}\"); }"); // 12
+    agree("import Core.Console; import Core.List; function main(){ var e=List.filter([1,2,3,4], fn(int x)=>x%2==0); Console.println(\"{List.sum(e)}\"); }"); // 6
+    agree("import Core.Console; import Core.List; function main(){ Console.println(\"{List.reduce([1,2,3,4], 1, fn(int a,int x)=>a*x)}\"); }"); // 24
+                                                                                                                                                // A lambda capturing an enclosing local, passed to a native (capture window parity, invariant #8).
+    agree("import Core.Console; import Core.List; function main(){ var k=10; var s=List.map([1,2,3], fn(int x)=>x*k); Console.println(\"{List.sum(s)}\"); }"); // 60
+                                                                                                                                                               // A bare NAMED function reference (zero-capture closure) passed straight to a native.
+    agree("import Core.Console; import Core.List; function dbl(int x)->int{return x*2;} function main(){ var d=List.map([1,2,3], dbl); Console.println(\"{List.sum(d)}\"); }"); // 12
+                                                                                                                                                                                // RE-ENTRANCY: a native called from inside another native's closure (map nested in reduce's fn).
+    agree("import Core.Console; import Core.List; function main(){ Console.println(\"{List.reduce([1,2,3], 0, fn(int a,int x)=>a + List.sum(List.map([x], fn(int y)=>y*y)))}\"); }");
+    // 14
+}
+
+#[test]
+fn higher_order_native_closure_fault_agrees() {
+    // A fault raised *inside* a closure run by a native must propagate byte-identically on both
+    // backends (interpreter `call_closure` ⇄ VM re-entrant `call_closure_value`). Can't be a runnable
+    // example (every example must produce identical Ok output) — lives here as a fault-parity case.
+    agree_err("import Core.Console; import Core.List; function main(){ var d=List.map([1,2,3], fn(int x)=>x/0); Console.println(\"{List.sum(d)}\"); }");
+    // DivZero on both
+}
+
+#[test]
+fn transpiles_higher_order_natives() {
+    let php = transpile_ok("package main; import Core.Console; import Core.List; function main(){ var d=List.map([1,2,3], fn(int x)=>x*2); var e=List.filter(d, fn(int x)=>x>2); Console.println(\"{List.reduce(e, 0, fn(int a,int x)=>a+x)}\"); }");
+    assert!(php.contains("array_map(fn($x) => $x * 2,"), "{php}");
+    assert!(php.contains("array_values(array_filter("), "{php}");
+    assert!(php.contains("array_reduce("), "{php}");
+}
+
+#[test]
 fn escaping_and_nested_lambdas_agree() {
     // A closure that ESCAPES its defining frame: a named function returns a lambda capturing its
     // param, then it is called after the function has returned. Captures live in the closure's Rc,

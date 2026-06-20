@@ -29,6 +29,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   equality is order-independent membership. Erases to a deduped PHP array (`array_values(array_unique(
   $xs, SORT_STRING))` / `in_array(_, _, true)` / `count`). Byte-identical `run ≡ runvm ≡ real PHP` (new
   `examples/guide/sets.phg`). Set union/intersection and iteration are follow-ups.
+- **Higher-order `Core.List` ops (S7b-3):** `map(List<T>, (T) -> U) -> List<U>`, `filter(List<T>,
+  (T) -> bool) -> List<T>`, `reduce(List<T>, U, (U, T) -> U) -> U` — the first natives that take a
+  **closure** argument. A native's `eval` becomes a `NativeEval` enum: `Pure(fn(args, out))` (every
+  existing native) or `HigherOrder(fn(args, invoke))`, where `invoke` is a backend-supplied
+  [`ClosureInvoker`] that runs a `Value::Closure` and returns its result. The one native body drives
+  **both** backends: the interpreter's invoker wraps `call_closure`; the VM gains a re-entrant
+  `call_closure_value` + `run_until` that pushes the closure's frame and drives the **shared**
+  `exec_op` until it returns — so a closure's result and any fault it raises are byte-identical to the
+  interpreter (the parity discipline of the value kernels, extended to control flow). **No new `Op`, no
+  `Value` change.** Generic over the element/result type (same call-site unifier as a generic free
+  function); erase to PHP `array_map` / `array_values(array_filter(…))` / `array_reduce`. Byte-identical
+  `run ≡ runvm ≡ real PHP` (new `examples/guide/higher-order.phg`, oracle-gated). This **completes
+  M-RT S7b.**
 
 ### Changed — stdlib namespace is now PascalCase `Core.*` (namespace reshape)
 
