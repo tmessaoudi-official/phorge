@@ -171,6 +171,8 @@ fn main() {
     if cmd == "serve" {
         let mut file: Option<&str> = None;
         let mut addr = "127.0.0.1:8080";
+        // Per-connection read/write timeout (GA blocker B4): default 30s; `--timeout 0` disables it.
+        let mut timeout_secs: u64 = 30;
         let mut i = 2;
         while i < args.len() {
             match args[i].as_str() {
@@ -179,6 +181,16 @@ fn main() {
                         eprintln!("{USAGE}");
                         exit(2);
                     });
+                    i += 2;
+                }
+                "--timeout" => {
+                    timeout_secs = args
+                        .get(i + 1)
+                        .and_then(|s| s.parse::<u64>().ok())
+                        .unwrap_or_else(|| {
+                            eprintln!("phg serve: --timeout expects a whole number of seconds");
+                            exit(2);
+                        });
                     i += 2;
                 }
                 a if !a.starts_with('-') && file.is_none() => {
@@ -192,9 +204,10 @@ fn main() {
             }
         }
         let file = file.unwrap_or_else(|| {
-            eprintln!("usage: phg serve <file> [--addr 127.0.0.1:8080]");
+            eprintln!("usage: phg serve <file> [--addr 127.0.0.1:8080] [--timeout 30]");
             exit(2);
         });
+        let timeout = (timeout_secs > 0).then(|| std::time::Duration::from_secs(timeout_secs));
         let unit = match loader::load(std::path::Path::new(file)) {
             Ok(u) => u,
             Err(err) => {
@@ -202,7 +215,7 @@ fn main() {
                 exit(1);
             }
         };
-        match cli::serve_program(&unit.program, &unit.diag_src, addr) {
+        match cli::serve_program(&unit.program, &unit.diag_src, addr, timeout) {
             Ok(text) => {
                 print!("{text}");
                 return;

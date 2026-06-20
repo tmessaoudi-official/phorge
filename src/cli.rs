@@ -145,10 +145,18 @@ pub fn help_for(cmd: &str) -> String {
                     router / `serialize_response` live — all pure Phorge), and writes the bytes back\n\
                     (`Connection: close`, one request per connection). A request fault degrades to a\n\
                     500; a malformed request is the program's concern (→ a 400 from `respond`).\n\n\
-                    usage:\n  phg serve <file> [--addr 127.0.0.1:8080]\n\n\
+                    The server is SINGLE-THREADED (the Rc-shared heap is not Send), so it handles one\n\
+                    connection at a time. Bind 127.0.0.1 (the default) on untrusted networks, and use\n\
+                    --timeout so a slow/idle client cannot wedge it (slowloris). A per-connection\n\
+                    read/write error never ends the server — it is logged and the next connection is\n\
+                    served.\n\n\
+                    usage:\n  phg serve <file> [--addr 127.0.0.1:8080] [--timeout SECONDS]\n\n\
+                    options:\n  \
+                    --addr ADDR        host:port to bind (default 127.0.0.1:8080)\n  \
+                    --timeout SECONDS  per-connection read/write timeout; 0 = none (default 30)\n\n\
                     examples:\n  \
                     phg serve examples/web/server.phg\n  \
-                    phg serve app.phg --addr 0.0.0.0:3000\n"
+                    phg serve app.phg --addr 0.0.0.0:3000 --timeout 15\n"
         }
         _ => return help_text(),
     };
@@ -519,10 +527,15 @@ pub fn transpile_program(prog: &Program, diag_src: &str) -> Result<String, Strin
 /// ([`crate::serve::serve_tcp`]) until the process is killed. Runs on the 256 MB deep-stack worker so
 /// the interpreter's `MAX_CALL_DEPTH` guard has the same headroom `run`/`runvm` rely on (the
 /// per-request `call_named` walks the native stack). Returns only on a bind/socket error.
-pub fn serve_program(prog: &Program, diag_src: &str, addr: &str) -> Result<String, String> {
+pub fn serve_program(
+    prog: &Program,
+    diag_src: &str,
+    addr: &str,
+    timeout: Option<std::time::Duration>,
+) -> Result<String, String> {
     on_deep_stack(|| {
         let checked = check_and_expand(prog, diag_src)?;
-        crate::serve::serve_tcp(&checked, addr).map_err(|e| format!("serve: {e}"))?;
+        crate::serve::serve_tcp(&checked, addr, timeout).map_err(|e| format!("serve: {e}"))?;
         Ok(String::new())
     })
 }

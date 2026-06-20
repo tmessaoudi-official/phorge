@@ -161,6 +161,108 @@ fn serves_known_unknown_and_malformed() {
     }
 }
 
+/// A transport with a scripted sequence of `recv` results (including errors), so the loop's
+/// resilience (GA blocker B3) can be tested deterministically without a socket.
+struct ScriptedTransport {
+    recvs: VecDeque<std::io::Result<Option<Vec<u8>>>>,
+    sent: Vec<Vec<u8>>,
+}
+impl Transport for ScriptedTransport {
+    fn recv(&mut self) -> std::io::Result<Option<Vec<u8>>> {
+        self.recvs.pop_front().unwrap_or(Ok(None))
+    }
+    fn send(&mut self, response: &[u8]) -> std::io::Result<()> {
+        self.sent.push(response.to_vec());
+        Ok(())
+    }
+}
+
+/// Type-check an inline program for the degradation tests below.
+fn checked(src: &str) -> phorge::ast::Program {
+    phorge::cli::parse_checked_program(src).expect("program type-checks")
+}
+
+/// B3: a per-connection `recv` error (client reset, transient accept) is logged and skipped — the
+/// surrounding good request is still served and the loop ends cleanly on `Ok(None)`.
+#[test]
+fn recv_error_does_not_kill_the_loop() {
+    let prog = program();
+    let good = b"GET / HTTP/1.1\r\nHost: x\r\n\r\n".to_vec();
+    let mut t = ScriptedTransport {
+        recvs: VecDeque::from(vec![
+            Err(std::io::Error::new(
+                std::io::ErrorKind::ConnectionReset,
+                "reset",
+            )),
+            Ok(Some(good)),
+            Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "pipe")),
+            Ok(None),
+        ]),
+        sent: Vec::new(),
+    };
+    serve(&prog, &mut t).expect("loop survives per-connection errors and ends cleanly");
+    assert_eq!(
+        t.sent.len(),
+        1,
+        "the one good request was served despite surrounding errors"
+    );
+    assert_eq!(t.sent[0], http("HTTP/1.1 200 OK", "home"));
+}
+
+/// B3: a listener that only ever errors (unrecoverable) eventually shuts the loop down via the
+/// consecutive-error circuit breaker, rather than spinning forever.
+#[test]
+fn unrecoverable_listener_eventually_stops() {
+    let prog = program();
+    let recvs = (0..1000)
+        .map(|_| Err(std::io::Error::other("listener dead")))
+        .collect();
+    let mut t = ScriptedTransport {
+        recvs,
+        sent: Vec::new(),
+    };
+    assert!(
+        serve(&prog, &mut t).is_err(),
+        "a listener that only errors must eventually end the loop"
+    );
+    assert!(t.sent.is_empty(), "nothing could be served");
+}
+
+/// P1-e: a request that *faults* inside `respond` degrades to a 500 and the loop continues to the
+/// next request (one bad request never aborts the server).
+#[test]
+fn respond_fault_degrades_to_500_and_loop_continues() {
+    let prog = checked(
+        "package main;\nfunction respond(bytes raw) -> bytes { List<bytes> xs = [raw]; return xs[5]; }\n",
+    );
+    let req = b"GET / HTTP/1.1\r\n\r\n".to_vec();
+    let mut fx = FixtureTransport::new(vec![req.clone(), req]);
+    serve(&prog, &mut fx).expect("loop completes despite per-request faults");
+    assert_eq!(
+        fx.sent.len(),
+        2,
+        "both faulting requests answered; loop continued"
+    );
+    for resp in &fx.sent {
+        assert!(
+            resp.starts_with(b"HTTP/1.1 500 Internal Server Error"),
+            "a request fault degrades to 500, got: {}",
+            String::from_utf8_lossy(&resp[..resp.len().min(40)])
+        );
+    }
+}
+
+/// P1-e: a `respond` that returns a non-`bytes` value also degrades to a 500 (the runtime never
+/// trusts the return type — it checks the actual value).
+#[test]
+fn respond_non_bytes_return_degrades_to_500() {
+    let prog = checked("package main;\nfunction respond(bytes raw) -> int { return 7; }\n");
+    let mut fx = FixtureTransport::new(vec![b"GET / HTTP/1.1\r\n\r\n".to_vec()]);
+    serve(&prog, &mut fx).expect("loop completes");
+    assert_eq!(fx.sent.len(), 1);
+    assert!(fx.sent[0].starts_with(b"HTTP/1.1 500 Internal Server Error"));
+}
+
 #[test]
 fn unknown_entry_reports_cleanly() {
     let prog = program();
@@ -169,7 +271,6 @@ fn unknown_entry_reports_cleanly() {
 }
 
 #[test]
-#[ignore = "binds a real TCP socket; run with `cargo test --test serve -- --ignored`"]
 fn tcp_smoke() {
     use phorge::serve::TcpTransport;
     use std::io::{Read, Write};

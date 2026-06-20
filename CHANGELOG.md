@@ -6,6 +6,26 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Security — `phg serve` made DoS-resilient (GA blockers B3, B4 + P1-d)
+
+- **One connection can no longer take the server down (B3).** A per-connection `recv`/`send` error
+  (client reset, broken pipe, transient `accept`) previously propagated out of the accept loop and
+  exited the process — an unauthenticated remote DoS. The loop now logs and skips such errors and
+  continues serving; only `MAX_CONSECUTIVE_TRANSPORT_ERRORS` (64) accept errors in a row with no
+  progress shuts it down (a genuinely dead listener). A per-request fault still degrades to a 500.
+- **Slowloris closed with a read/write timeout (B4).** Each accepted connection now gets a
+  `set_read_timeout`/`set_write_timeout` (default **30s**, configurable with `phg serve --timeout
+  SECONDS`; `0` disables). A slow/idle client times out and is dropped, and the single-threaded server
+  moves on to the next connection instead of being wedged indefinitely.
+- **Framing is now unit-tested + a CPU-DoS fixed (P1-d).** `read_http_request` is generic over `Read`
+  and covered by unit tests (Content-Length present/absent/malformed/case-insensitive, terminator &
+  body split across chunks, EOF-before-headers, the 8 MiB cap), and the real-socket smoke test is
+  un-`#[ignore]`d. Fixed a latent **O(n²)** re-scan of the whole buffer for the header terminator on
+  every chunk (a CPU-DoS on a large no-terminator request) — it now scans only newly-arrived bytes.
+- `phg serve --help` and SECURITY.md document the single-thread posture, the `127.0.0.1` default, and
+  `--timeout`. All changes are in the quarantined `src/serve.rs` runtime — the `run ≡ runvm ≡ php`
+  byte-identity spine is untouched.
+
 ### Security — `phg vendor` supply-chain hardening (GA blockers B1, B2)
 
 - **Git argument-injection / arbitrary-command-execution closed.** `phg vendor` passed a

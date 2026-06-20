@@ -14,6 +14,7 @@ use crate::value::Value;
 use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::rc::Rc;
+use std::time::Duration;
 
 /// The default Phorge entry the runtime calls per request: `respond(bytes) -> bytes`.
 pub const SERVE_ENTRY: &str = "respond";
@@ -28,15 +29,44 @@ pub trait Transport {
     fn send(&mut self, response: &[u8]) -> io::Result<()>;
 }
 
+/// If the transport reports this many consecutive errors with **no** successful request in between,
+/// the listener is treated as unrecoverable and the loop ends. Transient per-connection failures
+/// (client resets, slow-client read timeouts) are logged and skipped far below this bound, so one
+/// hostile or broken client can never take the server down — GA blocker B3.
+const MAX_CONSECUTIVE_TRANSPORT_ERRORS: usize = 64;
+
 /// Serve requests from `transport`, routing each raw buffer through the program's
-/// `respond(bytes) -> bytes`. A fault on one request degrades to a 500 (logged to stderr); the loop
-/// continues. Returns when the transport reports exhaustion.
+/// `respond(bytes) -> bytes`. **Resilient by design (GA blockers B3/B4):** a fault on one request
+/// degrades to a 500, a `send` failure (client reset / broken pipe) is logged and skipped, and a
+/// `recv` error (e.g. a transient `accept()`) is logged and retried — only `MAX_CONSECUTIVE_…` recv
+/// errors in a row with no progress ends the loop. Returns `Ok` when the transport reports
+/// exhaustion (`recv` → `Ok(None)`).
 pub fn serve<T: Transport>(program: &Program, transport: &mut T) -> io::Result<()> {
-    while let Some(raw) = transport.recv()? {
-        let response = respond_once(program, &raw);
-        transport.send(&response)?;
+    let mut consecutive_errors = 0usize;
+    loop {
+        match transport.recv() {
+            Ok(Some(raw)) => {
+                consecutive_errors = 0;
+                let response = respond_once(program, &raw);
+                if let Err(e) = transport.send(&response) {
+                    // One client's broken pipe / reset must not end the server.
+                    eprintln!("serve: send failed (connection dropped): {e}");
+                }
+            }
+            Ok(None) => return Ok(()), // transport exhausted → graceful shutdown
+            Err(e) => {
+                consecutive_errors += 1;
+                eprintln!("serve: connection error (skipped): {e}");
+                if consecutive_errors >= MAX_CONSECUTIVE_TRANSPORT_ERRORS {
+                    eprintln!(
+                        "serve: {consecutive_errors} consecutive transport errors — listener \
+                         appears unrecoverable, shutting down"
+                    );
+                    return Err(e);
+                }
+            }
+        }
     }
-    Ok(())
 }
 
 /// Invoke `respond(bytes) -> bytes` once. Any captured stdout (a handler calling `console.println`)
@@ -84,6 +114,8 @@ fn http_500() -> Vec<u8> {
 pub struct TcpTransport {
     listener: TcpListener,
     current: Option<TcpStream>,
+    /// Per-connection read/write timeout (slowloris guard, GA blocker B4). `None` = no timeout.
+    timeout: Option<Duration>,
 }
 
 impl TcpTransport {
@@ -92,7 +124,14 @@ impl TcpTransport {
         Ok(Self {
             listener: TcpListener::bind(addr)?,
             current: None,
+            timeout: None,
         })
+    }
+    /// Set the per-connection read/write timeout (GA blocker B4 — bounds a slow/idle client on the
+    /// single-threaded server). `None` disables it (a slow client may then hold a connection
+    /// indefinitely — only appropriate for trusted/loopback use).
+    pub fn set_timeout(&mut self, timeout: Option<Duration>) {
+        self.timeout = timeout;
     }
     /// The actually-bound address (useful when binding to port 0).
     pub fn local_addr(&self) -> io::Result<std::net::SocketAddr> {
@@ -102,10 +141,29 @@ impl TcpTransport {
 
 impl Transport for TcpTransport {
     fn recv(&mut self) -> io::Result<Option<Vec<u8>>> {
-        let (mut stream, _peer) = self.listener.accept()?;
-        let raw = read_http_request(&mut stream)?;
-        self.current = Some(stream);
-        Ok(Some(raw))
+        // Accept connections until one yields a request. An `accept()` error propagates to the serve
+        // loop's circuit breaker (it decides if the listener is unrecoverable). A per-connection read
+        // error — a read timeout from a slow/idle client (B4), or a reset mid-headers — is logged and
+        // the *next* connection is accepted, so one bad client cannot wedge the single-threaded
+        // server (B3 + B4 together).
+        loop {
+            let (mut stream, _peer) = self.listener.accept()?;
+            if let Some(t) = self.timeout {
+                // Best-effort: a platform that rejects the timeout must not crash the server.
+                let _ = stream.set_read_timeout(Some(t));
+                let _ = stream.set_write_timeout(Some(t));
+            }
+            match read_http_request(&mut stream) {
+                Ok(raw) => {
+                    self.current = Some(stream);
+                    return Ok(Some(raw));
+                }
+                Err(e) => {
+                    eprintln!("serve: dropping connection (read error): {e}");
+                    // loop: accept the next connection
+                }
+            }
+        }
     }
     fn send(&mut self, response: &[u8]) -> io::Result<()> {
         if let Some(mut stream) = self.current.take() {
@@ -116,10 +174,21 @@ impl Transport for TcpTransport {
     }
 }
 
-/// Bind `addr` and serve until killed — the blocking accept-loop `phg serve` calls (W4).
-pub fn serve_tcp(program: &Program, addr: &str) -> io::Result<()> {
+/// Bind `addr` and serve until killed — the blocking accept-loop `phg serve` calls (W4). `timeout`
+/// is the per-connection read/write timeout (GA blocker B4); `None` disables it.
+pub fn serve_tcp(program: &Program, addr: &str, timeout: Option<Duration>) -> io::Result<()> {
     let mut t = TcpTransport::bind(addr)?;
+    t.set_timeout(timeout);
     eprintln!("phg serve: listening on http://{}", t.local_addr()?);
+    match timeout {
+        Some(d) => eprintln!(
+            "phg serve: per-connection timeout {}s; single-threaded — bind 127.0.0.1 on untrusted networks",
+            d.as_secs()
+        ),
+        None => eprintln!(
+            "phg serve: no connection timeout (pass --timeout); single-threaded — bind 127.0.0.1 on untrusted networks"
+        ),
+    }
     serve(program, &mut t)
 }
 
@@ -129,14 +198,22 @@ const MAX_REQUEST: usize = 8 * 1024 * 1024;
 /// Read one HTTP/1.1 request from `stream`: everything up to and including `\r\n\r\n`, then the
 /// `Content-Length` body (0 if absent). Capped at [`MAX_REQUEST`]. Framing only — no semantic
 /// validation; a partial/malformed buffer flows to the program's `parse_request`, which returns
-/// `null` and yields a 400.
-fn read_http_request(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
+/// `null` and yields a 400. Generic over [`Read`] so the framing is unit-testable over a `Cursor`
+/// (P1-d) without binding a socket.
+fn read_http_request<R: Read>(stream: &mut R) -> io::Result<Vec<u8>> {
+    const SEP: &[u8] = b"\r\n\r\n";
     let mut buf = Vec::new();
     let mut chunk = [0u8; 4096];
+    // Only re-scan newly-arrived bytes for the header terminator (with a `SEP.len()-1` overlap so a
+    // terminator split across two reads is still found). Scanning the whole buffer every chunk is
+    // O(n²) — a CPU-DoS on a large no-terminator request; this keeps it linear.
+    let mut scanned = 0usize;
     let head_end = loop {
-        if let Some(pos) = find_subslice(&buf, b"\r\n\r\n") {
-            break pos + 4;
+        let from = scanned.saturating_sub(SEP.len() - 1);
+        if let Some(rel) = find_subslice(&buf[from..], SEP) {
+            break from + rel + SEP.len();
         }
+        scanned = buf.len();
         if buf.len() > MAX_REQUEST {
             return Ok(buf);
         }
@@ -179,4 +256,130 @@ fn find_subslice(hay: &[u8], needle: &[u8]) -> Option<usize> {
         return Some(0);
     }
     hay.windows(needle.len()).position(|w| w == needle)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    // --- find_subslice -----------------------------------------------------
+
+    #[test]
+    fn find_subslice_basics() {
+        assert_eq!(find_subslice(b"abc\r\n\r\nxyz", b"\r\n\r\n"), Some(3));
+        assert_eq!(find_subslice(b"no terminator here", b"\r\n\r\n"), None);
+        assert_eq!(find_subslice(b"", b"\r\n\r\n"), None);
+        assert_eq!(find_subslice(b"anything", b""), Some(0)); // empty needle → 0
+    }
+
+    // --- parse_content_length ---------------------------------------------
+
+    #[test]
+    fn content_length_absent_is_zero() {
+        assert_eq!(
+            parse_content_length(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n"),
+            0
+        );
+    }
+
+    #[test]
+    fn content_length_present_is_parsed() {
+        assert_eq!(
+            parse_content_length(b"POST / HTTP/1.1\r\nContent-Length: 42\r\n\r\n"),
+            42
+        );
+    }
+
+    #[test]
+    fn content_length_is_case_insensitive_and_trims() {
+        assert_eq!(
+            parse_content_length(b"POST / HTTP/1.1\r\ncOnTeNt-LeNgTh:   7  \r\n\r\n"),
+            7
+        );
+    }
+
+    #[test]
+    fn content_length_malformed_is_zero() {
+        // Non-numeric value parses to 0 (framing reads no body; the program's parser handles it).
+        assert_eq!(
+            parse_content_length(b"POST / HTTP/1.1\r\nContent-Length: not-a-number\r\n\r\n"),
+            0
+        );
+    }
+
+    // --- read_http_request (over a Cursor, no socket) ----------------------
+
+    #[test]
+    fn reads_headers_only_request() {
+        let req = b"GET / HTTP/1.1\r\nHost: x\r\n\r\n".to_vec();
+        let got = read_http_request(&mut Cursor::new(req.clone())).unwrap();
+        assert_eq!(got, req);
+    }
+
+    #[test]
+    fn reads_request_with_body() {
+        let req = b"POST / HTTP/1.1\r\nContent-Length: 5\r\n\r\nhello".to_vec();
+        let got = read_http_request(&mut Cursor::new(req.clone())).unwrap();
+        assert_eq!(got, req, "head + the declared 5 body bytes");
+    }
+
+    #[test]
+    fn eof_before_headers_returns_partial() {
+        // No CRLFCRLF, then EOF → returns whatever was read (parse → 400 downstream), never hangs.
+        let req = b"GET / HTTP/1.1 no terminator".to_vec();
+        let got = read_http_request(&mut Cursor::new(req.clone())).unwrap();
+        assert_eq!(got, req);
+    }
+
+    /// A reader that yields its data in fixed-size pieces — exercises the accumulation loop with the
+    /// `\r\n\r\n` terminator split across multiple `read` calls.
+    struct ChunkedReader {
+        data: Vec<u8>,
+        pos: usize,
+        chunk: usize,
+    }
+    impl Read for ChunkedReader {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            let remaining = &self.data[self.pos..];
+            let n = remaining.len().min(self.chunk).min(buf.len());
+            buf[..n].copy_from_slice(&remaining[..n]);
+            self.pos += n;
+            Ok(n)
+        }
+    }
+
+    #[test]
+    fn terminator_and_body_split_across_chunks() {
+        let req = b"POST /x HTTP/1.1\r\nContent-Length: 3\r\n\r\nabc".to_vec();
+        let mut r = ChunkedReader {
+            data: req.clone(),
+            pos: 0,
+            chunk: 1, // one byte per read → terminator and body span many reads
+        };
+        let got = read_http_request(&mut r).unwrap();
+        assert_eq!(got, req);
+    }
+
+    /// A reader that never produces a terminator — drives the [`MAX_REQUEST`] cap.
+    struct InfiniteReader;
+    impl Read for InfiniteReader {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            for b in buf.iter_mut() {
+                *b = b'a';
+            }
+            Ok(buf.len())
+        }
+    }
+
+    #[test]
+    fn max_request_cap_terminates() {
+        // No `\r\n\r\n` ever arrives; the read must stop near the cap rather than loop forever.
+        let got = read_http_request(&mut InfiniteReader).unwrap();
+        assert!(got.len() > MAX_REQUEST, "stopped at the cap");
+        assert!(
+            got.len() <= MAX_REQUEST + 4096,
+            "no more than one chunk past the cap"
+        );
+    }
 }
