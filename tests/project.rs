@@ -131,16 +131,104 @@ fn unqualified_cross_package_call_is_rejected() {
 }
 
 #[test]
-fn library_package_type_is_rejected() {
+fn library_package_type_is_usable_cross_package() {
+    // The E-PKG-TYPE gate is retired (M-RT cross-package types): a library package may declare a
+    // type, and `package main` consumes it via `import type`, instantiating + reading a field.
     let tmp = TempDir::new();
     tmp.write("phorge.toml", "module = \"acme/app\"");
-    let entry = tmp.write("src/main.phg", "package main;\nfunction main() {}");
+    let entry = tmp.write(
+        "src/main.phg",
+        "package main;\nimport Core.Console;\nimport type acme.util.Shape;\n\
+         function main() {\n    Shape s = Shape(5);\n    Console.println(\"{s.w}\");\n}",
+    );
+    tmp.write(
+        "src/acme/util/shape.phg",
+        "package acme.util;\nclass Shape { constructor(public int w) {} }",
+    );
+    let unit = loader::load(&entry).expect("project with a cross-package type loads");
+    // Both backends agree (the type def + every reference were mangled before either backend ran).
+    let run = cli::run_program(&unit.program, &unit.diag_src);
+    let runvm = cli::runvm_program(&unit.program, &unit.diag_src);
+    assert_eq!(run.as_deref(), Ok("5\n"), "run output");
+    assert_eq!(runvm.as_deref(), Ok("5\n"), "runvm output");
+}
+
+/// `import type` of a type a package does not export.
+#[test]
+fn import_type_unknown_is_rejected() {
+    let tmp = TempDir::new();
+    tmp.write("phorge.toml", "module = \"acme/app\"");
+    let entry = tmp.write(
+        "src/main.phg",
+        "package main;\nimport type acme.util.Nope;\nfunction main() {}",
+    );
     tmp.write(
         "src/acme/util/shape.phg",
         "package acme.util;\nclass Shape { constructor(public int w) {} }",
     );
     let err = loader::load(&entry).unwrap_err();
-    assert!(err.contains("E-PKG-TYPE"), "got: {err}");
+    assert!(err.contains("E-TYPE-IMPORT-UNKNOWN"), "got: {err}");
+}
+
+/// Two `import type` binding the same bare name without an alias.
+#[test]
+fn import_type_conflict_is_rejected() {
+    let tmp = TempDir::new();
+    tmp.write("phorge.toml", "module = \"acme/app\"");
+    let entry = tmp.write(
+        "src/main.phg",
+        "package main;\nimport type acme.a.Shape;\nimport type acme.b.Shape;\nfunction main() {}",
+    );
+    tmp.write(
+        "src/acme/a/shape.phg",
+        "package acme.a;\nclass Shape { constructor(public int w) {} }",
+    );
+    tmp.write(
+        "src/acme/b/shape.phg",
+        "package acme.b;\nclass Shape { constructor(public int w) {} }",
+    );
+    let err = loader::load(&entry).unwrap_err();
+    assert!(err.contains("E-TYPE-IMPORT-CONFLICT"), "got: {err}");
+}
+
+/// `import type` naming a built-in type (built-ins are import-free).
+#[test]
+fn import_type_builtin_is_rejected() {
+    let tmp = TempDir::new();
+    tmp.write("phorge.toml", "module = \"acme/app\"");
+    let entry = tmp.write(
+        "src/main.phg",
+        "package main;\nimport type acme.util.List;\nfunction main() {}",
+    );
+    tmp.write(
+        "src/acme/util/u.phg",
+        "package acme.util;\nfunction noop() {}",
+    );
+    let err = loader::load(&entry).unwrap_err();
+    assert!(err.contains("E-TYPE-IMPORT-BUILTIN"), "got: {err}");
+}
+
+/// `import type` whose bound name collides with a module-import qualifier.
+#[test]
+fn import_type_shadow_is_rejected() {
+    let tmp = TempDir::new();
+    tmp.write("phorge.toml", "module = \"acme/app\"");
+    // A class named `util` (lowercase is unusual but the loader is casing-agnostic) clashing with the
+    // `acme.util` module-import leaf `util`. The shadow guard keeps the two import kinds disjoint.
+    let entry = tmp.write(
+        "src/main.phg",
+        "package main;\nimport acme.util;\nimport type acme.types.util;\nfunction main() {}",
+    );
+    tmp.write(
+        "src/acme/util/u.phg",
+        "package acme.util;\nfunction noop() {}",
+    );
+    tmp.write(
+        "src/acme/types/t.phg",
+        "package acme.types;\nclass util { constructor(public int w) {} }",
+    );
+    let err = loader::load(&entry).unwrap_err();
+    assert!(err.contains("E-TYPE-IMPORT-SHADOW"), "got: {err}");
 }
 
 #[test]

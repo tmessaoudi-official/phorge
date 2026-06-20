@@ -599,6 +599,11 @@ pub enum Item {
     Import {
         path: Vec<String>,
         alias: Option<String>,
+        /// `import type a.b.C [as D];` — a *terminal type* import: the leaf (`C`) is a user/library
+        /// **type**, bound bare (or as `D`). Resolved + erased before any backend by the loader's
+        /// cross-package type pass (M-RT generics-all / cross-package types). A plain module import
+        /// (`import a.b;`, for Go-qualified `b.fn()` calls) has `type_only = false`.
+        type_only: bool,
         span: Span,
     },
     Function(FunctionDecl),

@@ -1,6 +1,10 @@
 # Selective Type Import — Design (DRAFT / brainstorm)
 
-> Status: **design discussion, not implemented.** Raised by the developer 2026-06-20 (post M-RT S7b-2):
+> Status: **IMPLEMENTED** (M-RT cross-package types) — the terminal `import type Pkg.Path.Type [as A];`
+> form ships with the E-PKG-TYPE lift; see `docs/specs/2026-06-20-epkgtype-lift-crosspackage-types-design.md`
+> for the implementation design and `examples/project/shapes/` for a worked example. The deferred
+> module-qualified form (§4.1 row 1, `Geometry.Point`) and generic types remain future work.
+> Original status: **design discussion, not implemented.** Raised by the developer 2026-06-20 (post M-RT S7b-2):
 > *"import should be able to import the last item — e.g. `import Core.List.List`, or `import Core.List`
 > then `List.List`."* This spec reframes that instinct, challenges it, and proposes a coherent model.
 > Gated on library packages exporting **types** (`E-PKG-TYPE` lift) — see §7 sequencing.

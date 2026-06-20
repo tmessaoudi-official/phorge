@@ -399,8 +399,22 @@ each generic method's sig+body to `Type::Erased` (PHP `mixed`/`array`/`\Closure`
 **No new `Op`, no `Value` change.** Byte-identical run≡runvm≡**real PHP** (`examples/guide/generic-methods.phg`);
 437 lib + PHP-oracle differential + 53 integration green. Deferred (KNOWN_ISSUES): generic *interface*
 methods (sig built with empty type-params), generic types/classes, a generic method as a first-class value.
-**NEXT sub-slice: generic types/classes `Box<T>`** — also lifts `E-PKG-TYPE`/cross-package types (which
-unblocks the adopted selective type import). Keep brainstorming the **E-PKG-TYPE lift** alongside it.
+**Sub-slice 2 — E-PKG-TYPE lift / cross-package types — COMPLETE** (design
+`docs/specs/2026-06-20-epkgtype-lift-crosspackage-types-design.md`; developer chose "both 1 and 2" =
+design-first then build, "all three kinds at once"). A library package may declare a
+`class`/`enum`/`interface`, consumed cross-package via the adopted terminal **`import type
+acme.geometry.Point [as Pt];`** (the deferred module-qualified `Geometry.Point` form is future work).
+Built by extending the cross-package *function* mangle/resolve pass to *types*: a loader `types` symbol
+table + per-file type-import map, a Pass-2 rewrite of every type-name position (annotations,
+instantiation, `instanceof`, enum construction/`match`) to the mangled FQN (mirroring `erase_generics`'s
+exhaustive walk); the transpiler buckets each type into its `namespace Acme\Geometry { … }` block and
+emits references as absolute FQNs. **No new `Op`/`Value`**; single-package output byte-identical.
+`E-PKG-TYPE` retired; new `E-TYPE-IMPORT-{UNKNOWN,CONFLICT,BUILTIN,SHADOW}`. The adopted **selective
+type import is now implemented**. `examples/project/shapes/` (cross-package class+interface+enum)
+byte-identical run≡runvm≡**real PHP**; 437 lib + both project oracles + 12 project tests (4 new
+`E-TYPE-IMPORT-*` + the lift) green.
+**NEXT sub-slice: generic types/classes `Box<T>`** (the last generics-all piece; layers on cross-package
+types for free since a generic library type erases `<T>` before the loader's type resolution).
 
 **SELECTIVE TYPE IMPORT — designed + ADOPTED, NOT impl** (`23dbe83`, spec
 `docs/specs/2026-06-20-selective-type-import-design.md`): **`import type Pkg.Path.TypeName [as A];`** for

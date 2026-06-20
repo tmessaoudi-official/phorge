@@ -882,11 +882,14 @@ impl Parser {
         Ok(path)
     }
 
-    /// `import a.b.c;` or `import a.b.c as leaf;` — dotted module path with an optional alias. `as`
-    /// is a **contextual** keyword (recognized only here), so it stays a valid identifier elsewhere.
-    /// Assumes current token is `import`.
+    /// `import a.b.c;` / `import a.b.c as leaf;` — a module import (Go-qualified `c.fn()` calls).
+    /// `import type a.b.C;` / `import type a.b.C as D;` — a *terminal type* import: the leaf `C` is a
+    /// user/library type, bound bare (or as `D`). `type` and `as` are **contextual** keywords
+    /// (recognized only here), so they stay valid identifiers elsewhere. Assumes current token is
+    /// `import`.
     fn parse_import(&mut self, sp: Span) -> Result<Item, Diagnostic> {
         self.expect(&TokenKind::Import, "'import'")?;
+        let type_only = self.eat(&TokenKind::TypeKw); // contextual `import type …`
         let mut path = vec![self.expect_ident("a module path segment")?];
         while self.eat(&TokenKind::Dot) {
             path.push(self.expect_ident("a module path segment after '.'")?);
@@ -901,6 +904,7 @@ impl Parser {
         Ok(Item::Import {
             path,
             alias,
+            type_only,
             span: sp,
         })
     }

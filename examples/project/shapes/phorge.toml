@@ -1,0 +1,2 @@
+module = "acme/shapes"
+source = "src"

@@ -17,6 +17,10 @@ struct Transpiler {
     classes: HashSet<String>,
     variants: HashSet<String>,
     variant_fields: HashMap<String, Vec<String>>,
+    /// An enum variant's PHP namespace (`namespace_of` of the — possibly mangled — enum name), so a
+    /// cross-package variant is constructed and `instanceof`-tested as a fully-qualified class
+    /// (`new \Acme\Geometry\Circle(…)`). A `package main` (bare) enum maps to `Main` ⇒ bare emission.
+    variant_ns: HashMap<String, String>,
     out: String,
     indent: usize,
     locals: Vec<HashSet<String>>,
@@ -64,6 +68,18 @@ fn last_segment(name: &str) -> &str {
     name.rsplit('\\').next().unwrap_or(name)
 }
 
+/// A type *reference* in PHP: a mangled (`\`-bearing) cross-package name becomes an absolute FQN
+/// (leading `\`, so it resolves regardless of the surrounding `namespace` block — uniform with
+/// function de-mangling, no `use`); a bare same-/`Main`-namespace name stays bare (M-RT cross-package
+/// types). Byte-identical to the pre-lift output for a single-package program (no `\` names).
+fn php_type_ref(name: &str) -> String {
+    if name.contains('\\') {
+        format!("\\{name}")
+    } else {
+        name.to_string()
+    }
+}
+
 /// Whether a native's PHP erasure is a global function call (`strlen(...)`, `str_replace(...)`) — an
 /// identifier immediately followed by `(`. Such calls need a leading `\` inside a namespace block so
 /// they resolve to the global PHP builtin, not `CurrentNs\strlen`. A language construct like
@@ -92,6 +108,7 @@ impl Transpiler {
             classes: HashSet::new(),
             variants: HashSet::new(),
             variant_fields: HashMap::new(),
+            variant_ns: HashMap::new(),
             out: String::new(),
             indent: 0,
             locals: Vec::new(),
@@ -120,8 +137,10 @@ impl Transpiler {
                 // they are emitted as PHP `interface` blocks in pass 2.
                 Item::Interface(_) => {}
                 Item::Enum(e) => {
+                    let ns = namespace_of(&e.name);
                     for v in &e.variants {
                         self.variants.insert(v.name.clone());
+                        self.variant_ns.insert(v.name.clone(), ns.clone());
                         self.variant_fields.insert(
                             v.name.clone(),
                             v.fields.iter().map(|p| p.name.clone()).collect(),
@@ -143,10 +162,15 @@ impl Transpiler {
         // A mangled (`\`-bearing) top-level name means a multi-package project (M5 S2c): switch to
         // the brace-namespace form. A single-package program (every existing example) has no `\`
         // names and stays on the flat path — byte-identical to today's output.
-        self.namespaced = program
-            .items
-            .iter()
-            .any(|it| matches!(it, Item::Function(f) if f.name.contains('\\')));
+        self.namespaced = program.items.iter().any(|it| match it {
+            Item::Function(f) => f.name.contains('\\'),
+            // A cross-package *type* (class/enum/interface) is mangled too — a project may export
+            // only types and no functions (M-RT cross-package types), so check type names as well.
+            Item::Class(c) => c.name.contains('\\'),
+            Item::Enum(e) => e.name.contains('\\'),
+            Item::Interface(i) => i.name.contains('\\'),
+            _ => false,
+        });
         if self.namespaced {
             return self.emit_program_namespaced(program);
         }
@@ -175,10 +199,11 @@ impl Transpiler {
 
     /// Multi-package emission (M5 S2c, M5-7): one `namespace …{}` brace-block per package, then a
     /// nameless `namespace {}` block that bootstraps `\Main\main()` and holds the global `opt!`
-    /// helper. A function's namespace is its mangled prefix (`Acme\Util\compute` ⇒ `Acme\Util`);
-    /// bare names (the `main` package) and all enums/classes (library types are rejected, so types
-    /// are `main`-only) land in `Main`. The bootstrap block is emitted last so every package's
-    /// functions are already declared when it runs.
+    /// helper. A definition's namespace is its mangled prefix (`Acme\Util\compute` ⇒ `Acme\Util`,
+    /// `Acme\Geometry\Point` ⇒ `Acme\Geometry`); bare names (the `main` package) land in `Main`. A
+    /// cross-package type's definition (class/enum/interface) is bucketed into its own namespace
+    /// (M-RT cross-package types). The bootstrap block is emitted last so every package's functions
+    /// and types are already declared when it runs.
     fn emit_program_namespaced(&mut self, program: &Program) -> Result<(), String> {
         use std::collections::BTreeMap;
         self.out.push_str("<?php\n");
@@ -186,7 +211,9 @@ impl Transpiler {
         for item in &program.items {
             let ns = match item {
                 Item::Function(f) => namespace_of(&f.name),
-                Item::Enum(_) | Item::Class(_) | Item::Interface(_) => "Main".to_string(),
+                Item::Enum(e) => namespace_of(&e.name),
+                Item::Class(c) => namespace_of(&c.name),
+                Item::Interface(i) => namespace_of(&i.name),
                 _ => continue,
             };
             buckets.entry(ns).or_default().push(item);
@@ -350,7 +377,7 @@ impl Transpiler {
                 // boundary lives in the `core.html` natives, not the type (see core.html design spec).
                 "Html" | "Attr" => "string".into(),
                 "List" | "Map" | "Set" => "array".into(),
-                other => other.to_string(), // enum / class name
+                other => php_type_ref(other), // enum / class / interface name (FQN if cross-package)
             },
             // A function-typed parameter/return erases to PHP `\Closure` (M3 S3).
             Type::Function { .. } => "\\Closure".into(),
@@ -405,9 +432,13 @@ impl Transpiler {
     /// An enum with payload variants becomes an abstract base class plus one `final`
     /// subclass per variant, with promoted public props for the payload fields.
     fn emit_enum(&mut self, e: &EnumDecl) -> Result<(), String> {
-        self.line(&format!("abstract class {} {{}}", e.name));
+        // The base + its variant subclasses are declared inside the enum's own `namespace` block, so
+        // both use the bare trailing segment (`Acme\Geometry\Color` ⇒ `Color`); a single-package enum
+        // is unchanged. Variant subclass names are never mangled (they aren't types).
+        let base = last_segment(&e.name);
+        self.line(&format!("abstract class {} {{}}", base));
         for v in &e.variants {
-            self.line(&format!("final class {} extends {} {{", v.name, e.name));
+            self.line(&format!("final class {} extends {} {{", v.name, base));
             self.indent += 1;
             if !v.fields.is_empty() {
                 let props: Vec<String> = v
@@ -449,9 +480,16 @@ impl Transpiler {
         let implements = if c.implements.is_empty() {
             String::new()
         } else {
-            format!(" implements {}", c.implements.join(", "))
+            let ifaces: Vec<String> = c.implements.iter().map(|i| php_type_ref(i)).collect();
+            format!(" implements {}", ifaces.join(", "))
         };
-        self.line(&format!("class {}{} {{", c.name, implements));
+        // Declared inside its `namespace` block in multi-package mode ⇒ bare trailing segment.
+        let disp = if self.namespaced {
+            last_segment(&c.name)
+        } else {
+            &c.name
+        };
+        self.line(&format!("class {}{} {{", disp, implements));
         self.indent += 1;
         let prev = self.cur_class_fields.replace(fields);
         for m in &c.members {
@@ -518,9 +556,15 @@ impl Transpiler {
         let extends = if i.extends.is_empty() {
             String::new()
         } else {
-            format!(" extends {}", i.extends.join(", "))
+            let parents: Vec<String> = i.extends.iter().map(|e| php_type_ref(e)).collect();
+            format!(" extends {}", parents.join(", "))
         };
-        self.line(&format!("interface {}{} {{", i.name, extends));
+        let disp = if self.namespaced {
+            last_segment(&i.name)
+        } else {
+            &i.name
+        };
+        self.line(&format!("interface {}{} {{", disp, extends));
         self.indent += 1;
         for m in &i.methods {
             let params: Vec<String> = m
@@ -696,7 +740,7 @@ impl Transpiler {
             } => {
                 let v = self.emit_expr(value)?;
                 let v = Self::paren_if_compound(value, v);
-                Ok(format!("{v} instanceof {type_name}"))
+                Ok(format!("{v} instanceof {}", php_type_ref(type_name)))
             }
             Expr::List(items, _) => {
                 let parts: Result<Vec<_>, _> = items.iter().map(|i| self.emit_expr(i)).collect();
@@ -891,12 +935,27 @@ impl Transpiler {
         Ok(chunks.join(" . "))
     }
 
+    /// A PHP reference to an enum variant subclass: fully-qualified when its enum lives in a package
+    /// namespace (`new \Acme\Geometry\Circle(…)`, an `instanceof` against it), bare for a `package
+    /// main` enum (`Circle`) — byte-identical to the pre-lift output for a single-package program.
+    fn variant_ref(&self, variant: &str) -> String {
+        match self.variant_ns.get(variant) {
+            Some(ns) if ns != "Main" => format!("\\{ns}\\{variant}"),
+            _ => variant.to_string(),
+        }
+    }
+
     fn emit_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<String, String> {
         if let Expr::Ident(name, _) = callee {
             let argv = self.emit_args(args)?;
-            // Enum variant or class construction → `new`; mirrors the evaluator's dispatch.
-            if self.variants.contains(name) || self.classes.contains(name) {
-                return Ok(format!("new {name}({argv})"));
+            // Enum variant or class construction → `new`; mirrors the evaluator's dispatch. A
+            // cross-package class name is mangled (FQN); a variant subclass lives in its enum's
+            // namespace, so a cross-package variant is constructed fully-qualified too.
+            if self.variants.contains(name) {
+                return Ok(format!("new {}({argv})", self.variant_ref(name)));
+            }
+            if self.classes.contains(name) {
+                return Ok(format!("new {}({argv})", php_type_ref(name)));
             }
             // A closure stored in a local variable (e.g. a `\Closure` parameter or a `var`-bound
             // lambda) must be called as `$f(…)` — PHP requires the `$` sigil on variable-call sites.
@@ -1013,9 +1072,10 @@ impl Transpiler {
                         binds.push_str(&format!("${bind_name} = {subj}->{prop}; "));
                         self.declare(bind_name);
                     }
+                    let vref = self.variant_ref(vname);
                     let body = self.emit_expr(&arm.body)?;
                     self.line(&format!(
-                        "{cond_kw} ({subj} instanceof {vname}) {{ {binds}{} }}",
+                        "{cond_kw} ({subj} instanceof {vref}) {{ {binds}{} }}",
                         yield_stmt(&target, &body)
                     ));
                     self.pop_scope();

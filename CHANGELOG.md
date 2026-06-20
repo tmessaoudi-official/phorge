@@ -6,6 +6,30 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — cross-package types: `import type` (Rich Types, M-RT)
+
+- **The `E-PKG-TYPE` gate is retired.** A library (non-`main`) package may now declare a
+  `class`/`enum`/`interface`, and another package consumes it with the terminal
+  **`import type acme.geometry.Point [as Pt];`** form (binds a bare type name; functions still use the
+  Go-qualified `pkg.fn()` form; built-ins like `List` stay import-free). Nominal subtyping,
+  `instanceof`, and enum `match` all work across packages. New example `examples/project/shapes/`
+  (a library `class` + `interface` + `enum` consumed from `package main`), byte-identical
+  `run ≡ runvm ≡ real PHP`.
+- **Mechanism — the cross-package *function* mangle/resolve pass, extended to types.** The loader
+  gains a `types` symbol table (`(package, Type) ⇒ Acme\Geometry\Point`) and a per-file type-import
+  map; Pass 2 rewrites every type-name position — annotations, instantiation (`Point(…)`),
+  `instanceof`, enum construction/`match` (via the bare variant whose enum is mangled) — to the
+  mangled FQN, mirroring `erase_generics`'s exhaustive `Type`/`Expr` walk. The checker and both
+  backends see fully-resolved names (`run ≡ runvm` by construction); only the transpiler de-mangles,
+  bucketing each type into its `namespace Acme\Geometry { … }` block and emitting references as
+  absolute FQNs (`new \Acme\Geometry\Rect(…)`, `instanceof \Acme\Geometry\Shape`). **No new `Op`, no
+  `Value` change**; a single-package program is byte-identical to the pre-lift output.
+- New diagnostics: `E-TYPE-IMPORT-UNKNOWN` (no such exported type), `E-TYPE-IMPORT-CONFLICT` (two
+  terminal imports bind one name — alias with `as`), `E-TYPE-IMPORT-BUILTIN` (built-ins are
+  import-free), `E-TYPE-IMPORT-SHADOW` (collides with a local type or a module-import qualifier).
+- Deferred: the module-qualified type form (`import acme.geometry;` → `Geometry.Point`); generic
+  *types* (`Box<T>`); generic interface methods.
+
 ### Added — erased generics `<T>` on methods (Rich Types, M-RT generics-all)
 
 - **Generic methods:** a class method may declare type parameters (`class U { function id<T>(T x) -> T

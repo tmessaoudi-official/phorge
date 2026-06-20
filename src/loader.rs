@@ -20,13 +20,17 @@
 //!
 //! Enforcement and resolution live here (path-aware), never in the type checker, so
 //! `cli::cmd_run(&str)`, the differential harness, and the checker's package-agnostic tests are
-//! untouched. S2c scope: library packages export **functions** only (a `class`/`enum` in a non-`main`
-//! package is rejected, `E-PKG-TYPE`); cross-package type namespacing is an M5 follow-up.
+//! untouched. Library packages export **functions and types** (M-RT cross-package types): a non-`main`
+//! `class`/`enum`/`interface` is mangled like a function (`acme.geometry` + `Point` ⇒
+//! `Acme\Geometry\Point`) and a consuming file binds it with `import type a.b.C [as D];`; the same
+//! Pass-2 rewrite that mangles call sites also rewrites every type-name position (annotations,
+//! instantiation, `instanceof`, enum access) to the mangled FQN, so the backends see fully-resolved
+//! names and only the transpiler de-mangles into PHP `namespace` blocks.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::ast::{ClassMember, Expr, Item, MatchArm, Program, Stmt, StrPart};
+use crate::ast::{ClassMember, Expr, Item, LambdaBody, MatchArm, Program, Stmt, StrPart, Type};
 use crate::lexer::lex;
 use crate::manifest::{validate_path_component, Project};
 use crate::parser::Parser;
@@ -128,9 +132,13 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
     sources.sort_by(|a, b| a.file.cmp(&b.file));
     sources.dedup_by(|a, b| a.file == b.file);
 
-    // Pass 1 — parse, validate, and index every function by (package, name) ⇒ mangled global name.
+    // Pass 1 — parse, validate, and index every top-level definition by (package, name) ⇒ mangled
+    // global name. Functions and types live in separate symbol tables (PHP namespaces functions and
+    // classes separately), so a `compute` function and a `Compute` type never collide. Library
+    // packages may now declare types (the old `E-PKG-TYPE` gate is retired — cross-package types).
     let mut parsed: Vec<(PathBuf, Program)> = Vec::with_capacity(sources.len());
     let mut defined: HashMap<(String, String), String> = HashMap::new();
+    let mut types: HashMap<(String, String), String> = HashMap::new();
     for src_entry in &sources {
         let file = &src_entry.file;
         let src = read_file(file)?;
@@ -143,25 +151,27 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
                 file.display()
             ));
         }
-        reject_library_types(&prog, file)?;
         let pkg = prog.package.join(".");
         for item in &prog.items {
-            if let Item::Function(f) = item {
-                if defined
-                    .insert(
-                        (pkg.clone(), f.name.clone()),
-                        mangle(&prog.package, &f.name),
-                    )
-                    .is_some()
-                {
-                    return Err(format!(
-                        "{}: duplicate definition of `{}` in package `{}` \
-                         (a function name must be unique within its package) [E-DUP-DEF]",
-                        file.display(),
-                        f.name,
-                        if pkg.is_empty() { "main" } else { &pkg }
-                    ));
-                }
+            let (name, is_type) = match item {
+                Item::Function(f) => (&f.name, false),
+                Item::Class(c) => (&c.name, true),
+                Item::Enum(e) => (&e.name, true),
+                Item::Interface(i) => (&i.name, true),
+                _ => continue,
+            };
+            let table = if is_type { &mut types } else { &mut defined };
+            if table
+                .insert((pkg.clone(), name.clone()), mangle(&prog.package, name))
+                .is_some()
+            {
+                return Err(format!(
+                    "{}: duplicate definition of `{}` in package `{}` \
+                     (a name must be unique within its package) [E-DUP-DEF]",
+                    file.display(),
+                    name,
+                    if pkg.is_empty() { "main" } else { &pkg }
+                ));
             }
         }
         parsed.push((file.clone(), prog));
@@ -184,10 +194,14 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
             unit_package = prog.package.clone();
             unit_span = prog.span;
         }
+        let user_imports = user_import_map(&prog.items);
+        let type_imports = build_type_imports(&prog, &types, &user_imports, &file)?;
         let ctx = ResolveCtx {
             package: prog.package.clone(),
-            user_imports: user_import_map(&prog.items),
+            user_imports,
             defined: &defined,
+            types: &types,
+            type_imports,
         };
         for item in prog.items {
             merged_items.push(resolve_item(item, &ctx));
@@ -261,7 +275,13 @@ fn pascal(s: &str) -> String {
 fn user_import_map(items: &[Item]) -> HashMap<String, Vec<String>> {
     let mut map = HashMap::new();
     for item in items {
-        if let Item::Import { path, alias, .. } = item {
+        if let Item::Import {
+            path,
+            alias,
+            type_only: false,
+            ..
+        } = item
+        {
             if path.first().map(String::as_str) == Some("Core") {
                 continue;
             }
@@ -274,28 +294,92 @@ fn user_import_map(items: &[Item]) -> HashMap<String, Vec<String>> {
     map
 }
 
-/// S2c scope: a non-`main` (library) package may export functions only. A top-level `class`/`enum`
-/// in a library package is rejected (`E-PKG-TYPE`) — cross-package type namespacing is an M5
-/// follow-up. `package main` (and the empty package, left to the checker) may define anything.
-fn reject_library_types(prog: &Program, file: &Path) -> Result<(), String> {
-    if prog.package.is_empty() || prog.package == ["main"] {
-        return Ok(());
-    }
+/// Build a file's **type-import map**: bare name (or `as` alias) ⇒ the mangled FQN of a cross-package
+/// type, from each `import type a.b.C [as D];`. Validates against the global `types` table and the
+/// file's own definitions / module imports (cross-package types, M-RT generics-all):
+/// - `E-TYPE-IMPORT-BUILTIN` — the leaf is a built-in type (`List`/`Map`/`Set`/scalars); built-ins
+///   are import-free, like `int`.
+/// - `E-TYPE-IMPORT-UNKNOWN` — the package exports no such type.
+/// - `E-TYPE-IMPORT-CONFLICT` — two terminal imports bind the same bare name (alias one with `as`).
+/// - `E-TYPE-IMPORT-SHADOW` — the bound name collides with a local type in this file or a module-import
+///   qualifier (the two import kinds stay disjoint, the `E-SHADOW-IMPORT` discipline).
+fn build_type_imports(
+    prog: &Program,
+    types: &HashMap<(String, String), String>,
+    user_imports: &HashMap<String, Vec<String>>,
+    file: &Path,
+) -> Result<HashMap<String, String>, String> {
+    // The file's own type names (collide → SHADOW). A `package main` file's types are its locals.
+    let local_types: std::collections::HashSet<&str> = prog
+        .items
+        .iter()
+        .filter_map(|it| match it {
+            Item::Class(c) => Some(c.name.as_str()),
+            Item::Enum(e) => Some(e.name.as_str()),
+            Item::Interface(i) => Some(i.name.as_str()),
+            _ => None,
+        })
+        .collect();
+    let mut map: HashMap<String, String> = HashMap::new();
     for item in &prog.items {
-        let kind = match item {
-            Item::Class(_) => "class",
-            Item::Enum(_) => "enum",
-            Item::Interface(_) => "interface",
-            _ => continue,
-        };
-        return Err(format!(
-            "{}: a {kind} in the library package `{}` is not yet supported — S2c namespaces \
-             functions only; move the type to `package main` (or await the M5 follow-up) [E-PKG-TYPE]",
-            file.display(),
-            prog.package.join(".")
-        ));
+        if let Item::Import {
+            path,
+            alias,
+            type_only: true,
+            ..
+        } = item
+        {
+            let (leaf, pkg_segs) = match path.split_last() {
+                Some((leaf, pkg)) if !pkg.is_empty() => (leaf, pkg),
+                _ => {
+                    return Err(format!(
+                        "{}: `import type` needs a package-qualified type (e.g. \
+                         `import type acme.geometry.Point;`) [E-TYPE-IMPORT-UNKNOWN]",
+                        file.display()
+                    ))
+                }
+            };
+            if is_builtin_type_leaf(leaf) {
+                return Err(format!(
+                    "{}: `{leaf}` is a built-in type and needs no import (built-ins are \
+                     import-free, like `int`) [E-TYPE-IMPORT-BUILTIN]",
+                    file.display()
+                ));
+            }
+            let pkg = pkg_segs.join(".");
+            let mangled = types.get(&(pkg.clone(), leaf.clone())).ok_or_else(|| {
+                format!(
+                    "{}: package `{pkg}` exports no type `{leaf}` [E-TYPE-IMPORT-UNKNOWN]",
+                    file.display()
+                )
+            })?;
+            let bound = alias.clone().unwrap_or_else(|| leaf.clone());
+            if local_types.contains(bound.as_str()) || user_imports.contains_key(&bound) {
+                return Err(format!(
+                    "{}: imported type `{bound}` shadows a local type or an imported module \
+                     qualifier — alias it with `as` [E-TYPE-IMPORT-SHADOW]",
+                    file.display()
+                ));
+            }
+            if map.insert(bound.clone(), mangled.clone()).is_some() {
+                return Err(format!(
+                    "{}: two `import type` bind the name `{bound}` — alias one with `as` \
+                     [E-TYPE-IMPORT-CONFLICT]",
+                    file.display()
+                ));
+            }
+        }
     }
-    Ok(())
+    Ok(map)
+}
+
+/// Built-in type names that are import-free (resolved by the checker/compiler, not a package member).
+/// An `import type` naming one of these is `E-TYPE-IMPORT-BUILTIN`.
+fn is_builtin_type_leaf(name: &str) -> bool {
+    matches!(
+        name,
+        "int" | "float" | "bool" | "string" | "bytes" | "List" | "Map" | "Set"
+    )
 }
 
 /// The resolution context for one file: its package (caller side of a bare call), its user-import
@@ -304,6 +388,47 @@ struct ResolveCtx<'a> {
     package: Vec<String>,
     user_imports: HashMap<String, Vec<String>>,
     defined: &'a HashMap<(String, String), String>,
+    /// Global type symbol table `(package, type) ⇒ mangled FQN` — for resolving a same-package
+    /// sibling type reference inside a library package.
+    types: &'a HashMap<(String, String), String>,
+    /// This file's terminal type imports: bare name (or `as` alias) ⇒ mangled FQN.
+    type_imports: HashMap<String, String>,
+}
+
+/// Resolve a type *name* to its mangled FQN, or `None` if it is a local (`package main`) type or a
+/// built-in (left bare). A terminal `import type` binding wins; otherwise a same-package sibling type
+/// (a library type referencing another type in its own package).
+fn resolve_type_ref(name: &str, ctx: &ResolveCtx) -> Option<String> {
+    if let Some(m) = ctx.type_imports.get(name) {
+        return Some(m.clone());
+    }
+    ctx.types
+        .get(&(ctx.package.join("."), name.to_string()))
+        .cloned()
+}
+
+/// Rewrite every type *name* inside a type annotation to its mangled FQN (cross-package types).
+/// Mirrors the exhaustive `Type` walk of `checker::erase_generics`'s `rty`; recurses through generic
+/// arguments, optionals, and function types so a `List<Point>` or `(Point) -> Point` resolves too.
+fn resolve_type(ty: &Type, ctx: &ResolveCtx) -> Type {
+    match ty {
+        Type::Named { name, args, span } => Type::Named {
+            name: resolve_type_ref(name, ctx).unwrap_or_else(|| name.clone()),
+            args: args.iter().map(|a| resolve_type(a, ctx)).collect(),
+            span: *span,
+        },
+        Type::Optional { inner, span } => Type::Optional {
+            inner: Box::new(resolve_type(inner, ctx)),
+            span: *span,
+        },
+        Type::Function { params, ret, span } => Type::Function {
+            params: params.iter().map(|p| resolve_type(p, ctx)).collect(),
+            ret: Box::new(resolve_type(ret, ctx)),
+            span: *span,
+        },
+        Type::Infer(s) => Type::Infer(*s),
+        Type::Erased(s) => Type::Erased(*s),
+    }
 }
 
 /// Rewrite one top-level item: rename a function to its mangled global name and resolve its body;
@@ -313,24 +438,67 @@ fn resolve_item(item: Item, ctx: &ResolveCtx) -> Item {
     match item {
         Item::Function(mut f) => {
             f.name = mangle(&ctx.package, &f.name);
+            for p in &mut f.params {
+                p.ty = resolve_type(&p.ty, ctx);
+            }
+            f.ret = f.ret.as_ref().map(|r| resolve_type(r, ctx));
             f.body = resolve_block(f.body, ctx);
             Item::Function(f)
         }
         Item::Class(mut c) => {
+            c.name = mangle(&ctx.package, &c.name);
+            for imp in &mut c.implements {
+                if let Some(m) = resolve_type_ref(imp, ctx) {
+                    *imp = m;
+                }
+            }
             for m in &mut c.members {
                 match m {
                     ClassMember::Method(f) => {
+                        for p in &mut f.params {
+                            p.ty = resolve_type(&p.ty, ctx);
+                        }
+                        f.ret = f.ret.as_ref().map(|r| resolve_type(r, ctx));
                         let body = std::mem::take(&mut f.body);
                         f.body = resolve_block(body, ctx);
                     }
-                    ClassMember::Constructor { body, .. } => {
+                    ClassMember::Constructor { params, body, .. } => {
+                        for p in params.iter_mut() {
+                            p.ty = resolve_type(&p.ty, ctx);
+                        }
                         let b = std::mem::take(body);
                         *body = resolve_block(b, ctx);
                     }
-                    ClassMember::Field { .. } => {}
+                    ClassMember::Field { ty, .. } => {
+                        *ty = resolve_type(ty, ctx);
+                    }
                 }
             }
             Item::Class(c)
+        }
+        Item::Enum(mut e) => {
+            e.name = mangle(&ctx.package, &e.name);
+            for v in &mut e.variants {
+                for p in &mut v.fields {
+                    p.ty = resolve_type(&p.ty, ctx);
+                }
+            }
+            Item::Enum(e)
+        }
+        Item::Interface(mut i) => {
+            i.name = mangle(&ctx.package, &i.name);
+            for ext in &mut i.extends {
+                if let Some(m) = resolve_type_ref(ext, ctx) {
+                    *ext = m;
+                }
+            }
+            for m in &mut i.methods {
+                for p in &mut m.params {
+                    p.ty = resolve_type(&p.ty, ctx);
+                }
+                m.ret = m.ret.as_ref().map(|r| resolve_type(r, ctx));
+            }
+            Item::Interface(i)
         }
         other => other,
     }
@@ -348,7 +516,7 @@ fn resolve_stmt(stmt: Stmt, ctx: &ResolveCtx) -> Stmt {
             init,
             span,
         } => Stmt::VarDecl {
-            ty,
+            ty: resolve_type(&ty, ctx),
             name,
             init: resolve_expr(init, ctx),
             span,
@@ -377,7 +545,7 @@ fn resolve_stmt(stmt: Stmt, ctx: &ResolveCtx) -> Stmt {
             body,
             span,
         } => Stmt::For {
-            ty,
+            ty: resolve_type(&ty, ctx),
             name,
             iter: resolve_expr(iter, ctx),
             body: resolve_block(body, ctx),
@@ -490,7 +658,43 @@ fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
             else_expr: Box::new(resolve_expr(*else_expr, ctx)),
             span,
         },
-        // Leaves carry no nested call site: Int / Float / Bool / Null / Ident / This.
+        // A bare identifier that names a cross-package type (e.g. the head of an enum access
+        // `Color.Red`) resolves to the mangled FQN; the shadow guard guarantees an imported type
+        // name is never also a local/variable, so rewriting every occurrence is safe.
+        Expr::Ident(n, sp) => match resolve_type_ref(&n, ctx) {
+            Some(m) => Expr::Ident(m, sp),
+            None => Expr::Ident(n, sp),
+        },
+        Expr::InstanceOf {
+            value,
+            type_name,
+            span,
+        } => Expr::InstanceOf {
+            value: Box::new(resolve_expr(*value, ctx)),
+            type_name: resolve_type_ref(&type_name, ctx).unwrap_or(type_name),
+            span,
+        },
+        Expr::Lambda {
+            params,
+            ret,
+            body,
+            span,
+        } => Expr::Lambda {
+            params: params
+                .into_iter()
+                .map(|mut p| {
+                    p.ty = resolve_type(&p.ty, ctx);
+                    p
+                })
+                .collect(),
+            ret: ret.as_ref().map(|r| resolve_type(r, ctx)),
+            body: match body {
+                LambdaBody::Expr(e) => LambdaBody::Expr(Box::new(resolve_expr(*e, ctx))),
+                LambdaBody::Block(stmts) => LambdaBody::Block(resolve_block(stmts, ctx)),
+            },
+            span,
+        },
+        // Leaves carry no nested call site or type name: Int / Float / Bool / Null / Bytes / This.
         leaf => leaf,
     }
 }
@@ -504,13 +708,17 @@ fn resolve_call(callee: Expr, args: Vec<Expr>, span: Span, ctx: &ResolveCtx) -> 
     let args: Vec<Expr> = args.into_iter().map(|a| resolve_expr(a, ctx)).collect();
     match callee {
         Expr::Ident(n, isp) => {
-            let mangled = ctx
-                .defined
-                .get(&(ctx.package.join("."), n.clone()))
-                .cloned()
+            // A type name wins (a constructor call `Point(x)` — a name is a type XOR a function in a
+            // file, guarded by `E-TYPE-IMPORT-SHADOW`); else the same-package function table.
+            let resolved = resolve_type_ref(&n, ctx)
+                .or_else(|| {
+                    ctx.defined
+                        .get(&(ctx.package.join("."), n.clone()))
+                        .cloned()
+                })
                 .unwrap_or(n);
             Expr::Call {
-                callee: Box::new(Expr::Ident(mangled, isp)),
+                callee: Box::new(Expr::Ident(resolved, isp)),
                 args,
                 span,
             }

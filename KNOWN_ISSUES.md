@@ -19,8 +19,12 @@ not a panic:
 - `instanceof` against **unions or intersections** (class operands ship in M-RT S1 and interface
   operands in M-RT S2 — see *Behavioral quirks* below; testing against unions/intersections lands
   with those features in later M-RT slices)
-- **interfaces in a library (non-`main`) package** — like classes/enums, an interface must live in
-  `package main` this slice (`E-PKG-TYPE`); cross-package types are a later slice
+- ~~interfaces/classes/enums in a library (non-`main`) package~~ — **now supported** (M-RT
+  cross-package types): a library package exports types, consumed via `import type Pkg.Path.Type [as
+  A]`; `E-PKG-TYPE` is retired. Remaining limits: the **module-qualified** type form (`import
+  acme.geometry;` then `Geometry.Point`) is deferred (the terminal `import type` is the shipped form);
+  variant/type names must be unique across all merged packages; generic *types* (`Box<T>`) are a
+  separate pending slice.
 - Exceptions (try / catch / throw)
 - Mutation (reassignment and field writes) — Phorge is immutable-by-default today
 - Method/function overloading, traits, operator overloading, property accessors
@@ -38,8 +42,8 @@ refinements are deliberately deferred (each rejected cleanly or simply unavailab
 - **Generic *interface* methods** are a non-parse — an interface method's signature is built with an
   empty type-parameter list, so a `<T>` there is never consumed. Generic methods on *classes* work.
 - **Generic types/classes/enums** (`class Box<T>`) are not yet supported — the type parameter list is
-  a function/method feature for now (the next generics-all sub-slice; it also lifts `E-PKG-TYPE` so
-  library/cross-package types become declarable).
+  a function/method feature for now (the next generics-all sub-slice). (Cross-package *monomorphic*
+  types already ship — `E-PKG-TYPE` is lifted; generic types layer on top.)
 - **A generic function used as a first-class *value*** (`var f = id;` then `f(x)`) is not supported —
   call a generic function directly so the call site can infer its type parameters. (A monomorphic
   named function as a value already works — M3 S3.)

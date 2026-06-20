@@ -1356,9 +1356,16 @@ pub fn index_of_by_leaf(leaf: &str, name: &str) -> Option<usize> {
 pub fn import_map(items: &[Item]) -> HashMap<String, String> {
     let mut map = HashMap::new();
     for item in items {
-        if let Item::Import { path, alias, .. } = item {
+        if let Item::Import {
+            path,
+            alias,
+            type_only: false,
+            ..
+        } = item
+        {
             // The bound qualifier is the alias when present (`import a.b as c;` ⇒ `c`), else the
-            // path's last segment (M5 S2c).
+            // path's last segment (M5 S2c). A terminal `import type …;` binds a *type* name, not a
+            // call qualifier, so it is excluded from this (call-site) map.
             let qualifier = alias.clone().or_else(|| path.last().cloned());
             if let Some(q) = qualifier {
                 map.insert(q, path.join("."));
@@ -2026,6 +2033,7 @@ mod tests {
         let items = vec![Item::Import {
             path: vec!["Core".into(), "Console".into()],
             alias: None,
+            type_only: false,
             span: sp,
         }];
         let m = import_map(&items);
@@ -2035,6 +2043,7 @@ mod tests {
         let aliased = vec![Item::Import {
             path: vec!["acme".into(), "util".into()],
             alias: Some("u".into()),
+            type_only: false,
             span: sp,
         }];
         let m = import_map(&aliased);

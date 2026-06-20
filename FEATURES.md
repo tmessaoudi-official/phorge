@@ -42,7 +42,8 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Interfaces + `implements` / `extends` | ✅ | `interface I { method sigs }`, `class C implements I, J`, `interface K extends I`; nominal subtyping (a class flows into an interface-typed slot), polymorphic calls through an interface type; transpiles to a PHP `interface`/`implements`/`extends` (M-RT S2) |
 | Erased generics `<T>` on free functions | ✅ | `function id<T>(T x) -> T`, inferred at the call site (incl. `List<T>` and `(T) -> T` parameters); no monomorphization — type params erase to PHP `mixed`/`array`/`\Closure` before any backend (M-RT S7) |
 | Erased generics `<T>` on methods | ✅ | `class U { function id<T>(T x) -> T … }`, inferred from the call's arguments; reuses the free-function machinery, erases identically (M-RT generics-all) |
-| Generic types/classes (`Box<T>`) | 🚧 M-RT | next generics-all sub-slice — also lifts library/cross-package types (`E-PKG-TYPE`) |
+| Generic types/classes (`Box<T>`) | 🚧 M-RT | next generics-all sub-slice |
+| Cross-package types — `import type Pkg.Path.Type [as A]` | ✅ | a library package exports a `class`/`enum`/`interface`; another imports it by its terminal name; nominal subtyping, `instanceof`, enum `match` all cross-package; erases to namespaced PHP FQNs (`E-PKG-TYPE` retired) (M-RT) |
 | Unions `A\|B`, intersections `A&B`, class `extends`, traits | 🚧 M-RT | the Rich Types milestone — `instanceof` (S1), interfaces (S2), `Map` (S3), generics (S7) and generic methods shipped; these are later slices |
 | Exceptions (try/catch/throw) | 🔲 M3 | |
 | Mutation (reassignment, field writes) | 🔲 M3 | triggers the tracing GC |

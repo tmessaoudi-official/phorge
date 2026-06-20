@@ -50,6 +50,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `web/server.phg` | the **M6 W4 served app** — W1 parse/serialize + W2 routing + the single entry `respond(bytes) -> bytes` that **`phg serve`** runs over a real socket. `web/server.php` is the **`php -S`** front-controller bridge (both call the same `handle(Request) -> Response`) — see `web/README.md` |
 | `project/tempconv/` | a **multi-file project** (M5) — mandatory packages, folder = path, cross-package qualified calls + import aliasing, namespaced PHP — see `project/README.md` |
 | `project/withdeps/` | a project with a **vendored git dependency** (M5 S3) — `[require]`, `phg vendor`, `phorge.lock`, offline `vendor/` — see `project/withdeps/README.md` |
+| `project/shapes/` | **cross-package types** (M-RT) — a library package (`acme.geometry`) exports a `class` + `interface` + `enum`, consumed from `package main` via `import type acme.geometry.Point;`; nominal subtyping, `instanceof`, and enum `match` all cross-package; erases to namespaced PHP (`new \Acme\Geometry\Rect(…)`) |
 
 ## Coverage matrix (the runnable surface)
 

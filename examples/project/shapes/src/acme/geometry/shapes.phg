@@ -1,0 +1,28 @@
+package acme.geometry;
+
+// A library package that EXPORTS types — a class, an interface, and an enum — for OTHER packages to
+// import with `import type` (the E-PKG-TYPE lift, M-RT cross-package types). Folder = package: this
+// file lives in `src/acme/geometry/`, so it is `package acme.geometry`. Every definition is mangled
+// to a PHP namespace (`Acme\Geometry\Rect`) and emitted inside a `namespace Acme\Geometry { … }`
+// block; consumers reference it by its fully-qualified name.
+
+// An interface (a nominal contract). A class implementing it is a subtype of it cross-package.
+interface Shape {
+  function area() -> int;
+}
+
+// A class implementing a same-package interface, with constructor-promoted fields and a method.
+class Rect implements Shape {
+  constructor(public int w, public int h) {}
+  function area() -> int {
+    return this.w * this.h;
+  }
+}
+
+// An enum. Its variants become namespaced subclasses (`\Acme\Geometry\Green`), constructed and
+// matched cross-package by the bare variant call form `Green()`.
+enum Paint {
+  Red(),
+  Green(),
+  Blue(),
+}
