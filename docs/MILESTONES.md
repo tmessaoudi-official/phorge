@@ -144,6 +144,18 @@ adds in-place mutation **immutable-by-default, `mutable` opt-in**, with **no tra
 - **Deferred** (KNOWN_ISSUES, each a clean compile error or explicit non-goal): cycle collector,
   identity `===`, nested place-stores (`this.f[i]=e`), backed/static/interface/abstract hooks.
 
+## Visibility modifiers — ✅ COMPLETE (2026-06-21)
+
+Three-level declaration visibility on every top-level declaration (class, enum, interface, free
+function): `public` (default — cross-package), `internal` (this package's files), `private` (this
+`.phg` file). Lattice `file ⊂ package ⊂ public`. A dedicated `Visibility` enum (distinct from member
+`Modifier` visibility), parsed as a leading keyword, **loader-enforced and backend-erased** — applied
+at the loader's three resolution chokepoints before the merged program reaches any backend, so the
+`run ≡ runvm ≡ real PHP` spine is safe by construction (PHP has no file/package-private declarations).
+Codes `E-VIS-PRIVATE`/`E-VIS-INTERNAL` (with `phg explain`); example `examples/project/visibility/`.
+Design `docs/specs/2026-06-21-visibility-modifiers-design.md`. Deferred (KNOWN_ISSUES): visibility on
+`type` aliases / `import` re-exports; member-level `Modifier` visibility stays PHP-only-enforced.
+
 ## M5 — Modules & packages — ✅ COMPLETE (2026-06-18)
 
 Go-shaped, `src/`-rooted project model: **mandatory `package` declarations** (`package main` = runnable

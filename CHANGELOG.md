@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — declaration visibility (`public` / `internal` / `private`)
+
+A three-level visibility lattice on every **top-level declaration** (class, enum, interface, free
+function): `public` (default — cross-package), `internal` (this package's files only), `private`
+(this `.phg` file only). Lattice `file ⊂ package ⊂ public`. A new axis distinct from member-level
+`Modifier` visibility, carried as a dedicated `Visibility` enum on each declaration.
+
+- **Parser**: an optional leading `public`/`internal`/`private` keyword before any top-level decl
+  (`internal` is a new reserved keyword); explicit `public` allowed; a doubled prefix is a parse error.
+- **Loader-enforced, backend-erased**: the M5 loader records each definition's `(file, package, vis)`
+  in Pass 1 and applies the lattice at its three resolution chokepoints — `build_type_imports`
+  (cross-package types), `resolve_type_ref` (same-package types), `resolve_call` (functions). No
+  backend reads the field, so the `run ≡ runvm ≡ real PHP` byte-identity spine is safe by construction
+  (PHP has no file/package-private declarations → emitted as a normal `class`/`function`).
+- New codes (both with `phg explain`): `E-VIS-PRIVATE`, `E-VIS-INTERNAL`.
+- New byte-identity-gated example project `examples/project/visibility/` (+ README documenting the
+  two rejected cases, which can't be runnable examples).
+
 ### Added — in-place mutation (mutation milestone, M-mut.1–.7b) — feature-complete
 
 Phorge was a pure single-assignment language (the AST had no assignment statement); the mutation
