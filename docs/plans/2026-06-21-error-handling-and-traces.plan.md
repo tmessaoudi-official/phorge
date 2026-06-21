@@ -43,4 +43,8 @@
   `Op`, stdout unchanged, FaultKind preserved.
 
 ## Formal Plan
-<!-- written at Phase 4 approval, after the Slice-1 spec is reviewed by the developer; then writing-plans -->
+Slice-1 implementation plan: **`docs/plans/2026-06-21-stack-traces-impl.plan.md`** — 8 tasks, TDD:
+`Frame`+`Diagnostic.frames`+CLI render → VM frame-walk → interpreter `trace_stack` → loader
+file-attribution+source-map → run≡runvm parity differential test → `phg serve --dev` web error page
+(prod stays bare 500) → CLI color → docs/example. Each task ends green on the full
+`PHORGE_REQUIRE_PHP=1` gate. Slice 2 (catchable error model — try/catch vs Result) is a later design.
