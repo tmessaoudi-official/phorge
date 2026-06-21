@@ -24,6 +24,28 @@ mistakes **before** the program runs:
   VM, transpiles to real PHP, or compiles to a single standalone native binary — all producing
   identical results.
 
+## The philosophy
+
+PHP is Phorge's **starting point — the floor, not the ceiling and not the identity.** Phorge inherits
+PHP's approachability and its concepts, then is bound only by two things: **software craftsmanship and
+effort.**
+
+- **Craftsmanship is the standard everything is measured against.** Anything in PHP that violates
+  best practice, SOLID, or sound design patterns *changes*; anything that respects them *stays*.
+  Familiarity never excuses a compromise — if a PHP idiom encourages something unsound, Phorge changes
+  it, syntax included.
+- **Familiarity is in what the language *does*** — the concepts and mental model an experienced PHP
+  developer already carries — and only *lightly* in syntax. The goal is recognition, not replication.
+- **The PHP transpile is a migration bridge, both ways.** Phorge → PHP lets you deploy and adopt
+  incrementally; the planned PHP → Phorge importer lets existing codebases move onto a typed
+  foundation. The bridge lowers the on-ramp; it does not cap the language.
+- **No ceiling.** The only limit on how good, how capable, how fast, and how easy-to-learn Phorge
+  becomes is the effort invested. PHP is where it begins, not where it ends.
+- **Power is additive — coexistence, not replacement.** New capabilities are added *alongside*
+  existing strengths, never by removing them: traits and class inheritance both earn their place;
+  overloading arrives without displacing nullable or variadic parameters. Each feature is interrogated
+  for how it interacts with the rest and what it must enforce to stay sound.
+
 ## Design principles
 
 1. **Correctness is the spine.** Every backend must produce byte-identical output to the reference
