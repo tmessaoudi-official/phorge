@@ -368,6 +368,7 @@ fn keyword(s: &str) -> Option<TokenKind> {
         "public" => Public,
         "private" => Private,
         "protected" => Protected,
+        "internal" => Internal,
         "return" => Return,
         "if" => If,
         "else" => Else,

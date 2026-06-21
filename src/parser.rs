@@ -9,6 +9,31 @@ use crate::diagnostic::{Diagnostic, Stage};
 use crate::limits::MAX_NEST_DEPTH;
 use crate::token::{Span, Token, TokenKind};
 
+/// Set the declaration-level visibility on a freshly parsed top-level item. Only the four declaration
+/// kinds carry visibility; any other item is returned unchanged (imports/type aliases are guarded
+/// against a visibility prefix in `parse_item` before this is reached).
+fn stamp_visibility(item: Item, vis: Visibility) -> Item {
+    match item {
+        Item::Function(mut f) => {
+            f.vis = vis;
+            Item::Function(f)
+        }
+        Item::Class(mut c) => {
+            c.vis = vis;
+            Item::Class(c)
+        }
+        Item::Enum(mut e) => {
+            e.vis = vis;
+            Item::Enum(e)
+        }
+        Item::Interface(mut i) => {
+            i.vis = vis;
+            Item::Interface(i)
+        }
+        other => other,
+    }
+}
+
 pub struct Parser {
     tokens: Vec<Token>,
     pos: usize,
@@ -1165,23 +1190,61 @@ impl Parser {
         None
     }
 
-    /// Parse one top-level item: `import` / `function` / `enum` / `class`.
+    /// Parse one top-level item: an optional visibility prefix (`public`/`internal`/`private`)
+    /// followed by `import` / `function` / `enum` / `class` / `interface` / `type`. The prefix is
+    /// stamped onto the declaration by the free `stamp_visibility`.
     pub fn parse_item(&mut self) -> Result<Item, Diagnostic> {
         let sp = self.peek_span();
-        match self.peek() {
-            TokenKind::Import => self.parse_import(sp),
-            TokenKind::Function => Ok(Item::Function(self.parse_function(Vec::new(), sp)?)),
-            TokenKind::Enum => Ok(Item::Enum(self.parse_enum(sp)?)),
-            TokenKind::Class => Ok(Item::Class(self.parse_class(sp)?)),
-            TokenKind::Interface => Ok(Item::Interface(self.parse_interface(sp)?)),
-            TokenKind::TypeKw => self.parse_type_alias(sp),
-            TokenKind::Package => Err(self
-                .error("'package' must be the first declaration, before any import or definition")),
+        // Optional leading declaration visibility (visibility modifiers): at most one of
+        // public/internal/private. Absent ⇒ the default `Visibility::Public`.
+        let vis = self.parse_decl_visibility()?;
+        let item = match self.peek() {
+            TokenKind::Import => {
+                if vis != Visibility::Public {
+                    return Err(self.error("an import cannot carry a visibility modifier"));
+                }
+                return self.parse_import(sp);
+            }
+            TokenKind::TypeKw => {
+                if vis != Visibility::Public {
+                    return Err(self.error("a type alias cannot carry a visibility modifier yet"));
+                }
+                return self.parse_type_alias(sp);
+            }
+            TokenKind::Function => Item::Function(self.parse_function(Vec::new(), sp)?),
+            TokenKind::Enum => Item::Enum(self.parse_enum(sp)?),
+            TokenKind::Class => Item::Class(self.parse_class(sp)?),
+            TokenKind::Interface => Item::Interface(self.parse_interface(sp)?),
+            TokenKind::Package => {
+                return Err(self.error(
+                    "'package' must be the first declaration, before any import or definition",
+                ))
+            }
             _ => {
-                Err(self
+                return Err(self
                     .error("a top-level item (import, function, enum, class, interface, or type)"))
             }
+        };
+        Ok(stamp_visibility(item, vis))
+    }
+
+    /// Read an optional single leading declaration-visibility keyword. Two visibility keywords in a
+    /// row (`public private`) is an error; absent ⇒ the default `Visibility::Public`.
+    fn parse_decl_visibility(&mut self) -> Result<Visibility, Diagnostic> {
+        let first = match self.peek() {
+            TokenKind::Public => Visibility::Public,
+            TokenKind::Internal => Visibility::Internal,
+            TokenKind::Private => Visibility::Private,
+            _ => return Ok(Visibility::Public),
+        };
+        self.advance();
+        if matches!(
+            self.peek(),
+            TokenKind::Public | TokenKind::Internal | TokenKind::Private
+        ) {
+            return Err(self.error("a single visibility (public, internal, or private), not two"));
         }
+        Ok(first)
     }
 
     /// Entry point: parse a whole program — an optional leading `package …;` (M5: required by the
@@ -1625,12 +1688,78 @@ fn compound_op(k: &TokenKind) -> Option<BinaryOp> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{ClassMember, Expr, Item, Modifier, Pattern, Stmt, StrPart, Type};
+    use crate::ast::{ClassMember, Expr, Item, Modifier, Pattern, Stmt, StrPart, Type, Visibility};
     use crate::lexer::lex;
 
     /// Helper: lex `src` and build a parser over the tokens.
     fn parser(src: &str) -> Parser {
         Parser::new(lex(src).expect("lex ok"))
+    }
+
+    /// Helper: parse a whole program, panicking on a parse error.
+    fn prog(src: &str) -> Program {
+        parser(src).parse_program().expect("parse ok")
+    }
+
+    /// Helper: parse a whole program expecting a parse error, returning its rendered message.
+    fn prog_err(src: &str) -> String {
+        parser(src).parse_program().unwrap_err().render(src)
+    }
+
+    #[test]
+    fn parses_private_class_visibility() {
+        match &prog("package main;\nprivate class P {}").items[0] {
+            Item::Class(c) => assert_eq!(c.vis, Visibility::Private),
+            other => panic!("expected class, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_internal_function_visibility() {
+        match &prog("package main;\ninternal function f() {}").items[0] {
+            Item::Function(f) => assert_eq!(f.vis, Visibility::Internal),
+            other => panic!("expected function, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_internal_enum_and_interface_visibility() {
+        match &prog("package main;\ninternal enum E { A() }").items[0] {
+            Item::Enum(e) => assert_eq!(e.vis, Visibility::Internal),
+            other => panic!("expected enum, got {other:?}"),
+        }
+        match &prog("package main;\nprivate interface I { function m() -> int; }").items[0] {
+            Item::Interface(i) => assert_eq!(i.vis, Visibility::Private),
+            other => panic!("expected interface, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn bare_decl_defaults_to_public() {
+        match &prog("package main;\nclass C {}").items[0] {
+            Item::Class(c) => assert_eq!(c.vis, Visibility::Public),
+            other => panic!("expected class, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn explicit_public_enum_parses() {
+        match &prog("package main;\npublic enum E { A() }").items[0] {
+            Item::Enum(e) => assert_eq!(e.vis, Visibility::Public),
+            other => panic!("expected enum, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn conflicting_visibility_prefix_is_rejected() {
+        let err = prog_err("package main;\npublic private class C {}");
+        assert!(err.contains("a single visibility"), "got: {err}");
+    }
+
+    #[test]
+    fn visibility_on_import_is_rejected() {
+        let err = prog_err("package main;\nprivate import Core.Console;");
+        assert!(err.contains("cannot carry a visibility"), "got: {err}");
     }
 
     /// Helper: parse `src` as a single expression.

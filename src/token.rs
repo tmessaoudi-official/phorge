@@ -31,6 +31,9 @@ pub enum TokenKind {
     Public,
     Private,
     Protected,
+    /// `internal` — package-level declaration visibility (visibility modifiers). Distinct from the
+    /// member modifiers above; recognized as a top-level declaration prefix.
+    Internal,
     Return,
     If,
     Else,
