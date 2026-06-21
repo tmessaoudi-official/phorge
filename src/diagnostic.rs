@@ -41,6 +41,21 @@ impl Stage {
 /// A single error, anywhere in the pipeline. `line == 0` means no position is known (the
 /// compiler and the tree-walking interpreter don't track one); `col == 0` with `line > 0`
 /// means a line is known but not a column (VM runtime errors, located via `Chunk.lines`).
+/// One frame of a runtime call stack (error-handling slice 1). Built identically by both backends —
+/// the VM walks its live `Frame`s, the interpreter snapshots its `trace_stack` — so a fault yields the
+/// same trace on `run` and `runvm`. `file` is `None` until the loader's source map attributes it (and
+/// always `None` in loose `-e`/stdin mode, where there is no file).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Frame {
+    pub function: String,
+    pub file: Option<std::path::PathBuf>,
+    pub line: u32,
+    pub col: u32,
+}
+
+/// A single error, anywhere in the pipeline. `line == 0` means no position is known (the
+/// compiler and the tree-walking interpreter don't track one); `col == 0` with `line > 0`
+/// means a line is known but not a column (VM runtime errors, located via `Chunk.lines`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostic {
     pub stage: Stage,
@@ -51,6 +66,9 @@ pub struct Diagnostic {
     pub code: Option<&'static str>,
     /// An optional one-line suggestion ("did you mean `…`?").
     pub hint: Option<String>,
+    /// Runtime call stack, innermost → outermost. Empty for front-end diagnostics and for runtime
+    /// faults before frames are attached. Rendered after the message/caret (slice 1).
+    pub frames: Vec<Frame>,
 }
 
 impl Diagnostic {
@@ -63,7 +81,34 @@ impl Diagnostic {
             col,
             code: None,
             hint: None,
+            frames: Vec::new(),
         }
+    }
+
+    /// Attach a runtime call stack (error-handling slice 1).
+    #[must_use]
+    pub fn with_frames(mut self, frames: Vec<Frame>) -> Self {
+        self.frames = frames;
+        self
+    }
+
+    /// Render the call stack (innermost first) appended after the message/caret. Empty ⇒ nothing.
+    fn render_frames(&self) -> String {
+        if self.frames.is_empty() {
+            return String::new();
+        }
+        let mut s = String::from("\nstack trace (most recent call first):\n");
+        for (i, f) in self.frames.iter().enumerate() {
+            let mark = if i == 0 { "→ " } else { "  " };
+            let loc = match &f.file {
+                Some(p) => format!("{}:{}", p.display(), f.line),
+                None => format!("line {}", f.line),
+            };
+            s.push_str(&format!("  {mark}{:<18} {loc}\n", f.function));
+        }
+        // Trim the trailing newline so the rendered diagnostic has no dangling blank line.
+        s.truncate(s.trim_end_matches('\n').len());
+        s
     }
 
     /// Attach a stable diagnostic code (consumed by `phg explain`).
@@ -109,6 +154,7 @@ impl Diagnostic {
         if let Some(hint) = &self.hint {
             s.push_str(&format!("\n  hint: {hint}"));
         }
+        s.push_str(&self.render_frames());
         s
     }
 
@@ -206,6 +252,37 @@ pub fn diagnostics_json(errors: &[Diagnostic], warnings: &[Diagnostic]) -> Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn render_includes_frame_list() {
+        let d = Diagnostic::runtime_at_line("list index out of range", 14).with_frames(vec![
+            Frame {
+                function: "checkout".into(),
+                file: Some("src/cart.phg".into()),
+                line: 14,
+                col: 11,
+            },
+            Frame {
+                function: "main".into(),
+                file: Some("src/main.phg".into()),
+                line: 6,
+                col: 3,
+            },
+        ]);
+        let out = d.render("");
+        assert!(out.contains("stack trace"), "{out}");
+        assert!(out.contains("checkout"), "{out}");
+        assert!(out.contains("src/cart.phg:14"), "{out}");
+        assert!(out.contains("main"), "{out}");
+        assert!(out.contains("src/main.phg:6"), "{out}");
+    }
+
+    #[test]
+    fn render_without_frames_is_unchanged() {
+        // Back-compat: a frameless diagnostic renders exactly as before (no "stack trace" block).
+        let d = Diagnostic::runtime("boom");
+        assert!(!d.render("").contains("stack trace"));
+    }
 
     #[test]
     fn renders_line_and_col_for_front_end_stages() {
