@@ -7,6 +7,16 @@
 
 ## ⏸️ EXACT RESUME POINT (read this first)
 
+> **UPDATE 2026-06-21 (post-resume):** developer reclassified mutation as **a gap to implement NOW**
+> (not a deferred milestone) and asked for full research + brainstorming "to cover everything in the
+> plan." A 5-track research workflow is in flight — **Run ID `wf_e87dd08d-c75`** (tracks: mutation
+> semantics, GC strategy, byte-identity-under-mutation, dependent-feature surface + modifier model, VM
+> impact → completeness critic → synthesis). Raw output: `docs/research/mutation/raw/`; synthesis lands
+> at `docs/research/mutation/SYNTHESIS.md`. **On resume / completion:** read SYNTHESIS.md, then brainstorm
+> the genuine forks with the developer (the modifier-model confirmation below is now folded into Track 4).
+> The modifier-model AskUserQuestion was NOT yet answered — developer challenged it and redirected to
+> "implement mutation first, with evidence." So the modifier model is now evidence-gated on the research.
+
 We were locking the **mutation / modifier model**. State:
 - Immutable-by-default: **ACCEPTED** by the developer (after I challenged hard and gave code examples).
 - Keyword: **`mutable`** (NOT `mut` — developer chose the spelled-out word).
