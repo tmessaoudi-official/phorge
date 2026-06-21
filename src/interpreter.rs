@@ -29,6 +29,20 @@ enum Signal {
 
 type R<T> = Result<T, Signal>;
 
+/// The source line of a statement, for runtime trace frames (error-handling slice 1).
+fn stmt_line(s: &Stmt) -> u32 {
+    match s {
+        Stmt::VarDecl { span, .. }
+        | Stmt::Assign { span, .. }
+        | Stmt::Return { span, .. }
+        | Stmt::If { span, .. }
+        | Stmt::For { span, .. }
+        | Stmt::While { span, .. }
+        | Stmt::CFor { span, .. } => span.line,
+        Stmt::Break(s) | Stmt::Continue(s) | Stmt::Block(_, s) | Stmt::Expr(_, s) => s.line,
+    }
+}
+
 fn rt<T>(msg: impl Into<String>) -> R<T> {
     Err(Signal::Runtime(Diagnostic::runtime(msg)))
 }
@@ -113,6 +127,12 @@ pub struct Interp {
     frame: CallScopes,
     this: Option<Value>,
     out: String,
+    /// Logical call stack for runtime stack traces (error-handling slice 1). A frame is pushed at each
+    /// `run_call` entry (function name + current line) and popped **only on success** — an error path
+    /// skips the pop, so at the top-level catch the stack still holds every active frame to snapshot.
+    /// Names mirror the VM's compiled `Function.name` (`main`, `Class::method`, `Class::new`,
+    /// `Class::name$set`) so `run`-traces are byte-identical to `runvm`-traces.
+    trace_stack: Vec<crate::diagnostic::Frame>,
     /// Live call-frame depth, checked against [`crate::limits::MAX_CALL_DEPTH`] in `run_call`.
     /// Converts unbounded recursion into a clean `"stack overflow"` fault instead of a native
     /// stack abort — and uses the *same* limit as the VM, keeping the backends parity-identical.
@@ -136,6 +156,7 @@ pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
         frame: CallScopes::new(),
         this: None,
         out: String::new(),
+        trace_stack: Vec::new(),
         depth: 0,
     };
     interp.collect(program);
@@ -144,10 +165,10 @@ pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
         None => return Err(Diagnostic::runtime("no `main` function")),
     };
     let names: Vec<String> = main.params.iter().map(|p| p.name.clone()).collect();
-    match interp.run_call(&names, &main.body, vec![], None) {
+    match interp.run_call("main", &names, &main.body, vec![], None) {
         Ok(_) => Ok(interp.out),
         Err(Signal::Return(_)) => Ok(interp.out),
-        Err(Signal::Runtime(e)) => Err(e),
+        Err(Signal::Runtime(e)) => Err(e.with_frames(interp.snapshot_frames())),
         // Checker-unreachable: `break`/`continue` are rejected outside a loop and caught by their
         // enclosing loop, so they never escape `main`'s body. Defensive (EV-7 parity).
         Err(Signal::Break | Signal::Continue) => {
@@ -177,6 +198,7 @@ pub fn call_named(
         frame: CallScopes::new(),
         this: None,
         out: String::new(),
+        trace_stack: Vec::new(),
         depth: 0,
     };
     interp.collect(program);
@@ -192,10 +214,10 @@ pub fn call_named(
         )));
     }
     let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
-    match interp.run_call(&names, &f.body, args, None) {
+    match interp.run_call(&f.name, &names, &f.body, args, None) {
         Ok(v) => Ok((v, interp.out)),
         Err(Signal::Return(v)) => Ok((v, interp.out)),
-        Err(Signal::Runtime(e)) => Err(e),
+        Err(Signal::Runtime(e)) => Err(e.with_frames(interp.snapshot_frames())),
         Err(Signal::Break | Signal::Continue) => {
             Err(Diagnostic::runtime("internal error: loop control escaped"))
         }
@@ -255,6 +277,7 @@ impl Interp {
     /// value; falling off the end yields `Unit`.
     fn run_call(
         &mut self,
+        fn_name: &str,
         names: &[String],
         body: &[Stmt],
         args: Vec<Value>,
@@ -267,6 +290,14 @@ impl Interp {
             return rt("stack overflow");
         }
         self.depth += 1;
+        // Push a trace frame (line is filled in by `exec_stmt` as the body runs). Popped only on the
+        // success arms below — an error leaves it on `trace_stack` for the top-level snapshot.
+        self.trace_stack.push(crate::diagnostic::Frame {
+            function: fn_name.to_string(),
+            file: None,
+            line: 0,
+            col: 0,
+        });
         let saved_frame = std::mem::replace(&mut self.frame, CallScopes::new());
         let saved_this = std::mem::replace(&mut self.this, this);
         for (n, a) in names.iter().zip(args) {
@@ -277,10 +308,21 @@ impl Interp {
         self.this = saved_this;
         self.depth -= 1;
         match result {
-            Ok(()) => Ok(Value::Unit),
-            Err(Signal::Return(v)) => Ok(v),
+            Ok(()) => {
+                self.trace_stack.pop();
+                Ok(Value::Unit)
+            }
+            Err(Signal::Return(v)) => {
+                self.trace_stack.pop();
+                Ok(v)
+            }
             Err(other) => Err(other),
         }
+    }
+
+    /// Snapshot the live trace stack as ordered frames (innermost → outermost) for a fault diagnostic.
+    fn snapshot_frames(&self) -> Vec<crate::diagnostic::Frame> {
+        self.trace_stack.iter().rev().cloned().collect()
     }
 
     fn exec_stmts(&mut self, stmts: &[Stmt]) -> R<()> {
@@ -298,6 +340,11 @@ impl Interp {
     }
 
     fn exec_stmt(&mut self, s: &Stmt) -> R<()> {
+        // Track the current source line on the active trace frame, so a fault reports the right line
+        // (and a non-top frame reports its call-site line — the call statement currently executing).
+        if let Some(fr) = self.trace_stack.last_mut() {
+            fr.line = stmt_line(s);
+        }
         match s {
             Stmt::VarDecl { name, init, .. } => {
                 let v = self.eval(init)?;
@@ -370,7 +417,10 @@ impl Interp {
                             // the assigned value and run its `set` block with `this` = the receiver.
                             // The checker guarantees a hook assigned here has a `set` (E-HOOK-NO-SET).
                             if let Some((p, body)) = self.hook_set(&inst.class, name) {
+                                // Mirror the VM's synthetic hook-setter name for trace parity.
+                                let setter = format!("{}::{name}$set", inst.class);
                                 self.run_call(
+                                    &setter,
                                     &[p.name],
                                     &body,
                                     vec![v],
@@ -917,7 +967,7 @@ impl Interp {
                     ));
                 }
                 let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
-                return self.run_call(&names, &f.body, argv, None);
+                return self.run_call(&f.name, &names, &f.body, argv, None);
             }
             if let Some((enum_name, arity)) = self.variants.get(name).cloned() {
                 if argv.len() != arity {
@@ -980,7 +1030,7 @@ impl Interp {
                     ));
                 }
                 let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
-                self.run_call(&names, &f.body, args, None)
+                self.run_call(&f.name, &names, &f.body, args, None)
             }
             ClosureData::Byte { .. } => {
                 // A VM-compiled closure that somehow ended up in the tree-walker is a compiler
@@ -1090,7 +1140,14 @@ impl Interp {
         // can't mutate fields (immutable), so both observe the same value — a refcount bump, not a
         // deep `HashMap` clone of the whole instance.
         let rc = Rc::new(inst);
-        self.run_call(&names, &body, args, Some(Value::Instance(rc.clone())))?;
+        let ctor = format!("{}::new", rc.class);
+        self.run_call(
+            &ctor,
+            &names,
+            &body,
+            args,
+            Some(Value::Instance(rc.clone())),
+        )?;
         Ok(Value::Instance(rc))
     }
 
@@ -1119,7 +1176,8 @@ impl Interp {
             ));
         }
         let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
-        self.run_call(&names, &f.body, args, Some(Value::Instance(inst)))
+        let mname = format!("{}::{name}", inst.class);
+        self.run_call(&mname, &names, &f.body, args, Some(Value::Instance(inst)))
     }
 
     /// The cloned `get` expression of a property hook `class.name`, if the class declares one with a
@@ -1317,6 +1375,17 @@ mod tests {
         let tokens = lex(&src).expect("lex ok");
         let prog = Parser::new(tokens).parse_program().expect("parse ok");
         interpret(&prog)
+    }
+
+    #[test]
+    fn interpreter_fault_carries_call_stack() {
+        let err = run(
+            "function f() -> int { var xs = [1]; return xs[5]; }\nfunction main() { var r = f(); }",
+        )
+        .unwrap_err();
+        assert_eq!(err.frames.len(), 2, "callee + main: {:?}", err.frames);
+        assert_eq!(err.frames[0].function, "f");
+        assert_eq!(err.frames[1].function, "main");
     }
 
     fn with_pkg(src: &str) -> String {
