@@ -27,16 +27,56 @@
 //! instantiation, `instanceof`, enum access) to the mangled FQN, so the backends see fully-resolved
 //! names and only the transpiler de-mangles into PHP `namespace` blocks.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::ast::{
-    ClassMember, Expr, Item, LambdaBody, MatchArm, Param, Program, Stmt, StrPart, Type,
+    ClassMember, Expr, Item, LambdaBody, MatchArm, Param, Program, Stmt, StrPart, Type, Visibility,
 };
 use crate::lexer::lex;
 use crate::manifest::{validate_path_component, Project};
 use crate::parser::Parser;
 use crate::token::Span;
+
+/// Provenance for one top-level definition: where it was declared and how visible it is. Built in
+/// Pass 1 (which still has per-file information) and consumed by the visibility lattice during Pass 2.
+#[derive(Clone)]
+struct DefInfo {
+    file: PathBuf,
+    package: String,
+    vis: Visibility,
+}
+
+/// The visibility lattice check. `None` ⇒ the reference is legal; `Some(code)` ⇒ the diagnostic code
+/// to report. Same file → always legal. Same package, different file → legal unless `private`.
+/// Different package → legal only if `public`.
+fn vis_violation(info: &DefInfo, referrer_file: &Path, referrer_pkg: &str) -> Option<&'static str> {
+    if info.file == referrer_file {
+        return None;
+    }
+    if info.package == referrer_pkg {
+        return if info.vis == Visibility::Private {
+            Some("E-VIS-PRIVATE")
+        } else {
+            None
+        };
+    }
+    match info.vis {
+        Visibility::Public => None,
+        Visibility::Internal => Some("E-VIS-INTERNAL"),
+        Visibility::Private => Some("E-VIS-PRIVATE"),
+    }
+}
+
+/// Render the visibility keyword for a diagnostic.
+fn vis_word(vis: Visibility) -> &'static str {
+    match vis {
+        Visibility::Public => "public",
+        Visibility::Internal => "internal",
+        Visibility::Private => "private",
+    }
+}
 
 /// A loaded compilation unit: the (possibly merged) program plus the source text used to render
 /// type-error carets. `diag_src` is the single file's source in loose mode (full carets) or empty
@@ -141,6 +181,10 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
     let mut parsed: Vec<(PathBuf, Program)> = Vec::with_capacity(sources.len());
     let mut defined: HashMap<(String, String), String> = HashMap::new();
     let mut types: HashMap<(String, String), String> = HashMap::new();
+    // Declaration-visibility provenance (visibility modifiers): where each definition lives + its
+    // visibility, keyed by (package, name) like the rename tables. Consumed by the lattice in Pass 2.
+    let mut prov_fns: HashMap<(String, String), DefInfo> = HashMap::new();
+    let mut prov_types: HashMap<(String, String), DefInfo> = HashMap::new();
     for src_entry in &sources {
         let file = &src_entry.file;
         let src = read_file(file)?;
@@ -155,11 +199,11 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
         }
         let pkg = prog.package.join(".");
         for item in &prog.items {
-            let (name, is_type) = match item {
-                Item::Function(f) => (&f.name, false),
-                Item::Class(c) => (&c.name, true),
-                Item::Enum(e) => (&e.name, true),
-                Item::Interface(i) => (&i.name, true),
+            let (name, is_type, vis) = match item {
+                Item::Function(f) => (&f.name, false, f.vis),
+                Item::Class(c) => (&c.name, true, c.vis),
+                Item::Enum(e) => (&e.name, true, e.vis),
+                Item::Interface(i) => (&i.name, true, i.vis),
                 _ => continue,
             };
             let table = if is_type { &mut types } else { &mut defined };
@@ -175,6 +219,19 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
                     if pkg.is_empty() { "main" } else { &pkg }
                 ));
             }
+            let prov = if is_type {
+                &mut prov_types
+            } else {
+                &mut prov_fns
+            };
+            prov.insert(
+                (pkg.clone(), name.clone()),
+                DefInfo {
+                    file: file.clone(),
+                    package: pkg.clone(),
+                    vis,
+                },
+            );
         }
         parsed.push((file.clone(), prog));
     }
@@ -197,16 +254,25 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
             unit_span = prog.span;
         }
         let user_imports = user_import_map(&prog.items);
-        let type_imports = build_type_imports(&prog, &types, &user_imports, &file)?;
+        let type_imports = build_type_imports(&prog, &types, &prov_types, &user_imports, &file)?;
         let ctx = ResolveCtx {
             package: prog.package.clone(),
             user_imports,
             defined: &defined,
             types: &types,
             type_imports,
+            file: &file,
+            prov_types: &prov_types,
+            prov_fns: &prov_fns,
+            violations: RefCell::new(Vec::new()),
         };
         for item in prog.items {
             merged_items.push(resolve_item(item, &ctx));
+        }
+        // Surface the first visibility violation collected while resolving this file (the
+        // infallible `resolve_*` chain buffers them).
+        if let Some(first) = ctx.violations.into_inner().into_iter().next() {
+            return Err(first);
         }
     }
 
@@ -308,6 +374,7 @@ fn user_import_map(items: &[Item]) -> HashMap<String, Vec<String>> {
 fn build_type_imports(
     prog: &Program,
     types: &HashMap<(String, String), String>,
+    prov_types: &HashMap<(String, String), DefInfo>,
     user_imports: &HashMap<String, Vec<String>>,
     file: &Path,
 ) -> Result<HashMap<String, String>, String> {
@@ -355,6 +422,18 @@ fn build_type_imports(
                     file.display()
                 )
             })?;
+            // Visibility: a cross-package `import type` may only reach a `public` type.
+            if let Some(info) = prov_types.get(&(pkg.clone(), leaf.clone())) {
+                if let Some(code) = vis_violation(info, file, &prog.package.join(".")) {
+                    return Err(format!(
+                        "{}: type `{leaf}` is not visible from package `{}` — it is `{}` in package \
+                         `{pkg}`; mark it `public` to export it [{code}]",
+                        file.display(),
+                        prog.package.join("."),
+                        vis_word(info.vis),
+                    ));
+                }
+            }
             let bound = alias.clone().unwrap_or_else(|| leaf.clone());
             if local_types.contains(bound.as_str()) || user_imports.contains_key(&bound) {
                 return Err(format!(
@@ -395,6 +474,14 @@ struct ResolveCtx<'a> {
     types: &'a HashMap<(String, String), String>,
     /// This file's terminal type imports: bare name (or `as` alias) ⇒ mangled FQN.
     type_imports: HashMap<String, String>,
+    /// The file currently being resolved (the referrer side of the visibility lattice).
+    file: &'a Path,
+    /// Visibility provenance for type and function definitions (visibility modifiers).
+    prov_types: &'a HashMap<(String, String), DefInfo>,
+    prov_fns: &'a HashMap<(String, String), DefInfo>,
+    /// Visibility violations collected while resolving this file's references (the `resolve_*` chain
+    /// is infallible, so violations are buffered here and surfaced after the file is resolved).
+    violations: RefCell<Vec<String>>,
 }
 
 /// Resolve a type *name* to its mangled FQN, or `None` if it is a local (`package main`) type or a
@@ -402,11 +489,26 @@ struct ResolveCtx<'a> {
 /// (a library type referencing another type in its own package).
 fn resolve_type_ref(name: &str, ctx: &ResolveCtx) -> Option<String> {
     if let Some(m) = ctx.type_imports.get(name) {
+        // Cross-package terminal import — already visibility-checked in `build_type_imports`.
         return Some(m.clone());
     }
-    ctx.types
-        .get(&(ctx.package.join("."), name.to_string()))
-        .cloned()
+    let key = (ctx.package.join("."), name.to_string());
+    if let Some(m) = ctx.types.get(&key) {
+        // Same-package sibling type: enforce file-scoped `private` (visibility modifiers). Here the
+        // referrer and definition share a package, so the lattice only ever yields `E-VIS-PRIVATE`.
+        if let Some(info) = ctx.prov_types.get(&key) {
+            if let Some(code) = vis_violation(info, ctx.file, &ctx.package.join(".")) {
+                ctx.violations.borrow_mut().push(format!(
+                    "{}: type `{name}` is private to `{}` — mark it `internal` (package-wide) or \
+                     `public` (everywhere) to use it from another file [{code}]",
+                    ctx.file.display(),
+                    info.file.display(),
+                ));
+            }
+        }
+        return Some(m.clone());
+    }
+    None
 }
 
 /// Rewrite every type *name* inside a type annotation to its mangled FQN (cross-package types).
@@ -785,19 +887,42 @@ fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
 /// function table). A `Member` head `q.name` is a qualified user call iff `q` is a non-`core` import
 /// leaf whose target package defines `name` — rewritten to a bare call on the mangled name;
 /// otherwise it is a native call or a method on a value and is left intact (receiver resolved).
+/// Buffer a function-visibility violation against `ctx.violations` (no-op when visible). `pkg` is the
+/// package the function lives in — the referrer's package for a bare call, the import target for a
+/// qualified `q.fn()` call.
+fn check_fn_visibility(ctx: &ResolveCtx, pkg: &str, name: &str) {
+    if let Some(info) = ctx.prov_fns.get(&(pkg.to_string(), name.to_string())) {
+        if let Some(code) = vis_violation(info, ctx.file, &ctx.package.join(".")) {
+            ctx.violations.borrow_mut().push(format!(
+                "{}: function `{name}` is not visible here — it is `{}` in package `{}`; widen its \
+                 visibility to call it [{code}]",
+                ctx.file.display(),
+                vis_word(info.vis),
+                if pkg.is_empty() { "main" } else { pkg },
+            ));
+        }
+    }
+}
+
 fn resolve_call(callee: Expr, args: Vec<Expr>, span: Span, ctx: &ResolveCtx) -> Expr {
     let args: Vec<Expr> = args.into_iter().map(|a| resolve_expr(a, ctx)).collect();
     match callee {
         Expr::Ident(n, isp) => {
             // A type name wins (a constructor call `Point(x)` — a name is a type XOR a function in a
             // file, guarded by `E-TYPE-IMPORT-SHADOW`); else the same-package function table.
-            let resolved = resolve_type_ref(&n, ctx)
-                .or_else(|| {
-                    ctx.defined
-                        .get(&(ctx.package.join("."), n.clone()))
-                        .cloned()
-                })
-                .unwrap_or(n);
+            let resolved = if let Some(t) = resolve_type_ref(&n, ctx) {
+                t
+            } else if let Some(f) = ctx
+                .defined
+                .get(&(ctx.package.join("."), n.clone()))
+                .cloned()
+            {
+                // Same-package function: enforce file-scoped `private` (visibility modifiers).
+                check_fn_visibility(ctx, &ctx.package.join("."), &n);
+                f
+            } else {
+                n
+            };
             Expr::Call {
                 callee: Box::new(Expr::Ident(resolved, isp)),
                 args,
@@ -814,6 +939,8 @@ fn resolve_call(callee: Expr, args: Vec<Expr>, span: Span, ctx: &ResolveCtx) -> 
                 if let Expr::Ident(q, _) = object.as_ref() {
                     if let Some(target) = ctx.user_imports.get(q) {
                         if let Some(mangled) = ctx.defined.get(&(target.join("."), name.clone())) {
+                            // Cross-package qualified call: enforce `internal`/`public`.
+                            check_fn_visibility(ctx, &target.join("."), &name);
                             return Expr::Call {
                                 callee: Box::new(Expr::Ident(mangled.clone(), msp)),
                                 args,
@@ -1132,5 +1259,117 @@ mod tests {
         );
         let err = load(&entry).unwrap_err();
         assert!(err.contains("E-VENDOR-MAIN"), "got: {err}");
+    }
+
+    // --- declaration visibility (visibility modifiers) ---------------------
+
+    #[test]
+    fn import_type_of_internal_library_type_is_rejected() {
+        let tmp = TempDir::new();
+        tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+        let entry = tmp.write(
+            "src/main.phg",
+            "package main;\nimport type acme.geo.Hidden;\nfunction main() { Hidden h = Hidden(); }",
+        );
+        tmp.write(
+            "src/acme/geo/geo.phg",
+            "package acme.geo;\ninternal class Hidden { constructor() {} }",
+        );
+        let err = load(&entry).unwrap_err();
+        assert!(err.contains("E-VIS-INTERNAL"), "got: {err}");
+    }
+
+    #[test]
+    fn import_type_of_public_library_type_is_allowed() {
+        let tmp = TempDir::new();
+        tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+        let entry = tmp.write(
+            "src/main.phg",
+            "package main;\nimport type acme.geo.Shown;\nfunction main() { Shown s = Shown(); }",
+        );
+        tmp.write(
+            "src/acme/geo/geo.phg",
+            "package acme.geo;\npublic class Shown { constructor() {} }",
+        );
+        assert!(load(&entry).is_ok());
+    }
+
+    #[test]
+    fn private_type_referenced_from_sibling_file_is_rejected() {
+        let tmp = TempDir::new();
+        tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+        let entry = tmp.write(
+            "src/main.phg",
+            "package main;\nfunction main() { Helper h = Helper(); }",
+        );
+        // A second `package main` file (folder-exempt at root) declaring a file-private type.
+        tmp.write(
+            "src/helper.phg",
+            "package main;\nprivate class Helper { constructor() {} }",
+        );
+        let err = load(&entry).unwrap_err();
+        assert!(err.contains("E-VIS-PRIVATE"), "got: {err}");
+    }
+
+    #[test]
+    fn internal_type_referenced_from_sibling_file_is_allowed() {
+        let tmp = TempDir::new();
+        tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+        let entry = tmp.write(
+            "src/main.phg",
+            "package main;\nfunction main() { Helper h = Helper(); }",
+        );
+        tmp.write(
+            "src/helper.phg",
+            "package main;\ninternal class Helper { constructor() {} }",
+        );
+        assert!(load(&entry).is_ok());
+    }
+
+    #[test]
+    fn private_function_called_from_sibling_file_is_rejected() {
+        let tmp = TempDir::new();
+        tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+        let entry = tmp.write(
+            "src/main.phg",
+            "package main;\nfunction main() -> int { return helper(); }",
+        );
+        tmp.write(
+            "src/helper.phg",
+            "package main;\nprivate function helper() -> int { return 1; }",
+        );
+        let err = load(&entry).unwrap_err();
+        assert!(err.contains("E-VIS-PRIVATE"), "got: {err}");
+    }
+
+    #[test]
+    fn internal_function_called_cross_package_is_rejected() {
+        let tmp = TempDir::new();
+        tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+        let entry = tmp.write(
+            "src/main.phg",
+            "package main;\nimport acme.util;\nfunction main() -> int { return util.secret(); }",
+        );
+        tmp.write(
+            "src/acme/util/util.phg",
+            "package acme.util;\ninternal function secret() -> int { return 7; }",
+        );
+        let err = load(&entry).unwrap_err();
+        assert!(err.contains("E-VIS-INTERNAL"), "got: {err}");
+    }
+
+    #[test]
+    fn public_function_called_cross_package_is_allowed() {
+        let tmp = TempDir::new();
+        tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+        let entry = tmp.write(
+            "src/main.phg",
+            "package main;\nimport acme.util;\nfunction main() -> int { return util.shown(); }",
+        );
+        tmp.write(
+            "src/acme/util/util.phg",
+            "package acme.util;\npublic function shown() -> int { return 7; }",
+        );
+        assert!(load(&entry).is_ok());
     }
 }
