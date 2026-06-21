@@ -266,7 +266,11 @@ fn main() {
                 print!("{json}");
                 exit(i32::from(had_errors));
             }
-            "check" => cli::check_program(&unit.program, &unit.diag_src),
+            "check" => cli::check_program(&unit.program, &unit.diag_src).map(|ok| {
+                // In project mode, replace the bland OK with a scope summary proving the whole
+                // project (every file + vendored deps) was validated — not just the entry route.
+                unit.stats.map_or(ok, |s| s.summary())
+            }),
             "transpile" => cli::transpile_program(&unit.program, &unit.diag_src),
             _ => unreachable!("matched above"),
         }

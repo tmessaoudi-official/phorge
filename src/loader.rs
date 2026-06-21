@@ -87,6 +87,43 @@ fn vis_word(vis: Visibility) -> &'static str {
 pub struct Unit {
     pub program: Program,
     pub diag_src: String,
+    /// Project-load statistics (project mode only; `None` in loose mode). Lets `phg check` report the
+    /// *scope* it validated — proving the whole project (every file, including code no route reaches,
+    /// plus vendored deps) was type-checked, the PHP-absent superpower of whole-program checking.
+    pub stats: Option<LoadStats>,
+}
+
+/// Counts of what a project load assembled and handed to the checker — every `.phg` under the source
+/// root (first-party + vendored), merged and validated as one program.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LoadStats {
+    pub files: usize,
+    pub packages: usize,
+    pub defs: usize,
+}
+
+impl LoadStats {
+    /// A one-line human summary for `phg check`'s success message.
+    pub fn summary(&self) -> String {
+        format!(
+            "OK — whole project type-checks clean: {} file{}, {} package{}, {} definition{} \
+             validated (every file + vendored deps)\n",
+            self.files,
+            plural(self.files),
+            self.packages,
+            plural(self.packages),
+            self.defs,
+            plural(self.defs),
+        )
+    }
+}
+
+fn plural(n: usize) -> &'static str {
+    if n == 1 {
+        ""
+    } else {
+        "s"
+    }
 }
 
 /// Load the entry at `path`: project mode if a `phorge.toml` is found by walking up, else loose mode.
@@ -112,6 +149,7 @@ pub fn load_loose_src(src: &str) -> Result<Unit, String> {
     Ok(Unit {
         program,
         diag_src: src.to_string(),
+        stats: None,
     })
 }
 
@@ -185,6 +223,9 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
     // visibility, keyed by (package, name) like the rename tables. Consumed by the lattice in Pass 2.
     let mut prov_fns: HashMap<(String, String), DefInfo> = HashMap::new();
     let mut prov_types: HashMap<(String, String), DefInfo> = HashMap::new();
+    // Whole-project scope counters for `phg check`'s success summary.
+    let mut pkgset: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut defs: usize = 0;
     for src_entry in &sources {
         let file = &src_entry.file;
         let src = read_file(file)?;
@@ -198,6 +239,11 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
             ));
         }
         let pkg = prog.package.join(".");
+        pkgset.insert(if pkg.is_empty() {
+            "main".to_string()
+        } else {
+            pkg.clone()
+        });
         for item in &prog.items {
             let (name, is_type, vis) = match item {
                 Item::Function(f) => (&f.name, false, f.vis),
@@ -232,9 +278,15 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
                     vis,
                 },
             );
+            defs += 1;
         }
         parsed.push((file.clone(), prog));
     }
+    let stats = LoadStats {
+        files: sources.len(),
+        packages: pkgset.len(),
+        defs,
+    };
 
     // Pass 2 — resolve call sites per file, then flat-merge.
     let mut merged_items: Vec<Item> = Vec::new();
@@ -283,6 +335,7 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
             span: unit_span,
         },
         diag_src: String::new(),
+        stats: Some(stats),
     })
 }
 
@@ -1172,6 +1225,35 @@ mod tests {
             u.program.items.len()
         );
         assert!(u.diag_src.is_empty(), "merged unit has no single source");
+    }
+
+    #[test]
+    fn project_load_reports_stats() {
+        let tmp = TempDir::new();
+        tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+        let entry = tmp.write(
+            "src/main.phg",
+            "package main;\nfunction main() {}\nclass C {}",
+        );
+        tmp.write(
+            "src/acme/util/parse.phg",
+            "package acme.util;\nfunction parse() {}",
+        );
+        let u = load(&entry).unwrap();
+        let stats = u.stats.expect("project mode reports stats");
+        assert_eq!(stats.files, 2, "two source files");
+        assert_eq!(stats.packages, 2, "main + acme.util");
+        assert_eq!(stats.defs, 3, "main, C, parse");
+        // The human summary mentions the project-wide scope.
+        let summary = stats.summary();
+        assert!(summary.contains("2 files"), "got: {summary}");
+        assert!(summary.contains("whole project"), "got: {summary}");
+    }
+
+    #[test]
+    fn loose_load_has_no_stats() {
+        let u = load_loose_src("package main;\nfunction main() {}").unwrap();
+        assert!(u.stats.is_none(), "loose mode reports no project stats");
     }
 
     #[test]

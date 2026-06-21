@@ -6,6 +6,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — `phg check` reports whole-project scope
+
+`phg check` on a project now reports the scope it validated — e.g. *"OK — whole project type-checks
+clean: 3 files, 2 packages, 5 definitions validated (every file + vendored deps)"* — making explicit
+the PHP-absent superpower it already had: because the loader merges every `.phg` under the source root
+(first-party **and** vendored) into one program and type-checks it before any backend runs, a broken
+class or bad import in a file **no route reaches** fails up front (unlike PHP's autoload-on-demand,
+where it hides until that file is interpreted). Loose mode (single file / `-e` / stdin) keeps the plain
+`OK (type-checks clean)`. (Counts ride on a new `loader::LoadStats`, project mode only.)
+
 ### Added — declaration visibility (`public` / `internal` / `private`)
 
 A three-level visibility lattice on every **top-level declaration** (class, enum, interface, free
