@@ -138,7 +138,7 @@ fn serves_known_unknown_and_malformed() {
         get_missing.clone(),
         malformed.clone(),
     ]);
-    serve(&prog, &mut fx).expect("serve loop completes");
+    serve(&prog, &mut fx, false).expect("serve loop completes");
 
     assert_eq!(fx.sent.len(), 3, "one response per request");
     assert_eq!(fx.sent[0], http("HTTP/1.1 200 OK", "home"));
@@ -200,7 +200,7 @@ fn recv_error_does_not_kill_the_loop() {
         ]),
         sent: Vec::new(),
     };
-    serve(&prog, &mut t).expect("loop survives per-connection errors and ends cleanly");
+    serve(&prog, &mut t, false).expect("loop survives per-connection errors and ends cleanly");
     assert_eq!(
         t.sent.len(),
         1,
@@ -222,7 +222,7 @@ fn unrecoverable_listener_eventually_stops() {
         sent: Vec::new(),
     };
     assert!(
-        serve(&prog, &mut t).is_err(),
+        serve(&prog, &mut t, false).is_err(),
         "a listener that only errors must eventually end the loop"
     );
     assert!(t.sent.is_empty(), "nothing could be served");
@@ -237,7 +237,7 @@ fn respond_fault_degrades_to_500_and_loop_continues() {
     );
     let req = b"GET / HTTP/1.1\r\n\r\n".to_vec();
     let mut fx = FixtureTransport::new(vec![req.clone(), req]);
-    serve(&prog, &mut fx).expect("loop completes despite per-request faults");
+    serve(&prog, &mut fx, false).expect("loop completes despite per-request faults");
     assert_eq!(
         fx.sent.len(),
         2,
@@ -258,7 +258,7 @@ fn respond_fault_degrades_to_500_and_loop_continues() {
 fn respond_non_bytes_return_degrades_to_500() {
     let prog = checked("package main;\nfunction respond(bytes raw) -> int { return 7; }\n");
     let mut fx = FixtureTransport::new(vec![b"GET / HTTP/1.1\r\n\r\n".to_vec()]);
-    serve(&prog, &mut fx).expect("loop completes");
+    serve(&prog, &mut fx, false).expect("loop completes");
     assert_eq!(fx.sent.len(), 1);
     assert!(fx.sent[0].starts_with(b"HTTP/1.1 500 Internal Server Error"));
 }
@@ -282,7 +282,7 @@ fn tcp_smoke() {
     // Detached server thread: serves the one connection we make, then blocks on the next accept
     // (harmless — the process exits at end of test).
     std::thread::spawn(move || {
-        let _ = serve(&prog, &mut t);
+        let _ = serve(&prog, &mut t, false);
     });
 
     let mut s = TcpStream::connect(addr).expect("connect");

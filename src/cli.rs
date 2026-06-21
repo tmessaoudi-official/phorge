@@ -153,7 +153,8 @@ pub fn help_for(cmd: &str) -> String {
                     usage:\n  phg serve <file> [--addr 127.0.0.1:8080] [--timeout SECONDS]\n\n\
                     options:\n  \
                     --addr ADDR        host:port to bind (default 127.0.0.1:8080)\n  \
-                    --timeout SECONDS  per-connection read/write timeout; 0 = none (default 30)\n\n\
+                    --timeout SECONDS  per-connection read/write timeout; 0 = none (default 30)\n  \
+                    --dev              rich HTML error page on an uncaught fault (DEV ONLY; prod = bare 500)\n\n\
                     examples:\n  \
                     phg serve examples/web/server.phg\n  \
                     phg serve app.phg --addr 0.0.0.0:3000 --timeout 15\n"
@@ -684,10 +685,11 @@ pub fn serve_program(
     diag_src: &str,
     addr: &str,
     timeout: Option<std::time::Duration>,
+    dev: bool,
 ) -> Result<String, String> {
     on_deep_stack(|| {
         let checked = check_and_expand(prog, diag_src)?;
-        crate::serve::serve_tcp(&checked, addr, timeout).map_err(|e| format!("serve: {e}"))?;
+        crate::serve::serve_tcp(&checked, addr, timeout, dev).map_err(|e| format!("serve: {e}"))?;
         Ok(String::new())
     })
 }

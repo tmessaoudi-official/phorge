@@ -41,13 +41,13 @@ const MAX_CONSECUTIVE_TRANSPORT_ERRORS: usize = 64;
 /// `recv` error (e.g. a transient `accept()`) is logged and retried — only `MAX_CONSECUTIVE_…` recv
 /// errors in a row with no progress ends the loop. Returns `Ok` when the transport reports
 /// exhaustion (`recv` → `Ok(None)`).
-pub fn serve<T: Transport>(program: &Program, transport: &mut T) -> io::Result<()> {
+pub fn serve<T: Transport>(program: &Program, transport: &mut T, dev: bool) -> io::Result<()> {
     let mut consecutive_errors = 0usize;
     loop {
         match transport.recv() {
             Ok(Some(raw)) => {
                 consecutive_errors = 0;
-                let response = respond_once(program, &raw);
+                let response = respond_once(program, &raw, dev);
                 if let Err(e) = transport.send(&response) {
                     // One client's broken pipe / reset must not end the server.
                     eprintln!("serve: send failed (connection dropped): {e}");
@@ -72,7 +72,7 @@ pub fn serve<T: Transport>(program: &Program, transport: &mut T) -> io::Result<(
 /// Invoke `respond(bytes) -> bytes` once. Any captured stdout (a handler calling `Console.println`)
 /// is treated as a server log line and written to stderr, keeping the HTTP response body clean.
 /// A non-`bytes` return or a runtime fault degrades to a 500 — never a panic (EV-7).
-fn respond_once(program: &Program, raw: &[u8]) -> Vec<u8> {
+fn respond_once(program: &Program, raw: &[u8], dev: bool) -> Vec<u8> {
     let arg = Value::Bytes(Rc::new(raw.to_vec()));
     match call_named(program, SERVE_ENTRY, vec![arg]) {
         Ok((Value::Bytes(b), out)) => {
@@ -90,9 +90,75 @@ fn respond_once(program: &Program, raw: &[u8]) -> Vec<u8> {
         }
         Err(e) => {
             eprintln!("serve: request failed: {e}");
-            http_500()
+            // Dev mode renders a rich HTML error page (the trace + request context). Production never
+            // leaks a trace/source — a bare generic 500 (a security rule, error-handling slice 1).
+            if dev {
+                dev_error_page(&e, raw)
+            } else {
+                http_500()
+            }
         }
     }
+}
+
+/// HTML-escape `s` with the same 5-char table as `Core.Html` (PHP `htmlspecialchars(_, ENT_QUOTES)`),
+/// so every value interpolated into the dev error page is XSS-safe by construction.
+fn esc(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&#039;"),
+            other => out.push(other),
+        }
+    }
+    out
+}
+
+/// A development-only HTML `500` page for an uncaught handler fault: the fault message, its call
+/// stack, and the request's start-line + headers. **Runtime glue** — outside the byte-identity value
+/// contract; only reached when `phg serve --dev` is set. Every interpolated value is escaped.
+fn dev_error_page(diag: &crate::diagnostic::Diagnostic, raw: &[u8]) -> Vec<u8> {
+    // The request head (start-line + headers) is everything up to the CRLFCRLF body boundary.
+    let head = raw
+        .windows(4)
+        .position(|w| w == b"\r\n\r\n")
+        .map_or(raw, |i| &raw[..i]);
+    let req = String::from_utf8_lossy(head);
+    let mut frames = String::new();
+    for (i, f) in diag.frames.iter().enumerate() {
+        let mark = if i == 0 { "→ " } else { "  " };
+        let loc = match &f.file {
+            Some(p) => format!("{}:{}", p.display(), f.line),
+            None => format!("line {}", f.line),
+        };
+        frames.push_str(&format!("{}{}    {}\n", mark, esc(&f.function), esc(&loc)));
+    }
+    let body = format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>Phorge — runtime fault</title>\
+         <style>body{{font:14px/1.5 ui-monospace,monospace;background:#1e1e2e;color:#cdd6f4;margin:2rem}}\
+         h1{{color:#f38ba8}}pre{{background:#181825;padding:1rem;border-radius:8px;overflow:auto}}\
+         .req{{color:#a6adc8}}</style></head><body>\
+         <h1>Runtime fault</h1><pre>{msg}</pre>\
+         <h2>Stack trace (most recent call first)</h2><pre>{frames}</pre>\
+         <h2>Request</h2><pre class=\"req\">{req}</pre>\
+         <p class=\"req\">phorge serve --dev — this page is shown in development only.</p>\
+         </body></html>",
+        msg = esc(&diag.to_string()),
+        frames = frames,
+        req = esc(&req),
+    );
+    let head = format!(
+        "HTTP/1.1 500 Internal Server Error\r\nContent-Length: {}\r\nConnection: close\r\nContent-Type: text/html; charset=utf-8\r\n\r\n",
+        body.len()
+    );
+    head.into_bytes()
+        .into_iter()
+        .chain(body.into_bytes())
+        .collect()
 }
 
 /// A minimal, well-formed `500 Internal Server Error` response (`Connection: close`).
@@ -176,10 +242,20 @@ impl Transport for TcpTransport {
 
 /// Bind `addr` and serve until killed — the blocking accept-loop `phg serve` calls (W4). `timeout`
 /// is the per-connection read/write timeout (GA blocker B4); `None` disables it.
-pub fn serve_tcp(program: &Program, addr: &str, timeout: Option<Duration>) -> io::Result<()> {
+pub fn serve_tcp(
+    program: &Program,
+    addr: &str,
+    timeout: Option<Duration>,
+    dev: bool,
+) -> io::Result<()> {
     let mut t = TcpTransport::bind(addr)?;
     t.set_timeout(timeout);
     eprintln!("phg serve: listening on http://{}", t.local_addr()?);
+    if dev {
+        eprintln!(
+            "phg serve: --dev — rich HTML error pages on fault (DEV ONLY, leaks traces/source)"
+        );
+    }
     match timeout {
         Some(d) => eprintln!(
             "phg serve: per-connection timeout {}s; single-threaded — bind 127.0.0.1 on untrusted networks",
@@ -189,7 +265,7 @@ pub fn serve_tcp(program: &Program, addr: &str, timeout: Option<Duration>) -> io
             "phg serve: no connection timeout (pass --timeout); single-threaded — bind 127.0.0.1 on untrusted networks"
         ),
     }
-    serve(program, &mut t)
+    serve(program, &mut t, dev)
 }
 
 /// Cap a single request at 8 MiB — keeps a hostile or runaway client from exhausting memory (EV-7).
@@ -262,6 +338,34 @@ fn find_subslice(hay: &[u8], needle: &[u8]) -> Option<usize> {
 mod tests {
     use super::*;
     use std::io::Cursor;
+
+    #[test]
+    fn dev_error_page_escapes_and_includes_frames_and_request() {
+        let diag =
+            crate::diagnostic::Diagnostic::runtime_at_line("boom <script>", 3).with_frames(vec![
+                crate::diagnostic::Frame {
+                    function: "respond".into(),
+                    file: None,
+                    line: 3,
+                    col: 0,
+                },
+            ]);
+        let page = dev_error_page(&diag, b"GET /x?<a> HTTP/1.1\r\nHost: a\r\n\r\nBODY");
+        let s = String::from_utf8(page).unwrap();
+        assert!(s.contains("500 Internal Server Error"), "{s}");
+        assert!(s.contains("text/html"), "{s}");
+        assert!(s.contains("&lt;script&gt;"), "message must be escaped: {s}");
+        assert!(!s.contains("<script>"), "no raw script tag: {s}");
+        assert!(s.contains("respond"), "frame shown: {s}");
+        assert!(
+            s.contains("/x?&lt;a&gt;"),
+            "request line shown + escaped: {s}"
+        );
+        assert!(
+            !s.contains("BODY"),
+            "request body is not included (head only): {s}"
+        );
+    }
 
     // --- find_subslice -----------------------------------------------------
 

@@ -173,6 +173,9 @@ fn main() {
         let mut addr = "127.0.0.1:8080";
         // Per-connection read/write timeout (GA blocker B4): default 30s; `--timeout 0` disables it.
         let mut timeout_secs: u64 = 30;
+        // `--dev` opts into the rich HTML error page on an uncaught handler fault. OFF by default:
+        // production must never leak a stack trace / source (a security rule) — it returns a bare 500.
+        let mut dev = false;
         let mut i = 2;
         while i < args.len() {
             match args[i].as_str() {
@@ -192,6 +195,10 @@ fn main() {
                             exit(2);
                         });
                     i += 2;
+                }
+                "--dev" => {
+                    dev = true;
+                    i += 1;
                 }
                 a if !a.starts_with('-') && file.is_none() => {
                     file = Some(a);
@@ -215,7 +222,7 @@ fn main() {
                 exit(1);
             }
         };
-        match cli::serve_program(&unit.program, &unit.diag_src, addr, timeout) {
+        match cli::serve_program(&unit.program, &unit.diag_src, addr, timeout, dev) {
             Ok(text) => {
                 print!("{text}");
                 return;
