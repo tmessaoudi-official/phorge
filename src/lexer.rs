@@ -386,6 +386,7 @@ fn keyword(s: &str) -> Option<TokenKind> {
         "implements" => Implements,
         "extends" => Extends,
         "var" => Var,
+        "mutable" => Mutable,
         "type" => TypeKw,
         _ => return None,
     })
@@ -731,6 +732,18 @@ mod tests {
         );
         // still idents when embedded in a longer word
         assert_eq!(kinds("interfaces"), vec![Ident("interfaces".into()), Eof]);
+    }
+
+    #[test]
+    fn mutable_keyword_is_recognized() {
+        use TokenKind::*;
+        // M-mut.1: `mutable` binding modifier.
+        assert_eq!(
+            kinds("mutable int x"),
+            vec![Mutable, Ident("int".into()), Ident("x".into()), Eof]
+        );
+        // still an ident when embedded in a longer word
+        assert_eq!(kinds("mutableness"), vec![Ident("mutableness".into()), Eof]);
     }
 
     #[test]
