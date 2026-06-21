@@ -976,6 +976,21 @@ fn pipe_agrees() {
 }
 
 #[test]
+fn mutation_reassign_agrees() {
+    // M-mut.1: mutable locals + reassignment, byte-identical on both backends.
+    // Plain reassignment.
+    agree("import Core.Console; function main(){ mutable int x = 1; x = 2; Console.println(\"{x}\"); }");
+    // Reassign from the variable's own value.
+    agree("import Core.Console; function main(){ mutable int x = 1; x = x + 5; Console.println(\"{x}\"); }");
+    // `mutable var` (inferred type) reassignment.
+    agree("import Core.Console; function main(){ mutable var x = 10; x = x * 3; Console.println(\"{x}\"); }");
+    // Two-binding SCALAR case (F13): a scalar copies, so reassigning `b` must not change `a`.
+    agree("import Core.Console; function main(){ int a = 10; mutable int b = a; b = 99; Console.println(\"{a} {b}\"); }");
+    // Reassignment inside a loop body (accumulator).
+    agree("import Core.Console; function main(){ mutable int sum = 0; for (int n in 1..=3) { sum = sum + n; } Console.println(\"{sum}\"); }");
+}
+
+#[test]
 fn named_fn_ref_as_value_agrees() {
     // named fn defined BEFORE use
     agree("import Core.Console; function dbl(int x)->int{return x*2;} function twice(int x,(int)->int f)->int{return f(f(x));} function main(){ Console.println(\"{twice(2, dbl)}\"); }"); // 8

@@ -524,11 +524,22 @@ fn resolve_stmt(stmt: Stmt, ctx: &ResolveCtx) -> Stmt {
             ty,
             name,
             init,
+            mutable,
             span,
         } => Stmt::VarDecl {
             ty: resolve_type(&ty, ctx),
             name,
             init: resolve_expr(init, ctx),
+            mutable,
+            span,
+        },
+        Stmt::Assign {
+            target,
+            value,
+            span,
+        } => Stmt::Assign {
+            target: resolve_expr(target, ctx),
+            value: resolve_expr(value, ctx),
             span,
         },
         Stmt::Return { value, span } => Stmt::Return {

@@ -931,6 +931,24 @@ impl<'a> Compiler<'a> {
                 self.add_local(name, local_ty);
                 Ok(())
             }
+            Stmt::Assign {
+                target,
+                value,
+                span,
+            } => {
+                // Reassignment reuses `Op::SetLocal` — no new Op (M-mut.1). The checker guarantees
+                // the target is a `mutable` in-scope local, so the slot always resolves.
+                let name = match target {
+                    Expr::Ident(n, _) => n,
+                    _ => unreachable!("checker rejects non-ident assignment targets"),
+                };
+                let slot = self
+                    .resolve_local(name)
+                    .ok_or_else(|| format!("unresolved local in assignment: {name}"))?;
+                self.expr(value)?; // push the new value
+                self.emit(Op::SetLocal(slot), span.line); // set-and-pop into the existing slot
+                Ok(())
+            }
             Stmt::Expr(e, span) => {
                 self.expr(e)?;
                 self.emit(Op::Pop, span.line);

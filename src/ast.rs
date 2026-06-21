@@ -454,6 +454,12 @@ fn collect_free_stmt(
             let mut inner = bound.clone();
             collect_free_block(stmts, &mut inner, found);
         }
+        Stmt::Assign { target, value, .. } => {
+            // Reassignment: the target names an existing binding (a use, not a new binding),
+            // and the value is evaluated against the current scope.
+            collect_free_expr(target, bound, found);
+            collect_free_expr(value, bound, found);
+        }
         Stmt::Expr(e, _) => collect_free_expr(e, bound, found),
     }
 }
@@ -510,11 +516,23 @@ pub struct CtorParam {
 /// Statements — appear inside function/method bodies.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
-    /// `Type name = expr;`
+    /// `Type name = expr;` or `mutable Type name = expr;` (M-mut.1). `mutable` is a *binding*
+    /// modifier (a property of the place, not the type) — immutable by default; only a `mutable`
+    /// binding may be reassigned via `Stmt::Assign`. Erased in PHP output (PHP locals are always
+    /// mutable); checker-only.
     VarDecl {
         ty: Type,
         name: String,
         init: Expr,
+        mutable: bool,
+        span: Span,
+    },
+    /// `<lvalue> = expr;` — reassignment (M-mut.1). `target` is an lvalue expression; this slice
+    /// accepts only `Expr::Ident` (field/index targets land in M-mut.5/6 and extend this same
+    /// statement). The checker enforces the target is `mutable` (`E-ASSIGN-IMMUTABLE`).
+    Assign {
+        target: Expr,
+        value: Expr,
         span: Span,
     },
     /// `return;` or `return expr;`
@@ -722,6 +740,7 @@ mod tests {
             },
             name: "n".into(),
             init: Expr::Int(5, sp()),
+            mutable: false,
             span: sp(),
         };
         match s {
@@ -829,6 +848,7 @@ mod tests {
                 ty: Type::Infer(sp()),
                 name: "y".to_string(),
                 init: ident("x"),
+                mutable: false,
                 span: sp(),
             },
             Stmt::Return {
@@ -837,5 +857,19 @@ mod tests {
             },
         ]);
         assert_eq!(free_vars(&[int_param("x")], &body), Vec::<String>::new());
+    }
+
+    #[test]
+    fn assign_free_vars_includes_target_and_value() {
+        // `x = y;` — both the target binding and the value are free-variable uses.
+        let s = Stmt::Assign {
+            target: ident("x"),
+            value: ident("y"),
+            span: sp(),
+        };
+        let mut found = std::collections::BTreeSet::new();
+        let mut bound = std::collections::HashSet::new();
+        collect_free_stmt(&s, &mut bound, &mut found);
+        assert!(found.contains("x") && found.contains("y"));
     }
 }

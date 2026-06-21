@@ -249,6 +249,28 @@ pub fn explain_text(code: &str) -> Option<String> {
              parameter, field, or return without handling absence first. Unwrap it with `??`\n\
              (default), `?.` (safe access), `if (var x = opt) { … }`, or `opt!` (checked).\n"
         }
+        "E-ASSIGN-IMMUTABLE" => {
+            "E-ASSIGN-IMMUTABLE — a reassignment targeted an immutable binding.\n\n\
+             Bindings are immutable by default. Only a binding declared `mutable` may be reassigned\n\
+             with `x = …;`. Declare it `mutable int x = …;` (or `mutable var x = …;`) — or, if it\n\
+             never changes, keep it immutable and introduce a new binding instead.\n"
+        }
+        "E-ASSIGN-TYPE" => {
+            "E-ASSIGN-TYPE — a reassigned value's type does not match the binding's type.\n\n\
+             Reassignment keeps the binding's declared type; the new value must be assignable to it\n\
+             (the same rule as the original declaration). Convert the value, or change the binding's\n\
+             declared type.\n"
+        }
+        "E-ASSIGN-UNKNOWN" => {
+            "E-ASSIGN-UNKNOWN — a reassignment targeted a name that is not an in-scope local.\n\n\
+             `x = …;` reassigns an existing local variable; the name must already be declared in\n\
+             scope. Declare it first (`mutable int x = …;`), or check for a typo.\n"
+        }
+        "E-ASSIGN-TARGET" => {
+            "E-ASSIGN-TARGET — an assignment target is not a simple variable.\n\n\
+             Only `name = expr;` (reassigning a local) is supported in this slice. Field assignment\n\
+             (`obj.field = …`) and element assignment (`xs[i] = …`) land in a later mutation slice.\n"
+        }
         "E-OPT-USE" => {
             "E-OPT-USE — a plain `.field` / `.method()` was used on an optional `T?` receiver.\n\n\
              The receiver could be `null`, so a plain member access risks a null dereference. Use\n\

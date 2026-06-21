@@ -25,6 +25,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/strings.phg` | string interpolation |
 | `guide/inference.phg` | `var` local type inference + `type` aliases (M3 S0) |
 | `guide/ergonomics.phg` | indexing `xs[i]`, integer ranges `0..n` / `0..=n`, expression `if` (M3 S1) |
+| `guide/mutable.phg` | the `mutable` binding modifier + variable reassignment (`x = e;`) — immutable-by-default, `mutable`/`mutable var` opt-in, reassignment as a loop accumulator, a two-binding scalar-copy case; reassignment reuses `Op::SetLocal` (no new Op), `mutable` erased in PHP output (mutation milestone M-mut.1) |
 | `guide/null-safety.phg` | optionals `T?`, `??`, `?.`, `if (var x = opt)`, `opt!`, `match` over `T?` (M3 S2) |
 | `guide/instanceof.phg` | the `instanceof` runtime type test (`value instanceof ClassName` → `bool`) + smart-cast narrowing inside `if`; transpiles to PHP `instanceof` (Rich Types M-RT S1) |
 | `guide/interfaces.phg` | `interface` + `class … implements …` + `interface … extends …`; nominal subtyping (a class instance flows into an interface-typed slot), polymorphic calls through an interface-typed parameter, and `instanceof` against an interface (with smart-cast narrowing); transpiles to a PHP `interface`/`implements`/`extends` (Rich Types M-RT S2) |

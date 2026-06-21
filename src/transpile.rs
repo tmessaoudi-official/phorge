@@ -638,6 +638,16 @@ impl Transpiler {
                 self.declare(name);
                 self.line(&format!("${name} = {e};"));
             }
+            Stmt::Assign { target, value, .. } => {
+                // Reassignment — same PHP shape as a declaration (`$x = …;`); the binding already
+                // exists, so no `declare`. `mutable`/immutable is erased (PHP locals are mutable).
+                let name = match target {
+                    Expr::Ident(n, _) => n,
+                    _ => unreachable!("checker rejects non-ident assignment targets"),
+                };
+                let e = self.emit_expr(value)?;
+                self.line(&format!("${name} = {e};"));
+            }
             Stmt::Return { value, .. } => match value {
                 Some(e) => {
                     let s = self.emit_expr(e)?;

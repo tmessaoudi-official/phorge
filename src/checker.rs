@@ -53,8 +53,10 @@ pub struct Checker {
     /// computed once via [`crate::ast::class_implements`] and shared verbatim with the backends so
     /// the runtime test can never diverge from the static one (M-RT S2).
     class_implements: std::collections::BTreeMap<String, Vec<String>>,
-    /// lexical block scopes; last is innermost
-    scopes: Vec<HashMap<String, Ty>>,
+    /// lexical block scopes; last is innermost. Each binding carries its type and whether it is
+    /// `mutable` (reassignable) — immutable by default (M-mut.1); only a `mutable` binding may be
+    /// the target of `Stmt::Assign`.
+    scopes: Vec<HashMap<String, (Ty, bool)>>,
     errors: Vec<Diagnostic>,
     /// Non-fatal lints (e.g. `W-FORCE-UNWRAP`). Surfaced to stderr by the CLI but never fail the
     /// build — the first member of Phorge's warning channel (M3 S2.5).
@@ -1094,6 +1096,10 @@ impl Checker {
                     self.check_stmt_casing(st);
                 }
             }
+            Stmt::Assign { target, value, .. } => {
+                self.check_expr_casing(target);
+                self.check_expr_casing(value);
+            }
             Stmt::Expr(e, _) => self.check_expr_casing(e),
         }
     }
@@ -1253,6 +1259,11 @@ impl Checker {
         self.scopes.pop();
     }
     fn declare(&mut self, name: &str, ty: Ty, span: Span) {
+        self.declare_binding(name, ty, false, span);
+    }
+    /// Declare a binding with an explicit mutability (M-mut.1). `declare` is the immutable-default
+    /// shorthand used by params, patterns, and if-let bindings (none of which are reassignable).
+    fn declare_binding(&mut self, name: &str, ty: Ty, mutable: bool, span: Span) {
         // A value binding may not shadow an imported module qualifier: were `console` both a local
         // and `import core.console;`, the run backends (locals-first) would treat `console.x()` as a
         // method call while the transpiler (import-map-driven) would emit the native — a silent
@@ -1283,12 +1294,22 @@ impl Checker {
             );
         }
         if let Some(top) = self.scopes.last_mut() {
-            top.insert(name.to_string(), ty);
+            top.insert(name.to_string(), (ty, mutable));
         }
+    }
+    /// A local binding's `(type, mutable)` — locals only (does not fall through to class fields).
+    /// Used by the reassignment check (M-mut.1): a non-local target is `E-ASSIGN-UNKNOWN`.
+    fn lookup_binding(&self, name: &str) -> Option<(Ty, bool)> {
+        for scope in self.scopes.iter().rev() {
+            if let Some(b) = scope.get(name) {
+                return Some(b.clone());
+            }
+        }
+        None
     }
     fn lookup(&self, name: &str) -> Option<Ty> {
         for scope in self.scopes.iter().rev() {
-            if let Some(t) = scope.get(name) {
+            if let Some((t, _)) = scope.get(name) {
                 return Some(t.clone());
             }
         }
@@ -1319,6 +1340,7 @@ impl Checker {
                 ty,
                 name,
                 init,
+                mutable,
                 span,
             } => {
                 let actual = self.check_expr(init);
@@ -1346,7 +1368,60 @@ impl Checker {
                         declared
                     }
                 };
-                self.declare(name, declared, *span);
+                self.declare_binding(name, declared, *mutable, *span);
+            }
+            Stmt::Assign {
+                target,
+                value,
+                span,
+            } => {
+                // Always check the value (surfaces nested errors regardless of the target's fate).
+                let vty = self.check_expr(value);
+                let name = match target {
+                    crate::ast::Expr::Ident(n, _) => n.clone(),
+                    _ => {
+                        self.err_coded(
+                            *span,
+                            "assignment target must be a simple variable",
+                            "E-ASSIGN-TARGET",
+                            Some(
+                                "only `name = expr;` is supported in this slice; field/index assignment lands in a later slice"
+                                    .into(),
+                            ),
+                        );
+                        return;
+                    }
+                };
+                match self.lookup_binding(&name) {
+                    None => {
+                        self.err_coded(
+                            Self::expr_span(target),
+                            format!("cannot assign to unknown variable `{name}`"),
+                            "E-ASSIGN-UNKNOWN",
+                            None,
+                        );
+                    }
+                    Some((bty, false)) => {
+                        self.err_coded(
+                            Self::expr_span(target),
+                            format!("`{name}` is immutable and cannot be reassigned"),
+                            "E-ASSIGN-IMMUTABLE",
+                            Some(format!(
+                                "declare it `mutable` (e.g. `mutable {bty} {name} = …;`)"
+                            )),
+                        );
+                    }
+                    Some((bty, true)) => {
+                        if !self.ty_assignable(&vty, &bty) {
+                            self.err_coded(
+                                Self::expr_span(value),
+                                format!("cannot assign `{vty}` to `{name}: {bty}`"),
+                                "E-ASSIGN-TYPE",
+                                None,
+                            );
+                        }
+                    }
+                }
             }
             Stmt::Return { value, span } => {
                 let actual = match value {
@@ -1412,7 +1487,17 @@ impl Checker {
                                     .get(type_name)
                                     .map_or(0, |c| c.type_params.len());
                                 let args = vec![Ty::Error; arity];
-                                self.declare(name, Ty::Named(type_name.clone(), args), *span);
+                                // The narrowed shadow inherits the outer binding's mutability, so a
+                                // `mutable` variable stays reassignable inside the narrowed block
+                                // (reassignment is still type-checked against the narrowed type, so
+                                // narrowing stays sound) — M-mut.1 smart-cast interaction.
+                                let m = self.lookup_binding(name).map(|(_, m)| m).unwrap_or(false);
+                                self.declare_binding(
+                                    name,
+                                    Ty::Named(type_name.clone(), args),
+                                    m,
+                                    *span,
+                                );
                                 self.check_block(then_block);
                                 self.pop_scope();
                                 narrowed = true;
@@ -2941,6 +3026,7 @@ fn lambda_uses_this(body: &crate::ast::LambdaBody) -> bool {
                     || else_block.as_ref().is_some_and(|eb| in_stmts(eb))
             }
             Stmt::For { iter, body, .. } => in_expr(iter) || in_stmts(body),
+            Stmt::Assign { target, value, .. } => in_expr(target) || in_expr(value),
             Stmt::Block(stmts, _) => in_stmts(stmts),
             Stmt::Expr(e, _) => in_expr(e),
         })
@@ -3292,11 +3378,22 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                 ty,
                 name,
                 init,
+                mutable,
                 span,
             } => Stmt::VarDecl {
                 ty,
                 name,
                 init: rexpr(init, h),
+                mutable,
+                span,
+            },
+            Stmt::Assign {
+                target,
+                value,
+                span,
+            } => Stmt::Assign {
+                target: rexpr(target, h),
+                value: rexpr(value, h),
                 span,
             },
             Stmt::Return { value, span } => Stmt::Return {
@@ -3592,11 +3689,22 @@ pub fn erase_generics(program: Program) -> Program {
                 ty,
                 name,
                 init,
+                mutable,
                 span,
             } => Stmt::VarDecl {
                 ty: rty(ty, params),
                 name: name.clone(),
                 init: rexpr(init, params),
+                mutable: *mutable,
+                span: *span,
+            },
+            Stmt::Assign {
+                target,
+                value,
+                span,
+            } => Stmt::Assign {
+                target: rexpr(target, params),
+                value: rexpr(value, params),
                 span: *span,
             },
             Stmt::Return { value, span } => Stmt::Return {
@@ -3795,11 +3903,13 @@ pub fn expand_aliases(program: &Program) -> Program {
                 ty,
                 name,
                 init,
+                mutable,
                 span,
             } => Stmt::VarDecl {
                 ty: rt(ty, a, 0),
                 name: name.clone(),
                 init: init.clone(),
+                mutable: *mutable,
                 span: *span,
             },
             Stmt::For {
@@ -3833,7 +3943,8 @@ pub fn expand_aliases(program: &Program) -> Program {
             Stmt::Block(stmts, span) => {
                 Stmt::Block(stmts.iter().map(|s| rstmt(s, a)).collect(), *span)
             }
-            Stmt::Return { .. } | Stmt::Expr(..) => s.clone(),
+            // Assign carries only exprs (no types this pass rewrites) — clone verbatim.
+            Stmt::Return { .. } | Stmt::Expr(..) | Stmt::Assign { .. } => s.clone(),
         }
     }
     fn rfunc(f: &FunctionDecl, a: &Aliases) -> FunctionDecl {
@@ -5518,6 +5629,64 @@ function main() { var dbl = fn(int x) => x + 1000; }"#,
                    class Dog implements Speaker { function speak() -> string { return \"w\"; } } \
                    function main() { Dog d = Dog(); \
                      if (d instanceof Speaker) { d.speak(); } }";
+        assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    }
+
+    // ---- M-mut.1: mutable locals + reassignment ----
+
+    #[test]
+    fn reassign_immutable_is_error() {
+        let bad = errors_of("function main() { int x = 1; x = 2; }");
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-ASSIGN-IMMUTABLE")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn reassign_mutable_is_ok() {
+        assert!(errors_of("function main() { mutable int x = 1; x = 2; }").is_empty());
+    }
+
+    #[test]
+    fn reassign_mutable_var_inferred_is_ok() {
+        assert!(errors_of("function main() { mutable var x = 1; x = 2; }").is_empty());
+    }
+
+    #[test]
+    fn reassign_type_mismatch_is_error() {
+        let bad = errors_of("function main() { mutable int x = 1; x = \"s\"; }");
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-ASSIGN-TYPE")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn reassign_unknown_is_error() {
+        let bad = errors_of("function main() { y = 2; }");
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-ASSIGN-UNKNOWN")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn reassign_field_target_is_unsupported() {
+        let bad = errors_of("function main() { mutable int x = 1; x.f = 2; }");
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-ASSIGN-TARGET")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn mutable_var_stays_reassignable_in_narrowed_block() {
+        // smart-cast interaction (M-mut.1): the narrowed `instanceof` shadow inherits the outer
+        // binding's mutability, so a `mutable` var is still reassignable inside the narrowed block.
+        let src = "class Dog { constructor() {} } \
+                   function main() { mutable Dog d = Dog(); \
+                     if (d instanceof Dog) { d = Dog(); } }";
         assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
     }
 }

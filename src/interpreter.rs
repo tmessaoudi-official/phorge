@@ -77,6 +77,18 @@ impl CallScopes {
     fn lookup(&self, name: &str) -> Option<&Value> {
         self.scopes.iter().rev().find_map(|s| s.get(name))
     }
+    /// Overwrite an existing binding in the innermost scope that declares it (M-mut.1
+    /// reassignment). Returns `false` if no scope holds `name` (defensive — the checker guarantees
+    /// the binding exists and is `mutable`). Does NOT create a new binding.
+    fn assign(&mut self, name: &str, v: Value) -> bool {
+        for s in self.scopes.iter_mut().rev() {
+            if let Some(slot) = s.get_mut(name) {
+                *slot = v;
+                return true;
+            }
+        }
+        false
+    }
 }
 
 pub struct Interp {
@@ -253,6 +265,18 @@ impl Interp {
                 let v = self.eval(init)?;
                 self.frame.declare(name, v);
                 Ok(())
+            }
+            Stmt::Assign { target, value, .. } => {
+                let v = self.eval(value)?;
+                let name = match target {
+                    Expr::Ident(n, _) => n,
+                    _ => unreachable!("checker rejects non-ident assignment targets"),
+                };
+                if self.frame.assign(name, v) {
+                    Ok(())
+                } else {
+                    rt(format!("undefined variable `{name}`"))
+                }
             }
             Stmt::Return { value, .. } => {
                 let v = match value {

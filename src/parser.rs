@@ -739,13 +739,15 @@ impl Parser {
                 let body = self.parse_block()?;
                 Ok(Stmt::Block(body, sp))
             }
-            TokenKind::Var => self.parse_var_inferred(),
+            TokenKind::Var => self.parse_var_inferred(false),
+            TokenKind::Mutable => self.parse_mutable_var_decl(),
             _ => self.parse_var_decl_or_expr_stmt(),
         }
     }
 
-    /// `var name = expr;` — the binding type is inferred from `expr` by the checker.
-    fn parse_var_inferred(&mut self) -> Result<Stmt, Diagnostic> {
+    /// `var name = expr;` — the binding type is inferred from `expr` by the checker. `mutable` is
+    /// `true` when this was reached via `mutable var name = …` (M-mut.1).
+    fn parse_var_inferred(&mut self, mutable: bool) -> Result<Stmt, Diagnostic> {
         let sp = self.peek_span();
         self.expect(&TokenKind::Var, "'var'")?;
         let name = self.expect_ident("a variable name after 'var'")?;
@@ -756,6 +758,29 @@ impl Parser {
             ty: Type::Infer(sp),
             name,
             init,
+            mutable,
+            span: sp,
+        })
+    }
+
+    /// `mutable var name = expr;` or `mutable Type name = expr;` (M-mut.1). `mutable` only ever
+    /// precedes a binding declaration, so the typed form is committed (no speculative rewind).
+    fn parse_mutable_var_decl(&mut self) -> Result<Stmt, Diagnostic> {
+        let sp = self.peek_span();
+        self.expect(&TokenKind::Mutable, "'mutable'")?;
+        if self.check(&TokenKind::Var) {
+            return self.parse_var_inferred(true);
+        }
+        let ty = self.parse_type()?;
+        let name = self.expect_ident("a variable name after 'mutable <type>'")?;
+        self.expect(&TokenKind::Eq, "'=' after 'mutable <type> <name>'")?;
+        let init = self.parse_expr()?;
+        self.expect(&TokenKind::Semicolon, "';' after variable declaration")?;
+        Ok(Stmt::VarDecl {
+            ty,
+            name,
+            init,
+            mutable: true,
             span: sp,
         })
     }
@@ -853,10 +878,22 @@ impl Parser {
                 ty,
                 name,
                 init,
+                mutable: false,
                 span: sp,
             });
         }
         let expr = self.parse_expr()?;
+        // Reassignment: `<lvalue> = expr;` (M-mut.1). The header try above already failed (the LHS
+        // is not a `Type name =` declaration), so a `=` here is assignment, not a var-decl.
+        if self.eat(&TokenKind::Eq) {
+            let value = self.parse_expr()?;
+            self.expect(&TokenKind::Semicolon, "';' after assignment")?;
+            return Ok(Stmt::Assign {
+                target: expr,
+                value,
+                span: sp,
+            });
+        }
         self.expect(&TokenKind::Semicolon, "';' after expression statement")?;
         Ok(Stmt::Expr(expr, sp))
     }
@@ -1807,6 +1844,46 @@ mod tests {
         // generic-typed var-decl must not be mistaken for comparison
         match stmt("List<Shape> shapes = items;") {
             Stmt::VarDecl { name, .. } => assert_eq!(name, "shapes"),
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_mutable_typed_var_decl() {
+        match stmt("mutable int x = 1;") {
+            Stmt::VarDecl { name, mutable, .. } => {
+                assert!(mutable);
+                assert_eq!(name, "x");
+            }
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_mutable_inferred_var_decl() {
+        match stmt("mutable var x = 1;") {
+            Stmt::VarDecl { name, mutable, .. } => {
+                assert!(mutable);
+                assert_eq!(name, "x");
+            }
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn plain_var_decl_is_not_mutable() {
+        match stmt("int x = 1;") {
+            Stmt::VarDecl { mutable, .. } => assert!(!mutable),
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_reassignment() {
+        match stmt("x = 2;") {
+            Stmt::Assign { target, .. } => {
+                assert!(matches!(target, Expr::Ident(ref n, _) if n == "x"));
+            }
             other => panic!("got {other:?}"),
         }
     }
