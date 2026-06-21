@@ -85,9 +85,18 @@ impl Diagnostic {
         }
     }
 
-    /// Attach a runtime call stack (error-handling slice 1).
+    /// Attach a runtime call stack (error-handling slice 1). When this diagnostic has no position of
+    /// its own (`line == 0` — the tree-walking interpreter tracks none), backfill it from the
+    /// innermost frame so the header line matches the VM's (which sets a line via `Chunk.lines`) —
+    /// keeping `run`-traces byte-identical to `runvm`-traces.
     #[must_use]
     pub fn with_frames(mut self, frames: Vec<Frame>) -> Self {
+        if self.line == 0 {
+            if let Some(top) = frames.first() {
+                self.line = top.line;
+                self.col = top.col;
+            }
+        }
         self.frames = frames;
         self
     }

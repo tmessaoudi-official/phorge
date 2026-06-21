@@ -1301,13 +1301,14 @@ function main() { Console.println("{1 / 0}"); }"#))
     }
 
     #[test]
-    fn run_runtime_error_has_no_line() {
-        // The tree-walking interpreter tracks no source position, so its runtime errors keep
-        // the position-less `runtime error: …` form (deliberate asymmetry — documented).
+    fn run_runtime_error_carries_line_via_trace() {
+        // Error-handling slice 1 removed the old interpreter/VM asymmetry: the tree-walker now keeps a
+        // logical call stack, so a runtime fault backfills the diagnostic line from the innermost
+        // frame — the interpreter reports `runtime error at <line>: …`, matching the VM.
         let src = wp("import Core.Console; function main() {\n    int z = 0;\n    int x = 1 / z;\n    Console.println(\"{x}\");\n}");
         let err = cmd_run(&src).unwrap_err();
-        assert!(err.starts_with("runtime error: "), "{err}");
-        assert!(!err.contains(" at "), "{err}");
+        assert!(err.contains("division by zero"), "{err}");
+        assert!(err.starts_with("runtime error at 3:"), "{err}");
     }
 
     #[test]

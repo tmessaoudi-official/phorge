@@ -761,6 +761,28 @@ mod tests {
         assert_eq!(err.frames[1].function, "main");
     }
 
+    #[test]
+    fn run_and_runvm_traces_match() {
+        // The slice-1 invariant: a fault yields byte-identical trace text on both backends.
+        for src in [
+            "package main;\n\
+             function g() -> int { var xs = [1]; return xs[9]; }\n\
+             function main() { var r = g(); }",
+            "package main;\nfunction main() { var x = 1 / 0; }",
+        ] {
+            let unit = crate::loader::load_loose_src(src).unwrap();
+            let checked = crate::cli::check_and_expand(&unit.program, &unit.diag_src).unwrap();
+            let interp_err = crate::interpreter::interpret(&checked).unwrap_err();
+            let program = crate::compiler::compile(&checked).unwrap();
+            let vm_err = Vm::new(&program).run().unwrap_err();
+            assert_eq!(
+                interp_err.render(""),
+                vm_err.render(""),
+                "run vs runvm trace text diverged for:\n{src}"
+            );
+        }
+    }
+
     /// Emit the standard function terminator: push `Unit`, then `Return` (P3-7).
     fn term(c: &mut Chunk) {
         let u = c.add_const(Value::Unit);
