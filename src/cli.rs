@@ -292,6 +292,18 @@ pub fn explain_text(code: &str) -> Option<String> {
              A hook is virtual (it has no storage), so its name must be distinct from every field,\n\
              static, method, and other hook in the class. Rename the hook or the colliding member.\n"
         }
+        "E-VIS-PRIVATE" => {
+            "E-VIS-PRIVATE — a `private` declaration was referenced from another file.\n\n\
+             A declaration marked `private` (visibility modifiers) is visible only within its own\n\
+             `.phg` file. Referencing it from any other file — even one in the same package — fails.\n\
+             Mark it `internal` (visible package-wide) or `public` (visible everywhere) to widen it.\n"
+        }
+        "E-VIS-INTERNAL" => {
+            "E-VIS-INTERNAL — an `internal` declaration was referenced from another package.\n\n\
+             A declaration marked `internal` is visible only within its own package (all its files),\n\
+             not from other packages. A cross-package reference (an `import type`, or a qualified\n\
+             `pkg.fn()` call) fails. Mark it `public` to export it across packages.\n"
+        }
         "E-OPT-USE" => {
             "E-OPT-USE — a plain `.field` / `.method()` was used on an optional `T?` receiver.\n\n\
              The receiver could be `null`, so a plain member access risks a null dereference. Use\n\
@@ -464,7 +476,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-VIS-PRIVATE, E-VIS-INTERNAL)"
         )
     })
 }
@@ -1368,6 +1380,15 @@ function main() { Console.println("hi"); }"#);
         assert!(np.contains("package main"), "{np}");
         let rp = explain_text("E-RESERVED-PACKAGE").expect("E-RESERVED-PACKAGE has an explanation");
         assert!(rp.contains("standard library"), "{rp}");
+    }
+
+    #[test]
+    fn explain_covers_visibility_codes() {
+        // The declaration-visibility diagnostics are self-documenting via `phg explain`.
+        let p = explain_text("E-VIS-PRIVATE").expect("E-VIS-PRIVATE has an explanation");
+        assert!(p.contains("`private`") && p.contains(".phg"), "{p}");
+        let i = explain_text("E-VIS-INTERNAL").expect("E-VIS-INTERNAL has an explanation");
+        assert!(i.contains("`internal`") && i.contains("package"), "{i}");
     }
 
     #[test]

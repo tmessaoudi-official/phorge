@@ -1372,4 +1372,23 @@ mod tests {
         );
         assert!(load(&entry).is_ok());
     }
+
+    #[test]
+    fn type_alias_does_not_launder_private_type() {
+        // A type alias names a type but the *construction* still names the real type directly, so the
+        // file-scoped `private` check on `Helper()` fires regardless of the alias (aliases are
+        // file-local + erased, so they cannot re-export across files).
+        let tmp = TempDir::new();
+        tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+        let entry = tmp.write(
+            "src/main.phg",
+            "package main;\ntype H = Helper;\nfunction main() { H h = Helper(); }",
+        );
+        tmp.write(
+            "src/helper.phg",
+            "package main;\nprivate class Helper { constructor() {} }",
+        );
+        let err = load(&entry).unwrap_err();
+        assert!(err.contains("E-VIS-PRIVATE"), "got: {err}");
+    }
 }
