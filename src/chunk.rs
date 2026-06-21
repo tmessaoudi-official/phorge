@@ -110,6 +110,12 @@ pub enum Op {
     /// uses a bounds-checked int index ("list index out of range" on OOB); a `Map` does a key lookup
     /// via `value::map_index` ("map key not found" when absent).
     Index,
+    /// Pop a value, an index, and a container; copy-on-write set `container[index] = value` and push
+    /// the (possibly new) container (M-mut.5). **Polymorphic**: a `List` does a bounds-checked int
+    /// set (`value::list_set`); a `Map` updates-or-appends by key (`value::map_set`). Value types are
+    /// acyclic, so `Rc::make_mut` reclaims fully — no GC. The caller writes the pushed container back
+    /// to its place (e.g. `SetLocal`).
+    SetIndex,
     /// Pop a list; push its length as an `Int`.
     Len,
     /// Pop two ints (`end` on top, then `start`) and push a `List<int>` materialization of the
@@ -382,6 +388,7 @@ impl BytecodeProgram {
                     | Op::MakeList(_)
                     | Op::MakeMap(_)
                     | Op::Index
+                    | Op::SetIndex
                     | Op::Len
                     | Op::MakeRange(_)
                     | Op::Return

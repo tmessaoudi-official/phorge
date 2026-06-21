@@ -279,18 +279,53 @@ impl Interp {
                 self.frame.declare(name, v);
                 Ok(())
             }
-            Stmt::Assign { target, value, .. } => {
-                let v = self.eval(value)?;
-                let name = match target {
-                    Expr::Ident(n, _) => n,
-                    _ => unreachable!("checker rejects non-ident assignment targets"),
-                };
-                if self.frame.assign(name, v) {
-                    Ok(())
-                } else {
-                    rt(format!("undefined variable `{name}`"))
+            Stmt::Assign { target, value, .. } => match target {
+                Expr::Ident(name, _) => {
+                    let v = self.eval(value)?;
+                    if self.frame.assign(name, v) {
+                        Ok(())
+                    } else {
+                        rt(format!("undefined variable `{name}`"))
+                    }
                 }
-            }
+                // Value-type element set `xs[i] = e` / `m[k] = e` (M-mut.5). Copy-on-write: clone the
+                // container's `Rc` only if another binding shares it (`Rc::make_mut`), mutate, write
+                // back to the local. Eval order matches the VM: index, then value.
+                Expr::Index { object, index, .. } => {
+                    let name = match &**object {
+                        Expr::Ident(n, _) => n,
+                        _ => unreachable!("checker restricts index-assign to a local container"),
+                    };
+                    let idx_val = self.eval(index)?;
+                    let new_val = self.eval(value)?;
+                    let mut container = self.frame.lookup(name).cloned().ok_or_else(|| {
+                        Signal::Runtime(Diagnostic::runtime(format!("undefined variable `{name}`")))
+                    })?;
+                    match &mut container {
+                        Value::List(xs) => {
+                            let idx = match idx_val {
+                                Value::Int(n) => n,
+                                v => {
+                                    return rt(format!(
+                                        "expected int index, found {}",
+                                        v.type_name()
+                                    ))
+                                }
+                            };
+                            crate::value::list_set(Rc::make_mut(xs).as_mut_slice(), idx, new_val)
+                                .map_err(|m| Signal::Runtime(Diagnostic::runtime(m)))?;
+                        }
+                        Value::Map(m) => {
+                            crate::value::map_set(Rc::make_mut(m), &idx_val, new_val)
+                                .map_err(|e| Signal::Runtime(Diagnostic::runtime(e)))?;
+                        }
+                        v => return rt(format!("cannot index-assign {}", v.type_name())),
+                    }
+                    self.frame.assign(name, container);
+                    Ok(())
+                }
+                _ => unreachable!("checker rejects other assignment targets"),
+            },
             Stmt::Return { value, .. } => {
                 let v = match value {
                     Some(e) => self.eval(e)?,

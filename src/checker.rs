@@ -1412,51 +1412,25 @@ impl Checker {
                 value,
                 span,
             } => {
+                use crate::ast::Expr;
                 // Always check the value (surfaces nested errors regardless of the target's fate).
                 let vty = self.check_expr(value);
-                let name = match target {
-                    crate::ast::Expr::Ident(n, _) => n.clone(),
+                match target {
+                    Expr::Ident(name, _) => self.check_local_reassign(name, &vty, target, value),
+                    // Value-type element set `xs[i] = e` / `m[k] = e` (M-mut.5).
+                    Expr::Index { object, index, .. } => {
+                        self.check_index_assign(object, index, &vty, value, *span)
+                    }
                     _ => {
                         self.err_coded(
                             *span,
-                            "assignment target must be a simple variable",
+                            "assignment target must be a variable or an indexed element",
                             "E-ASSIGN-TARGET",
                             Some(
-                                "only `name = expr;` is supported in this slice; field/index assignment lands in a later slice"
+                                "only `name = e;` and `container[i] = e;` are supported; field assignment lands in a later slice"
                                     .into(),
                             ),
                         );
-                        return;
-                    }
-                };
-                match self.lookup_binding(&name) {
-                    None => {
-                        self.err_coded(
-                            Self::expr_span(target),
-                            format!("cannot assign to unknown variable `{name}`"),
-                            "E-ASSIGN-UNKNOWN",
-                            None,
-                        );
-                    }
-                    Some((bty, false)) => {
-                        self.err_coded(
-                            Self::expr_span(target),
-                            format!("`{name}` is immutable and cannot be reassigned"),
-                            "E-ASSIGN-IMMUTABLE",
-                            Some(format!(
-                                "declare it `mutable` (e.g. `mutable {bty} {name} = …;`)"
-                            )),
-                        );
-                    }
-                    Some((bty, true)) => {
-                        if !self.ty_assignable(&vty, &bty) {
-                            self.err_coded(
-                                Self::expr_span(value),
-                                format!("cannot assign `{vty}` to `{name}: {bty}`"),
-                                "E-ASSIGN-TYPE",
-                                None,
-                            );
-                        }
                     }
                 }
             }
@@ -2736,6 +2710,133 @@ impl Checker {
             None => HashMap::new(),
         }
     }
+    /// `name = value` local reassignment (M-mut.1): the binding must exist and be `mutable`, and the
+    /// value assignable to its type.
+    fn check_local_reassign(
+        &mut self,
+        name: &str,
+        vty: &Ty,
+        target: &crate::ast::Expr,
+        value: &crate::ast::Expr,
+    ) {
+        match self.lookup_binding(name) {
+            None => {
+                self.err_coded(
+                    Self::expr_span(target),
+                    format!("cannot assign to unknown variable `{name}`"),
+                    "E-ASSIGN-UNKNOWN",
+                    None,
+                );
+            }
+            Some((bty, false)) => {
+                self.err_coded(
+                    Self::expr_span(target),
+                    format!("`{name}` is immutable and cannot be reassigned"),
+                    "E-ASSIGN-IMMUTABLE",
+                    Some(format!(
+                        "declare it `mutable` (e.g. `mutable {bty} {name} = …;`)"
+                    )),
+                );
+            }
+            Some((bty, true)) => {
+                if !self.ty_assignable(vty, &bty) {
+                    self.err_coded(
+                        Self::expr_span(value),
+                        format!("cannot assign `{vty}` to `{name}: {bty}`"),
+                        "E-ASSIGN-TYPE",
+                        None,
+                    );
+                }
+            }
+        }
+    }
+
+    /// `container[index] = value` value-type element set (M-mut.5). The container must be a `mutable`
+    /// local `List<T>` or `Map<K, V>` (nested places `a[i][j]`/`this.f[i]` are a later slice →
+    /// `E-ASSIGN-TARGET`). For a list the index must be `int` and the value a `T`; for a map the
+    /// index must be the key type `K` and the value a `V`.
+    fn check_index_assign(
+        &mut self,
+        object: &crate::ast::Expr,
+        index: &crate::ast::Expr,
+        vty: &Ty,
+        value: &crate::ast::Expr,
+        span: Span,
+    ) {
+        let ity = self.check_expr(index);
+        let name = match object {
+            crate::ast::Expr::Ident(n, _) => n.clone(),
+            _ => {
+                self.err_coded(
+                    Self::expr_span(object),
+                    "the container of an element assignment must be a simple variable",
+                    "E-ASSIGN-TARGET",
+                    Some("nested element/field assignment (`a[i][j]`, `this.f[i]`) lands in a later slice".into()),
+                );
+                return;
+            }
+        };
+        let (cty, mutable) = match self.lookup_binding(&name) {
+            Some(b) => b,
+            None => {
+                self.err_coded(
+                    Self::expr_span(object),
+                    format!("cannot assign into unknown variable `{name}`"),
+                    "E-ASSIGN-UNKNOWN",
+                    None,
+                );
+                return;
+            }
+        };
+        if !mutable {
+            self.err_coded(
+                Self::expr_span(object),
+                format!("`{name}` is immutable; its elements cannot be set"),
+                "E-ASSIGN-IMMUTABLE",
+                Some(format!(
+                    "declare it `mutable` (e.g. `mutable {cty} {name} = …;`)"
+                )),
+            );
+            return;
+        }
+        match cty {
+            Ty::List(elem) => {
+                if !self.ty_assignable(&ity, &Ty::Int) {
+                    self.err(span, format!("list index must be `int`, found `{ity}`"));
+                }
+                if !self.ty_assignable(vty, &elem) {
+                    self.err_coded(
+                        Self::expr_span(value),
+                        format!("cannot set a `{vty}` element into `{name}: List<{elem}>`"),
+                        "E-ASSIGN-TYPE",
+                        None,
+                    );
+                }
+            }
+            Ty::Map(k, v) => {
+                if !self.ty_assignable(&ity, &k) {
+                    self.err(span, format!("map key must be `{k}`, found `{ity}`"));
+                }
+                if !self.ty_assignable(vty, &v) {
+                    self.err_coded(
+                        Self::expr_span(value),
+                        format!("cannot set a `{vty}` value into `{name}: Map<{k}, {v}>`"),
+                        "E-ASSIGN-TYPE",
+                        None,
+                    );
+                }
+            }
+            other => {
+                self.err_coded(
+                    Self::expr_span(object),
+                    format!("`{name}: {other}` is not indexable for assignment"),
+                    "E-ASSIGN-TARGET",
+                    Some("only `List<T>` and `Map<K, V>` support `container[i] = e`".into()),
+                );
+            }
+        }
+    }
+
     /// `obj with { f = e, … }` (M-mut.4a): `obj` must be a concrete class; each overridden name must
     /// be one of its fields and each value assignable to that field's type. The result type is the
     /// class itself (a fresh instance). Codes `E-WITH-NONCLASS`/`E-WITH-FIELD`/`E-WITH-TYPE`.
@@ -6153,6 +6254,47 @@ function main() { var dbl = fn(int x) => x + 1000; }"#,
         assert!(
             bad.iter().any(|e| e.code == Some("E-WITH-NONCLASS")),
             "{bad:?}"
+        );
+    }
+
+    // ---- M-mut.5: value-type element set ----
+
+    #[test]
+    fn list_element_set_is_ok() {
+        assert!(
+            errors_of("function main() { mutable List<int> xs = [1, 2]; xs[0] = 9; }").is_empty()
+        );
+    }
+
+    #[test]
+    fn map_element_set_is_ok() {
+        let src = "function main() { mutable Map<string, int> m = [\"a\" => 1]; m[\"b\"] = 2; }";
+        assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    }
+
+    #[test]
+    fn element_set_on_immutable_is_error() {
+        let bad = errors_of("function main() { List<int> xs = [1, 2]; xs[0] = 9; }");
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-ASSIGN-IMMUTABLE")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn element_set_wrong_value_type_is_error() {
+        let bad = errors_of("function main() { mutable List<int> xs = [1]; xs[0] = \"s\"; }");
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-ASSIGN-TYPE")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn element_compound_set_is_ok() {
+        // `xs[0] += 5` rides the M-mut.2 desugar (`xs[0] = xs[0] + 5`) on an index target.
+        assert!(
+            errors_of("function main() { mutable List<int> xs = [1, 2]; xs[0] += 5; }").is_empty()
         );
     }
 

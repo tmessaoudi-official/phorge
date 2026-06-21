@@ -1013,6 +1013,31 @@ fn mutation_compound_assign_agrees() {
 }
 
 #[test]
+fn mutation_element_set_agrees() {
+    // M-mut.5: value-type element set xs[i]=e / m[k]=e — byte-identical on both backends.
+    // List element set.
+    agree("import Core.Console; function main(){ mutable List<int> xs = [1, 2, 3]; xs[1] = 20; Console.println(\"{xs[0]} {xs[1]} {xs[2]}\"); }"); // 1 20 3
+                                                                                                                                                  // Compound element set rides the M-mut.2 desugar.
+    agree("import Core.Console; function main(){ mutable List<int> xs = [1, 2, 3]; xs[0] += 100; xs[2] *= 5; Console.println(\"{xs[0]} {xs[2]}\"); }"); // 101 15
+                                                                                                                                                        // COPY-ON-WRITE value semantics (the P0 catcher, F13): mutating `ys` must not touch `xs`.
+    agree("import Core.Console; function main(){ mutable List<int> xs = [1, 2]; mutable List<int> ys = xs; ys[0] = 999; Console.println(\"{xs[0]} {ys[0]}\"); }"); // 1 999
+                                                                                                                                                                   // Map update (existing key) + insert (new key), insertion-ordered.
+    agree("import Core.Console; function main(){ mutable Map<string, int> m = [\"a\" => 1]; m[\"a\"] = 10; m[\"b\"] = 20; Console.println(\"{m[\"a\"]} {m[\"b\"]}\"); }"); // 10 20
+                                                                                                                                                                           // Map COW: a copy is independent.
+    agree("import Core.Console; function main(){ mutable Map<string, int> m = [\"a\" => 1]; mutable Map<string, int> n = m; n[\"a\"] = 99; Console.println(\"{m[\"a\"]} {n[\"a\"]}\"); }"); // 1 99
+                                                                                                                                                                                            // Set element in a loop (accumulate into a list).
+    agree("import Core.Console; function main(){ mutable List<int> xs = [0, 0, 0]; for (mutable int i = 0; i < 3; i++) { xs[i] = i * i; } Console.println(\"{xs[0]} {xs[1]} {xs[2]}\"); }");
+    // 0 1 4
+}
+
+#[test]
+fn mutation_element_set_oob_faults_agree() {
+    // M-mut.5: an out-of-range list element SET faults identically on both Rust backends
+    // (FaultKind::IndexOob). NOT PHP-gated — PHP would *extend* the array instead (KNOWN_ISSUES).
+    agree_err("import Core.Console; function main(){ mutable List<int> xs = [1, 2]; xs[5] = 9; Console.println(\"unreached\"); }");
+}
+
+#[test]
 fn mutation_clone_with_agrees() {
     // M-mut.4a: `obj with { f = e }` — fresh instance, source unchanged, byte-identical on both.
     agree("import Core.Console; class P { constructor(public int x, public int y) {} } function main(){ P p = P(1, 2); P q = p with { x = 9 }; Console.println(\"{p.x} {p.y} {q.x} {q.y}\"); }"); // 1 2 9 2

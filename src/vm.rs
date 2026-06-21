@@ -263,6 +263,30 @@ impl<'a> Vm<'a> {
                     v => return Err(format!("cannot index {}", v.type_name())),
                 }
             }
+            Op::SetIndex => {
+                // COW element set (M-mut.5): pop value, index, container; mutate a uniquely-owned
+                // copy via `Rc::make_mut` (clones only if another binding shares it — value
+                // semantics), push the resulting container for the caller to store back.
+                let v = self.pop();
+                let index = self.pop();
+                match self.pop() {
+                    Value::List(mut xs) => {
+                        let idx = match index {
+                            Value::Int(n) => n,
+                            x => {
+                                return Err(format!("expected int index, found {}", x.type_name()))
+                            }
+                        };
+                        crate::value::list_set(Rc::make_mut(&mut xs).as_mut_slice(), idx, v)?;
+                        self.stack.push(Value::List(xs));
+                    }
+                    Value::Map(mut m) => {
+                        crate::value::map_set(Rc::make_mut(&mut m), &index, v)?;
+                        self.stack.push(Value::Map(m));
+                    }
+                    v => return Err(format!("cannot index-assign {}", v.type_name())),
+                }
+            }
             Op::Len => match self.pop() {
                 Value::List(xs) => self.stack.push(Value::Int(xs.len() as i64)),
                 v => return Err(format!("cannot take length of {}", v.type_name())),

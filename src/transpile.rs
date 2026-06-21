@@ -639,14 +639,17 @@ impl Transpiler {
                 self.line(&format!("${name} = {e};"));
             }
             Stmt::Assign { target, value, .. } => {
-                // Reassignment — same PHP shape as a declaration (`$x = …;`); the binding already
-                // exists, so no `declare`. `mutable`/immutable is erased (PHP locals are mutable).
-                let name = match target {
-                    Expr::Ident(n, _) => n,
-                    _ => unreachable!("checker rejects non-ident assignment targets"),
+                // Reassignment (`$x = …;`) and value-type element set (`$xs[$i] = …;`, M-mut.5) share
+                // one shape: the lhs is the target rendered as an expression. PHP arrays are COW value
+                // types, so `$xs[$i] = $e` has the same value semantics as Phorge's `Op::SetIndex`.
+                // `mutable`/immutable is erased (PHP locals are always mutable).
+                let lhs = match target {
+                    Expr::Ident(n, _) => format!("${n}"),
+                    Expr::Index { .. } => self.emit_expr(target)?,
+                    _ => unreachable!("checker rejects other assignment targets"),
                 };
                 let e = self.emit_expr(value)?;
-                self.line(&format!("${name} = {e};"));
+                self.line(&format!("{lhs} = {e};"));
             }
             Stmt::Return { value, .. } => match value {
                 Some(e) => {

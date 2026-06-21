@@ -686,6 +686,8 @@ impl<'a> Compiler<'a> {
             Op::AddF | Op::SubF | Op::MulF | Op::DivF | Op::RemF => -1,
             Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge => -1,
             Op::Pop | Op::SetLocal(_) | Op::JumpIfFalse(_) | Op::Index | Op::MakeRange(_) => -1,
+            // SetIndex pops (container, index, value) and pushes the new container: net -2.
+            Op::SetIndex => -2,
             Op::Neg | Op::Not | Op::Len | Op::Jump(_) => 0,
             Op::MatchTag(_) | Op::GetEnumField(_) => 0, // pop one, push one
             Op::Concat(n) | Op::MakeList(n) => 1 - *n as isize,
@@ -956,20 +958,38 @@ impl<'a> Compiler<'a> {
                 target,
                 value,
                 span,
-            } => {
-                // Reassignment reuses `Op::SetLocal` — no new Op (M-mut.1). The checker guarantees
-                // the target is a `mutable` in-scope local, so the slot always resolves.
-                let name = match target {
-                    Expr::Ident(n, _) => n,
-                    _ => unreachable!("checker rejects non-ident assignment targets"),
-                };
-                let slot = self
-                    .resolve_local(name)
-                    .ok_or_else(|| format!("unresolved local in assignment: {name}"))?;
-                self.expr(value)?; // push the new value
-                self.emit(Op::SetLocal(slot), span.line); // set-and-pop into the existing slot
-                Ok(())
-            }
+            } => match target {
+                // Local reassignment reuses `Op::SetLocal` — no new Op (M-mut.1). The checker
+                // guarantees the target is a `mutable` in-scope local, so the slot always resolves.
+                Expr::Ident(name, _) => {
+                    let slot = self
+                        .resolve_local(name)
+                        .ok_or_else(|| format!("unresolved local in assignment: {name}"))?;
+                    self.expr(value)?; // push the new value
+                    self.emit(Op::SetLocal(slot), span.line); // set-and-pop into the existing slot
+                    Ok(())
+                }
+                // Value-type element set `xs[i] = e` / `m[k] = e` (M-mut.5). The container is a
+                // mutable local (checker-enforced); load it, push index + value, `SetIndex` (COW),
+                // then store the resulting container back. Nested places (`a[i][j]`, `this.f[i]`)
+                // are a later slice — the checker rejects a non-Ident container as `E-ASSIGN-TARGET`.
+                Expr::Index { object, index, .. } => {
+                    let name = match &**object {
+                        Expr::Ident(n, _) => n,
+                        _ => unreachable!("checker restricts index-assign to a local container"),
+                    };
+                    let slot = self
+                        .resolve_local(name)
+                        .ok_or_else(|| format!("unresolved local in index-assignment: {name}"))?;
+                    self.emit(Op::GetLocal(slot), span.line); // [container]
+                    self.expr(index)?; // [container, index]
+                    self.expr(value)?; // [container, index, value]
+                    self.emit(Op::SetIndex, span.line); // [newcontainer]
+                    self.emit(Op::SetLocal(slot), span.line); // write back
+                    Ok(())
+                }
+                _ => unreachable!("checker rejects other assignment targets"),
+            },
             Stmt::Expr(e, span) => {
                 self.expr(e)?;
                 self.emit(Op::Pop, span.line);

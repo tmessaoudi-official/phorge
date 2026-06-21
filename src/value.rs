@@ -163,6 +163,32 @@ pub fn map_index(map: &[(HKey, Value)], index: &Value) -> Result<Value, String> 
         .ok_or_else(|| "map key not found".to_string())
 }
 
+/// Set `list[idx] = v` in place with bounds-checking (M-mut.5). The caller owns the copy-on-write
+/// (`Rc::make_mut` before calling), so this mutates a uniquely-owned `Vec`. An out-of-range index
+/// faults identically to a read (`"list index out of range"`, `FaultKind::IndexOob`) — note this
+/// diverges from PHP, which would *extend* the array; examples only set in-bounds (KNOWN_ISSUES).
+pub fn list_set(list: &mut [Value], idx: i64, v: Value) -> Result<(), String> {
+    let i = usize::try_from(idx)
+        .ok()
+        .filter(|i| *i < list.len())
+        .ok_or_else(|| "list index out of range".to_string())?;
+    list[i] = v;
+    Ok(())
+}
+
+/// Set `map[key] = v` (M-mut.5): update in place if `key` is present, else append — insertion-ordered
+/// like PHP `$m[$k] = $v`, preserving the `Rc<Vec<(HKey, Value)>>` order invariant (R1). The caller
+/// owns the COW. A non-`HKey` key is checker-unreachable (EV-7).
+pub fn map_set(map: &mut Vec<(HKey, Value)>, key: &Value, v: Value) -> Result<(), String> {
+    let k = HKey::from_value(key).ok_or_else(|| format!("invalid map key: {}", key.type_name()))?;
+    if let Some(slot) = map.iter_mut().find(|(ek, _)| *ek == k) {
+        slot.1 = v;
+    } else {
+        map.push((k, v));
+    }
+    Ok(())
+}
+
 impl Value {
     /// Short name for diagnostics. Composite types fold to a constant so the
     /// return can stay `&'static str`.
