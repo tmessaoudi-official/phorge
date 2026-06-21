@@ -364,6 +364,18 @@ impl Transpiler {
         self.locals.iter().any(|s| s.contains(name))
     }
 
+    /// Render a `ClassName.field` static access as the PHP `ClassName::$field` lvalue (M-mut.7), or
+    /// `None` if `object` is not a class name (then it is an instance member). Mirrors the backends'
+    /// locals-first rule: a local binding shadowing a class name is an instance access.
+    fn static_ref(&self, object: &Expr, name: &str) -> Option<String> {
+        if let Expr::Ident(cls, _) = object {
+            if !self.is_local(cls) && self.classes.contains(cls) {
+                return Some(format!("{cls}::${name}"));
+            }
+        }
+        None
+    }
+
     fn emit_type(ty: &Type) -> String {
         match ty {
             Type::Named { name, .. } => match name.as_str() {
@@ -525,6 +537,7 @@ impl Transpiler {
                     modifiers,
                     ty,
                     name,
+                    init,
                     ..
                 } => {
                     // A field that is ALSO a promoted ctor param is declared by the
@@ -538,7 +551,20 @@ impl Transpiler {
                     // `mutable int x;`) emits as `public` — the spine-safe choice (M-mut.6).
                     let v = vis(modifiers);
                     let v = if v.is_empty() { "public" } else { v };
-                    self.line(&format!("{v} {} ${name};", Self::emit_type(ty)));
+                    if modifiers.contains(&Modifier::Static) {
+                        // A `static` field (M-mut.7) → PHP `public static <type> $name = <init>;`. The
+                        // initializer is a literal constant (checker-enforced), so it round-trips.
+                        let init_php = match init {
+                            Some(e) => self.emit_expr(e)?,
+                            None => "null".to_string(),
+                        };
+                        self.line(&format!(
+                            "{v} static {} ${name} = {init_php};",
+                            Self::emit_type(ty)
+                        ));
+                    } else {
+                        self.line(&format!("{v} {} ${name};", Self::emit_type(ty)));
+                    }
                 }
                 ClassMember::Constructor { params, body, .. } => {
                     let ps: Vec<String> = params
@@ -900,6 +926,12 @@ impl Transpiler {
             Expr::Member {
                 object, name, safe, ..
             } => {
+                // Static read `ClassName.field` → PHP `ClassName::$field` (M-mut.7).
+                if !*safe {
+                    if let Some(s) = self.static_ref(object, name) {
+                        return Ok(s);
+                    }
+                }
                 let o = self.emit_expr(object)?;
                 let arrow = if *safe { "?->" } else { "->" };
                 Ok(format!("{o}{arrow}{name}"))

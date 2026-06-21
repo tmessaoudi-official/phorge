@@ -546,6 +546,10 @@ pub enum Modifier {
     /// `o.f = e`. Immutable by default (a property of the place, not the type); erased in PHP output
     /// (PHP properties are always mutable unless `readonly`). The binding analog of `VarDecl.mutable`.
     Mutable,
+    /// `static` on a class field (M-mut.7) — class-level (not per-instance), program-lifetime state
+    /// accessed as `ClassName.field`. The Association axis of the modifier model. Transpiles to a PHP
+    /// `static` property.
+    Static,
 }
 
 /// A constructor parameter, which may carry promotion modifiers
@@ -671,6 +675,10 @@ pub enum ClassMember {
         modifiers: Vec<Modifier>,
         ty: Type,
         name: String,
+        /// A field-level initializer (`static mutable int total = 0;`). Required for `static` fields
+        /// (class-level state has no constructor to set it); must be `None` for an instance field
+        /// (those are set via the constructor). Restricted to a literal constant this slice (M-mut.7).
+        init: Option<Expr>,
         span: Span,
     },
     Constructor {

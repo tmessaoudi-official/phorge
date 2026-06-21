@@ -328,6 +328,30 @@ impl Value {
 // projection stays in each backend — their op enums (`BinaryOp` vs `Op`) differ, so only the
 // arithmetic and the fault strings are shared, not the dispatch.
 
+/// Evaluate a compile-time **literal-constant** expression to a `Value` — used to seed `static`
+/// field storage once at program load (M-mut.7). Both backends call this (F3), so the interpreter's
+/// `statics` map and the VM's `static_inits` table hold identical values. Returns `None` for anything
+/// that is not a literal; the checker rejects a non-literal static initializer (`E-STATIC-INIT-CONST`),
+/// so a `None` is checker-unreachable at load. Scalars + `null` + `bytes` only this slice — richer
+/// constant expressions (arithmetic, collection literals) are deferred.
+pub fn const_literal(e: &crate::ast::Expr) -> Option<Value> {
+    use crate::ast::{Expr, StrPart};
+    match e {
+        Expr::Int(n, _) => Some(Value::Int(*n)),
+        Expr::Float(f, _) => Some(Value::Float(*f)),
+        Expr::Bool(b, _) => Some(Value::Bool(*b)),
+        Expr::Null(_) => Some(Value::Null),
+        // A plain string literal is a single `Literal` part; any interpolation makes it non-const.
+        Expr::Str(parts, _) => match parts.as_slice() {
+            [] => Some(Value::Str(String::new())),
+            [StrPart::Literal(s)] => Some(Value::Str(s.clone())),
+            _ => None,
+        },
+        Expr::Bytes(b, _) => Some(Value::Bytes(Rc::new(b.clone()))),
+        _ => None,
+    }
+}
+
 /// Canonical fault body for integer `x / 0`. Single-sourced so `run` ≡ `runvm` in the fault path.
 pub const FAULT_DIV_ZERO: &str = "division by zero";
 /// Canonical fault body for integer `x % 0`.

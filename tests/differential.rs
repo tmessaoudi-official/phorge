@@ -1056,6 +1056,19 @@ fn mutation_instance_field_set_agrees() {
 }
 
 #[test]
+fn mutation_static_field_agrees() {
+    // M-mut.7: program-lifetime `static mutable` class fields, read/written as `ClassName.field` —
+    // byte-identical run/runvm + real PHP. A static is shared across all instances (one program-level
+    // slot), so a counter incremented in the constructor accumulates across constructions.
+    agree("import Core.Console; class Counter { static mutable int total = 0; constructor() { Counter.total = Counter.total + 1; } } function main(){ Counter(); Counter(); Counter(); Console.println(\"{Counter.total}\"); }"); // 3
+                                                                                                                                                                                                                                  // Direct read/write from a free function; an immutable static string too.
+    agree("import Core.Console; class Cfg { static mutable int n = 10; static string name = \"cfg\"; } function main(){ Cfg.n = Cfg.n + 5; Console.println(\"{Cfg.name}={Cfg.n}\"); }"); // cfg=15
+                                                                                                                                                                                         // A static read used as an arithmetic operand inside a method (the CTy-operand path).
+    agree("import Core.Console; class C { static mutable int k = 1; function step() -> int { C.k = C.k * 2; return C.k + 1; } } function main(){ C c = C(); Console.println(\"{c.step()} {c.step()}\"); }");
+    // 3 5
+}
+
+#[test]
 fn mutation_clone_with_agrees() {
     // M-mut.4a: `obj with { f = e }` — fresh instance, source unchanged, byte-identical on both.
     agree("import Core.Console; class P { constructor(public int x, public int y) {} } function main(){ P p = P(1, 2); P q = p with { x = 9 }; Console.println(\"{p.x} {p.y} {q.x} {q.y}\"); }"); // 1 2 9 2

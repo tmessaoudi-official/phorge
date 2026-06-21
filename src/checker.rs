@@ -31,6 +31,12 @@ struct ClassInfo {
     /// params carrying `mutable`. Only these may be the target of `o.f = e` (`E-ASSIGN-IMMUTABLE`);
     /// every other field is immutable by default. A subset of `fields`' keys.
     mutable_fields: std::collections::HashSet<String>,
+    /// `static` field name → type (M-mut.7). Class-level, accessed as `ClassName.field` — disjoint
+    /// from `fields` (statics are never instance members). Each has a literal-const initializer.
+    statics: HashMap<String, Ty>,
+    /// The subset of `statics` declared `static mutable` — only these may be the target of
+    /// `ClassName.field = e` (`E-ASSIGN-IMMUTABLE`).
+    static_mut: std::collections::HashSet<String>,
     methods: HashMap<String, FnSig>,
     /// constructor parameter types, for `ClassName(args)` calls
     ctor: Vec<Ty>,
@@ -825,6 +831,8 @@ impl Checker {
             ClassInfo {
                 fields: HashMap::new(),
                 mutable_fields: std::collections::HashSet::new(),
+                statics: HashMap::new(),
+                static_mut: std::collections::HashSet::new(),
                 methods: HashMap::new(),
                 ctor: Vec::new(),
                 type_params: c.type_params.clone(),
@@ -833,6 +841,8 @@ impl Checker {
         use crate::ast::Modifier;
         let mut fields = HashMap::new();
         let mut mutable_fields = std::collections::HashSet::new();
+        let mut statics: HashMap<String, Ty> = HashMap::new();
+        let mut static_mut = std::collections::HashSet::new();
         let mut methods = HashMap::new();
         let mut ctor = Vec::new();
         // The class's type parameters are in scope while resolving every member signature (fields,
@@ -850,14 +860,66 @@ impl Checker {
                     ty,
                     name,
                     modifiers,
-                    ..
+                    init,
+                    span,
                 } => {
                     self.active_type_params = class_tp.clone();
                     let fty = self.resolve_type(ty);
                     self.active_type_params.clear();
-                    fields.insert(name.clone(), fty);
-                    if modifiers.contains(&Modifier::Mutable) {
-                        mutable_fields.insert(name.clone());
+                    if modifiers.contains(&Modifier::Static) {
+                        // A `static` field is class-level state (M-mut.7): it needs a literal-const
+                        // initializer (no constructor sets it) and is NOT an instance field.
+                        match init {
+                            None => {
+                                self.err_coded(
+                                    *span,
+                                    format!("static field `{name}` needs an initializer"),
+                                    "E-STATIC-NO-INIT",
+                                    Some("e.g. `static mutable int total = 0;`".into()),
+                                );
+                            }
+                            Some(e) => {
+                                if crate::value::const_literal(e).is_none() {
+                                    self.err_coded(
+                                        Self::expr_span(e),
+                                        format!("static field `{name}` initializer must be a literal constant"),
+                                        "E-STATIC-INIT-CONST",
+                                        Some("use an int/float/bool/string/null literal".into()),
+                                    );
+                                } else {
+                                    let ity = self.check_expr(e);
+                                    if !self.ty_assignable(&ity, &fty) {
+                                        self.err_coded(
+                                            Self::expr_span(e),
+                                            format!("static field `{name}: {fty}` initialized with `{ity}`"),
+                                            "E-STATIC-INIT-TYPE",
+                                            None,
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        statics.insert(name.clone(), fty);
+                        if modifiers.contains(&Modifier::Mutable) {
+                            static_mut.insert(name.clone());
+                        }
+                    } else {
+                        // An instance field is set via the constructor; a field-level initializer is
+                        // not supported yet (M-mut.7 deferral).
+                        if init.is_some() {
+                            self.err_coded(
+                                *span,
+                                format!("instance field `{name}` cannot have an initializer"),
+                                "E-FIELD-INIT",
+                                Some(format!(
+                                    "set it in the constructor (`this.{name} = …`) or make it `static`"
+                                )),
+                            );
+                        }
+                        fields.insert(name.clone(), fty);
+                        if modifiers.contains(&Modifier::Mutable) {
+                            mutable_fields.insert(name.clone());
+                        }
                     }
                 }
                 ClassMember::Constructor { params, .. } => {
@@ -932,6 +994,8 @@ impl Checker {
         let info = self.classes.get_mut(&c.name).unwrap();
         info.fields = fields;
         info.mutable_fields = mutable_fields;
+        info.statics = statics;
+        info.static_mut = static_mut;
         info.methods = methods;
         info.ctor = ctor;
     }
@@ -2653,6 +2717,27 @@ impl Checker {
         safe: bool,
         span: Span,
     ) -> Ty {
+        // Static field read `ClassName.field` (M-mut.7): the head is a class *name* not shadowed by a
+        // local (locals-first), and `?.` makes no sense on a class. Resolved before `check_expr`,
+        // which would otherwise reject the bare class name as an unknown variable.
+        if !safe {
+            if let crate::ast::Expr::Ident(cls, _) = object {
+                if self.lookup_binding(cls).is_none() && self.classes.contains_key(cls) {
+                    return match self.classes[cls].statics.get(name).cloned() {
+                        Some(t) => t,
+                        None => self.err_coded(
+                            span,
+                            format!("`{cls}` has no static field `{name}`"),
+                            "E-STATIC-UNKNOWN",
+                            Some(
+                                "static fields are declared `static …` and read as `Class.field`"
+                                    .into(),
+                            ),
+                        ),
+                    };
+                }
+            }
+        }
         let obj = self.check_expr(object);
         // Peel an optional/null receiver, enforcing the non-null discipline: a plain `.field` on a
         // `T?` is `E-OPT-USE`; `?.field` unwraps and re-wraps the result as optional (M3 S2.3).
@@ -2883,6 +2968,42 @@ impl Checker {
                 Some("write `o.f = e` on a non-optional receiver".into()),
             );
             return;
+        }
+        // Static field write `ClassName.field = e` (M-mut.7): the head is a class name (not a local).
+        // The field must be a `static mutable` of that class.
+        if let crate::ast::Expr::Ident(cls, _) = object {
+            if self.lookup_binding(cls).is_none() && self.classes.contains_key(cls) {
+                let info = &self.classes[cls];
+                match info.statics.get(name).cloned() {
+                    None => {
+                        self.err_coded(
+                            span,
+                            format!("`{cls}` has no static field `{name}` to assign"),
+                            "E-ASSIGN-UNKNOWN",
+                            None,
+                        );
+                    }
+                    Some(fty) => {
+                        let is_mut = info.static_mut.contains(name);
+                        if !is_mut {
+                            self.err_coded(
+                                span,
+                                format!("static field `{name}` of `{cls}` is immutable and cannot be assigned"),
+                                "E-ASSIGN-IMMUTABLE",
+                                Some(format!("declare it `static mutable {fty} {name} = …;`")),
+                            );
+                        } else if !self.ty_assignable(vty, &fty) {
+                            self.err_coded(
+                                Self::expr_span(value),
+                                format!("cannot assign `{vty}` to static field `{name}: {fty}`"),
+                                "E-ASSIGN-TYPE",
+                                None,
+                            );
+                        }
+                    }
+                }
+                return;
+            }
         }
         let obj_ty = self.check_expr(object);
         let (class, cargs) = match &obj_ty {
@@ -4283,6 +4404,7 @@ pub fn erase_generics(program: Program) -> Program {
                             modifiers,
                             ty,
                             name,
+                            init,
                             span,
                         } => {
                             let set: Params = class_params.iter().copied().collect();
@@ -4290,6 +4412,7 @@ pub fn erase_generics(program: Program) -> Program {
                                 modifiers,
                                 ty: rty(&ty, &set),
                                 name,
+                                init: init.as_ref().map(|e| rexpr(e, &set)),
                                 span,
                             }
                         }
@@ -4474,11 +4597,14 @@ pub fn expand_aliases(program: &Program) -> Program {
                 modifiers,
                 ty,
                 name,
+                init,
                 span,
             } => ClassMember::Field {
                 modifiers: modifiers.clone(),
                 ty: rt(ty, a, 0),
                 name: name.clone(),
+                // A field initializer is a literal const (no type alias can appear inside it).
+                init: init.clone(),
                 span: *span,
             },
             ClassMember::Constructor { params, body, span } => ClassMember::Constructor {
@@ -6463,6 +6589,72 @@ function main() { var dbl = fn(int x) => x + 1000; }"#,
         let bad = errors_of(src);
         assert!(
             bad.iter().any(|e| e.code == Some("E-ASSIGN-TARGET")),
+            "{bad:?}"
+        );
+    }
+
+    // ---- M-mut.7: static mutable fields `ClassName.field` ----
+
+    #[test]
+    fn static_mutable_field_read_and_write_is_ok() {
+        let src = "class C { static mutable int total = 0; } \
+                   function main() { C.total = C.total + 1; }";
+        assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    }
+
+    #[test]
+    fn static_write_to_immutable_is_error() {
+        let src = "class C { static int x = 0; } function main() { C.x = 5; }";
+        let bad = errors_of(src);
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-ASSIGN-IMMUTABLE")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn static_field_without_initializer_is_error() {
+        let bad = errors_of("class C { static mutable int x; }");
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-STATIC-NO-INIT")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn static_field_non_const_initializer_is_error() {
+        let bad = errors_of("class C { static mutable int x = 1 + 1; }");
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-STATIC-INIT-CONST")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn static_field_initializer_type_mismatch_is_error() {
+        let bad = errors_of("class C { static mutable int x = \"s\"; }");
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-STATIC-INIT-TYPE")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn instance_field_with_initializer_is_error() {
+        let bad = errors_of("class C { int x = 5; constructor() {} }");
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-FIELD-INIT")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn unknown_static_field_read_is_error() {
+        let src = "import Core.Console; class C { static int x = 0; } \
+                   function main() { Console.println(\"{C.y}\"); }";
+        let bad = errors_of(src);
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-STATIC-UNKNOWN")),
             "{bad:?}"
         );
     }

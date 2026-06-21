@@ -107,6 +107,9 @@ pub struct Interp {
     class_implements: std::collections::BTreeMap<String, Vec<String>>,
     /// variant name -> (enum name, arity)
     variants: HashMap<String, (String, usize)>,
+    /// Program-lifetime `static` field storage (M-mut.7), keyed by `(class, field)`. Seeded once at
+    /// load from each static's literal-const initializer; read/written via `ClassName.field`.
+    statics: HashMap<(String, String), Value>,
     frame: CallScopes,
     this: Option<Value>,
     out: String,
@@ -129,6 +132,7 @@ pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
         classes: HashMap::new(),
         class_implements: std::collections::BTreeMap::new(),
         variants: HashMap::new(),
+        statics: HashMap::new(),
         frame: CallScopes::new(),
         this: None,
         out: String::new(),
@@ -169,6 +173,7 @@ pub fn call_named(
         classes: HashMap::new(),
         class_implements: std::collections::BTreeMap::new(),
         variants: HashMap::new(),
+        statics: HashMap::new(),
         frame: CallScopes::new(),
         this: None,
         out: String::new(),
@@ -211,6 +216,25 @@ impl Interp {
                     }
                 }
                 Item::Class(c) => {
+                    // Seed `static` field storage once at load from the literal-const initializer
+                    // (M-mut.7) — the same `const_literal` kernel the VM's `static_inits` uses (F3).
+                    for m in &c.members {
+                        if let crate::ast::ClassMember::Field {
+                            modifiers,
+                            name,
+                            init,
+                            ..
+                        } = m
+                        {
+                            if modifiers.contains(&crate::ast::Modifier::Static) {
+                                let v = init
+                                    .as_ref()
+                                    .and_then(crate::value::const_literal)
+                                    .unwrap_or(Value::Unit);
+                                self.statics.insert((c.name.clone(), name.clone()), v);
+                            }
+                        }
+                    }
                     self.classes.insert(c.name.clone(), c.clone());
                 }
                 // Interfaces have no runtime instances; they contribute only to the
@@ -330,6 +354,14 @@ impl Interp {
                 // — visible through every binding (handle semantics). The `borrow_mut` is taken only
                 // after the value is fully evaluated, so no borrow is held across a nested `eval`.
                 Expr::Member { object, name, .. } => {
+                    // Static write `ClassName.field = e` (M-mut.7): head is a class name, not a local.
+                    if let Expr::Ident(cls, _) = &**object {
+                        if self.frame.lookup(cls).is_none() && self.classes.contains_key(cls) {
+                            let v = self.eval(value)?;
+                            self.statics.insert((cls.clone(), name.clone()), v);
+                            return Ok(());
+                        }
+                    }
                     let recv = self.eval(object)?;
                     let v = self.eval(value)?;
                     match recv {
@@ -558,6 +590,17 @@ impl Interp {
             Expr::Member {
                 object, name, safe, ..
             } => {
+                // Static read `ClassName.field` (M-mut.7): head is a class name, not a local.
+                if !*safe {
+                    if let Expr::Ident(cls, _) = &**object {
+                        if self.frame.lookup(cls).is_none() && self.classes.contains_key(cls) {
+                            return match self.statics.get(&(cls.clone(), name.clone())) {
+                                Some(v) => Ok(v.clone()),
+                                None => rt(format!("no static field `{name}` on `{cls}`")),
+                            };
+                        }
+                    }
+                }
                 let recv = self.eval(object)?;
                 if *safe && matches!(recv, Value::Null) {
                     Ok(Value::Null) // `o?.field` on a null receiver short-circuits to null

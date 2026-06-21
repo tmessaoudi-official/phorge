@@ -41,6 +41,9 @@ pub struct Vm<'a> {
     program: &'a BytecodeProgram,
     stack: Vec<Value>,
     frames: Vec<Frame>,
+    /// Program-lifetime `static` field storage (M-mut.7), indexed by `Op::GetStatic`/`SetStatic`.
+    /// Seeded once from `program.static_inits` (the once-at-load literal values).
+    statics: Vec<Value>,
     out: String,
 }
 
@@ -50,6 +53,7 @@ impl<'a> Vm<'a> {
             program,
             stack: Vec::new(),
             frames: Vec::new(),
+            statics: program.static_inits.clone(),
             out: String::new(),
         }
     }
@@ -424,6 +428,14 @@ impl<'a> Vm<'a> {
                     v => return Err(format!("cannot set `.{name}` on {}", v.type_name())),
                 }
             }
+            Op::GetStatic(idx) => {
+                // Program-lifetime static read `ClassName.field` (M-mut.7).
+                self.stack.push(self.statics[idx].clone());
+            }
+            Op::SetStatic(idx) => {
+                // `ClassName.field = e` (M-mut.7): pop the value into the program-level static slot.
+                self.statics[idx] = self.pop();
+            }
             Op::IsInstance(name) => {
                 // `value instanceof name` (M-RT S1; interfaces S2): true iff the popped value is an
                 // instance whose class equals `name` OR implements interface `name` (via the shared
@@ -733,6 +745,7 @@ mod tests {
             names: Vec::new(),
             methods: HashMap::new(),
             class_implements: std::collections::BTreeMap::new(),
+            static_inits: Vec::new(),
         };
         Vm::new(&program).run().map_err(|d| d.to_string())
     }
@@ -960,6 +973,7 @@ mod tests {
             names: Vec::new(),
             methods: HashMap::new(),
             class_implements: std::collections::BTreeMap::new(),
+            static_inits: Vec::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "7\n");
     }
@@ -999,6 +1013,7 @@ mod tests {
             names: Vec::new(),
             methods: HashMap::new(),
             class_implements: std::collections::BTreeMap::new(),
+            static_inits: Vec::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "true\n7\n");
     }
@@ -1037,6 +1052,7 @@ mod tests {
             names: Vec::new(),
             methods: HashMap::new(),
             class_implements: std::collections::BTreeMap::new(),
+            static_inits: Vec::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "false\n");
     }
@@ -1071,6 +1087,7 @@ mod tests {
             names: vec!["x".into()],
             methods: HashMap::new(),
             class_implements: std::collections::BTreeMap::new(),
+            static_inits: Vec::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "3\n");
     }
@@ -1101,6 +1118,7 @@ mod tests {
             names: vec!["tag".into()],
             methods: HashMap::new(),
             class_implements: std::collections::BTreeMap::new(),
+            static_inits: Vec::new(),
         };
         let err = Vm::new(&program).run().unwrap_err().to_string();
         assert!(err.contains("no field `tag` on `Empty`"), "{err}");

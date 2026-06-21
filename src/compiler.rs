@@ -126,6 +126,11 @@ struct Compiler<'a> {
     enum_descs: &'a [EnumDesc],
     /// Class name → the index of its synthetic constructor function (for `ClassName(args)`).
     classes: &'a HashMap<String, usize>,
+    /// `(class, field)` → `(static slot index, field CTy)` (M-mut.7). `ClassName.field` lowers to
+    /// `Op::GetStatic(idx)` / `Op::SetStatic(idx)` via the index; the `CTy` lets `ctype` resolve a
+    /// static used as an arithmetic operand (`C.total + 1` specializes — without it the VM would
+    /// reject what the interpreter accepts, the documented CTy-operand trap).
+    statics_index: &'a HashMap<(String, String), (usize, CTy)>,
     /// The shared class-descriptor table — `stack_effect` reads `MakeInstance`'s field count from it.
     class_descs: &'a [ClassDesc],
     /// Field/member name → its index in `BytecodeProgram.names` (for `GetField`/`CallMethod`).
@@ -274,9 +279,19 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
         }
         for m in &c.members {
             match m {
-                ClassMember::Field { name, ty, .. } => {
-                    intern(name, &mut names); // readable, but unpopulated by construction
-                    tags.insert(name.clone(), resolve_cty(ty));
+                ClassMember::Field {
+                    name,
+                    ty,
+                    modifiers,
+                    ..
+                } => {
+                    // A `static` field is class-level state (addressed by `Op::Get/SetStatic` via a
+                    // static index, M-mut.7), not an instance field — it gets no name-pool entry and
+                    // no instance field-tag.
+                    if !modifiers.contains(&Modifier::Static) {
+                        intern(name, &mut names); // readable, but unpopulated by construction
+                        tags.insert(name.clone(), resolve_cty(ty));
+                    }
                 }
                 ClassMember::Method(f) => intern(&f.name, &mut names),
                 ClassMember::Constructor { .. } => {}
@@ -290,6 +305,38 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
     }
     // `intern`'s unique borrow of `names_index` ends at its last call above (NLL), so the
     // immutable `&names_index` borrows below are free.
+
+    // Static fields (M-mut.7): assign each `static` field a program-wide slot index (declaration
+    // order across classes) and const-fold its literal initializer into the program's `static_inits`
+    // table. The VM seeds its runtime `statics` vector from this once at startup; the interpreter
+    // seeds its own map from the same `const_literal` kernel (F3). The checker guarantees every
+    // static has a literal-const initializer, so `unwrap_or(Unit)` is checker-unreachable.
+    let mut statics_index: HashMap<(String, String), (usize, CTy)> = HashMap::new();
+    let mut static_inits: Vec<Value> = Vec::new();
+    for c in &class_decls {
+        for m in &c.members {
+            if let ClassMember::Field {
+                modifiers,
+                name,
+                ty,
+                init,
+                ..
+            } = m
+            {
+                if modifiers.contains(&Modifier::Static) {
+                    statics_index.insert(
+                        (c.name.clone(), name.clone()),
+                        (static_inits.len(), resolve_cty(ty)),
+                    );
+                    let v = init
+                        .as_ref()
+                        .and_then(crate::value::const_literal)
+                        .unwrap_or(Value::Unit);
+                    static_inits.push(v);
+                }
+            }
+        }
+    }
 
     // Methods follow the constructors in the index space; build the dispatch table — and the
     // `(class, method) → return type` table `ctype` reads for a method-call result — in lockstep.
@@ -340,6 +387,7 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             &variants,
             &enum_descs,
             &classes,
+            &statics_index,
             &class_descs,
             &names_index,
             &empty_fields,
@@ -376,6 +424,7 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             &variants,
             &enum_descs,
             &classes,
+            &statics_index,
             &class_descs,
             &names_index,
             &class_field_ctys[&cd.name],
@@ -397,6 +446,7 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             &variants,
             &enum_descs,
             &classes,
+            &statics_index,
             &class_descs,
             &names_index,
             &class_field_ctys[class_name],
@@ -422,6 +472,7 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
         // The single shared interface table — same algorithm as the interpreter + checker, so the
         // VM's `Op::IsInstance` against an interface is byte-identical (M-RT S2).
         class_implements: crate::ast::class_implements(program),
+        static_inits,
     })
 }
 
@@ -462,6 +513,7 @@ fn compile_constructor<'a>(
     variants: &'a HashMap<String, VariantMeta>,
     enum_descs: &'a [EnumDesc],
     classes: &'a HashMap<String, usize>,
+    statics_index: &'a HashMap<(String, String), (usize, CTy)>,
     class_descs: &'a [ClassDesc],
     names_index: &'a HashMap<String, usize>,
     field_tags: &'a HashMap<String, CTy>,
@@ -477,6 +529,7 @@ fn compile_constructor<'a>(
         variants,
         enum_descs,
         classes,
+        statics_index,
         class_descs,
         names_index,
         field_tags,
@@ -535,6 +588,7 @@ fn compile_method<'a>(
     variants: &'a HashMap<String, VariantMeta>,
     enum_descs: &'a [EnumDesc],
     classes: &'a HashMap<String, usize>,
+    statics_index: &'a HashMap<(String, String), (usize, CTy)>,
     class_descs: &'a [ClassDesc],
     names_index: &'a HashMap<String, usize>,
     field_tags: &'a HashMap<String, CTy>,
@@ -548,6 +602,7 @@ fn compile_method<'a>(
         variants,
         enum_descs,
         classes,
+        statics_index,
         class_descs,
         names_index,
         field_tags,
@@ -636,6 +691,7 @@ impl<'a> Compiler<'a> {
         variants: &'a HashMap<String, VariantMeta>,
         enum_descs: &'a [EnumDesc],
         classes: &'a HashMap<String, usize>,
+        statics_index: &'a HashMap<(String, String), (usize, CTy)>,
         class_descs: &'a [ClassDesc],
         names_index: &'a HashMap<String, usize>,
         field_tags: &'a HashMap<String, CTy>,
@@ -655,6 +711,7 @@ impl<'a> Compiler<'a> {
             variants,
             enum_descs,
             classes,
+            statics_index,
             class_descs,
             names_index,
             this_slot: None,
@@ -700,6 +757,8 @@ impl<'a> Compiler<'a> {
             Op::MakeInstance(idx) => 1 - self.class_descs[*idx].fields.len() as isize,
             Op::GetField(_) => 0,   // pop instance, push field value
             Op::SetField(_) => -2,  // pop instance + value, push nothing (statement)
+            Op::GetStatic(_) => 1,  // push the static's value
+            Op::SetStatic(_) => -1, // pop the value into the static slot
             Op::IsInstance(_) => 0, // pop value, push bool
             // Pops the receiver + `argc` args, pushes one result.
             Op::CallMethod(_, argc) => -(*argc as isize),
@@ -855,15 +914,22 @@ impl<'a> Compiler<'a> {
                 Some(c) => Ok(CTy::Class(c.clone())),
                 None => Err("`this` used outside a method".into()),
             },
-            Expr::Member { object, name, .. } => match self.ctype(object)? {
-                CTy::Class(cls) => self
-                    .class_field_ctys
-                    .get(&cls)
-                    .and_then(|fs| fs.get(name))
-                    .cloned()
-                    .ok_or_else(|| format!("no field `{name}` on `{cls}`")),
-                _ => Err(format!("cannot infer type of field `{name}`")),
-            },
+            Expr::Member { object, name, .. } => {
+                // Static read `ClassName.field` resolves to the static's declared `CTy` (M-mut.7) —
+                // checked first, since `ctype(object)` would reject the bare class name.
+                if let Some(cty) = self.static_cty(object, name) {
+                    return Ok(cty);
+                }
+                match self.ctype(object)? {
+                    CTy::Class(cls) => self
+                        .class_field_ctys
+                        .get(&cls)
+                        .and_then(|fs| fs.get(name))
+                        .cloned()
+                        .ok_or_else(|| format!("no field `{name}` on `{cls}`")),
+                    _ => Err(format!("cannot infer type of field `{name}`")),
+                }
+            }
             Expr::Call { callee, .. } => match &**callee {
                 Expr::Ident(name, _) => {
                     if let Some(meta) = self.fns.get(name) {
@@ -987,6 +1053,14 @@ impl<'a> Compiler<'a> {
                     self.expr(value)?; // [container, index, value]
                     self.emit(Op::SetIndex, span.line); // [newcontainer]
                     self.emit(Op::SetLocal(slot), span.line); // write back
+                    Ok(())
+                }
+                // Static write `ClassName.field = e` (M-mut.7): push the value, store into the
+                // program-level static slot. Checked first — the head is a class name, not a local.
+                Expr::Member { object, name, .. } if self.static_slot(object, name).is_some() => {
+                    let idx = self.static_slot(object, name).unwrap();
+                    self.expr(value)?; // [value]
+                    self.emit(Op::SetStatic(idx), span.line); // pop into the static slot
                     Ok(())
                 }
                 // Shared-mutable instance field set `o.f = e` / `this.f = e` (M-mut.6). Evaluate the
@@ -1171,7 +1245,11 @@ impl<'a> Compiler<'a> {
                 // (decision P4-5). Runtime lookup keeps the compiler untyped; the fault on a miss
                 // is byte-identical to the interpreter's. `?.` (safe) short-circuits a null receiver.
                 let line = span.line;
-                if *safe {
+                // Static read `ClassName.field` (M-mut.7): the head is a class name (not a local),
+                // so this is program-level state, not an instance field.
+                if let Some(idx) = self.static_slot(object, name) {
+                    self.emit(Op::GetStatic(idx), line);
+                } else if *safe {
                     self.compile_safe_access(object, line, |c| {
                         let idx = c.field_name_index(name)?;
                         c.emit(Op::GetField(idx), line);
@@ -1643,6 +1721,7 @@ impl<'a> Compiler<'a> {
             self.variants,
             self.enum_descs,
             self.classes,
+            self.statics_index,
             self.class_descs,
             self.names_index,
             &empty_fields,
@@ -1996,6 +2075,37 @@ impl<'a> Compiler<'a> {
             .get(name)
             .copied()
             .ok_or_else(|| format!("unknown field `{name}`"))
+    }
+
+    /// Resolve a `ClassName.field` static-field access to its program-level static slot (M-mut.7).
+    /// Returns `Some(idx)` only when `object` is a class *name* (not shadowed by a local) and `field`
+    /// is one of its `static` fields — i.e. exactly the static-access shape the checker accepts.
+    /// `None` ⇒ fall through to instance-field handling.
+    fn static_slot(&self, object: &Expr, field: &str) -> Option<usize> {
+        if let Expr::Ident(name, _) = object {
+            if self.resolve_local(name).is_none() && self.classes.contains_key(name) {
+                return self
+                    .statics_index
+                    .get(&(name.clone(), field.to_string()))
+                    .map(|&(idx, _)| idx);
+            }
+        }
+        None
+    }
+
+    /// The `CTy` of a `ClassName.field` static access, or `None` if it is not a static (M-mut.7).
+    /// Lets `ctype` treat a static as an arithmetic operand (`C.total + 1` specializes — without it
+    /// the VM rejects what the interpreter accepts, the documented CTy-operand trap).
+    fn static_cty(&self, object: &Expr, field: &str) -> Option<CTy> {
+        if let Expr::Ident(name, _) = object {
+            if self.resolve_local(name).is_none() && self.classes.contains_key(name) {
+                return self
+                    .statics_index
+                    .get(&(name.clone(), field.to_string()))
+                    .map(|(_, cty)| cty.clone());
+            }
+        }
+        None
     }
 
     /// Resolve a `match`-arm binding by name (innermost shadows). Returns the `$match` slot and the

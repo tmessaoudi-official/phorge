@@ -391,6 +391,7 @@ fn keyword(s: &str) -> Option<TokenKind> {
         "extends" => Extends,
         "var" => Var,
         "mutable" => Mutable,
+        "static" => Static,
         "with" => With,
         "type" => TypeKw,
         _ => return None,

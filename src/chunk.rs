@@ -171,6 +171,12 @@ pub enum Op {
     /// the write is visible through every binding to the same instance. Pushes nothing (statement
     /// form). The field is checker-guaranteed to exist and be `mutable`.
     SetField(usize),
+    /// Push a clone of the program-level static field `static_inits[idx]`'s current value (M-mut.7):
+    /// `ClassName.field` static read. The slot lives in the VM's runtime `statics` vector.
+    GetStatic(usize),
+    /// Pop the top value and store it into the static slot `idx` (M-mut.7): `ClassName.field = e`.
+    /// Pushes nothing (statement form); the field is checker-guaranteed a `static mutable`.
+    SetStatic(usize),
     /// Call an instance method `(name_idx, argc)`: the receiver and its `argc` args sit on the
     /// stack as `[.., receiver, arg0 … arg_{argc-1}]`. At runtime, resolve
     /// `(receiver.class, names[name_idx])` through `BytecodeProgram.methods` to a function index and
@@ -295,6 +301,11 @@ pub struct BytecodeProgram {
     /// `Op::IsInstance` test is byte-identical across backends. A `BTreeMap`/sorted values keep it
     /// deterministic for `disasm`.
     pub class_implements: BTreeMap<String, Vec<String>>,
+    /// Initial values of the program's `static` class fields (M-mut.7), in compiler-assigned index
+    /// order. The VM seeds its runtime `statics` vector from a clone of this at startup, so
+    /// program-lifetime static state begins at the once-at-load literal values. Indexed by
+    /// `Op::GetStatic`/`Op::SetStatic`.
+    pub static_inits: Vec<Value>,
 }
 
 impl BytecodeProgram {
@@ -324,6 +335,7 @@ impl BytecodeProgram {
         let ndescs = self.enum_descs.len();
         let nclasses = self.class_descs.len();
         let nnames = self.names.len();
+        let nstatics = self.static_inits.len();
         let nnatives = crate::native::registry().len();
         for (fi, f) in self.functions.iter().enumerate() {
             let code_len = f.chunk.code.len();
@@ -357,6 +369,9 @@ impl BytecodeProgram {
                     }
                     Op::CallNative(idx, _) => (*idx >= nnatives).then(|| {
                         format!("native index {idx} out of range (registry has {nnatives})")
+                    }),
+                    Op::GetStatic(idx) | Op::SetStatic(idx) => (*idx >= nstatics).then(|| {
+                        format!("static index {idx} out of range ({nstatics} statics)")
                     }),
                     // Absolute targets; `== code_len` is the legal "fall off the end → implicit
                     // return" landing the run loop already handles, so only `>` is invalid.
@@ -491,6 +506,7 @@ mod tests {
             names: Vec::new(),
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
+            static_inits: Vec::new(),
         };
         assert_eq!(prog.validate(), Ok(()));
     }
@@ -513,6 +529,7 @@ mod tests {
             names: Vec::new(),
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
+            static_inits: Vec::new(),
         };
         let err = prog.validate().unwrap_err();
         assert!(err.contains("invalid bytecode"), "{err}");
@@ -537,6 +554,7 @@ mod tests {
             names: Vec::new(),
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
+            static_inits: Vec::new(),
         };
         assert!(prog.validate().unwrap_err().contains("call target 7"));
 
@@ -548,6 +566,7 @@ mod tests {
             names: Vec::new(),
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
+            static_inits: Vec::new(),
         };
         assert!(bad_main.validate().unwrap_err().contains("main index 0"));
     }
@@ -570,6 +589,7 @@ mod tests {
             names: Vec::new(),
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
+            static_inits: Vec::new(),
         };
         let err = prog.validate().unwrap_err();
         assert!(err.contains("enum descriptor index 3"), "{err}");
@@ -593,6 +613,7 @@ mod tests {
             names: Vec::new(),
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
+            static_inits: Vec::new(),
         };
         assert!(prog
             .validate()
@@ -615,6 +636,7 @@ mod tests {
             names: Vec::new(),
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
+            static_inits: Vec::new(),
         };
         assert!(prog2.validate().unwrap_err().contains("field-name index 5"));
 
@@ -635,8 +657,30 @@ mod tests {
             names: Vec::new(),
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
+            static_inits: Vec::new(),
         };
         assert!(prog3.validate().unwrap_err().contains("field-name index 7"));
+
+        // M-mut.7: `GetStatic`/`SetStatic` are bounded by the static-init table length.
+        let mut c4 = Chunk::new();
+        c4.emit(Op::GetStatic(2), 1); // empty static table
+        c4.emit(Op::Return, 1);
+        let prog4 = BytecodeProgram {
+            functions: vec![Function {
+                name: "main".into(),
+                arity: 0,
+                n_captures: 0,
+                chunk: c4,
+            }],
+            main: 0,
+            enum_descs: Vec::new(),
+            class_descs: Vec::new(),
+            names: Vec::new(),
+            methods: HashMap::new(),
+            class_implements: BTreeMap::new(),
+            static_inits: Vec::new(),
+        };
+        assert!(prog4.validate().unwrap_err().contains("static index 2"));
     }
 
     #[test]
@@ -657,6 +701,7 @@ mod tests {
             names: Vec::new(),
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
+            static_inits: Vec::new(),
         };
         assert!(prog.validate().unwrap_err().contains("native index 9999"));
     }
@@ -682,6 +727,7 @@ mod tests {
             names: Vec::new(),
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
+            static_inits: Vec::new(),
         };
         let err = prog.validate().unwrap_err();
         assert!(err.contains("closure target 4"), "{err}");
@@ -710,6 +756,7 @@ mod tests {
             names: Vec::new(),
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
+            static_inits: Vec::new(),
         };
         assert!(prog.validate().is_ok());
     }
@@ -731,6 +778,7 @@ mod tests {
             names: Vec::new(),
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
+            static_inits: Vec::new(),
         };
         assert_eq!(prog.functions[prog.main].name, "main");
         assert_eq!(prog.functions[0].arity, 0);

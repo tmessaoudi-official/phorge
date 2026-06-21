@@ -1462,14 +1462,23 @@ impl Parser {
             }
             TokenKind::Function => Ok(ClassMember::Method(self.parse_function(modifiers, sp)?)),
             _ => {
-                // field: [modifiers] Type name ;
+                // field: [modifiers] Type name [= init] ;
                 let ty = self.parse_type()?;
                 let name = self.expect_ident("a field name")?;
+                // An optional field-level initializer (`static mutable int total = 0;`). The checker
+                // requires it for `static` fields and forbids it on instance fields (M-mut.7).
+                let init = if self.check(&TokenKind::Eq) {
+                    self.advance();
+                    Some(self.parse_expr()?)
+                } else {
+                    None
+                };
                 self.expect(&TokenKind::Semicolon, "';' after field declaration")?;
                 Ok(ClassMember::Field {
                     modifiers,
                     ty,
                     name,
+                    init,
                     span: sp,
                 })
             }
@@ -1488,6 +1497,8 @@ impl Parser {
                 TokenKind::Final => Modifier::Final,
                 // `mutable` field / promoted ctor param (M-mut.6); immutable by default.
                 TokenKind::Mutable => Modifier::Mutable,
+                // `static` class field (M-mut.7) — class-level state.
+                TokenKind::Static => Modifier::Static,
                 _ => break,
             };
             self.advance();
@@ -2520,6 +2531,28 @@ mod tests {
                     other => panic!("member 1: {other:?}"),
                 }
             }
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_static_field_with_initializer() {
+        // M-mut.7: `static mutable int total = 0;` — static modifier + field-level initializer.
+        let src = "class C { static mutable int total = 0; }";
+        match item(src) {
+            Item::Class(c) => match &c.members[0] {
+                ClassMember::Field {
+                    modifiers,
+                    name,
+                    init,
+                    ..
+                } => {
+                    assert_eq!(name, "total");
+                    assert_eq!(modifiers, &vec![Modifier::Static, Modifier::Mutable]);
+                    assert!(matches!(init, Some(Expr::Int(0, _))));
+                }
+                other => panic!("member 0: {other:?}"),
+            },
             other => panic!("got {other:?}"),
         }
     }
