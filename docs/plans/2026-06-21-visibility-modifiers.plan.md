@@ -12,4 +12,8 @@
 - [2026-06-21] AGREED: **design approved** ("Approve — write the spec"). Locked: loader-enforced; visibility never consumed by backends (byte-identity safe by construction, no erase pass); new `Visibility { Public, Internal, Private }` enum field on `ClassDecl`/`EnumDecl`/`InterfaceDecl`/`FunctionDecl` (NOT overloading member `Modifier`); explicit `public` keyword **allowed** (intent-clarity, not dropped); `internal` is a new reserved keyword; codes `E-VIS-PRIVATE`/`E-VIS-INTERNAL`. Single-file/loose mode = no-op. Spec: `docs/specs/2026-06-21-visibility-modifiers-design.md`.
 
 ## Formal Plan
-<!-- written at Phase 4 approval, after the design spec is ratified -->
+The bite-sized, TDD, task-by-task implementation plan lives in
+**`docs/plans/2026-06-21-visibility-modifiers-impl.plan.md`** (8 tasks: AST enum/fields → parser
+keyword → loader provenance + cross-package type enforcement → file-scoped private type → function
+visibility → explain + alias guard → example project → docs sweep). Each task ends green on the full
+`PHORGE_REQUIRE_PHP=1` gate.
