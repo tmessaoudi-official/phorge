@@ -1,0 +1,23 @@
+package acme.shapes;
+
+// Declaration visibility (visibility modifiers) — three levels on any top-level declaration:
+//
+//   public    (the default; may be omitted) — visible to OTHER packages (importable cross-package)
+//   internal                                — visible across THIS package's files, not other packages
+//   private                                 — visible only inside THIS .phg file
+//
+// `Rect` is `public`, so `main` (a different package) may `import type acme.shapes.Rect`.
+public class Rect {
+  constructor(public int w, public int h) {}
+  function area() -> int {
+    // `scale` is `internal` and declared in this same file — visible here.
+    return scale(this.w * this.h);
+  }
+}
+
+// `internal` — usable from this package's other file (helpers.phg) but NOT from `main`.
+internal function scale(int n) -> int {
+  // `factor` is `internal`, declared in the SIBLING file helpers.phg — a same-package, cross-file
+  // reference, which `internal` permits (only `private` would block it).
+  return n * factor();
+}

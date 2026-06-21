@@ -1,0 +1,14 @@
+package acme.shapes;
+
+// Same package as shapes.phg (folder = package: src/acme/shapes/ ⇒ acme.shapes), second file.
+
+// `internal` — shapes.phg's `scale` calls this across the file boundary (allowed: same package).
+internal function factor() -> int {
+  // `clamp` is `private` to THIS file — visible here, and only here.
+  return clamp(1);
+}
+
+// `private` — visible only inside helpers.phg. shapes.phg cannot see it; `main` certainly cannot.
+private function clamp(int n) -> int {
+  return n;
+}

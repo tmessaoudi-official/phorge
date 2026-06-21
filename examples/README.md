@@ -62,6 +62,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `project/tempconv/` | a **multi-file project** (M5) — mandatory packages, folder = path, cross-package qualified calls + import aliasing, namespaced PHP — see `project/README.md` |
 | `project/withdeps/` | a project with a **vendored git dependency** (M5 S3) — `[require]`, `phg vendor`, `phorge.lock`, offline `vendor/` — see `project/withdeps/README.md` |
 | `project/shapes/` | **cross-package types** (M-RT) — a library package (`acme.geometry`) exports a `class` + `interface` + `enum`, consumed from `package main` via `import type acme.geometry.Point;`; nominal subtyping, `instanceof`, and enum `match` all cross-package; erases to namespaced PHP (`new \Acme\Geometry\Rect(…)`) |
+| `project/visibility/` | **declaration visibility** (visibility modifiers) — `public` / `internal` / `private` on top-level declarations; a `public` class crosses packages, an `internal` helper crosses files within its package, a `private` helper stays file-local; loader-enforced, erased from PHP — see `project/visibility/README.md` |
 
 ## Coverage matrix (the runnable surface)
 
@@ -101,6 +102,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | CLI: source forms, inspection (`check`/`parse`/`lex`), diagnostics, `explain` | `cli/demo` |
 | multi-file projects: packages, folder = path, cross-package imports + aliasing, namespaced PHP | `project/tempconv` |
 | git dependencies: `[require]`, `phg vendor`, `phorge.lock`, offline `vendor/` | `project/withdeps` |
+| declaration visibility: `public`/`internal`/`private` (file ⊂ package ⊂ public), loader-enforced | `project/visibility` |
 
 ## Three sharp edges
 
