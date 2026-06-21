@@ -44,10 +44,33 @@ not a panic:
   variant/type names must be unique across all merged packages; generic *types* (`Box<T>`) are a
   separate pending slice.
 - Exceptions (try / catch / throw)
-- Mutation (reassignment and field writes) — Phorge is immutable-by-default today
 - Method/function overloading, traits, operator overloading, property accessors
 - Sized integers / `decimal`, `const`/`final` enforcement
 - `match` outside return / variable-declaration-initializer position
+
+## Mutation milestone — deferred corners
+
+In-place mutation ships incrementally (immutable-by-default, `mutable` opt-in): mutable locals +
+reassignment (M-mut.1), compound-assign + `++`/`--` + `??=` (M-mut.2), condition loops (M-mut.3),
+`clone with` (M-mut.4a), value-type element set `xs[i]=e`/`m[k]=e` (M-mut.5), and **shared-mutable
+instance fields `o.f=e`** (M-mut.6 — instances are handles; see `examples/guide/mutable-fields.phg`).
+Each is byte-identical `run ≡ runvm ≡ real PHP`. Still deferred (each is either a clean compile-time
+error or an explicit non-goal, never a panic):
+
+- **No cycle collector.** Instances are shared-mutable handles, so `a.next = b; b.next = a` forms a
+  reference cycle that `Rc`/`Drop` cannot reclaim — it **leaks until process exit** (the HHVM
+  per-process model, Fork-3). Fine for a run-once CLI; a trial-deletion collector lands only if a
+  long-lived-cycle need appears (e.g. `serve`). `==` on a cycle is *safe* (cycle-guarded `eq_val`,
+  F4) — it terminates rather than overflowing the stack.
+- **No identity `===`.** Only structural `==` exists; an `Rc::ptr_eq`-based identity operator is an
+  optional future addition.
+- **Nested place-stores.** `this.f[i] = e` (index into a field) and compound nested paths are
+  rejected (`E-ASSIGN-TARGET`); a field path `a.b.c = e` *is* supported (handle semantics), but an
+  *indexed* field target is not. A field-set on an intersection-typed object is also deferred.
+- **Get/set hooks (property accessors)** and **`static mutable`** state are later slices (M-mut.4b /
+  M-mut.7). Promoted/declared fields with no explicit visibility transpile to PHP `public` (Phorge
+  does not enforce field visibility at runtime; `readonly`/`final` emission is not done — immutable
+  fields are already write-prevented by the checker).
 
 ## Generics (M-RT S7) — deferred refinements
 

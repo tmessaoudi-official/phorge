@@ -166,6 +166,11 @@ pub enum Op {
     /// (a checker-valid but uninitialized explicit `Field` member) faults
     /// `no field \`{name}\` on \`{class}\`` — byte-identical to the interpreter (decision P4-5).
     GetField(usize),
+    /// Pop a value then an instance and set the instance's field `names[idx]` to that value
+    /// (M-mut.6): `o.f = e`. Mutates the shared `Rc<Instance>` cell in place (handle semantics), so
+    /// the write is visible through every binding to the same instance. Pushes nothing (statement
+    /// form). The field is checker-guaranteed to exist and be `mutable`.
+    SetField(usize),
     /// Call an instance method `(name_idx, argc)`: the receiver and its `argc` args sit on the
     /// stack as `[.., receiver, arg0 … arg_{argc-1}]`. At runtime, resolve
     /// `(receiver.class, names[name_idx])` through `BytecodeProgram.methods` to a function index and
@@ -345,9 +350,11 @@ impl BytecodeProgram {
                             "class descriptor index {idx} out of range ({nclasses} descriptors)"
                         )
                     }),
-                    Op::GetField(idx) | Op::CallMethod(idx, _) => (*idx >= nnames).then(|| {
-                        format!("field-name index {idx} out of range (name pool has {nnames})")
-                    }),
+                    Op::GetField(idx) | Op::SetField(idx) | Op::CallMethod(idx, _) => {
+                        (*idx >= nnames).then(|| {
+                            format!("field-name index {idx} out of range (name pool has {nnames})")
+                        })
+                    }
                     Op::CallNative(idx, _) => (*idx >= nnatives).then(|| {
                         format!("native index {idx} out of range (registry has {nnatives})")
                     }),
@@ -610,6 +617,26 @@ mod tests {
             class_implements: BTreeMap::new(),
         };
         assert!(prog2.validate().unwrap_err().contains("field-name index 5"));
+
+        // M-mut.6: `SetField` shares the same name-pool bound as `GetField`.
+        let mut c3 = Chunk::new();
+        c3.emit(Op::SetField(7), 1); // empty name pool
+        c3.emit(Op::Return, 1);
+        let prog3 = BytecodeProgram {
+            functions: vec![Function {
+                name: "main".into(),
+                arity: 0,
+                n_captures: 0,
+                chunk: c3,
+            }],
+            main: 0,
+            enum_descs: Vec::new(),
+            class_descs: Vec::new(),
+            names: Vec::new(),
+            methods: HashMap::new(),
+            class_implements: BTreeMap::new(),
+        };
+        assert!(prog3.validate().unwrap_err().contains("field-name index 7"));
     }
 
     #[test]

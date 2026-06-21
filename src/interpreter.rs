@@ -3,6 +3,7 @@
 //! assumes type-correct input and never panics on the faults types can't catch —
 //! those become a runtime `Diagnostic`. See design spec `2026-06-15-m1-plan5-evaluator-design.md`.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 use crate::ast::{
@@ -324,6 +325,21 @@ impl Interp {
                     self.frame.assign(name, container);
                     Ok(())
                 }
+                // Shared-mutable instance field set `o.f = e` / `this.f = e` (M-mut.6). Eval the
+                // object to its shared `Rc<Instance>`, then the value, then write the field in place
+                // — visible through every binding (handle semantics). The `borrow_mut` is taken only
+                // after the value is fully evaluated, so no borrow is held across a nested `eval`.
+                Expr::Member { object, name, .. } => {
+                    let recv = self.eval(object)?;
+                    let v = self.eval(value)?;
+                    match recv {
+                        Value::Instance(inst) => {
+                            inst.fields.borrow_mut().insert(name.clone(), v);
+                            Ok(())
+                        }
+                        other => rt(format!("cannot set `.{name}` on {}", other.type_name())),
+                    }
+                }
                 _ => unreachable!("checker rejects other assignment targets"),
             },
             Stmt::Return { value, .. } => {
@@ -547,10 +563,14 @@ impl Interp {
                     Ok(Value::Null) // `o?.field` on a null receiver short-circuits to null
                 } else {
                     match recv {
-                        Value::Instance(inst) => match inst.fields.get(name) {
-                            Some(v) => Ok(v.clone()),
-                            None => rt(format!("no field `{name}` on `{}`", inst.class)),
-                        },
+                        Value::Instance(inst) => {
+                            // Clone the value out and drop the borrow (handle semantics: the shared
+                            // cell stays available for later mutation).
+                            match inst.fields.borrow().get(name).cloned() {
+                                Some(v) => Ok(v),
+                                None => rt(format!("no field `{name}` on `{}`", inst.class)),
+                            }
+                        }
                         other => rt(format!("cannot read `.{name}` on {}", other.type_name())),
                     }
                 }
@@ -607,14 +627,14 @@ impl Interp {
                         ))
                     }
                 };
-                let mut new_fields = base.fields.clone();
+                let mut new_fields = base.fields.borrow().clone();
                 for (name, e) in fields {
                     let v = self.eval(e)?;
                     new_fields.insert(name.clone(), v);
                 }
                 Ok(Value::Instance(Rc::new(Instance {
                     class: base.class.clone(),
-                    fields: new_fields,
+                    fields: RefCell::new(new_fields),
                 })))
             }
             Expr::Match {
@@ -692,8 +712,8 @@ impl Interp {
         }
         // bare field reference inside a method body (mirrors checker scope seeding)
         if let Some(Value::Instance(inst)) = &self.this {
-            if let Some(v) = inst.fields.get(name) {
-                return Ok(v.clone());
+            if let Some(v) = inst.fields.borrow().get(name).cloned() {
+                return Ok(v);
             }
         }
         // A4: bare named-function reference in value position (e.g. passing `f` to a higher-order
@@ -974,7 +994,7 @@ impl Interp {
         });
         let mut inst = Instance {
             class: class_name.to_string(),
-            fields: HashMap::new(),
+            fields: RefCell::new(HashMap::new()),
         };
         let Some((params, body)) = ctor else {
             if !args.is_empty() {
@@ -997,7 +1017,8 @@ impl Interp {
                 )
             });
             if promoted {
-                inst.fields.insert(p.name.clone(), a.clone());
+                // We still solely own `inst` (not yet shared), so `get_mut` skips the runtime borrow.
+                inst.fields.get_mut().insert(p.name.clone(), a.clone());
             }
         }
         // Run the body for side effects with `this` + params in scope. In M1 the

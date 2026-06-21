@@ -14,6 +14,7 @@ use crate::chunk::{BytecodeProgram, Op};
 use crate::diagnostic::Diagnostic;
 use crate::limits::MAX_CALL_DEPTH;
 use crate::value::{EnumVal, Instance, Value};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -390,19 +391,37 @@ impl<'a> Vm<'a> {
                 let fields: HashMap<String, Value> = desc.fields.into_iter().zip(values).collect();
                 self.stack.push(Value::Instance(Rc::new(Instance {
                     class: desc.class,
-                    fields,
+                    fields: RefCell::new(fields),
                 })));
             }
             Op::GetField(idx) => {
                 let name = self.program.names[idx].clone();
                 match self.pop() {
-                    Value::Instance(inst) => match inst.fields.get(&name) {
-                        Some(v) => self.stack.push(v.clone()),
-                        // Byte-identical to the interpreter (`Expr::Member`): a checker-valid but
-                        // unpopulated explicit `Field` read faults here at runtime.
-                        None => return Err(format!("no field `{name}` on `{}`", inst.class)),
-                    },
+                    Value::Instance(inst) => {
+                        // Clone the field value out and drop the borrow before pushing (handle
+                        // semantics: the shared cell stays available for a later mutation).
+                        let v = inst.fields.borrow().get(&name).cloned();
+                        match v {
+                            Some(v) => self.stack.push(v),
+                            // Byte-identical to the interpreter (`Expr::Member`): a checker-valid but
+                            // unpopulated explicit `Field` read faults here at runtime.
+                            None => return Err(format!("no field `{name}` on `{}`", inst.class)),
+                        }
+                    }
                     v => return Err(format!("cannot read `.{name}` on {}", v.type_name())),
+                }
+            }
+            Op::SetField(idx) => {
+                // `o.f = e` (M-mut.6): pop the value (top), then the instance, and write the field
+                // into the shared `Rc<Instance>` cell in place — visible through every binding. The
+                // value is fully evaluated before `borrow_mut`, so no borrow is held across `eval`.
+                let name = self.program.names[idx].clone();
+                let value = self.pop();
+                match self.pop() {
+                    Value::Instance(inst) => {
+                        inst.fields.borrow_mut().insert(name, value);
+                    }
+                    v => return Err(format!("cannot set `.{name}` on {}", v.type_name())),
                 }
             }
             Op::IsInstance(name) => {

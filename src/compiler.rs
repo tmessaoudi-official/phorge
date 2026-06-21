@@ -699,6 +699,7 @@ impl<'a> Compiler<'a> {
             Op::MakeEnum(idx) => 1 - self.enum_descs[*idx].arity as isize,
             Op::MakeInstance(idx) => 1 - self.class_descs[*idx].fields.len() as isize,
             Op::GetField(_) => 0,   // pop instance, push field value
+            Op::SetField(_) => -2,  // pop instance + value, push nothing (statement)
             Op::IsInstance(_) => 0, // pop value, push bool
             // Pops the receiver + `argc` args, pushes one result.
             Op::CallMethod(_, argc) => -(*argc as isize),
@@ -986,6 +987,16 @@ impl<'a> Compiler<'a> {
                     self.expr(value)?; // [container, index, value]
                     self.emit(Op::SetIndex, span.line); // [newcontainer]
                     self.emit(Op::SetLocal(slot), span.line); // write back
+                    Ok(())
+                }
+                // Shared-mutable instance field set `o.f = e` / `this.f = e` (M-mut.6). Evaluate the
+                // object then the value (interpreter eval order), then `SetField` mutates the shared
+                // `Rc<Instance>` cell in place and pops both. The field is checker-guaranteed `mutable`.
+                Expr::Member { object, name, .. } => {
+                    self.expr(object)?; // [instance]
+                    self.expr(value)?; // [instance, value]
+                    let idx = self.field_name_index(name)?;
+                    self.emit(Op::SetField(idx), span.line); // mutate in place, pop both
                     Ok(())
                 }
                 _ => unreachable!("checker rejects other assignment targets"),

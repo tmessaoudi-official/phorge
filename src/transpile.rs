@@ -532,11 +532,13 @@ impl Transpiler {
                     if promoted_names.contains(name) {
                         continue;
                     }
-                    self.line(&format!(
-                        "{} {} ${name};",
-                        vis(modifiers),
-                        Self::emit_type(ty)
-                    ));
+                    // A typed PHP property requires a visibility keyword (`int $x;` is a syntax
+                    // error). Phorge fields are immutable-by-default and visibility is not enforced
+                    // at runtime by the backends, so a field with no explicit visibility (e.g.
+                    // `mutable int x;`) emits as `public` — the spine-safe choice (M-mut.6).
+                    let v = vis(modifiers);
+                    let v = if v.is_empty() { "public" } else { v };
+                    self.line(&format!("{v} {} ${name};", Self::emit_type(ty)));
                 }
                 ClassMember::Constructor { params, body, .. } => {
                     let ps: Vec<String> = params
@@ -645,7 +647,10 @@ impl Transpiler {
                 // `mutable`/immutable is erased (PHP locals are always mutable).
                 let lhs = match target {
                     Expr::Ident(n, _) => format!("${n}"),
-                    Expr::Index { .. } => self.emit_expr(target)?,
+                    // Element set `$xs[$i]` (M-mut.5) and instance-field set `$o->f` (M-mut.6) both
+                    // render the target as a PHP lvalue expression. PHP objects are mutable handles,
+                    // so `$o->f = $e` is byte-identical to the backends' `Op::SetField`.
+                    Expr::Index { .. } | Expr::Member { .. } => self.emit_expr(target)?,
                     _ => unreachable!("checker rejects other assignment targets"),
                 };
                 let e = self.emit_expr(value)?;
@@ -804,12 +809,13 @@ impl Transpiler {
                 format!("${name} = {e}")
             }
             Stmt::Assign { target, value, .. } => {
-                let name = match target {
-                    Expr::Ident(n, _) => n,
-                    _ => unreachable!("checker rejects non-ident assignment targets"),
+                let lhs = match target {
+                    Expr::Ident(n, _) => format!("${n}"),
+                    Expr::Index { .. } | Expr::Member { .. } => self.emit_expr(target)?,
+                    _ => unreachable!("checker rejects other assignment targets"),
                 };
                 let e = self.emit_expr(value)?;
-                format!("${name} = {e}")
+                format!("{lhs} = {e}")
             }
             Stmt::Expr(e, _) => self.emit_expr(e)?,
             _ => unreachable!("c-for init/step is a decl, assignment, or expression"),

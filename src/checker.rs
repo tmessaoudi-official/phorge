@@ -27,6 +27,10 @@ struct EnumInfo {
 
 struct ClassInfo {
     fields: HashMap<String, Ty>,
+    /// Names of the `mutable` fields (M-mut.6) — explicit `mutable Type f;` decls and promoted ctor
+    /// params carrying `mutable`. Only these may be the target of `o.f = e` (`E-ASSIGN-IMMUTABLE`);
+    /// every other field is immutable by default. A subset of `fields`' keys.
+    mutable_fields: std::collections::HashSet<String>,
     methods: HashMap<String, FnSig>,
     /// constructor parameter types, for `ClassName(args)` calls
     ctor: Vec<Ty>,
@@ -820,6 +824,7 @@ impl Checker {
             c.name.clone(),
             ClassInfo {
                 fields: HashMap::new(),
+                mutable_fields: std::collections::HashSet::new(),
                 methods: HashMap::new(),
                 ctor: Vec::new(),
                 type_params: c.type_params.clone(),
@@ -827,6 +832,7 @@ impl Checker {
         );
         use crate::ast::Modifier;
         let mut fields = HashMap::new();
+        let mut mutable_fields = std::collections::HashSet::new();
         let mut methods = HashMap::new();
         let mut ctor = Vec::new();
         // The class's type parameters are in scope while resolving every member signature (fields,
@@ -840,11 +846,19 @@ impl Checker {
         let mut promoted: Vec<(String, Ty)> = Vec::new();
         for m in &c.members {
             match m {
-                ClassMember::Field { ty, name, .. } => {
+                ClassMember::Field {
+                    ty,
+                    name,
+                    modifiers,
+                    ..
+                } => {
                     self.active_type_params = class_tp.clone();
                     let fty = self.resolve_type(ty);
                     self.active_type_params.clear();
                     fields.insert(name.clone(), fty);
+                    if modifiers.contains(&Modifier::Mutable) {
+                        mutable_fields.insert(name.clone());
+                    }
                 }
                 ClassMember::Constructor { params, .. } => {
                     // Resolve each param type once; reuse for both the ctor signature
@@ -861,6 +875,10 @@ impl Checker {
                                 )
                             }) {
                                 promoted.push((p.name.clone(), ty.clone()));
+                                // A `public mutable int x` promoted param yields a mutable field.
+                                if p.modifiers.contains(&Modifier::Mutable) {
+                                    mutable_fields.insert(p.name.clone());
+                                }
                             }
                             ty
                         })
@@ -913,6 +931,7 @@ impl Checker {
         }
         let info = self.classes.get_mut(&c.name).unwrap();
         info.fields = fields;
+        info.mutable_fields = mutable_fields;
         info.methods = methods;
         info.ctor = ctor;
     }
@@ -1421,13 +1440,17 @@ impl Checker {
                     Expr::Index { object, index, .. } => {
                         self.check_index_assign(object, index, &vty, value, *span)
                     }
+                    // Shared-mutable instance field set `o.f = e` / `this.f = e` (M-mut.6).
+                    Expr::Member {
+                        object, name, safe, ..
+                    } => self.check_field_assign(object, name, *safe, &vty, value, *span),
                     _ => {
                         self.err_coded(
                             *span,
-                            "assignment target must be a variable or an indexed element",
+                            "assignment target must be a variable, an indexed element, or a field",
                             "E-ASSIGN-TARGET",
                             Some(
-                                "only `name = e;` and `container[i] = e;` are supported; field assignment lands in a later slice"
+                                "only `name = e;`, `container[i] = e;`, and `obj.field = e;` are supported; nested places (`a.b.c`, `this.f[i]`) land in a later slice"
                                     .into(),
                             ),
                         );
@@ -2834,6 +2857,77 @@ impl Checker {
                     Some("only `List<T>` and `Map<K, V>` support `container[i] = e`".into()),
                 );
             }
+        }
+    }
+
+    /// `o.f = e` / `this.f = e` shared-mutable instance field set (M-mut.6). The object must resolve
+    /// to a concrete class (`this`, a local, or any field path `a.b` whose type is a class — handle
+    /// semantics make a write through any binding visible everywhere); the field must exist
+    /// (`E-ASSIGN-UNKNOWN`), be declared `mutable` (`E-ASSIGN-IMMUTABLE`), and the value must be
+    /// assignable to its (generics-substituted) type (`E-ASSIGN-TYPE`). A `?.` target is rejected
+    /// (`E-ASSIGN-TARGET`); nested index-into-field (`this.f[i] = e`) stays deferred to a later slice.
+    fn check_field_assign(
+        &mut self,
+        object: &crate::ast::Expr,
+        name: &str,
+        safe: bool,
+        vty: &Ty,
+        value: &crate::ast::Expr,
+        span: Span,
+    ) {
+        if safe {
+            self.err_coded(
+                span,
+                "cannot assign through a `?.` safe-access target",
+                "E-ASSIGN-TARGET",
+                Some("write `o.f = e` on a non-optional receiver".into()),
+            );
+            return;
+        }
+        let obj_ty = self.check_expr(object);
+        let (class, cargs) = match &obj_ty {
+            Ty::Error => return,
+            Ty::Named(n, cargs) if self.classes.contains_key(n) => (n.clone(), cargs.clone()),
+            other => {
+                self.err_coded(
+                    Self::expr_span(object),
+                    format!("cannot set field `{name}` on non-class `{other}`"),
+                    "E-ASSIGN-TARGET",
+                    Some("field assignment requires a class instance".into()),
+                );
+                return;
+            }
+        };
+        let fty = match self.classes[&class].fields.get(name).cloned() {
+            Some(t) => apply_subst(&t, &self.class_subst(&class, &cargs)),
+            None => {
+                self.err_coded(
+                    span,
+                    format!("`{class}` has no field `{name}` to assign"),
+                    "E-ASSIGN-UNKNOWN",
+                    None,
+                );
+                return;
+            }
+        };
+        if !self.classes[&class].mutable_fields.contains(name) {
+            self.err_coded(
+                span,
+                format!("field `{name}` of `{class}` is immutable and cannot be assigned"),
+                "E-ASSIGN-IMMUTABLE",
+                Some(format!(
+                    "declare it `mutable` (e.g. `mutable {fty} {name};`)"
+                )),
+            );
+            return;
+        }
+        if !self.ty_assignable(vty, &fty) {
+            self.err_coded(
+                Self::expr_span(value),
+                format!("cannot assign `{vty}` to field `{name}: {fty}`"),
+                "E-ASSIGN-TYPE",
+                None,
+            );
         }
     }
 
@@ -6088,7 +6182,8 @@ function main() { var dbl = fn(int x) => x + 1000; }"#,
     }
 
     #[test]
-    fn reassign_field_target_is_unsupported() {
+    fn field_assign_on_non_class_is_error() {
+        // A field-set target whose object is not a class instance is `E-ASSIGN-TARGET` (M-mut.6).
         let bad = errors_of("function main() { mutable int x = 1; x.f = 2; }");
         assert!(
             bad.iter().any(|e| e.code == Some("E-ASSIGN-TARGET")),
@@ -6305,5 +6400,70 @@ function main() { var dbl = fn(int x) => x + 1000; }"#,
             "import Core.Console; function main() { mutable int? o = 5; while (var v = o) { Console.println(\"{v}\"); o = null; } }"
         )
         .is_empty());
+    }
+
+    // ---- M-mut.6: shared-mutable instance field set `o.f = e` ----
+
+    #[test]
+    fn field_set_on_mutable_field_is_ok() {
+        let src = "class P { constructor(public mutable int x) {} } \
+                   function main() { P p = P(1); p.x = 2; }";
+        assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    }
+
+    #[test]
+    fn field_set_on_immutable_field_is_error() {
+        let src = "class P { constructor(public int x) {} } \
+                   function main() { P p = P(1); p.x = 2; }";
+        let bad = errors_of(src);
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-ASSIGN-IMMUTABLE")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn field_set_unknown_field_is_error() {
+        let src = "class P { constructor(public mutable int x) {} } \
+                   function main() { P p = P(1); p.y = 2; }";
+        let bad = errors_of(src);
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-ASSIGN-UNKNOWN")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn field_set_wrong_value_type_is_error() {
+        let src = "class P { constructor(public mutable int x) {} } \
+                   function main() { P p = P(1); p.x = \"s\"; }";
+        let bad = errors_of(src);
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-ASSIGN-TYPE")),
+            "{bad:?}"
+        );
+    }
+
+    #[test]
+    fn field_set_via_this_in_method_is_ok() {
+        // `this.f = e` inside a method resolves the receiver via `cur_class`; the explicit declared
+        // `mutable` field is writable.
+        let src = "class C { mutable int n; \
+                     constructor(public mutable int seed) { this.n = seed; } \
+                     function bump() -> int { this.n = this.n + 1; return this.n; } } \
+                   function main() { C c = C(10); c.bump(); }";
+        assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    }
+
+    #[test]
+    fn field_set_through_safe_access_is_error() {
+        // `o?.f = e` is a meaningless assignment target → `E-ASSIGN-TARGET`.
+        let src = "class P { constructor(public mutable int x) {} } \
+                   function main() { P? p = P(1); p?.x = 2; }";
+        let bad = errors_of(src);
+        assert!(
+            bad.iter().any(|e| e.code == Some("E-ASSIGN-TARGET")),
+            "{bad:?}"
+        );
     }
 }

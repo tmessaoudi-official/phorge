@@ -5,6 +5,7 @@
 //! and `Drop` reclaims correctly — no cycle can leak, so no tracing collector is needed (that is
 //! deferred to M3, when mutation could create cycles). See `docs/specs/2026-06-16-m2-p5-object-model-design.md`.
 
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -66,10 +67,16 @@ pub enum ClosureData {
     },
 }
 
+/// A class instance — a **shared-mutable handle** (M-mut.6). The `class` is immutable (set once at
+/// construction); only `fields` mutates, so it alone is interior-mutable (`RefCell`). Held in
+/// `Rc<Instance>`, so cloning a `Value::Instance` shares the *same* cell: a field write through one
+/// binding (`o.f = e`) is visible through every other binding — PHP/Java object semantics (F2).
+/// Field reads clone the value out and drop the borrow immediately; writes take a `borrow_mut` only
+/// after the value is fully evaluated, so a borrow is never held across a re-entrant `eval`/`run`.
 #[derive(Debug, Clone)]
 pub struct Instance {
     pub class: String,
-    pub fields: HashMap<String, Value>,
+    pub fields: RefCell<HashMap<String, Value>>,
 }
 
 #[derive(Debug, Clone)]
@@ -227,9 +234,27 @@ impl Value {
         }
     }
 
-    /// Structural value equality for `==` / `!=` / `is`.
-    #[allow(clippy::float_cmp)] // intentional: language-level float equality
+    /// Structural value equality for `==` / `!=`. Cycle-safe (F4): instances became shared-mutable
+    /// handles in M-mut.6, so `a.next = b; b.next = a` can form a reference cycle. An unguarded
+    /// recursion on such a cycle would overflow the native stack — and at *different* depths per
+    /// backend, breaking `agree_err`. The `visited` pair set short-circuits a re-encountered
+    /// `(a, b)` pair to `true` (co-inductive bisimulation, the standard correct cyclic equality), so
+    /// `==` always terminates deterministically. PHP `==` is likewise cycle-protected.
     pub fn eq_val(&self, other: &Value) -> bool {
+        self.eq_val_rec(other, &mut Vec::new())
+    }
+
+    /// Recursive worker for [`eq_val`]. `visited` records instance-pointer pairs currently being
+    /// compared; only the `Instance` arm consults/extends it (lists/maps/sets/enums are acyclic value
+    /// types — a cycle can only thread through an instance handle). Not popping memoizes equal pairs
+    /// too, which is sound: a *false* pair short-circuits the whole comparison (every `&&`/`.all()`
+    /// propagates the `false` up), so a stale-`true` memo for a false pair is never observed.
+    #[allow(clippy::float_cmp)] // intentional: language-level float equality
+    fn eq_val_rec(
+        &self,
+        other: &Value,
+        visited: &mut Vec<(*const Instance, *const Instance)>,
+    ) -> bool {
         use Value::*;
         match (self, other) {
             (Int(a), Int(b)) => a == b,
@@ -239,7 +264,10 @@ impl Value {
             (Bytes(a), Bytes(b)) => a == b,
             (Unit, Unit) => true,
             (List(a), List(b)) => {
-                a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| x.eq_val(y))
+                a.len() == b.len()
+                    && a.iter()
+                        .zip(b.iter())
+                        .all(|(x, y)| x.eq_val_rec(y, visited))
             }
             // Maps compare **order-independently** (insertion order is part of iteration, not of
             // identity): same key set with `eq_val` values. This matches PHP associative `==`.
@@ -248,7 +276,7 @@ impl Value {
                     && a.iter().all(|(k, v)| {
                         b.iter()
                             .find(|(bk, _)| bk == k)
-                            .is_some_and(|(_, bv)| v.eq_val(bv))
+                            .is_some_and(|(_, bv)| v.eq_val_rec(bv, visited))
                     })
             }
             // Sets compare **order-independently** (insertion order is iteration, not identity):
@@ -259,14 +287,26 @@ impl Value {
                 a.ty == b.ty
                     && a.variant == b.variant
                     && a.payload.len() == b.payload.len()
-                    && a.payload.iter().zip(&b.payload).all(|(x, y)| x.eq_val(y))
+                    && a.payload
+                        .iter()
+                        .zip(&b.payload)
+                        .all(|(x, y)| x.eq_val_rec(y, visited))
             }
             (Instance(a), Instance(b)) => {
-                a.class == b.class
-                    && a.fields.len() == b.fields.len()
-                    && a.fields
+                let pair = (Rc::as_ptr(a), Rc::as_ptr(b));
+                if visited.contains(&pair) {
+                    return true; // already comparing this pair (a cycle) → assume equal
+                }
+                visited.push(pair);
+                if a.class != b.class {
+                    return false;
+                }
+                let fa = a.fields.borrow();
+                let fb = b.fields.borrow();
+                fa.len() == fb.len()
+                    && fa
                         .iter()
-                        .all(|(k, v)| b.fields.get(k).is_some_and(|bv| v.eq_val(bv)))
+                        .all(|(k, v)| fb.get(k).is_some_and(|bv| v.eq_val_rec(bv, visited)))
             }
             (Null, Null) => true,
             // Functions are not comparable — the checker forbids `==`/`!=` on function
@@ -519,9 +559,35 @@ mod tests {
     fn as_display_is_none_for_composite() {
         let inst = Value::Instance(Rc::new(Instance {
             class: "Greeter".into(),
-            fields: HashMap::new(),
+            fields: RefCell::new(HashMap::new()),
         }));
         assert!(inst.as_display().is_none());
+    }
+
+    #[test]
+    fn eq_val_terminates_on_a_reference_cycle() {
+        // M-mut.6 / F4: build `a.next = b; b.next = a` (a 2-node instance cycle) and assert `eq_val`
+        // returns instead of overflowing the native stack. Without the `visited` guard this test
+        // aborts the process via stack overflow; with it, it terminates deterministically.
+        let a = Rc::new(Instance {
+            class: "Node".into(),
+            fields: RefCell::new(HashMap::new()),
+        });
+        let b = Rc::new(Instance {
+            class: "Node".into(),
+            fields: RefCell::new(HashMap::new()),
+        });
+        a.fields
+            .borrow_mut()
+            .insert("next".into(), Value::Instance(b.clone()));
+        b.fields
+            .borrow_mut()
+            .insert("next".into(), Value::Instance(a.clone()));
+        let va = Value::Instance(a);
+        let vb = Value::Instance(b);
+        // The two cyclic nodes are structurally bisimilar ⇒ equal; the call must terminate.
+        assert!(va.eq_val(&vb));
+        assert!(va.eq_val(&va.clone()));
     }
 
     #[test]

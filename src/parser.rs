@@ -1486,6 +1486,8 @@ impl Parser {
                 TokenKind::Protected => Modifier::Protected,
                 TokenKind::Const => Modifier::Const,
                 TokenKind::Final => Modifier::Final,
+                // `mutable` field / promoted ctor param (M-mut.6); immutable by default.
+                TokenKind::Mutable => Modifier::Mutable,
                 _ => break,
             };
             self.advance();
@@ -2484,6 +2486,38 @@ mod tests {
                 match &c.members[2] {
                     ClassMember::Method(f) => assert_eq!(f.name, "greet"),
                     other => panic!("member 2: {other:?}"),
+                }
+            }
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_mutable_field_and_ctor_param_modifier() {
+        // M-mut.6: `mutable` is accepted in field + promoted-ctor-param modifier position.
+        let src = "class C { \
+                     mutable int count; \
+                     constructor(public mutable int total) {} \
+                   }";
+        match item(src) {
+            Item::Class(c) => {
+                match &c.members[0] {
+                    ClassMember::Field {
+                        modifiers, name, ..
+                    } => {
+                        assert_eq!(name, "count");
+                        assert_eq!(modifiers, &vec![Modifier::Mutable]);
+                    }
+                    other => panic!("member 0: {other:?}"),
+                }
+                match &c.members[1] {
+                    ClassMember::Constructor { params, .. } => {
+                        assert_eq!(
+                            params[0].modifiers,
+                            vec![Modifier::Public, Modifier::Mutable]
+                        );
+                    }
+                    other => panic!("member 1: {other:?}"),
                 }
             }
             other => panic!("got {other:?}"),

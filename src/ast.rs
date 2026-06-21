@@ -542,6 +542,10 @@ pub enum Modifier {
     Protected,
     Const,
     Final,
+    /// `mutable` on a class field or promoted ctor param (M-mut.6) — the field may be reassigned via
+    /// `o.f = e`. Immutable by default (a property of the place, not the type); erased in PHP output
+    /// (PHP properties are always mutable unless `readonly`). The binding analog of `VarDecl.mutable`.
+    Mutable,
 }
 
 /// A constructor parameter, which may carry promotion modifiers

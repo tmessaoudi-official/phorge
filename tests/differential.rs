@@ -1038,6 +1038,24 @@ fn mutation_element_set_oob_faults_agree() {
 }
 
 #[test]
+fn mutation_instance_field_set_agrees() {
+    // M-mut.6: shared-mutable instance field set `o.f = e` — handle semantics, byte-identical on
+    // run/runvm + real PHP (`agree` is the 3-way oracle).
+    // Basic field set + read-back.
+    agree("import Core.Console; class P { constructor(public mutable int x) {} } function main(){ P p = P(1); p.x = 42; Console.println(\"{p.x}\"); }"); // 42
+                                                                                                                                                         // HANDLE semantics (the P0 catcher, F13): mutate via one binding, observe via the alias — BOTH
+                                                                                                                                                         // see it (the opposite of value-type COW). This is the value/handle slip a 2-binding test catches.
+    agree("import Core.Console; class P { constructor(public mutable int x) {} } function main(){ P p = P(1); P q = p; p.x = 99; Console.println(\"{p.x} {q.x}\"); }"); // 99 99
+                                                                                                                                                                        // `this.f = e` inside a method, visible through the original binding across calls.
+    agree("import Core.Console; class C { constructor(public mutable int n) {} function bump() -> int { this.n = this.n + 1; return this.n; } } function main(){ C c = C(10); c.bump(); c.bump(); Console.println(\"{c.n}\"); }"); // 12
+                                                                                                                                                                                                                                   // A declared (non-promoted) `mutable` field initialized in the ctor body via `this.f = e`.
+    agree("import Core.Console; class B { mutable int v; constructor(int seed) { this.v = seed * 2; } function get() -> int { return this.v; } } function main(){ B b = B(5); b.v = b.v + 1; Console.println(\"{b.get()}\"); }"); // 11
+                                                                                                                                                                                                                                  // Field set on an instance reached through another field (`a.b.c = e`) — handle semantics all the way.
+    agree("import Core.Console; class Inner { constructor(public mutable int v) {} } class Outer { constructor(public Inner inner) {} } function main(){ Outer o = Outer(Inner(1)); o.inner.v = 7; Console.println(\"{o.inner.v}\"); }");
+    // 7
+}
+
+#[test]
 fn mutation_clone_with_agrees() {
     // M-mut.4a: `obj with { f = e }` — fresh instance, source unchanged, byte-identical on both.
     agree("import Core.Console; class P { constructor(public int x, public int y) {} } function main(){ P p = P(1, 2); P q = p with { x = 9 }; Console.println(\"{p.x} {p.y} {q.x} {q.y}\"); }"); // 1 2 9 2
