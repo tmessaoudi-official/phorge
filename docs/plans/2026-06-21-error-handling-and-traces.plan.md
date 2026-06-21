@@ -42,6 +42,23 @@
   (Core.Html escaping discipline, runtime glue outside the oracle); prod = bare 500 no-leak. No new
   `Op`, stdout unchanged, FaultKind preserved.
 
+- [2026-06-21] AGREED: **execute Slice 1 fully autonomously** — build all 8 impl tasks straight
+  through, no per-task checkpoint, stop only on a genuine craftsmanship fork or a red gate (mirrors the
+  visibility + mutation directives). `_AUTONOMOUS_3C=1`.
+
+## STATUS (Slice 1 — in progress, 2026-06-21)
+- **DONE + committed:** Task 1 `Frame`+`Diagnostic.frames`+CLI render (`3cc83fa`); Task 2 VM frame-walk
+  (`d6a7230`); Task 3 interpreter `trace_stack` (`6cc563c`); **Task 5 trace-parity** — `run≡runvm`
+  byte-identical traces, line backfilled from the innermost frame (`7a424ca`). 689 tests green.
+  Frame names mirror the VM's compiled `Function.name` (`main`/`Class::method`/`Class::new`/`$set`).
+- **REMAINING (resume here):** Task 4 (loader per-function file attribution + source map on `Unit`,
+  and switch `run_program`/`runvm_program` from `.to_string()` to `.render(src)` so frames/caret reach
+  the user); Task 6 (`phg serve --dev` web error page, prod bare-500); Task 7 (CLI color/caret wiring);
+  Task 8 (docs + `examples/errors/` walkthrough). Plan: `docs/plans/2026-06-21-stack-traces-impl.plan.md`.
+- **Known gap to wire in Task 4:** frames are built but the CLI fault path still maps via `to_string()`
+  (Display) — so a *user* running `phg run` sees the header but NOT yet the frame list; that lands when
+  Task 4 switches the mapping to `render()`.
+
 ## Formal Plan
 Slice-1 implementation plan: **`docs/plans/2026-06-21-stack-traces-impl.plan.md`** — 8 tasks, TDD:
 `Frame`+`Diagnostic.frames`+CLI render → VM frame-walk → interpreter `trace_stack` → loader
