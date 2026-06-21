@@ -38,6 +38,11 @@ struct ClassInfo {
     /// `ClassName.field = e` (`E-ASSIGN-IMMUTABLE`).
     static_mut: std::collections::HashSet<String>,
     methods: HashMap<String, FnSig>,
+    /// Property hooks (M-mut.7b) — virtual members keyed by name. Disjoint from `fields`/`statics`
+    /// (a hook has no storage). The flags record whether the hook is readable (`has_get`) and/or
+    /// writable (`has_set`): reading a `!has_get` hook is `E-HOOK-NO-GET`, writing a `!has_set` one
+    /// is `E-HOOK-NO-SET`. A member read/write resolves a hook here before the instance-field path.
+    hooks: HashMap<String, HookInfo>,
     /// constructor parameter types, for `ClassName(args)` calls
     ctor: Vec<Ty>,
     /// Generic type parameters this class declares (`["T"]` for `class Box<T>`). Empty for a
@@ -45,6 +50,13 @@ struct ClassInfo {
     /// occurrences: construction unifies the ctor against the arguments to bind them, and member
     /// access substitutes them with the instance's type arguments (M-RT generics-all).
     type_params: Vec<String>,
+}
+
+/// A property hook's declared type and which accessors it provides (M-mut.7b).
+struct HookInfo {
+    ty: Ty,
+    has_get: bool,
+    has_set: bool,
 }
 
 /// An interface's own method signatures plus its declared parent interfaces (`extends`). The
@@ -834,6 +846,7 @@ impl Checker {
                 statics: HashMap::new(),
                 static_mut: std::collections::HashSet::new(),
                 methods: HashMap::new(),
+                hooks: HashMap::new(),
                 ctor: Vec::new(),
                 type_params: c.type_params.clone(),
             },
@@ -844,6 +857,7 @@ impl Checker {
         let mut statics: HashMap<String, Ty> = HashMap::new();
         let mut static_mut = std::collections::HashSet::new();
         let mut methods = HashMap::new();
+        let mut hooks: HashMap<String, HookInfo> = HashMap::new();
         let mut ctor = Vec::new();
         // The class's type parameters are in scope while resolving every member signature (fields,
         // constructor, methods), so a bare `T` resolves to `Ty::Param("T")` (M-RT generics-all). A
@@ -985,11 +999,53 @@ impl Checker {
                         },
                     );
                 }
+                // A property hook (M-mut.7b): record its declared type and which accessors it
+                // provides. The body is type-checked in phase 2 (`check_program`), with `this` and
+                // the field scope live. Class type params are in scope for the hook's type.
+                ClassMember::Hook {
+                    ty, name, get, set, ..
+                } => {
+                    self.active_type_params = class_tp.clone();
+                    let hty = self.resolve_type(ty);
+                    self.active_type_params.clear();
+                    if hooks.contains_key(name) {
+                        self.err_coded(
+                            c.span,
+                            format!("property hook `{name}` is declared more than once"),
+                            "E-HOOK-DUP",
+                            None,
+                        );
+                    }
+                    hooks.insert(
+                        name.clone(),
+                        HookInfo {
+                            ty: hty,
+                            has_get: get.is_some(),
+                            has_set: set.is_some(),
+                        },
+                    );
+                }
             }
         }
         // Explicit field decls win: only insert a promoted field if not already declared.
         for (name, ty) in promoted {
             fields.entry(name).or_insert(ty);
+        }
+        // A property hook is virtual: its name must not also name a stored field, a static, or a
+        // method (the read/write path resolves a hook before the field, so a collision would shadow
+        // the storage silently). Order-independent — checked after every member is collected.
+        for hname in hooks.keys() {
+            if fields.contains_key(hname)
+                || statics.contains_key(hname)
+                || methods.contains_key(hname)
+            {
+                self.err_coded(
+                    c.span,
+                    format!("property hook `{hname}` collides with a field, static, or method of the same name"),
+                    "E-HOOK-DUP",
+                    Some("a hook is virtual — give it a distinct name from any stored member".into()),
+                );
+            }
         }
         let info = self.classes.get_mut(&c.name).unwrap();
         info.fields = fields;
@@ -997,6 +1053,7 @@ impl Checker {
         info.statics = statics;
         info.static_mut = static_mut;
         info.methods = methods;
+        info.hooks = hooks;
         info.ctor = ctor;
     }
 
@@ -1058,6 +1115,56 @@ impl Checker {
                                 self.active_type_params.clear();
                                 self.cur_ret = prev_ret;
                             }
+                            // A property hook (M-mut.7b) — type-check the `get` expression against
+                            // the hook's declared type and the `set` block with the assigned value
+                            // `v` bound to that type, both with `this` + the field scope live.
+                            ClassMember::Hook {
+                                ty, name, get, set, ..
+                            } => {
+                                self.active_type_params = c.type_params.clone();
+                                let hook_ty = self.resolve_type(ty);
+                                if let Some(e) = get {
+                                    self.push_scope();
+                                    let ety = self.check_expr(e);
+                                    if !self.ty_assignable(&ety, &hook_ty) {
+                                        self.err_coded(
+                                            Self::expr_span(e),
+                                            format!(
+                                                "`get` of `{name}` yields `{ety}`, expected `{hook_ty}`"
+                                            ),
+                                            "E-HOOK-TYPE",
+                                            None,
+                                        );
+                                    }
+                                    self.pop_scope();
+                                }
+                                if let Some((p, body)) = set {
+                                    let prev_ret = std::mem::replace(&mut self.cur_ret, Ty::Unit);
+                                    self.push_scope();
+                                    let pty = self.resolve_type(&p.ty);
+                                    if !(self.ty_assignable(&pty, &hook_ty)
+                                        && self.ty_assignable(&hook_ty, &pty))
+                                    {
+                                        self.err_coded(
+                                            p.span,
+                                            format!(
+                                                "`set` parameter of `{name}` is `{pty}`, expected the hook type `{hook_ty}`"
+                                            ),
+                                            "E-HOOK-TYPE",
+                                            Some(format!("declare it `set({hook_ty} {})`", p.name)),
+                                        );
+                                    }
+                                    // Bind `v` at the hook's type so the body checks consistently
+                                    // even when the declared parameter type mismatched.
+                                    self.declare(&p.name, hook_ty.clone(), p.span);
+                                    for s in body {
+                                        self.check_stmt(s);
+                                    }
+                                    self.pop_scope();
+                                    self.cur_ret = prev_ret;
+                                }
+                                self.active_type_params.clear();
+                            }
                             ClassMember::Field { .. } => {}
                         }
                     }
@@ -1103,6 +1210,15 @@ impl Checker {
                                 }
                             }
                             ClassMember::Method(f) => self.check_fn_casing(f),
+                            // A hook name + its `set` parameter follow field/var casing (camelCase).
+                            ClassMember::Hook {
+                                name, set, span, ..
+                            } => {
+                                self.want_name_case(name, *span);
+                                if let Some((p, _)) = set {
+                                    self.want_name_case(&p.name, p.span);
+                                }
+                            }
                         }
                     }
                 }
@@ -2752,6 +2868,21 @@ impl Checker {
         };
         let field_ty = match base {
             Ty::Named(cls, cargs) => {
+                // A property hook (M-mut.7b) is resolved before a stored field: `o.name` runs its
+                // `get`. Reading a hook with no `get` (write-only) is `E-HOOK-NO-GET`. A hook is not
+                // generic (`package main` only), so no substitution applies to its type.
+                if let Some(h) = self.classes.get(&cls).and_then(|info| info.hooks.get(name)) {
+                    let (hty, has_get) = (h.ty.clone(), h.has_get);
+                    if !has_get {
+                        return self.err_coded(
+                            span,
+                            format!("property `{name}` of `{cls}` is write-only (no `get`)"),
+                            "E-HOOK-NO-GET",
+                            Some("add a `get => …;` clause to read it".into()),
+                        );
+                    }
+                    return if safe { Self::opt_wrap(hty) } else { hty };
+                }
                 let found = self
                     .classes
                     .get(&cls)
@@ -3019,6 +3150,33 @@ impl Checker {
                 return;
             }
         };
+        // A property hook (M-mut.7b) is resolved before a stored field: `o.name = e` runs its
+        // `set`. Writing a hook with no `set` (read-only computed) is `E-HOOK-NO-SET`; otherwise the
+        // value must be assignable to the hook's type. A hook is never `mutable`-gated (it has no
+        // storage); the set body decides what to mutate.
+        if let Some(h) = self
+            .classes
+            .get(&class)
+            .and_then(|info| info.hooks.get(name))
+        {
+            let (hty, has_set) = (h.ty.clone(), h.has_set);
+            if !has_set {
+                self.err_coded(
+                    span,
+                    format!("property `{name}` of `{class}` is read-only (no `set`)"),
+                    "E-HOOK-NO-SET",
+                    Some("add a `set(T v) { … }` clause to assign it".into()),
+                );
+            } else if !self.ty_assignable(vty, &hty) {
+                self.err_coded(
+                    Self::expr_span(value),
+                    format!("cannot assign `{vty}` to property `{name}: {hty}`"),
+                    "E-ASSIGN-TYPE",
+                    None,
+                );
+            }
+            return;
+        }
         let fty = match self.classes[&class].fields.get(name).cloned() {
             Some(t) => apply_subst(&t, &self.class_subst(&class, &cargs)),
             None => {
@@ -4019,6 +4177,16 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                             let b = std::mem::take(body);
                             *body = rblock(b, html);
                         }
+                        // A property hook's get expression + set block may contain `html"…"`
+                        // interpolation — rewrite both (M-mut.7b).
+                        ClassMember::Hook { get, set, .. } => {
+                            if let Some(e) = get.take() {
+                                *get = Some(rexpr(e, html));
+                            }
+                            if let Some((p, body)) = set.take() {
+                                *set = Some((p, rblock(body, html)));
+                            }
+                        }
                         ClassMember::Field { .. } => {}
                     }
                 }
@@ -4424,6 +4592,26 @@ pub fn erase_generics(program: Program) -> Program {
                                 span,
                             }
                         }
+                        // A property hook (M-mut.7b): erase the class params from its type, get
+                        // expression, and set parameter+block (a hook declares no `<T>` of its own).
+                        ClassMember::Hook {
+                            ty,
+                            name,
+                            get,
+                            set: setter,
+                            span,
+                        } => {
+                            let set: Params = class_params.iter().copied().collect();
+                            ClassMember::Hook {
+                                ty: rty(&ty, &set),
+                                name,
+                                get: get.as_ref().map(|e| rexpr(e, &set)),
+                                set: setter.as_ref().map(|(p, b)| {
+                                    (rparam(p, &set), b.iter().map(|s| rstmt(s, &set)).collect())
+                                }),
+                                span,
+                            }
+                        }
                     })
                     .collect();
                 Item::Class(ClassDecl {
@@ -4621,6 +4809,31 @@ pub fn expand_aliases(program: &Program) -> Program {
                 span: *span,
             },
             ClassMember::Method(f) => ClassMember::Method(rfunc(f, a)),
+            // A property hook (M-mut.7b): expand aliases in its type + set parameter type; the get
+            // expression and set block carry no stmt-level type annotations this pass rewrites
+            // (consistent with how method-body exprs are treated above), so they pass through.
+            ClassMember::Hook {
+                ty,
+                name,
+                get,
+                set,
+                span,
+            } => ClassMember::Hook {
+                ty: rt(ty, a, 0),
+                name: name.clone(),
+                get: get.clone(),
+                set: set.as_ref().map(|(p, b)| {
+                    (
+                        Param {
+                            ty: rt(&p.ty, a, 0),
+                            name: p.name.clone(),
+                            span: p.span,
+                        },
+                        b.iter().map(|s| rstmt(s, a)).collect(),
+                    )
+                }),
+                span: *span,
+            },
         }
     }
 

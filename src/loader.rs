@@ -30,7 +30,9 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::ast::{ClassMember, Expr, Item, LambdaBody, MatchArm, Program, Stmt, StrPart, Type};
+use crate::ast::{
+    ClassMember, Expr, Item, LambdaBody, MatchArm, Param, Program, Stmt, StrPart, Type,
+};
 use crate::lexer::lex;
 use crate::manifest::{validate_path_component, Project};
 use crate::parser::Parser;
@@ -481,6 +483,26 @@ fn resolve_item(item: Item, ctx: &ResolveCtx) -> Item {
                     }
                     ClassMember::Field { ty, .. } => {
                         *ty = resolve_type(ty, ctx);
+                    }
+                    // A property hook (M-mut.7b) carries a type plus a `get` expression and/or a
+                    // `set` block — each of which may name cross-package types or call cross-package
+                    // functions, so resolve them exactly like a method body (mangle + type-rewrite).
+                    ClassMember::Hook { ty, get, set, .. } => {
+                        *ty = resolve_type(ty, ctx);
+                        if let Some(e) = get.take() {
+                            *get = Some(resolve_expr(e, ctx));
+                        }
+                        if let Some((p, body)) = set.take() {
+                            let pty = resolve_type(&p.ty, ctx);
+                            *set = Some((
+                                Param {
+                                    ty: pty,
+                                    name: p.name,
+                                    span: p.span,
+                                },
+                                resolve_block(body, ctx),
+                            ));
+                        }
                     }
                 }
             }

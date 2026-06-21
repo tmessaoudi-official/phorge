@@ -596,6 +596,34 @@ impl Transpiler {
                     }
                 }
                 ClassMember::Method(f) => self.emit_function(f, true)?,
+                // A property hook (M-mut.7b) → a PHP 8.4 property hook. The hook is virtual (no
+                // backing store), so it emits no default; the get expression and set block reference
+                // *other* (real) fields. `public` because Phorge does not enforce field visibility.
+                ClassMember::Hook {
+                    ty, name, get, set, ..
+                } => {
+                    let pty = Self::emit_type(ty);
+                    self.line(&format!("public {pty} ${name} {{"));
+                    self.indent += 1;
+                    if let Some(g) = get {
+                        let e = self.emit_expr(g)?;
+                        self.line(&format!("get => {e};"));
+                    }
+                    if let Some((p, body)) = set {
+                        self.line(&format!("set({pty} ${}) {{", p.name));
+                        self.indent += 1;
+                        self.push_scope();
+                        self.declare(&p.name);
+                        for s in body {
+                            self.emit_stmt(s)?;
+                        }
+                        self.pop_scope();
+                        self.indent -= 1;
+                        self.line("}");
+                    }
+                    self.indent -= 1;
+                    self.line("}");
+                }
             }
         }
         self.cur_class_fields = prev;

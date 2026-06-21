@@ -271,6 +271,27 @@ pub fn explain_text(code: &str) -> Option<String> {
              Only `name = expr;` (reassigning a local) is supported in this slice. Field assignment\n\
              (`obj.field = …`) and element assignment (`xs[i] = …`) land in a later mutation slice.\n"
         }
+        "E-HOOK-NO-GET" => {
+            "E-HOOK-NO-GET — a property hook with no `get` was read.\n\n\
+             A property hook may be read-only, write-only, or both. Reading one that declares only a\n\
+             `set` is not allowed. Add a `get => …;` clause, or do not read this property.\n"
+        }
+        "E-HOOK-NO-SET" => {
+            "E-HOOK-NO-SET — a property hook with no `set` was assigned.\n\n\
+             A read-only computed property (only a `get`) cannot be assigned. Add a `set(T v) { … }`\n\
+             clause to make it writable, or do not assign this property.\n"
+        }
+        "E-HOOK-TYPE" => {
+            "E-HOOK-TYPE — a property hook's `get` result or `set` parameter does not match its type.\n\n\
+             A hook `T name { … }` reads as `T`, so its `get` expression must yield `T`; its `set`\n\
+             parameter must be declared `set(T v)`. Align the get expression / set parameter with the\n\
+             hook's declared type.\n"
+        }
+        "E-HOOK-DUP" => {
+            "E-HOOK-DUP — a property hook collides with another member.\n\n\
+             A hook is virtual (it has no storage), so its name must be distinct from every field,\n\
+             static, method, and other hook in the class. Rename the hook or the colliding member.\n"
+        }
         "E-OPT-USE" => {
             "E-OPT-USE — a plain `.field` / `.method()` was used on an optional `T?` receiver.\n\n\
              The receiver could be `null`, so a plain member access risks a null dereference. Use\n\
@@ -443,7 +464,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP)"
         )
     })
 }

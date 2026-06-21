@@ -1462,9 +1462,20 @@ impl Parser {
             }
             TokenKind::Function => Ok(ClassMember::Method(self.parse_function(modifiers, sp)?)),
             _ => {
-                // field: [modifiers] Type name [= init] ;
+                // field or property hook: [modifiers] Type name …
                 let ty = self.parse_type()?;
                 let name = self.expect_ident("a field name")?;
+                // A `{` after the name opens a **property hook** body (M-mut.7b):
+                // `Type name { get => expr; set(Type v) { stmts } }`. Anything else is a field. A
+                // hook is virtual behavior, not storage, so it carries no modifiers (`mutable`/
+                // `static` would describe a backing slot it doesn't have).
+                if self.check(&TokenKind::LBrace) {
+                    if !modifiers.is_empty() {
+                        return Err(self.error("a property hook to carry no modifiers"));
+                    }
+                    return self.parse_property_hook(ty, name, sp);
+                }
+                // field: [modifiers] Type name [= init] ;
                 // An optional field-level initializer (`static mutable int total = 0;`). The checker
                 // requires it for `static` fields and forbids it on instance fields (M-mut.7).
                 let init = if self.check(&TokenKind::Eq) {
@@ -1483,6 +1494,60 @@ impl Parser {
                 })
             }
         }
+    }
+
+    /// A property hook body (M-mut.7b): `{ get => expr; [set(Type v) { stmts }] }` — clauses in
+    /// either order, each at most once, at least one required. Assumes the current token is `{`.
+    fn parse_property_hook(
+        &mut self,
+        ty: Type,
+        name: String,
+        sp: Span,
+    ) -> Result<ClassMember, Diagnostic> {
+        self.expect(&TokenKind::LBrace, "'{' to open a property hook body")?;
+        let mut get: Option<Expr> = None;
+        let mut set: Option<(Param, Vec<Stmt>)> = None;
+        while !self.check(&TokenKind::RBrace) && !self.check(&TokenKind::Eof) {
+            let clause = self.expect_ident("`get` or `set`")?;
+            match clause.as_str() {
+                "get" => {
+                    if get.is_some() {
+                        return Err(self.error("a single `get` clause"));
+                    }
+                    // `get => expr ;`
+                    self.expect(&TokenKind::FatArrow, "'=>' after `get`")?;
+                    let body = self.parse_expr()?;
+                    self.expect(&TokenKind::Semicolon, "';' after the `get` expression")?;
+                    get = Some(body);
+                }
+                "set" => {
+                    if set.is_some() {
+                        return Err(self.error("a single `set` clause"));
+                    }
+                    // `set(Type v) { stmts }`
+                    self.expect(&TokenKind::LParen, "'(' after `set`")?;
+                    let params = self.parse_params()?;
+                    self.expect(&TokenKind::RParen, "')' to close the `set` parameter")?;
+                    if params.len() != 1 {
+                        return Err(self.error("exactly one `set` parameter `set(Type v)`"));
+                    }
+                    let body = self.parse_block()?;
+                    set = Some((params.into_iter().next().unwrap(), body));
+                }
+                _ => return Err(self.error("`get` or `set` in a property hook")),
+            }
+        }
+        self.expect(&TokenKind::RBrace, "'}' to close the property hook body")?;
+        if get.is_none() && set.is_none() {
+            return Err(self.error("at least a `get` or `set` clause in the property hook"));
+        }
+        Ok(ClassMember::Hook {
+            ty,
+            name,
+            get,
+            set,
+            span: sp,
+        })
     }
 
     /// Consume any run of visibility/binding modifiers.
@@ -2550,6 +2615,50 @@ mod tests {
                     assert_eq!(name, "total");
                     assert_eq!(modifiers, &vec![Modifier::Static, Modifier::Mutable]);
                     assert!(matches!(init, Some(Expr::Int(0, _))));
+                }
+                other => panic!("member 0: {other:?}"),
+            },
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_property_hook_get_and_set() {
+        // M-mut.7b: `float fahrenheit { get => …; set(float v) { … } }` — a property hook with
+        // both a computed-read body and an intercepted-write body.
+        let src = "class Temp { \
+                     mutable float celsius; \
+                     float fahrenheit { \
+                       get => this.celsius * 2.0; \
+                       set(float v) { this.celsius = v; } \
+                     } \
+                   }";
+        match item(src) {
+            Item::Class(c) => match &c.members[1] {
+                ClassMember::Hook {
+                    name, get, set, ty, ..
+                } => {
+                    assert_eq!(name, "fahrenheit");
+                    assert!(matches!(ty, Type::Named { name, .. } if name == "float"));
+                    assert!(get.is_some(), "expected a get body");
+                    let (p, stmts) = set.as_ref().expect("expected a set body");
+                    assert_eq!(p.name, "v");
+                    assert_eq!(stmts.len(), 1);
+                }
+                other => panic!("member 1: {other:?}"),
+            },
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_read_only_property_hook() {
+        // A get-only hook (no `set`) is a read-only computed property.
+        match item("class C { int doubled { get => 2; } }") {
+            Item::Class(c) => match &c.members[0] {
+                ClassMember::Hook { get, set, .. } => {
+                    assert!(get.is_some());
+                    assert!(set.is_none());
                 }
                 other => panic!("member 0: {other:?}"),
             },

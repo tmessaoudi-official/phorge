@@ -1069,6 +1069,24 @@ fn mutation_static_field_agrees() {
 }
 
 #[test]
+fn mutation_property_hooks_agrees() {
+    // M-mut.7b: property hooks `T name { get => …; set(T v) { … } }` — a get computes on read, a
+    // set intercepts a write (typically mutating a backing `mutable` field). Byte-identical on
+    // run/runvm + real PHP (the synthetic-method VM lowering ≡ the PHP 8.4 property hook).
+    // A read-only computed hook reads a backing field.
+    agree("import Core.Console; class C { constructor(public mutable int raw) {} int doubled { get => this.raw * 2; } } function main(){ C c = C(21); Console.println(\"{c.doubled}\"); }"); // 42
+                                                                                                                                                                                             // A get used as an arithmetic operand — the CTy-operand path (`o.hook + 1` must specialize on the VM).
+    agree("import Core.Console; class C { constructor(public mutable int raw) {} int doubled { get => this.raw * 2; } } function main(){ C c = C(21); Console.println(\"{c.doubled + 1}\"); }"); // 43
+                                                                                                                                                                                                 // A set writes a backing field; observe through both the hook (get) and the raw field.
+    agree("import Core.Console; class C { constructor(public mutable int raw) {} int half { get => this.raw; set(int v) { this.raw = v / 2; } } } function main(){ C c = C(0); c.half = 10; Console.println(\"{c.raw} {c.half}\"); }"); // 5 5
+                                                                                                                                                                                                                                        // HANDLE semantics through a hook: set via one binding, observe via the alias.
+    agree("import Core.Console; class C { constructor(public mutable int raw) {} int v { get => this.raw; set(int n) { this.raw = n; } } } function main(){ C c = C(1); C d = c; c.v = 99; Console.println(\"{d.v}\"); }"); // 99
+                                                                                                                                                                                                                            // A float computed property with exactly-representable values (Celsius↔Fahrenheit round-trip).
+    agree("import Core.Console; class Temp { constructor(public mutable float celsius) {} float fahrenheit { get => this.celsius * 9.0 / 5.0 + 32.0; set(float f) { this.celsius = (f - 32.0) * 5.0 / 9.0; } } } function main(){ Temp t = Temp(100.0); Console.println(\"{t.fahrenheit}\"); t.fahrenheit = 32.0; Console.println(\"{t.celsius}\"); }");
+    // 212 then 0
+}
+
+#[test]
 fn mutation_clone_with_agrees() {
     // M-mut.4a: `obj with { f = e }` — fresh instance, source unchanged, byte-identical on both.
     agree("import Core.Console; class P { constructor(public int x, public int y) {} } function main(){ P p = P(1, 2); P q = p with { x = 9 }; Console.println(\"{p.x} {p.y} {q.x} {q.y}\"); }"); // 1 2 9 2

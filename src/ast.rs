@@ -687,6 +687,26 @@ pub enum ClassMember {
         span: Span,
     },
     Method(FunctionDecl),
+    /// A **property hook** (M-mut.7b) — a member that looks like a field but computes on read and/or
+    /// intercepts writes: `T name { get => expr; set(T v) { stmts } }`. v1 is *virtual-only*: it
+    /// declares no storage and takes no initializer, so it is never an instance field (no slot in the
+    /// instance map, never promoted, invisible to `clone with`). A `get` is an expression evaluated
+    /// with `this` in scope (a read-only computed property); a `set` is a block with the assigned
+    /// value bound to its parameter `v`, run with `this` in scope (typically writing other `mutable`
+    /// fields). A hook may have get-only, set-only, or both. Reading a get-less hook is
+    /// `E-HOOK-NO-GET`; writing a set-less one is `E-HOOK-NO-SET`. Lowers on the VM to synthetic
+    /// methods `<Class>::<name>$get`/`$set` dispatched via `Op::CallMethod` (no new `Op`);
+    /// transpiles 1:1 to a PHP 8.4 property hook.
+    Hook {
+        ty: Type,
+        name: String,
+        /// `get => <expr>` — the computed-read body; `None` for a write-only hook.
+        get: Option<Expr>,
+        /// `set(T v) { <stmts> }` — the intercepted-write body; the `Param` carries `v`'s name+type.
+        /// `None` for a read-only computed hook.
+        set: Option<(Param, Vec<Stmt>)>,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]

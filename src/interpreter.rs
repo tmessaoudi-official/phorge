@@ -366,6 +366,18 @@ impl Interp {
                     let v = self.eval(value)?;
                     match recv {
                         Value::Instance(inst) => {
+                            // A property hook (M-mut.7b) resolves before a stored field: bind `v` to
+                            // the assigned value and run its `set` block with `this` = the receiver.
+                            // The checker guarantees a hook assigned here has a `set` (E-HOOK-NO-SET).
+                            if let Some((p, body)) = self.hook_set(&inst.class, name) {
+                                self.run_call(
+                                    &[p.name],
+                                    &body,
+                                    vec![v],
+                                    Some(Value::Instance(inst)),
+                                )?;
+                                return Ok(());
+                            }
                             inst.fields.borrow_mut().insert(name.clone(), v);
                             Ok(())
                         }
@@ -607,6 +619,12 @@ impl Interp {
                 } else {
                     match recv {
                         Value::Instance(inst) => {
+                            // A property hook (M-mut.7b) resolves before a stored field: run its
+                            // `get` with `this` bound to the receiver. The checker guarantees a hook
+                            // that is read here has a `get` (E-HOOK-NO-GET otherwise).
+                            if let Some(get) = self.hook_get(&inst.class, name) {
+                                return self.run_hook_get(Value::Instance(inst), &get);
+                            }
                             // Clone the value out and drop the borrow (handle semantics: the shared
                             // cell stays available for later mutation).
                             match inst.fields.borrow().get(name).cloned() {
@@ -1102,6 +1120,56 @@ impl Interp {
         }
         let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
         self.run_call(&names, &f.body, args, Some(Value::Instance(inst)))
+    }
+
+    /// The cloned `get` expression of a property hook `class.name`, if the class declares one with a
+    /// `get` (M-mut.7b). `None` if there is no such hook or it is write-only.
+    fn hook_get(&self, class: &str, name: &str) -> Option<Expr> {
+        self.classes
+            .get(class)?
+            .members
+            .iter()
+            .find_map(|m| match m {
+                ClassMember::Hook {
+                    name: n,
+                    get: Some(g),
+                    ..
+                } if n == name => Some(g.clone()),
+                _ => None,
+            })
+    }
+
+    /// The cloned `set` parameter + block of a property hook `class.name`, if the class declares one
+    /// with a `set` (M-mut.7b). `None` if there is no such hook or it is read-only.
+    fn hook_set(&self, class: &str, name: &str) -> Option<(crate::ast::Param, Vec<Stmt>)> {
+        self.classes
+            .get(class)?
+            .members
+            .iter()
+            .find_map(|m| match m {
+                ClassMember::Hook {
+                    name: n,
+                    set: Some(s),
+                    ..
+                } if n == name => Some(s.clone()),
+                _ => None,
+            })
+    }
+
+    /// Evaluate a property hook's `get` expression with `this` bound to the receiver, in a fresh
+    /// frame (M-mut.7b) — the value-returning analogue of `run_call`, but for an expression body.
+    fn run_hook_get(&mut self, recv: Value, get: &Expr) -> R<Value> {
+        if self.depth >= crate::limits::MAX_CALL_DEPTH {
+            return rt("stack overflow");
+        }
+        self.depth += 1;
+        let saved_frame = std::mem::replace(&mut self.frame, CallScopes::new());
+        let saved_this = self.this.replace(recv);
+        let result = self.eval(get);
+        self.frame = saved_frame;
+        self.this = saved_this;
+        self.depth -= 1;
+        result
     }
 
     fn eval_match(&mut self, scrutinee: &Expr, arms: &[MatchArm]) -> R<Value> {

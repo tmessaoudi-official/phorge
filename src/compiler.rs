@@ -295,6 +295,18 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
                 }
                 ClassMember::Method(f) => intern(&f.name, &mut names),
                 ClassMember::Constructor { .. } => {}
+                // A property hook (M-mut.7b) is virtual — no instance field, no field-tag. Its
+                // accessors lower to synthetic methods `<name>$get`/`$set` dispatched via
+                // `Op::CallMethod`, so the method names need name-pool entries (`$` can't appear in a
+                // user identifier ⇒ never collides). The methods themselves are built below.
+                ClassMember::Hook { name, get, set, .. } => {
+                    if get.is_some() {
+                        intern(&format!("{name}$get"), &mut names);
+                    }
+                    if set.is_some() {
+                        intern(&format!("{name}$set"), &mut names);
+                    }
+                }
             }
         }
         class_descs.push(ClassDesc {
@@ -340,6 +352,56 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
 
     // Methods follow the constructors in the index space; build the dispatch table — and the
     // `(class, method) → return type` table `ctype` reads for a method-call result — in lockstep.
+    // Synthetic methods for property hooks (M-mut.7b). Each hook's `get` becomes a 0-arg method
+    // `<name>$get` whose body returns the get expression; each `set` a 1-arg method `<name>$set`
+    // whose body is the set block. Owned here so `methods_to_compile` can borrow them alongside the
+    // real `ClassMember::Method`s. `$` is illegal in a Phorge identifier, so these never collide.
+    let mut hook_methods: Vec<(usize, FunctionDecl)> = Vec::new();
+    for (ci, c) in class_decls.iter().enumerate() {
+        for m in &c.members {
+            if let ClassMember::Hook {
+                ty,
+                name,
+                get,
+                set,
+                span,
+            } = m
+            {
+                if let Some(g) = get {
+                    hook_methods.push((
+                        ci,
+                        FunctionDecl {
+                            modifiers: Vec::new(),
+                            name: format!("{name}$get"),
+                            type_params: Vec::new(),
+                            params: Vec::new(),
+                            ret: Some(ty.clone()),
+                            body: vec![Stmt::Return {
+                                value: Some(g.clone()),
+                                span: *span,
+                            }],
+                            span: *span,
+                        },
+                    ));
+                }
+                if let Some((p, body)) = set {
+                    hook_methods.push((
+                        ci,
+                        FunctionDecl {
+                            modifiers: Vec::new(),
+                            name: format!("{name}$set"),
+                            type_params: Vec::new(),
+                            params: vec![p.clone()],
+                            ret: None,
+                            body: body.clone(),
+                            span: *span,
+                        },
+                    ));
+                }
+            }
+        }
+    }
+
     let mut methods: HashMap<(String, String), usize> = HashMap::new();
     let mut method_rets: HashMap<(String, String), CTy> = HashMap::new();
     let mut methods_to_compile: Vec<(usize, &FunctionDecl)> = Vec::new();
@@ -356,6 +418,19 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
                 next_idx += 1;
             }
         }
+    }
+    // Register the synthetic hook methods after the real ones — same dispatch table, same compile
+    // path (`compile_method`), so a hook read/write is just a `CallMethod` into `<Class>::<name>$get`
+    // / `$set`. The VM needs no new op.
+    for (ci, f) in &hook_methods {
+        let cname = &class_decls[*ci].name;
+        methods.insert((cname.clone(), f.name.clone()), next_idx);
+        method_rets.insert(
+            (cname.clone(), f.name.clone()),
+            f.ret.as_ref().map_or(CTy::Other, resolve_cty),
+        );
+        methods_to_compile.push((*ci, f));
+        next_idx += 1;
     }
 
     // Arities for *every* function index — free fns, constructors, then methods (`this` + params)
@@ -920,7 +995,17 @@ impl<'a> Compiler<'a> {
                 if let Some(cty) = self.static_cty(object, name) {
                     return Ok(cty);
                 }
-                match self.ctype(object)? {
+                let obj_cty = self.ctype(object);
+                // A property hook read `o.name` (M-mut.7b): its operand type is the `<name>$get`
+                // method's return type. Resolved before the field path so `o.fahrenheit + 1.0`
+                // specializes — without it the VM would reject what the interpreter accepts (the
+                // documented CTy-operand trap).
+                if let Ok(CTy::Class(cls)) = &obj_cty {
+                    if let Some(cty) = self.method_rets.get(&(cls.clone(), format!("{name}$get"))) {
+                        return Ok(cty.clone());
+                    }
+                }
+                match obj_cty? {
                     CTy::Class(cls) => self
                         .class_field_ctys
                         .get(&cls)
@@ -1061,6 +1146,20 @@ impl<'a> Compiler<'a> {
                     let idx = self.static_slot(object, name).unwrap();
                     self.expr(value)?; // [value]
                     self.emit(Op::SetStatic(idx), span.line); // pop into the static slot
+                    Ok(())
+                }
+                // Property hook write `o.name = e` (M-mut.7b) → call the synthetic `<name>$set`
+                // 1-arg method with the receiver + value; it runs the set block and returns `Unit`,
+                // which we discard. Resolved before the plain field path.
+                Expr::Member { object, name, .. }
+                    if self.hook_set_method(object, name).is_some() =>
+                {
+                    let setm = self.hook_set_method(object, name).unwrap();
+                    self.expr(object)?; // [instance]
+                    self.expr(value)?; // [instance, value]
+                    let idx = self.field_name_index(&setm)?;
+                    self.emit(Op::CallMethod(idx, 1), span.line); // [unit result]
+                    self.emit(Op::Pop, span.line); // discard the set's return value
                     Ok(())
                 }
                 // Shared-mutable instance field set `o.f = e` / `this.f = e` (M-mut.6). Evaluate the
@@ -1249,6 +1348,21 @@ impl<'a> Compiler<'a> {
                 // so this is program-level state, not an instance field.
                 if let Some(idx) = self.static_slot(object, name) {
                     self.emit(Op::GetStatic(idx), line);
+                } else if let Some(getm) = self.hook_get_method(object, name) {
+                    // Property hook read `o.name` (M-mut.7b) → call the synthetic `<name>$get`
+                    // 0-arg method, which leaves the computed value on the stack. `?.` short-circuits
+                    // a null receiver before dispatch (the interpreter does the same).
+                    if *safe {
+                        self.compile_safe_access(object, line, |c| {
+                            let idx = c.field_name_index(&getm)?;
+                            c.emit(Op::CallMethod(idx, 0), line);
+                            Ok(())
+                        })?;
+                    } else {
+                        self.expr(object)?;
+                        let idx = self.field_name_index(&getm)?;
+                        self.emit(Op::CallMethod(idx, 0), line);
+                    }
                 } else if *safe {
                     self.compile_safe_access(object, line, |c| {
                         let idx = c.field_name_index(name)?;
@@ -2103,6 +2217,31 @@ impl<'a> Compiler<'a> {
                     .statics_index
                     .get(&(name.clone(), field.to_string()))
                     .map(|(_, cty)| cty.clone());
+            }
+        }
+        None
+    }
+
+    /// The synthetic method name `<name>$get` if `object.name` is a readable property hook
+    /// (M-mut.7b) — i.e. `object`'s compile-type is a class with a registered `<name>$get` method.
+    /// `None` ⇒ `object.name` is a stored field (or not a hook), handled by `GetField`.
+    fn hook_get_method(&self, object: &Expr, name: &str) -> Option<String> {
+        if let Ok(CTy::Class(cls)) = self.ctype(object) {
+            let m = format!("{name}$get");
+            if self.method_rets.contains_key(&(cls, m.clone())) {
+                return Some(m);
+            }
+        }
+        None
+    }
+
+    /// The synthetic method name `<name>$set` if `object.name` is a writable property hook
+    /// (M-mut.7b). `None` ⇒ a stored field, handled by `SetField`.
+    fn hook_set_method(&self, object: &Expr, name: &str) -> Option<String> {
+        if let Ok(CTy::Class(cls)) = self.ctype(object) {
+            let m = format!("{name}$set");
+            if self.method_rets.contains_key(&(cls, m.clone())) {
+                return Some(m);
             }
         }
         None
