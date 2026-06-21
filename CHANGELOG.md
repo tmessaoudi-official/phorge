@@ -6,6 +6,32 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — in-place mutation (mutation milestone, M-mut.1–.7b) — feature-complete
+
+Phorge was a pure single-assignment language (the AST had no assignment statement); the mutation
+milestone adds in-place mutation **immutable-by-default, `mutable` opt-in**, with no tracing GC. The
+locked spine (forced by the real-PHP oracle): `List`/`Map`/`Set`/`Bytes` are **copy-on-write value
+types** (can't cycle ⇒ `Rc`/`Drop` reclaims fully); `Instance` is a **shared-mutable handle**
+(PHP/Java semantics). Every slice is byte-identical `run ≡ runvm ≡ real PHP`.
+
+- **M-mut.1** mutable locals + reassignment (`mutable` binding modifier; reuses `Op::SetLocal`).
+- **M-mut.2** compound assignment + `++`/`--` + `??=` (pure parser desugar, no new `Op`).
+- **M-mut.3** condition loops (`while`/`do-while`/C-`for`/while-let) + `break`/`continue` (no new `Op`).
+- **M-mut.4a** `obj with { f = e }` functional update (fresh instance via `Op::MakeInstance`).
+- **M-mut.5** value-type element set `xs[i] = e` / `m[k] = e` (one new `Op::SetIndex`, COW).
+- **M-mut.6** shared-mutable instance fields `o.f = e` / `this.f = e` (instances are **handles**; one
+  new `Op::SetField`; cycle-safe `eq_val`; **no cycle collector** — Fork-3 defer-to-process-exit).
+- **M-mut.7a** `static`/`static mutable` class fields, read/written as `ClassName.field` (dot, not
+  `::`); new `Op::GetStatic`/`SetStatic`; literal-const initializers seeded once at load.
+- **M-mut.7b** **property hooks** `T name { get => expr; set(T v) { stmts } }` — virtual get/set; a get
+  computes on read, a set intercepts a write; get-only = read-only, set-only = write-only. Lowers on
+  the VM to synthetic `<Class>::<name>$get`/`$set` methods dispatched via the existing `Op::CallMethod`
+  (**no new `Op`**); transpiles 1:1 to a PHP 8.4 property hook (new `examples/guide/property-hooks.phg`).
+  New codes (all with `phg explain`): `E-HOOK-NO-GET`, `E-HOOK-NO-SET`, `E-HOOK-TYPE`, `E-HOOK-DUP`.
+
+Deferred (see KNOWN_ISSUES): no cycle collector, no identity `===`, nested place-stores (`this.f[i]=e`),
+and backed/static/interface/abstract property hooks.
+
 ### Added — intersection types `A & B` (Rich Types, M-RT S5)
 
 - **Intersection types:** `A & B` is a value that satisfies *all* members at once — the narrowing dual

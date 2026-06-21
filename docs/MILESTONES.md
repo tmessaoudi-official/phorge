@@ -121,7 +121,28 @@ values, and the pipe operator `|>`). Cross-cutting: stdlib **Track B** Waves 1�
 slices are byte-identical on `run`/`runvm` and round-trip through real PHP. The live slice-by-slice
 status + forward plan live in `CLAUDE.md` (Active plan) and `CHANGELOG.md`; design specs are under
 `docs/specs/2026-06-17-m3-*` and `docs/specs/2026-06-18-m3-*`. Modules/packages and web capabilities were
-promoted to their own milestones — **M5** (✅ closed) and **M6** (🔨 in progress), below.
+promoted to their own milestones — **M5** (✅ closed) and **M6** (🔨 in progress), below. The Rich-Types
+sub-track (**M-RT**: `instanceof`, interfaces, `Map`/`Set`, erased generics incl. methods+classes,
+unions `A|B`, intersections `A&B`) and the **mutation milestone** (below) also run under M3's umbrella.
+
+## M-mut — In-place mutation — ✅ FEATURE-COMPLETE (2026-06-21)
+
+Phorge began as a pure single-assignment language (no assignment statement); the mutation milestone
+adds in-place mutation **immutable-by-default, `mutable` opt-in**, with **no tracing GC**. Locked spine
+(forced by the real-PHP oracle, design `docs/specs/2026-06-21-mutation-milestone-design.md`):
+`List`/`Map`/`Set`/`Bytes` are **copy-on-write value types** (can't cycle ⇒ `Rc`/`Drop` reclaims fully);
+`Instance` is a **shared-mutable handle** (PHP/Java semantics). Every slice is byte-identical
+`run ≡ runvm ≡ real PHP`.
+
+- **M-mut.1** mutable locals + reassignment · **.2** compound-assign + `++`/`--` + `??=` · **.3** condition
+  loops (`while`/`do-while`/C-`for`/while-let) + `break`/`continue` · **.4a** `obj with { f = e }` ·
+  **.5** value-type element set `xs[i]=e`/`m[k]=e` (`Op::SetIndex`, COW) · **.6** shared-mutable instance
+  fields `o.f=e` (`Op::SetField`; instances are handles; **no cycle collector** — Fork-3) · **.7a**
+  `static`/`static mutable` class fields `ClassName.field` (`Op::GetStatic`/`SetStatic`) · **.7b**
+  property hooks `T name { get => …; set(T v) { … } }` (virtual get/set, synthetic `$get`/`$set` methods
+  via `Op::CallMethod` — no new `Op`; PHP 8.4 property hook; `examples/guide/property-hooks.phg`).
+- **Deferred** (KNOWN_ISSUES, each a clean compile error or explicit non-goal): cycle collector,
+  identity `===`, nested place-stores (`this.f[i]=e`), backed/static/interface/abstract hooks.
 
 ## M5 — Modules & packages — ✅ COMPLETE (2026-06-18)
 
