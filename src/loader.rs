@@ -34,6 +34,7 @@ use std::path::{Path, PathBuf};
 use crate::ast::{
     ClassMember, Expr, Item, LambdaBody, MatchArm, Param, Program, Stmt, StrPart, Type, Visibility,
 };
+use crate::diagnostic::Diagnostic;
 use crate::lexer::lex;
 use crate::manifest::{validate_path_component, Project};
 use crate::parser::Parser;
@@ -91,6 +92,33 @@ pub struct Unit {
     /// *scope* it validated — proving the whole project (every file, including code no route reaches,
     /// plus vendored deps) was type-checked, the PHP-absent superpower of whole-program checking.
     pub stats: Option<LoadStats>,
+    /// Per-file source text (project mode), for runtime stack-trace carets. Empty in loose mode (the
+    /// single source rides on `diag_src`). Keyed by the file path shown in a `Frame.file`.
+    pub sources: std::collections::HashMap<PathBuf, String>,
+    /// Function (compiled/mangled) name → origin file, for attributing trace frames to a file
+    /// (error-handling slice 1). Covers free functions (incl. `main`); methods/ctors — whose frame
+    /// names are backend-synthesized (`Class::m`) — are not keyed here and show line-only.
+    pub fn_files: std::collections::HashMap<String, PathBuf>,
+}
+
+impl Unit {
+    /// Attribute each runtime trace frame to its origin file via [`Unit::fn_files`] (no-op in loose
+    /// mode / for backend-synthesized method frames). Returns the source text to render the fault
+    /// caret against — the innermost frame's file source in project mode, else `diag_src`.
+    #[must_use]
+    pub fn attribute_frames(&self, diag: &mut Diagnostic) -> String {
+        for f in &mut diag.frames {
+            if f.file.is_none() {
+                f.file = self.fn_files.get(&f.function).cloned();
+            }
+        }
+        diag.frames
+            .first()
+            .and_then(|f| f.file.as_ref())
+            .and_then(|p| self.sources.get(p))
+            .cloned()
+            .unwrap_or_else(|| self.diag_src.clone())
+    }
 }
 
 /// Counts of what a project load assembled and handed to the checker — every `.phg` under the source
@@ -150,6 +178,8 @@ pub fn load_loose_src(src: &str) -> Result<Unit, String> {
         program,
         diag_src: src.to_string(),
         stats: None,
+        sources: std::collections::HashMap::new(),
+        fn_files: std::collections::HashMap::new(),
     })
 }
 
@@ -226,9 +256,13 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
     // Whole-project scope counters for `phg check`'s success summary.
     let mut pkgset: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut defs: usize = 0;
+    // Trace-attribution maps (error-handling slice 1): per-file source + function → file.
+    let mut src_map: HashMap<PathBuf, String> = HashMap::new();
+    let mut fn_files: HashMap<String, PathBuf> = HashMap::new();
     for src_entry in &sources {
         let file = &src_entry.file;
         let src = read_file(file)?;
+        src_map.insert(file.clone(), src.clone());
         let prog = parse_at(file, &src)?;
         validate_folder_path(&prog, file, &src_entry.root)?;
         if src_entry.vendored && (prog.package.is_empty() || prog.package == ["main"]) {
@@ -278,6 +312,11 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
                     vis,
                 },
             );
+            // A free function's trace frame is keyed by its compiled (mangled) name — map it to its
+            // file so a runtime trace can show `file:line` (methods/ctors are synthesized elsewhere).
+            if !is_type {
+                fn_files.insert(mangle(&prog.package, name), file.clone());
+            }
             defs += 1;
         }
         parsed.push((file.clone(), prog));
@@ -336,6 +375,8 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
         },
         diag_src: String::new(),
         stats: Some(stats),
+        sources: src_map,
+        fn_files,
     })
 }
 

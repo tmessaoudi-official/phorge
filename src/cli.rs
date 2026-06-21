@@ -620,20 +620,28 @@ pub fn cmd_check(src: &str) -> Result<String, String> {
 // check -> de-alias -> backend), so a loose single-file program routed through `loader` produces
 // byte-identical output. `diag_src` carries the source for error carets (`""` for a merged unit).
 
-/// `run` on an already-loaded program (interpreter backend).
-pub fn run_program(prog: &Program, diag_src: &str) -> Result<String, String> {
+/// `run` on a loaded [`Unit`] (interpreter backend). A runtime fault is rendered **with its stack
+/// trace** (error-handling slice 1): frames are attributed to files via the unit's `fn_files`, and the
+/// caret is drawn against the innermost frame's source (project mode) or the single `diag_src` (loose).
+pub fn run_program(unit: &crate::loader::Unit) -> Result<String, String> {
     on_deep_stack(|| {
-        let checked = check_and_expand(prog, diag_src)?;
-        interpret(&checked).map_err(|e| e.to_string())
+        let checked = check_and_expand(&unit.program, &unit.diag_src)?;
+        interpret(&checked).map_err(|mut e| {
+            let src = unit.attribute_frames(&mut e);
+            e.render(&src)
+        })
     })
 }
 
-/// `runvm` on an already-loaded program (bytecode + VM backend).
-pub fn runvm_program(prog: &Program, diag_src: &str) -> Result<String, String> {
+/// `runvm` on a loaded [`Unit`] (bytecode + VM backend). Same trace rendering as [`run_program`].
+pub fn runvm_program(unit: &crate::loader::Unit) -> Result<String, String> {
     on_deep_stack(|| {
-        let checked = check_and_expand(prog, diag_src)?;
+        let checked = check_and_expand(&unit.program, &unit.diag_src)?;
         let program = compile(&checked).map_err(|e| e.to_string())?;
-        Vm::new(&program).run().map_err(|e| e.to_string())
+        Vm::new(&program).run().map_err(|mut e| {
+            let src = unit.attribute_frames(&mut e);
+            e.render(&src)
+        })
     })
 }
 

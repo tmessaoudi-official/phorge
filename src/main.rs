@@ -258,8 +258,8 @@ fn main() {
             }
         };
         match cmd {
-            "run" => cli::run_program(&unit.program, &unit.diag_src),
-            "runvm" => cli::runvm_program(&unit.program, &unit.diag_src),
+            "run" => cli::run_program(&unit),
+            "runvm" => cli::runvm_program(&unit),
             "check" if check_json => {
                 // JSON diagnostics go to stdout regardless; exit 0 (clean) or 1 (errors present).
                 let (json, had_errors) = cli::check_json_program(&unit.program);

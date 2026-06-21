@@ -141,8 +141,8 @@ fn vendor_fetches_and_loads_offline() {
 
     // --- load + run offline (no network) -----------------------------------
     let unit = loader::load(&entry).expect("offline load");
-    let run = cli::run_program(&unit.program, &unit.diag_src);
-    let runvm = cli::runvm_program(&unit.program, &unit.diag_src);
+    let run = cli::run_program(&unit);
+    let runvm = cli::runvm_program(&unit);
     assert_eq!(run.as_deref(), Ok("hi phorge\n"), "interpreter output");
     assert_eq!(run, runvm, "backends must be byte-identical");
 }

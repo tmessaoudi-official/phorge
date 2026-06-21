@@ -671,8 +671,8 @@ fn all_example_projects_match_between_backends() {
         eprintln!("project: {} (entry {})", project.display(), entry.display());
         let unit = loader::load(&entry)
             .unwrap_or_else(|e| panic!("project {} must load: {e}", project.display()));
-        let run = cli::run_program(&unit.program, &unit.diag_src);
-        let runvm = cli::runvm_program(&unit.program, &unit.diag_src);
+        let run = cli::run_program(&unit);
+        let runvm = cli::runvm_program(&unit);
         assert!(
             run.is_ok(),
             "project {} must run on the interpreter, got {run:?}",
@@ -1427,8 +1427,7 @@ fn all_example_projects_transpile_and_match_php() {
         let entry = find_main_phg(project);
         let label = project.display().to_string();
         let unit = loader::load(&entry).unwrap_or_else(|e| panic!("load {label}: {e}"));
-        let expected = cli::run_program(&unit.program, &unit.diag_src)
-            .unwrap_or_else(|e| panic!("run {label}: {e}"));
+        let expected = cli::run_program(&unit).unwrap_or_else(|e| panic!("run {label}: {e}"));
         let php_src = cli::transpile_program(&unit.program, &unit.diag_src)
             .unwrap_or_else(|e| panic!("transpile {label}: {e}"));
         let got = run_php(&php, &php_src, &label);
