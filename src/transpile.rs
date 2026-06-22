@@ -68,6 +68,13 @@ fn last_segment(name: &str) -> &str {
     name.rsplit('\\').next().unwrap_or(name)
 }
 
+/// Property names PHP's `\Exception` already declares (M-faults 2b). A Phorge `Error` subtype
+/// transpiles to `extends \Exception`, so a promoted/declared field with one of these names would be
+/// a typed redeclaration of an inherited untyped property — a PHP fatal — and must be emitted untyped.
+fn exception_reserved(name: &str) -> bool {
+    matches!(name, "message" | "code" | "file" | "line" | "previous")
+}
+
 /// A type *reference* in PHP: a mangled (`\`-bearing) cross-package name becomes an absolute FQN
 /// (leading `\`, so it resolves regardless of the surrounding `namespace` block — uniform with
 /// function de-mangling, no `use`); a bare same-/`Main`-namespace name stays bare (M-RT cross-package
@@ -519,11 +526,24 @@ impl Transpiler {
                 fields.insert(name.clone());
             }
         }
-        let implements = if c.implements.is_empty() {
+        // M-faults 2b: a class `implements Error` becomes a real PHP exception — `extends \Exception`
+        // (so `throw` targets a `\Throwable`, and native `getMessage()` works). The built-in `Error`
+        // marker has no PHP declaration, so it is dropped from the `implements` list; any *other*
+        // interfaces stay. A promoted/declared field whose name collides with one of `\Exception`'s
+        // own properties (`message`/`code`/`file`/`line`) must be emitted **untyped** — PHP rejects a
+        // typed redeclaration of an inherited untyped property.
+        let is_error = c.implements.iter().any(|i| last_segment(i) == "Error");
+        let other_ifaces: Vec<String> = c
+            .implements
+            .iter()
+            .filter(|i| last_segment(i) != "Error")
+            .map(|i| php_type_ref(i))
+            .collect();
+        let extends_clause = if is_error { " extends \\Exception" } else { "" };
+        let implements = if other_ifaces.is_empty() {
             String::new()
         } else {
-            let ifaces: Vec<String> = c.implements.iter().map(|i| php_type_ref(i)).collect();
-            format!(" implements {}", ifaces.join(", "))
+            format!(" implements {}", other_ifaces.join(", "))
         };
         // Declared inside its `namespace` block in multi-package mode ⇒ bare trailing segment.
         let disp = if self.namespaced {
@@ -531,7 +551,7 @@ impl Transpiler {
         } else {
             &c.name
         };
-        self.line(&format!("class {}{} {{", disp, implements));
+        self.line(&format!("class {disp}{extends_clause}{implements} {{"));
         self.indent += 1;
         let prev = self.cur_class_fields.replace(fields);
         for m in &c.members {
@@ -565,6 +585,9 @@ impl Transpiler {
                             "{v} static {} ${name} = {init_php};",
                             Self::emit_type(ty)
                         ));
+                    } else if is_error && exception_reserved(name) {
+                        // Collides with an inherited \Exception property → emit untyped.
+                        self.line(&format!("{v} ${name};"));
                     } else {
                         self.line(&format!("{v} {} ${name};", Self::emit_type(ty)));
                     }
@@ -574,14 +597,26 @@ impl Transpiler {
                         .iter()
                         .map(|p| {
                             let v = vis(&p.modifiers);
+                            // A promoted param whose name collides with an \Exception property is
+                            // emitted untyped (PHP rejects a typed redeclaration); a plain param keeps
+                            // its type (it is not a property).
+                            let untyped = is_error && !v.is_empty() && exception_reserved(&p.name);
                             if v.is_empty() {
                                 format!("{} ${}", Self::emit_type(&p.ty), p.name)
+                            } else if untyped {
+                                format!("{} ${}", v, p.name)
                             } else {
                                 format!("{} {} ${}", v, Self::emit_type(&p.ty), p.name)
                             }
                         })
                         .collect();
-                    if body.is_empty() {
+                    // For an Error subtype carrying a `message`, feed \Exception's own message store via
+                    // `parent::__construct($message)` so native `getMessage()` works (interop + 2c).
+                    let parent_call = is_error
+                        && params
+                            .iter()
+                            .any(|p| !vis(&p.modifiers).is_empty() && p.name == "message");
+                    if body.is_empty() && !parent_call {
                         self.line(&format!("function __construct({}) {{}}", ps.join(", ")));
                     } else {
                         self.line(&format!("function __construct({}) {{", ps.join(", ")));
@@ -589,6 +624,9 @@ impl Transpiler {
                         self.push_scope();
                         for p in params {
                             self.declare(&p.name);
+                        }
+                        if parent_call {
+                            self.line("parent::__construct($message);");
                         }
                         for s in body {
                             self.emit_stmt(s)?;

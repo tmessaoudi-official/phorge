@@ -53,6 +53,15 @@ then writing-plans.
 - PINNED: **3 new `Op` variants** — `Op::Throw`, `Op::PushHandler(usize)`, `Op::PopHandler`
   (`PushHandler`/`PopHandler` are one handler *mechanism*; `Throw` is the second). Each extends the three
   coupled matches (`vm.rs` `exec_op` + `chunk.rs` `validate` + `compiler.rs` `stack_effect`) in one commit.
+- AGREED (2b.2 build, AskUserQuestion + worked-code review): **Error → PHP mapping = field-based
+  marker.** `Error` is a built-in **marker interface** (no required method); a thrown class promotes a
+  `string message` field (conventional, **not** mandated — option C's `E-ERROR-MESSAGE` rejected as too
+  rigid); `class P implements Error` transpiles to PHP `class P extends \Exception` with the promoted
+  `message` routed through **`parent::__construct($message)`** so native `getMessage()` works (interop +
+  2c bridge); a read `e.message` on an `Error`-typed value emits `$e->getMessage()`. The explicit
+  `message()`-method option was rejected (boilerplate per class + breaks PHP's `getMessage()` convention).
+  The one special-case: a promoted field literally named `message` on an `Error` subtype gets this
+  treatment. (Class `extends` is a future slice S6, so `Error` is necessarily an interface this slice.)
 - PINNED: **`?`-throws mode is front-end-only — no backend codegen.** A `?` on a `throws`-call is a
   checker propagation *marker*; since the call's own `Op::Throw` already unwinds, the lowering is just the
   bare call. The checker **erases the throws-mode `Propagate` node to its inner expr before any backend**

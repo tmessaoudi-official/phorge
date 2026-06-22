@@ -123,11 +123,24 @@ pub struct Checker {
 
 impl Checker {
     fn new() -> Self {
+        // Built-in `Error` marker interface (M-faults 2b): a thrown type is `class X implements
+        // Error`. It declares **no** methods (a pure marker) — the `message` field is conventional and
+        // special-cased only by the transpiler (`extends \Exception` + `parent::__construct`). The name
+        // is reserved (see `is_builtin_type_name`), so user code cannot redefine it. Class `extends`
+        // (inheritance) is a future slice (S6), so an interface is the only available shape today.
+        let mut interfaces = HashMap::new();
+        interfaces.insert(
+            "Error".to_string(),
+            InterfaceInfo {
+                methods: HashMap::new(),
+                extends: Vec::new(),
+            },
+        );
         Checker {
             funcs: HashMap::new(),
             enums: HashMap::new(),
             classes: HashMap::new(),
-            interfaces: HashMap::new(),
+            interfaces,
             class_implements: std::collections::BTreeMap::new(),
             scopes: Vec::new(),
             errors: Vec::new(),
@@ -521,6 +534,13 @@ impl Checker {
     }
 
     fn collect_interface(&mut self, i: &crate::ast::InterfaceDecl) {
+        if is_builtin_type_name(&i.name) {
+            self.err(
+                i.span,
+                format!("cannot redefine built-in type `{}`", i.name),
+            );
+            return;
+        }
         if self.classes.contains_key(&i.name)
             || self.enums.contains_key(&i.name)
             || self.interfaces.contains_key(&i.name)
@@ -834,6 +854,13 @@ impl Checker {
     }
 
     fn collect_enum(&mut self, e: &crate::ast::EnumDecl) {
+        if is_builtin_type_name(&e.name) {
+            self.err(
+                e.span,
+                format!("cannot redefine built-in type `{}`", e.name),
+            );
+            return;
+        }
         if self.enums.contains_key(&e.name) || self.classes.contains_key(&e.name) {
             self.err(e.span, format!("type `{}` is already defined", e.name));
             return;
@@ -863,6 +890,13 @@ impl Checker {
 
     fn collect_class(&mut self, c: &crate::ast::ClassDecl) {
         use crate::ast::ClassMember;
+        if is_builtin_type_name(&c.name) {
+            self.err(
+                c.span,
+                format!("cannot redefine built-in type `{}`", c.name),
+            );
+            return;
+        }
         if self.classes.contains_key(&c.name) || self.enums.contains_key(&c.name) {
             self.err(c.span, format!("type `{}` is already defined", c.name));
             return;
@@ -4451,6 +4485,9 @@ fn is_builtin_type_name(name: &str) -> bool {
             | "u16"
             | "u32"
             | "u64"
+            // The built-in `Error` marker interface (M-faults 2b) — reserved so user code can't
+            // redefine it (as a class/enum/interface/alias).
+            | "Error"
     )
 }
 

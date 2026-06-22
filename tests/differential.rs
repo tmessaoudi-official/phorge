@@ -1544,3 +1544,58 @@ fn never_intrinsic_satisfies_return_totality() {
         r#"function bad() -> int { panic("never returns"); } function main(){ var x = bad(); }"#,
     );
 }
+
+/// M-faults 2b.2: the built-in `Error` marker interface is reserved (user code can't redefine it)
+/// and implementable (a class may `implements Error`; `instanceof Error` works).
+#[test]
+fn error_base_type_reserved_and_implementable() {
+    assert!(
+        !check_errs("class Error {}").is_empty(),
+        "`class Error` must be rejected (reserved)"
+    );
+    assert!(
+        !check_errs("interface Error {}").is_empty(),
+        "`interface Error` must be rejected (reserved)"
+    );
+    assert!(
+        !check_errs("type Error = int;").is_empty(),
+        "`type Error` must be rejected (reserved)"
+    );
+    assert!(
+        check_errs("class P implements Error { constructor(public string message) {} }").is_empty(),
+        "a class may implement Error"
+    );
+    assert!(
+        check_errs(
+            r#"class P implements Error { constructor(public string message) {} }
+function main() { P p = P("x"); if (p instanceof Error) { } }"#
+        )
+        .is_empty(),
+        "instanceof Error must type-check"
+    );
+}
+
+/// M-faults 2b.2: a class `implements Error` is a usable value type — construct it and read its
+/// `message` field — byte-identical on run/runvm AND real PHP. In PHP it transpiles to
+/// `class ParseError extends \Exception` with the promoted `message` emitted UNTYPED (a typed
+/// redeclaration of \Exception's inherited `$message` is a PHP fatal) + `parent::__construct`, so
+/// `e.message` (a plain field read) returns the value on every backend.
+#[test]
+fn error_subtype_value_is_byte_identical() {
+    // NB: avoid PHP built-in error names (`Error`/`TypeError`/`ParseError`/…) — they collide with
+    // PHP's reserved classes on transpile. `BadInput` is safe.
+    let src = with_pkg(
+        r#"import Core.Console;
+class BadInput implements Error { constructor(public string message) {} }
+function main() { BadInput e = BadInput("bad input"); Console.println(e.message); }"#,
+    );
+    let tree = cmd_run(&src);
+    let vm = cmd_runvm(&src);
+    assert_eq!(tree, vm, "run vs runvm:\n  run={tree:?}\n  runvm={vm:?}");
+    if let Some(php) = php_or_gate("error_subtype_value_is_byte_identical") {
+        let php_src = cli::cmd_transpile(&src).expect("transpile ok");
+        let got = run_php(&php, &php_src, "error_subtype_value");
+        let expected = tree.expect("run ok");
+        assert_eq!(got, expected, "PHP ≠ interpreter\n--- php ---\n{php_src}");
+    }
+}
