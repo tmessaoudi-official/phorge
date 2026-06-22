@@ -1571,6 +1571,41 @@ fn run_php(php: &str, php_src: &str, label: &str) -> String {
     String::from_utf8(out.stdout).expect("utf-8 php stdout")
 }
 
+/// M-RT S6b.4 — the `rename` resolution clause lowers to PHP `T::m insteadof …; T::m as n;`. The
+/// guide example exercises `use`; this gates the `rename` path (the trickier emission — `as` alone
+/// does not remove the original method, so an `insteadof` for the remaining winner is also required)
+/// end-to-end through real PHP, asserting the transpiled output equals the interpreter's.
+#[test]
+fn s6b_rename_decomposition_matches_php() {
+    let Some(php) = php_or_gate("s6b_rename_decomposition_matches_php") else {
+        return;
+    };
+    let src = with_pkg(
+        r#"import Core.Console;
+open class Swimmer { open function move() -> string { return "swims"; } }
+open class Flyer { open function move() -> string { return "flies"; } }
+class Duck extends Swimmer, Flyer {
+    rename Flyer.move as glide
+}
+function main() {
+    Duck d = Duck();
+    Console.println(d.move());
+    Console.println(d.glide());
+}"#,
+    );
+    let expected = cmd_run(&src).expect("interpreter runs");
+    let php_src = cli::cmd_transpile(&src).expect("transpiles");
+    assert!(
+        php_src.contains("insteadof") && php_src.contains("as glide"),
+        "expected insteadof + as in:\n{php_src}"
+    );
+    assert_eq!(
+        run_php(&php, &php_src, "s6b_rename"),
+        expected,
+        "PHP ≠ interpreter for the rename decomposition"
+    );
+}
+
 /// Every runnable single-file example: transpiled PHP run by `php` prints exactly what `cmd_run`
 /// (the interpreter) prints. Globbed like `all_examples_match_between_backends`, so a new example is
 /// auto-gated. A non-`Ok` example is skipped here (it's gated by the run≡runvm glob); the oracle is

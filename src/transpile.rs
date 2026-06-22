@@ -9,9 +9,44 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 pub fn emit(program: &Program) -> Result<String, String> {
     let mut t = Transpiler::new();
     t.class_implements = crate::ast::class_implements(program);
+    t.decomposed = decomposed_classes(program);
     t.collect(program);
     t.emit_program(program)?;
     Ok(t.out)
+}
+
+/// The set of classes that must lower to the interface+trait decomposition (M-RT S6b): every
+/// transitive ancestor of any multi-parent (`extends A, B`) class. A multi-parent class itself is
+/// emitted as a class that `implements`+`use`s (see [`Transpiler::emit_multi_class`]) and is *not*
+/// in this set, unless it is also an ancestor of another multi-parent class.
+fn decomposed_classes(program: &Program) -> BTreeSet<String> {
+    let parents: HashMap<&str, &[String]> = program
+        .items
+        .iter()
+        .filter_map(|it| match it {
+            Item::Class(c) => Some((c.name.as_str(), c.extends.as_slice())),
+            _ => None,
+        })
+        .collect();
+    let mut out: BTreeSet<String> = BTreeSet::new();
+    // Seed: the direct parents of every multi-parent class; then close upward over `extends`.
+    let mut queue: Vec<String> = Vec::new();
+    for it in &program.items {
+        if let Item::Class(c) = it {
+            if c.extends.len() >= 2 {
+                queue.extend(c.extends.iter().cloned());
+            }
+        }
+    }
+    while let Some(name) = queue.pop() {
+        if !out.insert(name.clone()) {
+            continue;
+        }
+        if let Some(ps) = parents.get(name.as_str()) {
+            queue.extend(ps.iter().cloned());
+        }
+    }
+    out
 }
 
 struct Transpiler {
@@ -56,7 +91,18 @@ struct Transpiler {
     /// PHP dispatch branches most-specific-first (subtypes before supertypes), so the emitted
     /// `if`-chain selects the same body the backends' `select_overload` does. Built once in `emit`.
     class_implements: std::collections::BTreeMap<String, Vec<String>>,
+    /// Classes that must lower to the **interface + trait** decomposition (M-RT S6b): every transitive
+    /// ancestor of a multi-parent (`extends A, B`) class. PHP has no multiple inheritance, so a
+    /// multi-parent class `implements` its parents' interfaces and `use`s their traits; each ancestor
+    /// therefore needs an `I<name>` interface + `T<name>` trait + a concrete `class <name>` form.
+    /// Built once in `emit`. A class outside this set lowers as a plain class / single `extends`
+    /// (byte-identical to pre-S6b output). The multi-parent classes themselves are emitted via
+    /// `emit_multi_class` (a class that `implements`+`use`s), not listed here.
+    decomposed: BTreeSet<String>,
 }
+
+/// A resolved method origin: `(declaring class, method name)` — mirrors `ast::class_method_origins`.
+type Origin = (String, String);
 
 /// Where a `match` expression's arm values flow: a `return` or an assignment to `$name`.
 enum MatchTarget {
@@ -170,6 +216,7 @@ impl Transpiler {
             uses_clone_with: false,
             namespaced: false,
             class_implements: std::collections::BTreeMap::new(),
+            decomposed: BTreeSet::new(),
         }
     }
 
@@ -233,7 +280,16 @@ impl Transpiler {
                     self.emit_free_fn(&program.items, f, &mut emitted_overloads)?
                 }
                 Item::Enum(e) => self.emit_enum(e)?,
-                Item::Class(c) => self.emit_class(c)?,
+                Item::Class(c) => {
+                    // M-RT S6b: multiple inheritance lowers to traits/interfaces (PHP has no MI).
+                    if c.extends.len() >= 2 {
+                        self.emit_multi_class(c, program)?;
+                    } else if self.decomposed.contains(&c.name) {
+                        self.emit_decomposed_class(c)?;
+                    } else {
+                        self.emit_class(c)?;
+                    }
+                }
                 Item::Interface(i) => self.emit_interface(i)?,
                 // Aliases are expanded out of the AST before transpiling; arm only for exhaustiveness.
                 Item::TypeAlias { .. } => {}
@@ -774,6 +830,23 @@ impl Transpiler {
         ));
         self.indent += 1;
         let prev = self.cur_class_fields.replace(fields);
+        self.emit_class_members(c, &promoted_names, is_error)?;
+        self.cur_class_fields = prev;
+        self.indent -= 1;
+        self.line("}");
+        Ok(())
+    }
+
+    /// Emit a class's members (fields, constructor, methods, hooks) — the shared body used by both a
+    /// plain `class` (`emit_class`) and a multi-parent class (`emit_multi_class`, M-RT S6b). The caller
+    /// has already emitted the class header + opening `{`, raised the indent, and set
+    /// `cur_class_fields`; it restores them after.
+    fn emit_class_members(
+        &mut self,
+        c: &ClassDecl,
+        promoted_names: &HashSet<String>,
+        is_error: bool,
+    ) -> Result<(), String> {
         let mut emitted_method_overloads: HashSet<String> = HashSet::new();
         for m in &c.members {
             match m {
@@ -927,10 +1000,210 @@ impl Transpiler {
                 }
             }
         }
+        Ok(())
+    }
+
+    /// M-RT S6b: emit a class that is an ancestor of some multi-parent class as the interface+trait
+    /// decomposition PHP needs for multiple inheritance — `interface I<name>` (the type side, so a
+    /// subtype is `instanceof` it), `trait T<name>` (the impl side, `use`d by subclasses), and a
+    /// concrete `class <name> implements I<name> { use T<name>; }` so the class is still directly
+    /// instantiable and single-`extends`able. An ancestor's own parents are decomposed too, so the
+    /// interface `extends I<parent>` and the trait `use T<parent>` (which is how a diamond shared base
+    /// auto-merges — both arms reach the same flattened trait method).
+    fn emit_decomposed_class(&mut self, c: &ClassDecl) -> Result<(), String> {
+        // interface I<name> [extends I<parent>, …] { method signatures }
+        let iparents: Vec<String> = c.extends.iter().map(|p| format!("I{p}")).collect();
+        let iext = if iparents.is_empty() {
+            String::new()
+        } else {
+            format!(" extends {}", iparents.join(", "))
+        };
+        self.line(&format!("interface I{}{} {{", c.name, iext));
+        self.indent += 1;
+        let mut sig_emitted: HashSet<String> = HashSet::new();
+        for m in &c.members {
+            if let ClassMember::Method(f) = m {
+                // One signature per name (a PHP interface cannot redeclare a name; overload sets in a
+                // decomposed class are rare and resolved by the trait body).
+                if !sig_emitted.insert(f.name.clone()) {
+                    continue;
+                }
+                let params: Vec<String> = f
+                    .params
+                    .iter()
+                    .map(|p| format!("{} ${}", Self::emit_type(&p.ty), p.name))
+                    .collect();
+                self.line(&format!(
+                    "public function {}({}): {};",
+                    f.name,
+                    params.join(", "),
+                    Self::ret_hint(&f.ret)
+                ));
+            }
+        }
+        self.indent -= 1;
+        self.line("}");
+
+        // trait T<name> { [use T<parent>, …;] members }
+        self.line(&format!("trait T{} {{", c.name));
+        self.indent += 1;
+        if !c.extends.is_empty() {
+            let tparents: Vec<String> = c.extends.iter().map(|p| format!("T{p}")).collect();
+            self.line(&format!("use {};", tparents.join(", ")));
+        }
+        let (promoted_names, fields, is_error) = self.class_field_context(c);
+        let prev = self.cur_class_fields.replace(fields);
+        self.emit_class_members(c, &promoted_names, is_error)?;
+        self.cur_class_fields = prev;
+        self.indent -= 1;
+        self.line("}");
+
+        // concrete class <name> implements I<name> { use T<name>; } — instantiable + single-extendable.
+        self.line(&format!(
+            "class {0} implements I{0} {{ use T{0}; }}",
+            c.name
+        ));
+        Ok(())
+    }
+
+    /// M-RT S6b: emit a multi-parent class (`class C extends A, B`) as a PHP class that `implements`
+    /// each parent's interface and `use`s each parent's trait, with `insteadof`/`as` clauses resolving
+    /// cross-parent method collisions (from the `use`/`rename`/`exclude` resolution clauses). A diamond
+    /// shared base needs no clause — PHP auto-dedups a method reached identically through two traits.
+    fn emit_multi_class(&mut self, c: &ClassDecl, program: &Program) -> Result<(), String> {
+        let iparents: Vec<String> = c.extends.iter().map(|p| format!("I{p}")).collect();
+        let tparents: Vec<String> = c.extends.iter().map(|p| format!("T{p}")).collect();
+        let final_kw = if c.open { "" } else { "final " };
+        self.line(&format!(
+            "{final_kw}class {} implements {} {{",
+            c.name,
+            iparents.join(", ")
+        ));
+        self.indent += 1;
+        let clauses = self.build_trait_clauses(c, program);
+        if clauses.is_empty() {
+            self.line(&format!("use {};", tparents.join(", ")));
+        } else {
+            self.line(&format!("use {} {{", tparents.join(", ")));
+            self.indent += 1;
+            for cl in &clauses {
+                self.line(cl);
+            }
+            self.indent -= 1;
+            self.line("}");
+        }
+        let (promoted_names, fields, is_error) = self.class_field_context(c);
+        let prev = self.cur_class_fields.replace(fields);
+        self.emit_class_members(c, &promoted_names, is_error)?;
         self.cur_class_fields = prev;
         self.indent -= 1;
         self.line("}");
         Ok(())
+    }
+
+    /// The `insteadof`/`as` clauses for a multi-parent class's `use` block (M-RT S6b). A method name
+    /// supplied by ≥2 direct parents with **distinct origins** is a real PHP trait collision needing
+    /// `insteadof` (a diamond shared base — same origin through both arms — is skipped, PHP auto-merges
+    /// it). The winner is the parent named by a `use P.m` clause, else the single parent left after
+    /// `rename`/`exclude` remove the others; every other providing parent's trait is listed after
+    /// `insteadof`. A class that overrides the method itself needs no clause (the class method wins). A
+    /// `rename P.m as n` also emits `T<P>::m as n;`.
+    fn build_trait_clauses(&self, c: &ClassDecl, program: &Program) -> Vec<String> {
+        use crate::ast::Resolution;
+        let (origins, _conflicts) = crate::ast::class_method_origins(program);
+        // method name -> [(direct parent, origin (declaring class, method))]
+        let mut provides: std::collections::BTreeMap<String, Vec<(String, Origin)>> =
+            std::collections::BTreeMap::new();
+        for ((cls, name), origin) in &origins {
+            if c.extends.contains(cls) {
+                provides
+                    .entry(name.clone())
+                    .or_default()
+                    .push((cls.clone(), origin.clone()));
+            }
+        }
+        let own: std::collections::BTreeSet<&str> = c
+            .members
+            .iter()
+            .filter_map(|m| match m {
+                ClassMember::Method(f) => Some(f.name.as_str()),
+                _ => None,
+            })
+            .collect();
+        let mut clauses = Vec::new();
+        for (m, entries) in &provides {
+            let distinct: std::collections::BTreeSet<&Origin> =
+                entries.iter().map(|(_, o)| o).collect();
+            if distinct.len() < 2 || own.contains(m.as_str()) {
+                continue; // diamond auto-merge, single source, or overridden by the class itself
+            }
+            let providing: std::collections::BTreeSet<String> =
+                entries.iter().map(|(p, _)| p.clone()).collect();
+            // The winner: `use P.m` names it; otherwise the one parent left after rename/exclude.
+            let used = c.resolutions.iter().find_map(|r| match r {
+                Resolution::Use { parent, method, .. } if method == m => Some(parent.clone()),
+                _ => None,
+            });
+            let removed: std::collections::BTreeSet<String> = c
+                .resolutions
+                .iter()
+                .filter_map(|r| match r {
+                    Resolution::Rename { parent, method, .. } if method == m => {
+                        Some(parent.clone())
+                    }
+                    Resolution::Exclude { parent, method, .. } if method == m => {
+                        Some(parent.clone())
+                    }
+                    _ => None,
+                })
+                .collect();
+            let winner = used.or_else(|| providing.iter().find(|p| !removed.contains(*p)).cloned());
+            if let Some(w) = winner {
+                let losers: Vec<String> = providing
+                    .iter()
+                    .filter(|p| **p != w)
+                    .map(|p| format!("T{p}"))
+                    .collect();
+                if !losers.is_empty() {
+                    clauses.push(format!("T{w}::{m} insteadof {};", losers.join(", ")));
+                }
+            }
+        }
+        for r in &c.resolutions {
+            if let Resolution::Rename {
+                parent,
+                method,
+                as_name,
+                ..
+            } = r
+            {
+                clauses.push(format!("T{parent}::{method} as {as_name};"));
+            }
+        }
+        clauses
+    }
+
+    /// The `(promoted ctor-param names, instance-field set, is_error)` context a class body needs to
+    /// emit its members — shared setup for `emit_class`, `emit_multi_class`, and `emit_decomposed_class`.
+    fn class_field_context(&self, c: &ClassDecl) -> (HashSet<String>, HashSet<String>, bool) {
+        let mut promoted_names: HashSet<String> = HashSet::new();
+        for m in &c.members {
+            if let ClassMember::Constructor { params, .. } = m {
+                for p in params {
+                    if is_promoted(&p.modifiers) {
+                        promoted_names.insert(p.name.clone());
+                    }
+                }
+            }
+        }
+        let mut fields: HashSet<String> = promoted_names.clone();
+        for m in &c.members {
+            if let ClassMember::Field { name, .. } = m {
+                fields.insert(name.clone());
+            }
+        }
+        let is_error = c.implements.iter().any(|i| last_segment(i) == "Error");
+        (promoted_names, fields, is_error)
     }
 
     /// Emit a PHP `interface` (M-RT S2): the name, an optional `extends A, B` clause, and one

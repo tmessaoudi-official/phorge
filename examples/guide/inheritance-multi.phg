@@ -1,0 +1,48 @@
+// Multiple inheritance with explicit resolution (M-RT S6b).
+//
+// Phorge supports real multiple inheritance: a class may `extend` several parents at once. PHP has no
+// multiple inheritance, so the transpiler lowers each parent to an interface + trait and the subclass
+// `implements` the interfaces and `use`s the traits — the model the field (Haxe, Hack) uses.
+//
+// When two parents supply a method of the same name, Phorge will NOT silently pick one: the collision
+// must be resolved explicitly with `use P.m` (pick a parent), `rename P.m as n` (keep both), or
+// `exclude P.m` (drop one) — else `E-MI-CONFLICT`. A *diamond* shared base (a method reached through
+// two arms that both resolve to the SAME declaring method) auto-merges and is never a conflict.
+//
+// (Inherited fields and constructors across multiple parents land in a later slice; this guide stays
+// field-free, like the single-inheritance guide.)
+package main;
+
+import Core.Console;
+
+open class Animal {
+    // Reached by Duck through BOTH Swimmer and Flyer — but it is the same `Animal.name`, so it
+    // auto-merges (the diamond): no conflict, no resolution clause needed.
+    function name() -> string {
+        return "animal";
+    }
+}
+
+open class Swimmer extends Animal {
+    open function move() -> string {
+        return "swims";
+    }
+}
+
+open class Flyer extends Animal {
+    open function move() -> string {
+        return "flies";
+    }
+}
+
+// Duck inherits from two parents. `move()` collides (Swimmer vs Flyer) and is resolved explicitly;
+// `name()` is the shared `Animal.name` reached through both arms (auto-merged).
+class Duck extends Swimmer, Flyer {
+    use Swimmer.move
+}
+
+function main() {
+    Duck d = Duck();
+    Console.println(d.move()); // "swims" — resolved by `use Swimmer.move`
+    Console.println(d.name()); // "animal" — diamond shared base, auto-merged
+}

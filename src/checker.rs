@@ -711,6 +711,34 @@ impl Checker {
         // before interface-conformance below — so an inherited method can satisfy an interface.
         self.inherit_class_members(program);
 
+        // M-RT S6b: a `rename P.m as n` clause exposes parent `P`'s method `m` on the child under the
+        // new name `n`, so a `child.n()` call type-checks (the backends dispatch it via the shared
+        // origin table). `use`/`exclude` keep method names unchanged, so they need no signature edit.
+        for item in &program.items {
+            if let Item::Class(c) = item {
+                for r in &c.resolutions {
+                    if let crate::ast::Resolution::Rename {
+                        parent,
+                        method,
+                        as_name,
+                        ..
+                    } = r
+                    {
+                        if let Some(sigs) = self
+                            .classes
+                            .get(parent)
+                            .and_then(|p| p.methods.get(method))
+                            .cloned()
+                        {
+                            if let Some(child) = self.classes.get_mut(&c.name) {
+                                child.methods.entry(as_name.clone()).or_insert(sigs);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // M-RT S6: a method that overrides an ancestor's method requires that ancestor's method to be
         // `open` (final-by-default), else `E-OVERRIDE-FINAL`. (Signature-variance checking on override
         // is deferred — see KNOWN_ISSUES.) `method_open[(class, name)]` is true if the class declares

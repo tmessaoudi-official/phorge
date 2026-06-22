@@ -365,6 +365,13 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
                 }
             }
         }
+        // M-RT S6b: a `rename P.m as n` resolution exposes a method under a fresh name `n` that is no
+        // class member, so it needs its own name-pool entry for `obj.n()` to lower to `Op::CallMethod`.
+        for r in &c.resolutions {
+            if let crate::ast::Resolution::Rename { as_name, .. } = r {
+                intern(as_name, &mut names);
+            }
+        }
         class_descs.push(ClassDesc {
             class: c.name.clone(),
             fields,
