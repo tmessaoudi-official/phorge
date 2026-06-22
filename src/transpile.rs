@@ -41,6 +41,11 @@ struct Transpiler {
     uses_rem: bool,
     uses_str: bool,
     uses_range: bool,
+    /// Set when `obj with { f = e }` is emitted. PHP's native two-argument `clone($o, [...])` is a
+    /// **8.5+** feature, but Phorge's transpile floor is **8.4** (the extension-policy reference is
+    /// `php:8.4-cli-alpine`), so a non-empty override list lowers to the `__phorge_clone_with`
+    /// runtime helper (clone + per-field set) instead — 8.4-compatible, same semantics (M-mut.4a).
+    uses_clone_with: bool,
     /// True when the program carries mangled (`\`-bearing) names — a multi-package project (M5 S2c).
     /// Switches emission from the flat single-package form to one `namespace …{}` brace-block per
     /// package + a nameless bootstrap block, and forces fully-qualified (leading-`\`) call emission.
@@ -126,6 +131,7 @@ impl Transpiler {
             uses_rem: false,
             uses_str: false,
             uses_range: false,
+            uses_clone_with: false,
             namespaced: false,
         }
     }
@@ -263,6 +269,18 @@ impl Transpiler {
                 "if ($v === null) { throw new \\RuntimeException(\"force-unwrap of null\"); }",
             );
             self.line("return $v;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_clone_with {
+            // `obj with { f = e }` on PHP 8.4 (native two-arg `clone` is 8.5+): clone, then set each
+            // overridden field. Phorge fields emit as plain public PHP properties, so the writes are
+            // valid; the constructor is bypassed (matches the backends' shallow clone-then-override).
+            self.line("function __phorge_clone_with($o, $changes) {");
+            self.indent += 1;
+            self.line("$c = clone $o;");
+            self.line("foreach ($changes as $k => $v) { $c->$k = $v; }");
+            self.line("return $c;");
             self.indent -= 1;
             self.line("}");
         }
@@ -1050,9 +1068,11 @@ impl Transpiler {
                 "internal: `?` propagation reached expression emission (checker restricts it to a let-initializer)"
                     .to_string(),
             ),
-            // `obj with { f = e }` → PHP 8.5 `clone($obj, ['f' => e, …])`: a fresh instance with the
-            // named fields overridden and the constructor bypassed — byte-identical to the backends
-            // (M-mut.4a). An empty override list is just `clone($obj)`.
+            // `obj with { f = e }` → a fresh instance with the named fields overridden and the
+            // constructor bypassed — byte-identical to the backends (M-mut.4a). An empty override list
+            // is just `clone($obj)` (valid since PHP 5). A non-empty list lowers to the
+            // `__phorge_clone_with` helper rather than PHP 8.5's native two-arg `clone($o, [...])`,
+            // because the transpile floor is PHP 8.4 (where two-arg `clone` is a parse error).
             Expr::CloneWith { object, fields, .. } => {
                 let o = self.emit_expr(object)?;
                 if fields.is_empty() {
@@ -1063,7 +1083,11 @@ impl Transpiler {
                     let v = self.emit_expr(e)?;
                     pairs.push(format!("'{name}' => {v}"));
                 }
-                Ok(format!("clone({o}, [{}])", pairs.join(", ")))
+                self.uses_clone_with = true;
+                // In multi-package (namespaced) mode the helper lives in the global namespace, so the
+                // call is fully qualified (`\__phorge_clone_with`), mirroring `__phorge_div`/`_str`.
+                let bs = if self.namespaced { "\\" } else { "" };
+                Ok(format!("{bs}__phorge_clone_with({o}, [{}])", pairs.join(", ")))
             }
             // Expression-position `match` (M11): wrap the SAME if-chain `emit_match` produces in
             // statement position inside an immediately-invoked closure, so both positions share one
@@ -1683,6 +1707,27 @@ mod tests {
         assert!(out.contains("function add(int $a, int $b): int {"), "{out}");
         assert!(out.contains("$c = $a + $b;"), "{out}");
         assert!(out.contains("return $c;"), "{out}");
+    }
+
+    #[test]
+    fn clone_with_lowers_to_php84_helper_not_85_native() {
+        // `obj with { f = e }` must NOT emit PHP 8.5's two-argument `clone($o, [...])` — that is a
+        // parse error on the 8.4 transpile floor (the CI php). It lowers to the `__phorge_clone_with`
+        // runtime helper instead (clone + per-field set). Regression guard for the CI floor fix.
+        let out = php("class P { constructor(public int x, public int y) {} } \
+             function main() { P a = P(1, 2); P b = a with { x = 9 }; }");
+        assert!(
+            out.contains("__phorge_clone_with("),
+            "clone-with call uses the 8.4 helper:\n{out}"
+        );
+        assert!(
+            out.contains("function __phorge_clone_with("),
+            "the helper is defined once:\n{out}"
+        );
+        assert!(
+            !out.contains("clone($"),
+            "no native two-arg `clone($o, …)` (PHP 8.5+ only):\n{out}"
+        );
     }
 
     #[test]
