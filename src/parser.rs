@@ -307,6 +307,15 @@ impl Parser {
                         span: sp,
                     };
                 }
+                // Postfix `?` is error propagation (M-faults Slice 2a). The lexer munches `??`/`?.`
+                // into `QuestionQuestion`/`QuestionDot`, so a lone `Question` here is unambiguous.
+                TokenKind::Question => {
+                    self.advance();
+                    e = Expr::Propagate {
+                        inner: Box::new(e),
+                        span: sp,
+                    };
+                }
                 // `obj with { f = e, … }` — functional update (M-mut.4a). Postfix, so it binds to the
                 // immediately-preceding expression; the brace block is unambiguous in expr position.
                 TokenKind::With => {
@@ -2102,6 +2111,15 @@ mod tests {
             },
             _ => panic!("expected a class"),
         }
+    }
+
+    #[test]
+    fn parses_propagate_postfix() {
+        // Postfix `?` is error propagation (M-faults 2a). The lexer munches `??`/`?.` separately, so a
+        // lone `?` here is unambiguous and `a?.b` still parses as a safe Member, not propagation.
+        assert!(matches!(expr("a?"), Expr::Propagate { .. }));
+        assert!(matches!(expr("f(x)?"), Expr::Propagate { .. }));
+        assert!(matches!(expr("a?.b"), Expr::Member { safe: true, .. }));
     }
 
     #[test]

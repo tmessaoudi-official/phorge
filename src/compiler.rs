@@ -1054,6 +1054,9 @@ impl<'a> Compiler<'a> {
             // `inner!` unwraps `T?` to `T`; its operand type is the inner's (so `o! + 1` specializes
             // — `resolve_cty(Optional)` already yields the inner `CTy`). M3 S2.5.
             Expr::Force { inner, .. } => self.ctype(inner),
+            // `expr?` unwraps a `Result<T, E>` to its `Ok` payload — generally an erased/unknown
+            // operand type, so it is not a specialized arithmetic operand (M-faults 2a).
+            Expr::Propagate { .. } => Ok(CTy::Other),
             // `obj with { … }` yields a fresh instance of `obj`'s class — same compile-type as `obj`.
             Expr::CloneWith { object, .. } => self.ctype(object),
             // A `match` value's type is its arms' shared type (checker-guaranteed); infer it from
@@ -1389,6 +1392,7 @@ impl<'a> Compiler<'a> {
                 self.emit(Op::Index, span.line);
             }
             Expr::Force { inner, span } => self.compile_force(inner, span.line)?,
+            Expr::Propagate { inner, span } => self.compile_propagate(inner, span.line)?,
             Expr::CloneWith {
                 object,
                 fields,
@@ -1744,6 +1748,31 @@ impl<'a> Compiler<'a> {
         let ok = self.emit_jump(Op::JumpIfFalse(0), line); // [opt]; non-null → keep, skip the fault
         self.emit(Op::Fault(FaultMsg::ForceUnwrapNull), line); // null → clean fault (terminal)
         self.patch_jump(ok);
+        Ok(())
+    }
+
+    /// `expr?` — Result-error propagation (M-faults 2a). Evaluate the operand; if it is `Err(_)`,
+    /// `Op::Return` the whole `Err` value (`do_return` truncates to the frame base, so this mid-expression
+    /// early-return is clean even nested); otherwise unwrap the `Ok` payload. No new `Op` — reuses
+    /// `MatchTag`/`GetEnumField`/`Return`. The checker restricts `?` to a let-initializer, so the result
+    /// (the `Ok` payload) is what the binding receives.
+    fn compile_propagate(&mut self, inner: &Expr, line: u32) -> Result<(), String> {
+        self.expr(inner)?; // [.., r]
+        let slot = self.height - 1; // r's frame-relative slot (transients may sit below it)
+        let err_idx = self
+            .variants
+            .get("Err")
+            .ok_or_else(|| {
+                "`?` requires a Result-shaped enum (no `Err` variant in scope)".to_string()
+            })?
+            .index;
+        self.emit(Op::GetLocal(slot), line); // [.., r, r]
+        self.emit(Op::MatchTag(err_idx), line); // [.., r, isErr]
+        let not_err = self.emit_jump(Op::JumpIfFalse(0), line); // pops isErr -> [.., r]
+        self.emit(Op::Return, line); // Err: return r (do_return truncates the frame stack)
+        self.patch_jump(not_err); // Ok path: [.., r]
+        self.height = slot + 1; // reassert post-branch height (the terminal Return desynced the tracker)
+        self.emit(Op::GetEnumField(0), line); // [.., ok_payload]
         Ok(())
     }
 

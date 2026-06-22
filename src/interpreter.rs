@@ -725,6 +725,21 @@ impl Interp {
                     Ok(v)
                 }
             }
+            Expr::Propagate { inner, .. } => {
+                // `expr?` (M-faults 2a): a `Result`-shaped enum — `Ok(v)` unwraps to `v`; `Err(_)`
+                // early-returns the whole `Err` value from the enclosing function (the checker
+                // guarantees the function returns the same Result type, so this is well-typed). The
+                // `Signal::Return` mirrors the VM's mid-expression `Op::Return`.
+                let v = self.eval(inner)?;
+                match &v {
+                    Value::Enum(e) if e.variant == "Ok" => Ok(e.payload[0].clone()),
+                    Value::Enum(e) if e.variant == "Err" => Err(Signal::Return(v.clone())),
+                    other => rt(format!(
+                        "`?` requires a Result value, got {}",
+                        other.type_name()
+                    )),
+                }
+            }
             Expr::CloneWith { object, fields, .. } => {
                 // `obj with { f = e }` (M-mut.4a): a fresh instance copying `obj`'s fields with the
                 // named ones overridden — the constructor is NOT run. The source `Rc` is untouched

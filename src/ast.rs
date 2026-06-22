@@ -187,6 +187,16 @@ pub enum Expr {
         inner: Box<Expr>,
         span: Span,
     },
+    /// `inner?` — error propagation (M-faults Slice 2a). On a `Result<T, E>` operand it unwraps an
+    /// `Ok(v)` to `v`, or early-`return`s the `Err(e)` from the enclosing function (which the checker
+    /// requires to return `Result<_, E'>` with `E <: E'`). Lowers on both backends to the existing
+    /// variant-tag test + `return` (no new `Op`); the `throws`-call mode is added in Slice 2b. Note the
+    /// lexer munches `??`/`?.` into their own tokens, so a lone `Question` in postfix position is
+    /// unambiguously this operator.
+    Propagate {
+        inner: Box<Expr>,
+        span: Span,
+    },
     Match {
         scrutinee: Box<Expr>,
         arms: Vec<MatchArm>,
@@ -367,6 +377,7 @@ fn collect_free_expr(
             collect_free_expr(index, bound, found);
         }
         Expr::Force { inner, .. } => collect_free_expr(inner, bound, found),
+        Expr::Propagate { inner, .. } => collect_free_expr(inner, bound, found),
         Expr::CloneWith { object, fields, .. } => {
             collect_free_expr(object, bound, found);
             for (_, e) in fields {

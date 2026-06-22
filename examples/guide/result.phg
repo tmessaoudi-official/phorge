@@ -1,0 +1,49 @@
+// Error-as-value with `Result<T, E>` and the `?` propagation operator (M-faults Slice 2a).
+//
+// `Result<T, E>` is just the generic enum from M-RT — `Ok(T)` for success, `Err(E)` for failure. The
+// `?` operator is the ergonomic glue: in a let-initializer, `var x = mayFail()?;` unwraps an `Ok` to
+// its value, or **early-returns the `Err`** from the enclosing function (which must itself return a
+// `Result`). It turns a chain of fallible steps into straight-line code without a pyramid of `match`.
+//
+// `?` is allowed only as the whole initializer of a binding (`int a = f()?;`). Anywhere else — nested
+// in a larger expression like `g(f()?)`, or a `return f()?;` — is a compile error (`E-PROPAGATE-POSITION`):
+// bind the result to a local first. On the two Phorge backends `?` early-returns mid-expression
+// directly; transpiled to PHP it lowers to `$t = f(); if ($t instanceof Err) return $t; $x = $t->value;`
+// — byte-identical output on `run`, `runvm`, and real PHP.
+
+package main;
+
+import Core.Console;
+
+enum Result<T, E> {
+    Ok(T value),
+    Err(E error),
+}
+
+// Parse a small "config" of two integer fields. Each lookup may fail; `?` propagates the first failure.
+function field(int key) -> Result<int, string> {
+    if (key < 0) {
+        return Err("negative key {key}");
+    }
+    return Ok(key * 10);
+}
+
+// Straight-line happy path: every `?` either unwraps or short-circuits the whole function to its `Err`.
+function combine(int a, int b) -> Result<int, string> {
+    int x = field(a)?; // unwrap or early-return Err
+    int y = field(b)?;
+    return Ok(x + y);
+}
+
+function show(Result<int, string> r) -> string {
+    return match r {
+        Ok(v) => "ok {v}",
+        Err(e) => "err {e}",
+    };
+}
+
+function main() {
+    Console.println(show(combine(1, 2))); // ok 30   — both fields succeed (10 + 20)
+    Console.println(show(combine(3, -1))); // err negative key -1 — second field fails, `?` short-circuits
+    Console.println(show(combine(-5, 9))); // err negative key -5 — first field fails
+}

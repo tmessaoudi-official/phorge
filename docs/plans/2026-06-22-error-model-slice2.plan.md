@@ -28,6 +28,21 @@ then writing-plans.
   on the bare root), **catch broad**; **`main()` may not throw** (`E-UNCAUGHT-THROW`); `throws A | B`
   reuses S4 unions. `?` is type-directed: throws-call → propagate throw; `Result` value → unwrap/early-Err.
 
+## Decisions Log (execution refinements)
+- [2026-06-22] AGREED (during 2a execution): **`?`-on-Result is restricted to a let-initializer
+  position** — the *entire* initializer of a `var`/typed binding (`int a = lookup()?;`) — where the PHP
+  lowering is a clean 3-line hoist (`$t = expr; if ($t instanceof Err) return $t; $x = $t->value;`). A `?`
+  anywhere else (nested, e.g. `f(g()?)`, or `return foo()?` — which would return the unwrapped `T` where
+  the fn returns `Result`, a type error anyway) is `E-PROPAGATE-POSITION` (hint: bind to a local first).
+  Reason
+  (verified): PHP cannot caller-return from an expression, and a general A-normal-form hoist is
+  out-of-scope for 2a; the VM/interpreter handle `?` at expression level fine (`do_return` truncates to
+  the frame base — early-return-on-`Err` works even nested), so the restriction is a PHP-fidelity
+  constraint enforced uniformly by the checker. Nested-`?` (the hoist pre-pass) is deferred.
+- [2026-06-22] AGREED: tasks 2a.1–2a.3 land as **one commit** ("Result `?` propagation") — Rust's
+  exhaustive-match requirement means the `Expr::Propagate` variant can't compile green until parse +
+  check + all-backend lowering are all wired.
+
 ## Formal Plan
 
 > Plan style = the project house format (ordered steps + acceptance + rollback), which overrides the

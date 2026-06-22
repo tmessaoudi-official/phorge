@@ -1398,6 +1398,7 @@ impl Checker {
                 self.check_expr_casing(index);
             }
             Expr::Force { inner, .. } => self.check_expr_casing(inner),
+            Expr::Propagate { inner, .. } => self.check_expr_casing(inner),
             Expr::CloneWith { object, fields, .. } => {
                 self.check_expr_casing(object);
                 for (_, e) in fields {
@@ -1745,7 +1746,15 @@ impl Checker {
                 mutable,
                 span,
             } => {
-                let actual = self.check_expr(init);
+                // A let-initializer is the one position where `?` propagation is allowed (M-faults 2a):
+                // detect it here and type it via `check_propagate` (the unwrapped `Ok` payload), so the
+                // general `check_expr` path's `E-PROPAGATE-POSITION` only fires elsewhere.
+                let actual = match init {
+                    crate::ast::Expr::Propagate { inner, span: psp } => {
+                        self.check_propagate(inner, *psp)
+                    }
+                    _ => self.check_expr(init),
+                };
                 let declared = match ty {
                     crate::ast::Type::Infer(infer_span) => {
                         // `var` binds the initializer's type — but a bare `null` (type `Ty::Null`)
@@ -2025,6 +2034,18 @@ impl Checker {
                 span,
             } => self.check_index(object, index, *span), // Task 5
             Expr::Force { inner, span } => self.check_force(inner, *span),
+            // A `?` reaching the general expression path is *not* in a let-initializer (the only
+            // allowed position this slice — see `check_propagate`): flag it, but still check the inner
+            // and return `Ty::Error` to avoid a cascade (M-faults 2a).
+            Expr::Propagate { inner, span } => {
+                self.check_expr(inner);
+                self.err_coded(
+                    *span,
+                    "`?` propagation is only allowed as the whole initializer of a `var`/typed binding",
+                    "E-PROPAGATE-POSITION",
+                    Some("bind the call's result to a local first (`var r = f(); …`), then handle it".into()),
+                )
+            }
             Expr::CloneWith {
                 object,
                 fields,
@@ -2322,6 +2343,7 @@ impl Checker {
             | Expr::Member { span, .. }
             | Expr::Index { span, .. }
             | Expr::Force { span, .. }
+            | Expr::Propagate { span, .. }
             | Expr::Match { span, .. }
             | Expr::Range { span, .. }
             | Expr::If { span, .. }
@@ -3490,6 +3512,67 @@ impl Checker {
     }
     /// `opt!` checked force-unwrap (M3 S2.5): `T?` → `T`. Every use is linted (`W-FORCE-UNWRAP`) to
     /// nudge toward `??`/`?.`/if-let; force-unwrapping a non-optional is `E-OPT-UNWRAP`.
+    /// Is `name` a `Result`-shaped enum — exactly an `Ok` variant (arity 1) and an `Err` variant
+    /// (arity 1)? `?` propagation is defined only over this shape (M-faults 2a).
+    fn is_result_enum(&self, name: &str) -> bool {
+        self.enums.get(name).is_some_and(|e| {
+            e.variants.get("Ok").is_some_and(|f| f.len() == 1)
+                && e.variants.get("Err").is_some_and(|f| f.len() == 1)
+        })
+    }
+
+    /// The type of variant `v`'s single payload field on enum `name`, with the enum's type parameters
+    /// substituted by `args` (`Ok` payload of `Result<int, _>` ⇒ `int`).
+    fn result_payload(&self, name: &str, v: &str, args: &[Ty]) -> Ty {
+        let theta = self.enum_subst(name, args);
+        self.enums[name].variants[v]
+            .first()
+            .map_or(Ty::Error, |t| apply_subst(t, &theta))
+    }
+
+    /// `expr?` — Result-error propagation (M-faults 2a). Unwraps an `Ok` payload to its value, or
+    /// early-returns the `Err` from the enclosing function. Requires the operand to be a `Result`-shaped
+    /// enum AND the enclosing function (`cur_ret`) to return that *same* enum, with the operand's `Err`
+    /// payload assignable to the function's (`E-PROPAGATE-CONTEXT`/`E-PROPAGATE-ERR`). Returns the
+    /// unwrapped `Ok` payload type. Called only from a let-initializer; any other position is rejected
+    /// by the `Expr::Propagate` arm in `check_expr` (`E-PROPAGATE-POSITION`).
+    fn check_propagate(&mut self, inner: &crate::ast::Expr, span: Span) -> Ty {
+        let t = self.check_expr(inner);
+        let (name, args) = match &t {
+            Ty::Error => return Ty::Error,
+            Ty::Named(n, a) if self.is_result_enum(n) => (n.clone(), a.clone()),
+            other => {
+                return self.err_coded(
+                    span,
+                    format!("`?` requires a `Result`-shaped operand (an enum with `Ok`/`Err` variants), found `{other}`"),
+                    "E-PROPAGATE-CONTEXT",
+                    Some("`?` unwraps `Ok` or early-returns `Err`".into()),
+                );
+            }
+        };
+        match self.cur_ret.clone() {
+            Ty::Named(rn, rargs) if rn == name => {
+                let err_in = self.result_payload(&name, "Err", &args);
+                let err_ret = self.result_payload(&rn, "Err", &rargs);
+                if !self.ty_assignable(&err_in, &err_ret) {
+                    self.err_coded(
+                        span,
+                        format!("`?` propagates an `Err({err_in})` but the enclosing `{name}` carries `Err({err_ret})`"),
+                        "E-PROPAGATE-ERR",
+                        None,
+                    );
+                }
+                self.result_payload(&name, "Ok", &args)
+            }
+            other => self.err_coded(
+                span,
+                format!("`?` early-returns the `Err`, so the enclosing function must return `{name}<…>`, but it returns `{other}`"),
+                "E-PROPAGATE-CONTEXT",
+                Some(format!("declare the function to return `{name}<…>`")),
+            ),
+        }
+    }
+
     fn check_force(&mut self, inner: &crate::ast::Expr, span: Span) -> Ty {
         let t = self.check_expr(inner);
         match t {
@@ -3925,6 +4008,7 @@ fn lambda_uses_this(body: &crate::ast::LambdaBody) -> bool {
             Expr::Member { object, .. } => in_expr(object),
             Expr::Index { object, index, .. } => in_expr(object) || in_expr(index),
             Expr::Force { inner, .. } => in_expr(inner),
+            Expr::Propagate { inner, .. } => in_expr(inner),
             Expr::CloneWith { object, fields, .. } => {
                 in_expr(object) || fields.iter().any(|(_, e)| in_expr(e))
             }
@@ -4307,6 +4391,10 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                 inner: Box::new(rexpr(*inner, h)),
                 span,
             },
+            Expr::Propagate { inner, span } => Expr::Propagate {
+                inner: Box::new(rexpr(*inner, h)),
+                span,
+            },
             Expr::Match {
                 scrutinee,
                 arms,
@@ -4674,6 +4762,10 @@ pub fn erase_generics(program: Program) -> Program {
                 span: *span,
             },
             Expr::Force { inner, span } => Expr::Force {
+                inner: Box::new(rexpr(inner, params)),
+                span: *span,
+            },
+            Expr::Propagate { inner, span } => Expr::Propagate {
                 inner: Box::new(rexpr(inner, params)),
                 span: *span,
             },
@@ -5532,6 +5624,52 @@ mod tests {
         // A plain (non-generic) enum still takes no type arguments.
         let bad = errors_of("enum Color { Red, Green } function main() { Color<int> c = Red(); }");
         assert!(!bad.is_empty(), "expected an arity error, got none");
+    }
+
+    // --- M-faults Slice 2a: `?` error propagation on Result ---
+
+    const RESULT_DEF: &str = "enum Result<T, E> { Ok(T value), Err(E error) }";
+
+    #[test]
+    fn propagate_in_result_fn_is_clean() {
+        // `?` in a let-initializer inside a `Result`-returning fn unwraps the `Ok` payload (an `int`).
+        let ok = errors_of(&format!(
+            "{RESULT_DEF} \
+             function f() -> Result<int, string> {{ return Ok(1); }} \
+             function g() -> Result<int, string> {{ int x = f()?; return Ok(x + 1); }} \
+             function main() {{}}"
+        ));
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn propagate_outside_let_initializer_is_position_error() {
+        // `?` nested in a larger expression is `E-PROPAGATE-POSITION` (not a whole let-initializer).
+        let bad = errors_of(&format!(
+            "{RESULT_DEF} \
+             function f() -> Result<int, string> {{ return Ok(1); }} \
+             function g() -> Result<int, string> {{ int x = f()? + 1; return Ok(x); }} \
+             function main() {{}}"
+        ));
+        assert!(
+            bad.iter().any(|d| d.code == Some("E-PROPAGATE-POSITION")),
+            "expected E-PROPAGATE-POSITION, got {bad:?}"
+        );
+    }
+
+    #[test]
+    fn propagate_in_non_result_fn_is_context_error() {
+        // `?` requires the enclosing fn to return the same `Result` — otherwise `E-PROPAGATE-CONTEXT`.
+        let bad = errors_of(&format!(
+            "{RESULT_DEF} \
+             function f() -> Result<int, string> {{ return Ok(1); }} \
+             function g() -> int {{ int x = f()?; return x; }} \
+             function main() {{}}"
+        ));
+        assert!(
+            bad.iter().any(|d| d.code == Some("E-PROPAGATE-CONTEXT")),
+            "expected E-PROPAGATE-CONTEXT, got {bad:?}"
+        );
     }
 
     // --- M-RT S4: union types + match-over-union ---

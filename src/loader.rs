@@ -859,6 +859,10 @@ fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
             inner: Box::new(resolve_expr(*inner, ctx)),
             span,
         },
+        Expr::Propagate { inner, span } => Expr::Propagate {
+            inner: Box::new(resolve_expr(*inner, ctx)),
+            span,
+        },
         Expr::CloneWith {
             object,
             fields,

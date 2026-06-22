@@ -692,6 +692,30 @@ impl Transpiler {
                 self.declare(name);
                 self.emit_match(scrutinee, arms, MatchTarget::Assign(name.clone()))?;
             }
+            // `T x = expr?;` (M-faults 2a) — PHP cannot caller-return from an expression, so the `?` is
+            // hoisted to statements here: stash the Result in `$x`, return it unchanged if it is `Err`,
+            // else unwrap the `Ok` payload in place. The checker restricts `?` to this position, so the
+            // expression-level `Expr::Propagate` arm in `emit_expr` is unreachable.
+            Stmt::VarDecl {
+                name,
+                init: Expr::Propagate { inner, .. },
+                ..
+            } => {
+                let v = self.emit_expr(inner)?;
+                self.declare(name);
+                let err = self.variant_ref("Err");
+                let ok_field = self
+                    .variant_fields
+                    .get("Ok")
+                    .and_then(|f| f.first())
+                    .cloned()
+                    .unwrap_or_else(|| "value".to_string());
+                self.line(&format!("${name} = {v};"));
+                self.line(&format!(
+                    "if (${name} instanceof {err}) {{ return ${name}; }}"
+                ));
+                self.line(&format!("${name} = ${name}->{ok_field};"));
+            }
             Stmt::VarDecl { name, init, .. } => {
                 let e = self.emit_expr(init)?;
                 self.declare(name);
@@ -977,6 +1001,12 @@ impl Transpiler {
                 let bs = if self.namespaced { "\\" } else { "" };
                 Ok(format!("{bs}__phorge_unwrap({v})"))
             }
+            // `?` propagation is hoisted at the `VarDecl` statement level (the only position the checker
+            // permits, M-faults 2a), so it never reaches expression emission in a valid program.
+            Expr::Propagate { .. } => Err(
+                "internal: `?` propagation reached expression emission (checker restricts it to a let-initializer)"
+                    .to_string(),
+            ),
             // `obj with { f = e }` → PHP 8.5 `clone($obj, ['f' => e, …])`: a fresh instance with the
             // named fields overridden and the constructor bypassed — byte-identical to the backends
             // (M-mut.4a). An empty override list is just `clone($obj)`.
