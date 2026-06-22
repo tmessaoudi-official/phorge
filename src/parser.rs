@@ -1706,7 +1706,8 @@ impl Parser {
                 TokenKind::Private => Modifier::Private,
                 TokenKind::Protected => Modifier::Protected,
                 TokenKind::Const => Modifier::Const,
-                TokenKind::Final => Modifier::Final,
+                // `open` method — opts into override (M-RT S6); final-by-default otherwise.
+                TokenKind::Open => Modifier::Open,
                 // `mutable` field / promoted ctor param (M-mut.6); immutable by default.
                 TokenKind::Mutable => Modifier::Mutable,
                 // `static` class field (M-mut.7) — class-level state.
@@ -2915,6 +2916,28 @@ mod tests {
             }
             other => panic!("got {other:?}"),
         }
+    }
+
+    #[test]
+    fn open_method_modifier_and_final_retired() {
+        // S6a.1: `open` parses as a method modifier. (Methods use block bodies, not `=> expr`.)
+        match item("class C { open function f() -> int { return 1; } }") {
+            Item::Class(c) => match &c.members[0] {
+                ClassMember::Method(m) => {
+                    assert_eq!(m.name, "f");
+                    assert_eq!(m.modifiers, vec![Modifier::Open]);
+                }
+                other => panic!("member 0: {other:?}"),
+            },
+            other => panic!("got {other:?}"),
+        }
+        // S6a.1: `final` is no longer a keyword — it now lexes as an ordinary identifier.
+        let toks = lex("final").expect("lex ok");
+        assert!(
+            matches!(&toks[0].kind, TokenKind::Ident(s) if s == "final"),
+            "expected `final` to lex as Ident, got {:?}",
+            toks[0].kind
+        );
     }
 
     #[test]

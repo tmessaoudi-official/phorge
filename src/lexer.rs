@@ -364,7 +364,7 @@ fn keyword(s: &str) -> Option<TokenKind> {
         "constructor" => Constructor,
         "trait" => Trait,
         "const" => Const,
-        "final" => Final,
+        "open" => Open,
         "public" => Public,
         "private" => Private,
         "protected" => Protected,

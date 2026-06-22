@@ -572,7 +572,12 @@ pub enum Modifier {
     Private,
     Protected,
     Const,
-    Final,
+    /// `open` on a class or method (M-RT S6) — opts into extensibility/overridability. Phorge is
+    /// **final-by-default** (a non-`open` class can't be `extend`ed; a non-`open` method can't be
+    /// overridden), so the `final` keyword is retired. Checker-enforced (`E-EXTEND-FINAL`/
+    /// `E-OVERRIDE-FINAL`); the transpiler emits PHP `final` for the *absence* of `open`. The
+    /// extensibility axis of the modifier model, orthogonal to `mutable` (mutation) and `static`.
+    Open,
     /// `mutable` on a class field or promoted ctor param (M-mut.6) — the field may be reassigned via
     /// `o.f = e`. Immutable by default (a property of the place, not the type); erased in PHP output
     /// (PHP properties are always mutable unless `readonly`). The binding analog of `VarDecl.mutable`.

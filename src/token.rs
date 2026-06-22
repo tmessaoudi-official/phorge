@@ -27,7 +27,10 @@ pub enum TokenKind {
     Constructor,
     Trait,
     Const,
-    Final,
+    /// `open` — the extensibility opt-in (M-RT S6). A class is `open class` to allow `extends`; a
+    /// method is `open function` to allow override. Final-by-default everywhere else, so the `final`
+    /// keyword is retired (redundant). Mirrors the `mutable`/immutable-default house rule.
+    Open,
     Public,
     Private,
     Protected,
