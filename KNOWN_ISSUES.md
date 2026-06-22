@@ -110,6 +110,32 @@ The value tier (`Result<T, E>` + `?`) and the panic tier (`panic`/`todo`/`unreac
   value types as `CTy::Other` (the same erased-generics operand limitation), so `f()? + 1` in a
   let-init would run on the interpreter but the VM rejects the arithmetic; bind to a typed local.
 
+## Error model Slice 2b (M-faults) — deferred refinements
+
+Checked exceptions — `throws`/`throw`/`try`/`catch`/`finally` and `?`-throws — ship in 2b, byte-identical
+`run ≡ runvm ≡ real PHP` (`examples/guide/errors.phg`). Notes and deliberate deferrals:
+
+- **Panics/faults are uncatchable by design.** A `panic`/`todo`/`unreachable`/failed `assert`, or a
+  runtime fault (division by zero, index out of range, …), is a separate tier from a `throw`: it passes
+  straight through every `catch` and aborts the program with a stack trace. Only a `throw` of an `Error`
+  subtype is catchable. This is intentional — panics signal bugs, not recoverable conditions.
+- **Multi-type catch is supported** — both multiple sequential `catch (X e) catch (Y e)` clauses and a
+  union `catch (A | B e)`. A clause shadowed by an earlier (broader/equal) one is `W-CATCH-UNREACHABLE`
+  (a non-fatal lint, like the dead-code lints).
+- **A raw union catch binding cannot read a common member** — `catch (A | B e) { e.message }` is rejected
+  because `e: A | B` and common-member access on a raw union is itself deferred (pre-existing S4 gap).
+  Catch the types in separate clauses, or narrow with `instanceof`, to read a field.
+- **Throw-across-a-higher-order-native is implemented but not yet source-reachable.** The runtime unwinds
+  a `throw` out of a closure passed to `Core.List.map`/`filter`/`reduce` correctly on both backends, but
+  a lambda **cannot declare `throws`** yet, so an uncaught `throw` inside such a closure is
+  `E-THROW-UNDECLARED` at compile time. The mechanism is in place ahead of lambda-`throws`.
+- **`throws` on a *method* or *interface* is parsed and checked inside the body, but not discharged at
+  the call site**, and **`?`-throws works on a free-function call only** (not a method call). Both are
+  follow-ups; free-function `throws` is fully enforced.
+- **`finally` cannot return a value** (a `return` inside `finally` overriding the try's value is
+  unsupported) — a deliberate non-goal (PHP allows it but it is a well-known footgun).
+- **Cause-chains and catching PHP-thrown exceptions across the interop boundary** are Slice 2c.
+
 ## Totality cluster (M-RT) — deferred refinements
 
 Return-on-all-paths (`E-MISSING-RETURN`), the `never` bottom type, and the `W-UNREACHABLE` /

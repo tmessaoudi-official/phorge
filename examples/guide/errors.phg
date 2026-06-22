@@ -1,0 +1,59 @@
+package main;
+
+import Core.Console;
+
+// M-faults Slice 2 — checked exceptions: `throws`, `throw`, `try`/`catch`/`finally`, and `?`-throws
+// propagation. A thrown type must implement the built-in `Error` marker (transpiles to a PHP class
+// extending `\Exception`); the compiler forces every checked exception to be caught or declared, so
+// nothing escapes silently. Faults/panics (e.g. `panic`, division by zero) are a separate, uncatchable
+// tier — see `result.phg` — and cannot appear in a runnable example (they would abort it).
+
+class NegativeInput implements Error {
+  constructor(public string message) {}
+}
+
+class TooLarge implements Error {
+  constructor(public string message) {}
+}
+
+// `throws A | B` declares the checked exceptions this function may raise (the union is a set).
+function validate(int n) -> int throws NegativeInput | TooLarge {
+  if (n < 0) {
+    throw NegativeInput("must not be negative");
+  }
+  if (n > 100) {
+    throw TooLarge("must be at most 100");
+  }
+  return n;
+}
+
+// `?` propagates a throwing call's exceptions to this function's own `throws` — no boilerplate.
+function doubled(int n) -> int throws NegativeInput | TooLarge {
+  var v = validate(n)?;
+  return v * 2;
+}
+
+function main() {
+  // Multiple `catch` clauses dispatch by type; `finally` runs on every path (ok, caught, or
+  // propagated). `?`-throws inside `doubled` surfaces the exception here.
+  for (int n in [50, 0 - 5, 200]) {
+    try {
+      var r = doubled(n);
+      Console.println("ok({n}) = {r}");
+    } catch (NegativeInput e) {
+      Console.println("rejected({n}): {e.message}");
+    } catch (TooLarge e) {
+      Console.println("rejected({n}): {e.message}");
+    } finally {
+      Console.println("  (checked {n})");
+    }
+  }
+
+  // A single union clause `catch (A | B e)` handles either checked error.
+  try {
+    var bad = validate(0 - 9);
+    Console.println("unreached");
+  } catch (NegativeInput | TooLarge e) {
+    Console.println("union catch handled a checked error");
+  }
+}

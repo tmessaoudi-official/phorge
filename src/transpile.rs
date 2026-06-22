@@ -92,6 +92,23 @@ fn php_type_ref(name: &str) -> String {
     }
 }
 
+/// Render a `catch` clause's type for PHP (M-faults 2b): a single class/interface via `php_type_ref`
+/// (FQN if cross-package), a union `A | B` as PHP 8's `A | B`. The built-in `Error` base maps to
+/// `\Exception` (a Phorge `Error` subtype transpiled to `extends \Exception`, and PHP's own `Error`
+/// is a *different* engine class — so `catch (Error e)` must catch `\Exception`, not PHP `\Error`).
+fn php_catch_type(ty: &Type) -> String {
+    match ty {
+        Type::Named { name, .. } if last_segment(name) == "Error" => "\\Exception".to_string(),
+        Type::Named { name, .. } => php_type_ref(name),
+        Type::Union(members, _) => members
+            .iter()
+            .map(php_catch_type)
+            .collect::<Vec<_>>()
+            .join(" | "),
+        _ => "\\Exception".to_string(), // defensive — the checker requires an Error-typed catch
+    }
+}
+
 /// Whether a native's PHP erasure is a global function call (`strlen(...)`, `str_replace(...)`) — an
 /// identifier immediately followed by `(`. Such calls need a leading `\` inside a namespace block so
 /// they resolve to the global PHP builtin, not `CurrentNs\strlen`. A language construct like
@@ -931,10 +948,56 @@ impl Transpiler {
                 let s = self.emit_expr(e)?;
                 self.line(&format!("{s};"));
             }
-            // M-faults 2b: PHP try/catch/finally emission lands in Task 2b.6. No example/test
-            // transpiles a throw/try in 2b.1.
-            Stmt::Throw { .. } | Stmt::Try { .. } => {
-                return Err("throw/try transpile not yet implemented (M-faults 2b.6)".to_string());
+            // `throw e;` → PHP `throw $e;` (M-faults 2b). The thrown value is an `Error` subtype,
+            // which transpiled to a `\Exception` subclass (Task 2b.2), so it is a valid PHP throwable.
+            Stmt::Throw { value, .. } => {
+                let e = self.emit_expr(value)?;
+                self.line(&format!("throw {e};"));
+            }
+            // `try { } catch (T e) { } … [finally { }]` → the PHP construct 1:1 (M-faults 2b). Multiple
+            // clauses map to multiple PHP `catch`es; a union `catch (A | B e)` → PHP 8's `catch (A | B
+            // $e)`. The `throws` declaration is erased (no `@throws` docblock — keeps the output minimal
+            // and byte-identical). `?`-throws was already erased to the bare call by the checker (2b.3).
+            Stmt::Try {
+                body,
+                catches,
+                finally_block,
+                ..
+            } => {
+                self.line("try {");
+                self.indent += 1;
+                self.push_scope();
+                for st in body {
+                    self.emit_stmt(st)?;
+                }
+                self.pop_scope();
+                self.indent -= 1;
+                for clause in catches {
+                    self.line(&format!(
+                        "}} catch ({} ${}) {{",
+                        php_catch_type(&clause.ty),
+                        clause.name
+                    ));
+                    self.indent += 1;
+                    self.push_scope();
+                    self.declare(&clause.name);
+                    for st in &clause.body {
+                        self.emit_stmt(st)?;
+                    }
+                    self.pop_scope();
+                    self.indent -= 1;
+                }
+                if let Some(fb) = finally_block {
+                    self.line("} finally {");
+                    self.indent += 1;
+                    self.push_scope();
+                    for st in fb {
+                        self.emit_stmt(st)?;
+                    }
+                    self.pop_scope();
+                    self.indent -= 1;
+                }
+                self.line("}");
             }
         }
         Ok(())

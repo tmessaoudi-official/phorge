@@ -6,6 +6,32 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — error model Slice 2b: checked exceptions (`throws`/`throw`/`try`/`catch`/`finally`) (M-faults)
+
+The enforced exception tier of the three-tier error model. Byte-identical `run ≡ runvm ≡ real PHP`
+(`examples/guide/errors.phg`); **three new `Op`s** (`Throw`/`PushHandler`/`PopHandler`), each extending
+the three coupled matches (`chunk.rs` validate + `vm.rs` exec_op + `compiler.rs` stack_effect) in one
+change.
+
+- **`throws E` declarations + compile-time enforcement** — a function declares the checked exceptions it
+  may raise (`throws A | B`, a set). Every `throw` and every call to a throwing function must be
+  *discharged*: caught by an enclosing `try`, or propagated with `?` and a matching enclosing `throws`.
+  A throwable type must implement the built-in **`Error`** marker; `throws Error` is too broad
+  (`E-THROWS-TOO-BROAD` — declare the specific type); `main` may not let an exception escape
+  (`E-UNCAUGHT-THROW`). New codes `E-THROW-TYPE`/`E-THROW-UNDECLARED`/`E-CALL-UNHANDLED`/`E-CATCH-TYPE`
+  and the `W-CATCH-UNREACHABLE` lint, all self-documenting via `phg explain`.
+- **`throw e;`** unwinds to the nearest matching `catch`. **`try { } catch (T e) { } … [finally { }]`** —
+  multiple sequential `catch` clauses dispatch by type, a union `catch (A | B e)` catches either, and a
+  shadowed clause is a `W-CATCH-UNREACHABLE` lint. `finally` runs on *every* exit edge (normal, caught,
+  re-thrown, or a `return`/`break`/`continue` escaping the block). A `Runtime` fault/panic is **not**
+  catchable — it passes straight through every `catch` (panics are an uncaught-by-design tier).
+- **`?`-throws propagation** — `f()?` on a throwing call propagates `f`'s exceptions to the enclosing
+  `throws` (front-end-only: the checker erases the marker, the call's own throw already unwinds).
+- **Native unwinding on both backends** — the interpreter uses a `Signal::Throw` (caught at the `try`
+  boundary); the VM uses a handler stack (`PushHandler`/`PopHandler`) and unwinds frames + the operand
+  stack to the landed handler. A `throws E` subtype transpiles to a PHP class `extends \Exception`, and
+  `throw`/`try`/`catch`/`finally` transpile to the PHP constructs 1:1.
+
 ### Added — error model Slice 2a: `Result` `?` propagation + fault intrinsics (M-faults)
 
 The first slice of the three-tier error model — the value tier and the panic tier (the enforced
