@@ -5769,7 +5769,9 @@ pub fn erase_generics(program: Program) -> Program {
                     vis: c.vis,
                     name: c.name,
                     type_params: Vec::new(), // erased
+                    extends: c.extends,
                     implements: c.implements,
+                    open: c.open,
                     members,
                     span: c.span,
                 })
@@ -6049,7 +6051,9 @@ pub fn expand_aliases(program: &Program) -> Program {
                 vis: c.vis,
                 name: c.name.clone(),
                 type_params: c.type_params.clone(),
+                extends: c.extends.clone(),
                 implements: c.implements.clone(),
+                open: c.open,
                 members: c.members.iter().map(|m| rmember(m, &aliases)).collect(),
                 span: c.span,
             })),

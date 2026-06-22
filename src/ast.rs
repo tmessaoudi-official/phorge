@@ -811,10 +811,21 @@ pub struct ClassDecl {
     /// arguments are inferred at construction and these parameters are **erased** (rewritten to
     /// `Type::Erased` across every member) before any backend runs.
     pub type_params: Vec<String>,
+    /// Parent classes this class `extends` (M-RT S6). Empty for a root class; one entry for single
+    /// inheritance (`class Dog extends Animal`); two or more for multiple inheritance
+    /// (`class Duck extends Swimmer, Flyer`). Each parent must be an `open` class
+    /// (`E-EXTEND-FINAL` otherwise); a cycle is `E-MI-CYCLE`. The checker flattens the transitive
+    /// supertype set (`ast::class_supertypes`) for subtyping/`instanceof`, and inherits the parents'
+    /// fields and methods into this class. Multi-parent collisions must be explicitly resolved (S6b).
+    pub extends: Vec<String>,
     /// Interfaces this class declares it implements (`class Dog implements Speaker, Named`). The
     /// checker (`E-IFACE-IMPL`/`E-IFACE-UNIMPL`/`E-IFACE-SIG`) validates each name resolves to an
     /// interface and the class provides every method of it and its `extends` chain (M-RT S2).
     pub implements: Vec<String>,
+    /// `open class` — whether this class may be `extend`ed (M-RT S6). **Final-by-default**: a
+    /// non-`open` class is a leaf (`E-EXTEND-FINAL` if a subclass names it). The transpiler emits a
+    /// PHP `final class` for a non-`open` class. The extensibility opt-in, orthogonal to `vis`.
+    pub open: bool,
     pub members: Vec<ClassMember>,
     pub span: Span,
 }

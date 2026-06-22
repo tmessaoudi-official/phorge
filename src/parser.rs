@@ -1257,6 +1257,11 @@ impl Parser {
         // Optional leading declaration visibility (visibility modifiers): at most one of
         // public/internal/private. Absent ⇒ the default `Visibility::Public`.
         let vis = self.parse_decl_visibility()?;
+        // Optional `open` extensibility prefix (M-RT S6) — applies only to a class.
+        let is_open = self.eat(&TokenKind::Open);
+        if is_open && !self.check(&TokenKind::Class) {
+            return Err(self.error("only a class can be declared `open`"));
+        }
         let item = match self.peek() {
             TokenKind::Import => {
                 if vis != Visibility::Public {
@@ -1272,7 +1277,7 @@ impl Parser {
             }
             TokenKind::Function => Item::Function(self.parse_function(Vec::new(), sp)?),
             TokenKind::Enum => Item::Enum(self.parse_enum(sp)?),
-            TokenKind::Class => Item::Class(self.parse_class(sp)?),
+            TokenKind::Class => Item::Class(self.parse_class(sp, is_open)?),
             TokenKind::Interface => Item::Interface(self.parse_interface(sp)?),
             TokenKind::Package => {
                 return Err(self.error(
@@ -1492,13 +1497,20 @@ impl Parser {
         })
     }
 
-    /// `class Name [implements A, B] { member* }` — assumes current token is `class`.
-    fn parse_class(&mut self, sp: Span) -> Result<ClassDecl, Diagnostic> {
+    /// `[open] class Name<T> [extends A, B] [implements I1, I2] { member* }` — assumes current token
+    /// is `class`. The `open` flag is parsed at the item level (`parse_item`) and threaded in.
+    fn parse_class(&mut self, sp: Span, open: bool) -> Result<ClassDecl, Diagnostic> {
         self.expect(&TokenKind::Class, "'class'")?;
         let name = self.expect_ident("a class name")?;
         // Optional generic parameter list `<T, U>` immediately after the class name (M-RT
-        // generics-all), before `implements` — `class Box<T> implements Cloneable { … }`.
+        // generics-all), before `extends`/`implements` — `class Box<T> extends … implements … { … }`.
         let type_params = self.parse_type_params()?;
+        // Optional `extends A, B` parent-class list (M-RT S6) — before `implements`.
+        let extends = if self.eat(&TokenKind::Extends) {
+            self.parse_name_list("a class name after 'extends'")?
+        } else {
+            Vec::new()
+        };
         let implements = if self.eat(&TokenKind::Implements) {
             self.parse_name_list("an interface name after 'implements'")?
         } else {
@@ -1514,7 +1526,9 @@ impl Parser {
             vis: Visibility::Public,
             name,
             type_params,
+            extends,
             implements,
+            open,
             members,
             span: sp,
         })
@@ -2938,6 +2952,31 @@ mod tests {
             "expected `final` to lex as Ident, got {:?}",
             toks[0].kind
         );
+    }
+
+    #[test]
+    fn parses_open_class_with_single_extends() {
+        // S6a.2: `open` class prefix + a single `extends` parent.
+        let p = prog("package main;\nopen class Animal {}\nclass Dog extends Animal {}");
+        let animal = match &p.items[0] {
+            Item::Class(c) => c,
+            o => panic!("item 0: {o:?}"),
+        };
+        assert!(animal.open, "Animal should be open");
+        assert!(animal.extends.is_empty(), "Animal extends nothing");
+        let dog = match &p.items[1] {
+            Item::Class(c) => c,
+            o => panic!("item 1: {o:?}"),
+        };
+        assert!(!dog.open, "Dog is final-by-default (not open)");
+        assert_eq!(dog.extends, vec!["Animal".to_string()]);
+    }
+
+    #[test]
+    fn open_prefix_on_a_non_class_is_an_error() {
+        // S6a.2: `open` only applies to classes.
+        let msg = prog_err("package main;\nopen function f() {}");
+        assert!(msg.contains("only a class"), "got: {msg}");
     }
 
     #[test]
