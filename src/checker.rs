@@ -9,6 +9,7 @@ use crate::limits::MAX_EXPR_DEPTH;
 use crate::token::Span;
 use crate::types::Ty;
 
+#[derive(Clone)]
 struct FnSig {
     params: Vec<Ty>,
     ret: Ty,
@@ -48,7 +49,10 @@ struct ClassInfo {
     /// The subset of `statics` declared `static mutable` — only these may be the target of
     /// `ClassName.field = e` (`E-ASSIGN-IMMUTABLE`).
     static_mut: std::collections::HashSet<String>,
-    methods: HashMap<String, FnSig>,
+    /// Method overload sets (M-RT overloading): a name maps to one *or more* signatures (dynamic
+    /// multiple dispatch). Length 1 in the common case; >1 when methods share a name with distinct
+    /// parameter signatures (all sharing a return type — `E-OVERLOAD-RETURN`).
+    methods: HashMap<String, Vec<FnSig>>,
     /// Property hooks (M-mut.7b) — virtual members keyed by name. Disjoint from `fields`/`statics`
     /// (a hook has no storage). The flags record whether the hook is readable (`has_get`) and/or
     /// writable (`has_set`): reading a `!has_get` hook is `E-HOOK-NO-GET`, writing a `!has_set` one
@@ -78,7 +82,9 @@ struct InterfaceInfo {
 }
 
 pub struct Checker {
-    funcs: HashMap<String, FnSig>,
+    /// Free-function overload sets (M-RT overloading): a name maps to one *or more* signatures
+    /// (dynamic multiple dispatch). Length 1 in the common case.
+    funcs: HashMap<String, Vec<FnSig>>,
     enums: HashMap<String, EnumInfo>,
     classes: HashMap<String, ClassInfo>,
     interfaces: HashMap<String, InterfaceInfo>,
@@ -366,9 +372,16 @@ impl Checker {
                             if self.interfaces.contains_key(n) {
                                 self.iface_flat_methods(n)
                             } else if let Some(info) = self.classes.get(n) {
+                                // Overloaded methods (M-RT): the intersection signature-agreement check
+                                // uses the first overload as the representative — a full overload-aware
+                                // intersection check is a documented follow-up.
                                 info.methods
                                     .iter()
-                                    .map(|(m, s)| (m.clone(), (s.params.clone(), s.ret.clone())))
+                                    .filter_map(|(m, s)| {
+                                        s.first().map(|s0| {
+                                            (m.clone(), (s0.params.clone(), s0.ret.clone()))
+                                        })
+                                    })
                                     .collect()
                             } else {
                                 Vec::new()
@@ -769,10 +782,14 @@ impl Checker {
     /// A class method conforms to an interface signature when arities match and each parameter type
     /// and the return type are equal (exact — no variance this slice, matching `assignable`'s
     /// function rule).
-    fn sig_conforms(&self, have: &FnSig, want: &(Vec<Ty>, Ty)) -> bool {
-        have.params.len() == want.0.len()
-            && have.params.iter().zip(&want.0).all(|(a, b)| a == b)
-            && have.ret == want.1
+    /// `have` is the class's overload set for the method name (M-RT overloading): conformance holds
+    /// when *any* overload matches the interface signature exactly.
+    fn sig_conforms(&self, have: &[FnSig], want: &(Vec<Ty>, Ty)) -> bool {
+        have.iter().any(|h| {
+            h.params.len() == want.0.len()
+                && h.params.iter().zip(&want.0).all(|(a, b)| a == b)
+                && h.ret == want.1
+        })
     }
 
     /// Nominal subtyping for assignability and `instanceof`: `a` is a subtype of `b` when they are
@@ -871,7 +888,9 @@ impl Checker {
     fn free_call_throws(&self, inner: &crate::ast::Expr) -> Option<Vec<Ty>> {
         if let crate::ast::Expr::Call { callee, .. } = inner {
             if let crate::ast::Expr::Ident(name, _) = &**callee {
-                if let Some(sig) = self.funcs.get(name) {
+                // Throws-mode `?` on an overloaded function uses the first overload's throws (the
+                // common case is a single overload); a fully overload-aware `?`-throws is a deferral.
+                if let Some(sig) = self.funcs.get(name).and_then(|v| v.first()) {
                     if !sig.throws.is_empty() {
                         return Some(sig.throws.clone());
                     }
@@ -966,16 +985,6 @@ impl Checker {
             );
             return;
         }
-        if self.funcs.contains_key(&f.name) {
-            self.err(
-                f.span,
-                format!(
-                    "function overloading is not yet supported in M1 (`{}` already defined)",
-                    f.name
-                ),
-            );
-            return;
-        }
         self.validate_type_params(&f.type_params, f.span);
         // Resolve the signature with the type parameters in scope so `T` becomes `Ty::Param("T")`.
         self.active_type_params = f.type_params.clone();
@@ -988,15 +997,66 @@ impl Checker {
         // union `throws A | B` is flattened to its members (`throws` is a set of exception types).
         let throws = Self::flatten_throws(f.throws.iter().map(|t| self.resolve_type(t)).collect());
         self.active_type_params.clear();
-        self.funcs.insert(
-            f.name.clone(),
-            FnSig {
-                params,
-                ret,
-                type_params: f.type_params.clone(),
-                throws,
-            },
-        );
+        // M-RT overloading: a same-named function joins an overload set rather than colliding. The
+        // set must share a return type and hold no two identical signatures; a generic overload is
+        // not allowed to participate (deferred). Push regardless of legality so downstream resolution
+        // sees the whole set (errors already reported).
+        let sig = FnSig {
+            params,
+            ret,
+            type_params: f.type_params.clone(),
+            throws,
+        };
+        let existing = self.funcs.get(&f.name).cloned().unwrap_or_default();
+        self.validate_new_overload(&existing, &sig, &f.name, f.span, "function");
+        self.funcs.entry(f.name.clone()).or_default().push(sig);
+    }
+
+    /// M-RT overloading: validate a new overload `sig` against the overloads of the same name already
+    /// collected in `existing`. Emits diagnostics only; the caller pushes `sig` regardless so later
+    /// resolution sees the full set. A legal set shares one return type (`E-OVERLOAD-RETURN`) and has
+    /// no two identical parameter signatures (`E-OVERLOAD-DUPLICATE`); a generic member cannot
+    /// participate (`E-OVERLOAD-GENERIC`, deferred). The first declaration is always fine.
+    fn validate_new_overload(
+        &mut self,
+        existing: &[FnSig],
+        sig: &FnSig,
+        name: &str,
+        span: Span,
+        kind: &str,
+    ) {
+        if existing.is_empty() {
+            return;
+        }
+        if !sig.type_params.is_empty() || existing.iter().any(|e| !e.type_params.is_empty()) {
+            self.err_coded(
+                span,
+                format!("generic {kind} `{name}` cannot be overloaded"),
+                "E-OVERLOAD-GENERIC",
+                Some("a generic declaration must be the only one with its name; remove the type parameters or rename".into()),
+            );
+            return;
+        }
+        let want_ret = &existing[0].ret;
+        if &sig.ret != want_ret {
+            self.err_coded(
+                span,
+                format!(
+                    "overloaded {kind} `{name}` must return the same type as its other overloads (`{want_ret}`), found `{}`",
+                    sig.ret
+                ),
+                "E-OVERLOAD-RETURN",
+                Some("overloads model one operation over different argument types; differing returns suggest separate functions or generics".into()),
+            );
+        }
+        if existing.iter().any(|e| e.params == sig.params) {
+            self.err_coded(
+                span,
+                format!("overloaded {kind} `{name}` has two declarations with identical parameter types"),
+                "E-OVERLOAD-DUPLICATE",
+                Some("each overload must differ in its parameter types".into()),
+            );
+        }
     }
 
     /// Validate a function's declared generic parameters: reject duplicates (`E-GENERIC-PARAM`) and
@@ -1092,7 +1152,7 @@ impl Checker {
         let mut mutable_fields = std::collections::HashSet::new();
         let mut statics: HashMap<String, Ty> = HashMap::new();
         let mut static_mut = std::collections::HashSet::new();
-        let mut methods = HashMap::new();
+        let mut methods: HashMap<String, Vec<FnSig>> = HashMap::new();
         let mut hooks: HashMap<String, HookInfo> = HashMap::new();
         let mut ctor = Vec::new();
         // The class's type parameters are in scope while resolving every member signature (fields,
@@ -1229,15 +1289,17 @@ impl Checker {
                         f.throws.iter().map(|t| self.resolve_type(t)).collect(),
                     );
                     self.active_type_params.clear();
-                    methods.insert(
-                        f.name.clone(),
-                        FnSig {
-                            params: p,
-                            ret,
-                            type_params: f.type_params.clone(),
-                            throws,
-                        },
-                    );
+                    // M-RT overloading: a same-named method joins an overload set (same rules as free
+                    // functions — same return, no identical signatures, no generic member).
+                    let sig = FnSig {
+                        params: p,
+                        ret,
+                        type_params: f.type_params.clone(),
+                        throws,
+                    };
+                    let existing = methods.get(&f.name).cloned().unwrap_or_default();
+                    self.validate_new_overload(&existing, &sig, &f.name, f.span, "method");
+                    methods.entry(f.name.clone()).or_default().push(sig);
                 }
                 // A property hook (M-mut.7b): record its declared type and which accessors it
                 // provides. The body is type-checked in phase 2 (`check_program`), with `this` and
@@ -1913,7 +1975,11 @@ impl Checker {
                     // A `never`-typed fault intrinsic (`panic`/`todo`/`unreachable` — not `assert`,
                     // which is `unit`), or a user function declared `-> never` (M-faults 2a).
                     matches!(name.as_str(), "panic" | "todo" | "unreachable")
-                        || self.funcs.get(name).is_some_and(|s| s.ret == Ty::Never)
+                        || self
+                            .funcs
+                            .get(name)
+                            .and_then(|v| v.first())
+                            .is_some_and(|s| s.ret == Ty::Never)
                 } else {
                     false
                 }
@@ -2358,7 +2424,17 @@ impl Checker {
                     // A4: bare named-function reference in value position — `fn_name` where
                     // `fn_name` is a top-level function, not a local. Return its function type so
                     // it can be passed as a first-class argument or stored in a variable.
-                    if let Some(sig) = self.funcs.get(name) {
+                    if let Some(sigs) = self.funcs.get(name) {
+                        // An overloaded function has no single first-class value (which overload?).
+                        if sigs.len() > 1 {
+                            return self.err_coded(
+                                *span,
+                                format!("`{name}` is overloaded — an overloaded function has no single first-class value"),
+                                "E-OVERLOAD-FN-VALUE",
+                                Some("call it directly, or wrap the intended overload in a lambda".into()),
+                            );
+                        }
+                        let sig = &sigs[0];
                         let param_tys = sig.params.clone();
                         let ret_ty = sig.ret.clone();
                         return Ty::Function(param_tys, Box::new(ret_ty));
@@ -3024,13 +3100,8 @@ impl Checker {
         if let Some(t) = self.try_variant_or_class_call(name, args, span) {
             return t;
         }
-        let sig = match self.funcs.get(name) {
-            Some(s) => (
-                s.params.clone(),
-                s.ret.clone(),
-                s.type_params.clone(),
-                s.throws.clone(),
-            ),
+        let sigs = match self.funcs.get(name) {
+            Some(s) => s.clone(),
             None => {
                 for a in args {
                     self.check_expr(a);
@@ -3038,18 +3109,122 @@ impl Checker {
                 return self.err(span, format!("unknown function `{name}`"));
             }
         };
-        // Discharge each checked exception the callee declares: a bare call must catch it in an
-        // enclosing `try` (M-faults 2b); the propagate (`?`) path was handled by the suppression flag.
+        // Single overload — the common case, identical to pre-overloading behaviour (incl. generics).
+        if sigs.len() == 1 {
+            let sig = &sigs[0];
+            // Discharge each checked exception the callee declares: a bare call must catch it in an
+            // enclosing `try` (M-faults 2b); the propagate (`?`) path used the suppression flag.
+            if !skip_throws {
+                for e in &sig.throws {
+                    self.discharge_call_throw(name, e, span);
+                }
+            }
+            return if sig.type_params.is_empty() {
+                self.check_args(name, &sig.params, args, span);
+                sig.ret.clone()
+            } else {
+                self.check_generic_call(name, &sig.params, &sig.ret, args, span)
+            };
+        }
+        // Overload set (M-RT): generic members were rejected at collection, so every overload is
+        // monomorphic. The call's result is the shared return type (`E-OVERLOAD-RETURN`); resolution
+        // here is *static* (for typing) — the runtime dispatch is byte-identical by construction.
+        self.check_overload_call(name, &sigs, args, span, skip_throws)
+    }
+
+    /// Resolve a multi-overload free-function call (M-RT). Evaluates the argument types, selects the
+    /// statically-matching overloads (arity + assignability), reports `E-OVERLOAD-NO-MATCH` when none
+    /// match, discharges the union of the matching overloads' checked exceptions, and returns the
+    /// shared return type (all overloads share it by `E-OVERLOAD-RETURN`).
+    fn check_overload_call(
+        &mut self,
+        name: &str,
+        sigs: &[FnSig],
+        args: &[crate::ast::Expr],
+        span: Span,
+        skip_throws: bool,
+    ) -> Ty {
+        let arg_tys: Vec<Ty> = args.iter().map(|a| self.check_expr(a)).collect();
+        let matches: Vec<&FnSig> = sigs
+            .iter()
+            .filter(|s| {
+                s.params.len() == arg_tys.len()
+                    && s.params
+                        .iter()
+                        .zip(&arg_tys)
+                        .all(|(p, a)| self.ty_assignable(a, p))
+            })
+            .collect();
+        if matches.is_empty() {
+            let got = arg_tys
+                .iter()
+                .map(|t| t.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            return self.err_coded(
+                span,
+                format!("no overload of `{name}` accepts arguments `({got})`"),
+                "E-OVERLOAD-NO-MATCH",
+                Some("the argument types must match one overload's parameter types".into()),
+            );
+        }
         if !skip_throws {
-            for e in &sig.3 {
-                self.discharge_call_throw(name, e, span);
+            let mut discharged: Vec<Ty> = Vec::new();
+            for m in &matches {
+                for e in &m.throws {
+                    if !discharged.contains(e) {
+                        discharged.push(e.clone());
+                        self.discharge_call_throw(name, e, span);
+                    }
+                }
             }
         }
-        if sig.2.is_empty() {
-            self.check_args(name, &sig.0, args, span);
-            sig.1
-        } else {
-            self.check_generic_call(name, &sig.0, &sig.1, args, span)
+        matches[0].ret.clone()
+    }
+
+    /// Resolve a *method* call against its overload set `applied` (class type-parameters already
+    /// substituted in each `(params, ret)`). One overload → the pre-overloading path, including a
+    /// method-level generic (`check_generic_call`). Multiple → a static match by arity +
+    /// assignability, returning the shared return type (`E-OVERLOAD-RETURN`); none → `E-OVERLOAD-NO-MATCH`.
+    fn check_method_sigs(
+        &mut self,
+        name: &str,
+        applied: &[(Vec<Ty>, Ty)],
+        args: &[crate::ast::Expr],
+        span: Span,
+    ) -> Ty {
+        if applied.len() == 1 {
+            let (params, ret) = &applied[0];
+            return if params.iter().any(ty_has_param) || ty_has_param(ret) {
+                self.check_generic_call(name, params, ret, args, span)
+            } else {
+                self.check_args(name, params, args, span);
+                ret.clone()
+            };
+        }
+        let arg_tys: Vec<Ty> = args.iter().map(|a| self.check_expr(a)).collect();
+        let matched = applied.iter().find(|(params, _)| {
+            params.len() == arg_tys.len()
+                && params
+                    .iter()
+                    .zip(&arg_tys)
+                    .all(|(p, a)| self.ty_assignable(a, p))
+        });
+        match matched {
+            Some((_, ret)) => ret.clone(),
+            None => {
+                let got = arg_tys
+                    .iter()
+                    .map(|t| t.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                self.err_coded(
+                    span,
+                    format!("no overload of method `{name}` accepts arguments `({got})`"),
+                    "E-OVERLOAD-NO-MATCH",
+                    Some("the argument types must match one overload's parameter types".into()),
+                )
+            }
         }
     }
 
@@ -3371,17 +3546,23 @@ impl Checker {
                 // from its flattened (own + `extends`) signature set. Interface-typed receivers
                 // dispatch polymorphically at runtime through the concrete class, so only the static
                 // signature is needed here.
-                let sig = self
+                // The method's overload set (M-RT): one or more signatures sharing a return type. An
+                // interface method (no overloading) contributes a single signature.
+                let sigs = self
                     .classes
                     .get(&cls)
                     .and_then(|info| info.methods.get(name))
-                    .map(|s| (s.params.clone(), s.ret.clone()))
+                    .map(|v| {
+                        v.iter()
+                            .map(|s| (s.params.clone(), s.ret.clone()))
+                            .collect::<Vec<_>>()
+                    })
                     .or_else(|| {
                         if self.interfaces.contains_key(&cls) {
                             self.iface_flat_methods(&cls)
                                 .into_iter()
                                 .find(|(m, _)| m == name)
-                                .map(|(_, sig)| sig)
+                                .map(|(_, sig)| vec![sig])
                         } else {
                             None
                         }
@@ -3392,17 +3573,18 @@ impl Checker {
                 // is the identity in the common case. Any *method-level* `<U>` that survives is then
                 // inferred from the call's arguments below.
                 let theta = self.class_subst(&cls, &cargs);
-                match sig {
-                    Some((params, ret)) => {
-                        let params: Vec<Ty> =
-                            params.iter().map(|p| apply_subst(p, &theta)).collect();
-                        let ret = apply_subst(&ret, &theta);
-                        if params.iter().any(ty_has_param) || ty_has_param(&ret) {
-                            self.check_generic_call(name, &params, &ret, args, span)
-                        } else {
-                            self.check_args(name, &params, args, span);
-                            ret
-                        }
+                match sigs {
+                    Some(sigs) => {
+                        let applied: Vec<(Vec<Ty>, Ty)> = sigs
+                            .iter()
+                            .map(|(ps, r)| {
+                                (
+                                    ps.iter().map(|p| apply_subst(p, &theta)).collect(),
+                                    apply_subst(r, &theta),
+                                )
+                            })
+                            .collect();
+                        self.check_method_sigs(name, &applied, args, span)
                     }
                     None => {
                         for a in args {
@@ -3418,43 +3600,46 @@ impl Checker {
                 // method present in two members agrees on its signature (E-INTERSECT-SIG at the type
                 // site), so first-found is unambiguous. None → E-INTERSECT-NO-MEMBER. The value is a
                 // concrete instance underneath, so dispatch is polymorphic at runtime — no Op change.
-                let mut found: Option<(Vec<Ty>, Ty)> = None;
+                let mut found: Option<Vec<(Vec<Ty>, Ty)>> = None;
                 for m in &members {
                     if let Ty::Named(mn, margs) = m {
                         let sig = self
                             .classes
                             .get(mn)
                             .and_then(|info| info.methods.get(name))
-                            .map(|s| (s.params.clone(), s.ret.clone()))
+                            .map(|v| {
+                                v.iter()
+                                    .map(|s| (s.params.clone(), s.ret.clone()))
+                                    .collect::<Vec<_>>()
+                            })
                             .or_else(|| {
                                 if self.interfaces.contains_key(mn) {
                                     self.iface_flat_methods(mn)
                                         .into_iter()
                                         .find(|(mm, _)| mm == name)
-                                        .map(|(_, sig)| sig)
+                                        .map(|(_, sig)| vec![sig])
                                 } else {
                                     None
                                 }
                             });
-                        if let Some((params, ret)) = sig {
+                        if let Some(sigs) = sig {
                             let theta = self.class_subst(mn, margs);
-                            found = Some((
-                                params.iter().map(|p| apply_subst(p, &theta)).collect(),
-                                apply_subst(&ret, &theta),
-                            ));
+                            found = Some(
+                                sigs.iter()
+                                    .map(|(ps, r)| {
+                                        (
+                                            ps.iter().map(|p| apply_subst(p, &theta)).collect(),
+                                            apply_subst(r, &theta),
+                                        )
+                                    })
+                                    .collect(),
+                            );
                             break;
                         }
                     }
                 }
                 match found {
-                    Some((params, ret)) => {
-                        if params.iter().any(ty_has_param) || ty_has_param(&ret) {
-                            self.check_generic_call(name, &params, &ret, args, span)
-                        } else {
-                            self.check_args(name, &params, args, span);
-                            ret
-                        }
-                    }
+                    Some(applied) => self.check_method_sigs(name, &applied, args, span),
                     None => {
                         for a in args {
                             self.check_expr(a);
@@ -7417,11 +7602,64 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_function_is_overloading_corner() {
+    fn overloaded_functions_by_arity_are_legal() {
+        // M-RT overloading: same name, distinct parameter signatures, same return type — a valid
+        // overload set (was rejected pre-overloading).
         let errs = errors_of("function f() {} function f(int n) {}");
+        assert!(errs.is_empty(), "{errs:?}");
+    }
+
+    #[test]
+    fn overloaded_functions_by_type_are_legal() {
+        let errs = errors_of(
+            "function show(int x) -> int { return x; } \
+             function show(string s) -> int { return 1; }",
+        );
+        assert!(errs.is_empty(), "{errs:?}");
+    }
+
+    #[test]
+    fn overload_set_must_share_return_type() {
+        let errs = errors_of(
+            "function f(int x) -> int { return x; } \
+             function f(string s) -> string { return s; }",
+        );
         assert!(
-            errs.iter()
-                .any(|e| e.message.contains("overloading is not yet supported")),
+            errs.iter().any(|e| e.code == Some("E-OVERLOAD-RETURN")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn overload_set_rejects_identical_signatures() {
+        let errs = errors_of("function f(int x) {} function f(int y) {}");
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-OVERLOAD-DUPLICATE")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn generic_function_cannot_be_overloaded() {
+        let errs = errors_of(
+            "function id<T>(T x) -> T { return x; } \
+             function id(int n) -> int { return n; }",
+        );
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-OVERLOAD-GENERIC")),
+            "{errs:?}"
+        );
+    }
+
+    #[test]
+    fn overloaded_call_with_no_matching_argument_type_errors() {
+        let errs = errors_of(
+            "function show(int x) -> int { return x; } \
+             function show(string s) -> int { return 1; } \
+             function main() { var r = show(true); }",
+        );
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-OVERLOAD-NO-MATCH")),
             "{errs:?}"
         );
     }

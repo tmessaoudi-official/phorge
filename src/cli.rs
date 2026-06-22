@@ -467,6 +467,38 @@ pub fn explain_text(code: &str) -> Option<String> {
              lone class for fields). None of them declares the named method or field. Check the name, or\n\
              add it to one of the intersection's members.\n"
         }
+        "E-OVERLOAD-RETURN" => {
+            "E-OVERLOAD-RETURN — overloads of one name must share a return type.\n\n\
+             Phorge overloading is dynamic multiple dispatch: the runtime argument types choose the\n\
+             overload, so the compiler cannot know which one fires at a polymorphic call. Requiring a\n\
+             single return type keeps every overloaded call statically typed. Overloads model one\n\
+             operation over different argument types; if the return must vary with the input, use a\n\
+             generic function (`f<T>(T) -> T`) or separate names.\n"
+        }
+        "E-OVERLOAD-DUPLICATE" => {
+            "E-OVERLOAD-DUPLICATE — two overloads have identical parameter types.\n\n\
+             Each overload of a name must be distinguishable by its parameter signature (arity or\n\
+             parameter types). Two declarations with the same parameters are redundant and could never\n\
+             be told apart at a call. Remove one, or change its parameters.\n"
+        }
+        "E-OVERLOAD-GENERIC" => {
+            "E-OVERLOAD-GENERIC — a generic function/method cannot be overloaded.\n\n\
+             A generic declaration (`f<T>(…)`) must be the only one with its name. Generic overloading\n\
+             (mixing `<T>` overloads with concrete ones) is not supported. Remove the type parameters\n\
+             and write concrete overloads, or rename one declaration.\n"
+        }
+        "E-OVERLOAD-NO-MATCH" => {
+            "E-OVERLOAD-NO-MATCH — no overload accepts the call's argument types.\n\n\
+             The call's static argument types match no overload's parameter types (by arity or\n\
+             assignability). Check the argument types against the available overloads; an argument\n\
+             whose static type is a supertype of every overload's parameter cannot be dispatched.\n"
+        }
+        "E-OVERLOAD-FN-VALUE" => {
+            "E-OVERLOAD-FN-VALUE — an overloaded function has no single first-class value.\n\n\
+             A bare reference to an overloaded function (`var g = f;`) is ambiguous — there is no one\n\
+             signature to give the value. Call the function directly, or wrap the intended overload in\n\
+             a lambda (`var g = fn(int x) => f(x);`).\n"
+        }
         "E-MISSING-RETURN" => {
             "E-MISSING-RETURN — a function does not return a value on every path.\n\n\
              A function whose declared return type carries a value (`-> int`, `-> Shape`, …) must\n\
