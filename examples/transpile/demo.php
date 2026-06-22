@@ -6,7 +6,7 @@ final class Circle extends Shape {
 final class Square extends Shape {
     public function __construct(public float $side) {}
 }
-class Named {
+final class Named {
     function __construct(private string $label) {}
     function labelOf(): string {
         return $this->label;

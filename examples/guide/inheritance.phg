@@ -1,0 +1,43 @@
+// Single inheritance with `open`/`final` and method override (M-RT S6a).
+//
+// Phorge is *final-by-default* — the inheritance sibling of immutable-by-default. A class must be
+// declared `open` to be extended, and a method must be declared `open` to be overridden. A subclass
+// inherits its parent's methods, may override the `open` ones, and is a subtype of its parent (so it
+// flows into a parent-typed binding). Dispatch is dynamic: an inherited method that calls another
+// method runs the *subclass's* override.
+//
+// (Constructors and inherited fields land in a later slice; this guide stays field-free.)
+package main;
+
+import Core.Console;
+
+open class Greeter {
+    // Not `open`: subclasses inherit it unchanged and cannot replace it. It calls `kind()`, which a
+    // subclass *can* override — so the inherited `greet()` adapts to the actual class.
+    function greet() -> string {
+        var k = this.kind();
+        return "Hello from a {k}";
+    }
+
+    // `open`: a subclass may override this method.
+    open function kind() -> string {
+        return "greeter";
+    }
+}
+
+class LoudGreeter extends Greeter {
+    // Overrides the `open` `kind()`. `greet()` is inherited unchanged.
+    function kind() -> string {
+        return "loud greeter";
+    }
+}
+
+function main() {
+    LoudGreeter g = LoudGreeter();
+    Console.println(g.greet()); // inherited greet() dispatches to the overridden kind()
+    Console.println(g.kind());
+
+    // A LoudGreeter flows into a Greeter-typed binding (subtyping); dispatch stays dynamic.
+    Greeter base = g;
+    Console.println(base.greet());
+}

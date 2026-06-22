@@ -745,7 +745,15 @@ impl Transpiler {
             .filter(|i| last_segment(i) != "Error")
             .map(|i| php_type_ref(i))
             .collect();
-        let extends_clause = if is_error { " extends \\Exception" } else { "" };
+        let extends_clause = if is_error {
+            " extends \\Exception".to_string()
+        } else if let Some(parent) = c.extends.first() {
+            // M-RT S6: single inheritance → PHP `extends Parent`. (Multiple parents lower via trait
+            // decomposition in S6b.)
+            format!(" extends {}", php_type_ref(parent))
+        } else {
+            String::new()
+        };
         let implements = if other_ifaces.is_empty() {
             String::new()
         } else {
@@ -757,7 +765,13 @@ impl Transpiler {
         } else {
             &c.name
         };
-        self.line(&format!("class {disp}{extends_clause}{implements} {{"));
+        // M-RT S6: final-by-default — a non-`open` class emits as a PHP `final class` (it can never be
+        // a parent, since the checker rejects `extends` of a non-`open` class via E-EXTEND-FINAL). An
+        // `open` class emits as a plain `class` so a subclass may `extends` it.
+        let final_kw = if c.open { "" } else { "final " };
+        self.line(&format!(
+            "{final_kw}class {disp}{extends_clause}{implements} {{"
+        ));
         self.indent += 1;
         let prev = self.cur_class_fields.replace(fields);
         let mut emitted_method_overloads: HashSet<String> = HashSet::new();
