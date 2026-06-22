@@ -1390,6 +1390,9 @@ impl Parser {
     fn parse_enum(&mut self, sp: Span) -> Result<EnumDecl, Diagnostic> {
         self.expect(&TokenKind::Enum, "'enum'")?;
         let name = self.expect_ident("an enum name")?;
+        // Optional generic parameter list `<T, E>` immediately after the enum name (M-RT generic
+        // enums) — `enum Result<T, E> { Ok(T value), Err(E error) }`.
+        let type_params = self.parse_type_params()?;
         self.expect(&TokenKind::LBrace, "'{' to open enum body")?;
         let mut variants = Vec::new();
         while !self.check(&TokenKind::RBrace) && !self.check(&TokenKind::Eof) {
@@ -1415,6 +1418,7 @@ impl Parser {
         Ok(EnumDecl {
             vis: Visibility::Public,
             name,
+            type_params,
             variants,
             span: sp,
         })

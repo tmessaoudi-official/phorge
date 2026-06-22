@@ -23,6 +23,11 @@ struct FnSig {
 struct EnumInfo {
     /// variant name -> field types (in declaration order)
     variants: HashMap<String, Vec<Ty>>,
+    /// Generic type parameters this enum declares (`["T"]` for `enum Option<T>`). Empty for a
+    /// non-generic enum. When non-empty, `variants`' field types may contain `Ty::Param` occurrences:
+    /// construction unifies a variant's fields against the call arguments to bind them, and a `match`
+    /// substitutes them with the scrutinee's type arguments (M-RT generic enums).
+    type_params: Vec<String>,
 }
 
 struct ClassInfo {
@@ -423,15 +428,19 @@ impl Checker {
                         let ty = self.resolve_type(&aliased);
                         self.alias_stack.pop();
                         ty
-                    } else if self.enums.contains_key(other) || self.interfaces.contains_key(other)
-                    {
-                        // Enums and interfaces take no type arguments this slice (generic enums/
-                        // interfaces are deferred — M-RT generics-all).
+                    } else if self.interfaces.contains_key(other) {
+                        // Interfaces take no type arguments this slice (generic interfaces deferred —
+                        // M-RT generics-all).
                         self.no_args(other, args, *span, Ty::Named(other.to_string(), Vec::new()))
-                    } else if let Some(arity) = self.classes.get(other).map(|c| c.type_params.len())
+                    } else if let Some(arity) = self
+                        .classes
+                        .get(other)
+                        .map(|c| c.type_params.len())
+                        .or_else(|| self.enums.get(other).map(|e| e.type_params.len()))
                     {
-                        // A class. A generic class requires exactly its declared number of type
-                        // arguments (`Box<int>`); a non-generic class takes none (M-RT generics-all).
+                        // A class or enum. A generic one requires exactly its declared number of type
+                        // arguments (`Box<int>`, `Option<int>`); a non-generic one takes none (M-RT
+                        // generics-all / generic enums).
                         if args.len() != arity {
                             let plural = if arity == 1 { "" } else { "s" };
                             self.err(
@@ -817,18 +826,26 @@ impl Checker {
             self.err(e.span, format!("type `{}` is already defined", e.name));
             return;
         }
-        // Register the name first so variant field types can reference the enum itself.
+        // Register the name + type parameters first so variant field types can reference the enum
+        // itself (including a self-referential `Tree<T>` payload) with correct arity (M-RT generic
+        // enums).
+        self.validate_type_params(&e.type_params, e.span);
         self.enums.insert(
             e.name.clone(),
             EnumInfo {
                 variants: HashMap::new(),
+                type_params: e.type_params.clone(),
             },
         );
+        // The enum's type parameters are in scope while resolving every variant field type, so a bare
+        // `T` resolves to `Ty::Param("T")` (M-RT generic enums); cleared after, like a generic class.
+        self.active_type_params = e.type_params.clone();
         let mut variants = HashMap::new();
         for v in &e.variants {
             let fields = v.fields.iter().map(|p| self.resolve_type(&p.ty)).collect();
             variants.insert(v.name.clone(), fields);
         }
+        self.active_type_params.clear();
         self.enums.get_mut(&e.name).unwrap().variants = variants;
     }
 
@@ -2769,10 +2786,53 @@ impl Checker {
             .enums
             .iter()
             .find(|(_, info)| info.variants.contains_key(name))
-            .map(|(enum_name, info)| (enum_name.clone(), info.variants[name].clone()));
-        if let Some((enum_name, fields)) = owner {
-            self.check_args(name, &fields, args, span);
-            return Some(Ty::Named(enum_name, Vec::new()));
+            .map(|(enum_name, info)| {
+                (
+                    enum_name.clone(),
+                    info.variants[name].clone(),
+                    info.type_params.clone(),
+                )
+            });
+        if let Some((enum_name, fields, type_params)) = owner {
+            if type_params.is_empty() {
+                self.check_args(name, &fields, args, span);
+                return Some(Ty::Named(enum_name, Vec::new()));
+            }
+            // A generic enum (`Option<T>`/`Result<T, E>`): infer its type arguments from the variant
+            // constructor call (M-RT generic enums), the same first-binding-wins unifier as a generic
+            // class constructor. A type parameter a variant does not mention (`None` for `Option<T>`,
+            // `Ok(T)` w.r.t. `E`) stays un-inferred and defaults to `Ty::Error` (permissive — the call
+            // site annotates the binding to fix it, e.g. `Option<int> n = None();`).
+            if fields.len() != args.len() {
+                self.err(
+                    span,
+                    format!(
+                        "variant `{name}` expects {} argument(s), found {}",
+                        fields.len(),
+                        args.len()
+                    ),
+                );
+                for a in args {
+                    self.check_expr(a);
+                }
+                return Some(Ty::Named(enum_name, vec![Ty::Error; type_params.len()]));
+            }
+            let mut theta: HashMap<String, Ty> = HashMap::new();
+            for (field, arg) in fields.iter().zip(args) {
+                let at = self.check_arg(arg, field);
+                if !self.unify(field, &at, &mut theta) {
+                    let want = apply_subst(field, &theta);
+                    self.err(
+                        span,
+                        format!("variant `{name}` expects `{want}`, found `{at}`"),
+                    );
+                }
+            }
+            let inst_args = type_params
+                .iter()
+                .map(|p| theta.get(p).cloned().unwrap_or(Ty::Error))
+                .collect();
+            return Some(Ty::Named(enum_name, inst_args));
         }
         // class constructor: `ClassName(args)`
         if let Some(info) = self.classes.get(name) {
@@ -3094,6 +3154,22 @@ impl Checker {
                 .iter()
                 .cloned()
                 .zip(cargs.iter().cloned())
+                .collect(),
+            None => HashMap::new(),
+        }
+    }
+
+    /// The substitution mapping a generic enum's type parameters to a scrutinee's type arguments
+    /// (`Option<int>` ⇒ `{T → int}`), so a `match` binds a variant payload at the concrete type
+    /// (`Some(n)` ⇒ `n: int`). Empty for a non-generic enum, so it is the identity in the common case
+    /// (M-RT generic enums). Mirror of [`class_subst`].
+    fn enum_subst(&self, enum_name: &str, eargs: &[Ty]) -> HashMap<String, Ty> {
+        match self.enums.get(enum_name) {
+            Some(info) => info
+                .type_params
+                .iter()
+                .cloned()
+                .zip(eargs.iter().cloned())
                 .collect(),
             None => HashMap::new(),
         }
@@ -3716,16 +3792,22 @@ impl Checker {
                 }
             }
             Pattern::Variant { name, fields, span } => {
-                let enum_name = match scrut {
-                    Ty::Named(n, _) if self.enums.contains_key(n) => n.clone(),
+                let (enum_name, eargs) = match scrut {
+                    Ty::Named(n, eargs) if self.enums.contains_key(n) => (n.clone(), eargs.clone()),
                     Ty::Error => return,
                     other => {
                         self.err(*span, format!("variant pattern `{name}` requires an enum scrutinee, found `{other}`"));
                         return;
                     }
                 };
-                let field_tys = match self.enums[&enum_name].variants.get(name) {
-                    Some(f) => f.clone(),
+                let field_tys: Vec<Ty> = match self.enums[&enum_name].variants.get(name) {
+                    // Substitute the enum's type parameters with the scrutinee's type arguments
+                    // (`Option<int>` ⇒ `{T → int}`) so a generic variant's payload binds at the
+                    // concrete type (M-RT generic enums); identity for a non-generic enum.
+                    Some(f) => {
+                        let theta = self.enum_subst(&enum_name, &eargs);
+                        f.iter().map(|t| apply_subst(t, &theta)).collect()
+                    }
                     None => {
                         self.err(*span, format!("enum `{enum_name}` has no variant `{name}`"));
                         return;
@@ -4847,6 +4929,28 @@ pub fn erase_generics(program: Program) -> Program {
                     span: c.span,
                 })
             }
+            // A generic enum (`Option<T>`/`Result<T, E>`, M-RT generic enums): erase the enum's type
+            // parameters across every variant's field types (a `T` payload becomes PHP `mixed`) and
+            // clear the parameter list, so the backends see an ordinary, type-variable-free enum.
+            // Same "expanded out before any backend" discipline as a generic class.
+            Item::Enum(e) if !e.type_params.is_empty() => {
+                let params: Params = e.type_params.iter().map(String::as_str).collect();
+                Item::Enum(crate::ast::EnumDecl {
+                    vis: e.vis,
+                    name: e.name,
+                    type_params: Vec::new(), // erased
+                    variants: e
+                        .variants
+                        .into_iter()
+                        .map(|v| crate::ast::EnumVariant {
+                            name: v.name,
+                            fields: v.fields.iter().map(|p| rparam(p, &params)).collect(),
+                            span: v.span,
+                        })
+                        .collect(),
+                    span: e.span,
+                })
+            }
             other => other,
         })
         .collect();
@@ -5088,6 +5192,7 @@ pub fn expand_aliases(program: &Program) -> Program {
             Item::Enum(e) => Some(Item::Enum(EnumDecl {
                 vis: e.vis,
                 name: e.name.clone(),
+                type_params: e.type_params.clone(),
                 variants: e
                     .variants
                     .iter()
@@ -5318,6 +5423,115 @@ mod tests {
              function main() { Box<int> b = Box(7); int x = b.get(); }",
         );
         assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    // --- M-RT: generic enums (`Option<T>` / `Result<T, E>`) ---
+
+    const OPTION: &str = "enum Option<T> { None, Some(T value) }";
+    const RESULT: &str = "enum Result<T, E> { Ok(T value), Err(E error) }";
+
+    #[test]
+    fn generic_enum_construction_infers_and_binds() {
+        // `Some(7)` infers `Option<int>`; matching it binds the payload at the concrete int, so using
+        // the binding where an int is expected is clean.
+        let ok = errors_of(&format!(
+            "{OPTION} function main() {{ var o = Some(7); \
+             int x = match o {{ Some(n) => n, None() => 0 }}; }}"
+        ));
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn generic_enum_match_payload_is_concrete() {
+        // Matching an `Option<int>` and binding the `Some` payload to a string is a type error —
+        // proving the payload is reified to int at the match (via the scrutinee's type argument), not
+        // left abstract/mixed.
+        let bad = errors_of(&format!(
+            "{OPTION} function main() {{ var o = Some(7); \
+             string s = match o {{ Some(n) => n, None() => \"x\" }}; }}"
+        ));
+        assert!(!bad.is_empty(), "expected a type error, got none");
+    }
+
+    #[test]
+    fn generic_enum_annotation_arity_checked() {
+        // A bare `Option` annotation (no type argument) on a generic enum is an arity error.
+        let bad = errors_of(&format!(
+            "{OPTION} function main() {{ Option o = Some(7); }}"
+        ));
+        assert!(!bad.is_empty(), "expected an arity error, got none");
+    }
+
+    #[test]
+    fn generic_enum_annotated_non_inferring_variant_ok() {
+        // `None` mentions no `T`, so it cannot infer the argument — annotating the binding fixes it.
+        let ok = errors_of(&format!(
+            "{OPTION} function main() {{ Option<int> n = None(); \
+             int x = match n {{ Some(v) => v, None() => 0 }}; }}"
+        ));
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn generic_enum_two_params_independent() {
+        // `Result<T, E>` binds `T` from `Ok`'s argument and `E` from `Err`'s, independently.
+        let ok = errors_of(&format!(
+            "{RESULT} function ok() -> Result<int, string> {{ return Ok(1); }} \
+             function bad() -> Result<int, string> {{ return Err(\"no\"); }} \
+             function main() {{ string r = match ok() {{ Ok(v) => \"v\", Err(e) => e }}; }}"
+        ));
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn generic_enum_variant_arity_checked() {
+        // A generic variant constructor still checks its own arity: `Some` takes exactly one field.
+        let bad = errors_of(&format!(
+            "{OPTION} function main() {{ var o = Some(1, 2); }}"
+        ));
+        assert!(!bad.is_empty(), "expected an arity error, got none");
+    }
+
+    #[test]
+    fn generic_enum_param_must_be_pascalcase() {
+        // A type parameter shadowing a built-in type name is `E-GENERIC-PARAM`.
+        let bad = errors_of("enum Box<int> { Wrap(int x) } function main() {}");
+        assert!(
+            bad.iter().any(|d| d.code == Some("E-GENERIC-PARAM")),
+            "expected E-GENERIC-PARAM, got {bad:?}"
+        );
+    }
+
+    #[test]
+    fn erase_generics_strips_enum_type_params() {
+        use crate::ast::{Item, Type};
+        let e = erase_generics(prog(&format!("{OPTION} function main() {{}}")));
+        let en = e
+            .items
+            .iter()
+            .find_map(|it| match it {
+                Item::Enum(en) if en.name == "Option" => Some(en),
+                _ => None,
+            })
+            .expect("enum Option present");
+        assert!(en.type_params.is_empty(), "enum type params not erased");
+        let some = en
+            .variants
+            .iter()
+            .find(|v| v.name == "Some")
+            .expect("Some variant present");
+        assert!(
+            matches!(some.fields[0].ty, Type::Erased(_)),
+            "Some payload not erased: {:?}",
+            some.fields[0].ty
+        );
+    }
+
+    #[test]
+    fn non_generic_enum_rejects_type_argument() {
+        // A plain (non-generic) enum still takes no type arguments.
+        let bad = errors_of("enum Color { Red, Green } function main() { Color<int> c = Red(); }");
+        assert!(!bad.is_empty(), "expected an arity error, got none");
     }
 
     // --- M-RT S4: union types + match-over-union ---

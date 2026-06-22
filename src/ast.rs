@@ -682,6 +682,13 @@ pub struct EnumDecl {
     /// Declaration-level visibility (default `Public`). Loader-enforced; see [`Visibility`].
     pub vis: Visibility,
     pub name: String,
+    /// Generic type parameters, in declaration order — `["T"]` for `enum Option<T>`, `["T", "E"]` for
+    /// `enum Result<T, E>` (M-RT generic enums). Empty for a non-generic enum — the common case. While
+    /// checking the enum, a bare type name in this set resolves to `Ty::Param` in a variant's field
+    /// types; a generic value's arguments are inferred at the variant constructor and these parameters
+    /// are **erased** (rewritten to `Type::Erased` across every variant) before any backend runs —
+    /// the same compile-time-only discipline as generic classes (`Box<T>`).
+    pub type_params: Vec<String>,
     pub variants: Vec<EnumVariant>,
     pub span: Span,
 }

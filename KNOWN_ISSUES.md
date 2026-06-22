@@ -117,13 +117,14 @@ that does return on every path. The corners below are deferred (each is sound, n
 
 ## Generics (M-RT S7) — deferred refinements
 
-Erased generics ship for **free functions, class methods, and classes**: `function id<T>(T x) -> T`,
-`class U { function id<T>(T x) -> T … }`, and `class Box<T> { … }` / `class Pair<A, B> { … }`,
-inferred at the call site / at construction, byte-identical `run ≡ runvm ≡ real PHP` (see
-`examples/guide/generics.phg`, `generic-methods.phg`, `generic-types.phg`). There is no
-monomorphization — type parameters are erased to PHP `mixed` before any backend; a generic class
-instance carries no runtime type argument (`instanceof Box<int>` ≡ `instanceof Box`). These
-refinements are deliberately deferred (each rejected cleanly or simply unavailable, never a crash):
+Erased generics ship for **free functions, class methods, classes, and enums**: `function id<T>(T x)
+-> T`, `class U { function id<T>(T x) -> T … }`, `class Box<T> { … }` / `class Pair<A, B> { … }`, and
+`enum Option<T>` / `enum Result<T, E>`, inferred at the call site / at construction / at the variant
+constructor, byte-identical `run ≡ runvm ≡ real PHP` (see `examples/guide/generics.phg`,
+`generic-methods.phg`, `generic-types.phg`, `generic-enums.phg`). There is no monomorphization — type
+parameters are erased to PHP `mixed` before any backend; a generic class/enum value carries no runtime
+type argument (`instanceof Box<int>` ≡ `instanceof Box`). These refinements are deliberately deferred
+(each rejected cleanly or simply unavailable, never a crash):
 
 - **A generic-typed *result* is not a specialized arithmetic operand.** Because a `T` erases to PHP
   `mixed`, the bytecode compiler types any generic-function/method/field result as the opaque
@@ -139,8 +140,20 @@ refinements are deliberately deferred (each rejected cleanly or simply unavailab
   may happen to work, but it is untested). Cross-package *monomorphic* types ship (`E-PKG-TYPE` lifted).
 - **Explicit type arguments at construction** (`Box<int>(7)`) are not parsed — the type argument is
   inferred from the constructor arguments. An explicit *annotation* (`Box<int> b = Box(7)`) does work.
-- **Generic *enums*** (`enum Opt<T>`) are not supported — the type-parameter list is a
-  function/method/class feature for now.
+- **Generic enums** (`enum Option<T>` / `enum Result<T, E>`) ship, with the same scope as generic
+  classes: `package main`-only, inference-only construction (no `Some<int>(7)` explicit-argument form —
+  use an annotation, `Option<int> n = None();`), invariant, no bounds, no generic *enum methods* (enums
+  have no methods). A match-bound payload is reified at the scrutinee's concrete type (`Some(n)` over an
+  `Option<int>` binds `n: int`), but — like every erased generic — that payload is `mixed` to the
+  backend, so it is **not a specialized VM arithmetic operand** (the operand limitation above); since
+  match arms are single-expression, return the payload into a typed local for arithmetic.
+- **Same-head generic types are not actually invariant at an assignment boundary.** `Box<string>` /
+  `Option<string>` *is* accepted where `Box<int>` / `Option<int>` is expected, because the nominal
+  assignability check short-circuits on the reflexive name edge (`subtype("Box","Box")` is true) before
+  the invariant type-argument comparison runs. [Verified: `Box<int> b = Box("x")` and `Option<int> o =
+  Some("x")` both type-check clean.] This is a **pre-existing gap shared by generic classes** (not new
+  to generic enums); the documented "invariant" intent is only enforced for the built-in containers
+  (`List`/`Map`/`Set`). A real fix touches the shared subtype oracle (used everywhere) and is deferred.
 - **A generic function used as a first-class *value*** (`var f = id;` then `f(x)`) is not supported —
   call a generic function directly so the call site can infer its type parameters. (A monomorphic
   named function as a value already works — M3 S3.)

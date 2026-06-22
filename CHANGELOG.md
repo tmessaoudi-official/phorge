@@ -6,6 +6,26 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — generic enums `enum Option<T>` / `enum Result<T, E>` (Rich Types, M-RT)
+
+TypeScript-style type parameters on **enums**, the sum-type companion to generic classes. An enum may
+declare `<T, …>` after its name; a type parameter is in scope across every variant's payload, **inferred
+at the variant constructor** (`Some(7)` ⇒ `Option<int>`, `Ok(1)` ⇒ `Result<int, …>`) by the same
+first-binding-wins unifier as a generic class constructor, and **recovered at every `match`** — matching
+an `Option<int>` binds `Some(n)` with `n: int`. A variant that mentions no parameter (`None`) can't infer
+it; annotate the binding to fix it (`Option<int> n = None();`). Byte-identical `run ≡ runvm ≡ real PHP`
+(new `examples/guide/generic-enums.phg`).
+
+Built by mirroring the shipped generic-class machinery with **zero backend changes**: `EnumDecl`/
+`EnumInfo` gain a `type_params` list; `try_variant_or_class_call` infers the enum's arguments at the
+variant constructor; a new `enum_subst` substitutes them at a `match`; `erase_generics` gains an
+`Item::Enum` arm that rewrites a `<T>` payload to `Type::Erased` (PHP `mixed`) and clears the parameter
+list before any backend. **No new `Op`, no `Value` change** — `Ty::Named` type arguments are checker-only
+and the parameter list is erased pre-backend, so the byte-identity spine is safe by construction. Scope
+mirrors generic classes: `package main` only, inference-only construction, invariant, no bounds, no
+generic enum methods. Reuses `E-GENERIC-PARAM`; **GENERICS-ALL now covers functions, methods, classes,
+and enums.**
+
 ### Added — totality cluster (M-RT): return-on-all-paths, `never`, dead-code lints
 
 Closed the type system's #1 soundness leak: a function whose declared return type carries a value now

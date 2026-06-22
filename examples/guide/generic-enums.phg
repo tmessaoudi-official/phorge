@@ -1,0 +1,74 @@
+// Generic enums (M-RT) — TypeScript-style `<T>` on an *enum*, the sum-type companion to generic
+// classes (`Box<T>`). The two canonical cases ship in the language's own idiom: `Option<T>` (a value
+// that may be absent) and `Result<T, E>` (a success `T` or an error `E`).
+//
+// A type parameter is in scope across every variant's payload. It is **inferred at the variant
+// constructor** (`Some(7)` ⇒ `Option<int>`, `Ok(1)` ⇒ `Result<int, …>`) and recovered at every
+// `match`: matching an `Option<int>` binds `Some(n)` with `n: int`, so the payload is usable at its
+// concrete type. A variant that does not mention a parameter (`None`, or `Ok` w.r.t. `E`) can't infer
+// it — annotate the binding to fix it (`Option<int> n = None();`). As with generic classes/functions
+// there is **no monomorphization**: after checking, the parameters are *erased* (a `T` payload becomes
+// PHP `mixed`), so the interpreter, the bytecode VM, and the transpiled PHP run identical,
+// type-variable-free code — byte-for-byte identical output.
+
+package main;
+
+import Core.Console;
+
+// Absent-or-present. `Some` carries a `T`; `None` carries nothing.
+enum Option<T> {
+    None,
+    Some(T value),
+}
+
+// Success-or-failure. `Ok` carries the success `T`; `Err` carries the error `E`.
+enum Result<T, E> {
+    Ok(T value),
+    Err(E error),
+}
+
+// Takes a concrete `Option<int>`; the `Some` payload binds at `int`, so `n` is a real integer.
+function describe(Option<int> o) -> string {
+    return match o {
+        Some(n) => "some {n}",
+        None()  => "none",
+    };
+}
+
+// Returns a generic enum: divide, or report the reason as a string error.
+function safeDiv(int a, int b) -> Result<int, string> {
+    return match b {
+        0 => Err("divide by zero"),
+        _ => Ok(a / b),
+    };
+}
+
+function report(Result<int, string> r) -> string {
+    return match r {
+        Ok(v)  => "ok {v}",
+        Err(e) => "err {e}",
+    };
+}
+
+function main() {
+    var some = Some(7); // Option<int> — T inferred from `7`
+    Option<int> none = None(); // None mentions no T — annotate to fix Option<int>
+
+    Console.println(describe(some)); // some 7
+    Console.println(describe(none)); // none
+
+    // A bound payload is *type-checked* at its concrete type (here `n: int`), so the front end accepts
+    // it anywhere an int is expected. It does carry the erased-generics limitation: a generic payload
+    // is `mixed` to the backend, so it is not a *specialized* arithmetic operand on the VM — to do math
+    // on it, return it into a typed local first (`int got = …; got + got`), exactly as with a generic
+    // class method result. String interpolation of the payload needs no such hint and works directly.
+    var os = Some("phorge"); // Option<string>
+    string label = match os {
+        Some(s) => "label {s}",
+        None()  => "label none",
+    };
+    Console.println(label); // label phorge
+
+    Console.println(report(safeDiv(10, 2))); // ok 5
+    Console.println(report(safeDiv(1, 0))); // err divide by zero
+}

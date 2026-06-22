@@ -496,9 +496,29 @@ literal/variant/type arm — folded into `check_match`'s existing arm loop, `mat
 Both `W-*` ride the warning channel (stderr, never gating); all 4 codes self-document via `phg explain`.
 `examples/guide/totality.phg`. **Phase-0 scan clean** — no shipped example or inline-test typed function
 fell off the end (the leak existed but valid code never exploited it). 600 lib + PHP-oracle differential
-+ integration green; clippy + fmt clean. **NEXT (per audit): method overloading** (lowers to one
-dispatching PHP method; revisits S5's `E-INTERSECT-SIG`) → S6 `extends`/abstract/LSB → S8 traits;
-generic enums (`Result`/`Option`) + error-model Slice 2 (`throws`/`Result`/faults) in parallel.
++ integration green; clippy + fmt clean.
+
+**M-RT GENERIC ENUMS — COMPLETE** (`docs/plans/2026-06-22-generic-enums.plan.md`): TypeScript-style
+`<T>` on **enums** — `enum Option<T>` / `enum Result<T, E>` — the sum-type companion to generic classes,
+**closing GENERICS-ALL** (functions + methods + classes + enums). Built by mirroring the `Box<T>`
+machinery with **zero backend changes**: `EnumDecl`/`EnumInfo` gain `type_params`; the type arg is
+inferred at the variant constructor (`Some(7)`⇒`Option<int>`) by the same first-binding-wins `unify`;
+a new `enum_subst` recovers it at every `match` (so `Some(n)` over `Option<int>` binds `n: int`);
+`erase_generics` gains an `Item::Enum` arm rewriting a `<T>` payload to `Type::Erased` (PHP `mixed`) +
+clearing the param list before any backend. **No new `Op`, no `Value` change** (`Ty::Named` args are
+checker-only, params erased pre-backend ⇒ byte-identity safe by construction). Scope mirrors generic
+classes: `package main`-only, inference-only construction (annotate to fix a non-inferring variant —
+`Option<int> n = None();`), invariant, no bounds, no generic enum methods. Reuses `E-GENERIC-PARAM`;
+`examples/guide/generic-enums.phg` byte-identical run≡runvm≡**real PHP 8.6**; 591 lib + PHP-oracle
+differential + integration green. **Verified gap surfaced (KNOWN_ISSUES, pre-existing & shared with
+generic classes):** same-head generic types are *not* actually invariant at an assignment boundary
+(`Box<string>`/`Option<string>` is accepted where `<int>` is expected) — the nominal assignability
+check short-circuits on the reflexive name edge before the invariant arg compare; a real fix touches
+the shared subtype oracle and is deferred.
+
+**NEXT (per audit): method overloading** (lowers to one dispatching PHP method; revisits S5's
+`E-INTERSECT-SIG`) → S6 `extends`/abstract/LSB → S8 traits; error-model Slice 2
+(`throws`/`Result`/faults — now unblocked by generic enums) in parallel.
 
 **ROADMAP-COMPLETENESS AUDIT DELIVERED + decisions locked (2026-06-22)** — a one-shot 20-track (A–S+V)
 multi-agent gap review (41 agents, 555 candidates → 290 adopt/187 defer/81 reject). **SSOT:

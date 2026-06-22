@@ -122,9 +122,10 @@ slices are byte-identical on `run`/`runvm` and round-trip through real PHP. The 
 status + forward plan live in `CLAUDE.md` (Active plan) and `CHANGELOG.md`; design specs are under
 `docs/specs/2026-06-17-m3-*` and `docs/specs/2026-06-18-m3-*`. Modules/packages and web capabilities were
 promoted to their own milestones — **M5** (✅ closed) and **M6** (🔨 in progress), below. The Rich-Types
-sub-track (**M-RT**: `instanceof`, interfaces, `Map`/`Set`, erased generics incl. methods+classes,
-unions `A|B`, intersections `A&B`, the **totality cluster** — return-on-all-paths + `never` + dead-code
-lints) and the **mutation milestone** (below) also run under M3's umbrella.
+sub-track (**M-RT**: `instanceof`, interfaces, `Map`/`Set`, erased generics incl. methods+classes+enums
+(`Option<T>`/`Result<T, E>`), unions `A|B`, intersections `A&B`, the **totality cluster** —
+return-on-all-paths + `never` + dead-code lints) and the **mutation milestone** (below) also run under
+M3's umbrella.
 
 ## M-mut — In-place mutation — ✅ FEATURE-COMPLETE (2026-06-21)
 
