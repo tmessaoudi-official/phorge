@@ -171,6 +171,23 @@ struct Compiler<'a> {
     /// `ctor_return_jumps` backpatch model). `body_base` is the `locals.len()` both forms pop down
     /// to (dropping body-scope locals while keeping the loop's own locals live). No new `Op` (F5).
     loop_frames: Vec<LoopFrame>,
+    /// Stack of enclosing `try` contexts whose `finally` (and any pending `PopHandler`) must run
+    /// when control transfers out of them via `return`/`break`/`continue` (M-faults 2b). Innermost
+    /// last; pushed while compiling a try *body* or a `catch` body, popped after.
+    finally_stack: Vec<TryCtx>,
+}
+
+/// One enclosing `try`/`catch` context for finally-on-transfer codegen (M-faults 2b).
+struct TryCtx {
+    /// The `finally` block to re-emit before a transfer (cloned from the AST), or `None`.
+    finally: Option<Vec<Stmt>>,
+    /// Whether a `PopHandler` must precede the finally on a transfer — true inside the try *body*
+    /// (the handler is still installed), false inside a `catch` body (the unwind already consumed
+    /// the handler).
+    has_handler: bool,
+    /// `loop_frames.len()` when this context was entered — lets `break`/`continue` run only the
+    /// finally blocks nested inside the target (innermost) loop.
+    loop_depth: usize,
 }
 
 /// One enclosing loop's break/continue backpatch state (M-mut.3).
@@ -729,6 +746,26 @@ fn compile_method<'a>(
 /// primitive/container head names collapse to `Other` (their element types are never operands in
 /// the M1 surface); any *other* named type is a user-defined class, kept as `Class(name)` so a
 /// field/method read through it resolves. An `Optional` is `Other` (no `null` in M1).
+/// The catchable type name(s) of a `catch` clause type (M-faults 2b): one name for a class /
+/// interface, or one per member for a union `catch (A | B e)`. The checker has rejected any
+/// non-`Error` member (`E-CATCH-TYPE`), so other `Type` shapes never reach here.
+fn catch_clause_names(ty: &Type) -> Vec<String> {
+    match ty {
+        Type::Named { name, .. } => vec![name.clone()],
+        Type::Union(members, _) => members.iter().flat_map(catch_clause_names).collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// The compile-time operand type of a `catch` binding (M-faults 2b): the class for a single-type
+/// clause (so `e.field` specializes), else `Other` for a union (no single class).
+fn catch_binding_cty(ty: &Type) -> CTy {
+    match ty {
+        Type::Named { name, .. } => CTy::Class(name.clone()),
+        _ => CTy::Other,
+    }
+}
+
 fn resolve_cty(ty: &Type) -> CTy {
     match ty {
         Type::Named { name, args, .. } => match name.as_str() {
@@ -813,6 +850,7 @@ impl<'a> Compiler<'a> {
             height: 0,
             ctor_return_jumps: None,
             loop_frames: Vec::new(),
+            finally_stack: Vec::new(),
         }
     }
 
@@ -869,6 +907,11 @@ impl<'a> Compiler<'a> {
             }
             // CallValue(argc): pops `argc` args + 1 closure, pushes 1 result → 1 - argc.
             Op::CallValue(argc) => 1 - *argc as isize,
+            // M-faults 2b: `Throw` pops the exception value; the handler ops are pure bookkeeping.
+            // The catch landing pad's pushed value (+1) is modeled by setting `self.height` directly
+            // at the landing pad (like a `match` scrutinee), not via a stack effect here.
+            Op::Throw => -1,
+            Op::PushHandler(_) | Op::PopHandler => 0,
         }
     }
 
@@ -900,6 +943,8 @@ impl<'a> Compiler<'a> {
         self.chunk.code[idx] = match self.chunk.code[idx] {
             Op::Jump(_) => Op::Jump(target),
             Op::JumpIfFalse(_) => Op::JumpIfFalse(target),
+            // A `try`'s handler target is patched to its catch landing pad (M-faults 2b).
+            Op::PushHandler(_) => Op::PushHandler(target),
             ref other => unreachable!("patch_jump on {other:?}"),
         };
     }
@@ -1219,7 +1264,21 @@ impl<'a> Compiler<'a> {
                     Some(e) => self.expr(e)?,
                     None => self.emit_const(Value::Unit, span.line),
                 }
-                self.emit(Op::Return, span.line);
+                // A `return` exits every enclosing `try` (M-faults 2b): pop their handlers and run
+                // their `finally` blocks first. Because a `finally` may evaluate (and the handler ops
+                // must not perturb the value), spill the return value to a temp local so finally runs
+                // on a clean operand stack, then reload it. No-op when no `try` is active.
+                if self.finally_stack.is_empty() {
+                    self.emit(Op::Return, span.line);
+                } else {
+                    let tmp = self.add_local("$ret", CTy::Other);
+                    self.height = self.locals.len();
+                    let n = self.finally_stack.len();
+                    self.emit_finally_for_exit(n, span.line)?;
+                    self.emit(Op::GetLocal(tmp), span.line);
+                    self.emit(Op::Return, span.line);
+                    self.locals.pop(); // unregister `$ret` (dead code follows a `return`)
+                }
                 Ok(())
             }
             Stmt::Block(stmts, span) => {
@@ -1271,11 +1330,18 @@ impl<'a> Compiler<'a> {
             ),
             Stmt::Break(span) => self.compile_break_continue(true, span.line),
             Stmt::Continue(span) => self.compile_break_continue(false, span.line),
-            // M-faults 2b: native unwinding codegen lands in Task 2b.5 (Op::Throw/PushHandler/
-            // PopHandler + finally). No example/test compiles a throw/try in 2b.1.
-            Stmt::Throw { .. } | Stmt::Try { .. } => {
-                Err("throw/try codegen not yet implemented (M-faults 2b.5)".to_string())
+            // `throw e;` — evaluate the exception and emit `Op::Throw` (M-faults 2b).
+            Stmt::Throw { value, span } => {
+                self.expr(value)?;
+                self.emit(Op::Throw, span.line);
+                Ok(())
             }
+            Stmt::Try {
+                body,
+                catches,
+                finally_block,
+                span,
+            } => self.compile_try(body, catches, finally_block.as_deref(), span.line),
         }
     }
 
@@ -2261,6 +2327,16 @@ impl<'a> Compiler<'a> {
             .last()
             .map(|f| f.body_base)
             .ok_or("`break`/`continue` outside a loop")?;
+        // Run the `finally` (+ `PopHandler`) of every `try` entered *inside* this (innermost) loop,
+        // before unwinding the loop-body locals (M-faults 2b). A `try` outside the loop is not exited.
+        let cur_loop_depth = self.loop_frames.len();
+        let n_exit = self
+            .finally_stack
+            .iter()
+            .rev()
+            .take_while(|c| c.loop_depth >= cur_loop_depth)
+            .count();
+        self.emit_finally_for_exit(n_exit, line)?;
         for _ in 0..(self.locals.len() - body_base) {
             self.emit(Op::Pop, line);
         }
@@ -2272,6 +2348,178 @@ impl<'a> Compiler<'a> {
             frame.continue_jumps.push(j);
         }
         Ok(())
+    }
+
+    /// `try { body } catch (T e) { … } … [finally { … }]` — native unwinding (M-faults 2b).
+    ///
+    /// Shape emitted:
+    /// ```text
+    ///   PushHandler(catch_lp)        ; capture frame depth + stack height
+    ///   <body>                       ; a Throw unwinds to catch_lp
+    ///   PopHandler ; <finally> ; Jump(end)        ; normal completion
+    /// catch_lp:                       ; VM landed with the thrown value at slot `v_slot`
+    ///   ; ($exc local registered here so catch-body locals stack above the value)
+    ///   for each clause: <type test(s)> → bind+body → <finally> → Jump(cleanup)
+    ///   <finally> ; Throw             ; no clause matched → re-throw
+    /// cleanup: Pop($exc)              ; caught paths discard the value, converge with the normal path
+    /// end:
+    /// ```
+    /// A `return`/`break`/`continue` inside the body or a catch runs the same `finally` (and pops the
+    /// handler) via the `finally_stack` (see `emit_finally_for_exit`).
+    fn compile_try(
+        &mut self,
+        body: &[Stmt],
+        catches: &[crate::ast::CatchClause],
+        finally: Option<&[Stmt]>,
+        line: u32,
+    ) -> Result<(), String> {
+        // A `try` is a statement, so the operand stack is clean here: height == locals.len().
+        let body_base = self.locals.len();
+        let push_idx = self.emit_jump(Op::PushHandler(0), line); // target patched to catch_lp
+
+        // --- try body ---
+        self.finally_stack.push(TryCtx {
+            finally: finally.map(<[Stmt]>::to_vec),
+            has_handler: true,
+            loop_depth: self.loop_frames.len(),
+        });
+        self.begin_scope();
+        for s in body {
+            self.stmt(s)?;
+        }
+        self.end_scope(line);
+        self.finally_stack.pop();
+
+        // --- normal completion: drop the handler, run finally, skip the catch block ---
+        self.emit(Op::PopHandler, line);
+        self.emit_finally_block(finally, line)?;
+        let normal_jump = self.emit_jump(Op::Jump(0), line);
+
+        // --- catch landing pad: the VM pushed the thrown value at slot `v_slot` ---
+        let catch_lp = self.here();
+        self.patch_jump_to(push_idx, catch_lp);
+        let v_slot = body_base;
+        self.height = v_slot + 1;
+        // Register the thrown value as a local so a catch body's own locals stack above it (the
+        // per-statement `height = locals.len()` reset then keeps every slot aligned).
+        let exc = self.add_local("$exc", CTy::Other);
+        debug_assert_eq!(exc, v_slot, "thrown value slot must be the next frame slot");
+
+        let mut caught_jumps = Vec::new();
+        for clause in catches {
+            // Dispatch: a match on any of the clause's type names falls through to `bind`; a full
+            // miss jumps to `no_match` (the next clause).
+            let names = catch_clause_names(&clause.ty);
+            let mut to_bind = Vec::new();
+            for name in &names {
+                self.height = v_slot + 1;
+                self.emit(Op::GetLocal(v_slot), line);
+                self.emit(Op::IsInstance(name.clone()), line);
+                let next_name = self.emit_jump(Op::JumpIfFalse(0), line); // false → try next name
+                to_bind.push(self.emit_jump(Op::Jump(0), line)); // true → bind
+                self.patch_jump(next_name);
+            }
+            let no_match = self.emit_jump(Op::Jump(0), line);
+            let bind = self.here();
+            for j in to_bind {
+                self.patch_jump_to(j, bind);
+            }
+
+            // Bind the value to the clause variable (via `match_bindings`, reading slot `v_slot`),
+            // then compile the catch body with its own finally/transfer context (no handler — the
+            // unwind already consumed it).
+            self.height = v_slot + 1;
+            self.begin_scope();
+            let n_before = self.match_bindings.len();
+            self.match_bindings.push(MatchBinding {
+                name: clause.name.clone(),
+                match_slot: v_slot,
+                path: Vec::new(),
+                ty: catch_binding_cty(&clause.ty),
+            });
+            self.finally_stack.push(TryCtx {
+                finally: finally.map(<[Stmt]>::to_vec),
+                has_handler: false,
+                loop_depth: self.loop_frames.len(),
+            });
+            for s in &clause.body {
+                self.stmt(s)?;
+            }
+            self.finally_stack.pop();
+            self.match_bindings.truncate(n_before);
+            self.end_scope(line);
+
+            // Caught: run finally, drop the value, converge.
+            self.height = v_slot + 1;
+            self.emit_finally_block(finally, line)?;
+            self.emit(Op::Pop, line); // discard $exc → height v_slot
+            caught_jumps.push(self.emit_jump(Op::Jump(0), line)); // → end (past cleanup's Pop)
+            self.patch_jump(no_match);
+        }
+
+        // --- no clause matched: run finally, re-throw the value (still on top at `v_slot`) ---
+        self.height = v_slot + 1;
+        self.emit_finally_block(finally, line)?;
+        self.emit(Op::Throw, line);
+
+        // --- converge ---
+        self.locals.pop(); // unregister $exc
+        let end = self.here();
+        self.patch_jump_to(normal_jump, end);
+        for j in caught_jumps {
+            self.patch_jump_to(j, end);
+        }
+        self.height = body_base;
+        Ok(())
+    }
+
+    /// Emit a `finally` block inline (a fresh scope), or nothing when there is no `finally`. Balanced:
+    /// `self.height`/`self.locals` are unchanged on return (M-faults 2b).
+    fn emit_finally_block(&mut self, finally: Option<&[Stmt]>, line: u32) -> Result<(), String> {
+        if let Some(stmts) = finally {
+            self.begin_scope();
+            for s in stmts {
+                self.stmt(s)?;
+            }
+            self.end_scope(line);
+        }
+        Ok(())
+    }
+
+    /// Emit the `PopHandler` (when the context's handler is still installed) and `finally` block for
+    /// the innermost `n_exit` `try` contexts, innermost-first — run before a `return`/`break`/
+    /// `continue` transfers out of them (M-faults 2b). The contexts are temporarily removed while
+    /// their finallys are emitted so a transfer *inside* a finally doesn't re-enter them, then
+    /// restored (the `try`s remain lexically active for the fall-through paths).
+    fn emit_finally_for_exit(&mut self, n_exit: usize, line: u32) -> Result<(), String> {
+        if n_exit == 0 {
+            return Ok(());
+        }
+        let start = self.finally_stack.len() - n_exit;
+        let removed = self.finally_stack.split_off(start); // innermost == last
+        let mut result = Ok(());
+        for ctx in removed.iter().rev() {
+            if ctx.has_handler {
+                self.emit(Op::PopHandler, line);
+            }
+            if let Some(stmts) = &ctx.finally {
+                self.begin_scope();
+                for s in stmts {
+                    if let Err(e) = self.stmt(s) {
+                        result = Err(e);
+                        break;
+                    }
+                }
+                if result.is_ok() {
+                    self.end_scope(line);
+                }
+            }
+            if result.is_err() {
+                break;
+            }
+        }
+        self.finally_stack.extend(removed); // the try contexts are still lexically active
+        result
     }
 
     /// Resolve a field/member name to its index in the program's `names` pool (for `GetField`). The

@@ -24,10 +24,23 @@ enum Signal {
     Break,
     /// `continue;` — unwinds to the innermost loop, which catches it and starts the next iteration.
     Continue,
+    /// `throw e;` — a checked exception, unwinding to the innermost enclosing `try` whose `catch`
+    /// matches it, or out of `main` (uncaught) if none does (M-faults 2b). Distinct from `Runtime`:
+    /// only a `Throw` is catchable; a `Runtime` fault (panic/index-OOB/…) passes straight through
+    /// every `catch` — panics are uncatchable by design.
+    Throw(Value),
     Runtime(Diagnostic),
 }
 
 type R<T> = Result<T, Signal>;
+
+/// Sentinel fault body used to carry a `Signal::Throw` *across a higher-order-native boundary*
+/// without changing the backend-shared `ClosureInvoker` signature (`Result<_, String>`). The
+/// invoker stashes the thrown value in `Interp::pending_throw` and returns this string; the
+/// `CallNative` site recognises it and rebuilds the `Throw` (M-faults 2b). The same trick is used
+/// by the VM. The token is not a valid source identifier, so it can never collide with a real fault.
+/// Single-sourced with the VM via [`crate::chunk::THROW_SENTINEL`].
+const THROW_SENTINEL: &str = crate::chunk::THROW_SENTINEL;
 
 /// The source line of a statement, for runtime trace frames (error-handling slice 1).
 fn stmt_line(s: &Stmt) -> u32 {
@@ -58,6 +71,9 @@ fn signal_msg(sig: Signal) -> String {
         Signal::Runtime(d) => d.message,
         Signal::Return(_) => "internal error: closure return escaped".to_string(),
         Signal::Break | Signal::Continue => "internal error: loop control escaped".to_string(),
+        // A `Throw` is intercepted before this point at the native boundary (it becomes the
+        // sentinel + `pending_throw`); reaching here would be an interpreter bug.
+        Signal::Throw(_) => "internal error: throw escaped to native boundary".to_string(),
     }
 }
 
@@ -150,6 +166,10 @@ pub struct Interp {
     /// Converts unbounded recursion into a clean `"stack overflow"` fault instead of a native
     /// stack abort — and uses the *same* limit as the VM, keeping the backends parity-identical.
     depth: usize,
+    /// Carries a thrown value across a higher-order-native call boundary (M-faults 2b). When a
+    /// closure passed to `List.map`/etc. throws, the invoker stows the value here and returns
+    /// [`THROW_SENTINEL`]; the `CallNative` site rebuilds the `Throw` from it. `None` otherwise.
+    pending_throw: Option<Value>,
 }
 
 /// Run a whole program: collect declarations, locate `main`, call it, and return
@@ -171,6 +191,7 @@ pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
         out: String::new(),
         trace_stack: Vec::new(),
         depth: 0,
+        pending_throw: None,
     };
     interp.collect(program);
     let main = match interp.funcs.get("main") {
@@ -182,11 +203,38 @@ pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
         Ok(_) => Ok(interp.out),
         Err(Signal::Return(_)) => Ok(interp.out),
         Err(Signal::Runtime(e)) => Err(e.with_frames(interp.snapshot_frames())),
+        // An exception that escapes `main` uncaught (defensive — the checker's `E-UNCAUGHT-THROW`
+        // guarantees `main` handles every throw, so this is unreachable for a checked program).
+        Err(Signal::Throw(v)) => Err(Diagnostic::runtime(format!(
+            "uncaught exception `{}`",
+            throw_what(&v)
+        ))
+        .with_frames(interp.snapshot_frames())),
         // Checker-unreachable: `break`/`continue` are rejected outside a loop and caught by their
         // enclosing loop, so they never escape `main`'s body. Defensive (EV-7 parity).
         Err(Signal::Break | Signal::Continue) => {
             Err(Diagnostic::runtime("internal error: loop control escaped"))
         }
+    }
+}
+
+/// The display name of a thrown value for an uncaught-exception message — its class for an
+/// instance, else its type name (M-faults 2b).
+fn throw_what(v: &Value) -> String {
+    match v {
+        Value::Instance(inst) => inst.class.clone(),
+        other => other.type_name().to_string(),
+    }
+}
+
+/// The catchable type name(s) of a `catch` clause type (M-faults 2b): a single name for a class /
+/// interface, or one per member for a union `catch (A | B e)`. The checker has already rejected any
+/// non-`Error` member (`E-CATCH-TYPE`), so other `Type` shapes never reach here.
+fn catch_type_names(ty: &crate::ast::Type) -> Vec<String> {
+    match ty {
+        crate::ast::Type::Named { name, .. } => vec![name.clone()],
+        crate::ast::Type::Union(members, _) => members.iter().flat_map(catch_type_names).collect(),
+        _ => Vec::new(),
     }
 }
 
@@ -213,6 +261,7 @@ pub fn call_named(
         out: String::new(),
         trace_stack: Vec::new(),
         depth: 0,
+        pending_throw: None,
     };
     interp.collect(program);
     let f = match interp.funcs.get(name) {
@@ -231,6 +280,11 @@ pub fn call_named(
         Ok(v) => Ok((v, interp.out)),
         Err(Signal::Return(v)) => Ok((v, interp.out)),
         Err(Signal::Runtime(e)) => Err(e.with_frames(interp.snapshot_frames())),
+        Err(Signal::Throw(v)) => Err(Diagnostic::runtime(format!(
+            "uncaught exception `{}`",
+            throw_what(&v)
+        ))
+        .with_frames(interp.snapshot_frames())),
         Err(Signal::Break | Signal::Continue) => {
             Err(Diagnostic::runtime("internal error: loop control escaped"))
         }
@@ -527,13 +581,71 @@ impl Interp {
                 self.eval(e)?;
                 Ok(())
             }
-            // M-faults 2b: native unwinding lands in Task 2b.4. The checker rejects throw/try in
-            // 2b.1 by not yet wiring enforcement, and no example/test exercises them, so this arm is
-            // unreachable in the current build.
-            Stmt::Throw { .. } | Stmt::Try { .. } => {
-                unreachable!("throw/try evaluation not yet implemented (M-faults 2b.4)")
+            // `throw e;` — evaluate the exception value and unwind as a `Throw` signal (M-faults 2b).
+            Stmt::Throw { value, .. } => {
+                let v = self.eval(value)?;
+                Err(Signal::Throw(v))
+            }
+            // `try { … } catch (T e) { … } … [finally { … }]` — native unwinding (M-faults 2b).
+            // The body runs; a `Throw` it raises is matched against the catch clauses in order (a
+            // catch whose type — or any union member — is the value's class or a supertype). A
+            // `Runtime` fault (panic/index-OOB) is NOT a `Throw`, so it passes straight through every
+            // catch. `finally` runs on *every* exit edge (normal, caught, re-thrown, or a
+            // return/break/continue escaping the body) and its own signal, if any, takes precedence.
+            Stmt::Try {
+                body,
+                catches,
+                finally_block,
+                ..
+            } => {
+                let outcome = match self.exec_scoped(body) {
+                    Err(Signal::Throw(v)) => match self.match_catch(catches, &v) {
+                        Some(clause) => {
+                            self.frame.push_scope();
+                            self.frame.declare(&clause.name, v);
+                            let r = self.exec_stmts(&clause.body);
+                            self.frame.pop_scope();
+                            r
+                        }
+                        None => Err(Signal::Throw(v)), // no clause matched — re-propagate
+                    },
+                    // Ok, a fault, or a return/break/continue all flow to `finally` unchanged.
+                    other => other,
+                };
+                if let Some(fb) = finally_block {
+                    // A `finally` that itself diverges (return/throw/break/continue/fault) overrides
+                    // the body/catch outcome; a normal `finally` lets `outcome` propagate.
+                    self.exec_scoped(fb)?;
+                }
+                outcome
             }
         }
+    }
+
+    /// Find the first `catch` clause matching a thrown value `v` (M-faults 2b): a clause whose type
+    /// — or, for a union `catch (A | B e)`, any member — is `v`'s class or a supertype of it (the
+    /// shared `instanceof` oracle). Returns the clause to run, or `None` to re-propagate the throw.
+    fn match_catch<'a>(
+        &self,
+        catches: &'a [crate::ast::CatchClause],
+        v: &Value,
+    ) -> Option<&'a crate::ast::CatchClause> {
+        catches.iter().find(|c| {
+            catch_type_names(&c.ty)
+                .iter()
+                .any(|n| self.value_is_a(v, n))
+        })
+    }
+
+    /// Whether `v` is an instance of (or a subtype of) the type named `name` — the same test as
+    /// `instanceof`: an exact class match or `name` is an interface the class implements.
+    fn value_is_a(&self, v: &Value, name: &str) -> bool {
+        matches!(v, Value::Instance(inst)
+            if inst.class == *name
+                || self
+                    .class_implements
+                    .get(&inst.class)
+                    .is_some_and(|ifaces| ifaces.iter().any(|i| i == name)))
     }
 
     /// `while (cond) { .. }` / `do { .. } while (cond);` (M-mut.3). Each iteration runs the body in
@@ -964,7 +1076,18 @@ impl Interp {
                                 crate::native::NativeEval::HigherOrder(f) => {
                                     let mut invoke = |fv: &Value, cargs: Vec<Value>| match fv {
                                         Value::Closure(rc) => {
-                                            self.call_closure(rc.clone(), cargs).map_err(signal_msg)
+                                            match self.call_closure(rc.clone(), cargs) {
+                                                Ok(v) => Ok(v),
+                                                // A `throw` inside a closure passed to the native
+                                                // can't cross the `Result<_, String>` boundary as a
+                                                // value — stash it and signal via the sentinel, then
+                                                // rebuild the `Throw` once the native returns.
+                                                Err(Signal::Throw(v)) => {
+                                                    self.pending_throw = Some(v);
+                                                    Err(THROW_SENTINEL.to_string())
+                                                }
+                                                Err(other) => Err(signal_msg(other)),
+                                            }
                                         }
                                         v => Err(format!(
                                             "cannot call {} as a function",
@@ -976,7 +1099,15 @@ impl Interp {
                             };
                             return match result {
                                 Ok(v) => Ok(v),
-                                Err(msg) => rt(msg),
+                                Err(msg) => {
+                                    // Reconstruct a throw that unwound out of a higher-order native.
+                                    if msg == THROW_SENTINEL {
+                                        if let Some(v) = self.pending_throw.take() {
+                                            return Err(Signal::Throw(v));
+                                        }
+                                    }
+                                    rt(msg)
+                                }
                             };
                         }
                     }

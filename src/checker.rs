@@ -824,6 +824,20 @@ impl Checker {
 
     // ---- M-faults 2b: checked-exception discharge ----
 
+    /// Flatten any union member of a resolved `throws` list into its individual exception types, so
+    /// `throws A | B` becomes the set `{A, B}` — discharge and validation operate per type, and a
+    /// call/`?` that propagates a union must discharge every member (M-faults 2b).
+    fn flatten_throws(tys: Vec<Ty>) -> Vec<Ty> {
+        let mut out = Vec::new();
+        for t in tys {
+            match t {
+                Ty::Union(members) => out.extend(members),
+                other => out.push(other),
+            }
+        }
+        out
+    }
+
     /// Whether `t` is a thrown/declared/caught exception type — a class or interface that is `<:` the
     /// built-in `Error` marker (the `Error` interface itself qualifies). Anything else (a primitive,
     /// an enum, a function, a poison `<error>`) is not throwable/catchable (`E-THROW-TYPE`/
@@ -970,8 +984,9 @@ impl Checker {
             Some(t) => self.resolve_type(t),
             None => Ty::Unit,
         };
-        // Resolve the declared throws set with the type parameters still in scope, then clear.
-        let throws = f.throws.iter().map(|t| self.resolve_type(t)).collect();
+        // Resolve the declared throws set with the type parameters still in scope, then clear. A
+        // union `throws A | B` is flattened to its members (`throws` is a set of exception types).
+        let throws = Self::flatten_throws(f.throws.iter().map(|t| self.resolve_type(t)).collect());
         self.active_type_params.clear();
         self.funcs.insert(
             f.name.clone(),
@@ -1210,7 +1225,9 @@ impl Checker {
                         Some(t) => self.resolve_type(t),
                         None => Ty::Unit,
                     };
-                    let throws = f.throws.iter().map(|t| self.resolve_type(t)).collect();
+                    let throws = Self::flatten_throws(
+                        f.throws.iter().map(|t| self.resolve_type(t)).collect(),
+                    );
                     self.active_type_params.clear();
                     methods.insert(
                         f.name.clone(),
@@ -1717,7 +1734,7 @@ impl Checker {
         };
         // Resolve + validate the declared throws set (type params still in scope), then make it the
         // active discharge context for the body (M-faults 2b).
-        let throws: Vec<Ty> = f.throws.iter().map(|t| self.resolve_type(t)).collect();
+        let throws = Self::flatten_throws(f.throws.iter().map(|t| self.resolve_type(t)).collect());
         self.validate_throws_decl(f, &throws);
         let prev_ret = std::mem::replace(&mut self.cur_ret, ret.clone());
         let prev_throws = std::mem::replace(&mut self.cur_throws, throws);

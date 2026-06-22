@@ -37,6 +37,24 @@ struct Frame {
     slot_base: usize,
 }
 
+/// A live exception handler (M-faults 2b): the catch landing pad to jump to, plus the frame depth
+/// and stack height to unwind to when a `Throw` reaches it. Pushed by `Op::PushHandler`, removed by
+/// `Op::PopHandler` or consumed by an unwind.
+struct Handler {
+    catch_ip: usize,
+    frame_depth: usize,
+    stack_height: usize,
+}
+
+/// Display name of a thrown value for an uncaught-exception message — its class for an instance,
+/// else its type name (M-faults 2b; mirrors the interpreter's `throw_what` for trace parity).
+fn throw_display(v: &Value) -> String {
+    match v {
+        Value::Instance(inst) => inst.class.clone(),
+        other => other.type_name().to_string(),
+    }
+}
+
 pub struct Vm<'a> {
     program: &'a BytecodeProgram,
     stack: Vec<Value>,
@@ -45,6 +63,13 @@ pub struct Vm<'a> {
     /// Seeded once from `program.static_inits` (the once-at-load literal values).
     statics: Vec<Value>,
     out: String,
+    /// Active exception handlers, innermost last (M-faults 2b). `Op::PushHandler`/`PopHandler`
+    /// maintain it; a `Throw` unwinds to the topmost handler owned by the current run loop.
+    handlers: Vec<Handler>,
+    /// Carries a thrown value alongside the [`THROW_SENTINEL`] fault (the analogue of the
+    /// interpreter's field): set by `Op::Throw`, taken by the unwind that lands it or by the
+    /// uncaught-exception path (M-faults 2b).
+    pending_throw: Option<Value>,
 }
 
 impl<'a> Vm<'a> {
@@ -55,6 +80,8 @@ impl<'a> Vm<'a> {
             frames: Vec::new(),
             statics: program.static_inits.clone(),
             out: String::new(),
+            handlers: Vec::new(),
+            pending_throw: None,
         }
     }
 
@@ -96,6 +123,13 @@ impl<'a> Vm<'a> {
                 Ok(Flow::Next) => {}
                 Ok(Flow::Done) => return Ok(self.out),
                 Err(msg) => {
+                    // A thrown exception: unwind to the nearest handler (any handler, floor 0) and
+                    // resume at its catch landing pad. If none exists, it escapes `main` uncaught —
+                    // fall through to the diagnostic path below with an uncaught-exception body
+                    // (the checker's `E-UNCAUGHT-THROW` makes this unreachable for a checked program).
+                    if msg == crate::chunk::THROW_SENTINEL && self.unwind_throw(0) {
+                        continue;
+                    }
                     // Walk the live call stack innermost → outermost. Each frame's line is the source
                     // line of the op it is paused on: the faulting op for the top frame, the pending
                     // `Call` for the rest. `Frame.ip` was pre-incremented before `exec_op`, so `ip - 1`
@@ -120,7 +154,18 @@ impl<'a> Vm<'a> {
                         })
                         .collect();
                     let line = frames.first().map_or(0, |f| f.line);
-                    return Err(Diagnostic::runtime_at_line(msg, line).with_frames(frames));
+                    // An uncaught throw (no handler matched above) surfaces as an uncaught-exception
+                    // fault naming the thrown type; any other `msg` is a plain runtime fault.
+                    let body = if msg == crate::chunk::THROW_SENTINEL {
+                        let what = self
+                            .pending_throw
+                            .take()
+                            .map_or_else(|| "?".to_string(), |v| throw_display(&v));
+                        format!("uncaught exception `{what}`")
+                    } else {
+                        msg
+                    };
+                    return Err(Diagnostic::runtime_at_line(body, line).with_frames(frames));
                 }
             }
         }
@@ -551,8 +596,58 @@ impl<'a> Vm<'a> {
                     slot_base,
                 });
             }
+
+            // --- M-faults 2b: native unwinding (try/catch/finally) ---
+
+            // Install a handler at the current frame depth + stack height; on a `Throw` the run loop
+            // unwinds to its landing pad. Pure bookkeeping — no stack effect.
+            Op::PushHandler(catch_ip) => {
+                self.handlers.push(Handler {
+                    catch_ip,
+                    frame_depth: self.frames.len(),
+                    stack_height: self.stack.len(),
+                });
+            }
+            // The try body completed (or control is leaving it) — drop the most recent handler.
+            Op::PopHandler => {
+                self.handlers.pop();
+            }
+            // `throw e` — stash the value and raise the sentinel fault; the run loop searches the
+            // handler stack (`unwind_throw`). Crossing a higher-order-native boundary falls out for
+            // free: `run_until` can't find a handler inside the closure's frames, so the sentinel
+            // propagates up to the outer loop, which unwinds to the `try` around the native call.
+            Op::Throw => {
+                let v = self.pop();
+                self.pending_throw = Some(v);
+                return Err(crate::chunk::THROW_SENTINEL.to_string());
+            }
         }
         Ok(Flow::Next)
+    }
+
+    /// Try to unwind a pending `Throw` to the topmost handler owned by the current run loop (one
+    /// whose `frame_depth` is above `floor`: `0` for the main loop, `target_depth` for a re-entrant
+    /// `run_until`). On success, truncate frames + stack to the handler's marks, push the thrown
+    /// value, jump the landed frame to the catch landing pad, and return `true` (ready to resume).
+    /// On no handler, leave all state — including `pending_throw` — untouched and return `false`
+    /// (the caller propagates the sentinel / reports an uncaught exception). M-faults 2b.
+    fn unwind_throw(&mut self, floor: usize) -> bool {
+        match self.handlers.last() {
+            Some(h) if h.frame_depth > floor => {
+                let h = self.handlers.pop().expect("checked by the guard");
+                let v = self
+                    .pending_throw
+                    .take()
+                    .expect("the throw sentinel implies a pending value");
+                self.frames.truncate(h.frame_depth);
+                self.stack.truncate(h.stack_height);
+                self.stack.push(v);
+                let top = self.frames.len() - 1;
+                self.frames[top].ip = h.catch_ip;
+                true
+            }
+            _ => false,
+        }
     }
 
     /// Unwind the current frame: truncate its locals window and pop it; if a caller remains,
@@ -567,6 +662,12 @@ impl<'a> Vm<'a> {
         );
         self.stack.truncate(base);
         self.frames.pop();
+        // Drop any handler that belonged to the frame just popped (defensive: the compiler emits a
+        // `PopHandler` on every normal/transfer exit from a try body, so a live handler should not
+        // outlive its frame — but a future codegen path must never leave a dangling handler that a
+        // later `Throw` could wrongly catch). M-faults 2b.
+        let depth = self.frames.len();
+        self.handlers.retain(|h| h.frame_depth <= depth);
         if !self.frames.is_empty() {
             self.stack.push(rv);
         }
@@ -632,12 +733,23 @@ impl<'a> Vm<'a> {
             }
             let op = code[ip].clone();
             self.frames[fr].ip += 1;
-            match self.exec_op(op, fr, func)? {
-                Flow::Next => {}
+            match self.exec_op(op, fr, func) {
+                Ok(Flow::Next) => {}
                 // `Flow::Done` is only ever returned by `main`'s `Return`; at `target_depth >= 1`
                 // (always, since a native runs inside at least `main`) it is unreachable, but exit
                 // cleanly rather than spin if a future caller passes `target_depth == 0`.
-                Flow::Done => return Ok(()),
+                Ok(Flow::Done) => return Ok(()),
+                Err(msg) => {
+                    // A throw raised inside this re-entrant call: unwind to a handler owned by *this*
+                    // call (frame_depth above `target_depth`, i.e. a `try` inside the closure). If
+                    // none exists, the throw escapes the closure — propagate the sentinel (with
+                    // `pending_throw` intact) so the native returns it and the outer `run` loop
+                    // unwinds to the `try` surrounding the higher-order call (M-faults 2b).
+                    if msg == crate::chunk::THROW_SENTINEL && self.unwind_throw(target_depth) {
+                        continue;
+                    }
+                    return Err(msg);
+                }
             }
         }
         Ok(())

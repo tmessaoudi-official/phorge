@@ -1599,3 +1599,99 @@ function main() { BadInput e = BadInput("bad input"); Console.println(e.message)
         assert_eq!(got, expected, "PHP ≠ interpreter\n--- php ---\n{php_src}");
     }
 }
+
+/// M-faults 2b.5: native unwinding on the VM (`Op::Throw`/`PushHandler`/`PopHandler`) is
+/// byte-identical to the interpreter. These are `run ≡ runvm` only — the PHP transpile of
+/// `throw`/`try`/`catch`/`finally` lands in 2b.6, after which an `examples/guide/errors.phg` adds the
+/// three-way (`run ≡ runvm ≡ php`) gate (2b.7). The shared header defines two `Error` subtypes.
+#[cfg(test)]
+const ERR_HDR: &str = "import Core.Console; \
+    class E1 implements Error { constructor(public string message) {} } \
+    class E2 implements Error { constructor(public string message) {} }";
+
+#[test]
+fn throw_caught_and_finally_runs_on_both_backends() {
+    // Normal path runs `a = parse(5)`; the throw path is caught; `finally` runs on every exit edge.
+    agree(&format!(
+        "{ERR_HDR} \
+         function parse(int n) -> int throws E1 {{ if (n < 0) {{ throw E1(\"neg\"); }} return n + 1; }} \
+         function main() {{ \
+           try {{ \
+             var a = parse(5); Console.println(\"a={{a}}\"); \
+             var b = parse(0 - 3); Console.println(\"unreached\"); \
+           }} catch (E1 e) {{ Console.println(\"caught {{e.message}}\"); }} \
+           finally {{ Console.println(\"cleanup\"); }} \
+         }}"
+    ));
+}
+
+#[test]
+fn return_through_finally_and_nested_rethrow_agree() {
+    // `pick` returns through its `finally` on the ok path and re-throws (finally still runs) on the
+    // throw path; the outer `try` catches the re-thrown exception.
+    agree(&format!(
+        "{ERR_HDR} \
+         function pick(int n) -> int throws E1 {{ \
+           try {{ if (n < 0) {{ throw E1(\"inner\"); }} return n; }} \
+           finally {{ Console.println(\"fin {{n}}\"); }} \
+         }} \
+         function main() {{ \
+           try {{ var a = pick(2); Console.println(\"a={{a}}\"); var b = pick(0 - 1); }} \
+           catch (E1 e) {{ Console.println(\"outer {{e.message}}\"); }} \
+         }}"
+    ));
+}
+
+#[test]
+fn multiple_and_union_catch_dispatch_agree() {
+    // Multiple sequential `catch` clauses dispatch by type; a union `throws E1 | E2` is the set
+    // {E1, E2}, each discharged by its own clause.
+    agree(&format!(
+        "{ERR_HDR} \
+         function risky(int n) -> int throws E1 | E2 {{ \
+           if (n == 1) {{ throw E1(\"one\"); }} if (n == 2) {{ throw E2(\"two\"); }} return n; \
+         }} \
+         function main() {{ for (int i in [1, 2, 3]) {{ \
+           try {{ var r = risky(i); Console.println(\"ok {{r}}\"); }} \
+           catch (E1 e) {{ Console.println(\"E1 {{e.message}}\"); }} \
+           catch (E2 e) {{ Console.println(\"E2 {{e.message}}\"); }} \
+         }} }}"
+    ));
+}
+
+#[test]
+fn break_and_continue_through_finally_agree() {
+    // A `break`/`continue` out of a `try` inside a loop still runs the `finally` (and drops the
+    // handler) before transferring — byte-identical on both backends.
+    agree(&format!(
+        "{ERR_HDR} \
+         function main() {{ for (int i in [1, 2, 3, 4]) {{ \
+           try {{ \
+             if (i == 3) {{ break; }} if (i == 2) {{ continue; }} Console.println(\"body {{i}}\"); \
+           }} finally {{ Console.println(\"fin {{i}}\"); }} \
+         }} Console.println(\"done\"); }}"
+    ));
+}
+
+#[test]
+fn propagate_throws_with_question_mark_agrees() {
+    // `f()?` on a throwing call propagates to the enclosing `throws`; the outer `try` catches it.
+    agree(&format!(
+        "{ERR_HDR} \
+         function f() -> int throws E1 {{ throw E1(\"x\"); }} \
+         function g() -> int throws E1 {{ return f()?; }} \
+         function main() {{ try {{ var n = g(); }} catch (E1 e) {{ Console.println(\"g threw {{e.message}}\"); }} }}"
+    ));
+}
+
+#[test]
+fn panic_bypasses_catch_on_both_backends() {
+    // A `Runtime` fault (division by zero) is NOT a catchable `throw`: it passes straight through an
+    // enclosing `catch` and aborts identically on both backends (panics are uncatchable by design).
+    agree_err(&format!(
+        "{ERR_HDR} \
+         function main() {{ var xs = [1, 0, 2]; \
+           try {{ for (int x in xs) {{ var q = 10 / x; Console.println(\"q {{q}}\"); }} }} \
+           catch (E1 e) {{ Console.println(\"nope\"); }} }}"
+    ));
+}

@@ -216,7 +216,28 @@ pub enum Op {
     /// inline (like `Fault(FaultMsg)`), not via a pool index, so — like `MakeRange`/`Fault` — it
     /// needs no `validate` arm.
     IsInstance(String),
+    /// Pop the top value and unwind it as a thrown exception (M-faults 2b): the value is stashed in
+    /// `Vm::pending_throw` and a [`THROW_SENTINEL`] fault is raised, which the run loop turns into a
+    /// search of the handler stack (`Op::PushHandler`). Carries no static index — like
+    /// `Fault`/`MakeRange` it needs no `validate` arm.
+    Throw,
+    /// Install an exception handler whose catch landing pad is the carried code index, capturing the
+    /// current frame depth and stack height (M-faults 2b). On a `Throw`, the run loop unwinds to the
+    /// topmost handler, truncates frames/stack to the captured marks, pushes the thrown value, and
+    /// jumps to the landing pad. The only index-carrying op of the three, so — like `Jump` — its
+    /// target is bounds-checked in `validate`.
+    PushHandler(usize),
+    /// Remove the most-recently-installed handler (M-mut: the try body completed without throwing, or
+    /// control is transferring out of the try). Carries no index — no `validate` arm.
+    PopHandler,
 }
+
+/// Fault body used to carry a [`Op::Throw`]'s value across the `Result<_, String>` fault channel
+/// (and the higher-order-native `ClosureInvoker` boundary) without a dedicated error enum: the
+/// thrown `Value` is stashed in `Vm::pending_throw` / `Interp::pending_throw` and this token is
+/// returned; the run loop / `CallNative` site recognises it and rebuilds the throw (M-faults 2b).
+/// Not a valid source identifier, so it can never collide with a real fault message.
+pub const THROW_SENTINEL: &str = "__phorge_throw__";
 
 /// A unit of compiled bytecode: instructions, a constant pool, and a per-instruction
 /// source-line table (for runtime-error reporting).
@@ -391,7 +412,8 @@ impl BytecodeProgram {
                     }),
                     // Absolute targets; `== code_len` is the legal "fall off the end → implicit
                     // return" landing the run loop already handles, so only `>` is invalid.
-                    Op::Jump(t) | Op::JumpIfFalse(t) => (*t > code_len)
+                    // A handler's catch landing pad is an absolute code index like a jump target.
+                    Op::Jump(t) | Op::JumpIfFalse(t) | Op::PushHandler(t) => (*t > code_len)
                         .then(|| format!("jump target {t} out of range (code len {code_len})")),
                     // `MakeClosure` carries a function-table index (must be in range).
                     Op::MakeClosure(idx) => (*idx >= nfns)
@@ -433,6 +455,10 @@ impl BytecodeProgram {
                     | Op::GetEnumField(_)
                     | Op::Fault(_)
                     | Op::CallValue(_)
+                    // `Throw`/`PopHandler` carry nothing (like `Fault`/`Return`); `Throw`'s value is
+                    // on the stack and `PopHandler` just discards the top handler.
+                    | Op::Throw
+                    | Op::PopHandler
                     // Carries the class name inline (like `Fault`), not a pool index.
                     | Op::IsInstance(_) => None,
                 };
