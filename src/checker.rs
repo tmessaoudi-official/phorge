@@ -18,6 +18,12 @@ struct FnSig {
     /// methods may be generic (M-RT generics-all); interface method signatures stay non-generic
     /// (the parser builds them with empty `type_params`), so theirs is always empty.
     type_params: Vec<String>,
+    /// Checked exception types this function declares (`throws A | B` ⇒ `[A, B]`), resolved at
+    /// collection time. Empty for the common no-throws case. A call site must *discharge* each
+    /// member — catch it in an enclosing `try`, or propagate it with `?` and a matching enclosing
+    /// `throws` (M-faults 2b). Free functions and class methods carry their declared set; interface
+    /// method signatures keep it empty (dynamic-dispatch throws enforcement is a documented deferral).
+    throws: Vec<Ty>,
 }
 
 struct EnumInfo {
@@ -90,6 +96,23 @@ pub struct Checker {
     warnings: Vec<Diagnostic>,
     /// return type of the function/method currently being checked
     cur_ret: Ty,
+    /// Checked-exception set the function/method currently being checked is declared to `throws`
+    /// (M-faults 2b). A `throw e` or a `?`-propagated throwing call discharges against this set;
+    /// saved/restored exactly like [`Self::cur_ret`] at every body-checking site. Empty inside a
+    /// constructor, property hook, or lambda (none may declare `throws`).
+    cur_throws: Vec<Ty>,
+    /// Whether the function currently being checked is the program entry `main` (M-faults 2b).
+    /// `main` may not declare `throws`, and an undischarged throw reaching it is `E-UNCAUGHT-THROW`
+    /// (rather than the generic `E-THROW-UNDECLARED`).
+    cur_is_main: bool,
+    /// Stack of the active enclosing `try` blocks' catch-type sets — innermost last — while checking
+    /// a `try` *body* (popped before its own catch/finally are checked, since a throw there is not
+    /// caught by the same `try`). A thrown type is *caught* iff it is `<:` some type in any frame.
+    /// Cleared around a lambda body (a closure passed to a native does not see the lexical `try`).
+    try_catch_stack: Vec<Vec<Ty>>,
+    /// One-shot flag set by a throws-mode `?` so the immediately-wrapped throwing call skips its own
+    /// call-site discharge check (the `?` propagates instead). Consumed (taken) by the call.
+    skip_throws_discharge: bool,
     /// class currently being checked (for `this` and bare field refs)
     cur_class: Option<String>,
     /// live `check_expr` recursion depth, bounded by [`MAX_EXPR_DEPTH`]
@@ -105,10 +128,15 @@ pub struct Checker {
     /// Drives namespaced native-call resolution (`console.println`) and the shadowing guard that
     /// keeps an imported qualifier disjoint from every value binding (M3 Wave 1).
     imports: HashMap<String, String>,
-    /// Type-directed desugarings for `html"…"` literals (core.html Wave 3), keyed by the literal's
-    /// `Span.start` (byte offset — unique per source occurrence in a single file). Each entry is the
-    /// `html.concat([…])` replacement built while checking, replayed by [`resolve_html`] after a
-    /// successful check so no backend ever sees an [`crate::ast::Expr::Html`] node.
+    /// Span-keyed node substitutions applied by [`resolve_html`] after a successful check, so the
+    /// backend-facing AST is free of front-end-only nodes. Keyed by `Span.start` (byte offset —
+    /// unique per source occurrence in a single file). Two producers share it:
+    /// (1) type-directed `html"…"` desugarings — each entry is the `html.concat([…])` replacement
+    ///     for an [`crate::ast::Expr::Html`] literal (core.html Wave 3);
+    /// (2) throws-mode `?` erasure — a throwing call's `?` is a checker-only propagation marker, so
+    ///     its [`crate::ast::Expr::Propagate`] node is replaced by its inner call expression (the
+    ///     call's own throw already unwinds; M-faults 2b). Result-mode `?` is *not* recorded here —
+    ///     it carries real lowering and is left for the backends.
     html_resolutions: HashMap<usize, crate::ast::Expr>,
     /// Type parameters in scope while resolving the signature/body of the generic function currently
     /// being checked (`["T", "U"]`). A bare type name in this set resolves to `Ty::Param` rather than
@@ -146,6 +174,10 @@ impl Checker {
             errors: Vec::new(),
             warnings: Vec::new(),
             cur_ret: Ty::Unit,
+            cur_throws: Vec::new(),
+            cur_is_main: false,
+            try_catch_stack: Vec::new(),
+            skip_throws_discharge: false,
             cur_class: None,
             depth: 0,
             loop_depth: 0,
@@ -576,6 +608,9 @@ impl Checker {
                     params,
                     ret,
                     type_params: Vec::new(),
+                    // Interface-method throws are not enforced through dynamic dispatch this slice
+                    // (a documented deferral); keep the set empty so no call site mis-discharges.
+                    throws: Vec::new(),
                 },
             );
         }
@@ -787,6 +822,123 @@ impl Checker {
         Ty::assignable_with(from, to, &|a, b| self.is_subtype(a, b))
     }
 
+    // ---- M-faults 2b: checked-exception discharge ----
+
+    /// Whether `t` is a thrown/declared/caught exception type — a class or interface that is `<:` the
+    /// built-in `Error` marker (the `Error` interface itself qualifies). Anything else (a primitive,
+    /// an enum, a function, a poison `<error>`) is not throwable/catchable (`E-THROW-TYPE`/
+    /// `E-CATCH-TYPE`). Poison (`Ty::Error`) returns `true` so a prior error doesn't cascade.
+    fn is_error_type(&self, t: &Ty) -> bool {
+        match t {
+            Ty::Error => true,
+            Ty::Named(n, _) => self.is_subtype(n, "Error"),
+            _ => false,
+        }
+    }
+
+    /// Whether a thrown `e` is *declared* by the enclosing function — `<:` some member of
+    /// [`Self::cur_throws`]. The propagate (`?`) path and a bare `throw e` both discharge this way.
+    fn throws_declared(&self, e: &Ty) -> bool {
+        self.cur_throws.iter().any(|d| self.ty_assignable(e, d))
+    }
+
+    /// Whether a thrown `e` is *caught* by an enclosing `try` we are currently inside the body of —
+    /// `<:` some catch-clause type in any active [`Self::try_catch_stack`] frame (innermost or outer).
+    fn covered_by_try(&self, e: &Ty) -> bool {
+        self.try_catch_stack
+            .iter()
+            .any(|frame| frame.iter().any(|c| self.ty_assignable(e, c)))
+    }
+
+    /// If `inner` is a call to a free function declaring a non-empty `throws` set, return that set
+    /// (owned). The one operand shape a throws-mode `?` recognises this slice — `f()?` where `f`
+    /// declares `throws E`. Method/native/closure throwing calls are a documented deferral (their
+    /// throws are still discharged at the call site, just not propagable with `?`).
+    fn free_call_throws(&self, inner: &crate::ast::Expr) -> Option<Vec<Ty>> {
+        if let crate::ast::Expr::Call { callee, .. } = inner {
+            if let crate::ast::Expr::Ident(name, _) = &**callee {
+                if let Some(sig) = self.funcs.get(name) {
+                    if !sig.throws.is_empty() {
+                        return Some(sig.throws.clone());
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Throws-mode `?` (M-faults 2b): `f()?` where `f` declares `throws E`. Checks the inner call
+    /// (suppressing its own call-site discharge), requires every thrown type to be *declared* by the
+    /// enclosing `throws` (propagation — not a `try`), records the node for erasure, and returns the
+    /// call's *normal* return type. Returns `None` when `inner` is not a free throwing call, so the
+    /// caller falls back to Result-mode (`check_propagate`) or `E-PROPAGATE-POSITION`.
+    fn try_throws_propagate(&mut self, inner: &crate::ast::Expr, span: Span) -> Option<Ty> {
+        let throws = self.free_call_throws(inner)?;
+        // The wrapped call propagates instead of discharging locally — suppress its own check.
+        self.skip_throws_discharge = true;
+        let t = self.check_expr(inner);
+        for e in &throws {
+            if !self.throws_declared(e) {
+                self.err_coded(
+                    span,
+                    format!(
+                        "`?` propagates `{e}`, but the enclosing function does not declare `throws {e}`"
+                    ),
+                    "E-CALL-UNHANDLED",
+                    Some(format!(
+                        "add `throws {e}` to the enclosing function, or wrap the call in `try`/`catch`"
+                    )),
+                );
+            }
+        }
+        // Record for erasure: a throws-mode `?` is a checker-only marker (the call's own throw
+        // unwinds), so the backend-facing AST keeps just the inner call (see `resolve_html`).
+        self.html_resolutions.insert(span.start, inner.clone());
+        Some(t)
+    }
+
+    /// Validate a function's `throws` declaration (M-faults 2b): the entry `main` may not declare it
+    /// (`E-UNCAUGHT-THROW`); every declared type must implement `Error` (`E-THROW-TYPE`); and naming
+    /// the bare `Error` root is too broad (`E-THROWS-TOO-BROAD` — declare the specific subtype so
+    /// callers know what to catch). `throws` is resolved into `resolved` in declaration order.
+    fn validate_throws_decl(&mut self, f: &crate::ast::FunctionDecl, resolved: &[Ty]) {
+        if f.name == "main" && !f.throws.is_empty() {
+            self.err_coded(
+                f.span,
+                "`main` is the program entry point and may not declare `throws`",
+                "E-UNCAUGHT-THROW",
+                Some(
+                    "handle every error inside `main` with `try`/`catch` — nothing may escape the entry point"
+                        .into(),
+                ),
+            );
+        }
+        for t in resolved {
+            match t {
+                Ty::Error => {} // poison from an earlier error — don't cascade
+                Ty::Named(n, _) if n == "Error" => {
+                    self.err_coded(
+                        f.span,
+                        "`throws Error` is too broad — declare the specific exception type(s) you throw",
+                        "E-THROWS-TOO-BROAD",
+                        Some("e.g. `throws BadInput` so callers know exactly what to catch".into()),
+                    );
+                }
+                _ if !self.is_error_type(t) => {
+                    self.err_coded(
+                        f.span,
+                        format!(
+                            "`throws {t}` is not allowed — a thrown type must implement `Error`"
+                        ),
+                        "E-THROW-TYPE",
+                        Some("declare the throwing type `class Foo implements Error { … }`".into()),
+                    );
+                }
+                _ => {}
+            }
+        }
+    }
+
     fn collect_function(&mut self, f: &crate::ast::FunctionDecl) {
         if is_intrinsic_name(&f.name) {
             self.err_coded(
@@ -818,6 +970,8 @@ impl Checker {
             Some(t) => self.resolve_type(t),
             None => Ty::Unit,
         };
+        // Resolve the declared throws set with the type parameters still in scope, then clear.
+        let throws = f.throws.iter().map(|t| self.resolve_type(t)).collect();
         self.active_type_params.clear();
         self.funcs.insert(
             f.name.clone(),
@@ -825,6 +979,7 @@ impl Checker {
                 params,
                 ret,
                 type_params: f.type_params.clone(),
+                throws,
             },
         );
     }
@@ -1055,6 +1210,7 @@ impl Checker {
                         Some(t) => self.resolve_type(t),
                         None => Ty::Unit,
                     };
+                    let throws = f.throws.iter().map(|t| self.resolve_type(t)).collect();
                     self.active_type_params.clear();
                     methods.insert(
                         f.name.clone(),
@@ -1062,6 +1218,7 @@ impl Checker {
                             params: p,
                             ret,
                             type_params: f.type_params.clone(),
+                            throws,
                         },
                     );
                 }
@@ -1558,7 +1715,13 @@ impl Checker {
             Some(t) => self.resolve_type(t),
             None => Ty::Unit,
         };
+        // Resolve + validate the declared throws set (type params still in scope), then make it the
+        // active discharge context for the body (M-faults 2b).
+        let throws: Vec<Ty> = f.throws.iter().map(|t| self.resolve_type(t)).collect();
+        self.validate_throws_decl(f, &throws);
         let prev_ret = std::mem::replace(&mut self.cur_ret, ret.clone());
+        let prev_throws = std::mem::replace(&mut self.cur_throws, throws);
+        let prev_main = std::mem::replace(&mut self.cur_is_main, f.name == "main");
         self.push_scope();
         for p in &f.params {
             let pty = self.resolve_type(&p.ty);
@@ -1567,6 +1730,8 @@ impl Checker {
         self.check_body(&f.body);
         self.pop_scope();
         self.cur_ret = prev_ret;
+        self.cur_throws = prev_throws;
+        self.cur_is_main = prev_main;
         self.active_type_params.clear();
         // Totality: a non-`unit` function must return (or diverge) on every path (M-RT totality
         // cluster). Run after the body walk so all signatures are visible to the divergence analysis.
@@ -1694,6 +1859,27 @@ impl Checker {
             }
             // `for (T x in iter)` always terminates over a finite list — never a divergence source.
             Stmt::Expr(e, _) => self.expr_is_never(e),
+            // A `throw` always diverges (it unwinds out of the current frame; M-faults 2b).
+            Stmt::Throw { .. } => true,
+            // A `try` diverges iff control can never leave it normally: a `finally` that itself
+            // diverges forces divergence; otherwise every exit edge must diverge — the body AND
+            // every catch body. (An uncaught throw out of the body also diverges, so requiring the
+            // body to terminate is sound — if it falls through normally, so does the `try`.)
+            Stmt::Try {
+                body,
+                catches,
+                finally_block,
+                ..
+            } => {
+                if finally_block
+                    .as_ref()
+                    .is_some_and(|fb| self.block_terminates(fb))
+                {
+                    return true;
+                }
+                self.block_terminates(body)
+                    && catches.iter().all(|c| self.block_terminates(&c.body))
+            }
             _ => false,
         }
     }
@@ -1819,13 +2005,14 @@ impl Checker {
                 mutable,
                 span,
             } => {
-                // A let-initializer is the one position where `?` propagation is allowed (M-faults 2a):
-                // detect it here and type it via `check_propagate` (the unwrapped `Ok` payload), so the
-                // general `check_expr` path's `E-PROPAGATE-POSITION` only fires elsewhere.
+                // A let-initializer is the one position where Result-mode `?` propagation is allowed
+                // (M-faults 2a): detect it here and type it via `check_propagate` (the unwrapped `Ok`
+                // payload). Throws-mode `?` (a throwing call) is allowed in *any* position and tried
+                // first; it returns the call's normal type and erases the node (`try_throws_propagate`).
                 let actual = match init {
-                    crate::ast::Expr::Propagate { inner, span: psp } => {
-                        self.check_propagate(inner, *psp)
-                    }
+                    crate::ast::Expr::Propagate { inner, span: psp } => self
+                        .try_throws_propagate(inner, *psp)
+                        .unwrap_or_else(|| self.check_propagate(inner, *psp)),
                     _ => self.check_expr(init),
                 };
                 let declared = match ty {
@@ -2017,22 +2204,97 @@ impl Checker {
             Stmt::Expr(e, _) => {
                 self.check_expr(e);
             }
-            // M-faults 2b.1: structural type-checking only (check the thrown expr, the try body,
-            // each catch body with its binding in scope, and finally). `throws`-set enforcement,
-            // the `<: Error` rule, catch coverage, W-CATCH-UNREACHABLE, and try-totality land in
-            // Task 2b.3 — layered on top of this recursion.
-            Stmt::Throw { value, .. } => {
-                self.check_expr(value);
+            // M-faults 2b.3: `throw e` — the value must implement `Error` (`E-THROW-TYPE`), and the
+            // exception must be *discharged* in context: caught by an enclosing `try` or declared in
+            // the enclosing `throws` (`E-THROW-UNDECLARED`, or `E-UNCAUGHT-THROW` inside `main`).
+            Stmt::Throw { value, span } => {
+                let e = self.check_expr(value);
+                if matches!(e, Ty::Error) {
+                    // poison — an earlier error already reported
+                } else if !self.is_error_type(&e) {
+                    self.err_coded(
+                        *span,
+                        format!(
+                            "can only `throw` a value whose type implements `Error`, found `{e}`"
+                        ),
+                        "E-THROW-TYPE",
+                        Some("define the thrown type as `class Foo implements Error { … }`".into()),
+                    );
+                } else if !self.covered_by_try(&e) && !self.throws_declared(&e) {
+                    if self.cur_is_main {
+                        self.err_coded(
+                            *span,
+                            format!("`{e}` thrown in `main` escapes the program entry point"),
+                            "E-UNCAUGHT-THROW",
+                            Some("wrap it in `try { … } catch (… e) { … }` — `main` may not let an exception escape".into()),
+                        );
+                    } else {
+                        self.err_coded(
+                            *span,
+                            format!("`{e}` is thrown here but neither caught nor declared"),
+                            "E-THROW-UNDECLARED",
+                            Some(format!("add `throws {e}` to the enclosing function, or wrap this in `try`/`catch`")),
+                        );
+                    }
+                }
             }
+            // M-faults 2b.3: a `try` — validate each catch type (`<: Error`, flag a shadowed clause
+            // `W-CATCH-UNREACHABLE`), check the body with the catch set active so a throw inside is
+            // discharged, then each catch body with its binding in scope, then `finally`.
             Stmt::Try {
                 body,
                 catches,
                 finally_block,
                 ..
             } => {
-                self.check_block(body);
+                // Resolve + validate catch types, building the active frame and the per-clause
+                // binding types. A union catch `(A | B e)` contributes both members to the frame.
+                let mut frame: Vec<Ty> = Vec::new();
+                let mut seen: Vec<Ty> = Vec::new();
+                let mut clause_tys: Vec<Ty> = Vec::with_capacity(catches.len());
                 for c in catches {
                     let cty = self.resolve_type(&c.ty);
+                    let members: Vec<Ty> = match &cty {
+                        Ty::Union(ms) => ms.clone(),
+                        other => vec![other.clone()],
+                    };
+                    for m in &members {
+                        if !self.is_error_type(m) {
+                            self.err_coded(
+                                c.span,
+                                format!("a `catch` type must implement `Error`, found `{m}`"),
+                                "E-CATCH-TYPE",
+                                Some("catch a type defined `class Foo implements Error { … }` (or the `Error` base itself)".into()),
+                            );
+                        }
+                    }
+                    // A clause every member of which is already covered by an earlier clause can
+                    // never run (PHP is silent here; Phorge lints — see the totality cluster).
+                    if !members.is_empty()
+                        && members
+                            .iter()
+                            .all(|m| seen.iter().any(|s| self.ty_assignable(m, s)))
+                    {
+                        self.warn_coded(
+                            c.span,
+                            "unreachable `catch`: an earlier clause already catches this type",
+                            "W-CATCH-UNREACHABLE",
+                            Some(
+                                "remove it, or reorder so the more specific clause comes first"
+                                    .into(),
+                            ),
+                        );
+                    }
+                    seen.extend(members.iter().cloned());
+                    frame.extend(members.iter().cloned());
+                    clause_tys.push(cty);
+                }
+                // The catch set covers throws inside the *body* only (a throw in a catch/finally is
+                // not caught by the same `try`): push for the body, pop before the clauses.
+                self.try_catch_stack.push(frame);
+                self.check_block(body);
+                self.try_catch_stack.pop();
+                for (c, cty) in catches.iter().zip(clause_tys) {
                     self.push_scope();
                     self.declare(&c.name, cty, c.span);
                     self.check_block(&c.body);
@@ -2132,18 +2394,21 @@ impl Checker {
                 span,
             } => self.check_index(object, index, *span), // Task 5
             Expr::Force { inner, span } => self.check_force(inner, *span),
-            // A `?` reaching the general expression path is *not* in a let-initializer (the only
-            // allowed position this slice — see `check_propagate`): flag it, but still check the inner
-            // and return `Ty::Error` to avoid a cascade (M-faults 2a).
-            Expr::Propagate { inner, span } => {
-                self.check_expr(inner);
-                self.err_coded(
-                    *span,
-                    "`?` propagation is only allowed as the whole initializer of a `var`/typed binding",
-                    "E-PROPAGATE-POSITION",
-                    Some("bind the call's result to a local first (`var r = f(); …`), then handle it".into()),
-                )
-            }
+            // A `?` in general expression position. Throws-mode `?` (a throwing call) is valid here
+            // and returns the call's normal type (M-faults 2b). Result-mode `?` is *not* — it is
+            // restricted to a let-initializer (the one position with a clean PHP hoist; M-faults 2a):
+            // flag it, but still check the inner to avoid a cascade.
+            Expr::Propagate { inner, span } => self.try_throws_propagate(inner, *span).unwrap_or_else(
+                || {
+                    self.check_expr(inner);
+                    self.err_coded(
+                        *span,
+                        "Result-mode `?` propagation is only allowed as the whole initializer of a `var`/typed binding",
+                        "E-PROPAGATE-POSITION",
+                        Some("bind the call's result to a local first (`var r = f(); …`), then handle it".into()),
+                    )
+                },
+            ),
             Expr::CloneWith {
                 object,
                 fields,
@@ -2604,6 +2869,12 @@ impl Checker {
         let param_tys: Vec<Ty> = params.iter().map(|p| self.resolve_type(&p.ty)).collect();
         // Save and replace the current return type (a lambda has its own return scope).
         let saved_ret = std::mem::replace(&mut self.cur_ret, Ty::Error);
+        // A lambda is a separate callable: it declares no `throws`, and it does not see the lexical
+        // `try` it is written inside (it may be invoked elsewhere — e.g. passed to a native). So a
+        // `throw` in its body discharges against an empty context (M-faults 2b).
+        let saved_throws = std::mem::take(&mut self.cur_throws);
+        let saved_try = std::mem::take(&mut self.try_catch_stack);
+        let saved_main = std::mem::replace(&mut self.cur_is_main, false);
         self.push_scope();
         for p in params {
             let pty = self.resolve_type(&p.ty);
@@ -2642,6 +2913,9 @@ impl Checker {
         };
         self.pop_scope();
         self.cur_ret = saved_ret;
+        self.cur_throws = saved_throws;
+        self.try_catch_stack = saved_try;
+        self.cur_is_main = saved_main;
         Ty::Function(param_tys, Box::new(ret_ty))
     }
 
@@ -2726,11 +3000,20 @@ impl Checker {
     /// `name(args)` — a free function, enum-variant constructor (Task 5), or class
     /// constructor (Task 6). Free-function case here.
     fn check_named_call(&mut self, name: &str, args: &[crate::ast::Expr], span: Span) -> Ty {
+        // Consume the throws-mode `?` suppression flag up front (a throwing call under `?` propagates
+        // instead of discharging locally). Taken before the variant/ctor probe so it cannot leak —
+        // the flag is only ever set for a free throwing function (`free_call_throws`), never a ctor.
+        let skip_throws = std::mem::take(&mut self.skip_throws_discharge);
         if let Some(t) = self.try_variant_or_class_call(name, args, span) {
             return t;
         }
         let sig = match self.funcs.get(name) {
-            Some(s) => (s.params.clone(), s.ret.clone(), s.type_params.clone()),
+            Some(s) => (
+                s.params.clone(),
+                s.ret.clone(),
+                s.type_params.clone(),
+                s.throws.clone(),
+            ),
             None => {
                 for a in args {
                     self.check_expr(a);
@@ -2738,12 +3021,36 @@ impl Checker {
                 return self.err(span, format!("unknown function `{name}`"));
             }
         };
+        // Discharge each checked exception the callee declares: a bare call must catch it in an
+        // enclosing `try` (M-faults 2b); the propagate (`?`) path was handled by the suppression flag.
+        if !skip_throws {
+            for e in &sig.3 {
+                self.discharge_call_throw(name, e, span);
+            }
+        }
         if sig.2.is_empty() {
             self.check_args(name, &sig.0, args, span);
             sig.1
         } else {
             self.check_generic_call(name, &sig.0, &sig.1, args, span)
         }
+    }
+
+    /// Discharge one checked exception `e` a called function `name` may throw at a *bare* (non-`?`)
+    /// call site: it must be caught by an enclosing `try`, else `E-CALL-UNHANDLED`. Propagation is
+    /// the `?` path ([`Self::try_throws_propagate`]) — a bare call may not silently propagate.
+    fn discharge_call_throw(&mut self, name: &str, e: &Ty, span: Span) {
+        if self.covered_by_try(e) {
+            return;
+        }
+        self.err_coded(
+            span,
+            format!("call to `{name}` can throw `{e}`, which is not handled here"),
+            "E-CALL-UNHANDLED",
+            Some(format!(
+                "wrap the call in `try {{ … }} catch ({e} e) {{ … }}`, or propagate it with `?` and declare `throws {e}`"
+            )),
+        );
     }
 
     /// Check a call to a *generic* function (M-RT S7). Unifies each declared parameter type (which
@@ -4579,9 +4886,15 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                 inner: Box::new(rexpr(*inner, h)),
                 span,
             },
-            Expr::Propagate { inner, span } => Expr::Propagate {
-                inner: Box::new(rexpr(*inner, h)),
-                span,
+            // A throws-mode `?` was recorded for erasure (its `Span.start` is in `h`, mapping to the
+            // inner call): unwrap it to the bare call — the call's own throw unwinds, so no backend
+            // ever sees a throws-mode `Propagate`. A Result-mode `?` is absent from `h` and kept.
+            Expr::Propagate { inner, span } => match h.get(&span.start) {
+                Some(r) => rexpr(r.clone(), h),
+                None => Expr::Propagate {
+                    inner: Box::new(rexpr(*inner, h)),
+                    span,
+                },
             },
             Expr::Match {
                 scrutinee,
@@ -5972,6 +6285,264 @@ mod tests {
             bad.iter().any(|d| d.code == Some("E-PROPAGATE-CONTEXT")),
             "expected E-PROPAGATE-CONTEXT, got {bad:?}"
         );
+    }
+
+    // --- M-faults Slice 2b: checked exceptions (throws / throw / try-catch enforcement) ---
+
+    const ERRDEF: &str =
+        "class BadInput implements Error { constructor(public string message) {} } \
+         class NotFound implements Error { constructor(public string message) {} }";
+
+    #[test]
+    fn throw_undeclared_and_uncaught_is_error() {
+        // A helper that throws but neither declares `throws` nor wraps it in a `try`.
+        let bad = errors_of(&format!(
+            "{ERRDEF} function f() {{ throw BadInput(\"x\"); }} function main() {{}}"
+        ));
+        assert!(
+            bad.iter().any(|d| d.code == Some("E-THROW-UNDECLARED")),
+            "expected E-THROW-UNDECLARED, got {bad:?}"
+        );
+    }
+
+    #[test]
+    fn throw_declared_then_caught_at_call_is_clean() {
+        // `f` declares `throws BadInput` (discharges its own throw); `main` calls it inside a `try`
+        // catching `BadInput` (discharges the call). Both sides handled — clean.
+        let ok = errors_of(&format!(
+            "{ERRDEF} function f() throws BadInput {{ throw BadInput(\"x\"); }} \
+             function main() {{ try {{ f(); }} catch (BadInput e) {{}} }}"
+        ));
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn throw_in_main_is_uncaught() {
+        let bad = errors_of(&format!(
+            "{ERRDEF} function main() {{ throw BadInput(\"x\"); }}"
+        ));
+        assert!(
+            bad.iter().any(|d| d.code == Some("E-UNCAUGHT-THROW")),
+            "expected E-UNCAUGHT-THROW, got {bad:?}"
+        );
+    }
+
+    #[test]
+    fn main_may_not_declare_throws() {
+        let bad = errors_of(&format!(
+            "{ERRDEF} function main() throws BadInput {{ throw BadInput(\"x\"); }}"
+        ));
+        assert!(
+            bad.iter().any(|d| d.code == Some("E-UNCAUGHT-THROW")),
+            "expected E-UNCAUGHT-THROW, got {bad:?}"
+        );
+    }
+
+    #[test]
+    fn throws_error_root_is_too_broad() {
+        let bad = errors_of(&format!(
+            "{ERRDEF} function f() throws Error {{ throw BadInput(\"x\"); }} \
+             function main() {{ try {{ f(); }} catch (Error e) {{}} }}"
+        ));
+        assert!(
+            bad.iter().any(|d| d.code == Some("E-THROWS-TOO-BROAD")),
+            "expected E-THROWS-TOO-BROAD, got {bad:?}"
+        );
+    }
+
+    #[test]
+    fn throw_non_error_value_is_type_error() {
+        let bad = errors_of("function main() { throw 42; }");
+        assert!(
+            bad.iter().any(|d| d.code == Some("E-THROW-TYPE")),
+            "expected E-THROW-TYPE, got {bad:?}"
+        );
+    }
+
+    #[test]
+    fn bare_call_to_throwing_fn_is_unhandled() {
+        let bad = errors_of(&format!(
+            "{ERRDEF} function f() throws BadInput {{ throw BadInput(\"x\"); }} \
+             function main() {{ f(); }}"
+        ));
+        assert!(
+            bad.iter().any(|d| d.code == Some("E-CALL-UNHANDLED")),
+            "expected E-CALL-UNHANDLED, got {bad:?}"
+        );
+    }
+
+    #[test]
+    fn propagate_throws_to_declared_is_clean() {
+        // `g` propagates `f`'s `BadInput` with `?` and declares it — clean; `main` catches the call.
+        let ok = errors_of(&format!(
+            "{ERRDEF} function f() throws BadInput {{ throw BadInput(\"x\"); }} \
+             function g() throws BadInput {{ f()?; }} \
+             function main() {{ try {{ g(); }} catch (BadInput e) {{}} }}"
+        ));
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn propagate_throws_without_declaration_is_unhandled() {
+        // `g` uses `?` but does not declare `throws BadInput` — the propagation is unhandled.
+        let bad = errors_of(&format!(
+            "{ERRDEF} function f() throws BadInput {{ throw BadInput(\"x\"); }} \
+             function g() {{ f()?; }} function main() {{}}"
+        ));
+        assert!(
+            bad.iter().any(|d| d.code == Some("E-CALL-UNHANDLED")),
+            "expected E-CALL-UNHANDLED, got {bad:?}"
+        );
+    }
+
+    #[test]
+    fn catch_non_error_type_is_error() {
+        let bad = errors_of(&format!(
+            "{ERRDEF} function main() {{ try {{}} catch (int e) {{}} }}"
+        ));
+        assert!(
+            bad.iter().any(|d| d.code == Some("E-CATCH-TYPE")),
+            "expected E-CATCH-TYPE, got {bad:?}"
+        );
+    }
+
+    #[test]
+    fn shadowed_catch_clause_warns() {
+        // A second `catch (BadInput …)` after the first can never run — a non-fatal lint.
+        let warns = warnings_of(&format!(
+            "{ERRDEF} function f() throws BadInput {{ throw BadInput(\"x\"); }} \
+             function main() {{ try {{ f(); }} catch (BadInput e) {{}} catch (BadInput e2) {{}} }}"
+        ));
+        assert!(
+            warns.iter().any(|d| d.code == Some("W-CATCH-UNREACHABLE")),
+            "expected W-CATCH-UNREACHABLE, got {warns:?}"
+        );
+    }
+
+    #[test]
+    fn union_catch_covers_each_member() {
+        // `catch (BadInput | NotFound e)` discharges a call that throws `BadInput` (a member).
+        let ok = errors_of(&format!(
+            "{ERRDEF} function f() throws BadInput {{ throw BadInput(\"x\"); }} \
+             function main() {{ try {{ f(); }} catch (BadInput | NotFound e) {{}} }}"
+        ));
+        assert!(ok.is_empty(), "expected clean, got {ok:?}");
+    }
+
+    #[test]
+    fn try_with_returning_arms_satisfies_totality() {
+        // A `-> int` fn whose `try` body and `catch` both return diverges on every path — total.
+        let ok = errors_of(&format!(
+            "{ERRDEF} function g() -> int {{ try {{ return 1; }} catch (BadInput e) {{ return 0; }} }} \
+             function main() {{}}"
+        ));
+        assert!(ok.is_empty(), "expected clean (try totality), got {ok:?}");
+    }
+
+    #[test]
+    fn try_falling_through_misses_return() {
+        // Both arms fall through, so the `-> int` fn does not return on all paths.
+        let bad = errors_of(&format!(
+            "{ERRDEF} function g() -> int {{ try {{}} catch (BadInput e) {{}} }} function main() {{}}"
+        ));
+        assert!(
+            bad.iter().any(|d| d.code == Some("E-MISSING-RETURN")),
+            "expected E-MISSING-RETURN, got {bad:?}"
+        );
+    }
+
+    #[test]
+    fn throw_tail_satisfies_totality() {
+        // A `throw` diverges, so a `-> int` fn whose only statement is a `throw` is total.
+        let ok = errors_of(&format!(
+            "{ERRDEF} function g() -> int throws BadInput {{ throw BadInput(\"x\"); }} \
+             function main() {{ try {{ var n = g(); }} catch (BadInput e) {{}} }}"
+        ));
+        assert!(ok.is_empty(), "expected clean (throw diverges), got {ok:?}");
+    }
+
+    #[test]
+    fn throws_mode_propagate_is_recorded_for_erasure() {
+        // A throws-mode `?` is a checker-only marker: it must be recorded (mapped to the bare call)
+        // so `resolve_html` erases the `Propagate` node before any backend sees it.
+        let p = prog(&format!(
+            "{ERRDEF} function f() throws BadInput {{ throw BadInput(\"x\"); }} \
+             function g() throws BadInput {{ f()?; }} function main() {{}}"
+        ));
+        let (_warns, subst) = check_resolutions(&p).expect("checks clean");
+        assert_eq!(
+            subst.len(),
+            1,
+            "exactly one throws-? recorded, got {subst:?}"
+        );
+        assert!(
+            matches!(subst.values().next(), Some(crate::ast::Expr::Call { .. })),
+            "the erased `?` must map to the bare call, got {subst:?}"
+        );
+        // And the substitution actually removes the `Propagate` node.
+        let expanded = resolve_html(p, &subst);
+        assert!(
+            !program_has_propagate(&expanded),
+            "throws-mode `?` Propagate node was not erased"
+        );
+    }
+
+    /// Recursively scan a checked program for any surviving `Expr::Propagate` node (test helper for
+    /// the throws-`?` erasure invariant).
+    fn program_has_propagate(p: &Program) -> bool {
+        use crate::ast::{ClassMember, Expr, Item, LambdaBody, Stmt};
+        fn in_expr(e: &Expr) -> bool {
+            match e {
+                Expr::Propagate { .. } => true,
+                Expr::Unary { expr, .. } | Expr::Force { inner: expr, .. } => in_expr(expr),
+                Expr::Binary { lhs, rhs, .. } => in_expr(lhs) || in_expr(rhs),
+                Expr::Call { callee, args, .. } => in_expr(callee) || args.iter().any(in_expr),
+                Expr::Member { object, .. } => in_expr(object),
+                Expr::Index { object, index, .. } => in_expr(object) || in_expr(index),
+                Expr::List(items, _) => items.iter().any(in_expr),
+                Expr::Match {
+                    scrutinee, arms, ..
+                } => in_expr(scrutinee) || arms.iter().any(|a| in_expr(&a.body)),
+                Expr::Lambda { body, .. } => match body {
+                    LambdaBody::Expr(e) => in_expr(e),
+                    LambdaBody::Block(b) => b.iter().any(in_stmt),
+                },
+                _ => false,
+            }
+        }
+        fn in_stmt(s: &Stmt) -> bool {
+            match s {
+                Stmt::Expr(e, _) | Stmt::Throw { value: e, .. } => in_expr(e),
+                Stmt::VarDecl { init, .. } => in_expr(init),
+                Stmt::Return { value: Some(e), .. } => in_expr(e),
+                Stmt::Block(b, _) => b.iter().any(in_stmt),
+                Stmt::Try {
+                    body,
+                    catches,
+                    finally_block,
+                    ..
+                } => {
+                    body.iter().any(in_stmt)
+                        || catches.iter().any(|c| c.body.iter().any(in_stmt))
+                        || finally_block
+                            .as_ref()
+                            .is_some_and(|fb| fb.iter().any(in_stmt))
+                }
+                _ => false,
+            }
+        }
+        fn in_fn(body: &[Stmt]) -> bool {
+            body.iter().any(in_stmt)
+        }
+        p.items.iter().any(|it| match it {
+            Item::Function(f) => in_fn(&f.body),
+            Item::Class(c) => c.members.iter().any(|m| match m {
+                ClassMember::Method(f) => in_fn(&f.body),
+                ClassMember::Constructor { body, .. } => in_fn(body),
+                _ => false,
+            }),
+            _ => false,
+        })
     }
 
     // --- M-RT S4: union types + match-over-union ---

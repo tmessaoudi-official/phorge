@@ -524,6 +524,48 @@ pub fn explain_text(code: &str) -> Option<String> {
              plain string literal — no interpolation or computed expression (yet). Use a literal, or\n\
              compute the message into a local for a future dynamic form.\n"
         }
+        "E-THROW-TYPE" => {
+            "E-THROW-TYPE — only an `Error` value may be thrown or declared.\n\n\
+             `throw e` requires `e` to be a value whose type implements the built-in `Error` marker\n\
+             (`class Foo implements Error { … }`), and a `throws T` declaration requires the same of\n\
+             `T`. You cannot throw a primitive, enum, or arbitrary object.\n"
+        }
+        "E-THROW-UNDECLARED" => {
+            "E-THROW-UNDECLARED — a thrown exception is neither caught nor declared.\n\n\
+             A checked exception must be discharged: wrap the `throw` (or the throwing call) in a\n\
+             `try { … } catch (T e) { … }`, or add `throws T` to the enclosing function so callers\n\
+             handle it. Phorge enforces this at compile time — nothing leaks silently.\n"
+        }
+        "E-CALL-UNHANDLED" => {
+            "E-CALL-UNHANDLED — a call can throw a checked exception that isn't handled.\n\n\
+             Calling a `throws T` function obliges the caller to handle `T`: catch it in an enclosing\n\
+             `try`/`catch`, or propagate it with `?` AND declare `throws T` on the enclosing function.\n\
+             A bare call may not silently let the exception escape.\n"
+        }
+        "E-UNCAUGHT-THROW" => {
+            "E-UNCAUGHT-THROW — an exception escapes `main`.\n\n\
+             `main` is the program entry point: it may not declare `throws`, and every exception it\n\
+             (or anything it calls) can raise must be caught before it escapes. Wrap the throwing code\n\
+             in a `try { … } catch (T e) { … }` inside `main`.\n"
+        }
+        "E-THROWS-TOO-BROAD" => {
+            "E-THROWS-TOO-BROAD — `throws Error` is too broad.\n\n\
+             Declare the *specific* exception type(s) a function throws (`throws BadInput`), not the\n\
+             bare `Error` root, so callers know exactly what to catch. A `catch (Error e)` is still\n\
+             allowed — catching broad is fine; declaring broad is not.\n"
+        }
+        "E-CATCH-TYPE" => {
+            "E-CATCH-TYPE — a `catch` clause names a non-`Error` type.\n\n\
+             A `catch (T e)` requires `T` (or every member of a union `catch (A | B e)`) to implement\n\
+             the built-in `Error` marker — you can only catch what can be thrown. Catching the `Error`\n\
+             base itself is allowed (it matches every exception).\n"
+        }
+        "W-CATCH-UNREACHABLE" => {
+            "W-CATCH-UNREACHABLE — a `catch` clause can never run (warning).\n\n\
+             An earlier clause in the same `try` already catches this type (it is the same as, or a\n\
+             supertype of, this one), so control never reaches it. Remove the dead clause, or reorder\n\
+             so the more specific type comes first. This is a lint — it never fails the build.\n"
+        }
         _ => return None,
     };
     Some(body.to_string())
@@ -534,7 +576,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE)"
         )
     })
 }
@@ -1464,6 +1506,23 @@ function main() { Console.println("hi"); }"#);
             "E-PROPAGATE-ERR",
             "E-RESERVED-INTRINSIC",
             "E-INTRINSIC-LITERAL",
+        ] {
+            let body = explain_text(code).unwrap_or_else(|| panic!("{code} has an explanation"));
+            assert!(body.starts_with(code), "{body}");
+        }
+    }
+
+    #[test]
+    fn explain_covers_error_model_2b_codes() {
+        // The M-faults 2b exception codes are self-documenting via `phg explain`.
+        for code in [
+            "E-THROW-TYPE",
+            "E-THROW-UNDECLARED",
+            "E-CALL-UNHANDLED",
+            "E-UNCAUGHT-THROW",
+            "E-THROWS-TOO-BROAD",
+            "E-CATCH-TYPE",
+            "W-CATCH-UNREACHABLE",
         ] {
             let body = explain_text(code).unwrap_or_else(|| panic!("{code} has an explanation"));
             assert!(body.starts_with(code), "{body}");
