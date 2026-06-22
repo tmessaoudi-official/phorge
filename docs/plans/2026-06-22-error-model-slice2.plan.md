@@ -75,7 +75,17 @@ then writing-plans.
   reuse `Op::Fault` via new data-carrying `FaultMsg` variants). Byte-identical `run≡runvm≡real PHP`;
   600 lib + PHP-oracle differential + 64 integration green; 5 new codes self-document via `phg explain`.
   `examples/guide/result.phg`. **NEXT: review checkpoint → author the detailed 2b plan (exceptions).**
-- **PHASE 2b — IN PROGRESS.** **2b.1 DONE** (`cee1f5c`): keywords + AST (`Stmt::Throw`/`Stmt::Try`/
+- **PHASE 2b — COMPLETE** (`201266a`). All seven tasks landed; `throws`/`throw`/`try`/`catch`/`finally`
+  + `?`-throws are byte-identical `run ≡ runvm ≡ real PHP` (`examples/guide/errors.phg`), exactly 3 new
+  `Op`s (`Throw`/`PushHandler`/`PopHandler`). Per-task notes below; 2c (cause-chain + imported-PHP catch
+  bridge) is the remaining slice.
+  - **2b.6 + 2b.7 DONE** (`201266a`, one batch per dev choice): transpile `throw`→PHP `throw`, `try`/
+    `catch`/`finally`→the PHP construct 1:1 (multiple clauses + union `catch (A|B $e)`; built-in `Error`
+    maps to `\Exception` via `php_catch_type`; `throws` erased; `?`-throws already erased by the checker);
+    `examples/guide/errors.phg` (throws-union, throw, multiple catch, union catch, finally, `?`-throws)
+    byte-identical on run/runvm/**real PHP 8.4**, auto-gated by the example glob; README row + CHANGELOG +
+    KNOWN_ISSUES (2b deferrals). Full suite green on the PHP-8.4 floor; clippy+fmt clean.
+- **PHASE 2b (task history) — 2b.1 DONE** (`cee1f5c`): keywords + AST (`Stmt::Throw`/`Stmt::Try`/
   `CatchClause`/`FunctionDecl.throws`) + parser + all exhaustive-match arms (structural passes real,
   semantic backends stubbed). **2b.2 DONE** (`459f080`): built-in `Error` marker interface (seeded +
   reserved) → PHP `extends \Exception`; promoted `message` untyped + `parent::__construct`; value
