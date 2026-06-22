@@ -95,10 +95,26 @@ then writing-plans.
   7 codes + the warning self-document via `phg explain`. 623 lib + full suite green on the PHP-8.4 floor;
   clippy+fmt clean. **Deferred (KNOWN_ISSUES):** method/interface-declared throws are checked *inside*
   the body but not discharged at the *call* site; `?` on a throwing *method* call (only free-fn
-  `?`-throws this slice). **NEXT: 2b.4** interpreter (`Signal::Throw` + try/catch/finally + native
-  side-channel) → 2b.5 VM (3 Ops + finally, the agreed review checkpoint) → 2b.6 transpile parity →
-  2b.7 example+docs.
-- **PHASE 2c — NOT STARTED**: `finally` + cause-chain + imported-PHP catch bridge.
+  `?`-throws this slice). Union `throws A | B` is flattened to its member set.
+- **2b.4 + 2b.5 DONE** (`b91cffc`, built as one batch per the developer's choice — checkpoint at the
+  first `run ≡ runvm` differential). Both backends run `throw`/`try`/`catch`/`finally` **byte-identical
+  (`run ≡ runvm`)**; PHP transpile is 2b.6. **3 new `Op`s** (the pinned set), each extending the three
+  coupled matches in the same commit: `Op::Throw` (-1), `Op::PushHandler(ip)` (validate bounds-checks
+  `ip`), `Op::PopHandler`. Throw signaling reuses the **`THROW_SENTINEL`** mechanism (shared in
+  `chunk.rs`) instead of a `VmError` enum — `Op::Throw` stashes the value in `pending_throw` + returns
+  the sentinel; `run`/`run_until` unwind to the nearest owned handler. **Throw-across-native falls out
+  for free** (`run_until` finds no handler inside the closure → sentinel propagates to the outer loop's
+  `try`). Interpreter `Signal::Throw` (a `Runtime` fault/panic passes through every `catch` — uncatchable
+  by design); `finally` on every exit edge; compiler `finally` codegen via a `finally_stack`
+  (return spills its value to a temp; break/continue run only the finallys nested in the target loop; the
+  thrown value is a registered local at the landing pad so catch-body locals stack above it). 6 new
+  differential cases. 623 lib + 72 differential + full suite green on the PHP-8.4 floor; clippy+fmt clean.
+  **Deferred (KNOWN_ISSUES):** throw-across-native is implemented + structurally exercised but not yet
+  *source-reachable* — a lambda can't declare `throws`, so an uncaught throw inside a closure passed to a
+  native is `E-THROW-UNDECLARED` (the runtime mechanism is future-proofing for lambda-throws); a raw
+  union catch binding can't read a common member (pre-existing S4 limitation). **NEXT: 2b.6** transpile
+  parity (`throw`/`try`/`catch`/`finally` → PHP exceptions; full 3-way oracle) → 2b.7 example+docs.
+- **PHASE 2c — NOT STARTED**: cause-chain + imported-PHP catch bridge (`finally` moved into 2b).
 
 ## Decisions Log (execution refinements)
 - [2026-06-22] AGREED (during 2a execution): **`?`-on-Result is restricted to a let-initializer
