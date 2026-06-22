@@ -6,6 +6,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — error model Slice 2c: exception cause chains (M-faults)
+
+Closes the M-faults exception tier. A conventional **`cause` field of type `Error?`** on an `Error`
+subtype preserves the lower-level error that triggered a higher-level one. On transpile it is routed
+into PHP's native exception chain — `parent::__construct($message, 0, $cause)` — so the generated PHP
+reports an idiomatic "caused by" via `getPrevious()`, while the Phorge backends read it back as an
+ordinary field. Byte-identical `run ≡ runvm ≡ real PHP` (`examples/guide/cause-chain.phg`);
+**transpiler-only — no new `Op`, no backend or checker change** (a `cause` field already round-tripped
+as a plain field; 2c adds the native-chain routing + a `?\Throwable` property type so the `Error` marker
+is not mistaken for PHP's unrelated engine `Error` class). Recognition is gated on field name + marker
+type, so a mis-typed or non-`Error` `cause` stays a plain field. The remaining interop pieces — reading
+a *foreign* exception's cause via `getPrevious()` and catching PHP-thrown exceptions — fold into PHP
+interop (M8.5), which does not exist yet.
+
 ### Added — error model Slice 2b: checked exceptions (`throws`/`throw`/`try`/`catch`/`finally`) (M-faults)
 
 The enforced exception tier of the three-tier error model. Byte-identical `run ≡ runvm ≡ real PHP`

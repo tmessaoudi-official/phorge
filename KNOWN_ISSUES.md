@@ -16,7 +16,10 @@ not a panic:
   names are backend-synthesized, not in the loader's function→file map; free functions + `main` get
   full `file:line`. (3) Frame lines are statement-granularity, so a fault inside a multi-line
   expression may report the statement's start line. (4) Trace text is intentionally uncolored
-  (matches Phorge's plain-diagnostic convention). (5) No "cause chain" (needs the slice-2 error model).
+  (matches Phorge's plain-diagnostic convention). (5) Stack traces do not yet print a "caused by"
+  cause chain — the *data* exists (M-faults 2c: a `cause` field is preserved and, on transpile, populates
+  PHP's native `$previous`), but the Phorge fault renderer does not walk it; folding the cause chain into
+  the trace output is a later refinement.
 
 - **Declaration visibility** (`public`/`internal`/`private`) ships for top-level declarations, but a
   few related cases are deliberately deferred: a visibility keyword **on a `type` alias**
@@ -134,7 +137,14 @@ Checked exceptions — `throws`/`throw`/`try`/`catch`/`finally` and `?`-throws �
   follow-ups; free-function `throws` is fully enforced.
 - **`finally` cannot return a value** (a `return` inside `finally` overriding the try's value is
   unsupported) — a deliberate non-goal (PHP allows it but it is a well-known footgun).
-- **Cause-chains and catching PHP-thrown exceptions across the interop boundary** are Slice 2c.
+- **Cause-chains ship in Slice 2c** (`examples/guide/cause-chain.phg`): a conventional `cause` field of
+  type `Error?` on an `Error` subtype is routed into PHP's native exception chain
+  (`parent::__construct($message, 0, $cause)` → `getPrevious()`); the Phorge backends read it back as a
+  plain field, byte-identical `run ≡ runvm ≡ real PHP`. Two deliberate deferrals remain: **reading a
+  cause through PHP's `getPrevious()` accessor** (a `.cause()` method form, as opposed to the field read)
+  is only meaningful for a *foreign* PHP exception, so it folds into **PHP interop (M8.5)**; and
+  **catching PHP-thrown exceptions across the interop boundary** likewise lands with M8.5 (Phorge has no
+  PHP-import mechanism yet, so the bridge has nothing to bridge today).
 
 ## Totality cluster (M-RT) — deferred refinements
 

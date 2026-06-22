@@ -80,6 +80,19 @@ fn exception_reserved(name: &str) -> bool {
     matches!(name, "message" | "code" | "file" | "line" | "previous")
 }
 
+/// Whether `ty` is the built-in marker `Error` (bare `Error` or optional `Error?`). Used by M-faults
+/// 2c to recognize a conventional `cause` field whose value feeds PHP's native exception chain. A
+/// type literally named `Error` in PHP would resolve to the unrelated *engine* `Error` class, so an
+/// `Error`-typed cause must be emitted as `?\Throwable` (the type of `\Exception::$previous`), which
+/// accepts every Phorge `Error` (each transpiles to `extends \Exception`).
+fn is_error_marker_type(ty: &Type) -> bool {
+    match ty {
+        Type::Named { name, .. } => last_segment(name) == "Error",
+        Type::Optional { inner, .. } => is_error_marker_type(inner),
+        _ => false,
+    }
+}
+
 /// A type *reference* in PHP: a mangled (`\`-bearing) cross-package name becomes an absolute FQN
 /// (leading `\`, so it resolves regardless of the surrounding `namespace` block — uniform with
 /// function de-mangling, no `use`); a bare same-/`Main`-namespace name stays bare (M-RT cross-package
@@ -628,6 +641,16 @@ impl Transpiler {
                     }
                 }
                 ClassMember::Constructor { params, body, .. } => {
+                    // M-faults 2c: a promoted `cause` param of marker-`Error` type on an Error subtype
+                    // feeds PHP's native exception chain (`$previous`) — recognized by name + type so a
+                    // mis-typed `cause` stays a plain field. Emitted as `?\Throwable` (the `$previous`
+                    // type), not the engine `Error` class.
+                    let is_cause = |p: &CtorParam| {
+                        is_error
+                            && !vis(&p.modifiers).is_empty()
+                            && p.name == "cause"
+                            && is_error_marker_type(&p.ty)
+                    };
                     let ps: Vec<String> = params
                         .iter()
                         .map(|p| {
@@ -636,7 +659,9 @@ impl Transpiler {
                             // emitted untyped (PHP rejects a typed redeclaration); a plain param keeps
                             // its type (it is not a property).
                             let untyped = is_error && !v.is_empty() && exception_reserved(&p.name);
-                            if v.is_empty() {
+                            if is_cause(p) {
+                                format!("{v} ?\\Throwable ${}", p.name)
+                            } else if v.is_empty() {
                                 format!("{} ${}", Self::emit_type(&p.ty), p.name)
                             } else if untyped {
                                 format!("{} ${}", v, p.name)
@@ -645,13 +670,23 @@ impl Transpiler {
                             }
                         })
                         .collect();
-                    // For an Error subtype carrying a `message`, feed \Exception's own message store via
-                    // `parent::__construct($message)` so native `getMessage()` works (interop + 2c).
-                    let parent_call = is_error
+                    // For an Error subtype, feed \Exception's own stores via `parent::__construct`:
+                    // `$message` (so native `getMessage()` works) and, when a conventional `cause` is
+                    // promoted, `$cause` as the 3rd `$previous` arg (so `getPrevious()` reports the
+                    // cause chain idiomatically — interop + the 2c bridge). `$code` is 0 (Phorge has no
+                    // exception-code surface). Either, both, or neither may be present.
+                    let has_message = is_error
                         && params
                             .iter()
                             .any(|p| !vis(&p.modifiers).is_empty() && p.name == "message");
-                    if body.is_empty() && !parent_call {
+                    let has_cause = params.iter().any(is_cause);
+                    let parent_args = match (has_message, has_cause) {
+                        (true, true) => Some("$message, 0, $cause"),
+                        (false, true) => Some("\"\", 0, $cause"),
+                        (true, false) => Some("$message"),
+                        (false, false) => None,
+                    };
+                    if body.is_empty() && parent_args.is_none() {
                         self.line(&format!("function __construct({}) {{}}", ps.join(", ")));
                     } else {
                         self.line(&format!("function __construct({}) {{", ps.join(", ")));
@@ -660,8 +695,8 @@ impl Transpiler {
                         for p in params {
                             self.declare(&p.name);
                         }
-                        if parent_call {
-                            self.line("parent::__construct($message);");
+                        if let Some(args) = parent_args {
+                            self.line(&format!("parent::__construct({args});"));
                         }
                         for s in body {
                             self.emit_stmt(s)?;
@@ -1790,6 +1825,28 @@ mod tests {
         assert!(
             !out.contains("clone($"),
             "no native two-arg `clone($o, …)` (PHP 8.5+ only):\n{out}"
+        );
+    }
+
+    #[test]
+    fn error_cause_routed_to_php_previous_chain() {
+        // M-faults 2c: a conventional `cause` field of optional-`Error` type on an `Error` subtype is
+        // routed into PHP's native exception chain via `parent::__construct($message, 0, $cause)`, so
+        // the transpiled PHP reports an idiomatic "caused by" through `getPrevious()` too. The cause
+        // property is typed `?\Throwable` (PHP's `$previous` type) — NOT the unrelated engine `Error`
+        // class (which `Error` would otherwise resolve to) nor a lossy `mixed`.
+        let out = php(
+            "class IoError implements Error { constructor(public string message) {} } \
+             class ConfigError implements Error { \
+               constructor(public string message, public Error? cause) {} }",
+        );
+        assert!(
+            out.contains("parent::__construct($message, 0, $cause);"),
+            "cause routed to native previous chain:\n{out}"
+        );
+        assert!(
+            out.contains("?\\Throwable $cause"),
+            "cause typed as ?\\Throwable (not engine Error / mixed):\n{out}"
         );
     }
 

@@ -1,0 +1,41 @@
+package main;
+
+import Core.Console;
+
+// M-faults Slice 2c — exception cause chains. A higher-level error can carry the lower-level error
+// that triggered it, so context is preserved instead of lost. A conventional `cause` field of type
+// `Error?` on an `Error` subtype is routed into PHP's native exception chain
+// (`parent::__construct($message, 0, $cause)`), so the transpiled PHP reports an idiomatic
+// "caused by" via `getPrevious()` too — while the Phorge backends read it back as a plain field.
+
+class IoError implements Error {
+  constructor(public string message) {}
+}
+
+class ConfigError implements Error {
+  constructor(public string message, public Error? cause) {}
+}
+
+// Simulate a low-level failure, then wrap it in a higher-level error that preserves the cause.
+function readConfig() -> int throws ConfigError {
+  try {
+    throw IoError("disk offline");
+  } catch (IoError e) {
+    throw ConfigError("could not load config", e);
+  }
+}
+
+function main() {
+  try {
+    var n = readConfig();
+    Console.println("loaded {n}");
+  } catch (ConfigError e) {
+    Console.println("error: {e.message}");
+    // `e.cause` is `Error?`; narrow it with an if-let, then `instanceof` to read the concrete cause.
+    if (var c = e.cause) {
+      if (c instanceof IoError) {
+        Console.println("  caused by: {c.message}");
+      }
+    }
+  }
+}

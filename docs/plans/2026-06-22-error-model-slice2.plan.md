@@ -124,7 +124,22 @@ then writing-plans.
   native is `E-THROW-UNDECLARED` (the runtime mechanism is future-proofing for lambda-throws); a raw
   union catch binding can't read a common member (pre-existing S4 limitation). **NEXT: 2b.6** transpile
   parity (`throw`/`try`/`catch`/`finally` → PHP exceptions; full 3-way oracle) → 2b.7 example+docs.
-- **PHASE 2c — NOT STARTED**: cause-chain + imported-PHP catch bridge (`finally` moved into 2b).
+- **PHASE 2c — COMPLETE** (cause-chain). **Transpiler-only — no new `Op`, no backend/checker change.**
+  A conventional `cause` field of marker-`Error` type (`Error`/`Error?`) on an `Error` subtype is routed
+  into PHP's native exception chain via `parent::__construct($message, 0, $cause)` (code `0` — Phorge has
+  no exception-code surface), so the transpiled PHP reports a "caused by" through `getPrevious()`; the
+  Phorge backends read the cause back as the plain promoted `$cause` property, so it was already
+  byte-identical (`run ≡ runvm`) before this slice — 2c adds the native-chain routing for idiomatic PHP +
+  M8.5-interop readiness, plus a `?\Throwable` property type (a type literally named `Error` would
+  otherwise resolve to PHP's unrelated *engine* `Error` class). Recognition is gated on field **name**
+  (`cause`) + **marker type** (`is_error_marker_type`), so a mis-typed or non-`Error` `cause` stays a
+  plain field (no surprise divergence). `examples/guide/cause-chain.phg` byte-identical
+  `run ≡ runvm ≡ real PHP 8.4`, auto-gated by the example glob; new transpile unit test
+  `error_cause_routed_to_php_previous_chain`. 624 lib + 72 differential + full suite green on the PHP-8.4
+  floor; clippy + fmt clean. **Deferred (KNOWN_ISSUES → M8.5 interop):** reading a *foreign* PHP
+  exception's cause via a `.cause()`/`getPrevious()` accessor (only meaningful once PHP code can be
+  imported), and catching PHP-thrown exceptions across the interop boundary (no PHP-import mechanism
+  exists today). **M-faults exception tier (2a + 2b + 2c) is now CLOSED.**
 
 ## Decisions Log (execution refinements)
 - [2026-06-22] AGREED (during 2a execution): **`?`-on-Result is restricted to a let-initializer
