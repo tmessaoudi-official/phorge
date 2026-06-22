@@ -201,6 +201,31 @@ fn p2_programs_match_between_backends() {
     }
 }
 
+/// M-RT S6a — single inheritance: an inherited method, an overridden method (via a subclass ref),
+/// and dynamic dispatch (via a superclass-typed ref holding the subclass) all resolve identically on
+/// `run` and `runvm`. The interpreter walks the parent chain; the compiler pre-flattens the same
+/// lookup into the VM's method table.
+#[test]
+fn s6_inheritance_dispatch_is_byte_identical() {
+    agree(
+        r#"import Core.Console;
+open class Animal {
+    function speak() -> string { return "..."; }
+    open function kind() -> string { return "animal"; }
+}
+class Dog extends Animal {
+    function kind() -> string { return "dog"; }
+}
+function main() {
+    Dog d = Dog();
+    Console.println(d.speak());
+    Console.println(d.kind());
+    Animal a = d;
+    Console.println(a.kind());
+}"#,
+    );
+}
+
 /// M3 S0.2 — `var` local type inference is a front-end-only feature (type erased after checking),
 /// so both backends must run a `var` program byte-identically.
 #[test]

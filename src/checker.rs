@@ -708,6 +708,76 @@ impl Checker {
         // before interface-conformance below — so an inherited method can satisfy an interface.
         self.inherit_class_members(program);
 
+        // M-RT S6: a method that overrides an ancestor's method requires that ancestor's method to be
+        // `open` (final-by-default), else `E-OVERRIDE-FINAL`. (Signature-variance checking on override
+        // is deferred — see KNOWN_ISSUES.) `method_open[(class, name)]` is true if the class declares
+        // that name with at least one `open` overload.
+        let mut method_open: std::collections::HashMap<(String, String), bool> =
+            std::collections::HashMap::new();
+        let parents_map: std::collections::HashMap<&str, &[String]> = program
+            .items
+            .iter()
+            .filter_map(|it| match it {
+                Item::Class(c) => Some((c.name.as_str(), c.extends.as_slice())),
+                _ => None,
+            })
+            .collect();
+        for item in &program.items {
+            if let Item::Class(c) = item {
+                for m in &c.members {
+                    if let crate::ast::ClassMember::Method(f) = m {
+                        let is_open = f.modifiers.contains(&crate::ast::Modifier::Open);
+                        method_open
+                            .entry((c.name.clone(), f.name.clone()))
+                            .and_modify(|v| *v = *v || is_open)
+                            .or_insert(is_open);
+                    }
+                }
+            }
+        }
+        for item in &program.items {
+            if let Item::Class(c) = item {
+                let mut checked: std::collections::BTreeSet<&str> =
+                    std::collections::BTreeSet::new();
+                for m in &c.members {
+                    let crate::ast::ClassMember::Method(f) = m else {
+                        continue;
+                    };
+                    if !checked.insert(f.name.as_str()) {
+                        continue; // one diagnostic per overridden name
+                    }
+                    // Nearest ancestor (first-parent chain this slice) that declares this name.
+                    let mut cur = c.extends.first().cloned();
+                    let mut seen = std::collections::HashSet::new();
+                    while let Some(anc) = cur {
+                        if !seen.insert(anc.clone()) {
+                            break;
+                        }
+                        if let Some(&open) = method_open.get(&(anc.clone(), f.name.clone())) {
+                            if !open {
+                                self.err_coded(
+                                    f.span,
+                                    format!(
+                                        "method `{}` overrides `{anc}`'s `{}`, which is not `open`",
+                                        f.name, f.name
+                                    ),
+                                    "E-OVERRIDE-FINAL",
+                                    Some(format!(
+                                        "mark it `open function {}(…)` on `{anc}` to allow overriding",
+                                        f.name
+                                    )),
+                                );
+                            }
+                            break; // the nearest declaration decides
+                        }
+                        cur = parents_map
+                            .get(anc.as_str())
+                            .and_then(|ps| ps.first().cloned());
+                    }
+                }
+            }
+        }
+
         // `extends` targets must be interfaces; detect cycles.
         for item in &program.items {
             if let Item::Interface(i) = item {
@@ -6318,6 +6388,29 @@ mod tests {
             errs.iter().any(|e| e.code == Some("E-MI-CYCLE")),
             "got {errs:?}"
         );
+    }
+
+    #[test]
+    fn overriding_a_final_method_errors() {
+        // S6a.4: Animal.kind is final-by-default; Dog redefining it is E-OVERRIDE-FINAL.
+        let errs = errors_of(
+            "open class Animal { function kind() -> string { return \"a\"; } } \
+             class Dog extends Animal { function kind() -> string { return \"d\"; } }",
+        );
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-OVERRIDE-FINAL")),
+            "got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn overriding_an_open_method_is_allowed() {
+        // S6a.4: marking the parent method `open` permits the override.
+        let errs = errors_of(
+            "open class Animal { open function kind() -> string { return \"a\"; } } \
+             class Dog extends Animal { function kind() -> string { return \"d\"; } }",
+        );
+        assert!(errs.is_empty(), "got {errs:?}");
     }
 
     // --- M-RT S7: erased generics ---

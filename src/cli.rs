@@ -429,6 +429,12 @@ pub fn explain_text(code: &str) -> Option<String> {
              `class A extends B` while `B extends A` (directly or transitively) has no well-founded\n\
              member set. Break the cycle so every class's `extends` chain bottoms out at a root class.\n"
         }
+        "E-OVERRIDE-FINAL" => {
+            "E-OVERRIDE-FINAL — a method overrides a non-`open` ancestor method.\n\n\
+             Methods are final-by-default (M-RT S6): a subclass may only redefine a parent method that\n\
+             the parent declared `open function`. Mark the parent method `open` to allow the override,\n\
+             or rename the subclass method so it does not shadow the inherited one.\n"
+        }
         "E-UNION-MEMBER" => {
             "E-UNION-MEMBER — a union member is not an allowed type.\n\n\
              A union `A | B` (M-RT S4) may combine classes, interfaces, and primitives\n\

@@ -1389,21 +1389,38 @@ impl Interp {
             Value::Instance(inst) => inst,
             other => return rt(format!("cannot call `.{name}()` on {}", other.type_name())),
         };
-        let class = match self.classes.get(&inst.class).cloned() {
-            Some(c) => c,
-            None => return rt(format!("unknown class `{}`", inst.class)),
+        // M-RT S6: walk the class and its ancestors (nearest-first) to the first class that declares
+        // a method of this name. A child's own method shadows an inherited one (override); a method
+        // found only on an ancestor dispatches there. The compiler pre-flattens the same lookup into
+        // the VM's `methods` table, so `run`/`runvm` resolve to the same body. (Single inheritance
+        // this slice — the first parent; multi-parent precedence lands in S6b.)
+        let candidates: Vec<FunctionDecl> = {
+            let mut cur = inst.class.clone();
+            let mut seen = std::collections::HashSet::new();
+            loop {
+                if !seen.insert(cur.clone()) {
+                    break Vec::new();
+                }
+                let Some(class) = self.classes.get(&cur) else {
+                    break Vec::new();
+                };
+                let here: Vec<FunctionDecl> = class
+                    .members
+                    .iter()
+                    .filter_map(|m| match m {
+                        ClassMember::Method(f) if f.name == name => Some(f.clone()),
+                        _ => None,
+                    })
+                    .collect();
+                if !here.is_empty() {
+                    break here;
+                }
+                match class.extends.first() {
+                    Some(p) => cur = p.clone(),
+                    None => break Vec::new(),
+                }
+            }
         };
-        // M-RT overloading: a class may declare several methods of one name. Gather them and, when
-        // there is more than one, select the most-specific by the runtime argument values — the same
-        // `dispatch::select_overload` the VM's `CallMethod` runs, so `run`/`runvm` pick the same body.
-        let candidates: Vec<&FunctionDecl> = class
-            .members
-            .iter()
-            .filter_map(|m| match m {
-                ClassMember::Method(f) if f.name == name => Some(f),
-                _ => None,
-            })
-            .collect();
         let f = match candidates.len() {
             0 => return rt(format!("no method `{name}` on `{}`", inst.class)),
             1 => candidates[0].clone(),
