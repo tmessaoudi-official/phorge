@@ -413,6 +413,22 @@ pub fn explain_text(code: &str) -> Option<String> {
              `interface A extends B` while `B extends A` (directly or transitively) has no well-founded\n\
              method set. Break the cycle so every interface's `extends` chain bottoms out.\n"
         }
+        "E-EXTEND-FINAL" => {
+            "E-EXTEND-FINAL — a class extends a non-`open` class.\n\n\
+             Phorge is final-by-default (M-RT S6): a class can only be a parent if it is declared\n\
+             `open class`. Mark the parent `open` to allow extension, or remove the `extends`. (This is\n\
+             the inheritance dual of the `mutable` opt-in — safe by default, opt into the power.)\n"
+        }
+        "E-EXTEND-UNKNOWN" => {
+            "E-EXTEND-UNKNOWN — a class extends a name that is not a class.\n\n\
+             `extends` lists parent *classes*; the name resolved to an interface, enum, or nothing.\n\
+             Use `implements` for interfaces, or declare the missing parent class.\n"
+        }
+        "E-MI-CYCLE" => {
+            "E-MI-CYCLE — classes form an `extends` cycle.\n\n\
+             `class A extends B` while `B extends A` (directly or transitively) has no well-founded\n\
+             member set. Break the cycle so every class's `extends` chain bottoms out at a root class.\n"
+        }
         "E-UNION-MEMBER" => {
             "E-UNION-MEMBER — a union member is not an allowed type.\n\n\
              A union `A | B` (M-RT S4) may combine classes, interfaces, and primitives\n\

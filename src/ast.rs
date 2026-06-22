@@ -292,15 +292,25 @@ pub fn free_vars(params: &[Param], body: &LambdaBody) -> Vec<String> {
 /// every consumer.
 pub fn class_implements(program: &Program) -> std::collections::BTreeMap<String, Vec<String>> {
     use std::collections::{BTreeMap, BTreeSet};
-    // Direct `extends` edges for every interface.
+    // Direct `extends` edges for interfaces and for classes (M-RT S6), plus each class's own
+    // `implements` list. A class inherits the interfaces of all its ancestor classes.
     let mut iface_extends: BTreeMap<&str, &[String]> = BTreeMap::new();
+    let mut class_extends: BTreeMap<&str, &[String]> = BTreeMap::new();
+    let mut own_implements: BTreeMap<&str, &[String]> = BTreeMap::new();
     for item in &program.items {
-        if let Item::Interface(i) = item {
-            iface_extends.insert(i.name.as_str(), &i.extends);
+        match item {
+            Item::Interface(i) => {
+                iface_extends.insert(i.name.as_str(), &i.extends);
+            }
+            Item::Class(c) => {
+                class_extends.insert(c.name.as_str(), &c.extends);
+                own_implements.insert(c.name.as_str(), &c.implements);
+            }
+            _ => {}
         }
     }
-    // Transitive closure of one interface's `extends` chain (the interface itself included),
-    // visited-guarded against cycles.
+    // Transitive closure of a name's `extends` chain (the name itself included), visited-guarded
+    // against cycles. Used for both the interface graph and the class graph.
     fn closure<'a>(
         name: &'a str,
         edges: &BTreeMap<&'a str, &'a [String]>,
@@ -318,11 +328,58 @@ pub fn class_implements(program: &Program) -> std::collections::BTreeMap<String,
     let mut out: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for item in &program.items {
         if let Item::Class(c) = item {
+            // The class itself plus every ancestor class (so inherited interfaces flow down, M-RT S6).
+            let mut family: BTreeSet<String> = BTreeSet::new();
+            closure(c.name.as_str(), &class_extends, &mut family);
             let mut ifaces: BTreeSet<String> = BTreeSet::new();
-            for i in &c.implements {
-                closure(i, &iface_extends, &mut ifaces);
+            for cls in &family {
+                if let Some(impls) = own_implements.get(cls.as_str()) {
+                    for i in impls.iter() {
+                        closure(i, &iface_extends, &mut ifaces);
+                    }
+                }
             }
             out.insert(c.name.clone(), ifaces.into_iter().collect());
+        }
+    }
+    out
+}
+
+/// Transitive parent-class closure for every class: `class_supertypes[c]` is the sorted set of all
+/// ancestor class names reachable through `extends` — **not** including `c` itself, except when `c`
+/// is part of an `extends` cycle (then `c` appears in its own set, which the checker uses to report
+/// `E-MI-CYCLE`). Mirrors [`class_implements`]; the `extends` walk is cycle-safe via a visited set.
+/// Consumed by the checker's nominal-subtype oracle (so `Dog <: Animal`) and (S6b+) the backends for
+/// `instanceof` against a parent class — one algorithm, so the three backends can never diverge.
+pub fn class_supertypes(program: &Program) -> std::collections::BTreeMap<String, Vec<String>> {
+    use std::collections::{BTreeMap, BTreeSet};
+    let mut class_extends: BTreeMap<&str, &[String]> = BTreeMap::new();
+    for item in &program.items {
+        if let Item::Class(c) = item {
+            class_extends.insert(c.name.as_str(), &c.extends);
+        }
+    }
+    // Accumulate the ancestors of `name` (parents, grandparents, …) — `name` itself is added only if
+    // a cycle leads back to it.
+    fn ancestors<'a>(
+        name: &'a str,
+        edges: &BTreeMap<&'a str, &'a [String]>,
+        acc: &mut BTreeSet<String>,
+    ) {
+        if let Some(parents) = edges.get(name) {
+            for p in parents.iter() {
+                if acc.insert(p.clone()) {
+                    ancestors(p, edges, acc);
+                }
+            }
+        }
+    }
+    let mut out: std::collections::BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for item in &program.items {
+        if let Item::Class(c) = item {
+            let mut anc: BTreeSet<String> = BTreeSet::new();
+            ancestors(c.name.as_str(), &class_extends, &mut anc);
+            out.insert(c.name.clone(), anc.into_iter().collect());
         }
     }
     out

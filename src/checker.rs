@@ -37,6 +37,7 @@ struct EnumInfo {
     type_params: Vec<String>,
 }
 
+#[derive(Clone)]
 struct ClassInfo {
     fields: HashMap<String, Ty>,
     /// Names of the `mutable` fields (M-mut.6) — explicit `mutable Type f;` decls and promoted ctor
@@ -68,6 +69,7 @@ struct ClassInfo {
 }
 
 /// A property hook's declared type and which accessors it provides (M-mut.7b).
+#[derive(Clone)]
 struct HookInfo {
     ty: Ty,
     has_get: bool,
@@ -92,6 +94,10 @@ pub struct Checker {
     /// computed once via [`crate::ast::class_implements`] and shared verbatim with the backends so
     /// the runtime test can never diverge from the static one (M-RT S2).
     class_implements: std::collections::BTreeMap<String, Vec<String>>,
+    /// Transitively-flattened ancestor-class set for every class (M-RT S6), computed once via
+    /// [`crate::ast::class_supertypes`]. Drives nominal subtyping (`Dog <: Animal`) alongside
+    /// `class_implements`; a class appearing in its own set marks an `extends` cycle (`E-MI-CYCLE`).
+    class_supertypes: std::collections::BTreeMap<String, Vec<String>>,
     /// lexical block scopes; last is innermost. Each binding carries its type and whether it is
     /// `mutable` (reassignable) — immutable by default (M-mut.1); only a `mutable` binding may be
     /// the target of `Stmt::Assign`.
@@ -176,6 +182,7 @@ impl Checker {
             classes: HashMap::new(),
             interfaces,
             class_implements: std::collections::BTreeMap::new(),
+            class_supertypes: std::collections::BTreeMap::new(),
             scopes: Vec::new(),
             errors: Vec::new(),
             warnings: Vec::new(),
@@ -640,6 +647,66 @@ impl Checker {
         // Always safe to compute (the shared fn is cycle-guarded); diagnostics below catch malformed
         // graphs, and the backends only run after a clean check, so a cyclic table never reaches them.
         self.class_implements = crate::ast::class_implements(program);
+        self.class_supertypes = crate::ast::class_supertypes(program);
+
+        // Class `extends` targets must be `open` classes; detect cycles (M-RT S6).
+        let class_open: std::collections::HashMap<&str, bool> = program
+            .items
+            .iter()
+            .filter_map(|it| match it {
+                Item::Class(c) => Some((c.name.as_str(), c.open)),
+                _ => None,
+            })
+            .collect();
+        for item in &program.items {
+            if let Item::Class(c) = item {
+                if self
+                    .class_supertypes
+                    .get(&c.name)
+                    .is_some_and(|s| s.contains(&c.name))
+                {
+                    self.err_coded(
+                        c.span,
+                        format!("class `{}` is part of an `extends` cycle", c.name),
+                        "E-MI-CYCLE",
+                        Some("a class may not extend itself transitively".into()),
+                    );
+                    continue; // skip per-parent checks for a cyclic class (avoids noise)
+                }
+                for parent in &c.extends {
+                    if !self.classes.contains_key(parent) {
+                        self.err_coded(
+                            c.span,
+                            format!(
+                                "class `{}` extends `{parent}`, which is not a class",
+                                c.name
+                            ),
+                            "E-EXTEND-UNKNOWN",
+                            Some(
+                                "`extends` lists parent classes; use `implements` for interfaces"
+                                    .into(),
+                            ),
+                        );
+                    } else if !class_open.get(parent.as_str()).copied().unwrap_or(false) {
+                        self.err_coded(
+                            c.span,
+                            format!(
+                                "class `{}` cannot extend `{parent}`, which is not `open`",
+                                c.name
+                            ),
+                            "E-EXTEND-FINAL",
+                            Some(format!(
+                                "mark the parent `open class {parent}` to allow extension"
+                            )),
+                        );
+                    }
+                }
+            }
+        }
+
+        // Inherit each class's ancestors' members into its `ClassInfo` (child wins on a clash),
+        // before interface-conformance below — so an inherited method can satisfy an interface.
+        self.inherit_class_members(program);
 
         // `extends` targets must be interfaces; detect cycles.
         for item in &program.items {
@@ -723,6 +790,74 @@ impl Checker {
         }
     }
 
+    /// Inherit ancestor-class members into each class's [`ClassInfo`] (M-RT S6). Every class's
+    /// parents are fully merged first (so transitive members flow down), then a parent's
+    /// fields/statics/methods/hooks are copied into the child where the child declares none of its
+    /// own — the child's own member wins on a clash. Cycle-safe via the `done` set.
+    fn inherit_class_members(&mut self, program: &crate::ast::Program) {
+        use crate::ast::Item;
+        let parents: HashMap<String, Vec<String>> = program
+            .items
+            .iter()
+            .filter_map(|it| match it {
+                Item::Class(c) => Some((c.name.clone(), c.extends.clone())),
+                _ => None,
+            })
+            .collect();
+        let mut done: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let names: Vec<String> = parents.keys().cloned().collect();
+        for name in names {
+            self.merge_inherited(&name, &parents, &mut done);
+        }
+    }
+
+    /// Ensure `name`'s [`ClassInfo`] has merged in all of its (already-merged) parents' members.
+    /// Recurses parents-first; memoized via `done`, which also breaks any `extends` cycle.
+    fn merge_inherited(
+        &mut self,
+        name: &str,
+        parents: &HashMap<String, Vec<String>>,
+        done: &mut std::collections::HashSet<String>,
+    ) {
+        if !done.insert(name.to_string()) {
+            return;
+        }
+        let Some(ps) = parents.get(name).cloned() else {
+            return;
+        };
+        for p in &ps {
+            self.merge_inherited(p, parents, done);
+            let Some(parent_info) = self.classes.get(p).cloned() else {
+                continue; // unknown parent — already reported E-EXTEND-UNKNOWN
+            };
+            let Some(child) = self.classes.get_mut(name) else {
+                return;
+            };
+            for (k, v) in &parent_info.fields {
+                if !child.fields.contains_key(k) {
+                    child.fields.insert(k.clone(), v.clone());
+                    if parent_info.mutable_fields.contains(k) {
+                        child.mutable_fields.insert(k.clone());
+                    }
+                }
+            }
+            for (k, v) in &parent_info.statics {
+                if !child.statics.contains_key(k) {
+                    child.statics.insert(k.clone(), v.clone());
+                    if parent_info.static_mut.contains(k) {
+                        child.static_mut.insert(k.clone());
+                    }
+                }
+            }
+            for (k, v) in &parent_info.methods {
+                child.methods.entry(k.clone()).or_insert_with(|| v.clone());
+            }
+            for (k, v) in &parent_info.hooks {
+                child.hooks.entry(k.clone()).or_insert_with(|| v.clone());
+            }
+        }
+    }
+
     /// True if `name`'s `extends` chain reaches `name` again (a cycle). Visited-guarded.
     fn iface_in_cycle(&self, name: &str, stack: &mut std::collections::BTreeSet<String>) -> bool {
         fn walk(
@@ -794,7 +929,8 @@ impl Checker {
 
     /// Nominal subtyping for assignability and `instanceof`: `a` is a subtype of `b` when they are
     /// equal, when class `a` implements interface `b` (transitively, via [`Self::class_implements`]),
-    /// or when interface `a` extends interface `b` (transitively). The only subtyping in M-RT S2.
+    /// when class `a` extends class `b` (transitively, via [`Self::class_supertypes`] — M-RT S6), or
+    /// when interface `a` extends interface `b` (transitively).
     fn is_subtype(&self, a: &str, b: &str) -> bool {
         if a == b {
             return true;
@@ -803,6 +939,14 @@ impl Checker {
             .class_implements
             .get(a)
             .is_some_and(|ifaces| ifaces.iter().any(|i| i == b))
+        {
+            return true;
+        }
+        // class `a` extends class `b` transitively (M-RT S6)?
+        if self
+            .class_supertypes
+            .get(a)
+            .is_some_and(|sup| sup.iter().any(|s| s == b))
         {
             return true;
         }
@@ -6133,6 +6277,47 @@ mod tests {
             Ok(_) => Vec::new(),
             Err(e) => e,
         }
+    }
+
+    // --- M-RT S6: single inheritance ---
+
+    #[test]
+    fn subclass_is_assignable_and_inherits_methods() {
+        // S6a.3: Dog <: Animal (assignability) + Dog inherits Animal's method.
+        let errs = errors_of(
+            "open class Animal { function name() -> string { return \"a\"; } } \
+             class Dog extends Animal {} \
+             function f() -> string { Animal a = Dog(); return a.name(); } \
+             function g() -> string { Dog d = Dog(); return d.name(); }",
+        );
+        assert!(errs.is_empty(), "expected clean, got {errs:?}");
+    }
+
+    #[test]
+    fn extending_a_non_open_class_errors() {
+        let errs = errors_of("class Animal {} class Dog extends Animal {}");
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-EXTEND-FINAL")),
+            "got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn extending_an_unknown_name_errors() {
+        let errs = errors_of("class Dog extends Bogus {}");
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-EXTEND-UNKNOWN")),
+            "got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn class_extends_cycle_errors() {
+        let errs = errors_of("open class A extends B {} open class B extends A {}");
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-MI-CYCLE")),
+            "got {errs:?}"
+        );
     }
 
     // --- M-RT S7: erased generics ---
