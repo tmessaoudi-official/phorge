@@ -141,7 +141,9 @@ impl CallScopes {
 }
 
 pub struct Interp {
-    funcs: HashMap<String, FunctionDecl>,
+    /// Free-function overload sets (M-RT overloading): a name maps to one *or more* declarations.
+    /// Length 1 in the common case; dynamic dispatch selects among >1 by the argument values.
+    funcs: HashMap<String, Vec<FunctionDecl>>,
     classes: HashMap<String, ClassDecl>,
     /// Transitively-flattened interface set each class implements — the `instanceof` table, built
     /// once via [`crate::ast::class_implements`] and shared verbatim with the checker + VM so the
@@ -194,7 +196,7 @@ pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
         pending_throw: None,
     };
     interp.collect(program);
-    let main = match interp.funcs.get("main") {
+    let main = match interp.funcs.get("main").and_then(|v| v.first()) {
         Some(f) => f.clone(),
         None => return Err(Diagnostic::runtime("no `main` function")),
     };
@@ -264,9 +266,16 @@ pub fn call_named(
         pending_throw: None,
     };
     interp.collect(program);
-    let f = match interp.funcs.get(name) {
-        Some(f) => f.clone(),
+    let set = match interp.funcs.get(name) {
+        Some(v) => v.clone(),
         None => return Err(Diagnostic::runtime(format!("no `{name}` function"))),
+    };
+    // M-RT overloading: select the overload by the supplied argument values (single-overload sets
+    // return directly). A selection fault surfaces as a runtime diagnostic.
+    let f = match interp.select_free_overload(name, &set, &args) {
+        Ok(f) => f,
+        Err(Signal::Runtime(d)) => return Err(d),
+        Err(_) => return Err(Diagnostic::runtime(format!("cannot resolve `{name}`"))),
     };
     if f.params.len() != args.len() {
         return Err(Diagnostic::runtime(format!(
@@ -296,7 +305,12 @@ impl Interp {
         for item in &program.items {
             match item {
                 Item::Function(f) => {
-                    self.funcs.insert(f.name.clone(), f.clone());
+                    // M-RT overloading: a same-named function joins an overload set (the checker has
+                    // already validated legality). Declaration order is preserved.
+                    self.funcs
+                        .entry(f.name.clone())
+                        .or_default()
+                        .push(f.clone());
                 }
                 Item::Enum(e) => {
                     for v in &e.variants {
@@ -1140,7 +1154,8 @@ impl Interp {
                 _ => {}
             }
             let argv = self.eval_args(args)?;
-            if let Some(f) = self.funcs.get(name).cloned() {
+            if let Some(set) = self.funcs.get(name).cloned() {
+                let f = self.select_free_overload(name, &set, &argv)?;
                 if argv.len() != f.params.len() {
                     return rt(format!(
                         "`{name}` expects {} args, got {}",
@@ -1184,6 +1199,40 @@ impl Interp {
         }
     }
 
+    /// Select the overload of free function `name` to run for `argv` (M-RT dynamic dispatch). A
+    /// single-overload set is returned directly; otherwise the most-specific match by the runtime
+    /// argument types wins. The same selection runs in the VM (`dispatch::select_overload` over the
+    /// same `ParamKind`s), so `run`/`runvm` pick the same body. An ambiguous or unmatched call faults
+    /// with a byte-identical message.
+    fn select_free_overload(
+        &self,
+        name: &str,
+        set: &[FunctionDecl],
+        argv: &[Value],
+    ) -> R<FunctionDecl> {
+        if set.len() == 1 {
+            return Ok(set[0].clone());
+        }
+        let candidates: Vec<Vec<crate::dispatch::ParamKind>> = set
+            .iter()
+            .map(|f| {
+                f.params
+                    .iter()
+                    .map(|p| crate::dispatch::param_kind(&p.ty))
+                    .collect()
+            })
+            .collect();
+        match crate::dispatch::select_overload(&candidates, argv, &self.class_implements) {
+            Ok(i) => Ok(set[i].clone()),
+            Err(crate::dispatch::SelectErr::Ambiguous) => {
+                rt(format!("ambiguous overloaded call to `{name}`"))
+            }
+            Err(crate::dispatch::SelectErr::NoMatch) => rt(format!(
+                "no overload of `{name}` matches the argument types"
+            )),
+        }
+    }
+
     /// Execute a closure value with the supplied arguments.
     fn call_closure(&mut self, closure: Rc<ClosureData>, args: Vec<Value>) -> R<Value> {
         match &*closure {
@@ -1200,7 +1249,9 @@ impl Interp {
                 self.call_tree_closure(params, body, env, args)
             }
             ClosureData::Named(name) => {
-                let f = match self.funcs.get(name).cloned() {
+                // A first-class named-function value never refers to an overloaded function
+                // (`E-OVERLOAD-FN-VALUE`), so the set has exactly one member.
+                let f = match self.funcs.get(name).and_then(|v| v.first()).cloned() {
                     Some(f) => f,
                     None => return rt(format!("function `{name}` not found")),
                 };

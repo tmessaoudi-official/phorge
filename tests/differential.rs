@@ -1199,6 +1199,49 @@ fn generic_methods_agree() {
 }
 
 #[test]
+fn overloaded_free_functions_agree() {
+    // M-RT overloading (dynamic multiple dispatch): the runtime argument types select the overload,
+    // identically on both backends. Primitive overloads (disjoint by construction).
+    agree("import Core.Console; \
+           function d(int n)->string { return \"int:{n}\"; } \
+           function d(string s)->string { return \"str:{s}\"; } \
+           function d(bool b)->string { return \"bool:{b}\"; } \
+           function main(){ Console.println(d(42)); Console.println(d(\"hi\")); Console.println(d(true)); }");
+    // Arity overloads.
+    agree(
+        "import Core.Console; \
+           function add(int a)->int { return a; } \
+           function add(int a, int b)->int { return a+b; } \
+           function main(){ Console.println(\"{add(5)} {add(5,6)}\"); }",
+    );
+    // Class + interface overloads with most-specific dispatch: a `Circle` value picks `area(Circle)`,
+    // a `Square` (only a `Shape`) picks the `area(Shape)` fallback — same choice on both backends.
+    agree("import Core.Console; \
+           interface Shape {} \
+           class Circle implements Shape { constructor(public int r) {} } \
+           class Square implements Shape { constructor(public int s) {} } \
+           function area(Circle c)->int { return c.r*c.r*3; } \
+           function area(Shape s)->int { return 0; } \
+           function main(){ Circle c=Circle(2); Square q=Square(4); Console.println(\"{area(c)} {area(q)}\"); }");
+}
+
+#[test]
+fn ambiguous_overloaded_call_faults_on_both_backends() {
+    // A multi-argument cross-cutting overload set with no unique most-specific match for the call is
+    // a clean runtime fault — and the SAME fault on both backends (byte-identical message → same
+    // classification). `Both` satisfies A and B, so `pick(Both, Both)` matches both overloads and
+    // neither dominates.
+    agree_err(
+        "import Core.Console; \
+               interface A {} interface B {} \
+               class Both implements A, B { constructor(public int v) {} } \
+               function pick(A x, B y)->int { return 1; } \
+               function pick(B x, A y)->int { return 2; } \
+               function main(){ Both b=Both(0); Console.println(\"{pick(b, b)}\"); }",
+    );
+}
+
+#[test]
 fn transpiles_generic_method_to_mixed() {
     // A generic method erases to `mixed`-typed PHP (params and return), exactly as a generic free
     // function does; `List<T>` → `array`, `(T)->T` → `\Closure`. No type variable reaches the output.

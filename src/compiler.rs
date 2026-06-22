@@ -82,6 +82,10 @@ struct FnMeta {
     /// Class-aware param types, so a bare named-function reference in value position resolves to a
     /// `CTy::Fn` (lets `var f = namedfn; f(x)` dispatch through `CallValue` like a lambda local).
     params: Vec<CTy>,
+    /// `Some(set_id)` when this name is overloaded (M-RT): a call emits `Op::CallOverload(set_id,
+    /// argc)` (runtime dynamic dispatch) instead of a direct `Op::Call(index)`. `None` — the common
+    /// single-overload case — keeps using `index`. Filled in a post-pass once all overloads are seen.
+    overload: Option<usize>,
 }
 
 /// Per-variant metadata gathered in the pre-pass: its index into the `enum_descs` table (for
@@ -210,6 +214,9 @@ pub fn compile(program: &Program) -> Result<BytecodeProgram, Diagnostic> {
 fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
     let mut order: Vec<&FunctionDecl> = Vec::new();
     let mut fns: HashMap<String, FnMeta> = HashMap::new();
+    // M-RT overloading: name → every function index declared under it (declaration order). Names with
+    // more than one entry become overload sets in the post-pass below.
+    let mut overload_order: HashMap<String, Vec<usize>> = HashMap::new();
     // Enum pre-pass: one `EnumDesc` per variant of every declared enum, plus the variant-name →
     // metadata map both construction and `match` resolve through (decision P4-2).
     let mut enum_descs: Vec<EnumDesc> = Vec::new();
@@ -218,14 +225,20 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
     for it in &program.items {
         match it {
             Item::Function(f) => {
-                fns.insert(
-                    f.name.clone(),
-                    FnMeta {
-                        index: order.len(),
-                        ret: f.ret.as_ref().map_or(CTy::Other, resolve_cty),
-                        params: f.params.iter().map(|p| resolve_cty(&p.ty)).collect(),
-                    },
-                );
+                let index = order.len();
+                // M-RT overloading: keep the FIRST overload's `FnMeta` (return type is shared across
+                // the set, so it still types a call's result); record every overload's function index
+                // so the post-pass can build the dispatch table for names with more than one.
+                fns.entry(f.name.clone()).or_insert_with(|| FnMeta {
+                    index,
+                    ret: f.ret.as_ref().map_or(CTy::Other, resolve_cty),
+                    params: f.params.iter().map(|p| resolve_cty(&p.ty)).collect(),
+                    overload: None,
+                });
+                overload_order
+                    .entry(f.name.clone())
+                    .or_default()
+                    .push(index);
                 order.push(f);
             }
             Item::Enum(e) => {
@@ -257,6 +270,32 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
         .get("main")
         .map(|m| m.index)
         .ok_or_else(|| "no `main` function".to_string())?;
+
+    // M-RT overloading post-pass: for every name with more than one declaration, build a dispatch
+    // table (each overload's runtime `ParamKind`s + its function index) and stamp the name's `FnMeta`
+    // with the set id, so `compile_call` emits `Op::CallOverload` instead of a direct `Op::Call`.
+    let mut overloads: Vec<crate::dispatch::OverloadSet> = Vec::new();
+    for (name, indices) in &overload_order {
+        if indices.len() < 2 {
+            continue;
+        }
+        let set: crate::dispatch::OverloadSet = indices
+            .iter()
+            .map(|&fi| {
+                let kinds = order[fi]
+                    .params
+                    .iter()
+                    .map(|p| crate::dispatch::param_kind(&p.ty))
+                    .collect();
+                (kinds, fi)
+            })
+            .collect();
+        let set_id = overloads.len();
+        overloads.push(set);
+        if let Some(meta) = fns.get_mut(name) {
+            meta.overload = Some(set_id);
+        }
+    }
 
     // Class pre-pass (decision P4-2/P4-4/P4-6). Function indices are laid out as
     // `[free fns | constructors | methods]` so free-function indices — and `main` — stay put.
@@ -569,6 +608,7 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
         // VM's `Op::IsInstance` against an interface is byte-identical (M-RT S2).
         class_implements: crate::ast::class_implements(program),
         static_inits,
+        overloads,
     })
 }
 
@@ -881,6 +921,8 @@ impl<'a> Compiler<'a> {
             // pair collapses into one op, net delta unchanged).
             Op::CallNative(_, argc) => 1 - *argc as isize,
             Op::Call(idx) => 1 - self.arities[*idx] as isize,
+            // Pops `argc` args, dispatches to one overload, pushes its single return value.
+            Op::CallOverload(_, argc) => 1 - *argc as isize,
             Op::MakeEnum(idx) => 1 - self.enum_descs[*idx].arity as isize,
             Op::MakeInstance(idx) => 1 - self.class_descs[*idx].fields.len() as isize,
             Op::GetField(_) => 0,   // pop instance, push field value
@@ -1664,10 +1706,17 @@ impl<'a> Compiler<'a> {
                 return Ok(());
             }
             if let Some(meta) = self.fns.get(name) {
+                let dispatch = meta.overload;
+                let index = meta.index;
                 for a in args {
                     self.expr(a)?;
                 }
-                self.emit(Op::Call(meta.index), line);
+                // An overloaded name dispatches on the runtime argument types (M-RT); a single
+                // overload is a direct call as before.
+                match dispatch {
+                    Some(set_id) => self.emit(Op::CallOverload(set_id, args.len()), line),
+                    None => self.emit(Op::Call(index), line),
+                }
                 return Ok(());
             }
             // A local variable with a function type (lambda or named-fn ref): push the closure

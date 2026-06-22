@@ -403,6 +403,43 @@ impl<'a> Vm<'a> {
                     slot_base,
                 });
             }
+            Op::CallOverload(set_id, argc) => {
+                if self.frames.len() >= MAX_CALL_DEPTH {
+                    return Err("stack overflow".to_string());
+                }
+                // M-RT dynamic dispatch: peek the `argc` argument values already on the stack and
+                // pick the most-specific matching overload — the SAME selector + `ParamKind`s the
+                // interpreter uses, so `run`/`runvm` resolve to the same function.
+                let n = self.stack.len();
+                let set = &self.program.overloads[set_id];
+                let cands: Vec<Vec<crate::dispatch::ParamKind>> =
+                    set.iter().map(|(k, _)| k.clone()).collect();
+                let target = match crate::dispatch::select_overload(
+                    &cands,
+                    &self.stack[n - argc..],
+                    &self.program.class_implements,
+                ) {
+                    Ok(pos) => set[pos].1,
+                    Err(e) => {
+                        let name = &self.program.functions[set[0].1].name;
+                        return Err(match e {
+                            crate::dispatch::SelectErr::Ambiguous => {
+                                format!("ambiguous overloaded call to `{name}`")
+                            }
+                            crate::dispatch::SelectErr::NoMatch => {
+                                format!("no overload of `{name}` matches the argument types")
+                            }
+                        });
+                    }
+                };
+                let arity = self.program.functions[target].arity;
+                let slot_base = self.pop_n_start(arity);
+                self.frames.push(Frame {
+                    func: target,
+                    ip: 0,
+                    slot_base,
+                });
+            }
 
             Op::Return => {
                 let rv = self.pop();
@@ -919,6 +956,7 @@ mod tests {
             methods: HashMap::new(),
             class_implements: std::collections::BTreeMap::new(),
             static_inits: Vec::new(),
+            overloads: Vec::new(),
         };
         Vm::new(&program).run().map_err(|d| d.to_string())
     }
@@ -1147,6 +1185,7 @@ mod tests {
             methods: HashMap::new(),
             class_implements: std::collections::BTreeMap::new(),
             static_inits: Vec::new(),
+            overloads: Vec::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "7\n");
     }
@@ -1187,6 +1226,7 @@ mod tests {
             methods: HashMap::new(),
             class_implements: std::collections::BTreeMap::new(),
             static_inits: Vec::new(),
+            overloads: Vec::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "true\n7\n");
     }
@@ -1226,6 +1266,7 @@ mod tests {
             methods: HashMap::new(),
             class_implements: std::collections::BTreeMap::new(),
             static_inits: Vec::new(),
+            overloads: Vec::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "false\n");
     }
@@ -1261,6 +1302,7 @@ mod tests {
             methods: HashMap::new(),
             class_implements: std::collections::BTreeMap::new(),
             static_inits: Vec::new(),
+            overloads: Vec::new(),
         };
         assert_eq!(Vm::new(&program).run().unwrap(), "3\n");
     }
@@ -1292,6 +1334,7 @@ mod tests {
             methods: HashMap::new(),
             class_implements: std::collections::BTreeMap::new(),
             static_inits: Vec::new(),
+            overloads: Vec::new(),
         };
         let err = Vm::new(&program).run().unwrap_err().to_string();
         assert!(err.contains("no field `tag` on `Empty`"), "{err}");

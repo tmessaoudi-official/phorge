@@ -9,6 +9,7 @@ pub mod chunk;
 pub mod cli;
 pub mod compiler;
 pub mod diagnostic;
+pub mod dispatch;
 pub mod interpreter;
 pub mod lexer;
 pub mod limits;

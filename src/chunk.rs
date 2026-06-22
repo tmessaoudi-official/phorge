@@ -151,6 +151,14 @@ pub enum Op {
     /// Call `functions[idx]`: its args are already on top of the stack; the new frame's
     /// local window opens at `stack.len() - functions[idx].arity` (decision P3-1, P3-3).
     Call(usize),
+    /// Call an *overloaded* free function (M-RT dynamic dispatch). The args are on top of the stack
+    /// as for `Op::Call`; the first operand is an index into [`BytecodeProgram::overloads`], the
+    /// second is the argument count. At runtime the top `argc` values' types select the
+    /// most-specific matching overload (`dispatch::select_overload`), and its function index is
+    /// called exactly like `Op::Call`. The selection is byte-identical to the interpreter's (same
+    /// `ParamKind`s, same selector). A no-match/ambiguous selection is a clean runtime fault. The
+    /// set index is bounds-checked in `validate` (its target indices are checked there too).
+    CallOverload(usize, usize),
     /// Pop the return value, unwind the current frame (truncate its slot window), pop the
     /// frame, push the return value onto the caller's stack. End execution when the last
     /// (`main`) frame returns (decision P3-2).
@@ -343,6 +351,11 @@ pub struct BytecodeProgram {
     /// program-lifetime static state begins at the once-at-load literal values. Indexed by
     /// `Op::GetStatic`/`Op::SetStatic`.
     pub static_inits: Vec<Value>,
+    /// Overload dispatch tables (M-RT method/function overloading), indexed by the set id an
+    /// `Op::CallOverload` carries. Each entry pairs an overload's parameter kinds with the function
+    /// index to call; `dispatch::select_overload` picks the most-specific match at runtime. Empty in
+    /// the overwhelmingly common no-overloads program.
+    pub overloads: Vec<crate::dispatch::OverloadSet>,
 }
 
 impl BytecodeProgram {
@@ -391,6 +404,22 @@ impl BytecodeProgram {
                         .then(|| format!("const index {i} out of range (pool has {const_len})")),
                     Op::Call(idx) => (*idx >= nfns)
                         .then(|| format!("call target {idx} out of range ({nfns} functions)")),
+                    Op::CallOverload(sid, _) => {
+                        if *sid >= self.overloads.len() {
+                            Some(format!(
+                                "overload set {sid} out of range ({} sets)",
+                                self.overloads.len()
+                            ))
+                        } else {
+                            self.overloads[*sid].iter().find_map(|(_, idx)| {
+                                (*idx >= nfns).then(|| {
+                                    format!(
+                                        "overload target {idx} out of range ({nfns} functions)"
+                                    )
+                                })
+                            })
+                        }
+                    }
                     Op::MakeEnum(idx) | Op::MatchTag(idx) => (*idx >= ndescs).then(|| {
                         format!("enum descriptor index {idx} out of range ({ndescs} descriptors)")
                     }),
@@ -549,6 +578,7 @@ mod tests {
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
+            overloads: Vec::new(),
         };
         assert_eq!(prog.validate(), Ok(()));
     }
@@ -572,6 +602,7 @@ mod tests {
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
+            overloads: Vec::new(),
         };
         let err = prog.validate().unwrap_err();
         assert!(err.contains("invalid bytecode"), "{err}");
@@ -597,6 +628,7 @@ mod tests {
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
+            overloads: Vec::new(),
         };
         assert!(prog.validate().unwrap_err().contains("call target 7"));
 
@@ -609,6 +641,7 @@ mod tests {
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
+            overloads: Vec::new(),
         };
         assert!(bad_main.validate().unwrap_err().contains("main index 0"));
     }
@@ -632,6 +665,7 @@ mod tests {
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
+            overloads: Vec::new(),
         };
         let err = prog.validate().unwrap_err();
         assert!(err.contains("enum descriptor index 3"), "{err}");
@@ -656,6 +690,7 @@ mod tests {
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
+            overloads: Vec::new(),
         };
         assert!(prog
             .validate()
@@ -679,6 +714,7 @@ mod tests {
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
+            overloads: Vec::new(),
         };
         assert!(prog2.validate().unwrap_err().contains("field-name index 5"));
 
@@ -700,6 +736,7 @@ mod tests {
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
+            overloads: Vec::new(),
         };
         assert!(prog3.validate().unwrap_err().contains("field-name index 7"));
 
@@ -721,6 +758,7 @@ mod tests {
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
+            overloads: Vec::new(),
         };
         assert!(prog4.validate().unwrap_err().contains("static index 2"));
     }
@@ -744,6 +782,7 @@ mod tests {
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
+            overloads: Vec::new(),
         };
         assert!(prog.validate().unwrap_err().contains("native index 9999"));
     }
@@ -770,6 +809,7 @@ mod tests {
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
+            overloads: Vec::new(),
         };
         let err = prog.validate().unwrap_err();
         assert!(err.contains("closure target 4"), "{err}");
@@ -799,6 +839,7 @@ mod tests {
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
+            overloads: Vec::new(),
         };
         assert!(prog.validate().is_ok());
     }
@@ -821,6 +862,7 @@ mod tests {
             methods: HashMap::new(),
             class_implements: BTreeMap::new(),
             static_inits: Vec::new(),
+            overloads: Vec::new(),
         };
         assert_eq!(prog.functions[prog.main].name, "main");
         assert_eq!(prog.functions[0].arity, 0);
