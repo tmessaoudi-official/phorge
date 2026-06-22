@@ -1,12 +1,14 @@
 //! Phorge → PHP transpiler. Walks the untyped AST (the same AST the evaluator walks)
 //! and emits runnable PHP 8.x source. Entry point: [`emit`].
 use crate::ast::*;
+use crate::dispatch::ParamKind;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 /// Transpile a parsed program to PHP source. Returns the PHP text, or a
 /// `transpile error: …` message for an unsupported construct.
 pub fn emit(program: &Program) -> Result<String, String> {
     let mut t = Transpiler::new();
+    t.class_implements = crate::ast::class_implements(program);
     t.collect(program);
     t.emit_program(program)?;
     Ok(t.out)
@@ -50,6 +52,10 @@ struct Transpiler {
     /// Switches emission from the flat single-package form to one `namespace …{}` brace-block per
     /// package + a nameless bootstrap block, and forces fully-qualified (leading-`\`) call emission.
     namespaced: bool,
+    /// The flattened `class_implements` oracle (M-RT overloading): used to order an overload set's
+    /// PHP dispatch branches most-specific-first (subtypes before supertypes), so the emitted
+    /// `if`-chain selects the same body the backends' `select_overload` does. Built once in `emit`.
+    class_implements: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 /// Where a `match` expression's arm values flow: a `return` or an assignment to `$name`.
@@ -163,6 +169,7 @@ impl Transpiler {
             uses_range: false,
             uses_clone_with: false,
             namespaced: false,
+            class_implements: std::collections::BTreeMap::new(),
         }
     }
 
@@ -218,10 +225,13 @@ impl Transpiler {
             return self.emit_program_namespaced(program);
         }
         self.out.push_str("<?php\n");
+        let mut emitted_overloads: HashSet<String> = HashSet::new();
         for item in &program.items {
             match item {
                 Item::Import { .. } => {}
-                Item::Function(f) => self.emit_function(f, false)?,
+                Item::Function(f) => {
+                    self.emit_free_fn(&program.items, f, &mut emitted_overloads)?
+                }
                 Item::Enum(e) => self.emit_enum(e)?,
                 Item::Class(c) => self.emit_class(c)?,
                 Item::Interface(i) => self.emit_interface(i)?,
@@ -261,12 +271,29 @@ impl Transpiler {
             };
             buckets.entry(ns).or_default().push(item);
         }
+        let mut emitted_overloads: HashSet<String> = HashSet::new();
         for (ns, items) in &buckets {
             self.line(&format!("namespace {ns} {{"));
             self.indent += 1;
             for item in items {
                 match item {
-                    Item::Function(f) => self.emit_function(f, false)?,
+                    Item::Function(f) => {
+                        // Group M-RT overloads within this package's bucket (same full name).
+                        let group: Vec<&FunctionDecl> = items
+                            .iter()
+                            .filter_map(|it| match &**it {
+                                Item::Function(g) if g.name == f.name => Some(g),
+                                _ => None,
+                            })
+                            .collect();
+                        if group.len() > 1 {
+                            if emitted_overloads.insert(f.name.clone()) {
+                                self.emit_overload_set(&f.name, &group, false)?;
+                            }
+                        } else {
+                            self.emit_function(f, false)?;
+                        }
+                    }
                     Item::Enum(e) => self.emit_enum(e)?,
                     Item::Class(c) => self.emit_class(c)?,
                     Item::Interface(i) => self.emit_interface(i)?,
@@ -494,6 +521,17 @@ impl Transpiler {
     }
 
     fn emit_function(&mut self, f: &FunctionDecl, is_method: bool) -> Result<(), String> {
+        self.emit_function_named(f, is_method, None)
+    }
+
+    /// Emit a function/method, optionally under an overridden name (M-RT overloading emits each
+    /// overload's body under a mangled `<name>__ovl_<i>` name; the dispatcher takes the original).
+    fn emit_function_named(
+        &mut self,
+        f: &FunctionDecl,
+        is_method: bool,
+        name_override: Option<&str>,
+    ) -> Result<(), String> {
         let params: Vec<String> = f
             .params
             .iter()
@@ -501,10 +539,10 @@ impl Transpiler {
             .collect();
         // In namespaced mode a top-level function is declared inside its `namespace` block, so emit
         // only its trailing segment (`Acme\Util\compute` ⇒ `compute`). Methods keep their name.
-        let disp = if self.namespaced && !is_method {
-            last_segment(&f.name)
-        } else {
-            &f.name
+        let disp = match name_override {
+            Some(n) => n,
+            None if self.namespaced && !is_method => last_segment(&f.name),
+            None => &f.name,
         };
         self.line(&format!(
             "function {}({}): {} {{",
@@ -524,6 +562,126 @@ impl Transpiler {
         self.indent -= 1;
         self.line("}");
         Ok(())
+    }
+
+    /// Emit one free function, grouping M-RT overloads: a name declared more than once in `items`
+    /// becomes a single overload set (emitted once, on first occurrence); a unique name emits
+    /// directly. `emitted` guards against re-emitting a set as later overloads are walked.
+    fn emit_free_fn(
+        &mut self,
+        items: &[Item],
+        f: &FunctionDecl,
+        emitted: &mut HashSet<String>,
+    ) -> Result<(), String> {
+        let group: Vec<&FunctionDecl> = items
+            .iter()
+            .filter_map(|it| match it {
+                Item::Function(g) if g.name == f.name => Some(g),
+                _ => None,
+            })
+            .collect();
+        if group.len() > 1 {
+            if emitted.insert(f.name.clone()) {
+                self.emit_overload_set(&f.name, &group, false)?;
+            }
+            Ok(())
+        } else {
+            self.emit_function(f, false)
+        }
+    }
+
+    /// Emit an overloaded free-function / method set (M-RT dynamic dispatch): each overload's body
+    /// under a mangled `<leaf>__ovl_<i>` name, then one dispatcher under the original name that
+    /// selects on the runtime argument types (`is_int`/`is_string`/`instanceof`), branches ordered
+    /// most-specific-first — so the emitted PHP picks the same body the backends' `select_overload`
+    /// does for every resolvable call. (An *ambiguous* call faults in the backends; the PHP chain
+    /// would take the first match — a transpile-only divergence on faulting input, never in a runnable
+    /// example. Overloads that erase to the same PHP test — `string`/`bytes`, or `List`/`Map`/`Set`,
+    /// all of which become PHP `string`/`array` — likewise cannot be told apart in PHP; KNOWN_ISSUES.)
+    fn emit_overload_set(
+        &mut self,
+        name: &str,
+        ovls: &[&FunctionDecl],
+        is_method: bool,
+    ) -> Result<(), String> {
+        let leaf = last_segment(name).to_string();
+        for (i, f) in ovls.iter().enumerate() {
+            let mangled = format!("{leaf}__ovl_{i}");
+            self.emit_function_named(f, is_method, Some(&mangled))?;
+        }
+        let kinds: Vec<Vec<ParamKind>> = ovls
+            .iter()
+            .map(|f| {
+                f.params
+                    .iter()
+                    .map(|p| crate::dispatch::param_kind(&p.ty))
+                    .collect()
+            })
+            .collect();
+        let mut order: Vec<usize> = (0..ovls.len()).collect();
+        order.sort_by(|&a, &b| {
+            if crate::dispatch::dominates(&kinds[a], &kinds[b], &self.class_implements) {
+                std::cmp::Ordering::Less
+            } else if crate::dispatch::dominates(&kinds[b], &kinds[a], &self.class_implements) {
+                std::cmp::Ordering::Greater
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        });
+        let disp = if self.namespaced && !is_method {
+            leaf.clone()
+        } else {
+            name.to_string()
+        };
+        let ret = Self::ret_hint(&ovls[0].ret);
+        self.line(&format!("function {disp}(...$args): {ret} {{"));
+        self.indent += 1;
+        for &i in &order {
+            let test = self.overload_branch_test(&kinds[i]);
+            let mangled = format!("{leaf}__ovl_{i}");
+            let target = if is_method {
+                format!("$this->{mangled}")
+            } else {
+                mangled
+            };
+            self.line(&format!("if ({test}) {{ return {target}(...$args); }}"));
+        }
+        self.line(&format!(
+            "throw new \\LogicException(\"no matching overload for {leaf}\");"
+        ));
+        self.indent -= 1;
+        self.line("}");
+        Ok(())
+    }
+
+    /// The PHP boolean test that an argument tuple matches one overload's parameter kinds (M-RT).
+    fn overload_branch_test(&self, kinds: &[ParamKind]) -> String {
+        let mut conds = vec![format!("count($args) === {}", kinds.len())];
+        for (k, kind) in kinds.iter().enumerate() {
+            let a = format!("$args[{k}]");
+            conds.push(match kind {
+                ParamKind::Int => format!("is_int({a})"),
+                ParamKind::Float => format!("is_float({a})"),
+                ParamKind::Bool => format!("is_bool({a})"),
+                // `bytes` erases to a PHP string, so it shares `string`'s test (indistinguishable).
+                ParamKind::Str | ParamKind::Bytes => format!("is_string({a})"),
+                // `List`/`Map`/`Set` all erase to a PHP array (indistinguishable).
+                ParamKind::List | ParamKind::Map | ParamKind::Set => format!("is_array({a})"),
+                ParamKind::Fn => format!("({a} instanceof \\Closure)"),
+                ParamKind::Named(n) => {
+                    // The built-in `Error` marker is a PHP `\Throwable`; a class/interface/enum uses
+                    // its (possibly cross-package FQN) name.
+                    let ty = if last_segment(n) == "Error" {
+                        "\\Throwable".to_string()
+                    } else {
+                        php_type_ref(n)
+                    };
+                    format!("({a} instanceof {ty})")
+                }
+                ParamKind::Any => "true".to_string(),
+            });
+        }
+        conds.join(" && ")
     }
 
     /// An enum with payload variants becomes an abstract base class plus one `final`
@@ -602,6 +760,7 @@ impl Transpiler {
         self.line(&format!("class {disp}{extends_clause}{implements} {{"));
         self.indent += 1;
         let prev = self.cur_class_fields.replace(fields);
+        let mut emitted_method_overloads: HashSet<String> = HashSet::new();
         for m in &c.members {
             match m {
                 ClassMember::Field {
@@ -706,7 +865,24 @@ impl Transpiler {
                         self.line("}");
                     }
                 }
-                ClassMember::Method(f) => self.emit_function(f, true)?,
+                ClassMember::Method(f) => {
+                    // Group M-RT method overloads (methods of one name on this class).
+                    let group: Vec<&FunctionDecl> = c
+                        .members
+                        .iter()
+                        .filter_map(|mm| match mm {
+                            ClassMember::Method(g) if g.name == f.name => Some(g),
+                            _ => None,
+                        })
+                        .collect();
+                    if group.len() > 1 {
+                        if emitted_method_overloads.insert(f.name.clone()) {
+                            self.emit_overload_set(&f.name, &group, true)?;
+                        }
+                    } else {
+                        self.emit_function(f, true)?;
+                    }
+                }
                 // A property hook (M-mut.7b) → a PHP 8.4 property hook. The hook is virtual (no
                 // backing store), so it emits no default; the get expression and set block reference
                 // *other* (real) fields. `public` because Phorge does not enforce field visibility.

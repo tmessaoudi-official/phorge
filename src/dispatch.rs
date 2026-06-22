@@ -100,6 +100,20 @@ fn at_least_as_specific(
     }
 }
 
+/// Whether overload `a` is strictly more specific than `b` (at least as specific in every position,
+/// and strictly more in at least one). Used by the transpiler to order an overload set's dispatch
+/// branches most-specific-first, so the emitted PHP `if`-chain picks the same body the backends'
+/// `select_overload` does for a resolvable call.
+pub fn dominates(a: &[ParamKind], b: &[ParamKind], oracle: &BTreeMap<String, Vec<String>>) -> bool {
+    a.len() == b.len()
+        && a.iter()
+            .zip(b)
+            .all(|(x, y)| at_least_as_specific(x, y, oracle))
+        && a.iter()
+            .zip(b)
+            .any(|(x, y)| x != y && at_least_as_specific(x, y, oracle))
+}
+
 /// Why an overloaded call could not resolve to a single body.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SelectErr {
