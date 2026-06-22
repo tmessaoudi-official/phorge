@@ -1359,6 +1359,28 @@ impl Checker {
                 self.check_expr_casing(value);
             }
             Stmt::Expr(e, _) => self.check_expr_casing(e),
+            Stmt::Throw { value, .. } => self.check_expr_casing(value),
+            Stmt::Try {
+                body,
+                catches,
+                finally_block,
+                ..
+            } => {
+                for st in body {
+                    self.check_stmt_casing(st);
+                }
+                for c in catches {
+                    self.want_name_case(&c.name, c.span);
+                    for st in &c.body {
+                        self.check_stmt_casing(st);
+                    }
+                }
+                if let Some(fb) = finally_block {
+                    for st in fb {
+                        self.check_stmt_casing(st);
+                    }
+                }
+            }
         }
     }
 
@@ -1746,7 +1768,9 @@ impl Checker {
             | Stmt::While { span, .. }
             | Stmt::CFor { span, .. }
             | Stmt::Expr(_, span)
-            | Stmt::Block(_, span) => *span,
+            | Stmt::Block(_, span)
+            | Stmt::Throw { span, .. }
+            | Stmt::Try { span, .. } => *span,
             Stmt::Break(span) | Stmt::Continue(span) => *span,
         }
     }
@@ -1958,6 +1982,31 @@ impl Checker {
             Stmt::Block(stmts, _) => self.check_block(stmts),
             Stmt::Expr(e, _) => {
                 self.check_expr(e);
+            }
+            // M-faults 2b.1: structural type-checking only (check the thrown expr, the try body,
+            // each catch body with its binding in scope, and finally). `throws`-set enforcement,
+            // the `<: Error` rule, catch coverage, W-CATCH-UNREACHABLE, and try-totality land in
+            // Task 2b.3 — layered on top of this recursion.
+            Stmt::Throw { value, .. } => {
+                self.check_expr(value);
+            }
+            Stmt::Try {
+                body,
+                catches,
+                finally_block,
+                ..
+            } => {
+                self.check_block(body);
+                for c in catches {
+                    let cty = self.resolve_type(&c.ty);
+                    self.push_scope();
+                    self.declare(&c.name, cty, c.span);
+                    self.check_block(&c.body);
+                    self.pop_scope();
+                }
+                if let Some(fb) = finally_block {
+                    self.check_block(fb);
+                }
             }
         }
     }
@@ -4146,6 +4195,17 @@ fn lambda_uses_this(body: &crate::ast::LambdaBody) -> bool {
             Stmt::Assign { target, value, .. } => in_expr(target) || in_expr(value),
             Stmt::Block(stmts, _) => in_stmts(stmts),
             Stmt::Expr(e, _) => in_expr(e),
+            Stmt::Throw { value, .. } => in_expr(value),
+            Stmt::Try {
+                body,
+                catches,
+                finally_block,
+                ..
+            } => {
+                in_stmts(body)
+                    || catches.iter().any(|c| in_stmts(&c.body))
+                    || finally_block.as_ref().is_some_and(|fb| in_stmts(fb))
+            }
         })
     }
     match body {
@@ -4634,6 +4694,29 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
             Stmt::Continue(span) => Stmt::Continue(span),
             Stmt::Block(stmts, span) => Stmt::Block(rblock(stmts, h), span),
             Stmt::Expr(e, span) => Stmt::Expr(rexpr(e, h), span),
+            Stmt::Throw { value, span } => Stmt::Throw {
+                value: rexpr(value, h),
+                span,
+            },
+            Stmt::Try {
+                body,
+                catches,
+                finally_block,
+                span,
+            } => Stmt::Try {
+                body: rblock(body, h),
+                catches: catches
+                    .into_iter()
+                    .map(|c| crate::ast::CatchClause {
+                        ty: c.ty,
+                        name: c.name,
+                        body: rblock(c.body, h),
+                        span: c.span,
+                    })
+                    .collect(),
+                finally_block: finally_block.map(|b| rblock(b, h)),
+                span,
+            },
         }
     }
 
@@ -5001,6 +5084,31 @@ pub fn erase_generics(program: Program) -> Program {
                 Stmt::Block(stmts.iter().map(|s| rstmt(s, params)).collect(), *span)
             }
             Stmt::Expr(e, span) => Stmt::Expr(rexpr(e, params), *span),
+            Stmt::Throw { value, span } => Stmt::Throw {
+                value: rexpr(value, params),
+                span: *span,
+            },
+            Stmt::Try {
+                body,
+                catches,
+                finally_block,
+                span,
+            } => Stmt::Try {
+                body: body.iter().map(|s| rstmt(s, params)).collect(),
+                catches: catches
+                    .iter()
+                    .map(|c| crate::ast::CatchClause {
+                        ty: rty(&c.ty, params),
+                        name: c.name.clone(),
+                        body: c.body.iter().map(|s| rstmt(s, params)).collect(),
+                        span: c.span,
+                    })
+                    .collect(),
+                finally_block: finally_block
+                    .as_ref()
+                    .map(|b| b.iter().map(|s| rstmt(s, params)).collect()),
+                span: *span,
+            },
         }
     }
 
@@ -5021,6 +5129,7 @@ pub fn erase_generics(program: Program) -> Program {
                     type_params: Vec::new(), // erased
                     params: f.params.iter().map(|p| rparam(p, &params)).collect(),
                     ret: f.ret.as_ref().map(|t| rty(t, &params)),
+                    throws: f.throws.iter().map(|t| rty(t, &params)).collect(),
                     body: f.body.iter().map(|s| rstmt(s, &params)).collect(),
                     span: f.span,
                 })
@@ -5053,6 +5162,7 @@ pub fn erase_generics(program: Program) -> Program {
                                 type_params: Vec::new(), // erased
                                 params: f.params.iter().map(|p| rparam(p, &set)).collect(),
                                 ret: f.ret.as_ref().map(|t| rty(t, &set)),
+                                throws: f.throws.iter().map(|t| rty(t, &set)).collect(),
                                 body: f.body.iter().map(|s| rstmt(s, &set)).collect(),
                                 span: f.span,
                             })
@@ -5272,8 +5382,33 @@ pub fn expand_aliases(program: &Program) -> Program {
             Stmt::Block(stmts, span) => {
                 Stmt::Block(stmts.iter().map(|s| rstmt(s, a)).collect(), *span)
             }
-            // Assign/break/continue carry only exprs or nothing (no types this pass rewrites).
-            Stmt::Return { .. }
+            // A `try`'s catch clause carries a type annotation (possibly an alias) — resolve it and
+            // recurse into the bodies (this pass rewrites type annotations only; exprs are cloned).
+            Stmt::Try {
+                body,
+                catches,
+                finally_block,
+                span,
+            } => Stmt::Try {
+                body: body.iter().map(|s| rstmt(s, a)).collect(),
+                catches: catches
+                    .iter()
+                    .map(|c| crate::ast::CatchClause {
+                        ty: rt(&c.ty, a, 0),
+                        name: c.name.clone(),
+                        body: c.body.iter().map(|s| rstmt(s, a)).collect(),
+                        span: c.span,
+                    })
+                    .collect(),
+                finally_block: finally_block
+                    .as_ref()
+                    .map(|b| b.iter().map(|s| rstmt(s, a)).collect()),
+                span: *span,
+            },
+            // Throw/Assign/Return/Expr/break/continue carry only exprs or nothing (no type
+            // annotations this pass rewrites).
+            Stmt::Throw { .. }
+            | Stmt::Return { .. }
             | Stmt::Expr(..)
             | Stmt::Assign { .. }
             | Stmt::Break(_)
@@ -5288,6 +5423,7 @@ pub fn expand_aliases(program: &Program) -> Program {
             type_params: f.type_params.clone(),
             params: f.params.iter().map(|p| rparam(p, a)).collect(),
             ret: f.ret.as_ref().map(|t| rt(t, a, 0)),
+            throws: f.throws.iter().map(|t| rt(t, a, 0)).collect(),
             body: f.body.iter().map(|s| rstmt(s, a)).collect(),
             span: f.span,
         }

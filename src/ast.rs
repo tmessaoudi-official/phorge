@@ -513,6 +513,26 @@ fn collect_free_stmt(
             collect_free_expr(value, bound, found);
         }
         Stmt::Expr(e, _) => collect_free_expr(e, bound, found),
+        Stmt::Throw { value, .. } => collect_free_expr(value, bound, found),
+        Stmt::Try {
+            body,
+            catches,
+            finally_block,
+            ..
+        } => {
+            let mut try_bound = bound.clone();
+            collect_free_block(body, &mut try_bound, found);
+            for c in catches {
+                // The catch binding is in scope only inside its own clause body.
+                let mut catch_bound = bound.clone();
+                catch_bound.insert(c.name.clone());
+                collect_free_block(&c.body, &mut catch_bound, found);
+            }
+            if let Some(fb) = finally_block {
+                let mut fin_bound = bound.clone();
+                collect_free_block(fb, &mut fin_bound, found);
+            }
+        }
     }
 }
 
@@ -659,6 +679,31 @@ pub enum Stmt {
     Block(Vec<Stmt>, Span),
     /// `expr;`
     Expr(Expr, Span),
+    /// `throw expr;` (M-faults 2b). `value` is `never`-typed at the statement level (a `throw`
+    /// diverges — it satisfies return-on-all-paths); the thrown value must be `<: Error`.
+    Throw { value: Expr, span: Span },
+    /// `try { .. } catch (Type name) { .. } [catch …] [finally { .. }]` (M-faults 2b). At least one
+    /// `catch` **or** a `finally` is present (parser-enforced). Catches are tried in source order; a
+    /// thrown value matches the first clause whose `ty` it is an `instanceof`. `finally_block` runs on
+    /// every exit edge (normal, caught, re-propagated, and a `return`/`break`/`continue` escaping the
+    /// try). An uncatchable fault (panic) passes straight through every `catch`.
+    Try {
+        body: Vec<Stmt>,
+        catches: Vec<CatchClause>,
+        finally_block: Option<Vec<Stmt>>,
+        span: Span,
+    },
+}
+
+/// One `catch (Type name) { .. }` clause of a [`Stmt::Try`] (M-faults 2b). `ty` may be a union
+/// (`catch (A | B e)`) — `name` is then bound at the union type. Each clause has its own binding,
+/// scope, and body.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CatchClause {
+    pub ty: Type,
+    pub name: String,
+    pub body: Vec<Stmt>,
+    pub span: Span,
 }
 
 /// A function or method declaration. `modifiers` is empty for a free (top-level) function.
@@ -676,6 +721,11 @@ pub struct FunctionDecl {
     pub type_params: Vec<String>,
     pub params: Vec<Param>,
     pub ret: Option<Type>,
+    /// Declared checked-exception set: the `throws T (| T)*` clause (M-faults 2b). Empty for a
+    /// function that throws nothing. Each member must be a specific subtype of the built-in `Error`
+    /// (the bare root is `E-THROWS-TOO-BROAD`). Erased before any backend — the `throws` declaration
+    /// is checker-only (PHP has no checked exceptions).
+    pub throws: Vec<Type>,
     pub body: Vec<Stmt>,
     pub span: Span,
 }
@@ -908,6 +958,7 @@ mod tests {
                 args: vec![],
                 span: sp(),
             }),
+            throws: vec![],
             body: vec![],
             span: sp(),
         };

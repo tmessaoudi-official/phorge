@@ -812,8 +812,58 @@ impl Parser {
             }
             TokenKind::Var => self.parse_var_inferred(false),
             TokenKind::Mutable => self.parse_mutable_var_decl(),
+            TokenKind::Throw => self.parse_throw(),
+            TokenKind::Try => self.parse_try(),
             _ => self.parse_var_decl_or_expr_stmt(),
         }
+    }
+
+    /// `throw expr;` (M-faults 2b).
+    fn parse_throw(&mut self) -> Result<Stmt, Diagnostic> {
+        let sp = self.peek_span();
+        self.expect(&TokenKind::Throw, "'throw'")?;
+        let value = self.parse_expr()?;
+        self.expect(&TokenKind::Semicolon, "';' after 'throw <expr>'")?;
+        Ok(Stmt::Throw { value, span: sp })
+    }
+
+    /// `try { .. } catch (Type name) { .. } [catch …] [finally { .. }]` (M-faults 2b). Requires at
+    /// least one `catch` **or** a `finally` (a bare `try {}` is a parse error). A catch type may be a
+    /// union (`catch (A | B e)`), parsed by the shared `parse_type`.
+    fn parse_try(&mut self) -> Result<Stmt, Diagnostic> {
+        let sp = self.peek_span();
+        self.expect(&TokenKind::Try, "'try'")?;
+        let body = self.parse_block()?;
+        let mut catches = Vec::new();
+        while self.check(&TokenKind::Catch) {
+            let csp = self.peek_span();
+            self.advance(); // 'catch'
+            self.expect(&TokenKind::LParen, "'(' after 'catch'")?;
+            let ty = self.parse_type()?;
+            let name = self.expect_ident("a binding name in the catch clause")?;
+            self.expect(&TokenKind::RParen, "')' to close the catch clause")?;
+            let cbody = self.parse_block()?;
+            catches.push(crate::ast::CatchClause {
+                ty,
+                name,
+                body: cbody,
+                span: csp,
+            });
+        }
+        let finally_block = if self.eat(&TokenKind::Finally) {
+            Some(self.parse_block()?)
+        } else {
+            None
+        };
+        if catches.is_empty() && finally_block.is_none() {
+            return Err(self.error("'catch' or 'finally' after the try block"));
+        }
+        Ok(Stmt::Try {
+            body,
+            catches,
+            finally_block,
+            span: sp,
+        })
     }
 
     /// `var name = expr;` — the binding type is inferred from `expr` by the checker. `mutable` is
@@ -1343,6 +1393,14 @@ impl Parser {
         } else {
             None
         };
+        // `throws T (| T)*` (M-faults 2b). `parse_type` consumes a `A | B` union natively, so one
+        // call captures the whole declared set as a single (possibly `Union`) `Type`; the checker
+        // flattens it. Empty when the clause is absent.
+        let throws = if self.eat(&TokenKind::Throws) {
+            vec![self.parse_type()?]
+        } else {
+            Vec::new()
+        };
         let body = self.parse_block()?;
         Ok(FunctionDecl {
             modifiers,
@@ -1351,6 +1409,7 @@ impl Parser {
             type_params,
             params,
             ret,
+            throws,
             body,
             span: sp,
         })
@@ -1489,6 +1548,11 @@ impl Parser {
             } else {
                 None
             };
+            let throws = if self.eat(&TokenKind::Throws) {
+                vec![self.parse_type()?]
+            } else {
+                Vec::new()
+            };
             self.expect(
                 &TokenKind::Semicolon,
                 "';' after an interface method signature",
@@ -1500,6 +1564,7 @@ impl Parser {
                 type_params: Vec::new(),
                 params,
                 ret,
+                throws,
                 body: Vec::new(),
                 span: msp,
             });
@@ -2328,6 +2393,101 @@ mod tests {
         match stmt("{ return; return 1; }") {
             Stmt::Block(body, _) => assert_eq!(body.len(), 2),
             other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_throw_stmt() {
+        match stmt("throw ParseError(\"x\");") {
+            Stmt::Throw {
+                value: Expr::Call { .. },
+                ..
+            } => {}
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_try_catch_finally() {
+        match stmt("try { f(); } catch (ParseError e) { g(); } finally { h(); }") {
+            Stmt::Try {
+                body,
+                catches,
+                finally_block,
+                ..
+            } => {
+                assert_eq!(body.len(), 1);
+                assert_eq!(catches.len(), 1);
+                assert_eq!(catches[0].name, "e");
+                assert!(matches!(&catches[0].ty, Type::Named { name, .. } if name == "ParseError"));
+                assert!(finally_block.is_some());
+            }
+            other => panic!("got {other:?}"),
+        }
+        // A finally-only try (no catch) is allowed.
+        assert!(matches!(
+            stmt("try { f(); } finally { h(); }"),
+            Stmt::Try {
+                catches,
+                finally_block: Some(_),
+                ..
+            } if catches.is_empty()
+        ));
+        // A bare `try {}` with neither catch nor finally is a parse error.
+        assert!(parser("try { f(); }").parse_stmt().is_err());
+    }
+
+    #[test]
+    fn parses_multi_catch() {
+        match stmt("try { f(); } catch (A a) { x(); } catch (B b) { y(); }") {
+            Stmt::Try {
+                catches,
+                finally_block,
+                ..
+            } => {
+                assert_eq!(catches.len(), 2);
+                assert_eq!(catches[0].name, "a");
+                assert_eq!(catches[1].name, "b");
+                assert!(finally_block.is_none());
+            }
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_union_catch() {
+        match stmt("try { f(); } catch (A | B e) { x(); }") {
+            Stmt::Try { catches, .. } => {
+                assert_eq!(catches.len(), 1);
+                assert_eq!(catches[0].name, "e");
+                assert!(matches!(&catches[0].ty, Type::Union(members, _) if members.len() == 2));
+            }
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_fn_throws_clause() {
+        // Single declared exception type.
+        match &prog("package main;\nfunction f() -> int throws ParseError { return 1; }").items[0] {
+            Item::Function(f) => {
+                assert_eq!(f.throws.len(), 1);
+                assert!(matches!(&f.throws[0], Type::Named { name, .. } if name == "ParseError"));
+            }
+            other => panic!("expected function, got {other:?}"),
+        }
+        // `throws A | B` captures the whole union as one `Type::Union`.
+        match &prog("package main;\nfunction g() throws A | B { return; }").items[0] {
+            Item::Function(f) => {
+                assert_eq!(f.throws.len(), 1);
+                assert!(matches!(&f.throws[0], Type::Union(members, _) if members.len() == 2));
+            }
+            other => panic!("expected function, got {other:?}"),
+        }
+        // No throws clause ⇒ empty.
+        match &prog("package main;\nfunction h() {}").items[0] {
+            Item::Function(f) => assert!(f.throws.is_empty()),
+            other => panic!("expected function, got {other:?}"),
         }
     }
 

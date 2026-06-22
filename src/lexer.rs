@@ -395,6 +395,11 @@ fn keyword(s: &str) -> Option<TokenKind> {
         "static" => Static,
         "with" => With,
         "type" => TypeKw,
+        "throw" => Throw,
+        "try" => Try,
+        "catch" => Catch,
+        "finally" => Finally,
+        "throws" => Throws,
         _ => return None,
     })
 }

@@ -818,6 +818,29 @@ fn resolve_stmt(stmt: Stmt, ctx: &ResolveCtx) -> Stmt {
         Stmt::Continue(span) => Stmt::Continue(span),
         Stmt::Block(stmts, span) => Stmt::Block(resolve_block(stmts, ctx), span),
         Stmt::Expr(e, span) => Stmt::Expr(resolve_expr(e, ctx), span),
+        Stmt::Throw { value, span } => Stmt::Throw {
+            value: resolve_expr(value, ctx),
+            span,
+        },
+        Stmt::Try {
+            body,
+            catches,
+            finally_block,
+            span,
+        } => Stmt::Try {
+            body: resolve_block(body, ctx),
+            catches: catches
+                .into_iter()
+                .map(|c| crate::ast::CatchClause {
+                    ty: resolve_type(&c.ty, ctx),
+                    name: c.name,
+                    body: resolve_block(c.body, ctx),
+                    span: c.span,
+                })
+                .collect(),
+            finally_block: finally_block.map(|b| resolve_block(b, ctx)),
+            span,
+        },
     }
 }
 

@@ -60,6 +60,14 @@ pub enum TokenKind {
     Static,
     With,
     TypeKw,
+    // M-faults Slice 2b — exception keywords.
+    Throw,
+    Try,
+    Catch,
+    Finally,
+    /// `throws T (| T)*` clause on a function signature (M-faults 2b). Distinct from `throw` (the
+    /// statement); the lexer matches the full word so `throws` never lexes as `throw` + `s`.
+    Throws,
     // punctuation / operators
     Dot,
     DotDot,   // `..` exclusive range

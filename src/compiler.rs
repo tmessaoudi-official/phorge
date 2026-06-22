@@ -377,6 +377,7 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
                             type_params: Vec::new(),
                             params: Vec::new(),
                             ret: Some(ty.clone()),
+                            throws: Vec::new(),
                             body: vec![Stmt::Return {
                                 value: Some(g.clone()),
                                 span: *span,
@@ -395,6 +396,7 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
                             type_params: Vec::new(),
                             params: vec![p.clone()],
                             ret: None,
+                            throws: Vec::new(),
                             body: body.clone(),
                             span: *span,
                         },
@@ -1269,6 +1271,11 @@ impl<'a> Compiler<'a> {
             ),
             Stmt::Break(span) => self.compile_break_continue(true, span.line),
             Stmt::Continue(span) => self.compile_break_continue(false, span.line),
+            // M-faults 2b: native unwinding codegen lands in Task 2b.5 (Op::Throw/PushHandler/
+            // PopHandler + finally). No example/test compiles a throw/try in 2b.1.
+            Stmt::Throw { .. } | Stmt::Try { .. } => {
+                Err("throw/try codegen not yet implemented (M-faults 2b.5)".to_string())
+            }
         }
     }
 

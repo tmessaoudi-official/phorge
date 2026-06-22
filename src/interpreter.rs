@@ -38,7 +38,9 @@ fn stmt_line(s: &Stmt) -> u32 {
         | Stmt::If { span, .. }
         | Stmt::For { span, .. }
         | Stmt::While { span, .. }
-        | Stmt::CFor { span, .. } => span.line,
+        | Stmt::CFor { span, .. }
+        | Stmt::Throw { span, .. }
+        | Stmt::Try { span, .. } => span.line,
         Stmt::Break(s) | Stmt::Continue(s) | Stmt::Block(_, s) | Stmt::Expr(_, s) => s.line,
     }
 }
@@ -524,6 +526,12 @@ impl Interp {
             Stmt::Expr(e, _) => {
                 self.eval(e)?;
                 Ok(())
+            }
+            // M-faults 2b: native unwinding lands in Task 2b.4. The checker rejects throw/try in
+            // 2b.1 by not yet wiring enforcement, and no example/test exercises them, so this arm is
+            // unreachable in the current build.
+            Stmt::Throw { .. } | Stmt::Try { .. } => {
+                unreachable!("throw/try evaluation not yet implemented (M-faults 2b.4)")
             }
         }
     }

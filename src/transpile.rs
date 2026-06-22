@@ -875,6 +875,11 @@ impl Transpiler {
                 let s = self.emit_expr(e)?;
                 self.line(&format!("{s};"));
             }
+            // M-faults 2b: PHP try/catch/finally emission lands in Task 2b.6. No example/test
+            // transpiles a throw/try in 2b.1.
+            Stmt::Throw { .. } | Stmt::Try { .. } => {
+                return Err("throw/try transpile not yet implemented (M-faults 2b.6)".to_string());
+            }
         }
         Ok(())
     }
