@@ -22,6 +22,12 @@
 
 ---
 
+## Progress
+
+- **S6a COMPLETE** (`3b31ecd`→`c5e1a4c`): open modifier + final-keyword retired (S6a.1); `ClassDecl.extends`+`open` parse (S6a.2); `class_supertypes` oracle + member inheritance + `E-EXTEND-FINAL`/`-UNKNOWN`/`-MI-CYCLE` (S6a.3); method override + `E-OVERRIDE-FINAL` + parent-chain dispatch (S6a.4); transpile `extends`/`final class` + `examples/guide/inheritance.phg` (S6a.5). 779 tests green on the PHP-8.4 floor, byte-identical run≡runvm≡real PHP. **Method-level PHP `final` deferred** (not needed for byte-identity; checker enforces override-finality). **Override signature-variance check deferred** (KNOWN_ISSUES).
+- **S6b — IN PROGRESS** (multi-parent compose + resolution clauses + `abstract`).
+- **S6c — NOT STARTED** (field/ctor composition + diamond + full subtyping).
+
 ## Sub-slice S6a — single `extends` + override + the `open`/`final` model
 
 **Deliverable:** `open class A {…}  class B extends A {…}` with method override; `open` opt-in; `final` keyword retired; single-parent `super(...)`/`parent` works; subtyping + `instanceof` against the parent chain. One parent only (multi-parent is `E-…` deferred to S6b). Byte-identical run≡runvm≡PHP.
