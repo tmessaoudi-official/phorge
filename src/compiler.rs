@@ -566,6 +566,17 @@ fn ctor_parts(c: &ClassDecl) -> (&[CtorParam], &[Stmt]) {
 
 /// A ctor param is *promoted* to a field iff it carries a visibility modifier (matching
 /// `interpreter::construct` / the checker's promotion rule).
+/// Extract the literal text of a string-literal expression (one `StrPart::Literal`). The checker
+/// guarantees a fault intrinsic's message is such a literal (M-faults 2a); defaults to empty.
+fn str_literal(e: Option<&Expr>) -> String {
+    if let Some(Expr::Str(parts, _)) = e {
+        if let [crate::ast::StrPart::Literal(s)] = &parts[..] {
+            return s.clone();
+        }
+    }
+    String::new()
+}
+
 fn is_promoted(p: &CtorParam) -> bool {
     p.modifiers.iter().any(|m| {
         matches!(
@@ -1575,6 +1586,10 @@ impl<'a> Compiler<'a> {
 
     fn compile_call(&mut self, callee: &Expr, args: &[Expr], line: u32) -> Result<(), String> {
         if let Expr::Ident(name, _) = callee {
+            // Fault intrinsics (M-faults 2a) lower to `Op::Fault` — no user-function dispatch.
+            if self.compile_intrinsic(name, args, line)? {
+                return Ok(());
+            }
             if let Some(meta) = self.fns.get(name) {
                 for a in args {
                     self.expr(a)?;
@@ -1774,6 +1789,46 @@ impl<'a> Compiler<'a> {
         self.height = slot + 1; // reassert post-branch height (the terminal Return desynced the tracker)
         self.emit(Op::GetEnumField(0), line); // [.., ok_payload]
         Ok(())
+    }
+
+    /// Lower a fault intrinsic (`panic`/`todo`/`unreachable`/`assert`) to `Op::Fault` (M-faults 2a).
+    /// Returns `true` if `name` was an intrinsic (and was compiled), `false` otherwise. Messages are
+    /// compile-time literals (the checker enforces this), so they bake straight into the `FaultMsg` —
+    /// no new `Op`. `panic`/`todo`/`unreachable` are `never`-typed: the trailing `self.height += 1`
+    /// keeps the expression's "produces one value" contract for the (dead) code after the terminal
+    /// `Op::Fault`. `assert` produces `unit` on the true path and faults on the false path.
+    fn compile_intrinsic(&mut self, name: &str, args: &[Expr], line: u32) -> Result<bool, String> {
+        let base = self.height;
+        match name {
+            "panic" => {
+                let msg = str_literal(args.first());
+                self.emit(Op::Fault(FaultMsg::Panic(msg)), line);
+                self.height = base + 1;
+            }
+            "todo" => {
+                self.emit(Op::Fault(FaultMsg::Todo), line);
+                self.height = base + 1;
+            }
+            "unreachable" => {
+                self.emit(Op::Fault(FaultMsg::Unreachable), line);
+                self.height = base + 1;
+            }
+            "assert" => {
+                let msg = args
+                    .get(1)
+                    .map_or_else(String::new, |m| str_literal(Some(m)));
+                self.expr(&args[0])?; // [.., cond]
+                let to_fault = self.emit_jump(Op::JumpIfFalse(0), line); // false → fault (pops cond)
+                self.emit_const(Value::Unit, line); // true: [.., unit]
+                let to_end = self.emit_jump(Op::Jump(0), line);
+                self.patch_jump(to_fault);
+                self.emit(Op::Fault(FaultMsg::Assert(msg)), line);
+                self.patch_jump(to_end);
+                self.height = base + 1; // unit result
+            }
+            _ => return Ok(false),
+        }
+        Ok(true)
     }
 
     /// `obj with { f = e, … }` (M-mut.4a). Reconstruct a fresh instance: evaluate `obj` into a

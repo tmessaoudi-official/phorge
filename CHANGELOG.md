@@ -6,6 +6,30 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — error model Slice 2a: `Result` `?` propagation + fault intrinsics (M-faults)
+
+The first slice of the three-tier error model — the value tier and the panic tier (the enforced
+`throws E` exception tier lands in 2b). Byte-identical `run ≡ runvm ≡ real PHP`
+(`examples/guide/result.phg`); **no new `Op`**.
+
+- **`?` error-propagation operator** — postfix `expr?` on a `Result<T, E>` (an enum with `Ok`/`Err`
+  variants), in a let-initializer: unwraps the `Ok` payload, or **early-returns the `Err`** from the
+  enclosing function (which must return the same `Result`). The lexer already munches `??`/`?.`
+  separately, so a lone `?` needs no new token. Lowers via the existing `MatchTag`/`GetEnumField`/
+  `Return` ops (the VM's `do_return` truncates to the frame base, so the mid-expression early-return is
+  clean); transpiles to a PHP statement hoist (`$t = e; if ($t instanceof Err) return $t; $x =
+  $t->value;`) since PHP can't caller-return from an expression. Restricted to a let-initializer
+  (`E-PROPAGATE-POSITION`); the function must return the matching `Result` (`E-PROPAGATE-CONTEXT`/
+  `E-PROPAGATE-ERR`). The `throws`-call mode is deferred to 2b.
+- **Fault intrinsics** — `panic("msg")`, `todo()`, `unreachable()` (all **`never`-typed**, so they
+  satisfy return-on-all-paths and complete the totality story) and `assert(cond[, "msg"])`. They reuse
+  the existing `Op::Fault` (new data-carrying `FaultMsg` variants — no new `Op`); messages are
+  compile-time string literals (`E-INTRINSIC-LITERAL`) single-sourced so both backends render
+  identically (`FaultKind::Panic`). The names are reserved (`E-RESERVED-INTRINSIC`). Transpile to PHP
+  `throw new \RuntimeException`/`\LogicException` and a ternary-`throw` for `assert`.
+
+All five new diagnostics self-document via `phg explain`.
+
 ### Added — generic enums `enum Option<T>` / `enum Result<T, E>` (Rich Types, M-RT)
 
 TypeScript-style type parameters on **enums**, the sum-type companion to generic classes. An enum may

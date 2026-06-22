@@ -494,6 +494,36 @@ pub fn explain_text(code: &str) -> Option<String> {
              everything) so later arms are dead, or this arm duplicates an earlier literal/variant/type\n\
              pattern. Reorder so the catch-all is last, or remove the duplicate. Non-fatal lint.\n"
         }
+        "E-PROPAGATE-POSITION" => {
+            "E-PROPAGATE-POSITION — `?` used outside a let-initializer.\n\n\
+             The `?` error-propagation operator is allowed only as the *whole* initializer of a binding\n\
+             (`int a = mayFail()?;`). It is not allowed nested in a larger expression (`g(f()?)`) or in a\n\
+             `return` — PHP, the transpile target, cannot return from the caller inside an expression.\n\
+             Bind the call's result to a local first, then handle it (M-faults).\n"
+        }
+        "E-PROPAGATE-CONTEXT" => {
+            "E-PROPAGATE-CONTEXT — `?` in a function that can't propagate the error.\n\n\
+             `?` unwraps an `Ok` or early-returns the `Err`, so it requires a `Result`-shaped operand\n\
+             (an enum with `Ok`/`Err` variants) AND an enclosing function that returns that same\n\
+             `Result`. Declare the function to return `Result<…>`, or handle the value with a `match`.\n"
+        }
+        "E-PROPAGATE-ERR" => {
+            "E-PROPAGATE-ERR — `?` propagates an incompatible error type.\n\n\
+             The operand's `Err` payload type must be assignable to the enclosing function's `Err`\n\
+             payload type (it is the value `?` early-returns). Widen the function's error type, or map\n\
+             the error before propagating.\n"
+        }
+        "E-RESERVED-INTRINSIC" => {
+            "E-RESERVED-INTRINSIC — a reserved built-in name was redefined.\n\n\
+             `panic`, `todo`, `unreachable`, and `assert` are built-in fault intrinsics (M-faults) and\n\
+             cannot be declared as user functions. Rename your function.\n"
+        }
+        "E-INTRINSIC-LITERAL" => {
+            "E-INTRINSIC-LITERAL — a fault intrinsic's message must be a string literal.\n\n\
+             `panic(\"…\")` and `assert(cond, \"…\")` bake their message at compile time, so it must be a\n\
+             plain string literal — no interpolation or computed expression (yet). Use a literal, or\n\
+             compute the message into a local for a future dynamic form.\n"
+        }
         _ => return None,
     };
     Some(body.to_string())
@@ -504,7 +534,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-VIS-PRIVATE, E-VIS-INTERNAL)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL)"
         )
     })
 }
@@ -1419,6 +1449,21 @@ function main() { Console.println("hi"); }"#);
             "E-NEVER-RETURN",
             "W-UNREACHABLE",
             "W-MATCH-UNREACHABLE",
+        ] {
+            let body = explain_text(code).unwrap_or_else(|| panic!("{code} has an explanation"));
+            assert!(body.starts_with(code), "{body}");
+        }
+    }
+
+    #[test]
+    fn explain_covers_error_model_2a_codes() {
+        // The M-faults Slice 2a diagnostics (`?` propagation + fault intrinsics) self-document.
+        for code in [
+            "E-PROPAGATE-POSITION",
+            "E-PROPAGATE-CONTEXT",
+            "E-PROPAGATE-ERR",
+            "E-RESERVED-INTRINSIC",
+            "E-INTRINSIC-LITERAL",
         ] {
             let body = explain_text(code).unwrap_or_else(|| panic!("{code} has an explanation"));
             assert!(body.starts_with(code), "{body}");

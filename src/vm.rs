@@ -402,7 +402,7 @@ impl<'a> Vm<'a> {
             // A fixed runtime fault (match-exhaustiveness backstop or `opt!`-on-null), byte-identical
             // to the interpreter's fault for the same cause (the `agree_err` oracle classifies by
             // body). The message is single-sourced on `FaultMsg` (M3 S2.5).
-            Op::Fault(m) => return Err(m.message().to_string()),
+            Op::Fault(m) => return Err(m.message()),
 
             // --- P4b: classes ---
             Op::MakeInstance(idx) => {

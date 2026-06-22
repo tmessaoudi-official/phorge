@@ -42,7 +42,14 @@ function show(Result<int, string> r) -> string {
     };
 }
 
+// The third tier is *unchecked faults / panics* — for programmer bugs, never declared up the chain.
+// `panic("msg")`, `todo()`, and `unreachable()` are `never`-typed (they satisfy return-on-all-paths and
+// crash with a stack trace); `assert(cond[, "msg"])` faults only when its condition is false. Because a
+// fault crashes, panics can't appear in a *runnable* example — but a *passing* `assert` runs cleanly and
+// is byte-identical, so we show that form here. (A failing `panic`/`assert` transpiles to a PHP `throw`.)
+
 function main() {
+    assert(1 < 2, "arithmetic is intact"); // passes — a no-op; a false condition would fault
     Console.println(show(combine(1, 2))); // ok 30   — both fields succeed (10 + 20)
     Console.println(show(combine(3, -1))); // err negative key -1 — second field fails, `?` short-circuits
     Console.println(show(combine(-5, 9))); // err negative key -5 — first field fails

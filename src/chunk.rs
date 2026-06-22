@@ -41,21 +41,37 @@ impl ConstKey {
 /// Which fixed runtime fault an [`Op::Fault`] raises. The message lives here (single-sourced) so the
 /// VM and the tree-walking interpreter stay byte-identical — the `agree_err` oracle classifies
 /// faults by body substring (M3 S2.5).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// `Panic`/`Assert` carry a compile-time-literal message, so `FaultMsg` is no longer `Copy` (M-faults
+// 2a). `Op` is already `Clone` (not `Copy`), so this costs nothing beyond a rare String clone when a
+// fault op is dispatched (a fault is terminal — it happens at most once per run).
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FaultMsg {
     /// Non-exhaustive `match` fall-through (checker-unreachable backstop).
     NonExhaustiveMatch,
     /// `opt!` force-unwrap of a `null` value.
     ForceUnwrapNull,
+    /// `panic("msg")` — an explicit programmer abort. The message is a compile-time string literal.
+    Panic(String),
+    /// `todo()` — an unimplemented path.
+    Todo,
+    /// `unreachable()` — a path the programmer asserts can't happen.
+    Unreachable,
+    /// A failed `assert(cond[, "msg"])`. The (literal) message is empty when none was given.
+    Assert(String),
 }
 
 impl FaultMsg {
     /// The fault body. Must match the interpreter's `rt(..)` text for each fault so both backends
-    /// classify to the same `FaultKind`.
-    pub fn message(self) -> &'static str {
+    /// classify to the same `FaultKind` (and, here, stay byte-identical — single-sourced).
+    pub fn message(&self) -> String {
         match self {
-            FaultMsg::NonExhaustiveMatch => "non-exhaustive match at runtime",
-            FaultMsg::ForceUnwrapNull => "force-unwrap of null",
+            FaultMsg::NonExhaustiveMatch => "non-exhaustive match at runtime".to_string(),
+            FaultMsg::ForceUnwrapNull => "force-unwrap of null".to_string(),
+            FaultMsg::Panic(m) => format!("panic: {m}"),
+            FaultMsg::Todo => "todo: not yet implemented".to_string(),
+            FaultMsg::Unreachable => "entered unreachable code".to_string(),
+            FaultMsg::Assert(m) if m.is_empty() => "assertion failed".to_string(),
+            FaultMsg::Assert(m) => format!("assertion failed: {m}"),
         }
     }
 }

@@ -768,6 +768,18 @@ impl Checker {
     }
 
     fn collect_function(&mut self, f: &crate::ast::FunctionDecl) {
+        if is_intrinsic_name(&f.name) {
+            self.err_coded(
+                f.span,
+                format!(
+                    "`{}` is a reserved built-in intrinsic and cannot be redefined",
+                    f.name
+                ),
+                "E-RESERVED-INTRINSIC",
+                Some("panic/todo/unreachable/assert are built in (M-faults)".into()),
+            );
+            return;
+        }
         if self.funcs.contains_key(&f.name) {
             self.err(
                 f.span,
@@ -1639,7 +1651,10 @@ impl Checker {
         match e {
             Expr::Call { callee, .. } => {
                 if let Expr::Ident(name, _) = &**callee {
-                    self.funcs.get(name).is_some_and(|s| s.ret == Ty::Never)
+                    // A `never`-typed fault intrinsic (`panic`/`todo`/`unreachable` — not `assert`,
+                    // which is `unit`), or a user function declared `-> never` (M-faults 2a).
+                    matches!(name.as_str(), "panic" | "todo" | "unreachable")
+                        || self.funcs.get(name).is_some_and(|s| s.ret == Ty::Never)
                 } else {
                     false
                 }
@@ -2556,6 +2571,12 @@ impl Checker {
         use crate::ast::Expr;
         match callee {
             Expr::Ident(name, _) => {
+                // Built-in fault intrinsics (M-faults 2a): `panic`/`todo`/`unreachable` (→ `never`) and
+                // `assert` (→ `unit`). Recognized here before any user-function lookup; the names are
+                // reserved (`E-RESERVED-INTRINSIC`) so this can't be shadowed.
+                if let Some(t) = self.check_intrinsic_call(name, args, span) {
+                    return t;
+                }
                 // If the name is a local (or a `match`-arm binding) with function type, treat it
                 // as a function-value call rather than a named-function call — the latter only
                 // looks in `self.funcs` (top-level declarations) and would report "unknown
@@ -3573,6 +3594,70 @@ impl Checker {
         }
     }
 
+    /// Recognize and check a fault intrinsic call (`panic`/`todo`/`unreachable`/`assert`); returns
+    /// `Some(ty)` if `name` is one, else `None` (a normal call). Messages must be string *literals*
+    /// (compile-time const) so both backends bake byte-identical fault text (M-faults 2a).
+    fn check_intrinsic_call(
+        &mut self,
+        name: &str,
+        args: &[crate::ast::Expr],
+        span: Span,
+    ) -> Option<Ty> {
+        match name {
+            "panic" => {
+                if args.len() != 1 {
+                    self.err(span, "`panic` takes one string-literal message");
+                } else {
+                    self.require_str_literal(&args[0], span);
+                }
+                Some(Ty::Never)
+            }
+            "todo" | "unreachable" => {
+                if !args.is_empty() {
+                    self.err(span, format!("`{name}` takes no arguments"));
+                }
+                Some(Ty::Never)
+            }
+            "assert" => {
+                if args.is_empty() || args.len() > 2 {
+                    self.err(
+                        span,
+                        "`assert` takes a bool and an optional string-literal message",
+                    );
+                } else {
+                    let c = self.check_expr(&args[0]);
+                    if !self.ty_assignable(&c, &Ty::Bool) {
+                        self.err(
+                            span,
+                            format!("`assert` condition must be `bool`, found `{c}`"),
+                        );
+                    }
+                    if let Some(m) = args.get(1) {
+                        self.require_str_literal(m, span);
+                    }
+                }
+                Some(Ty::Unit)
+            }
+            _ => None,
+        }
+    }
+
+    /// Require `e` to be a string *literal* (one `StrPart::Literal`, no interpolation) — the fault
+    /// intrinsics bake their message at compile time (M-faults 2a).
+    fn require_str_literal(&mut self, e: &crate::ast::Expr, span: Span) {
+        if !matches!(e, crate::ast::Expr::Str(parts, _)
+            if parts.len() == 1 && matches!(parts[0], crate::ast::StrPart::Literal(_)))
+        {
+            self.err_coded(
+                span,
+                "this intrinsic's message must be a plain string literal",
+                "E-INTRINSIC-LITERAL",
+                Some("interpolation/expressions aren't allowed here yet".into()),
+            );
+        }
+        self.check_expr(e);
+    }
+
     fn check_force(&mut self, inner: &crate::ast::Expr, span: Span) -> Ty {
         let t = self.check_expr(inner);
         match t {
@@ -4111,6 +4196,12 @@ pub fn check_resolutions(
 
 /// Classic two-row Levenshtein edit distance (ASCII-oriented; M1 identifiers are ASCII), used to
 /// suggest the nearest in-scope name for an unknown identifier.
+/// The reserved fault-intrinsic names (M-faults 2a) — `panic`/`todo`/`unreachable` (`never`) and
+/// `assert` (`unit`). Recognized at call sites and rejected as user function names.
+fn is_intrinsic_name(name: &str) -> bool {
+    matches!(name, "panic" | "todo" | "unreachable" | "assert")
+}
+
 fn levenshtein(a: &str, b: &str) -> usize {
     let a: Vec<char> = a.chars().collect();
     let b: Vec<char> = b.chars().collect();
@@ -5654,6 +5745,44 @@ mod tests {
         assert!(
             bad.iter().any(|d| d.code == Some("E-PROPAGATE-POSITION")),
             "expected E-PROPAGATE-POSITION, got {bad:?}"
+        );
+    }
+
+    #[test]
+    fn intrinsic_panic_requires_string_literal() {
+        // A non-literal panic message (interpolation) is `E-INTRINSIC-LITERAL`.
+        let bad = errors_of(r#"function main() { var n = 1; panic("bad {n}"); }"#);
+        assert!(
+            bad.iter().any(|d| d.code == Some("E-INTRINSIC-LITERAL")),
+            "expected E-INTRINSIC-LITERAL, got {bad:?}"
+        );
+    }
+
+    #[test]
+    fn intrinsic_assert_condition_must_be_bool() {
+        let bad = errors_of(r#"function main() { assert(1, "x"); }"#);
+        assert!(
+            !bad.is_empty(),
+            "expected a type error for a non-bool assert condition"
+        );
+    }
+
+    #[test]
+    fn intrinsic_name_is_reserved() {
+        let bad = errors_of("function unreachable() { return; } function main() {}");
+        assert!(
+            bad.iter().any(|d| d.code == Some("E-RESERVED-INTRINSIC")),
+            "expected E-RESERVED-INTRINSIC, got {bad:?}"
+        );
+    }
+
+    #[test]
+    fn panic_tail_satisfies_return_totality() {
+        // `panic` is `never`-typed, so a value-returning fn ending in it needs no further `return`.
+        let ok = errors_of(r#"function f() -> int { panic("x"); } function main() {}"#);
+        assert!(
+            ok.is_empty(),
+            "expected clean (never satisfies totality), got {ok:?}"
         );
     }
 

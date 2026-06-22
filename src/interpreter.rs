@@ -59,6 +59,17 @@ fn signal_msg(sig: Signal) -> String {
     }
 }
 
+/// The literal text of a fault intrinsic's string-literal message argument (M-faults 2a). The checker
+/// guarantees it is a single `StrPart::Literal`; defaults to empty (e.g. a bare `assert(cond)`).
+fn lit_msg(e: Option<&Expr>) -> String {
+    if let Some(Expr::Str(parts, _)) = e {
+        if let [crate::ast::StrPart::Literal(s)] = &parts[..] {
+            return s.clone();
+        }
+    }
+    String::new()
+}
+
 fn as_bool(v: &Value) -> R<bool> {
     match v {
         Value::Bool(b) => Ok(*b),
@@ -972,6 +983,23 @@ impl Interp {
             return self.call_method(recv, name, argv);
         }
         if let Expr::Ident(name, _) = callee {
+            // Fault intrinsics (M-faults 2a) — `panic`/`todo`/`unreachable` always fault; `assert`
+            // faults iff its condition is false. The message is single-sourced on `FaultMsg::message`
+            // so it is byte-identical to the VM's `Op::Fault`.
+            use crate::chunk::FaultMsg;
+            match name.as_str() {
+                "panic" => return rt(FaultMsg::Panic(lit_msg(args.first())).message()),
+                "todo" => return rt(FaultMsg::Todo.message()),
+                "unreachable" => return rt(FaultMsg::Unreachable.message()),
+                "assert" => {
+                    let cond = self.eval(&args[0])?;
+                    if !matches!(cond, Value::Bool(true)) {
+                        return rt(FaultMsg::Assert(lit_msg(args.get(1))).message());
+                    }
+                    return Ok(Value::Unit);
+                }
+                _ => {}
+            }
             let argv = self.eval_args(args)?;
             if let Some(f) = self.funcs.get(name).cloned() {
                 if argv.len() != f.params.len() {

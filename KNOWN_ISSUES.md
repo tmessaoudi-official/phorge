@@ -93,6 +93,23 @@ an explicit non-goal, never a panic):
   transpile to PHP `public` (Phorge does not enforce field visibility at runtime; `readonly`/`final`
   emission is not done — immutable fields are already write-prevented by the checker).
 
+## Error model Slice 2a (M-faults) — deferred refinements
+
+The value tier (`Result<T, E>` + `?`) and the panic tier (`panic`/`todo`/`unreachable`/`assert`) ship in
+2a, byte-identical `run ≡ runvm ≡ real PHP`. The enforced `throws E` exception tier (with `try`/`catch`/
+`finally`) is Slice 2b. Deliberately deferred (each rejected cleanly, never a crash):
+
+- **`?` is allowed only as a whole let-initializer** (`int a = f()?;`). Nested (`g(f()?)`) or
+  `return f()?` is `E-PROPAGATE-POSITION` — bind to a local first. [Verified: PHP cannot caller-return
+  from inside an expression; a general A-normal-form hoist is deferred.]
+- **`?` works on `Result` only this slice** — the `throws`-call propagation mode lands with 2b.
+- **A fault intrinsic's message must be a string literal** (`E-INTRINSIC-LITERAL`) — it is baked into the
+  fault at compile time. Interpolated/computed panic messages are deferred (would need a runtime-string
+  fault path).
+- **`?`-unwrapped payloads are not specialized arithmetic operands on the VM** — the unwrapped `Ok`
+  value types as `CTy::Other` (the same erased-generics operand limitation), so `f()? + 1` in a
+  let-init would run on the interpreter but the VM rejects the arithmetic; bind to a typed local.
+
 ## Totality cluster (M-RT) — deferred refinements
 
 Return-on-all-paths (`E-MISSING-RETURN`), the `never` bottom type, and the `W-UNREACHABLE` /

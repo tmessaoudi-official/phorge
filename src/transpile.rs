@@ -1189,6 +1189,41 @@ impl Transpiler {
 
     fn emit_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<String, String> {
         if let Expr::Ident(name, _) = callee {
+            // Fault intrinsics (M-faults 2a) → PHP exceptions (a `throw` expression, PHP 8.0+). The
+            // fault text is single-sourced on `FaultMsg::message` so it reads identically to the
+            // backends (panics aren't runnable examples, so this isn't oracle-compared, but it stays
+            // valid, faithful PHP).
+            use crate::chunk::FaultMsg;
+            match name.as_str() {
+                "panic" => {
+                    let m = FaultMsg::Panic(lit_arg(args.first())).message();
+                    return Ok(format!(
+                        "throw new \\RuntimeException(\"{}\")",
+                        php_escape(&m)
+                    ));
+                }
+                "todo" => {
+                    return Ok(format!(
+                        "throw new \\RuntimeException(\"{}\")",
+                        php_escape(&FaultMsg::Todo.message())
+                    ));
+                }
+                "unreachable" => {
+                    return Ok(format!(
+                        "throw new \\LogicException(\"{}\")",
+                        php_escape(&FaultMsg::Unreachable.message())
+                    ));
+                }
+                "assert" => {
+                    let c = self.emit_expr(&args[0])?;
+                    let m = FaultMsg::Assert(lit_arg(args.get(1))).message();
+                    return Ok(format!(
+                        "({c} ? null : throw new \\RuntimeException(\"{}\"))",
+                        php_escape(&m)
+                    ));
+                }
+                _ => {}
+            }
             let argv = self.emit_args(args)?;
             // Enum variant or class construction → `new`; mirrors the evaluator's dispatch. A
             // cross-package class name is mangled (FQN); a variant subclass lives in its enum's
@@ -1510,6 +1545,17 @@ impl Transpiler {
 
 /// Escape a literal string chunk for embedding in a PHP double-quoted string.
 /// `$` is escaped so PHP does not attempt its own interpolation on emitted literals.
+/// The literal text of a fault intrinsic's string-literal message (M-faults 2a); empty if absent. The
+/// checker guarantees the argument is a single `StrPart::Literal`.
+fn lit_arg(e: Option<&Expr>) -> String {
+    if let Some(Expr::Str(parts, _)) = e {
+        if let [StrPart::Literal(s)] = &parts[..] {
+            return s.clone();
+        }
+    }
+    String::new()
+}
+
 fn php_escape(s: &str) -> String {
     s.replace('\\', "\\\\")
         .replace('"', "\\\"")
