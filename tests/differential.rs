@@ -88,6 +88,10 @@ enum FaultKind {
     /// fault `"range too large"` (P1-#9) instead of OOM-aborting (exit 101); classified by body
     /// substring so the VM's line prefix doesn't split it from the interpreter's prefix-less render.
     RangeTooLarge,
+    /// An explicit programmer abort — `panic`/`todo`/`unreachable`/failed `assert` (M-faults 2a). All
+    /// four share one kind: their bodies are single-sourced on `FaultMsg`, so both backends render
+    /// byte-identically; classifying by body substring keeps the VM's line prefix from splitting them.
+    Panic,
     /// Anything the corpus doesn't yet classify — carried verbatim so a mismatch stays legible.
     Other(String),
 }
@@ -110,6 +114,12 @@ fn classify(err: &str) -> FaultKind {
         FaultKind::ForceUnwrap
     } else if err.contains("range too large") {
         FaultKind::RangeTooLarge
+    } else if err.contains("panic:")
+        || err.contains("not yet implemented")
+        || err.contains("unreachable code")
+        || err.contains("assertion failed")
+    {
+        FaultKind::Panic
     } else if err.contains("no field") {
         FaultKind::NoField
     } else if err.contains("unsupported") || err.contains("compile error") {
@@ -1509,5 +1519,28 @@ fn m7_large_range_faults_identically() {
 fn m7_int_min_div_neg_one_faults_identically() {
     agree_err(
         "import Core.Console; function main(){ int x = -9223372036854775807 - 1; Console.println(\"{x / -1}\"); }",
+    );
+}
+
+/// M-faults 2a: the fault intrinsics crash byte-identically on both backends (single-sourced
+/// `FaultMsg` body → same `FaultKind::Panic`). `assert(true)` is a no-op, so the program completes.
+#[test]
+fn faults_panic_intrinsics_agree() {
+    agree_err(r#"function main(){ panic("boom"); }"#);
+    agree_err("function main(){ todo(); }");
+    agree_err("function main(){ unreachable(); }");
+    agree_err(r#"function main(){ assert(2 < 1, "nope"); }"#);
+    agree_err("function main(){ assert(false); }");
+    agree(
+        r#"import Core.Console; function main(){ assert(1 < 2, "ok"); Console.println("done"); }"#,
+    );
+}
+
+/// M-faults 2a: a `never`-typed `panic` at the tail of a value-returning function satisfies
+/// return-on-all-paths (the totality engine treats it as diverging), and faults identically.
+#[test]
+fn never_intrinsic_satisfies_return_totality() {
+    agree_err(
+        r#"function bad() -> int { panic("never returns"); } function main(){ var x = bad(); }"#,
     );
 }
