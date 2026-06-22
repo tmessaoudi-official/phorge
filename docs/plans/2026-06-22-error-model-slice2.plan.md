@@ -79,9 +79,25 @@ then writing-plans.
   `CatchClause`/`FunctionDecl.throws`) + parser + all exhaustive-match arms (structural passes real,
   semantic backends stubbed). **2b.2 DONE** (`459f080`): built-in `Error` marker interface (seeded +
   reserved) → PHP `extends \Exception`; promoted `message` untyped + `parent::__construct`; value
-  construct+read byte-identical run/runvm/real PHP. **NEXT: 2b.3** (checker: `throws` enforcement +
-  `?`-throws erasure + catch coverage/W-CATCH-UNREACHABLE + `try` totality) → 2b.4 interpreter → 2b.5 VM
-  (3 Ops + finally, the agreed review checkpoint) → 2b.6 transpile parity → 2b.7 example+docs.
+  construct+read byte-identical run/runvm/real PHP. **2b.3 DONE**: checker enforcement, front-end only,
+  no backend (a program failing the checker never reaches the stubbed backends, so the suite stays
+  green). Landed: `FnSig.throws` (resolved at collect for free fns + class methods; interface methods
+  empty = deferral); `Checker` fields `cur_throws`/`cur_is_main`/`try_catch_stack`/`skip_throws_discharge`
+  (saved/restored like `cur_ret` at every body site; reset around lambdas — a lambda sees no enclosing
+  `try` and declares no throws); `throw e` enforcement (`E-THROW-TYPE` non-Error; discharge via covering
+  `try` **or** declared `throws`, else `E-THROW-UNDECLARED` / `E-UNCAUGHT-THROW` in `main`); bare-call
+  discharge (`E-CALL-UNHANDLED` — covering `try` only; propagation needs `?`); throws-mode `?`
+  (`try_throws_propagate`, free-fn throwing call, discharged against declared `throws`, recorded in
+  `html_resolutions` + erased by a new `resolve_html` `Propagate` arm so no backend sees it; Result-mode
+  `?` unchanged); catch typing (`E-CATCH-TYPE` non-Error member, union-catch frame membership, binding in
+  scope, `W-CATCH-UNREACHABLE` for a shadowed clause); `throws`-decl validation (`E-THROWS-TOO-BROAD` on
+  bare `Error`; `main` may not declare `throws`); `try`/`throw` totality arms in `stmt_terminates`.
+  7 codes + the warning self-document via `phg explain`. 623 lib + full suite green on the PHP-8.4 floor;
+  clippy+fmt clean. **Deferred (KNOWN_ISSUES):** method/interface-declared throws are checked *inside*
+  the body but not discharged at the *call* site; `?` on a throwing *method* call (only free-fn
+  `?`-throws this slice). **NEXT: 2b.4** interpreter (`Signal::Throw` + try/catch/finally + native
+  side-channel) → 2b.5 VM (3 Ops + finally, the agreed review checkpoint) → 2b.6 transpile parity →
+  2b.7 example+docs.
 - **PHASE 2c — NOT STARTED**: `finally` + cause-chain + imported-PHP catch bridge.
 
 ## Decisions Log (execution refinements)
