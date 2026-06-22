@@ -517,36 +517,28 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
         next_idx += 1;
     }
 
-    // M-RT S6/S6b: inherit method-table entries from ancestor classes. A class that does not declare
-    // a method of a given name uses the nearest ancestor's already-registered body (same fn index), so
-    // the VM's `CallMethod` resolves an inherited method exactly like the interpreter's parent-chain
-    // walk. No new functions are compiled — these are table aliases; own/nearer entries already win.
-    // The ancestor order is the **shared** `ast::class_mro` (nearest-first BFS over every parent), the
-    // same table the interpreter's `call_method` walks — so the two backends can never disagree on
-    // which ancestor a multi-parent method is inherited from.
+    // M-RT S6/S6b: alias inherited / resolution-clause / renamed method-table entries to the body that
+    // actually runs. The **shared** `ast::class_method_origins` resolves each `(class, name)` to its
+    // `(declaring_class, method)` — already accounting for override, multi-parent composition, diamond
+    // auto-merge, and `use`/`rename`/`exclude` clauses — the exact table the interpreter dispatches
+    // through, so the two backends can never disagree. No new functions are compiled: an inherited
+    // entry is a table alias to the declaring class's already-registered fn index. A class's own method
+    // (`origin == self`) is already registered, so it is skipped.
     {
-        let mro = crate::ast::class_mro(program);
-        let class_names: Vec<String> = class_decls.iter().map(|c| c.name.clone()).collect();
-        for cname in &class_names {
-            for anc in mro.get(cname).into_iter().flatten() {
-                let anc_methods: Vec<String> = methods
-                    .keys()
-                    .filter(|(cl, _)| cl == anc)
-                    .map(|(_, m)| m.clone())
-                    .collect();
-                for mname in anc_methods {
-                    let key = (cname.clone(), mname.clone());
-                    if methods.contains_key(&key) {
-                        continue; // own or nearer-ancestor method wins (override)
-                    }
-                    let anc_key = (anc.clone(), mname.clone());
-                    methods.insert(key.clone(), methods[&anc_key]);
-                    if let Some(rty) = method_rets.get(&anc_key).cloned() {
-                        method_rets.insert(key.clone(), rty);
-                    }
-                    if let Some(set_id) = method_overloads.get(&anc_key).copied() {
-                        method_overloads.insert(key, set_id);
-                    }
+        let (origins, _conflicts) = crate::ast::class_method_origins(program);
+        for ((cname, name), (oc, om)) in &origins {
+            let key = (cname.clone(), name.clone());
+            if methods.contains_key(&key) {
+                continue; // own / already-registered entry wins
+            }
+            let anc_key = (oc.clone(), om.clone());
+            if let Some(idx) = methods.get(&anc_key).copied() {
+                methods.insert(key.clone(), idx);
+                if let Some(rty) = method_rets.get(&anc_key).cloned() {
+                    method_rets.insert(key.clone(), rty);
+                }
+                if let Some(set_id) = method_overloads.get(&anc_key).copied() {
+                    method_overloads.insert(key, set_id);
                 }
             }
         }

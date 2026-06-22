@@ -150,10 +150,11 @@ pub struct Interp {
     /// runtime test never diverges (M-RT S2). Interfaces themselves are erased: there are no
     /// interface values, only this lookup.
     class_implements: std::collections::BTreeMap<String, Vec<String>>,
-    /// Per-class method-resolution order (nearest-first ancestor list, excluding self), built once via
-    /// [`crate::ast::class_mro`] and shared with the compiler's pre-flatten so `call_method` resolves
-    /// an inherited method to the *same* ancestor the VM's flat method table does (M-RT S6b).
-    class_mro: std::collections::BTreeMap<String, Vec<String>>,
+    /// The fully-resolved method-dispatch table — `(class, name) -> (declaring_class, method)` — built
+    /// once via [`crate::ast::class_method_origins`] and shared with the compiler's pre-flatten so a
+    /// multi-parent / resolution-clause / renamed call resolves to the *same* body the VM dispatches
+    /// to (M-RT S6b). Subsumes the parent-chain walk: `call_method` is now a single table lookup.
+    method_origins: std::collections::BTreeMap<(String, String), (String, String)>,
     /// variant name -> (enum name, arity)
     variants: HashMap<String, (String, usize)>,
     /// Program-lifetime `static` field storage (M-mut.7), keyed by `(class, field)`. Seeded once at
@@ -190,7 +191,7 @@ pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
         funcs: HashMap::new(),
         classes: HashMap::new(),
         class_implements: std::collections::BTreeMap::new(),
-        class_mro: std::collections::BTreeMap::new(),
+        method_origins: std::collections::BTreeMap::new(),
         variants: HashMap::new(),
         statics: HashMap::new(),
         frame: CallScopes::new(),
@@ -261,7 +262,7 @@ pub fn call_named(
         funcs: HashMap::new(),
         classes: HashMap::new(),
         class_implements: std::collections::BTreeMap::new(),
-        class_mro: std::collections::BTreeMap::new(),
+        method_origins: std::collections::BTreeMap::new(),
         variants: HashMap::new(),
         statics: HashMap::new(),
         frame: CallScopes::new(),
@@ -357,10 +358,12 @@ impl Interp {
         }
         // The single shared interface table (same algorithm as the checker + VM, no divergence).
         self.class_implements = crate::ast::class_implements(program);
-        // The single shared method-resolution order (M-RT S6b): `call_method` walks `[class] ++ mro`
-        // so a multi-parent method resolves to the same ancestor the compiler pre-flattens into the
-        // VM's table.
-        self.class_mro = crate::ast::class_mro(program);
+        // The single shared method-dispatch table (M-RT S6b): `call_method` resolves `(class, name)`
+        // to its `(declaring_class, method)` — the same table the compiler pre-flattens into the VM's
+        // method table, so multi-parent / resolution-clause / renamed dispatch can never diverge. The
+        // conflict list is checker-only (E-MI-CONFLICT); a clean program reaches here conflict-free.
+        let (origins, _conflicts) = crate::ast::class_method_origins(program);
+        self.method_origins = origins;
     }
 
     /// Run a callable body in a fresh frame: bind `args` to `names` in the base
@@ -1399,35 +1402,33 @@ impl Interp {
             Value::Instance(inst) => inst,
             other => return rt(format!("cannot call `.{name}()` on {}", other.type_name())),
         };
-        // M-RT S6/S6b: resolve the method against the class's method-resolution order — the class
-        // itself, then its ancestors nearest-first (BFS over *every* parent, not just the first), via
-        // the shared `class_mro` table. The first class that declares a method of this name wins (a
-        // child's own method overrides an inherited one; a diamond shared base is visited once). The
-        // compiler pre-flattens the identical lookup into the VM's `methods` table, so `run`/`runvm`
-        // resolve to the same body.
+        // M-RT S6/S6b: resolve the method through the shared dispatch table, which maps `(class, name)`
+        // to the `(declaring_class, method)` it runs — already accounting for override, multi-parent
+        // composition, diamond auto-merge, and `use`/`rename`/`exclude` resolution clauses. The
+        // compiler pre-flattens the identical table into the VM's `methods` table, so `run`/`runvm`
+        // dispatch to the same body. The candidates are that origin class's overloads of the resolved
+        // method name (which differs from `name` only for a renamed alias).
         let candidates: Vec<FunctionDecl> = {
-            let mro = self.class_mro.get(&inst.class);
-            let chain =
-                std::iter::once(inst.class.clone()).chain(mro.into_iter().flatten().cloned());
-            let mut found = Vec::new();
-            for cur in chain {
-                let Some(class) = self.classes.get(&cur) else {
-                    continue;
-                };
-                let here: Vec<FunctionDecl> = class
-                    .members
-                    .iter()
-                    .filter_map(|m| match m {
-                        ClassMember::Method(f) if f.name == name => Some(f.clone()),
-                        _ => None,
+            let key = (inst.class.clone(), name.to_string());
+            match self.method_origins.get(&key) {
+                Some((origin_class, origin_method)) => self
+                    .classes
+                    .get(origin_class)
+                    .map(|class| {
+                        class
+                            .members
+                            .iter()
+                            .filter_map(|m| match m {
+                                ClassMember::Method(f) if &f.name == origin_method => {
+                                    Some(f.clone())
+                                }
+                                _ => None,
+                            })
+                            .collect()
                     })
-                    .collect();
-                if !here.is_empty() {
-                    found = here;
-                    break;
-                }
+                    .unwrap_or_default(),
+                None => Vec::new(),
             }
-            found
         };
         let f = match candidates.len() {
             0 => return rt(format!("no method `{name}` on `{}`", inst.class)),

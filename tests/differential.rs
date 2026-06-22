@@ -272,6 +272,46 @@ function main() {
     );
 }
 
+/// M-RT S6b.2 — a cross-parent method collision resolved with `use P.m` dispatches identically on
+/// both backends. `Swimmer.move` and `Flyer.move` collide; `use Flyer.move` (the *second* parent —
+/// the case BFS-first-wins would get wrong) picks Flyer's, so `d.move()` must run Flyer's body on
+/// `run` and `runvm` alike.
+#[test]
+fn s6b_resolution_use_picks_the_named_parent() {
+    agree(
+        r#"import Core.Console;
+open class Swimmer { open function move() -> string { return "swims"; } }
+open class Flyer { open function move() -> string { return "flies"; } }
+class Duck extends Swimmer, Flyer {
+    use Flyer.move
+}
+function main() {
+    Duck d = Duck();
+    Console.println(d.move()); // Flyer's, per the resolution clause
+}"#,
+    );
+}
+
+/// M-RT S6b.2 — `rename P.m as n` keeps both colliding methods: the renamed one under the new name,
+/// the other under the original. `rename Flyer.move as glide` leaves `move` resolved to Swimmer (the
+/// only remaining source) and binds `glide` to Flyer's `move`. Both calls dispatch identically.
+#[test]
+fn s6b_resolution_rename_keeps_both() {
+    agree(
+        r#"import Core.Console;
+open class Swimmer { open function move() -> string { return "swims"; } }
+open class Flyer { open function move() -> string { return "flies"; } }
+class Duck extends Swimmer, Flyer {
+    rename Flyer.move as glide
+}
+function main() {
+    Duck d = Duck();
+    Console.println(d.move());  // Swimmer's (the remaining source)
+    Console.println(d.glide()); // Flyer's, under the new name
+}"#,
+    );
+}
+
 /// M3 S0.2 — `var` local type inference is a front-end-only feature (type erased after checking),
 /// so both backends must run a `var` program byte-identically.
 #[test]

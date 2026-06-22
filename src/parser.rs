@@ -1518,7 +1518,17 @@ impl Parser {
         };
         self.expect(&TokenKind::LBrace, "'{' to open class body")?;
         let mut members = Vec::new();
+        let mut resolutions = Vec::new();
         while !self.check(&TokenKind::RBrace) && !self.check(&TokenKind::Eof) {
+            // M-RT S6b: a leading contextual `use`/`rename`/`exclude` (lexed as identifiers, never
+            // reserved) introduces a multi-inheritance resolution clause rather than a member. Types
+            // are PascalCase, so these lowercase leaders are unambiguous in member position.
+            if let TokenKind::Ident(kw) = self.peek() {
+                if matches!(kw.as_str(), "use" | "rename" | "exclude") {
+                    resolutions.push(self.parse_resolution()?);
+                    continue;
+                }
+            }
             members.push(self.parse_class_member()?);
         }
         self.expect(&TokenKind::RBrace, "'}' to close class")?;
@@ -1529,9 +1539,51 @@ impl Parser {
             extends,
             implements,
             open,
+            resolutions,
             members,
             span: sp,
         })
+    }
+
+    /// A multi-inheritance resolution clause (M-RT S6b): `use P.m` | `rename P.m as n` | `exclude P.m`,
+    /// with an optional trailing `;`. Assumes the current token is the contextual keyword.
+    fn parse_resolution(&mut self) -> Result<crate::ast::Resolution, Diagnostic> {
+        let sp = self.peek_span();
+        let kw = self.expect_ident("a resolution clause keyword")?;
+        let parent = self.expect_ident("a parent class name")?;
+        self.expect(&TokenKind::Dot, "'.' between the parent and method")?;
+        let method = self.expect_ident("a method name")?;
+        let res = match kw.as_str() {
+            "use" => crate::ast::Resolution::Use {
+                parent,
+                method,
+                span: sp,
+            },
+            "exclude" => crate::ast::Resolution::Exclude {
+                parent,
+                method,
+                span: sp,
+            },
+            "rename" => {
+                let as_kw = self.expect_ident("'as' in a rename clause")?;
+                if as_kw != "as" {
+                    return Err(self.error("'as' after 'rename P.m'"));
+                }
+                let as_name = self.expect_ident("the new method name after 'as'")?;
+                crate::ast::Resolution::Rename {
+                    parent,
+                    method,
+                    as_name,
+                    span: sp,
+                }
+            }
+            _ => unreachable!("caller gated the keyword"),
+        };
+        // Optional terminator.
+        if self.check(&TokenKind::Semicolon) {
+            self.advance();
+        }
+        Ok(res)
     }
 
     /// `interface Name [extends A, B] { (function sig;)* }` — assumes current token is `interface`.

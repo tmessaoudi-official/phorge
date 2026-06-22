@@ -429,6 +429,14 @@ pub fn explain_text(code: &str) -> Option<String> {
              `class A extends B` while `B extends A` (directly or transitively) has no well-founded\n\
              member set. Break the cycle so every class's `extends` chain bottoms out at a root class.\n"
         }
+        "E-MI-CONFLICT" => {
+            "E-MI-CONFLICT — a method is inherited from more than one parent.\n\n\
+             Under multiple inheritance (`class C extends A, B`, M-RT S6b), if two parents each supply a\n\
+             method of the same name Phorge will not silently pick one. Resolve it in C's body with a\n\
+             clause: `use P.m` (pick parent P's `m`), `rename P.m as n` (keep both under a new name),\n\
+             `exclude P.m` (drop one), or override by declaring `function m(…)` in C. A diamond where\n\
+             both arms reach the *same* declaring method auto-merges and is never a conflict.\n"
+        }
         "E-OVERRIDE-FINAL" => {
             "E-OVERRIDE-FINAL — a method overrides a non-`open` ancestor method.\n\n\
              Methods are final-by-default (M-RT S6): a subclass may only redefine a parent method that\n\

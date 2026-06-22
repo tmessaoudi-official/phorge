@@ -427,6 +427,166 @@ pub fn class_mro(program: &Program) -> std::collections::BTreeMap<String, Vec<St
     out
 }
 
+/// The fully-resolved method-dispatch table for every class (M-RT S6b): for each `(class, name)` it
+/// gives the `(declaring_class, declaring_method)` a call of `name` on an instance of `class` runs.
+/// This is the **single source of dispatch** for *both* backends — the interpreter looks up the
+/// origin and the compiler aliases the bytecode method-table entry to it — so multi-parent dispatch
+/// (including resolution clauses and renamed aliases) can never diverge between `run` and `runvm`.
+///
+/// Composition: a class's own methods map to itself (override); each direct parent contributes its
+/// own resolved table; a diamond shared base auto-merges (both arms reach the *same* declaring
+/// method). Resolution clauses (`use`/`rename`/`exclude`) are applied before finalizing. The second
+/// return value lists every **unresolved** cross-parent collision as `(class, name, class_span)` —
+/// the checker reports each as `E-MI-CONFLICT`. On a conflict the table still records a deterministic
+/// pick so a backend never panics (the checker fails the build first).
+#[allow(clippy::type_complexity)]
+pub fn class_method_origins(
+    program: &Program,
+) -> (
+    std::collections::BTreeMap<(String, String), (String, String)>,
+    Vec<(String, String, Span)>,
+) {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    struct Ctx {
+        decl: BTreeMap<String, BTreeSet<String>>,
+        extends: BTreeMap<String, Vec<String>>,
+        resolutions: BTreeMap<String, Vec<Resolution>>,
+        spans: BTreeMap<String, Span>,
+        memo: BTreeMap<String, BTreeMap<String, (String, String)>>,
+        conflicts: Vec<(String, String, Span)>,
+        in_progress: BTreeSet<String>,
+    }
+
+    impl Ctx {
+        fn resolve(&mut self, c: &str) -> BTreeMap<String, (String, String)> {
+            if let Some(m) = self.memo.get(c) {
+                return m.clone();
+            }
+            if !self.in_progress.insert(c.to_string()) {
+                // `extends` cycle — reported as `E-MI-CYCLE` elsewhere; break to avoid infinite loop.
+                return BTreeMap::new();
+            }
+            let mut map: BTreeMap<String, (String, String)> = BTreeMap::new();
+            // Own methods win over anything inherited (override).
+            if let Some(ms) = self.decl.get(c).cloned() {
+                for m in ms {
+                    map.insert(m.clone(), (c.to_string(), m));
+                }
+            }
+            // Gather each direct parent's resolved contributions, tracking the direct parent the
+            // method arrives through (so a `use/rename/exclude P.m` clause can target it) and the true
+            // origin (so a diamond dedups by origin).
+            let mut contrib: BTreeMap<String, Vec<(String, (String, String))>> = BTreeMap::new();
+            for p in self.extends.get(c).cloned().unwrap_or_default() {
+                let p_map = self.resolve(&p);
+                for (name, origin) in p_map {
+                    if map.contains_key(&name) {
+                        continue; // overridden by C itself
+                    }
+                    contrib.entry(name).or_default().push((p.clone(), origin));
+                }
+            }
+            // Apply resolution clauses in source order.
+            for r in self.resolutions.get(c).cloned().unwrap_or_default() {
+                match r {
+                    Resolution::Use { parent, method, .. } => {
+                        if let Some(v) = contrib.get_mut(&method) {
+                            v.retain(|(pn, _)| pn == &parent);
+                        }
+                    }
+                    Resolution::Exclude { parent, method, .. } => {
+                        if let Some(v) = contrib.get_mut(&method) {
+                            v.retain(|(pn, _)| pn != &parent);
+                        }
+                    }
+                    Resolution::Rename {
+                        parent,
+                        method,
+                        as_name,
+                        ..
+                    } => {
+                        let moved: Vec<(String, (String, String))> =
+                            if let Some(v) = contrib.get_mut(&method) {
+                                let (keep, take): (Vec<_>, Vec<_>) =
+                                    v.drain(..).partition(|(pn, _)| pn != &parent);
+                                *v = keep;
+                                take
+                            } else {
+                                Vec::new()
+                            };
+                        if !moved.is_empty() {
+                            contrib.entry(as_name).or_default().extend(moved);
+                        }
+                    }
+                }
+            }
+            // Finalize each inherited name: dedup by origin (diamond), else conflict.
+            for (name, v) in contrib {
+                if map.contains_key(&name) {
+                    continue;
+                }
+                let distinct: BTreeSet<(String, String)> = v.into_iter().map(|(_, o)| o).collect();
+                let mut it = distinct.into_iter();
+                match it.next() {
+                    None => {}
+                    Some(first) => {
+                        if it.next().is_some() {
+                            let span = self.spans.get(c).copied().unwrap_or(Span {
+                                start: 0,
+                                len: 0,
+                                line: 1,
+                                col: 1,
+                            });
+                            self.conflicts.push((c.to_string(), name.clone(), span));
+                        }
+                        map.insert(name, first); // deterministic pick (sorted-first)
+                    }
+                }
+            }
+            self.in_progress.remove(c);
+            self.memo.insert(c.to_string(), map.clone());
+            map
+        }
+    }
+
+    let mut ctx = Ctx {
+        decl: BTreeMap::new(),
+        extends: BTreeMap::new(),
+        resolutions: BTreeMap::new(),
+        spans: BTreeMap::new(),
+        memo: BTreeMap::new(),
+        conflicts: Vec::new(),
+        in_progress: BTreeSet::new(),
+    };
+    for item in &program.items {
+        if let Item::Class(c) = item {
+            let mut ms = BTreeSet::new();
+            for m in &c.members {
+                if let ClassMember::Method(f) = m {
+                    ms.insert(f.name.clone());
+                }
+            }
+            ctx.decl.insert(c.name.clone(), ms);
+            ctx.extends.insert(c.name.clone(), c.extends.clone());
+            ctx.resolutions
+                .insert(c.name.clone(), c.resolutions.clone());
+            ctx.spans.insert(c.name.clone(), c.span);
+        }
+    }
+    let names: Vec<String> = ctx.extends.keys().cloned().collect();
+    for n in &names {
+        ctx.resolve(n);
+    }
+    let mut out: BTreeMap<(String, String), (String, String)> = BTreeMap::new();
+    for (c, m) in &ctx.memo {
+        for (name, origin) in m {
+            out.insert((c.clone(), name.clone()), origin.clone());
+        }
+    }
+    (out, ctx.conflicts)
+}
+
 fn collect_free_expr(
     e: &Expr,
     bound: &mut std::collections::HashSet<String>,
@@ -925,8 +1085,42 @@ pub struct ClassDecl {
     /// non-`open` class is a leaf (`E-EXTEND-FINAL` if a subclass names it). The transpiler emits a
     /// PHP `final class` for a non-`open` class. The extensibility opt-in, orthogonal to `vis`.
     pub open: bool,
+    /// Explicit multi-inheritance resolution clauses (M-RT S6b), declared in the class body before/among
+    /// members: `use P.m` (pick `P`'s `m` for the colliding name), `rename P.m as n` (rebind `P`'s `m`
+    /// under a fresh name `n`, removing it from the collision), `exclude P.m` (drop `P`'s `m`). Empty
+    /// for a single-parent or collision-free class. Consumed by `ast::class_method_origins` (dispatch)
+    /// and the transpiler (`insteadof`/`as` emission). An unresolved cross-parent method collision is
+    /// `E-MI-CONFLICT`.
+    pub resolutions: Vec<Resolution>,
     pub members: Vec<ClassMember>,
     pub span: Span,
+}
+
+/// A multi-inheritance conflict-resolution clause (M-RT S6b) — see [`ClassDecl::resolutions`]. Each
+/// names a **direct parent** and one of its methods; the checker validates the parent/method exist and
+/// that every cross-parent collision is resolved (`E-MI-CONFLICT`).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Resolution {
+    /// `use P.m` — pick parent `P`'s `m` as the winner for the method name `m`; other parents' `m` drop.
+    Use {
+        parent: String,
+        method: String,
+        span: Span,
+    },
+    /// `rename P.m as n` — bind parent `P`'s `m` under the new name `n` (and remove it from the `m`
+    /// collision, so a single remaining source resolves `m`).
+    Rename {
+        parent: String,
+        method: String,
+        as_name: String,
+        span: Span,
+    },
+    /// `exclude P.m` — drop parent `P`'s contribution to the method name `m`.
+    Exclude {
+        parent: String,
+        method: String,
+        span: Span,
+    },
 }
 
 /// An interface declaration (`interface Speaker { method-sigs } [extends A, B]`). Methods are

@@ -766,6 +766,25 @@ impl Checker {
             }
         }
 
+        // M-RT S6b: an unresolved cross-parent method collision is `E-MI-CONFLICT`. The shared origin
+        // resolver returns every name a class inherits from ≥2 distinct parents without a `use`/
+        // `rename`/`exclude` clause (or own override) to disambiguate. A clean program produces an
+        // empty list; the backends then dispatch through the same resolved table.
+        let (_origins, conflicts) = crate::ast::class_method_origins(program);
+        for (class, name, span) in conflicts {
+            self.err_coded(
+                span,
+                format!(
+                    "method `{name}` is inherited from more than one parent of class `{class}`"
+                ),
+                "E-MI-CONFLICT",
+                Some(format!(
+                    "resolve it: `use P.{name}` to pick a parent, `rename P.{name} as <new>` to keep \
+                     both, `exclude P.{name}` to drop one, or override `function {name}(…)` in `{class}`"
+                )),
+            );
+        }
+
         // `extends` targets must be interfaces; detect cycles.
         for item in &program.items {
             if let Item::Interface(i) = item {
@@ -5974,6 +5993,7 @@ pub fn erase_generics(program: Program) -> Program {
                     extends: c.extends,
                     implements: c.implements,
                     open: c.open,
+                    resolutions: c.resolutions,
                     members,
                     span: c.span,
                 })
@@ -6256,6 +6276,7 @@ pub fn expand_aliases(program: &Program) -> Program {
                 extends: c.extends.clone(),
                 implements: c.implements.clone(),
                 open: c.open,
+                resolutions: c.resolutions.clone(),
                 members: c.members.iter().map(|m| rmember(m, &aliases)).collect(),
                 span: c.span,
             })),
@@ -6399,6 +6420,78 @@ mod tests {
              class Dog extends Animal { function kind() -> string { return \"d\"; } }",
         );
         assert!(errs.is_empty(), "got {errs:?}");
+    }
+
+    #[test]
+    fn unresolved_cross_parent_collision_errors() {
+        // S6b.2: two parents each declare `move`; `Duck` neither resolves nor overrides it.
+        let errs = errors_of(
+            "open class Swimmer { open function move() -> string { return \"s\"; } } \
+             open class Flyer { open function move() -> string { return \"f\"; } } \
+             class Duck extends Swimmer, Flyer {}",
+        );
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-MI-CONFLICT")),
+            "got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn use_clause_resolves_the_collision() {
+        // S6b.2: `use Swimmer.move` picks a winner — no conflict.
+        let errs = errors_of(
+            "open class Swimmer { open function move() -> string { return \"s\"; } } \
+             open class Flyer { open function move() -> string { return \"f\"; } } \
+             class Duck extends Swimmer, Flyer { use Swimmer.move }",
+        );
+        assert!(
+            !errs.iter().any(|e| e.code == Some("E-MI-CONFLICT")),
+            "got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn exclude_clause_resolves_the_collision() {
+        // S6b.2: `exclude Flyer.move` drops one source, leaving `move` unambiguous.
+        let errs = errors_of(
+            "open class Swimmer { open function move() -> string { return \"s\"; } } \
+             open class Flyer { open function move() -> string { return \"f\"; } } \
+             class Duck extends Swimmer, Flyer { exclude Flyer.move }",
+        );
+        assert!(
+            !errs.iter().any(|e| e.code == Some("E-MI-CONFLICT")),
+            "got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn child_override_resolves_the_collision() {
+        // S6b.2: declaring `move` in the child overrides both parents — no conflict (and the parent
+        // methods are `open`, so the override itself is legal).
+        let errs = errors_of(
+            "open class Swimmer { open function move() -> string { return \"s\"; } } \
+             open class Flyer { open function move() -> string { return \"f\"; } } \
+             class Duck extends Swimmer, Flyer { function move() -> string { return \"d\"; } }",
+        );
+        assert!(
+            !errs.iter().any(|e| e.code == Some("E-MI-CONFLICT")),
+            "got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn diamond_shared_base_is_not_a_conflict() {
+        // S6b.2: `Mid` reaches `Base.tag` through both arms, but both resolve to the same declaring
+        // method — auto-merge, never E-MI-CONFLICT.
+        let errs = errors_of(
+            "open class Base { open function tag() -> string { return \"b\"; } } \
+             open class Left extends Base {} open class Right extends Base {} \
+             class Mid extends Left, Right {}",
+        );
+        assert!(
+            !errs.iter().any(|e| e.code == Some("E-MI-CONFLICT")),
+            "got {errs:?}"
+        );
     }
 
     #[test]
