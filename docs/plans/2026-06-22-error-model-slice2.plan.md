@@ -28,6 +28,16 @@ then writing-plans.
   on the bare root), **catch broad**; **`main()` may not throw** (`E-UNCAUGHT-THROW`); `throws A | B`
   reuses S4 unions. `?` is type-directed: throws-call → propagate throw; `Result` value → unwrap/early-Err.
 
+## Status
+- **PHASE 2a — COMPLETE** (`46c8d2a` `?` propagation, `f35ff6c` fault intrinsics). `Result` `?` +
+  `panic`/`todo`/`unreachable`/`assert`, no new `Op` (`?` reuses MatchTag/GetEnumField/Return; intrinsics
+  reuse `Op::Fault` via new data-carrying `FaultMsg` variants). Byte-identical `run≡runvm≡real PHP`;
+  600 lib + PHP-oracle differential + 64 integration green; 5 new codes self-document via `phg explain`.
+  `examples/guide/result.phg`. **NEXT: review checkpoint → author the detailed 2b plan (exceptions).**
+- **PHASE 2b — NOT STARTED** (outline below): core `Error` base, `throws E` + enforcement, `throw`,
+  `try`/`catch`, `?`-throws mode, native VM unwinding (≈2 new Ops), PHP exception mapping.
+- **PHASE 2c — NOT STARTED**: `finally` + cause-chain + imported-PHP catch bridge.
+
 ## Decisions Log (execution refinements)
 - [2026-06-22] AGREED (during 2a execution): **`?`-on-Result is restricted to a let-initializer
   position** — the *entire* initializer of a `var`/typed binding (`int a = lookup()?;`) — where the PHP
