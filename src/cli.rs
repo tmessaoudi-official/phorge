@@ -447,6 +447,19 @@ pub fn explain_text(code: &str) -> Option<String> {
              `exclude P.m` (drop one), or override by declaring `function m(…)` in C. A diamond where\n\
              both arms reach the *same* declaring method auto-merges and is never a conflict.\n"
         }
+        "E-USE-UNKNOWN" => {
+            "E-USE-UNKNOWN — a `use` clause names something that is not a declared trait.\n\n\
+             A class composes a trait with `use T;` (M-RT S8). The name must resolve to a `trait`, not a\n\
+             class, interface, or undeclared name. If you meant to inherit a class, use `extends` (a\n\
+             class is an *is-a* supertype); `use` is for *has-the-behavior-of* horizontal reuse. Declare\n\
+             the trait with `trait T { … }`.\n"
+        }
+        "E-USE-AS-TYPE" => {
+            "E-USE-AS-TYPE — a trait was used where a type is expected.\n\n\
+             A trait (M-RT S8) is horizontal reuse, NOT a type: you cannot type a variable/parameter/\n\
+             field as a trait, and `instanceof T` on a trait is rejected. Compose it into a class with\n\
+             `use T;` and type values by the class (or by an interface the class implements).\n"
+        }
         "E-MI-FIELD-CONFLICT" => {
             "E-MI-FIELD-CONFLICT — a field is inherited from more than one parent.\n\n\
              Under multiple inheritance (`class C extends A, B`, M-RT S6c), if two parents each declare\n\
@@ -1644,6 +1657,15 @@ function main() { Console.println("hi"); }"#);
         assert!(p.contains("`private`") && p.contains(".phg"), "{p}");
         let i = explain_text("E-VIS-INTERNAL").expect("E-VIS-INTERNAL has an explanation");
         assert!(i.contains("`internal`") && i.contains("package"), "{i}");
+    }
+
+    #[test]
+    fn explain_covers_s8_trait_codes() {
+        // M-RT S8: the trait diagnostics are self-documenting via `phg explain`.
+        let u = explain_text("E-USE-UNKNOWN").expect("E-USE-UNKNOWN has an explanation");
+        assert!(u.contains("trait") && u.contains("extends"), "{u}");
+        let t = explain_text("E-USE-AS-TYPE").expect("E-USE-AS-TYPE has an explanation");
+        assert!(t.contains("NOT a type") && t.contains("instanceof"), "{t}");
     }
 
     #[test]

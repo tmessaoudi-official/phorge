@@ -475,6 +475,12 @@ pub fn class_method_origins(
     struct Ctx {
         decl: BTreeMap<String, BTreeSet<String>>,
         extends: BTreeMap<String, Vec<String>>,
+        /// M-RT S8: class → the traits it `use`s. A used trait contributes its own methods exactly like
+        /// a parent contributes its resolved table, so trait-vs-trait / trait-vs-parent collisions and
+        /// `use`/`rename`/`exclude` resolution clauses all reuse the same machinery.
+        uses: BTreeMap<String, Vec<String>>,
+        /// M-RT S8: trait name → its declared method names.
+        trait_decl: BTreeMap<String, BTreeSet<String>>,
         resolutions: BTreeMap<String, Vec<Resolution>>,
         spans: BTreeMap<String, Span>,
         memo: BTreeMap<String, BTreeMap<String, (String, String)>>,
@@ -509,6 +515,21 @@ pub fn class_method_origins(
                         continue; // overridden by C itself
                     }
                     contrib.entry(name).or_default().push((p.clone(), origin));
+                }
+            }
+            // M-RT S8: each `use`d trait contributes its own declared methods. Tracked by the trait
+            // name (so a `use/rename/exclude Trait.m` clause can target it) with origin `(trait, m)`
+            // (so two traits supplying the *same* method collide and need resolution; the class's own
+            // method still wins via the `map.contains_key` guard).
+            for t in self.uses.get(c).cloned().unwrap_or_default() {
+                for name in self.trait_decl.get(&t).cloned().unwrap_or_default() {
+                    if map.contains_key(&name) {
+                        continue; // overridden by C itself
+                    }
+                    contrib
+                        .entry(name.clone())
+                        .or_default()
+                        .push((t.clone(), (t.clone(), name)));
                 }
             }
             // Apply resolution clauses in source order.
@@ -577,6 +598,8 @@ pub fn class_method_origins(
     let mut ctx = Ctx {
         decl: BTreeMap::new(),
         extends: BTreeMap::new(),
+        uses: BTreeMap::new(),
+        trait_decl: BTreeMap::new(),
         resolutions: BTreeMap::new(),
         spans: BTreeMap::new(),
         memo: BTreeMap::new(),
@@ -584,18 +607,34 @@ pub fn class_method_origins(
         in_progress: BTreeSet::new(),
     };
     for item in &program.items {
-        if let Item::Class(c) = item {
-            let mut ms = BTreeSet::new();
-            for m in &c.members {
-                if let ClassMember::Method(f) = m {
-                    ms.insert(f.name.clone());
+        match item {
+            Item::Class(c) => {
+                let mut ms = BTreeSet::new();
+                for m in &c.members {
+                    if let ClassMember::Method(f) = m {
+                        ms.insert(f.name.clone());
+                    }
                 }
+                ctx.decl.insert(c.name.clone(), ms);
+                ctx.extends.insert(c.name.clone(), c.extends.clone());
+                ctx.uses.insert(
+                    c.name.clone(),
+                    c.uses.iter().map(|u| u.name.clone()).collect(),
+                );
+                ctx.resolutions
+                    .insert(c.name.clone(), c.resolutions.clone());
+                ctx.spans.insert(c.name.clone(), c.span);
             }
-            ctx.decl.insert(c.name.clone(), ms);
-            ctx.extends.insert(c.name.clone(), c.extends.clone());
-            ctx.resolutions
-                .insert(c.name.clone(), c.resolutions.clone());
-            ctx.spans.insert(c.name.clone(), c.span);
+            Item::Trait(t) => {
+                let mut ms = BTreeSet::new();
+                for m in &t.members {
+                    if let ClassMember::Method(f) = m {
+                        ms.insert(f.name.clone());
+                    }
+                }
+                ctx.trait_decl.insert(t.name.clone(), ms);
+            }
+            _ => {}
         }
     }
     let names: Vec<String> = ctx.extends.keys().cloned().collect();
@@ -1284,6 +1323,36 @@ pub struct ClassDecl {
     /// and the transpiler (`insteadof`/`as` emission). An unresolved cross-parent method collision is
     /// `E-MI-CONFLICT`.
     pub resolutions: Vec<Resolution>,
+    /// Traits this class composes via `use T;` (M-RT S8). Each names a `trait` whose members are
+    /// flattened into this class (methods registered for dispatch, fields/const/static/hooks/ctor
+    /// folded in) **before any backend runs** — a trait is reuse, not a supertype, so it never enters
+    /// the `instanceof`/subtype tables. Trait-vs-trait collisions reuse the same `resolutions` clauses
+    /// as multi-parent collisions (a clause's "parent" may name a `use`d trait). The transpiler emits a
+    /// native PHP `trait`/`use`. Empty for a class that composes no traits.
+    pub uses: Vec<UseTrait>,
+    pub members: Vec<ClassMember>,
+    pub span: Span,
+}
+
+/// A `use T;` trait-composition clause in a class body (M-RT S8) — see [`ClassDecl::uses`]. Named by
+/// the trait's bare name (`package Main`-only this slice). Distinguished at parse time from an S6b
+/// resolution clause (`use P.m`) by dot-lookahead: a `.` after the name is a resolution clause, a
+/// `,`/`;` is trait composition.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UseTrait {
+    pub name: String,
+    pub span: Span,
+}
+
+/// A trait declaration (`trait T { members }`, M-RT S8) — horizontal code reuse that is **not a type**
+/// (a variable can never be typed `T`; `instanceof T` is rejected). Its members use the exact same
+/// grammar as class members (methods with any visibility, instance fields with `mutable`/immutable,
+/// `const`, `static`, property hooks, a constructor, and `abstract` requirements). A class composes a
+/// trait with `use T;`; the trait's members are flattened into the using class before any backend, so
+/// the interpreter/VM see ordinary class members. The transpiler emits a native PHP `trait`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TraitDecl {
+    pub name: String,
     pub members: Vec<ClassMember>,
     pub span: Span,
 }
@@ -1352,6 +1421,8 @@ pub enum Item {
     Enum(EnumDecl),
     Class(ClassDecl),
     Interface(InterfaceDecl),
+    /// `trait T { members }` — horizontal reuse composed by a class via `use T;` (M-RT S8). Not a type.
+    Trait(TraitDecl),
     /// `type Name = Type;` — a compile-time alias, erased after checking (resolved by the checker
     /// and expanded out of the AST before any backend runs).
     TypeAlias {

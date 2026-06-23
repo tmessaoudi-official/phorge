@@ -350,6 +350,29 @@ impl Interp {
                 // Interfaces have no runtime instances; they contribute only to the
                 // `class_implements` table built below (used by `instanceof`).
                 Item::Interface(_) => {}
+                // M-RT S8: a trait is registered as a synthetic class so `call_method` can resolve a
+                // trait-supplied method body — the shared `class_method_origins` maps a using class's
+                // method to its `(trait, m)` origin, and the body is looked up via `self.classes`. A
+                // trait is never instantiated and never enters the subtype table, so this entry only
+                // ever serves method-body lookup.
+                Item::Trait(t) => {
+                    self.classes.insert(
+                        t.name.clone(),
+                        crate::ast::ClassDecl {
+                            vis: crate::ast::Visibility::Public,
+                            name: t.name.clone(),
+                            type_params: Vec::new(),
+                            extends: Vec::new(),
+                            implements: Vec::new(),
+                            open: false,
+                            is_abstract: true,
+                            resolutions: Vec::new(),
+                            uses: Vec::new(),
+                            members: t.members.clone(),
+                            span: t.span,
+                        },
+                    );
+                }
                 Item::Import { .. } => {}
                 // Aliases are expanded out of the AST before any backend runs (checker::
                 // expand_aliases); this arm only satisfies the exhaustive match.

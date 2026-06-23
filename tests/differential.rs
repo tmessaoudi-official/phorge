@@ -2126,3 +2126,31 @@ fn panic_bypasses_catch_on_both_backends() {
            catch (E1 e) {{ Console.println(\"nope\"); }} }}"
     ));
 }
+
+#[test]
+fn s8_trait_method_reuse_is_byte_identical() {
+    // M-RT S8 T1: a class composes a trait via `use`; the trait's method is flattened in and dispatches
+    // identically on both backends and through native PHP `trait`/`use`.
+    agree_out_php(
+        "import Core.Console;
+trait Loud { function shout(string s) -> string { return s; } function greet() -> string { return this.shout(\"hi\"); } }
+class Crier { use Loud; }
+function main() { Console.println(Crier().greet()); }",
+        "hi\n",
+        "s8_trait_method_reuse",
+    );
+}
+
+#[test]
+fn s8_trait_abstract_requirement_satisfied_is_byte_identical() {
+    // A trait may *require* a method (abstract); a using class that provides it composes cleanly, and a
+    // trait method calling the requirement dispatches to the class's implementation on both backends.
+    agree_out_php(
+        "import Core.Console;
+trait Greeter { abstract function name() -> string; function hello() -> string { return this.name(); } }
+class Person { use Greeter; function name() -> string { return \"Ada\"; } }
+function main() { Console.println(Person().hello()); }",
+        "Ada\n",
+        "s8_trait_abstract_requirement",
+    );
+}

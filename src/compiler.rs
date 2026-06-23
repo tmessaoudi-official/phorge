@@ -221,6 +221,30 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
     // metadata map both construction and `match` resolve through (decision P4-2).
     let mut enum_descs: Vec<EnumDesc> = Vec::new();
     let mut variants: HashMap<String, VariantMeta> = HashMap::new();
+    // M-RT S8: each trait becomes a synthetic method-bearing decl so its methods are registered and
+    // compiled under the trait name; `class_method_origins` then aliases every using class's trait
+    // method to the trait's fn index. A trait is never instantiated (no `MakeInstance`), so the extra
+    // class descriptor is inert. Owned here (declared before `class_decls`) so the borrow lasts.
+    let trait_synths: Vec<ClassDecl> = program
+        .items
+        .iter()
+        .filter_map(|it| match it {
+            Item::Trait(t) => Some(ClassDecl {
+                vis: crate::ast::Visibility::Public,
+                name: t.name.clone(),
+                type_params: Vec::new(),
+                extends: Vec::new(),
+                implements: Vec::new(),
+                open: false,
+                is_abstract: true,
+                resolutions: Vec::new(),
+                uses: Vec::new(),
+                members: t.members.clone(),
+                span: t.span,
+            }),
+            _ => None,
+        })
+        .collect();
     let mut class_decls: Vec<&ClassDecl> = Vec::new();
     for it in &program.items {
         match it {
@@ -260,11 +284,17 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
             Item::Class(c) => class_decls.push(c),
             // Interfaces emit no bytecode; they feed only the `class_implements` table built below.
             Item::Interface(_) => {}
+            // M-RT S8: traits are handled via `trait_synths` (appended to `class_decls` below).
+            Item::Trait(_) => {}
             Item::Import { .. } => {}
             // Aliases are expanded out of the AST before compiling (checker::expand_aliases); this
             // arm only satisfies the exhaustive match.
             Item::TypeAlias { .. } => {}
         }
+    }
+    // M-RT S8: register the synthetic trait decls alongside real classes for method compilation.
+    for s in &trait_synths {
+        class_decls.push(s);
     }
     let main = fns
         .get("main")

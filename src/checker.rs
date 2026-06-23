@@ -98,6 +98,11 @@ pub struct Checker {
     enums: HashMap<String, EnumInfo>,
     classes: HashMap<String, ClassInfo>,
     interfaces: HashMap<String, InterfaceInfo>,
+    /// Trait names (M-RT S8). A trait's members are collected into [`Self::classes`] under its name
+    /// (so member lookup while checking the trait body and merging into a using class reuse the class
+    /// machinery), but a trait is **not a type**: this set lets `resolve_type`/`instanceof`/construction
+    /// reject a trait name where a type is expected.
+    traits: std::collections::HashSet<String>,
     /// Transitively-flattened interface set each class implements (the `instanceof`/subtyping table),
     /// computed once via [`crate::ast::class_implements`] and shared verbatim with the backends so
     /// the runtime test can never diverge from the static one (M-RT S2).
@@ -189,6 +194,7 @@ impl Checker {
             enums: HashMap::new(),
             classes: HashMap::new(),
             interfaces,
+            traits: std::collections::HashSet::new(),
             class_implements: std::collections::BTreeMap::new(),
             class_supertypes: std::collections::BTreeMap::new(),
             scopes: Vec::new(),
@@ -505,6 +511,19 @@ impl Checker {
                         // Interfaces take no type arguments this slice (generic interfaces deferred —
                         // M-RT generics-all).
                         self.no_args(other, args, *span, Ty::Named(other.to_string(), Vec::new()))
+                    } else if self.traits.contains(other) {
+                        // M-RT S8: a trait is collected into `classes` for member lookup, but it is
+                        // **not a type** — a value can never be typed as a trait. Reject it here before
+                        // the class branch would accept it.
+                        self.err_coded(
+                            *span,
+                            format!("`{other}` is a trait, not a type"),
+                            "E-USE-AS-TYPE",
+                            Some(
+                                "a trait is reuse, not a type — `use` it in a class; you cannot type a value as a trait"
+                                    .into(),
+                            ),
+                        )
                     } else if let Some(arity) = self
                         .classes
                         .get(other)
@@ -573,6 +592,7 @@ impl Checker {
                 Item::Enum(e) => self.collect_enum(e),
                 Item::Class(c) => self.collect_class(c),
                 Item::Interface(i) => self.collect_interface(i),
+                Item::Trait(t) => self.collect_trait(t),
                 Item::Import { .. } => {} // import map already built above; nothing per-item to hoist
                 Item::TypeAlias { name, ty, span } => {
                     if is_builtin_type_name(name) {
@@ -591,6 +611,30 @@ impl Checker {
         // `implements` (cycles, unknown names, method conformance) and build the shared
         // class→interface table the backends consume verbatim (M-RT S2).
         self.check_interface_graph(program);
+    }
+
+    /// M-RT S8: collect a trait by reusing the class machinery. A synthetic `ClassDecl` carries the
+    /// trait's members into a [`ClassInfo`] (keyed by the trait name) so the trait body type-checks and
+    /// the trait's members can be merged into each using class. Marked `is_abstract` so an abstract
+    /// *requirement* method doesn't trip the concrete-class unimpl check on the trait itself; recorded
+    /// in [`Self::traits`] so the name is rejected wherever a *type* is expected (a trait is reuse, not
+    /// a type), and so construction (`Loud()`) is caught by the abstract-instantiate guard.
+    fn collect_trait(&mut self, t: &crate::ast::TraitDecl) {
+        let synthetic = crate::ast::ClassDecl {
+            vis: crate::ast::Visibility::Public,
+            name: t.name.clone(),
+            type_params: Vec::new(),
+            extends: Vec::new(),
+            implements: Vec::new(),
+            open: false,
+            is_abstract: true,
+            resolutions: Vec::new(),
+            uses: Vec::new(),
+            members: t.members.clone(),
+            span: t.span,
+        };
+        self.collect_class(&synthetic);
+        self.traits.insert(t.name.clone());
     }
 
     fn collect_interface(&mut self, i: &crate::ast::InterfaceDecl) {
@@ -867,6 +911,39 @@ impl Checker {
                     }
                 }
             }
+            // M-RT S8: a trait's abstract method is a *requirement* on every using class. Recording it
+            // under the trait name means the shared origins table (which maps a using class's method to
+            // its `(trait, m)` origin) makes the same `E-ABSTRACT-UNIMPL` check below fire when a using
+            // class leaves the requirement unmet.
+            if let Item::Trait(t) = item {
+                for m in &t.members {
+                    if let crate::ast::ClassMember::Method(f) = m {
+                        if f.modifiers.contains(&crate::ast::Modifier::Abstract) {
+                            abstract_methods.insert((t.name.clone(), f.name.clone()));
+                        }
+                    }
+                }
+            }
+        }
+        // M-RT S8: every `use T;` must name a declared trait — not a class, interface, or unknown.
+        for item in &program.items {
+            if let Item::Class(c) = item {
+                for u in &c.uses {
+                    if !self.traits.contains(&u.name) {
+                        let hint = if self.classes.contains_key(&u.name) {
+                            "that name is a class — `use` composes a `trait`, `extends` inherits a class"
+                        } else {
+                            "declare it with `trait <Name> { … }`"
+                        };
+                        self.err_coded(
+                            u.span,
+                            format!("unknown trait `{}` in a `use` clause", u.name),
+                            "E-USE-UNKNOWN",
+                            Some(hint.into()),
+                        );
+                    }
+                }
+            }
         }
         // M-RT S6b: a concrete class must implement every abstract method it declares or inherits. The
         // shared dispatch table resolves each callable name to the body it runs; if that body is still
@@ -1006,6 +1083,43 @@ impl Checker {
         let names: Vec<String> = parents.keys().cloned().collect();
         for name in names {
             self.merge_inherited(&name, &parents, &mut done);
+        }
+        // M-RT S8: after class inheritance is flattened, merge each `use`d trait's members (methods +
+        // fields) into the using class's `ClassInfo`, so calling a trait method / reading a trait field
+        // on the class type-checks. A class's own (and inherited) member of the same name wins
+        // (`or_insert`); the dispatch table (`class_method_origins`) independently flags any unresolved
+        // trait/parent/trait collision as `E-MI-CONFLICT`.
+        let class_uses: Vec<(String, Vec<String>)> = program
+            .items
+            .iter()
+            .filter_map(|it| match it {
+                Item::Class(c) => Some((
+                    c.name.clone(),
+                    c.uses.iter().map(|u| u.name.clone()).collect(),
+                )),
+                _ => None,
+            })
+            .collect();
+        for (cls, used) in class_uses {
+            for t in used {
+                let Some(tinfo) = self.classes.get(&t).cloned() else {
+                    continue; // unknown trait — reported separately as E-USE-UNKNOWN
+                };
+                let Some(child) = self.classes.get_mut(&cls) else {
+                    continue;
+                };
+                for (k, v) in &tinfo.fields {
+                    if !child.fields.contains_key(k) {
+                        child.fields.insert(k.clone(), v.clone());
+                        if tinfo.mutable_fields.contains(k) {
+                            child.mutable_fields.insert(k.clone());
+                        }
+                    }
+                }
+                for (k, v) in &tinfo.methods {
+                    child.methods.entry(k.clone()).or_insert_with(|| v.clone());
+                }
+            }
         }
     }
 
@@ -1719,7 +1833,7 @@ impl Checker {
 
     /// Phase 2 — check every function/method body.
     fn check_program(&mut self, program: &Program) {
-        use crate::ast::{ClassMember, Item};
+        use crate::ast::Item;
         // Reshape slice 2a: identifier casing is a hard, front-end-only rule. Run it first so its
         // diagnostics surface regardless of body-level errors (it is purely declaration-shaped).
         self.check_casing(program);
@@ -1788,89 +1902,11 @@ impl Checker {
         for item in &program.items {
             match item {
                 Item::Function(f) => self.check_function(f),
-                Item::Class(c) => {
-                    let prev = self.cur_class.replace(c.name.clone());
-                    // The class's type parameters are in scope across every method/constructor body
-                    // (unioned with a method's own in `check_function`), so a body referencing `T`
-                    // type-checks (M-RT generics-all). Empty for a non-generic class.
-                    let prev_tp =
-                        std::mem::replace(&mut self.cur_class_type_params, c.type_params.clone());
-                    for m in &c.members {
-                        match m {
-                            ClassMember::Method(f) => self.check_function(f),
-                            ClassMember::Constructor { params, body, .. } => {
-                                let prev_ret = std::mem::replace(&mut self.cur_ret, Ty::Unit);
-                                // class type params in scope for any `T` annotation in the body
-                                self.active_type_params = c.type_params.clone();
-                                self.push_scope();
-                                // constructor params are in scope inside its body
-                                let ctor = self
-                                    .classes
-                                    .get(&c.name)
-                                    .map(|info| info.ctor.clone())
-                                    .unwrap_or_default();
-                                for (p, t) in params.iter().zip(ctor) {
-                                    self.declare(&p.name, t, p.span);
-                                }
-                                self.check_body(body);
-                                self.pop_scope();
-                                self.active_type_params.clear();
-                                self.cur_ret = prev_ret;
-                            }
-                            // A property hook (M-mut.7b) — type-check the `get` expression against
-                            // the hook's declared type and the `set` block with the assigned value
-                            // `v` bound to that type, both with `this` + the field scope live.
-                            ClassMember::Hook {
-                                ty, name, get, set, ..
-                            } => {
-                                self.active_type_params = c.type_params.clone();
-                                let hook_ty = self.resolve_type(ty);
-                                if let Some(e) = get {
-                                    self.push_scope();
-                                    let ety = self.check_expr(e);
-                                    if !self.ty_assignable(&ety, &hook_ty) {
-                                        self.err_coded(
-                                            Self::expr_span(e),
-                                            format!(
-                                                "`get` of `{name}` yields `{ety}`, expected `{hook_ty}`"
-                                            ),
-                                            "E-HOOK-TYPE",
-                                            None,
-                                        );
-                                    }
-                                    self.pop_scope();
-                                }
-                                if let Some((p, body)) = set {
-                                    let prev_ret = std::mem::replace(&mut self.cur_ret, Ty::Unit);
-                                    self.push_scope();
-                                    let pty = self.resolve_type(&p.ty);
-                                    if !(self.ty_assignable(&pty, &hook_ty)
-                                        && self.ty_assignable(&hook_ty, &pty))
-                                    {
-                                        self.err_coded(
-                                            p.span,
-                                            format!(
-                                                "`set` parameter of `{name}` is `{pty}`, expected the hook type `{hook_ty}`"
-                                            ),
-                                            "E-HOOK-TYPE",
-                                            Some(format!("declare it `set({hook_ty} {})`", p.name)),
-                                        );
-                                    }
-                                    // Bind `v` at the hook's type so the body checks consistently
-                                    // even when the declared parameter type mismatched.
-                                    self.declare(&p.name, hook_ty.clone(), p.span);
-                                    self.check_body(body);
-                                    self.pop_scope();
-                                    self.cur_ret = prev_ret;
-                                }
-                                self.active_type_params.clear();
-                            }
-                            ClassMember::Field { .. } => {}
-                        }
-                    }
-                    self.cur_class_type_params = prev_tp;
-                    self.cur_class = prev;
-                }
+                Item::Class(c) => self.check_type_body(&c.name, &c.type_params, &c.members),
+                // M-RT S8: a trait's method/ctor/hook bodies are checked once, in trait context
+                // (correct spans, no double-reporting), with the trait's own collected members as
+                // `this`. A trait has no type parameters this slice.
+                Item::Trait(t) => self.check_type_body(&t.name, &[], &t.members),
                 // Interface method signatures have no body to check (the conformance/graph
                 // validation ran in `collect`); enums/imports/aliases have nothing here.
                 Item::Enum(_)
@@ -1879,6 +1915,93 @@ impl Checker {
                 | Item::TypeAlias { .. } => {}
             }
         }
+    }
+
+    /// Check the method/constructor/hook bodies of a class or trait (M-RT S8 shares this between the
+    /// two). `this` resolves to `type_name`'s already-collected [`ClassInfo`]; `type_params` are in
+    /// scope across every body (empty for a trait this slice).
+    fn check_type_body(
+        &mut self,
+        type_name: &str,
+        type_params: &[String],
+        members: &[crate::ast::ClassMember],
+    ) {
+        use crate::ast::ClassMember;
+        let prev = self.cur_class.replace(type_name.to_string());
+        let prev_tp = std::mem::replace(&mut self.cur_class_type_params, type_params.to_vec());
+        for m in members {
+            match m {
+                ClassMember::Method(f) => self.check_function(f),
+                ClassMember::Constructor { params, body, .. } => {
+                    let prev_ret = std::mem::replace(&mut self.cur_ret, Ty::Unit);
+                    // type params in scope for any `T` annotation in the body
+                    self.active_type_params = type_params.to_vec();
+                    self.push_scope();
+                    // constructor params are in scope inside its body
+                    let ctor = self
+                        .classes
+                        .get(type_name)
+                        .map(|info| info.ctor.clone())
+                        .unwrap_or_default();
+                    for (p, t) in params.iter().zip(ctor) {
+                        self.declare(&p.name, t, p.span);
+                    }
+                    self.check_body(body);
+                    self.pop_scope();
+                    self.active_type_params.clear();
+                    self.cur_ret = prev_ret;
+                }
+                // A property hook (M-mut.7b) — type-check the `get` expression against the hook's
+                // declared type and the `set` block with the assigned value `v` bound to that type,
+                // both with `this` + the field scope live.
+                ClassMember::Hook {
+                    ty, name, get, set, ..
+                } => {
+                    self.active_type_params = type_params.to_vec();
+                    let hook_ty = self.resolve_type(ty);
+                    if let Some(e) = get {
+                        self.push_scope();
+                        let ety = self.check_expr(e);
+                        if !self.ty_assignable(&ety, &hook_ty) {
+                            self.err_coded(
+                                Self::expr_span(e),
+                                format!("`get` of `{name}` yields `{ety}`, expected `{hook_ty}`"),
+                                "E-HOOK-TYPE",
+                                None,
+                            );
+                        }
+                        self.pop_scope();
+                    }
+                    if let Some((p, body)) = set {
+                        let prev_ret = std::mem::replace(&mut self.cur_ret, Ty::Unit);
+                        self.push_scope();
+                        let pty = self.resolve_type(&p.ty);
+                        if !(self.ty_assignable(&pty, &hook_ty)
+                            && self.ty_assignable(&hook_ty, &pty))
+                        {
+                            self.err_coded(
+                                p.span,
+                                format!(
+                                    "`set` parameter of `{name}` is `{pty}`, expected the hook type `{hook_ty}`"
+                                ),
+                                "E-HOOK-TYPE",
+                                Some(format!("declare it `set({hook_ty} {})`", p.name)),
+                            );
+                        }
+                        // Bind `v` at the hook's type so the body checks consistently even when the
+                        // declared parameter type mismatched.
+                        self.declare(&p.name, hook_ty.clone(), p.span);
+                        self.check_body(body);
+                        self.pop_scope();
+                        self.cur_ret = prev_ret;
+                    }
+                    self.active_type_params.clear();
+                }
+                ClassMember::Field { .. } => {}
+            }
+        }
+        self.cur_class_type_params = prev_tp;
+        self.cur_class = prev;
     }
 
     // ---- identifier casing (reshape slice 2a) ----
@@ -1932,6 +2055,32 @@ impl Checker {
                     self.want_type_case(&i.name, i.span);
                     for m in &i.methods {
                         self.check_fn_casing(m);
+                    }
+                }
+                // M-RT S8: a trait name is a type identifier (PascalCase); its members follow the same
+                // value-identifier casing as a class's.
+                Item::Trait(t) => {
+                    self.want_type_case(&t.name, t.span);
+                    for m in &t.members {
+                        match m {
+                            ClassMember::Field { name, span, .. } => {
+                                self.want_name_case(name, *span)
+                            }
+                            ClassMember::Constructor { params, .. } => {
+                                for p in params {
+                                    self.want_name_case(&p.name, p.span);
+                                }
+                            }
+                            ClassMember::Method(f) => self.check_fn_casing(f),
+                            ClassMember::Hook {
+                                name, set, span, ..
+                            } => {
+                                self.want_name_case(name, *span);
+                                if let Some((p, _)) = set {
+                                    self.want_name_case(&p.name, p.span);
+                                }
+                            }
+                        }
                     }
                 }
                 Item::TypeAlias { name, span, .. } => self.want_type_case(name, *span),
@@ -3046,6 +3195,16 @@ impl Checker {
     /// then-block lives in `check_stmt`'s `Stmt::If` arm (it needs the surrounding block), not here.
     fn check_instanceof(&mut self, value: &crate::ast::Expr, type_name: &str, span: Span) -> Ty {
         let v = self.check_expr(value);
+        // M-RT S8: a trait is reuse, not a type — it cannot be an `instanceof` target (it is collected
+        // into `classes` for member lookup, so this explicit guard is needed before the class check).
+        if self.traits.contains(type_name) {
+            return self.err_coded(
+                span,
+                format!("`{type_name}` is a trait, not a type"),
+                "E-INSTANCEOF-TYPE",
+                Some("a trait is reuse, not a type; test against a class or interface".into()),
+            );
+        }
         if !self.classes.contains_key(type_name) && !self.interfaces.contains_key(type_name) {
             return self.err_coded(
                 span,
@@ -6192,6 +6351,7 @@ pub fn erase_generics(program: Program) -> Program {
                     open: c.open,
                     is_abstract: c.is_abstract,
                     resolutions: c.resolutions,
+                    uses: c.uses,
                     members,
                     span: c.span,
                 })
@@ -6476,8 +6636,15 @@ pub fn expand_aliases(program: &Program) -> Program {
                 open: c.open,
                 is_abstract: c.is_abstract,
                 resolutions: c.resolutions.clone(),
+                uses: c.uses.clone(),
                 members: c.members.iter().map(|m| rmember(m, &aliases)).collect(),
                 span: c.span,
+            })),
+            // M-RT S8: a trait's member type annotations are alias-rewritten exactly like a class's.
+            Item::Trait(t) => Some(Item::Trait(crate::ast::TraitDecl {
+                name: t.name.clone(),
+                members: t.members.iter().map(|m| rmember(m, &aliases)).collect(),
+                span: t.span,
             })),
             Item::Interface(i) => Some(Item::Interface(InterfaceDecl {
                 vis: i.vis,
@@ -6653,6 +6820,66 @@ mod tests {
         // S6b.3: a non-abstract class may not itself declare an abstract method (same check, origin is
         // the class itself).
         let errs = errors_of("class Shape { abstract function area() -> int; }");
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-ABSTRACT-UNIMPL")),
+            "got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn s8_use_unknown_trait_errors() {
+        // M-RT S8: `use` must name a declared trait.
+        let errs = errors_of("class C { use Nope; } function main() {}");
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-USE-UNKNOWN")),
+            "got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn s8_use_a_class_as_trait_errors() {
+        // M-RT S8: `use` composes a trait, not a class — naming a class is E-USE-UNKNOWN.
+        let errs = errors_of("class Base {} class C { use Base; } function main() {}");
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-USE-UNKNOWN")),
+            "got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn s8_instanceof_trait_errors() {
+        // M-RT S8: a trait is not a type — it cannot be an `instanceof` target.
+        let errs = errors_of(
+            "trait T { function f() -> int { return 1; } } \
+             class C { use T; } \
+             function main() { C c = C(); var b = c instanceof T; }",
+        );
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-INSTANCEOF-TYPE")),
+            "got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn s8_trait_as_type_annotation_errors() {
+        // M-RT S8: a value cannot be typed as a trait.
+        let errs = errors_of(
+            "trait T { function f() -> int { return 1; } } \
+             function main() { T x = x; }",
+        );
+        assert!(
+            errs.iter().any(|e| e.code == Some("E-USE-AS-TYPE")),
+            "got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn s8_unmet_trait_abstract_requirement_errors() {
+        // M-RT S8: a using class must satisfy a trait's abstract requirement (reuses E-ABSTRACT-UNIMPL).
+        let errs = errors_of(
+            "trait Greeter { abstract function name() -> string; } \
+             class P { use Greeter; } function main() {}",
+        );
         assert!(
             errs.iter().any(|e| e.code == Some("E-ABSTRACT-UNIMPL")),
             "got {errs:?}"

@@ -1293,6 +1293,12 @@ impl Parser {
                 Item::Class(self.parse_class(sp, is_open || is_abstract, is_abstract)?)
             }
             TokenKind::Interface => Item::Interface(self.parse_interface(sp)?),
+            TokenKind::Trait => {
+                if vis != Visibility::Public {
+                    return Err(self.error("a trait cannot carry a visibility modifier yet"));
+                }
+                return Ok(Item::Trait(self.parse_trait(sp)?));
+            }
             TokenKind::Package => {
                 return Err(self.error(
                     "'package' must be the first declaration, before any import or definition",
@@ -1548,14 +1554,36 @@ impl Parser {
         self.expect(&TokenKind::LBrace, "'{' to open class body")?;
         let mut members = Vec::new();
         let mut resolutions = Vec::new();
+        let mut uses = Vec::new();
         while !self.check(&TokenKind::RBrace) && !self.check(&TokenKind::Eof) {
-            // M-RT S6b: a leading contextual `use`/`rename`/`exclude` (lexed as identifiers, never
-            // reserved) introduces a multi-inheritance resolution clause rather than a member. Types
-            // are PascalCase, so these lowercase leaders are unambiguous in member position.
-            if let TokenKind::Ident(kw) = self.peek() {
-                if matches!(kw.as_str(), "use" | "rename" | "exclude") {
-                    resolutions.push(self.parse_resolution()?);
-                    continue;
+            // A leading contextual `use`/`rename`/`exclude` (lexed as identifiers, never reserved)
+            // introduces a clause rather than a member. Types are PascalCase, so these lowercase
+            // leaders are unambiguous in member position. M-RT S8 dot-lookahead: `use P.m` (a `.`
+            // after the name) is an S6b resolution clause; `use T;` / `use A, B;` is trait composition.
+            let leader = if let TokenKind::Ident(kw) = self.peek() {
+                Some(kw.clone())
+            } else {
+                None
+            };
+            if let Some(kw) = leader {
+                match kw.as_str() {
+                    "use" => {
+                        let is_resolution = matches!(
+                            self.tokens.get(self.pos + 2).map(|t| &t.kind),
+                            Some(&TokenKind::Dot)
+                        );
+                        if is_resolution {
+                            resolutions.push(self.parse_resolution()?);
+                        } else {
+                            uses.extend(self.parse_use_traits()?);
+                        }
+                        continue;
+                    }
+                    "rename" | "exclude" => {
+                        resolutions.push(self.parse_resolution()?);
+                        continue;
+                    }
+                    _ => {}
                 }
             }
             members.push(self.parse_class_member()?);
@@ -1570,6 +1598,45 @@ impl Parser {
             open,
             is_abstract,
             resolutions,
+            uses,
+            members,
+            span: sp,
+        })
+    }
+
+    /// M-RT S8 trait composition: `use Name [, Name]* ;` → one or more [`crate::ast::UseTrait`].
+    /// Assumes the current token is the contextual `use` keyword and the name is NOT dot-qualified
+    /// (the caller disambiguated this from an S6b `use P.m` resolution clause via dot-lookahead).
+    fn parse_use_traits(&mut self) -> Result<Vec<crate::ast::UseTrait>, Diagnostic> {
+        self.expect_ident("'use'")?; // consume the contextual `use`
+        let mut out = Vec::new();
+        loop {
+            let sp = self.peek_span();
+            let name = self.expect_ident("a trait name after 'use'")?;
+            out.push(crate::ast::UseTrait { name, span: sp });
+            if self.eat(&TokenKind::Comma) {
+                continue;
+            }
+            break;
+        }
+        self.expect(&TokenKind::Semicolon, "';' after a trait `use` clause")?;
+        Ok(out)
+    }
+
+    /// `trait Name { members }` (M-RT S8) — assumes the current token is `trait`. Members use the exact
+    /// class-member grammar (methods, fields, const, static, hooks, constructor, abstract requirements).
+    /// A trait has no `extends`/`implements`/generics this slice.
+    fn parse_trait(&mut self, sp: Span) -> Result<crate::ast::TraitDecl, Diagnostic> {
+        self.expect(&TokenKind::Trait, "'trait'")?;
+        let name = self.expect_ident("a trait name")?;
+        self.expect(&TokenKind::LBrace, "'{' to open trait body")?;
+        let mut members = Vec::new();
+        while !self.check(&TokenKind::RBrace) && !self.check(&TokenKind::Eof) {
+            members.push(self.parse_class_member()?);
+        }
+        self.expect(&TokenKind::RBrace, "'}' to close trait")?;
+        Ok(crate::ast::TraitDecl {
+            name,
             members,
             span: sp,
         })
@@ -1915,6 +1982,28 @@ mod tests {
     fn bare_decl_defaults_to_public() {
         match &prog("package Main;\nclass C {}").items[0] {
             Item::Class(c) => assert_eq!(c.vis, Visibility::Public),
+            other => panic!("expected class, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn s8_use_dot_lookahead_splits_trait_from_resolution() {
+        // M-RT S8 D9: `use T;` (no dot) is trait composition; `use A.foo` (dot) is an S6b resolution
+        // clause. Both can appear in the same class body and must land in the right buckets.
+        match &prog(
+            "package Main;\nopen class A { open function foo() -> int { return 1; } }\n\
+             trait T { function bar() -> int { return 2; } }\n\
+             class C extends A { use T; use A.foo }",
+        )
+        .items
+        .last()
+        .unwrap()
+        {
+            Item::Class(c) => {
+                assert_eq!(c.uses.len(), 1, "one trait `use`");
+                assert_eq!(c.uses[0].name, "T");
+                assert_eq!(c.resolutions.len(), 1, "one resolution clause");
+            }
             other => panic!("expected class, got {other:?}"),
         }
     }

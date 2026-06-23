@@ -249,6 +249,9 @@ impl Transpiler {
                         self.imports.insert(leaf.clone(), path.join("."));
                     }
                 }
+                // M-RT S8: a trait is emitted as a native PHP `trait` in pass 2; it needs no call/
+                // construction resolution index (it is never called or constructed by name).
+                Item::Trait(_) => {}
                 // Aliases are expanded out of the AST before transpiling; arm only for exhaustiveness.
                 Item::TypeAlias { .. } => {}
             }
@@ -291,6 +294,8 @@ impl Transpiler {
                     }
                 }
                 Item::Interface(i) => self.emit_interface(i)?,
+                // M-RT S8: a native PHP `trait` (composed by classes via `use`).
+                Item::Trait(t) => self.emit_trait(t)?,
                 // Aliases are expanded out of the AST before transpiling; arm only for exhaustiveness.
                 Item::TypeAlias { .. } => {}
             }
@@ -846,8 +851,64 @@ impl Transpiler {
             "{final_kw}class {disp}{extends_clause}{implements} {{"
         ));
         self.indent += 1;
+        // M-RT S8: compose each `use`d trait. A non-conflicting `use Trait;` is emitted per trait
+        // (trait-vs-trait conflict resolution emission — PHP `insteadof`/`as` — is a follow-up; the
+        // checker rejects an *unresolved* collision, and the PHP oracle would catch a resolved one).
+        for u in &c.uses {
+            self.line(&format!("use {};", self.type_pos_ref(&u.name)));
+        }
         let prev = self.cur_class_fields.replace(fields);
         self.emit_class_members(c, &promoted_names, is_error, false)?;
+        self.cur_class_fields = prev;
+        self.indent -= 1;
+        self.line("}");
+        Ok(())
+    }
+
+    /// M-RT S8: emit a native PHP `trait` from a [`crate::ast::TraitDecl`]. Members are emitted in
+    /// trait mode (`as_trait = true`) — promoted ctor params become plain properties — reusing the
+    /// shared `emit_class_members`. A trait is `package Main`-only this slice, so its name is bare.
+    fn emit_trait(&mut self, t: &crate::ast::TraitDecl) -> Result<(), String> {
+        let mut promoted_names: HashSet<String> = HashSet::new();
+        let mut fields: HashSet<String> = HashSet::new();
+        for m in &t.members {
+            match m {
+                ClassMember::Constructor { params, .. } => {
+                    for p in params {
+                        if is_promoted(&p.modifiers) {
+                            promoted_names.insert(p.name.clone());
+                            fields.insert(p.name.clone());
+                        }
+                    }
+                }
+                ClassMember::Field { name, .. } => {
+                    fields.insert(name.clone());
+                }
+                _ => {}
+            }
+        }
+        let synthetic = ClassDecl {
+            vis: crate::ast::Visibility::Public,
+            name: t.name.clone(),
+            type_params: Vec::new(),
+            extends: Vec::new(),
+            implements: Vec::new(),
+            open: true,
+            is_abstract: false,
+            resolutions: Vec::new(),
+            uses: Vec::new(),
+            members: t.members.clone(),
+            span: t.span,
+        };
+        let disp = if self.namespaced {
+            last_segment(&t.name)
+        } else {
+            &t.name
+        };
+        self.line(&format!("trait {disp} {{"));
+        self.indent += 1;
+        let prev = self.cur_class_fields.replace(fields);
+        self.emit_class_members(&synthetic, &promoted_names, false, true)?;
         self.cur_class_fields = prev;
         self.indent -= 1;
         self.line("}");
