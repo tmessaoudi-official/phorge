@@ -2,7 +2,7 @@ use super::*;
 use crate::types::Ty;
 use crate::value::Value;
 
-pub(super) fn set_of(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn set_of(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::List(xs)] => {
             let s = crate::value::build_set((**xs).clone())?;
@@ -11,7 +11,7 @@ pub(super) fn set_of(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("Set.of expects (List<T>)".into()),
     }
 }
-pub(super) fn set_contains(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn set_contains(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Set(s), elem] => {
             let hk = crate::value::HKey::from_value(elem)
@@ -21,7 +21,7 @@ pub(super) fn set_contains(args: &[Value], _: &mut String) -> Result<Value, Stri
         _ => Err("Set.contains expects (Set<T>, T)".into()),
     }
 }
-pub(super) fn set_size(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn set_size(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Set(s)] => Ok(Value::Int(s.len() as i64)),
         _ => Err("Set.size expects (Set<T>)".into()),
@@ -60,3 +60,7 @@ pub(crate) fn set_natives() -> Vec<NativeFn> {
         },
     ]
 }
+
+#[cfg(test)]
+#[path = "set_tests.rs"]
+mod tests;

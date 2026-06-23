@@ -25,6 +25,17 @@
   (no production compiler does it; gives up exhaustiveness — Roslyn-only, runtime-default). Evidence:
   `docs/research/decomposition/SYNTHESIS.md` (4 converged agents).
 
+- [2026-06-23 17:30] AGREED (test structure — developer pushed for full test decomposition + isolation):
+  **tests are co-located sibling files declared as CHILD modules**, mirroring the source decomposition;
+  one test file per concept (`math.rs` ↔ `math_tests.rs` via `#[cfg(test)] #[path] mod tests;`).
+  **Tests-outside-`src/` (a `tests/unit/` parallel tree) was tried and REJECTED**: empirically it forced
+  13+ encapsulation holes (private modules/methods/fields → `pub(crate)`: `Parser::peek`/`advance`,
+  `Checker::resolve_type`/`.errors`, native submodules…) + 313 import fixes — it *destroys* the isolation
+  the developer wants. Child-module siblings keep every module a sealed black box (private internals stay
+  private; **zero holes**) AND mirror the tree AND co-locate each concept's tests. This is Rust best
+  practice (the Book's `#[cfg(test)] mod tests` private-access model), just with the body in a sibling
+  file. Rule going forward: **when a module's source splits, its tests split alongside, one per concept.**
+
 ## ~~Open question for the brainstorm~~ RESOLVED → Hybrid (see Decisions Log)
 Mechanism locked by research: keep splits inside one `mod { }` (bundle/ precedent → child files keep
 private-field visibility, zero `pub(crate)` churn); the three coupled `Op` matches stay whole; native
@@ -101,6 +112,12 @@ in `docs/MILESTONES.md`; prune research raw/ if desired; final full gate.
   helper that a `tests.rs` calls only errors under `cargo clippy --all-targets` / `cargo test`. Always
   gate with clippy --all-targets, never `build` alone. Fix pattern: `pub(super)` the helper + import the
   submodule in tests.rs; trim globs to only-used (deny-warnings treats unused import as error).
+
+- [2026-06-23 17:35] **W1.1b DONE** — test-structure showcase on `native`: split `native/tests.rs`
+  (658) into per-submodule sibling child-module files (`math_tests.rs`…`set_tests.rs`) + kept
+  console/registry/import_map tests in `native/tests.rs` (70). Helpers reverted `pub(super)`→**private**
+  (tests are children again) — **zero `pub(super)` in native**, fully sealed. 823 green, clippy
+  --all-targets + fmt clean. This is the template for every later wave's tests.
 
 ### Rollback
 Each wave is one commit on `master`; a regressing wave is reverted with `git revert <sha>` (clean,

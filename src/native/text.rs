@@ -2,37 +2,37 @@ use super::*;
 use crate::types::Ty;
 use crate::value::Value;
 
-pub(super) fn text_len(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn text_len(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Int(s.len() as i64)),
         _ => Err("Text.len expects (string)".into()),
     }
 }
-pub(super) fn text_upper(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn text_upper(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.to_ascii_uppercase())),
         _ => Err("Text.upper expects (string)".into()),
     }
 }
-pub(super) fn text_lower(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn text_lower(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.to_ascii_lowercase())),
         _ => Err("Text.lower expects (string)".into()),
     }
 }
-pub(super) fn text_trim(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn text_trim(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.trim().to_string())),
         _ => Err("Text.trim expects (string)".into()),
     }
 }
-pub(super) fn text_contains(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn text_contains(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(sub)] => Ok(Value::Bool(s.contains(sub.as_str()))),
         _ => Err("Text.contains expects (string, string)".into()),
     }
 }
-pub(super) fn text_split(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn text_split(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(sep)] => {
             let parts: Vec<Value> = s
@@ -44,7 +44,7 @@ pub(super) fn text_split(args: &[Value], _: &mut String) -> Result<Value, String
         _ => Err("Text.split expects (string, string)".into()),
     }
 }
-pub(super) fn text_split_once(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn text_split_once(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         // Split on the FIRST occurrence → `[head, tail]`; `[whole]` (1 elem) if `sep` is absent.
         // Matches PHP `explode($sep, $s, 2)` exactly for a non-empty separator (the only use).
@@ -58,7 +58,7 @@ pub(super) fn text_split_once(args: &[Value], _: &mut String) -> Result<Value, S
         _ => Err("Text.split_once expects (string, string)".into()),
     }
 }
-pub(super) fn text_join(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn text_join(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::List(items), Value::Str(sep)] => {
             let mut parts: Vec<String> = Vec::with_capacity(items.len());
@@ -78,7 +78,7 @@ pub(super) fn text_join(args: &[Value], _: &mut String) -> Result<Value, String>
         _ => Err("Text.join expects (List<string>, string)".into()),
     }
 }
-pub(super) fn text_replace(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn text_replace(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(from), Value::Str(to)] => {
             Ok(Value::Str(s.replace(from.as_str(), to.as_str())))
@@ -186,3 +186,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
 // the same bytes, so file examples read a **committed fixture**; `write` is a non-deterministic side
 // effect and is excluded from the byte-identity-gated example set (it is unit-tested with a temp
 // file). The run↔runvm spine shares the same `eval`, so it is always identical regardless.
+
+#[cfg(test)]
+#[path = "text_tests.rs"]
+mod tests;

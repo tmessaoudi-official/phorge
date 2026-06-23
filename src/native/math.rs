@@ -2,31 +2,31 @@ use super::*;
 use crate::types::Ty;
 use crate::value::Value;
 
-pub(super) fn math_sqrt(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn math_sqrt(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Float(x)] => Ok(Value::Float(x.sqrt())),
         _ => Err("Math.sqrt expects (float)".into()),
     }
 }
-pub(super) fn math_pow(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn math_pow(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Float(b), Value::Float(e)] => Ok(Value::Float(b.powf(*e))),
         _ => Err("Math.pow expects (float, float)".into()),
     }
 }
-pub(super) fn math_floor(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn math_floor(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Float(x)] => Ok(Value::Float(x.floor())),
         _ => Err("Math.floor expects (float)".into()),
     }
 }
-pub(super) fn math_ceil(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn math_ceil(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Float(x)] => Ok(Value::Float(x.ceil())),
         _ => Err("Math.ceil expects (float)".into()),
     }
 }
-pub(super) fn math_abs(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn math_abs(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         // `i64::MIN.abs()` overflows; a clean fault keeps EV-7 (never panic on input).
         [Value::Int(n)] => n
@@ -36,13 +36,13 @@ pub(super) fn math_abs(args: &[Value], _: &mut String) -> Result<Value, String> 
         _ => Err("Math.abs expects (int)".into()),
     }
 }
-pub(super) fn math_min(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn math_min(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Int(a), Value::Int(b)] => Ok(Value::Int((*a).min(*b))),
         _ => Err("Math.min expects (int, int)".into()),
     }
 }
-pub(super) fn math_max(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn math_max(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Int(a), Value::Int(b)] => Ok(Value::Int((*a).max(*b))),
         _ => Err("Math.max expects (int, int)".into()),
@@ -116,3 +116,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
 // stay byte-identical with PHP: `len` is the *byte* length (PHP `strlen`), and `upper`/`lower` are
 // ASCII-case (PHP `strtoupper`/`strtolower`), so multi-byte text could differ between the Rust
 // backends and PHP — examples use ASCII. The run↔runvm spine is always byte-identical (both Rust).
+
+#[cfg(test)]
+#[path = "math_tests.rs"]
+mod tests;

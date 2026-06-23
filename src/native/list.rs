@@ -2,7 +2,7 @@ use super::*;
 use crate::types::Ty;
 use crate::value::Value;
 
-pub(super) fn list_reverse(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn list_reverse(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::List(xs)] => {
             let mut v = (**xs).clone();
@@ -12,7 +12,7 @@ pub(super) fn list_reverse(args: &[Value], _: &mut String) -> Result<Value, Stri
         _ => Err("List.reverse expects (List<T>)".into()),
     }
 }
-pub(super) fn list_sum(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn list_sum(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::List(xs)] => {
             let mut acc: i64 = 0;
@@ -49,7 +49,7 @@ pub(super) fn list_sum(args: &[Value], _: &mut String) -> Result<Value, String> 
 // `array_reduce` (D-L9). `filter` wraps `array_filter` in `array_values` to re-index the result to a
 // sequential list (PHP's `array_filter` preserves the original keys), matching the Rust `Vec`.
 
-pub(super) fn list_map(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+fn list_map(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
     match args {
         [Value::List(xs), f] => {
             let mut out = Vec::with_capacity(xs.len());
@@ -61,7 +61,7 @@ pub(super) fn list_map(args: &[Value], call: &mut ClosureInvoker) -> Result<Valu
         _ => Err("List.map expects (List<T>, (T) -> U)".into()),
     }
 }
-pub(super) fn list_filter(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+fn list_filter(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
     match args {
         [Value::List(xs), f] => {
             let mut out = Vec::new();
@@ -82,7 +82,7 @@ pub(super) fn list_filter(args: &[Value], call: &mut ClosureInvoker) -> Result<V
         _ => Err("List.filter expects (List<T>, (T) -> bool)".into()),
     }
 }
-pub(super) fn list_reduce(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+fn list_reduce(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
     match args {
         [Value::List(xs), init, f] => {
             let mut acc = init.clone();
@@ -164,3 +164,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
 // COERCION CAVEAT (KNOWN_ISSUES): PHP arrays coerce integer-like string keys and bools to int keys,
 // so a `keys()` over such a map renders differently under PHP than on the Rust backends; examples use
 // plain (non-numeric) string keys, which PHP keeps verbatim. The run↔runvm spine is always identical.
+
+#[cfg(test)]
+#[path = "list_tests.rs"]
+mod tests;

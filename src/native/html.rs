@@ -6,7 +6,7 @@ use crate::value::Value;
 /// (Phorge strings are always valid UTF-8, so the invalid-byte/ENT_SUBSTITUTE path is unreachable).
 /// `&` MUST be replaced first — otherwise the `&` this function inserts gets double-escaped. This
 /// five-char table is THE byte-identity contract with the `php` emission below; the unit test pins it.
-pub(super) fn html_escape(s: &str) -> String {
+fn html_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
         match c {
@@ -21,7 +21,7 @@ pub(super) fn html_escape(s: &str) -> String {
     out
 }
 
-pub(super) fn html_text(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn html_text(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(html_escape(s))),
         _ => Err("Html.text expects (string)".into()),
@@ -31,7 +31,7 @@ pub(super) fn html_text(args: &[Value], _: &mut String) -> Result<Value, String>
 /// `raw`/`render` are runtime identities on the underlying `Value::Str` — `raw` lifts a trusted
 /// string to `Html`, `render` lowers finished `Html` back to a `string`; both are pure relabelings,
 /// the type checker is what makes them meaningful.
-pub(super) fn html_identity(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn html_identity(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Str(s.clone())),
         _ => Err("expected (string)".into()),
@@ -40,7 +40,7 @@ pub(super) fn html_identity(args: &[Value], _: &mut String) -> Result<Value, Str
 
 /// Concatenate a list of `Html`/`Attr` fragments (each erased to `Value::Str`) with no separator —
 /// the runtime half of `el`/`void_el`/`concat`. PHP-side this is `implode('', $list)`.
-pub(super) fn html_join_fragments(items: &[Value]) -> Result<String, String> {
+fn html_join_fragments(items: &[Value]) -> Result<String, String> {
     let mut out = String::new();
     for it in items {
         match it {
@@ -59,7 +59,7 @@ pub(super) fn html_join_fragments(items: &[Value]) -> Result<String, String> {
 /// `attr(name, value)` -> ` name="ESC(value)"` (leading space, so attrs concatenate directly between
 /// the tag and `>`). The NAME is an author literal (trusted, not escaped, like the tag); only the
 /// VALUE is escaped — the same `htmlspecialchars(_, ENT_QUOTES)` boundary as `text`.
-pub(super) fn html_attr(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn html_attr(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(name), Value::Str(value)] => {
             Ok(Value::Str(format!(" {name}=\"{}\"", html_escape(value))))
@@ -69,7 +69,7 @@ pub(super) fn html_attr(args: &[Value], _: &mut String) -> Result<Value, String>
 }
 
 /// `bool_attr(name)` -> ` name` — a valueless boolean attribute (`disabled`, `checked`, `required`).
-pub(super) fn html_bool_attr(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn html_bool_attr(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(name)] => Ok(Value::Str(format!(" {name}"))),
         _ => Err("Html.bool_attr expects (string)".into()),
@@ -78,7 +78,7 @@ pub(super) fn html_bool_attr(args: &[Value], _: &mut String) -> Result<Value, St
 
 /// `el(tag, attrs, children)` -> `<tag ATTRS>CHILDREN</tag>`. Attrs already carry their leading
 /// space; children are pre-rendered `Html` joined with no separator.
-pub(super) fn html_el(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn html_el(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(tag), Value::List(attrs), Value::List(children)] => {
             let a = html_join_fragments(attrs)?;
@@ -90,7 +90,7 @@ pub(super) fn html_el(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 
 /// `void_el(tag, attrs)` -> `<tag ATTRS/>` — a self-closing void element (`br`, `hr`, `img`, …).
-pub(super) fn html_void_el(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn html_void_el(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(tag), Value::List(attrs)] => {
             let a = html_join_fragments(attrs)?;
@@ -101,7 +101,7 @@ pub(super) fn html_void_el(args: &[Value], _: &mut String) -> Result<Value, Stri
 }
 
 /// `concat(parts)` -> the `Html` parts joined with no separator (combine sibling fragments).
-pub(super) fn html_concat(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn html_concat(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::List(parts)] => Ok(Value::Str(html_join_fragments(parts)?)),
         _ => Err("Html.concat expects (List<Html>)".into()),
@@ -346,3 +346,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
 // *expression shape* (→ `CTy::Other`) and the transpiler emits via the `php` closure, so neither
 // materializes the native's `ret` (M-RT S7b). `sum` is concrete `List<int> -> int` and routes through
 // the ordinary non-generic path. The higher-order ops (`map`/`filter`/`reduce`) land in a later slice.
+
+#[cfg(test)]
+#[path = "html_tests.rs"]
+mod tests;

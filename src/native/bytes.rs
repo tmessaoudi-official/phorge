@@ -2,13 +2,13 @@ use super::*;
 use crate::types::Ty;
 use crate::value::Value;
 
-pub(super) fn bytes_from_string(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn bytes_from_string(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Bytes(std::rc::Rc::new(s.clone().into_bytes()))),
         _ => Err("Bytes.from_string expects (string)".into()),
     }
 }
-pub(super) fn bytes_to_string(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn bytes_to_string(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         // Invalid UTF-8 → `null` (the `string?` absent case), never a fault.
         [Value::Bytes(b)] => Ok(match std::str::from_utf8(b) {
@@ -18,13 +18,13 @@ pub(super) fn bytes_to_string(args: &[Value], _: &mut String) -> Result<Value, S
         _ => Err("Bytes.to_string expects (bytes)".into()),
     }
 }
-pub(super) fn bytes_len(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn bytes_len(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Bytes(b)] => Ok(Value::Int(b.len() as i64)),
         _ => Err("Bytes.len expects (bytes)".into()),
     }
 }
-pub(super) fn bytes_concat(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn bytes_concat(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Bytes(a), Value::Bytes(b)] => {
             let mut out = Vec::with_capacity(a.len() + b.len());
@@ -35,7 +35,7 @@ pub(super) fn bytes_concat(args: &[Value], _: &mut String) -> Result<Value, Stri
         _ => Err("Bytes.concat expects (bytes, bytes)".into()),
     }
 }
-pub(super) fn bytes_find(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn bytes_find(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         // Index of the first occurrence of `needle` in `haystack`, or `null` (the `int?` absent case).
         // Empty needle → `0` (matches PHP 8 `strpos($h, "")`). Used to locate the HTTP head/body split.
@@ -55,7 +55,7 @@ pub(super) fn bytes_find(args: &[Value], _: &mut String) -> Result<Value, String
         _ => Err("Bytes.find expects (bytes, bytes)".into()),
     }
 }
-pub(super) fn bytes_slice(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn bytes_slice(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         // Half-open [start, end), bounds clamped to [0, len] — total, no fault.
         [Value::Bytes(b), Value::Int(start), Value::Int(end)] => {

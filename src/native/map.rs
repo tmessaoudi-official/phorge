@@ -2,7 +2,7 @@ use super::*;
 use crate::types::Ty;
 use crate::value::Value;
 
-pub(super) fn map_keys(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn map_keys(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Map(m)] => Ok(Value::List(std::rc::Rc::new(
             m.iter().map(|(k, _)| k.to_value()).collect(),
@@ -10,7 +10,7 @@ pub(super) fn map_keys(args: &[Value], _: &mut String) -> Result<Value, String> 
         _ => Err("Map.keys expects (Map<K, V>)".into()),
     }
 }
-pub(super) fn map_values(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn map_values(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Map(m)] => Ok(Value::List(std::rc::Rc::new(
             m.iter().map(|(_, v)| v.clone()).collect(),
@@ -18,7 +18,7 @@ pub(super) fn map_values(args: &[Value], _: &mut String) -> Result<Value, String
         _ => Err("Map.values expects (Map<K, V>)".into()),
     }
 }
-pub(super) fn map_has(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn map_has(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Map(m), key] => {
             let hk = crate::value::HKey::from_value(key)
@@ -28,7 +28,7 @@ pub(super) fn map_has(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("Map.has expects (Map<K, V>, K)".into()),
     }
 }
-pub(super) fn map_size(args: &[Value], _: &mut String) -> Result<Value, String> {
+fn map_size(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Map(m)] => Ok(Value::Int(m.len() as i64)),
         _ => Err("Map.size expects (Map<K, V>)".into()),
@@ -86,3 +86,7 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
 // loosely collapse e.g. "1"/"01"), `contains` to a strict `in_array`, `size` to `count`. Element type
 // is the hashable subset (`int`/`bool`/`string`); a `float`/composite element is `E-MAP-KEY` at the
 // type level, and a stray one faults cleanly at runtime (EV-7).
+
+#[cfg(test)]
+#[path = "map_tests.rs"]
+mod tests;
