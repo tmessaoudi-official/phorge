@@ -44,6 +44,13 @@
 > S5.3-T6 edits `CLAUDE.md` (subagent-blocked) — so the parallelism that would justify subagents is absent.
 > Per-task commits, gate-green each time.
 
+> [2026-06-23] AGREED (execution, S5.1): **S5.1-T1 match-arm guards SHIPPED** (`c7e7f13`,
+> contextual `when`, no new `Op`, byte-identical, 827 tests). **S5.1-T2 if-let/while-let guards
+> DEFERRED** to a follow-up — cost-discovery: it needs an invasive `Stmt::If.guard` field (~18
+> construction/consumer sites incl. the fragile `rewrite_*`/loader AST-rebuild passes) or a
+> synthetic-local desugar, disproportionate to its marginal value now that match-arm guards (the
+> headline) are done. Recorded in KNOWN_ISSUES; can land later as its own small slice.
+
 ## Formal Plan
 
 > **For agentic workers:** implement task-by-task. Each task is independently testable and ends with a

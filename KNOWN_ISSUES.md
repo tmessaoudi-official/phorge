@@ -104,6 +104,17 @@ not a panic:
 - Sized integers / `decimal`, `const`/`final` enforcement
 - `match` outside return / variable-declaration-initializer position
 
+## Pattern cluster (M-RT S5.1) — deferred refinements
+- **Match-arm guards ship** (`pat when <cond> => …`, contextual `when`, byte-identical, no new `Op`).
+  **if-let / while-let guards** (`if (var u = opt when u.active)`) are **deferred to a follow-up**:
+  the match-arm machinery doesn't apply (the binding is statement-level, not an arm), so it needs
+  either a new `Stmt::If.guard` field threaded through ~18 construction/consumer sites (incl. the
+  `rewrite_*`/loader AST-rebuild passes) or a synthetic-local desugar — disproportionate to its
+  marginal value. Workaround today: bind, then test inside the block (`if (var u = opt) { if (u.active) … }`).
+- Struct/class field destructuring (`Point { x, y }`), nested type-patterns in payloads
+  (`Wrapper(Circle c)`), and flow-narrowing (negative/else, early-return, post-match, equality) are the
+  later S5.2 / S5.3 sub-slices of this milestone (see the union/narrowing deferral rows above).
+
 ## Mutation milestone — deferred corners
 
 In-place mutation ships incrementally (immutable-by-default, `mutable` opt-in): mutable locals +

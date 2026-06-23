@@ -370,6 +370,20 @@ pub fn explain_text(code: &str) -> Option<String> {
              pattern is allowed only at the **top level** of a match arm, not nested inside a variant\n\
              pattern. Use it to match over a union scrutinee.\n"
         }
+        "E-MATCH-GUARD-EXHAUST" => {
+            "E-MATCH-GUARD-EXHAUST — a shape is covered only by guarded arms.\n\n\
+             A match arm guard (`pat when <cond> => …`, pattern cluster) is an optional boolean\n\
+             condition; a false guard falls through to the next arm. Because the guard might be false,\n\
+             a guarded arm does NOT discharge its shape for exhaustiveness. If every arm matching a\n\
+             given variant/type is guarded, the match can fall through with no arm — so add an\n\
+             **unguarded** arm (or `_`) covering that shape as a fallback.\n"
+        }
+        "E-GUARD-TYPE" => {
+            "E-GUARD-TYPE — a match arm guard is not boolean.\n\n\
+             The condition after `when` in a match arm (`pat when <cond> => …`) is a boolean test,\n\
+             evaluated with the arm's pattern bindings in scope. It must have type `bool` — wrap a\n\
+             non-boolean value in a comparison (`when n > 0`) rather than relying on truthiness.\n"
+        }
         "E-INTERSECT-MEMBER" => {
             "E-INTERSECT-MEMBER — an intersection member is not an allowed type.\n\n\
              An intersection `A & B` (M-RT S5) combines interfaces, plus *at most one* concrete class\n\

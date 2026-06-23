@@ -1,0 +1,54 @@
+// Match-arm guards — an optional `when <cond>` on a match arm (M-RT pattern cluster S5.1).
+//
+// A guard is an extra boolean condition on an arm: the arm matches only when the pattern matches AND
+// the guard holds. A false guard falls through to the next arm (arms are tried top-to-bottom,
+// first-match-wins), so several arms can share a shape with different conditions. Most arms have no
+// guard. The guard can read the arm's pattern bindings.
+//
+// A guarded arm does NOT discharge its shape for exhaustiveness (the guard might be false), so an
+// unguarded fallback for that shape is still required — here the final `Code(n) =>` and the unguarded
+// `Circle c =>`. Guards use a contextual `when` (a normal identifier elsewhere), lower to the existing
+// branch ops (no new VM op), and fold into the transpiled PHP if/elseif chain.
+package Main;
+import Core.Console;
+
+enum Status {
+    Code(int n)
+}
+
+// Several arms share the `Code` shape, separated by guards; the last is the unguarded fallback.
+function classify(Status s) -> string {
+    return match s {
+        Code(n) when n >= 500 => "server error",
+        Code(n) when n >= 400 => "client error",
+        Code(n) when n >= 200 => "ok",
+        Code(n) => "informational ({n})",
+    };
+}
+
+class Circle {
+    constructor(public float r) {}
+}
+
+class Square {
+    constructor(public float side) {}
+}
+
+// Guards on type-patterns over a union, reading a field in the guard condition.
+function describe(Circle | Square sh) -> string {
+    return match sh {
+        Circle c when c.r > 1.0 => "big circle",
+        Circle c => "small circle",
+        Square s => "square",
+    };
+}
+
+function main() {
+    Console.println(classify(Code(503)));
+    Console.println(classify(Code(404)));
+    Console.println(classify(Code(200)));
+    Console.println(classify(Code(100)));
+    Console.println(describe(Circle(2.0)));
+    Console.println(describe(Circle(0.5)));
+    Console.println(describe(Square(3.0)));
+}
