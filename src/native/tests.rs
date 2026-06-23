@@ -1,4 +1,6 @@
 use super::*;
+// Helper bodies live in the per-leaf submodules (M-Decomp W1.1); several tests exercise them directly.
+use super::{file::*, html::*, list::*, map::*, math::*, set::*, text::*};
 
 #[test]
 fn pinned_console_println_slot() {

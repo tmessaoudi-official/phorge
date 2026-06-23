@@ -93,6 +93,15 @@ in `docs/MILESTONES.md`; prune research raw/ if desired; final full gate.
   823 green, clippy + fmt clean. (chunk/value/types/manifest/diagnostic/serve etc. left single — not
   whales, not slated for dir splits.) **Wave 0 COMPLETE.**
 
+- [2026-06-23 16:25] **W1.1 DONE** — `native/mod.rs` (1380) → 191 (header/types/console/parg/build/
+  registry/index) + 8 per-leaf submodules (`math/text/file/bytes/html/list/map/set.rs`). `build()` stays
+  the sole ordering coordinator (`CONSOLE_PRINTLN==0` assert intact). Helpers widened to `pub(super)`;
+  tests import the submodules. 823 green.
+  **GOTCHA (recurs every impl split):** `cargo build` does NOT compile test modules — a moved private
+  helper that a `tests.rs` calls only errors under `cargo clippy --all-targets` / `cargo test`. Always
+  gate with clippy --all-targets, never `build` alone. Fix pattern: `pub(super)` the helper + import the
+  submodule in tests.rs; trim globs to only-used (deny-warnings treats unused import as error).
+
 ### Rollback
 Each wave is one commit on `master`; a regressing wave is reverted with `git revert <sha>` (clean,
 since each commit is self-contained and green). Nothing is pushed until you ask.
