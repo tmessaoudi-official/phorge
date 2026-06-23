@@ -119,6 +119,17 @@ in `docs/MILESTONES.md`; prune research raw/ if desired; final full gate.
   (tests are children again) — **zero `pub(super)` in native**, fully sealed. 823 green, clippy
   --all-targets + fmt clean. This is the template for every later wave's tests.
 
+- [2026-06-23 18:10] **W1.3 DONE** — extracted checker's 3 self-contained AST-rewrite passes to sealed
+  sibling modules: `rewrite_html.rs`/`rewrite_generics.rs`/`rewrite_alias.rs` (~1090 lines out);
+  `checker/mod.rs` 6769→5678. Re-exported (`pub use`) so `checker::{resolve_html,erase_generics,
+  expand_aliases}` callers are unchanged. 823 green.
+  **GOTCHA (bit me 3×: cli, +2 here) — DOC-COMMENT BOUNDARIES:** a `pub fn`'s doc comment sits ABOVE
+  the `fn` line. Extracting `[fn_line .. next_fn_line-1]` (a) leaves THIS fn's doc stranded in the source
+  (dangling `///` → "expected item after doc comment", OR silently mis-documents the next item) and
+  (b) grabs the NEXT fn's doc into this file. When splitting by line range, START the range at the doc
+  comment (scan up for the contiguous leading `///` block), not the `fn` line. CRITICAL for W2 (checker
+  impl split has ~110 doc'd methods).
+
 ### Status checkpoint (2026-06-23 ~17:45)
 **DONE + committed green (823 tests, clippy --all-targets + fmt, PHP 8.4 floor):**
 - W0.1 `0d4bdd4` · W0.2 `51adb06` (test extraction) · docs `49d154b`
