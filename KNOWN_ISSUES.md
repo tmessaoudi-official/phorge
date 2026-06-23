@@ -29,13 +29,15 @@ not a panic:
   needs the type emitted as `ISwimmer` (full subtyping across the lattice = S6c — the S6b guide example
   uses no parent-typed binding/`instanceof`). (2) **Field-collision detection shipped (S6c.1):** a
   same-named instance field inherited from ≥2 distinct parents is `E-MI-FIELD-CONFLICT` (no `insteadof`
-  for PHP properties; resolve by redeclaring in the child). (3) **Single-parent constructor inheritance
-  shipped (S6c.2a):** a class with **no own constructor** inherits its (single-parent, transitively
-  chained) ancestor's — `Greeter("Ada")` runs the inherited ctor on a `Greeter`. Still deferred: the
-  **multi-parent orchestrating constructor** (≥2 parents with state, no own ctor → S6c.2b), and a class
-  that declares **its own** constructor *under inheritance* — there is no parent-forwarding mechanism, so
-  it cannot initialize inherited state (needs the explicit per-parent init call, the `super`-replacement
-  follow-up). (4) A class that is **both a multi-parent leaf and an ancestor of another multi-parent
+  for PHP properties; resolve by redeclaring in the child). (3) **Constructor inheritance shipped (S6c.2a + S6c.2b):** a class with **no own
+  constructor** inherits its parents' — single-parent runs the (transitively chained) ancestor's ctor;
+  **multi-parent** runs a synthesized orchestrating ctor whose params are the parents' ctor params
+  concatenated in `extends` order, executing each parent's ctor (with its arg slice) on the one instance.
+  Still deferred: a class that declares **its own** constructor *under inheritance* — there is no
+  parent-forwarding mechanism (`super`/`parent` is reserved-ambiguous), so it cannot initialize inherited
+  parent state; needs the explicit per-parent init call (the `super`-replacement follow-up). Also a
+  *non-promoted* ctor-param **name collision across two parents** would emit a duplicate PHP parameter
+  (rare; promoted-field collisions are already `E-MI-FIELD-CONFLICT`). (4) A class that is **both a multi-parent leaf and an ancestor of another multi-parent
   class** ("multi-of-multi") takes the `implements/use` path and is not also emitted as a trait — a deep
   edge case outside S6's `package Main` scope. (5) **`super`/`parent` is not a language construct at all**
   (inherited methods dispatch via `this.m()`), so the planned `E-MI-SUPER-AMBIGUOUS` reservation is moot

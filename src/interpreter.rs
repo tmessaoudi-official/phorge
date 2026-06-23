@@ -1339,25 +1339,26 @@ impl Interp {
         Ok(out)
     }
 
-    /// The constructor `class_name` uses (M-RT S6c.2a): its own if declared, else — for **single**
-    /// inheritance — its nearest ancestor's (walking the one-parent chain). Mirrors
-    /// `ast::effective_ctor`; returns `None` when no own/inherited ctor applies (no parent, ≥2 parents
-    /// with no own ctor, or no ancestor declares one). A `(params, body)` clone so `construct` can run
-    /// it with the instance live.
-    fn effective_ctor_parts(&self, class_name: &str) -> Option<(Vec<CtorParam>, Vec<Stmt>)> {
-        let class = self.classes.get(class_name)?;
+    /// The ordered constructor plan `class_name` runs (M-RT S6c.2) — mirrors `ast::ctor_plan`: its own
+    /// ctor if declared, else (single inheritance) the parent's plan, else (multiple inheritance) every
+    /// parent's plan concatenated in `extends` order. Empty when no own/inherited ctor applies. Each
+    /// `(params, body)` is cloned so `construct` can run it with the instance live.
+    fn ctor_plan(&self, class_name: &str) -> Vec<(Vec<CtorParam>, Vec<Stmt>)> {
+        let Some(class) = self.classes.get(class_name) else {
+            return Vec::new();
+        };
         if let Some(parts) = class.members.iter().find_map(|m| match m {
             ClassMember::Constructor { params, body, .. } => Some((params.clone(), body.clone())),
             _ => None,
         }) {
-            return Some(parts);
+            return vec![parts];
         }
-        let parent = if class.extends.len() == 1 {
-            Some(class.extends[0].clone())
-        } else {
-            None
-        };
-        parent.and_then(|p| self.effective_ctor_parts(&p))
+        let parents = class.extends.clone();
+        match parents.len() {
+            0 => Vec::new(),
+            1 => self.ctor_plan(&parents[0]),
+            _ => parents.iter().flat_map(|p| self.ctor_plan(p)).collect(),
+        }
     }
 
     /// Construct a class instance. Applies constructor *promotion* at runtime
@@ -1368,56 +1369,68 @@ impl Interp {
             self.classes.contains_key(class_name),
             "caller checked the class exists"
         );
-        // M-RT S6c.2a: a no-own-ctor class runs its *inherited* (single-parent) constructor — the
-        // own-else-nearest-single-parent walk mirrored from `ast::effective_ctor` (and PHP's native
-        // ctor inheritance / the compiler's effective-ctor). The promoted params set fields on a
-        // `class_name` instance, so `Greeter("Ada")` populates the inherited `name`.
-        let ctor = self.effective_ctor_parts(class_name);
+        // M-RT S6c.2: a no-own-ctor class runs its inherited constructor *plan* — for single
+        // inheritance the parent's ctor, for multiple inheritance every parent's in `extends` order.
+        // The full args are the plan entries' params concatenated; each entry takes its slice.
+        let plan = self.ctor_plan(class_name);
         let mut inst = Instance {
             class: class_name.to_string(),
             fields: RefCell::new(HashMap::new()),
         };
-        let Some((params, body)) = ctor else {
+        let total: usize = plan.iter().map(|(p, _)| p.len()).sum();
+        if plan.is_empty() {
             if !args.is_empty() {
                 return rt(format!("`{class_name}` has no constructor but got args"));
             }
             return Ok(Value::Instance(Rc::new(inst)));
-        };
-        if args.len() != params.len() {
+        }
+        if args.len() != total {
             return rt(format!(
-                "constructor of `{class_name}` expects {} args, got {}",
-                params.len(),
+                "constructor of `{class_name}` expects {total} args, got {}",
                 args.len()
             ));
         }
-        for (p, a) in params.iter().zip(args.iter()) {
-            let promoted = p.modifiers.iter().any(|m| {
+        let promoted = |p: &CtorParam| {
+            p.modifiers.iter().any(|m| {
                 matches!(
                     m,
                     Modifier::Public | Modifier::Private | Modifier::Protected
                 )
-            });
-            if promoted {
-                // We still solely own `inst` (not yet shared), so `get_mut` skips the runtime borrow.
-                inst.fields.get_mut().insert(p.name.clone(), a.clone());
+            })
+        };
+        // Promote every promoted param across the whole plan first (before any body runs), matching the
+        // VM's `MakeInstance` populating all fields up front — so a parent body can read a field a later
+        // parent promotes, identically on both backends. We still solely own `inst`, so `get_mut` skips
+        // the runtime borrow.
+        let mut offset = 0;
+        for (params, _) in &plan {
+            for (i, p) in params.iter().enumerate() {
+                if promoted(p) {
+                    inst.fields
+                        .get_mut()
+                        .insert(p.name.clone(), args[offset + i].clone());
+                }
             }
+            offset += params.len();
         }
-        // Run the body for side effects with `this` + params in scope. In M1 the
-        // body cannot mutate fields (no reassignment), so the promoted instance is
-        // the result regardless of the body's return.
-        let names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
-        // Share one `Rc` between the `this` receiver and the returned instance (M2 P5a): the body
-        // can't mutate fields (immutable), so both observe the same value — a refcount bump, not a
-        // deep `HashMap` clone of the whole instance.
+        // Share one `Rc` between the `this` receiver and the returned instance (M2 P5a). Then run each
+        // plan entry's body in order with its param slice + `this` in scope. Bodies cannot change the
+        // result (a ctor body's return is discarded); their side effect is field initialization.
         let rc = Rc::new(inst);
         let ctor = format!("{}::new", rc.class);
-        self.run_call(
-            &ctor,
-            &names,
-            &body,
-            args,
-            Some(Value::Instance(rc.clone())),
-        )?;
+        let mut offset = 0;
+        for (params, body) in &plan {
+            let names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
+            let slice = args[offset..offset + params.len()].to_vec();
+            offset += params.len();
+            self.run_call(
+                &ctor,
+                &names,
+                body,
+                slice,
+                Some(Value::Instance(rc.clone())),
+            )?;
+        }
         Ok(Value::Instance(rc))
     }
 

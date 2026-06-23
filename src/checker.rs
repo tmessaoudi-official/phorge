@@ -1053,14 +1053,15 @@ impl Checker {
             for (k, v) in &parent_info.hooks {
                 child.hooks.entry(k.clone()).or_insert_with(|| v.clone());
             }
-            // M-RT S6c.2a: a single-parent class with no own constructor inherits the parent's
-            // constructor signature for `ClassName(args)` type-checking (mirrors PHP's native ctor
-            // inheritance + the interpreter's parent-chain walk + the compiler's effective-ctor). The
-            // parent's `ctor` is already its *effective* signature (parents merged first), so a chain
-            // of no-own-ctor classes propagates it. Multi-parent (`ps.len() > 1`) is S6c.2b; a class
-            // declaring its own ctor keeps it (the deferred parent-forwarding case).
-            if ps.len() == 1 && !child.has_ctor {
-                child.ctor = parent_info.ctor.clone();
+            // M-RT S6c.2: a class with no own constructor inherits its parents' constructor
+            // signature(s) for `ClassName(args)` type-checking — single inheritance takes the one
+            // parent's, multiple inheritance **concatenates** every parent's in `extends` order (the
+            // orchestrating ctor's params, matching the interpreter's plan + the compiler's flattened
+            // descriptor). Parents merge first, so each `parent_info.ctor` is already its *effective*
+            // (own-or-inherited) signature; appending across the loop builds the full concatenation. A
+            // class declaring its own ctor keeps it (the deferred parent-forwarding case, KNOWN_ISSUES).
+            if !child.has_ctor {
+                child.ctor.extend(parent_info.ctor.iter().cloned());
             }
         }
     }

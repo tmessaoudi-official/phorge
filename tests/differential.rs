@@ -449,6 +449,43 @@ function main() {
     );
 }
 
+/// M-RT S6c.2b — multi-parent orchestrating constructor. A class with ≥2 parents and **no own
+/// constructor** inherits a synthesized constructor whose parameters are the parents' ctor params
+/// concatenated in `extends` order; constructing it runs each parent's constructor (with its arg
+/// slice) on the one instance, initializing every inherited field. Byte-identical run≡runvm≡real PHP.
+#[test]
+fn s6c_multi_parent_ctor_is_byte_identical() {
+    // promotion-only parents: all inherited fields populated from the concatenated args
+    agree_out_php(
+        r#"import Core.Console;
+open class Named { constructor(public string name) {} }
+open class Aged { constructor(public int age) {} }
+class Person extends Named, Aged {}
+function main() {
+    Person p = Person("Ada", 36);
+    Console.println("{p.name} is {p.age}");
+}"#,
+        "Ada is 36\n",
+        "s6c_multi_parent_ctor_promotion",
+    );
+    // a parent constructor with a *body* (derives a field) runs through the orchestration
+    agree_out_php(
+        r#"import Core.Console;
+open class Named { constructor(public string name) {} }
+open class Scored {
+    mutable int doubled;
+    constructor(int score) { this.doubled = score * 2; }
+}
+class Player extends Named, Scored {}
+function main() {
+    Player p = Player("Bo", 21);
+    Console.println("{p.name} {p.doubled}");
+}"#,
+        "Bo 42\n",
+        "s6c_multi_parent_ctor_body",
+    );
+}
+
 /// M-RT S6c.3 — `instanceof`/subtyping across the full class lattice. The runtime `instanceof` oracle
 /// previously consulted only interfaces (`class_implements`), so `d instanceof Animal` against a
 /// *parent class* was wrongly `false` on both Rust backends — and a multi-parent class lowers to PHP

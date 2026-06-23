@@ -1,0 +1,53 @@
+// Multiple inheritance with state: composed constructors + fields + `instanceof` (M-RT S6c).
+//
+// Phorge composes a multi-parent class's *state*, not just its methods. A class with several parents
+// and NO constructor of its own gets a synthesized orchestrating constructor: its parameters are the
+// parents' constructor parameters concatenated in `extends` order, and constructing it runs each
+// parent's constructor (with its slice of the arguments) on the one new instance — so every inherited
+// field is initialized. A parent constructor may carry a body, not just promoted parameters.
+//
+// PHP has no multiple inheritance, so each parent lowers to an interface + a trait; the trait holds the
+// fields as plain properties (two trait constructors would collide), and the subclass gets a single
+// `__construct` that assigns them. The interpreter and VM run the same composed plan. All three
+// backends agree byte-for-byte.
+package Main;
+
+import Core.Console;
+
+// A parent whose constructor is pure promotion (declares + stores `name`).
+open class Named {
+    constructor(public string name) {}
+
+    function label() -> string {
+        return this.name;
+    }
+}
+
+// A parent whose constructor has a *body* — it derives a stored field from its argument.
+open class Paid {
+    mutable int annual;
+    constructor(int monthly) {
+        this.annual = monthly * 12;
+    }
+}
+
+// Two orthogonal parents, no own constructor → a synthesized ctor(string name, int monthly).
+class Employee extends Named, Paid {
+    function summary() -> string {
+        return "{this.name}: {this.annual}/yr";
+    }
+}
+
+function main() {
+    Employee e = Employee("Ada", 1000);
+
+    // Inherited state from BOTH parents is initialized: Named's promoted `name`, Paid's derived `annual`.
+    Console.println(e.summary());   // Ada: 12000/yr
+    Console.println(e.label());     // inherited method reads the inherited field
+
+    // An Employee is a subtype of every ancestor (S6c.3): it flows into a parent-typed binding and
+    // answers `instanceof` for each parent.
+    Named n = e;
+    Console.println(n.label());
+    Console.println("{e instanceof Named} {e instanceof Paid} {e instanceof Employee}");
+}

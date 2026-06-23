@@ -323,11 +323,13 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
     };
     for (ci, c) in class_decls.iter().enumerate() {
         classes.insert(c.name.clone(), nfree + ci);
-        // M-RT S6c.2a: a no-own-ctor class's instance descriptor uses its *inherited* (single-parent)
-        // constructor's promoted fields, so a `MakeInstance` for it populates the same fields the
-        // interpreter promotes through the parent chain. `effective_ctor` is the shared decision.
-        let params: &[CtorParam] =
-            crate::ast::effective_ctor(program, &c.name).map_or(&[] as &[CtorParam], |(_, p, _)| p);
+        // M-RT S6c.2: a no-own-ctor class's instance descriptor uses its inherited constructor(s)'
+        // promoted fields — for single inheritance the parent's, for multiple inheritance every
+        // parent's concatenated — so a `MakeInstance` populates exactly the fields the interpreter
+        // promotes. `ctor_plan` is the shared decision; flatten its entries' params.
+        let plan = crate::ast::ctor_plan(program, &c.name);
+        let params: Vec<CtorParam> = plan.iter().flat_map(|(p, _)| p.iter().cloned()).collect();
+        let params: &[CtorParam] = &params;
         let mut fields: Vec<String> = Vec::new();
         let mut tags: HashMap<String, CTy> = HashMap::new();
         for p in params {
@@ -560,9 +562,14 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
     // `CallMethod`, whose arg count is in the op, so their arity entries are for completeness).
     let mut arities: Vec<usize> = order.iter().map(|f| f.params.len()).collect();
     for c in &class_decls {
-        // M-RT S6c.2a: the synthetic ctor's arity is the *effective* (own-or-single-parent-inherited)
-        // constructor's, matching `compile_constructor`'s param count.
-        arities.push(crate::ast::effective_ctor(program, &c.name).map_or(0, |(_, p, _)| p.len()));
+        // M-RT S6c.2: the synthetic ctor's arity is the sum of its constructor plan's params (own, or
+        // inherited single/multi-parent), matching `compile_constructor`'s param count.
+        arities.push(
+            crate::ast::ctor_plan(program, &c.name)
+                .iter()
+                .map(|(p, _)| p.len())
+                .sum(),
+        );
     }
     for (_, f) in &methods_to_compile {
         arities.push(1 + f.params.len());
@@ -725,11 +732,12 @@ fn compile_constructor<'a>(
     method_rets: &'a HashMap<(String, String), CTy>,
     base_fn_idx: usize,
 ) -> Result<(Function, Vec<Function>), String> {
-    // M-RT S6c.2a: a no-own-ctor class compiles its *inherited* (single-parent) constructor — the same
-    // params + body PHP would inherit and the interpreter walks the parent chain to find. The synthetic
-    // function stays `<Class>::new` and `MakeInstance(desc_idx)` builds a *this*-class instance.
-    let (params, body): (&[CtorParam], &[Stmt]) =
-        crate::ast::effective_ctor(program, &c.name).map_or((&[], &[]), |(_, p, b)| (p, b));
+    // M-RT S6c.2: a no-own-ctor class compiles its inherited constructor *plan* — for single
+    // inheritance the parent's, for multiple inheritance every parent's, in `extends` order. The
+    // synthetic function stays `<Class>::new`; `MakeInstance(desc_idx)` builds a *this*-class instance
+    // populated with every promoted param across the plan, then each plan entry's body runs in turn.
+    let plan = crate::ast::ctor_plan(program, &c.name);
+    let all_params: Vec<&CtorParam> = plan.iter().flat_map(|(p, _)| p.iter()).collect();
     let line = c.span.line;
     let mut comp = Compiler::new(
         fns,
@@ -746,13 +754,14 @@ fn compile_constructor<'a>(
         base_fn_idx,
     );
     comp.cur_class = Some(c.name.clone()); // `this` resolves to this class (ctype)
-    for p in params {
+    for p in &all_params {
         comp.add_local(&p.name, resolve_cty(&p.ty));
     }
     comp.height = comp.locals.len();
-    // Prologue: load promoted params in declaration order, then build the instance. `MakeInstance`
-    // pops exactly those values (matching `class_descs[desc_idx].fields`), so the order lines up.
-    for (slot, p) in params.iter().enumerate() {
+    // Prologue: load every promoted param across the plan, in slot order, then build the instance.
+    // `MakeInstance` pops exactly those values (matching `class_descs[desc_idx].fields`, built from the
+    // same flattened plan), so the order lines up.
+    for (slot, p) in all_params.iter().enumerate() {
         if is_promoted(p) {
             comp.emit(Op::GetLocal(slot), line);
         }
@@ -760,22 +769,26 @@ fn compile_constructor<'a>(
     comp.emit(Op::MakeInstance(desc_idx), line);
     let inst_slot = comp.add_local("$this", CTy::Other);
     comp.this_slot = Some(inst_slot); // a ctor body may reference `this` / bare fields
-                                      // Body: returns are redirected to the epilogue (the body cannot change the constructed value).
-    comp.ctor_return_jumps = Some(Vec::new());
-    for s in body {
-        comp.stmt(s)?;
+                                      // Each plan entry's body runs in sequence on the one instance. An early `return` ends *that*
+                                      // body only (matching the interpreter's separate per-parent call) — so each gets its own
+                                      // return-jump set, patched to the end of that body, never skipping a later parent's init.
+    for (_, body) in &plan {
+        comp.ctor_return_jumps = Some(Vec::new());
+        for s in body {
+            comp.stmt(s)?;
+        }
+        let jumps = comp.ctor_return_jumps.take().unwrap_or_default();
+        for j in jumps {
+            comp.patch_jump(j);
+        }
     }
-    let jumps = comp.ctor_return_jumps.take().unwrap_or_default();
-    // Epilogue: every redirected `return` and the natural fall-through converge here.
-    for j in jumps {
-        comp.patch_jump(j);
-    }
+    // Epilogue: load and return the constructed instance (a ctor body cannot change the result).
     comp.emit(Op::GetLocal(inst_slot), line);
     comp.emit(Op::Return, line);
     Ok((
         Function {
             name: format!("{}::new", c.name),
-            arity: params.len(),
+            arity: all_params.len(),
             n_captures: 0, // constructors are never closures
             chunk: comp.chunk,
         },

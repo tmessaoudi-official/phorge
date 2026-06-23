@@ -285,7 +285,7 @@ impl Transpiler {
                     if c.extends.len() >= 2 {
                         self.emit_multi_class(c, program)?;
                     } else if self.decomposed.contains(&c.name) {
-                        self.emit_decomposed_class(c)?;
+                        self.emit_decomposed_class(c, program)?;
                     } else {
                         self.emit_class(c)?;
                     }
@@ -847,22 +847,29 @@ impl Transpiler {
         ));
         self.indent += 1;
         let prev = self.cur_class_fields.replace(fields);
-        self.emit_class_members(c, &promoted_names, is_error)?;
+        self.emit_class_members(c, &promoted_names, is_error, false)?;
         self.cur_class_fields = prev;
         self.indent -= 1;
         self.line("}");
         Ok(())
     }
 
-    /// Emit a class's members (fields, constructor, methods, hooks) — the shared body used by both a
-    /// plain `class` (`emit_class`) and a multi-parent class (`emit_multi_class`, M-RT S6b). The caller
-    /// has already emitted the class header + opening `{`, raised the indent, and set
-    /// `cur_class_fields`; it restores them after.
+    /// Emit a class's members (fields, constructor, methods, hooks) — the shared body used by a plain
+    /// `class` (`emit_class`) and a multi-parent class (`emit_multi_class`, M-RT S6b). The caller has
+    /// already emitted the class header + opening `{`, raised the indent, and set `cur_class_fields`;
+    /// it restores them after.
+    ///
+    /// `as_trait` (M-RT S6c.2b): when emitting a decomposed class's *trait* body, a constructor cannot
+    /// be a `__construct` (two trait constructors collide fatally in PHP), so its promoted params are
+    /// emitted as PLAIN `public` fields and its body is dropped — the construction logic moves to an
+    /// explicit-assignment `__construct` on the concrete class / multi-parent subclass
+    /// (`emit_synth_construct`).
     fn emit_class_members(
         &mut self,
         c: &ClassDecl,
         promoted_names: &HashSet<String>,
         is_error: bool,
+        as_trait: bool,
     ) -> Result<(), String> {
         let mut emitted_method_overloads: HashSet<String> = HashSet::new();
         for m in &c.members {
@@ -904,6 +911,22 @@ impl Transpiler {
                     }
                 }
                 ClassMember::Constructor { params, body, .. } => {
+                    // M-RT S6c.2b: in a decomposed class's trait, a constructor can't be `__construct`
+                    // (two trait `__construct`s are a PHP fatal). Emit its promoted params as plain
+                    // `public` fields (the trait owns the storage); the construction logic moves to the
+                    // concrete class / multi-parent subclass via `emit_synth_construct`.
+                    if as_trait {
+                        for p in params {
+                            if is_promoted(&p.modifiers) {
+                                self.line(&format!(
+                                    "public {} ${};",
+                                    self.emit_type(&p.ty),
+                                    p.name
+                                ));
+                            }
+                        }
+                        continue;
+                    }
                     // M-faults 2c: a promoted `cause` param of marker-`Error` type on an Error subtype
                     // feeds PHP's native exception chain (`$previous`) — recognized by name + type so a
                     // mis-typed `cause` stays a plain field. Emitted as `?\Throwable` (the `$previous`
@@ -1027,7 +1050,50 @@ impl Transpiler {
     /// instantiable and single-`extends`able. An ancestor's own parents are decomposed too, so the
     /// interface `extends I<parent>` and the trait `use T<parent>` (which is how a diamond shared base
     /// auto-merges — both arms reach the same flattened trait method).
-    fn emit_decomposed_class(&mut self, c: &ClassDecl) -> Result<(), String> {
+    /// M-RT S6c.2b: emit an explicit-assignment `__construct` from a class's constructor *plan*
+    /// (`ast::ctor_plan`) — used where promotion cannot be (a decomposed concrete class and a
+    /// multi-parent subclass, whose fields live in `use`d traits as plain properties). Params are the
+    /// plan entries' params concatenated; the body sets each promoted param (`$this->p = $p;`) then runs
+    /// each entry's body, in order — mirroring the interpreter's per-entry promote-then-body and the
+    /// VM's `MakeInstance`-then-bodies. Emits nothing for an empty plan (a zero-arg class).
+    fn emit_synth_construct(&mut self, c: &ClassDecl, program: &Program) -> Result<(), String> {
+        let plan = crate::ast::ctor_plan(program, &c.name);
+        if plan.is_empty() {
+            return Ok(());
+        }
+        let params: Vec<String> = plan
+            .iter()
+            .flat_map(|(ps, _)| ps.iter())
+            .map(|p| format!("{} ${}", self.emit_type(&p.ty), p.name))
+            .collect();
+        self.line(&format!(
+            "public function __construct({}) {{",
+            params.join(", ")
+        ));
+        self.indent += 1;
+        self.push_scope();
+        for (ps, _) in &plan {
+            for p in ps {
+                self.declare(&p.name);
+            }
+        }
+        for (ps, body) in &plan {
+            for p in ps {
+                if is_promoted(&p.modifiers) {
+                    self.line(&format!("$this->{0} = ${0};", p.name));
+                }
+            }
+            for s in body {
+                self.emit_stmt(s)?;
+            }
+        }
+        self.pop_scope();
+        self.indent -= 1;
+        self.line("}");
+        Ok(())
+    }
+
+    fn emit_decomposed_class(&mut self, c: &ClassDecl, program: &Program) -> Result<(), String> {
         // interface I<name> [extends I<parent>, …] { method signatures }
         let iparents: Vec<String> = c.extends.iter().map(|p| format!("I{p}")).collect();
         let iext = if iparents.is_empty() {
@@ -1070,16 +1136,24 @@ impl Transpiler {
         }
         let (promoted_names, fields, is_error) = self.class_field_context(c);
         let prev = self.cur_class_fields.replace(fields);
-        self.emit_class_members(c, &promoted_names, is_error)?;
+        // `as_trait = true`: promoted ctor params become plain fields, the constructor is NOT emitted
+        // here (it would be a colliding trait `__construct`).
+        self.emit_class_members(c, &promoted_names, is_error, true)?;
         self.cur_class_fields = prev;
         self.indent -= 1;
         self.line("}");
 
-        // concrete class <name> implements I<name> { use T<name>; } — instantiable + single-extendable.
-        self.line(&format!(
-            "class {0} implements I{0} {{ use T{0}; }}",
-            c.name
-        ));
+        // concrete class <name> implements I<name> { use T<name>; <explicit __construct> } — directly
+        // instantiable + single-`extends`able. The constructor logic the trait dropped lives here as an
+        // explicit-assignment ctor (M-RT S6c.2b).
+        self.line(&format!("class {0} implements I{0} {{", c.name));
+        self.indent += 1;
+        self.line(&format!("use T{};", c.name));
+        let prev = self.cur_class_fields.replace(self.class_field_context(c).1);
+        self.emit_synth_construct(c, program)?;
+        self.cur_class_fields = prev;
+        self.indent -= 1;
+        self.line("}");
         Ok(())
     }
 
@@ -1111,7 +1185,17 @@ impl Transpiler {
         }
         let (promoted_names, fields, is_error) = self.class_field_context(c);
         let prev = self.cur_class_fields.replace(fields);
-        self.emit_class_members(c, &promoted_names, is_error)?;
+        self.emit_class_members(c, &promoted_names, is_error, false)?;
+        // M-RT S6c.2b: a multi-parent class with no own constructor gets a synthesized orchestrating
+        // `__construct` (explicit assignments + each parent body, from `ctor_plan`); its fields live in
+        // the `use`d parent traits. A class that declares its own ctor already emitted it above.
+        if !c
+            .members
+            .iter()
+            .any(|m| matches!(m, ClassMember::Constructor { .. }))
+        {
+            self.emit_synth_construct(c, program)?;
+        }
         self.cur_class_fields = prev;
         self.indent -= 1;
         self.line("}");

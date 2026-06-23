@@ -731,34 +731,44 @@ pub fn class_field_conflicts(program: &Program) -> Vec<(String, String, Span)> {
     ctx.conflicts
 }
 
-/// The constructor a `ClassName(args)` call uses (M-RT S6c.2a): the class's **own** constructor if it
-/// declares one, else — for **single** inheritance — its nearest ancestor's (walking the one-parent
-/// chain). Returns `(declaring_class, params, body)`. `None` when neither the class nor (via a
-/// single-parent chain) any ancestor declares a constructor, or when the class has **multiple** parents
-/// and no own constructor — multi-parent orchestration is S6c.2b; a child that declares its *own*
-/// constructor under inheritance is the deferred case (it returns its own ctor, parents un-chained).
+/// The ordered list of constructors a `ClassName(args)` call runs (M-RT S6c.2). Each entry is one
+/// `(params, body)` to execute, in order, on the single instance being built; the call's full argument
+/// list is the entries' params concatenated in this order, sliced per entry.
 ///
-/// This is the single source of the inherited-ctor decision: the checker reads it for the construction
-/// signature and the compiler for the instance descriptor + synthetic ctor body. The interpreter
-/// mirrors the same own-else-single-parent walk over its `ClassDecl` map.
-pub fn effective_ctor<'a>(
-    program: &'a Program,
-    class: &str,
-) -> Option<(&'a str, &'a [CtorParam], &'a [Stmt])> {
-    let decl = program.items.iter().find_map(|it| match it {
+/// - A class with its **own** constructor → just that one (`[own]`).
+/// - **Single** inheritance, no own ctor → the parent's plan (the nearest ancestor's ctor, transitively
+///   chained — S6c.2a).
+/// - **Multiple** inheritance, no own ctor → each parent's plan concatenated in `extends` order, so
+///   every parent's constructor runs and initializes its fields (S6c.2b). A diamond-shared base's ctor
+///   runs once per arm — identically on all three backends, so byte-identity holds.
+/// - No ctor anywhere → `[]` (a zero-arg `ClassName()` builds an empty instance).
+///
+/// Single source of the construction decision: checker (signature = concatenated param types),
+/// compiler (instance descriptor + synthetic ctor body + arity), interpreter (run each entry with its
+/// arg slice). A child that declares its *own* ctor under inheritance returns just its own — initializing
+/// inherited state then needs the deferred `super`-replacement (KNOWN_ISSUES).
+pub fn ctor_plan(program: &Program, class: &str) -> Vec<(Vec<CtorParam>, Vec<Stmt>)> {
+    let Some(decl) = program.items.iter().find_map(|it| match it {
         Item::Class(c) if c.name == class => Some(c),
         _ => None,
-    })?;
+    }) else {
+        return Vec::new();
+    };
     if let Some((p, b)) = decl.members.iter().find_map(|m| match m {
-        ClassMember::Constructor { params, body, .. } => Some((&params[..], &body[..])),
+        ClassMember::Constructor { params, body, .. } => Some((params.clone(), body.clone())),
         _ => None,
     }) {
-        return Some((&decl.name, p, b));
+        return vec![(p, b)];
     }
-    if decl.extends.len() == 1 {
-        return effective_ctor(program, &decl.extends[0]);
+    match decl.extends.len() {
+        0 => Vec::new(),
+        1 => ctor_plan(program, &decl.extends[0]),
+        _ => decl
+            .extends
+            .iter()
+            .flat_map(|p| ctor_plan(program, p))
+            .collect(),
     }
-    None
 }
 
 fn collect_free_expr(
