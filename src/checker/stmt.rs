@@ -140,10 +140,17 @@ impl Checker {
                     }
                     // Flow-narrowing (S5.3): the then-block sees the variables the condition implies
                     // when *true* (e.g. `if (x instanceof T)` narrows `x` to `T`). The narrowed shadows
-                    // are installed in a child scope and dropped after the block.
-                    let narrowings = self.narrow_from_condition(cond, true);
-                    self.check_block_narrowed(then_block, &narrowings, *span);
+                    // are installed in a child scope and dropped after the block. The else-block sees
+                    // the *false*-polarity narrowing (T2: the remaining union members, the null arm…).
+                    let then_narrow = self.narrow_from_condition(cond, true);
+                    self.check_block_narrowed(then_block, &then_narrow, *span);
+                    if let Some(eb) = else_block {
+                        let else_narrow = self.narrow_from_condition(cond, false);
+                        self.check_block_narrowed(eb, &else_narrow, *span);
+                    }
+                    return;
                 }
+                // The if-let (`bind`) path: its else-block sees neither the binding nor any narrowing.
                 if let Some(eb) = else_block {
                     self.check_block(eb);
                 }
@@ -320,37 +327,86 @@ impl Checker {
 
     /// The variables a boolean condition narrows when it evaluates to `polarity` (`true` = then-branch,
     /// `false` = else-branch), as `(var, narrowed-type)` shadows. Flow-narrowing engine (S5.3); a `&self`
-    /// query (installation is the caller's job). T1 recognizes the one pre-existing source — a bare
-    /// `x instanceof T` at `polarity = true` — preserving the prior smart-cast behavior exactly; later
-    /// tasks add the negative/else, equality and `&&`/`!` forms.
+    /// query (installation is the caller's job). Sources: `x instanceof T` (true ⇒ `T`; false ⇒ the
+    /// remaining union members), `x == null` / `x != null` over a `T?` (both polarities), `!c` (flips
+    /// polarity), and `a && b` (true side) / `a || b` (false side, De Morgan).
     pub(super) fn narrow_from_condition(
         &self,
         cond: &crate::ast::Expr,
         polarity: bool,
     ) -> Vec<(String, Ty)> {
-        use crate::ast::Expr;
+        use crate::ast::{BinaryOp, Expr, UnaryOp};
         let mut out = Vec::new();
-        if let Expr::InstanceOf {
-            value, type_name, ..
-        } = cond
-        {
-            if polarity {
+        match cond {
+            Expr::InstanceOf {
+                value, type_name, ..
+            } => {
                 if let Expr::Ident(name, _) = &**value {
-                    if self.classes.contains_key(type_name)
-                        || self.interfaces.contains_key(type_name)
-                    {
-                        // `instanceof` carries no type arguments at runtime (`instanceof Box<int>` ≡
-                        // `instanceof Box`), so a narrowed generic class instance has erased (poison)
-                        // type arguments — its generic members read as `mixed` (M-RT generics-all).
+                    let known = self.classes.contains_key(type_name)
+                        || self.interfaces.contains_key(type_name);
+                    if !known {
+                        return out;
+                    }
+                    if polarity {
+                        // then-branch: narrow to the tested type. `instanceof` carries no type
+                        // arguments at runtime (`instanceof Box<int>` ≡ `instanceof Box`), so a
+                        // generic class narrows with erased (poison) args — its generic members read
+                        // as `mixed` (M-RT generics-all).
                         let arity = self
                             .classes
                             .get(type_name)
                             .map_or(0, |c| c.type_params.len());
-                        let args = vec![Ty::Error; arity];
-                        out.push((name.clone(), Ty::Named(type_name.clone(), args)));
+                        out.push((
+                            name.clone(),
+                            Ty::Named(type_name.clone(), vec![Ty::Error; arity]),
+                        ));
+                    } else if let Some((Ty::Union(members), _)) = self.lookup_binding(name) {
+                        // else-branch: drop the tested member (and any subtype of it) from the union.
+                        let orig = members.len();
+                        let rest: Vec<Ty> = members
+                            .into_iter()
+                            .filter(|m| {
+                                !matches!(m, Ty::Named(n, _)
+                                    if n == type_name || self.is_subtype(n, type_name))
+                            })
+                            .collect();
+                        if !rest.is_empty() && rest.len() < orig {
+                            out.push((name.clone(), Ty::union_of(rest)));
+                        }
                     }
                 }
             }
+            // (Phorge has no `x == null` / `x != null` comparison — the checker rejects comparing a
+            // `T?` to the null literal; optionals are tested via if-let / `??` / match-over-optional,
+            // so there is no null-equality narrowing source here.)
+            // `a && b` narrows the conjunction on its true side; `a || b` narrows on its false side
+            // (De Morgan: `!(a || b)` ≡ `!a && !b`). The other polarity yields a disjunction — no
+            // single narrowing — so it contributes nothing.
+            Expr::Binary {
+                op: BinaryOp::And,
+                lhs,
+                rhs,
+                ..
+            } if polarity => {
+                out.extend(self.narrow_from_condition(lhs, true));
+                out.extend(self.narrow_from_condition(rhs, true));
+            }
+            Expr::Binary {
+                op: BinaryOp::Or,
+                lhs,
+                rhs,
+                ..
+            } if !polarity => {
+                out.extend(self.narrow_from_condition(lhs, false));
+                out.extend(self.narrow_from_condition(rhs, false));
+            }
+            // `!c` flips the polarity.
+            Expr::Unary {
+                op: UnaryOp::Not,
+                expr,
+                ..
+            } => out.extend(self.narrow_from_condition(expr, !polarity)),
+            _ => {}
         }
         out
     }

@@ -2387,6 +2387,28 @@ function main() {
     );
 }
 
+/// Pattern cluster S5.3 — flow-narrowing (else / negative). After `if (s instanceof Circle)` the
+/// else-branch narrows `s` to the remaining union member (`Square`), so the Square-only field reads
+/// there. Narrowing is checker-only — this confirms a program relying on it runs byte-identically.
+#[test]
+fn flow_narrowing_else_byte_identical() {
+    agree_out_php(
+        "import Core.Console;
+class Circle { constructor(public float r) {} }
+class Square { constructor(public float side) {} }
+function dim(Circle | Square s) -> float {
+    if (s instanceof Circle) { return s.r; } else { return s.side; }
+}
+function main() {
+    float a = dim(Circle(2.5));
+    float b = dim(Square(4.0));
+    Console.println(\"a={a} b={b}\");
+}",
+        "a=2.5 b=4\n",
+        "flow_narrowing_else",
+    );
+}
+
 /// Pattern cluster S5.2-T2 — a nested type pattern inside a variant payload (`W(Circle c)`). The
 /// payload (an interface) is matched to a concrete class via the same `Op::IsInstance` test, then the
 /// binding's field is read (`c.r + 1.0` exercises the CTy operand path on a nested-pattern binding).

@@ -213,6 +213,46 @@ fn nested_type_pattern_in_variant_payload() {
 }
 
 #[test]
+fn flow_narrowing_else_and_negation() {
+    const CS: &str = "class Circle { constructor(public float r) {} } \
+                      class Square { constructor(public float side) {} }";
+
+    // else-branch narrowing: after `if (s instanceof Circle)` the else sees `s : Square` (the union
+    // minus Circle), so the Square-only field `side` type-checks there.
+    let ok = format!(
+        "{CS} function f(Circle | Square s) -> float {{ \
+             if (s instanceof Circle) {{ return s.r; }} else {{ return s.side; }} }}"
+    );
+    assert!(errors_of(&ok).is_empty(), "{:?}", errors_of(&ok));
+
+    // `!(s instanceof Circle)` flips the polarity: the *then*-branch sees `s : Square`.
+    let neg = format!(
+        "{CS} function f(Circle | Square s) -> float {{ \
+             if (!(s instanceof Circle)) {{ return s.side; }} else {{ return s.r; }} }}"
+    );
+    assert!(errors_of(&neg).is_empty(), "{:?}", errors_of(&neg));
+
+    // `&&` conjoins both operands' true-side narrowings: the then-branch sees `a : Circle` AND
+    // `b : Square` at once.
+    let conj = format!(
+        "{CS} function f(Circle | Square a, Circle | Square b) -> float {{ \
+             if (a instanceof Circle && b instanceof Square) {{ return a.r + b.side; }} return 0.0; }}"
+    );
+    assert!(errors_of(&conj).is_empty(), "{:?}", errors_of(&conj));
+
+    // Without narrowing the else still sees the full union — a Square-only field on a `Circle` is an
+    // error (proves the then-branch is NOT over-narrowed into the else).
+    let bad = format!(
+        "{CS} function f(Circle | Square s) -> float {{ \
+             if (s instanceof Circle) {{ return s.side; }} else {{ return s.side; }} }}"
+    );
+    assert!(
+        !errors_of(&bad).is_empty(),
+        "expected a then-branch field error"
+    );
+}
+
+#[test]
 fn match_arm_guards() {
     // A guarded arm plus an unguarded fallback for the same shape is exhaustive and type-checks.
     let ok = format!(
