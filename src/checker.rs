@@ -945,6 +945,69 @@ impl Checker {
                 }
             }
         }
+        // M-RT S8 (T3): trait-constructor footguns become clean ahead-of-time diagnostics (D5/D6/D8).
+        for item in &program.items {
+            let Item::Class(c) = item else { continue };
+            let has_own_ctor = c
+                .members
+                .iter()
+                .any(|m| matches!(m, crate::ast::ClassMember::Constructor { .. }));
+            // Used traits (known + declaring a constructor), in source order.
+            let trait_ctors: Vec<&str> = c
+                .uses
+                .iter()
+                .filter(|u| {
+                    self.classes
+                        .get(&u.name)
+                        .is_some_and(|t| t.has_ctor && self.traits.contains(&u.name))
+                })
+                .map(|u| u.name.as_str())
+                .collect();
+            if has_own_ctor {
+                // The class's own ctor wins; any trait ctor is dead unless aliased (PHP P1).
+                if let Some(t) = trait_ctors.first() {
+                    self.warn_coded(
+                        c.span,
+                        format!(
+                            "class `{}` declares its own constructor, so trait `{t}`'s constructor is never run",
+                            c.name
+                        ),
+                        "W-TRAIT-CTOR-SHADOWED",
+                        Some("remove the class ctor to use the trait's, or keep it (the trait ctor is intentionally shadowed)".into()),
+                    );
+                }
+            } else if trait_ctors.len() >= 2 {
+                // Two trait constructors collide — PHP would fatal; require a resolution.
+                self.err_coded(
+                    c.span,
+                    format!(
+                        "class `{}` composes constructors from multiple traits ({})",
+                        c.name,
+                        trait_ctors.join(", ")
+                    ),
+                    "E-TRAIT-CTOR-COLLISION",
+                    Some("a class can compose at most one trait constructor; give one its own ctor or drop a trait".into()),
+                );
+            } else if trait_ctors.len() == 1 {
+                // One trait ctor + a parent that has a ctor: the trait ctor wins, the parent's is not
+                // auto-run (PHP P2) — surface the silent skip.
+                let parent_has_ctor = c
+                    .extends
+                    .iter()
+                    .any(|p| !crate::ast::ctor_plan(program, p).is_empty());
+                if parent_has_ctor {
+                    self.warn_coded(
+                        c.span,
+                        format!(
+                            "class `{}` runs trait `{}`'s constructor; the parent constructor is not run",
+                            c.name, trait_ctors[0]
+                        ),
+                        "W-TRAIT-CTOR-PARENT-SKIPPED",
+                        Some("call the parent's initializer explicitly if it must run, or give the class its own ctor".into()),
+                    );
+                }
+            }
+        }
         // M-RT S6b: a concrete class must implement every abstract method it declares or inherits. The
         // shared dispatch table resolves each callable name to the body it runs; if that body is still
         // an abstract signature on a *non-abstract* class, the method is unimplemented. This one check
@@ -1129,6 +1192,14 @@ impl Checker {
                             child.static_mut.insert(k.clone());
                         }
                     }
+                }
+                // M-RT S8 (T3): a `use`d trait's constructor becomes the class's ctor signature,
+                // replacing any inherited parent ctor (trait wins, PHP P2). The class's own ctor still
+                // wins over both (`has_ctor` set in `collect_class`). First trait with a ctor wins for
+                // the merge; two unresolved trait ctors are `E-TRAIT-CTOR-COLLISION`.
+                if !child.has_ctor && tinfo.has_ctor {
+                    child.ctor = tinfo.ctor.clone();
+                    child.has_ctor = true;
                 }
             }
         }
@@ -6894,6 +6965,52 @@ mod tests {
         assert!(
             errs.iter().any(|e| e.code == Some("E-ABSTRACT-UNIMPL")),
             "got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn s8_two_trait_constructors_collide() {
+        // M-RT S8 T3: a class composing two ctor-bearing traits (no own ctor) is E-TRAIT-CTOR-COLLISION.
+        let errs = errors_of(
+            "trait A { constructor(public int a) {} } \
+             trait B { constructor(public int b) {} } \
+             class C { use A; use B; } function main() {}",
+        );
+        assert!(
+            errs.iter()
+                .any(|e| e.code == Some("E-TRAIT-CTOR-COLLISION")),
+            "got {errs:?}"
+        );
+    }
+
+    #[test]
+    fn s8_class_ctor_shadows_trait_ctor_warns() {
+        // M-RT S8 T3 (D8): a class's own ctor shadows a `use`d trait's ctor — warning, not error.
+        let warns = warnings_of(
+            "trait T { constructor(public int id) {} } \
+             class C { use T; constructor() {} } function main() {}",
+        );
+        assert!(
+            warns
+                .iter()
+                .any(|w| w.code == Some("W-TRAIT-CTOR-SHADOWED")),
+            "got {warns:?}"
+        );
+    }
+
+    #[test]
+    fn s8_trait_ctor_skips_parent_warns() {
+        // M-RT S8 T3 (D6): trait ctor wins over an inherited parent ctor — warn the silent skip.
+        let warns = warnings_of(
+            "open class Base { constructor(public int b) {} } \
+             trait T { constructor(public int id) {} } \
+             class C extends Base { use T; } function main() {}",
+        );
+        assert!(
+            warns
+                .iter()
+                .any(|w| w.code == Some("W-TRAIT-CTOR-PARENT-SKIPPED")),
+            "got {warns:?}"
         );
     }
 

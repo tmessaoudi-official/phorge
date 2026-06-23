@@ -2185,6 +2185,34 @@ function main() { Console.println(C().shout(\"hi\")); }",
 }
 
 #[test]
+fn s8_trait_constructor_promotion_is_byte_identical() {
+    // M-RT S8 T3: a `use`d trait's constructor (pure promotion) becomes the using class's ctor; PHP
+    // auto-inherits the trait's __construct. Byte-identical across backends and real PHP.
+    agree_out_php(
+        "import Core.Console;
+trait Stamped { constructor(public int id) {} }
+class Doc { use Stamped; }
+function main() { Doc d = Doc(7); Console.println(\"{d.id}\"); }",
+        "7\n",
+        "s8_trait_ctor_promotion",
+    );
+}
+
+#[test]
+fn s8_trait_constructor_body_is_byte_identical() {
+    // M-RT S8 T3: a trait ctor with a BODY (deriving a stored field) runs identically; folded into
+    // ctor_plan on both backends, emitted as the trait's __construct in PHP.
+    agree_out_php(
+        "import Core.Console;
+trait Paid { mutable int annual; constructor(int monthly) { this.annual = monthly * 12; } }
+class Emp { use Paid; }
+function main() { Emp e = Emp(1000); Console.println(\"{e.annual}\"); }",
+        "12000\n",
+        "s8_trait_ctor_body",
+    );
+}
+
+#[test]
 fn s8_trait_abstract_requirement_satisfied_is_byte_identical() {
     // A trait may *require* a method (abstract); a using class that provides it composes cleanly, and a
     // trait method calling the requirement dispatches to the class's implementation on both backends.

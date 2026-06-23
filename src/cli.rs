@@ -460,6 +460,27 @@ pub fn explain_text(code: &str) -> Option<String> {
              field as a trait, and `instanceof T` on a trait is rejected. Compose it into a class with\n\
              `use T;` and type values by the class (or by an interface the class implements).\n"
         }
+        "E-TRAIT-CTOR-COLLISION" => {
+            "E-TRAIT-CTOR-COLLISION — a class composes constructors from two or more traits.\n\n\
+             A `use`d trait's constructor becomes the class's constructor (M-RT S8). A class can adopt at\n\
+             most one — two trait constructors would collide (PHP fatals on this). Resolve it by giving\n\
+             the class its own `constructor(…)` (which wins and runs the trait initializers explicitly),\n\
+             or by composing only one ctor-bearing trait.\n"
+        }
+        "W-TRAIT-CTOR-SHADOWED" => {
+            "W-TRAIT-CTOR-SHADOWED — a class's own constructor shadows a `use`d trait's constructor.\n\n\
+             When a class declares its own `constructor` AND composes a trait that also has one, the\n\
+             class's ctor wins and the trait's never runs (PHP P1). This is a warning, not an error —\n\
+             intentional if you meant to override. If the trait's initializer must run, call it from the\n\
+             class ctor or drop the class ctor.\n"
+        }
+        "W-TRAIT-CTOR-PARENT-SKIPPED" => {
+            "W-TRAIT-CTOR-PARENT-SKIPPED — a trait constructor runs instead of the parent's.\n\n\
+             When a class `extends` a parent that has a constructor AND composes a trait that also has\n\
+             one (with no class ctor of its own), the trait's constructor wins and the parent's is NOT\n\
+             auto-run (PHP P2). A warning so the silent skip is visible: give the class its own ctor that\n\
+             initializes the parent if that matters.\n"
+        }
         "E-MI-FIELD-CONFLICT" => {
             "E-MI-FIELD-CONFLICT — a field is inherited from more than one parent.\n\n\
              Under multiple inheritance (`class C extends A, B`, M-RT S6c), if two parents each declare\n\
@@ -1666,6 +1687,13 @@ function main() { Console.println("hi"); }"#);
         assert!(u.contains("trait") && u.contains("extends"), "{u}");
         let t = explain_text("E-USE-AS-TYPE").expect("E-USE-AS-TYPE has an explanation");
         assert!(t.contains("NOT a type") && t.contains("instanceof"), "{t}");
+        let cc = explain_text("E-TRAIT-CTOR-COLLISION").expect("E-TRAIT-CTOR-COLLISION explained");
+        assert!(cc.contains("constructor") && cc.contains("collide"), "{cc}");
+        let sh = explain_text("W-TRAIT-CTOR-SHADOWED").expect("W-TRAIT-CTOR-SHADOWED explained");
+        assert!(sh.contains("shadow") || sh.contains("wins"), "{sh}");
+        let ps = explain_text("W-TRAIT-CTOR-PARENT-SKIPPED")
+            .expect("W-TRAIT-CTOR-PARENT-SKIPPED explained");
+        assert!(ps.contains("parent") && ps.contains("auto-run"), "{ps}");
     }
 
     #[test]

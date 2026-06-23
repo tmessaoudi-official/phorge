@@ -799,6 +799,23 @@ pub fn ctor_plan(program: &Program, class: &str) -> Vec<(Vec<CtorParam>, Vec<Stm
     }) {
         return vec![(p, b)];
     }
+    // M-RT S8: a `use`d trait's constructor becomes the class's constructor and **wins over an
+    // inherited parent ctor** (PHP P2 — the parent ctor is not auto-run; the checker warns
+    // `W-TRAIT-CTOR-PARENT-SKIPPED`). The checker rejects two unresolved trait ctors
+    // (`E-TRAIT-CTOR-COLLISION`), so a clean program has at most one — take it deterministically.
+    if let Some(tc) = decl.uses.iter().find_map(|u| {
+        program.items.iter().find_map(|it| match it {
+            Item::Trait(t) if t.name == u.name => t.members.iter().find_map(|m| match m {
+                ClassMember::Constructor { params, body, .. } => {
+                    Some((params.clone(), body.clone()))
+                }
+                _ => None,
+            }),
+            _ => None,
+        })
+    }) {
+        return vec![tc];
+    }
     match decl.extends.len() {
         0 => Vec::new(),
         1 => ctor_plan(program, &decl.extends[0]),

@@ -1406,6 +1406,21 @@ impl Interp {
         }) {
             return vec![parts];
         }
+        // M-RT S8 (T3): a `use`d trait's constructor becomes the class's ctor, winning over a parent
+        // ctor (PHP P2). Trait members live in `self.classes` under the trait name (synthetic decl).
+        // Mirrors `ast::ctor_plan`; the checker rejects two unresolved trait ctors.
+        if let Some(tc) = class.uses.iter().find_map(|u| {
+            self.classes.get(&u.name).and_then(|t| {
+                t.members.iter().find_map(|m| match m {
+                    ClassMember::Constructor { params, body, .. } => {
+                        Some((params.clone(), body.clone()))
+                    }
+                    _ => None,
+                })
+            })
+        }) {
+            return vec![tc];
+        }
         let parents = class.extends.clone();
         match parents.len() {
             0 => Vec::new(),

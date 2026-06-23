@@ -908,7 +908,12 @@ impl Transpiler {
         self.line(&format!("trait {disp} {{"));
         self.indent += 1;
         let prev = self.cur_class_fields.replace(fields);
-        self.emit_class_members(&synthetic, &promoted_names, false, true)?;
+        // `as_trait = false`: a USER trait emits like a normal class body — including a real
+        // `__construct` with promotion (M-RT S8 T3). PHP makes that `__construct` the using class's
+        // constructor automatically (a class composes at most one trait ctor — the checker rejects two
+        // via `E-TRAIT-CTOR-COLLISION`). This differs from the S6 MI decomposition, which uses
+        // `as_trait = true` precisely to suppress colliding multi-parent trait ctors.
+        self.emit_class_members(&synthetic, &promoted_names, false, false)?;
         self.cur_class_fields = prev;
         self.indent -= 1;
         self.line("}");
