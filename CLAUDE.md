@@ -515,9 +515,15 @@ generic classes):** same-head generic types are *not* actually invariant at an a
 check short-circuits on the reflexive name edge before the invariant arg compare; a real fix touches
 the shared subtype oracle and is deferred.
 
-**NEXT (per audit): method overloading** (lowers to one dispatching PHP method; revisits S5's
-`E-INTERSECT-SIG`) → S6 `extends`/abstract/LSB → S8 traits; error-model Slice 2
-(`throws`/`Result`/faults — now unblocked by generic enums) in parallel.
+**M-RT (Rich Types) is now CLOSED (2026-06-23).** The full slice chain shipped: method overloading →
+S6 inheritance (single + multiple, final-by-default, abstract) → **S8 traits** (`trait`/`use` horizontal
+reuse — methods/state/constructors/abstract-requirements/property-hooks; reuse not a type; native PHP
+`trait`/`use`; design `docs/specs/2026-06-23-m-rt-s8-traits-design.md`). Error-model Slice 2
+(`throws`/`Result`/faults) also CLOSED. **NEXT (developer-chosen, 2026-06-23): the codebase
+decomposition milestone** — behavior-preserving cohesion-based `mod/` splits of the whale files
+(checker.rs ~9.7k first), byte-identity-gated, NO OOP/SOLID dogma, preserve exhaustive-match coupling;
+needs its own research + brainstorm (see memory `decomposition-milestone`). Central open question:
+by-phase sub-split vs by-construct thin-dispatcher.
 
 **ROADMAP-COMPLETENESS AUDIT DELIVERED + decisions locked (2026-06-22)** — a one-shot 20-track (A–S+V)
 multi-agent gap review (41 agents, 555 candidates → 290 adopt/187 defer/81 reject). **SSOT:

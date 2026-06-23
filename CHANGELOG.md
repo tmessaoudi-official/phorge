@@ -6,6 +6,30 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M-RT S8: traits (`trait` / `use`) — M-RT CLOSED
+
+Horizontal code reuse via `trait T { … }` composed by a class with `use T;` (design
+`docs/specs/2026-06-23-m-rt-s8-traits-design.md`, plan `docs/plans/2026-06-23-m-rt-s8-traits.plan.md`).
+A trait is **reuse, not a type** (`use` = has-the-behavior-of, vs `extends` = is-a): a value can never
+be typed as a trait and `instanceof Trait` is rejected. Trait members flatten into the using class
+**before any backend** (the interpreter/VM see ordinary members); the transpiler reconstructs a native
+PHP `trait` + `use`. Byte-identical `run ≡ runvm ≡ real PHP 8.4`; `examples/guide/traits.phg`.
+
+- **Members (maximal set):** methods with any visibility (incl. `private`); `mutable` instance fields
+  (set via the using class's ctor) and `static` fields (a **per-using-class copy**, PHP `use`
+  semantics); a trait **constructor** (promotion + body) adopted by a using class with no ctor of its
+  own; an **abstract requirement** the using class must satisfy (reuses `E-ABSTRACT-UNIMPL`); and
+  **property hooks** (`get`/`set`, PHP 8.4 hooks in a trait).
+- **Constructor folding:** a trait ctor folds into `ctor_plan` (the single source for all three
+  backends) and **wins over an inherited parent ctor** (PHP P2). Footguns become clean ahead-of-time
+  diagnostics: `E-TRAIT-CTOR-COLLISION` (two trait ctors), `W-TRAIT-CTOR-SHADOWED` (class ctor wins,
+  P1), `W-TRAIT-CTOR-PARENT-SKIPPED` (parent ctor not auto-run, P2).
+- **Syntax:** `use T;` is disambiguated from an S6b `use P.m` resolution clause by **dot-lookahead**
+  (a `.` after the name = resolution clause). New codes `E-USE-UNKNOWN` / `E-USE-AS-TYPE`; all new
+  codes self-document via `phg explain`. **No new `Op`** — traits are front-end + native PHP.
+- Closes **M-RT (Rich Types)**: `instanceof` → interfaces → Map/Set → generics-all → unions →
+  intersections → totality → overloading → S6 inheritance → **traits**.
+
 ### Changed — package/namespace reshape COMPLETE: PascalCase everywhere + `package Main` (slices 2b + 3)
 
 The package model's casing reshape is finished (design `docs/specs/2026-06-20-package-namespace-reshape-design.md`).

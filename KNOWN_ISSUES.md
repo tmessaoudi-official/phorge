@@ -43,6 +43,21 @@ not a panic:
   (inherited methods dispatch via `this.m()`), so the planned `E-MI-SUPER-AMBIGUOUS` reservation is moot
   until that feature lands.
 
+- **Traits — S8 shipped; deferrals (all clean compile-time, or transpile-oracle-gated):** `trait`/`use`
+  composition (methods, `mutable`/`static` state, a trait constructor, abstract requirements, property
+  hooks) is in, byte-identical across backends + real PHP 8.4. Deferred: (1) **traits as types** —
+  intentional and permanent; a trait is reuse, not a type (`E-USE-AS-TYPE`/`E-INSTANCEOF-TYPE`). Use an
+  interface for the type side. (2) **generic traits** (`trait T<X>`) — mirror the generic-method gate;
+  not yet parsed. (3) **cross-package traits** — this slice is `package Main`-only (like every M-RT
+  slice); a library-package trait + cross-package `use` is a follow-up. (4) **trait-vs-trait
+  conflict-resolution *transpilation*** — the checker resolves a collision via `use P.m`/`rename`/
+  `exclude` clauses, but the transpiler emits only a plain per-trait `use T;` (no `insteadof`/`as` for
+  *trait* collisions yet); an unresolved collision is rejected by the checker, and a *resolved* one would
+  be caught by the PHP oracle — so no silent wrong output, just a gap. (5) **immutable trait instance
+  fields need a trait constructor** to initialize (promotion) — the same M-mut rule as a plain class
+  (an immutable field can't be assigned via `this.f = …`, even in the using class's ctor). (6) `const`
+  *class/trait* members are a pre-existing non-feature (`E-FIELD-INIT`), unrelated to traits.
+
 - **Declaration visibility** (`public`/`internal`/`private`) ships for top-level declarations, but a
   few related cases are deliberately deferred: a visibility keyword **on a `type` alias**
   (`private type X = …` is a parse error — aliases are file-local and erased, so they cannot re-export

@@ -1,0 +1,71 @@
+// Traits — horizontal code reuse with `trait` / `use` (Rich Types — M-RT S8).
+//
+// A trait is a reusable bundle of behavior and state that a class composes with `use`. Unlike a
+// parent class (`extends`), a trait is NOT a type: you cannot type a value as a trait, and
+// `instanceof Trait` is rejected — `extends` means *is-a*, `use` means *has-the-behavior-of*. A
+// trait may carry methods (any visibility), instance + `static` state, a constructor, an `abstract`
+// requirement the using class must satisfy, and property hooks. Trait members flatten into the using
+// class before any backend runs, so the interpreter and VM see ordinary members; the transpiler emits
+// a native PHP `trait` + `use`. Every backend (interpreter, VM, real PHP) agrees byte-for-byte.
+package Main;
+
+import Core.Console;
+
+// Method reuse, including a `private` helper only other trait methods can call.
+trait Loud {
+    private function emphasize(string s) -> string {
+        return "{s}!";
+    }
+    function shout(string s) -> string {
+        return this.emphasize(s);
+    }
+}
+
+// State: a `mutable` field plus a constructor that derives it (promotion + a body). A class composing
+// this trait and declaring no constructor of its own adopts this one.
+trait Paid {
+    mutable int annual;
+    constructor(int monthly) {
+        this.annual = monthly * 12;
+    }
+    function raise(int pct) {
+        this.annual = this.annual + this.annual * pct / 100;
+    }
+}
+
+// An `abstract` requirement the using class must satisfy, and a get-hook that reads it.
+trait Identified {
+    abstract function id() -> int;
+    string badge {
+        get => "#{this.id()}";
+    }
+}
+
+// A `static` field — each using class gets its own copy (PHP `use` semantics).
+trait Counted {
+    static mutable int created = 0;
+}
+
+// Compose several traits at once. `Employee` provides the `id` the `Identified` trait requires.
+class Employee {
+    use Loud;
+    use Paid;
+    use Identified;
+    use Counted;
+
+    function id() -> int {
+        return 7;
+    }
+}
+
+function main() {
+    Employee e = Employee(1000); // Paid's constructor runs: annual = 1000 * 12 = 12000
+    e.raise(10); // 12000 + 10% = 13200
+
+    Console.println(e.shout("hello")); // Loud: hello!
+    Console.println("{e.annual}"); // Paid state, mutated: 13200
+    Console.println(e.badge); // Identified hook reading the abstract id(): #7
+
+    Employee.created = 3;
+    Console.println("{Employee.created}"); // Counted static: 3
+}
