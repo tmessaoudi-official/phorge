@@ -97,6 +97,21 @@ fn console_println(args: &[Value], out: &mut String) -> Result<Value, String> {
     Ok(Value::Unit)
 }
 
+/// `Console.print` — like `println` but with no trailing newline (primitives P3). Space-joins multiple
+/// args, same as `println`; transpiles to a bare PHP `echo`.
+fn console_print(args: &[Value], out: &mut String) -> Result<Value, String> {
+    for (i, a) in args.iter().enumerate() {
+        if i > 0 {
+            out.push(' ');
+        }
+        match a.as_display() {
+            Some(t) => out.push_str(&t),
+            None => return Err(format!("print cannot print {}", a.type_name())),
+        }
+    }
+    Ok(Value::Unit)
+}
+
 /// Index helper for a native's PHP emission: the already-emitted PHP for argument `i`, or `""` if
 /// absent (the checker guarantees arity before `php` is ever called). Keeps the `php` closures terse.
 fn parg(args: &[String], i: usize) -> &str {
@@ -120,6 +135,20 @@ fn build() -> Vec<NativeFn> {
             format!(r#"echo {a} . "\n""#)
         },
     }];
+    // `Console.print` — no trailing newline (primitives P3). Not slot-pinned; resolved by (module,name).
+    registry.push(NativeFn {
+        module: "Core.Console",
+        name: "print",
+        params: vec![Ty::String],
+        ret: Ty::Unit,
+        eval: NativeEval::Pure(console_print),
+        php: |args| {
+            let a = args
+                .first()
+                .map_or_else(|| "\"\"".to_string(), String::clone);
+            format!("echo {a}")
+        },
+    });
     registry.extend(math::math_natives());
     registry.extend(text::text_natives());
     registry.extend(file::file_natives());

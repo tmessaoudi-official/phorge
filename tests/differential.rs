@@ -2339,3 +2339,21 @@ function main() {
         "bitwise_operators",
     );
 }
+
+/// Primitives sweep P3 — `Console.print` (no trailing newline; space-joins like `println`). Composes
+/// with `println` and string interpolation; transpiles to a bare PHP `echo`.
+#[test]
+fn console_print_byte_identical() {
+    agree_out_php(
+        "import Core.Console;
+function main() {
+    Console.print(\"a\");
+    Console.print(\"b\");
+    Console.println(\"c\");
+    Console.print(\"x {1 + 2} \");
+    Console.println(\"y\");
+}",
+        "abc\nx 3 y\n",
+        "console_print",
+    );
+}
