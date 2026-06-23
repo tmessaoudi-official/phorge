@@ -1576,35 +1576,33 @@ impl Interp {
     /// The cloned `get` expression of a property hook `class.name`, if the class declares one with a
     /// `get` (M-mut.7b). `None` if there is no such hook or it is write-only.
     fn hook_get(&self, class: &str, name: &str) -> Option<Expr> {
-        self.classes
-            .get(class)?
-            .members
-            .iter()
-            .find_map(|m| match m {
-                ClassMember::Hook {
-                    name: n,
-                    get: Some(g),
-                    ..
-                } if n == name => Some(g.clone()),
-                _ => None,
-            })
+        let decl = self.classes.get(class)?;
+        let own = decl.members.iter().find_map(|m| match m {
+            ClassMember::Hook {
+                name: n,
+                get: Some(g),
+                ..
+            } if n == name => Some(g.clone()),
+            _ => None,
+        });
+        // M-RT S8 (T4): fall back to a `use`d trait's hook (trait members live under the trait name).
+        own.or_else(|| decl.uses.iter().find_map(|u| self.hook_get(&u.name, name)))
     }
 
     /// The cloned `set` parameter + block of a property hook `class.name`, if the class declares one
     /// with a `set` (M-mut.7b). `None` if there is no such hook or it is read-only.
     fn hook_set(&self, class: &str, name: &str) -> Option<(crate::ast::Param, Vec<Stmt>)> {
-        self.classes
-            .get(class)?
-            .members
-            .iter()
-            .find_map(|m| match m {
-                ClassMember::Hook {
-                    name: n,
-                    set: Some(s),
-                    ..
-                } if n == name => Some(s.clone()),
-                _ => None,
-            })
+        let decl = self.classes.get(class)?;
+        let own = decl.members.iter().find_map(|m| match m {
+            ClassMember::Hook {
+                name: n,
+                set: Some(s),
+                ..
+            } if n == name => Some(s.clone()),
+            _ => None,
+        });
+        // M-RT S8 (T4): fall back to a `use`d trait's hook.
+        own.or_else(|| decl.uses.iter().find_map(|u| self.hook_set(&u.name, name)))
     }
 
     /// Evaluate a property hook's `get` expression with `this` bound to the receiver, in a fresh

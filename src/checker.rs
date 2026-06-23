@@ -1193,6 +1193,11 @@ impl Checker {
                         }
                     }
                 }
+                // M-RT S8 (T4): a `use`d trait's property hooks flatten into the using class so
+                // `c.hookName` resolves (the backends dispatch the synthetic `$get`/`$set` methods).
+                for (k, v) in &tinfo.hooks {
+                    child.hooks.entry(k.clone()).or_insert_with(|| v.clone());
+                }
                 // M-RT S8 (T3): a `use`d trait's constructor becomes the class's ctor signature,
                 // replacing any inherited parent ctor (trait wins, PHP P2). The class's own ctor still
                 // wins over both (`has_ctor` set in `collect_class`). First trait with a ctor wins for

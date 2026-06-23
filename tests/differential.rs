@@ -2213,6 +2213,33 @@ function main() { Emp e = Emp(1000); Console.println(\"{e.annual}\"); }",
 }
 
 #[test]
+fn s8_trait_get_hook_is_byte_identical() {
+    // M-RT S8 T4: a `use`d trait's property get-hook flattens into the using class; the synthetic
+    // `$get` method dispatches on both backends and transpiles to a native PHP 8.4 trait hook.
+    agree_out_php(
+        "import Core.Console;
+trait Labeled { mutable string raw; string display { get => \"<{this.raw}>\"; } }
+class Tag { use Labeled; constructor() { this.raw = \"x\"; } }
+function main() { Tag t = Tag(); Console.println(t.display); }",
+        "<x>\n",
+        "s8_trait_get_hook",
+    );
+}
+
+#[test]
+fn s8_trait_get_set_hook_is_byte_identical() {
+    // M-RT S8 T4: a trait get+set hook — the set intercepts the write (doubles it), the get reads back.
+    agree_out_php(
+        "import Core.Console;
+trait Clamped { mutable int raw; int value { get => this.raw; set(int v) { this.raw = v * 2; } } }
+class Box { use Clamped; constructor() { this.raw = 0; } }
+function main() { Box b = Box(); b.value = 5; Console.println(\"{b.value}\"); }",
+        "10\n",
+        "s8_trait_get_set_hook",
+    );
+}
+
+#[test]
 fn s8_trait_abstract_requirement_satisfied_is_byte_identical() {
     // A trait may *require* a method (abstract); a using class that provides it composes cleanly, and a
     // trait method calling the requirement dispatches to the class's implementation on both backends.

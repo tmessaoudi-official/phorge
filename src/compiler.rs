@@ -493,7 +493,15 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
     // real `ClassMember::Method`s. `$` is illegal in a Phorge identifier, so these never collide.
     let mut hook_methods: Vec<(usize, FunctionDecl)> = Vec::new();
     for (ci, c) in class_decls.iter().enumerate() {
-        for m in &c.members {
+        // Own hooks plus (M-RT S8 T4) each `use`d trait's hooks, all registered under THIS class's `ci`
+        // so `c.hookName` dispatches to `(this class, name$get/$set)`. A hook body accesses fields by
+        // name, so a trait hook body is class-agnostic and safe to register under the using class.
+        let from_traits = c
+            .uses
+            .iter()
+            .filter_map(|u| class_decls.iter().find(|d| d.name == u.name))
+            .flat_map(|t| t.members.iter());
+        for m in c.members.iter().chain(from_traits) {
             if let ClassMember::Hook {
                 ty,
                 name,
