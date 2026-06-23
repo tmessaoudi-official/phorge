@@ -86,8 +86,12 @@ in `docs/MILESTONES.md`; prune research raw/ if desired; final full gate.
 - [2026-06-23 15:50] APPROVED by developer: "Go — run the whole way" (autonomous; commit each green
   wave; pause only on a byte-identity break or design fork; no push).
 - [2026-06-23 15:50] BASELINE established: **823 tests green**, clippy + fmt clean, PHP 8.4 floor.
-- [2026-06-23 15:55] **W0.1 DONE** — `checker.rs` (9786) → `checker/mod.rs` (6770) + `checker/tests.rs`
-  (3016). 823 green, clippy + fmt clean. Mechanical test-module extraction, zero behavior surface.
+- [2026-06-23 15:55] **W0.1 DONE** (`0d4bdd4`) — `checker.rs` (9786) → `checker/mod.rs` (6770) +
+  `checker/tests.rs` (3016). 823 green, clippy + fmt clean. Mechanical, zero behavior surface.
+- [2026-06-23 16:05] **W0.2 DONE** — 10 whales → `foo/mod.rs` + `foo/tests.rs`: parser/compiler/
+  transpile/interpreter/native/vm/loader/ast/lexer/cli. ~5k test lines moved out of the impl files.
+  823 green, clippy + fmt clean. (chunk/value/types/manifest/diagnostic/serve etc. left single — not
+  whales, not slated for dir splits.) **Wave 0 COMPLETE.**
 
 ### Rollback
 Each wave is one commit on `master`; a regressing wave is reverted with `git revert <sha>` (clean,

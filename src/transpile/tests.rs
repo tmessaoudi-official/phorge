@@ -1,0 +1,375 @@
+use super::emit;
+use crate::lexer::lex;
+use crate::parser::Parser;
+
+fn php(src: &str) -> String {
+    let tokens = lex(src).expect("lex");
+    let prog = Parser::new(tokens).parse_program().expect("parse");
+    emit(&prog).expect("emit")
+}
+
+fn parse_only(src: &str) -> crate::ast::Program {
+    // Auto-prepend the reserved `package Main;` (M5 S1, line-preserving) unless declared, so
+    // transpiler tests need no per-case edit. The transpiler ignores the package in S1 (flat
+    // emission); brace-namespaces for non-`main` packages land in S2c.
+    let src = if src.trim_start().starts_with("package ") {
+        src.to_string()
+    } else {
+        format!("package Main; {src}")
+    };
+    let tokens = lex(&src).expect("lex");
+    Parser::new(tokens).parse_program().expect("parse")
+}
+
+#[test]
+fn empty_program_emits_php_open_tag() {
+    assert_eq!(php(""), "<?php\n");
+}
+
+#[test]
+fn free_function_with_params_and_arithmetic() {
+    let out = php("function add(int a, int b) -> int { int c = a + b; return c; }");
+    assert!(out.contains("function add(int $a, int $b): int {"), "{out}");
+    assert!(out.contains("$c = $a + $b;"), "{out}");
+    assert!(out.contains("return $c;"), "{out}");
+}
+
+#[test]
+fn clone_with_lowers_to_php84_helper_not_85_native() {
+    // `obj with { f = e }` must NOT emit PHP 8.5's two-argument `clone($o, [...])` — that is a
+    // parse error on the 8.4 transpile floor (the CI php). It lowers to the `__phorge_clone_with`
+    // runtime helper instead (clone + per-field set). Regression guard for the CI floor fix.
+    let out = php("class P { constructor(public int x, public int y) {} } \
+             function main() { P a = P(1, 2); P b = a with { x = 9 }; }");
+    assert!(
+        out.contains("__phorge_clone_with("),
+        "clone-with call uses the 8.4 helper:\n{out}"
+    );
+    assert!(
+        out.contains("function __phorge_clone_with("),
+        "the helper is defined once:\n{out}"
+    );
+    assert!(
+        !out.contains("clone($"),
+        "no native two-arg `clone($o, …)` (PHP 8.5+ only):\n{out}"
+    );
+}
+
+#[test]
+fn error_cause_routed_to_php_previous_chain() {
+    // M-faults 2c: a conventional `cause` field of optional-`Error` type on an `Error` subtype is
+    // routed into PHP's native exception chain via `parent::__construct($message, 0, $cause)`, so
+    // the transpiled PHP reports an idiomatic "caused by" through `getPrevious()` too. The cause
+    // property is typed `?\Throwable` (PHP's `$previous` type) — NOT the unrelated engine `Error`
+    // class (which `Error` would otherwise resolve to) nor a lossy `mixed`.
+    let out = php(
+        "class IoError implements Error { constructor(public string message) {} } \
+             class ConfigError implements Error { \
+               constructor(public string message, public Error? cause) {} }",
+    );
+    assert!(
+        out.contains("parent::__construct($message, 0, $cause);"),
+        "cause routed to native previous chain:\n{out}"
+    );
+    assert!(
+        out.contains("?\\Throwable $cause"),
+        "cause typed as ?\\Throwable (not engine Error / mixed):\n{out}"
+    );
+}
+
+#[test]
+fn no_return_type_is_void() {
+    let out = php("function f() { return; }");
+    assert!(out.contains("function f(): void {"), "{out}");
+}
+
+#[test]
+fn if_and_for_and_unary() {
+    // Phorge is immutable (no reassignment) — use fresh var decls inside branches.
+    let out = php("function f(int n) -> int { \
+               List<int> xs = [1, 2]; \
+               for (int x in xs) { if (x > 0) { int a = -x; } else { bool b = !true; } } \
+               return n; }");
+    assert!(out.contains("foreach ($xs as $x) {"), "{out}");
+    assert!(out.contains("if ($x > 0) {"), "{out}");
+    assert!(out.contains("} else {"), "{out}");
+    assert!(
+        out.contains("$a = -$x;") && out.contains("$b = !true;"),
+        "{out}"
+    );
+    assert!(out.contains("[1, 2]"), "{out}");
+}
+
+#[test]
+fn indexing_emits_php_subscript() {
+    let out = php("function at(List<int> xs, int i) -> int { return xs[i]; }");
+    assert!(out.contains("$xs[$i]"), "{out}");
+}
+
+#[test]
+fn ranges_emit_php_range() {
+    // Ranges route through `__phorge_range` (QW-13): the helper yields `[]` for an empty/reversed
+    // range, where PHP's bare `range()` would descend. The `inclusive` flag is the third arg.
+    let out = php(r#"import Core.Console;
+function main() { for (int i in 0..3) { Console.println("{i}"); } }"#);
+    assert!(out.contains("__phorge_range(0, 3, false)"), "{out}");
+    assert!(out.contains("function __phorge_range"), "{out}");
+    let inc = php(r#"import Core.Console;
+function main() { for (int i in 1..=3) { Console.println("{i}"); } }"#);
+    assert!(inc.contains("__phorge_range(1, 3, true)"), "{inc}");
+}
+
+#[test]
+fn expression_if_emits_ternary() {
+    let out = php("function pick(bool b) -> int { return if (b) { 1 } else { 2 }; }");
+    assert!(out.contains("($b ? 1 : 2)"), "{out}");
+}
+
+#[test]
+fn interpolation_emits_concatenation() {
+    // Each interpolated value is coerced via `__phorge_str` (P0-3: bool ⇒ "true"/"false").
+    let out = php("function greet(string name) -> string { return \"Hello {name}\"; }");
+    assert!(
+        out.contains(r#"return "Hello " . __phorge_str($name);"#),
+        "{out}"
+    );
+}
+
+#[test]
+fn float_interpolation_emits_phorge_float_helper() {
+    // A float reaches PHP only through interpolation (`Console.println` takes `string`), so the
+    // `__phorge_str` chokepoint routes floats through `__phorge_float`, which reproduces Rust's
+    // shortest-round-trip positional `f64` Display (no PHP precision-14 / scientific divergence).
+    let out = php("function f(float x) -> string { return \"v={x}\"; }");
+    assert!(
+        out.contains(r#"return "v=" . __phorge_str($x);"#),
+        "call site routes through __phorge_str: {out}"
+    );
+    assert!(
+        out.contains("if (is_float($v)) { return __phorge_float($v); }"),
+        "__phorge_str delegates floats to __phorge_float: {out}"
+    );
+    assert!(
+        out.contains("function __phorge_float($v) {")
+            && out.contains(r#"$cand = sprintf("%.{$p}e", $a);"#),
+        "__phorge_float helper is defined with the shortest-round-trip loop: {out}"
+    );
+    // Only tier-1 PHP functions — must stay correct under `php -n` (extension policy).
+    for forbidden in ["mb_", "ctype_", "iconv", "bcadd"] {
+        assert!(
+            !out.contains(forbidden),
+            "__phorge_float must use tier-1 functions only, found `{forbidden}`: {out}"
+        );
+    }
+}
+
+#[test]
+fn pure_string_literal_no_concat() {
+    let out = php("function f() -> string { return \"hi\"; }");
+    assert!(out.contains(r#"return "hi";"#), "{out}");
+}
+
+#[test]
+fn literal_match_emits_strict_eq_elseif_chain() {
+    // Literal patterns → `=== <lit>` guards. The arms must be `if/elseif/else`-chained (not
+    // independent `if`s) so an assign-position match doesn't fall through to the defensive throw.
+    let out = php(
+            "function sign(int n) -> string { string s = match n { 0 => \"z\", 1 => \"one\", x => \"other\" }; return s; }",
+        );
+    assert!(out.contains("if ($n === 0) { $s = \"z\"; }"), "{out}");
+    assert!(out.contains("elseif ($n === 1) { $s = \"one\"; }"), "{out}");
+    assert!(out.contains("else { $x = $n; $s = \"other\"; }"), "{out}");
+    // No unconditional throw stranded after the assign chain.
+    assert!(!out.contains("$s = \"other\"; }\n    throw"), "{out}");
+}
+
+#[test]
+fn expression_position_match_emits_iife() {
+    // A `match` used as a sub-expression wraps the shared if-chain in an immediately-invoked
+    // closure, capturing enclosing locals by value via `use(...)`.
+    let out = php(
+            "function f(int n) -> int { int base = 5; int r = (match n { 0 => 10, x => x }) + base; return r; }",
+        );
+    // Over-captures every enclosing local by value (both `$base` and the param `$n`).
+    assert!(out.contains("(function() use ($base, $n) {"), "{out}");
+    assert!(out.contains("if ($n === 0) { return 10; }"), "{out}");
+    assert!(out.contains("else { $x = $n; return $x; }"), "{out}");
+    assert!(out.contains("})()"), "{out}");
+}
+
+#[test]
+fn println_becomes_echo() {
+    let out = php("import Core.Console; function main() { Console.println(\"hi\"); }");
+    assert!(out.contains(r#"echo "hi" . "\n";"#), "{out}");
+}
+
+#[test]
+fn main_is_invoked_when_present() {
+    let out = php("import Core.Console; function main() { Console.println(\"hi\"); }");
+    assert!(out.trim_end().ends_with("main();"), "{out}");
+    // no main -> no call
+    let no_main = php("function helper() -> int { return 1; }");
+    assert!(!no_main.contains("main();"), "{no_main}");
+}
+
+const SHAPE: &str = "enum Shape { Circle(float radius), Rect(float w, float h), }";
+
+#[test]
+fn enum_emits_base_and_subclasses() {
+    let out = php(SHAPE);
+    assert!(out.contains("abstract class Shape {}"), "{out}");
+    assert!(out.contains("final class Circle extends Shape {"), "{out}");
+    assert!(
+        out.contains("public function __construct(public float $radius) {}"),
+        "{out}"
+    );
+    assert!(out.contains("final class Rect extends Shape {"), "{out}");
+    assert!(
+        out.contains("public function __construct(public float $w, public float $h) {}"),
+        "{out}"
+    );
+}
+
+#[test]
+fn variant_construction_uses_new() {
+    let out = php(&format!(
+        "{SHAPE} function f() -> Shape {{ return Circle(2.0); }}"
+    ));
+    assert!(out.contains("return new Circle(2.0);"), "{out}");
+}
+
+#[test]
+fn free_function_call_no_new() {
+    let out = php("function inc(int n) -> int { return n + 1; } \
+             function f() -> int { return inc(1); }");
+    assert!(out.contains("return inc(1);"), "{out}");
+}
+
+#[test]
+fn class_with_promotion_and_method() {
+    let out = php("class Greeter { constructor(private string name) {} \
+               function greet() -> string { return \"Hello {name}\"; } }");
+    assert!(out.contains("class Greeter {"), "{out}");
+    assert!(
+        out.contains("function __construct(private string $name) {}"),
+        "{out}"
+    );
+    assert!(out.contains("function greet(): string {"), "{out}");
+    // bare field ref inside a method resolves to $this->name (coerced via __phorge_str — P0-3)
+    assert!(
+        out.contains(r#"return "Hello " . __phorge_str($this->name);"#),
+        "{out}"
+    );
+}
+
+#[test]
+fn explicit_non_promoted_field_emitted() {
+    // A plain field (not a ctor param) is emitted as a standalone property.
+    let out = php("class C { private int count; constructor() {} }");
+    assert!(out.contains("private int $count;"), "{out}");
+}
+
+#[test]
+fn promoted_field_not_redeclared() {
+    // Declared both explicitly AND via promotion: emit only the promotion (PHP forbids
+    // redeclaring a promoted property as a separate one — caught by the round-trip test).
+    let out = php("class C { private int total; constructor(private int total) {} }");
+    assert!(
+        out.contains("function __construct(private int $total) {}"),
+        "{out}"
+    );
+    assert!(
+        !out.contains("private int $total;"),
+        "standalone redeclaration must be gone: {out}"
+    );
+}
+
+#[test]
+fn member_access_and_method_call() {
+    let out = php(
+        "import core.console; class Greeter { constructor(private string name) {} \
+               function greet() -> string { return name; } } \
+             function main() { Greeter g = Greeter(\"Tak\"); Console.println(g.greet()); }",
+    );
+    assert!(out.contains(r#"$g = new Greeter("Tak");"#), "{out}");
+    assert!(out.contains("$g->greet()"), "{out}");
+}
+
+#[test]
+fn match_in_return_emits_instanceof_chain() {
+    let out = php(&format!(
+        "{SHAPE} function area(Shape s) -> float {{ \
+               return match s {{ Circle(r) => 3.14159 * r * r, Rect(w, h) => w * h, }}; }}"
+    ));
+    assert!(out.contains("if ($s instanceof Circle) {"), "{out}");
+    assert!(out.contains("$r = $s->radius;"), "{out}"); // positional: r <- field 0 (radius)
+                                                        // P0-2: a compound operand keeps grouping parens (`3.14159 * r * r` is left-assoc Mul, so the
+                                                        // left operand of the outer `*` is the inner product, conservatively parenthesized).
+    assert!(out.contains("return (3.14159 * $r) * $r;"), "{out}");
+    assert!(out.contains("if ($s instanceof Rect) {"), "{out}");
+    assert!(
+        out.contains("$w = $s->w;") && out.contains("$h = $s->h;"),
+        "{out}"
+    );
+    assert!(out.contains("throw new \\UnhandledMatchError();"), "{out}");
+}
+
+#[test]
+fn match_in_var_decl_assigns_in_each_arm() {
+    let out = php(&format!(
+        "{SHAPE} function f(Shape s) -> float {{ \
+               float a = match s {{ Circle(r) => r, Rect(w, h) => w, }}; return a; }}"
+    ));
+    assert!(
+        out.contains("if ($s instanceof Circle) { $r = $s->radius; $a = $r; }"),
+        "{out}"
+    );
+    assert!(out.contains("if ($s instanceof Rect) {"), "{out}");
+}
+
+#[test]
+fn wildcard_arm_has_no_trailing_throw() {
+    let out = php(&format!(
+        "{SHAPE} function area(Shape s) -> float {{ \
+               return match s {{ Circle(r) => r, _ => 0.0, }}; }}"
+    ));
+    assert!(!out.contains("UnhandledMatchError"), "{out}");
+}
+
+#[test]
+fn match_as_call_argument_emits_iife() {
+    // `match` as a call argument is expression position (M11): it lowers to an immediately-invoked
+    // closure wrapping the same variant if-chain, with payload bindings declared inside the closure.
+    let prog = parse_only(&format!(
+        "{SHAPE} function f(Shape s) -> float {{ \
+               float a = id(match s {{ Circle(r) => r, Rect(w, h) => w, }}); return a; }}"
+    ));
+    let out = emit(&prog).expect("expression-position match transpiles");
+    assert!(out.contains("id((function() use ($s) {"), "{out}");
+    assert!(
+        out.contains("if ($s instanceof Circle) { $r = $s->radius; return $r; }"),
+        "{out}"
+    );
+    assert!(
+        out.contains("elseif ($s instanceof Rect) { $w = $s->w; $h = $s->h; return $w; }"),
+        "{out}"
+    );
+    assert!(out.contains("})())"), "{out}");
+}
+
+// ── M3 S3 Task 5: expression lambdas + named-fn references ──────────────
+
+#[test]
+fn transpiles_expression_lambda_to_arrow_fn() {
+    let php_out = php("package Main; import Core.Console; function main(){ var d = fn(int x) => x*2; Console.println(\"{d(5)}\"); }");
+    assert!(php_out.contains("fn($x) => $x * 2"), "{php_out}");
+}
+
+#[test]
+fn transpiles_named_fn_reference() {
+    let php_out = php("package Main; function inc(int x)->int{return x+1;} function apply(int x,(int)->int f)->int{return f(x);} function main(){ apply(1, inc); }");
+    assert!(
+        php_out.contains("inc(...)"),
+        "first-class callable: {php_out}"
+    );
+}
