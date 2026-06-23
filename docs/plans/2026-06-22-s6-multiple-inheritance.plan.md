@@ -25,8 +25,20 @@
 ## Progress
 
 - **S6a COMPLETE** (`3b31ecd`→`c5e1a4c`): open modifier + final-keyword retired (S6a.1); `ClassDecl.extends`+`open` parse (S6a.2); `class_supertypes` oracle + member inheritance + `E-EXTEND-FINAL`/`-UNKNOWN`/`-MI-CYCLE` (S6a.3); method override + `E-OVERRIDE-FINAL` + parent-chain dispatch (S6a.4); transpile `extends`/`final class` + `examples/guide/inheritance.phg` (S6a.5). 779 tests green on the PHP-8.4 floor, byte-identical run≡runvm≡real PHP. **Method-level PHP `final` deferred** (not needed for byte-identity; checker enforces override-finality). **Override signature-variance check deferred** (KNOWN_ISSUES).
-- **S6b — IN PROGRESS** (multi-parent compose + resolution clauses + `abstract`).
-- **S6c — NOT STARTED** (field/ctor composition + diamond + full subtyping).
+- **S6b COMPLETE** (`8aa9181`→`4313f7b`): multi-parent compose via the shared `ast::class_method_origins`
+  dispatch table — the single source both backends consume, closing the latent interp-first-parent-only
+  vs compiler-BFS-all-parents divergence (S6b.1); resolution clauses `use`/`rename`/`exclude` + diamond
+  auto-merge + `E-MI-CONFLICT` (S6b.2); `abstract` classes & methods + `E-ABSTRACT-INSTANTIATE`/`-UNIMPL`/
+  `E-OPEN-STATIC` (S6b.3); transpiler interface+trait decomposition with `insteadof`/`as` +
+  `examples/guide/inheritance-multi.phg` (S6b.4). 649 lib + PHP-8.4-oracle differential + integration
+  green, byte-identical run≡runvm≡real PHP 8.4. **`E-MI-SUPER-AMBIGUOUS` is N/A** — the language has no
+  `super`/`parent` construct (inherited methods dispatch via `this.m()`); the reservation lands with that
+  feature. **Verified gap fixed mid-slice:** a `rename P.m as n` alias needed (a) checker exposure of the
+  new name on the child's `ClassInfo.methods` and (b) a compiler name-pool entry — without both, `child.n()`
+  type-checked-then-VM-`unknown field` (a real break the vacuous `agree()` had masked; caught by the
+  rename PHP-oracle test). **Deferred to S6c:** type/`instanceof` references to a *decomposed ancestor*
+  rewriting to its interface form (full subtyping across the lattice); MI field/constructor composition.
+- **S6c — NOT STARTED** (field/ctor composition + diamond + full subtyping/`instanceof` across the lattice).
 
 ## Sub-slice S6a — single `extends` + override + the `open`/`final` model
 

@@ -21,6 +21,19 @@ not a panic:
   PHP's native `$previous`), but the Phorge fault renderer does not walk it; folding the cause chain into
   the trace output is a later refinement.
 
+- **Multiple inheritance — S6b shipped; deferrals (→ S6c):** `class C extends A, B` with `use`/`rename`/
+  `exclude` resolution, diamond auto-merge, and `abstract` classes/methods are in. Still deferred: (1) a
+  **type or `instanceof` reference to a *decomposed ancestor* rewriting to its interface form** — the
+  multi-parent class lowers to `implements I…/use T…`, so a Phorge subtype satisfies the parent's
+  *interface*, not the parent *class*; a `Swimmer s = duck;` binding or `duck instanceof Swimmer` therefore
+  needs the type emitted as `ISwimmer` (full subtyping across the lattice = S6c — the S6b guide example
+  uses no parent-typed binding/`instanceof`). (2) **MI field & constructor composition** (a synthesized
+  orchestrating constructor across parents) — the S6b guide is field/constructor-free. (3) A class that is
+  **both a multi-parent leaf and an ancestor of another multi-parent class** ("multi-of-multi") takes the
+  `implements/use` path and is not also emitted as a trait — a deep edge case outside S6's `package main`
+  scope. (4) **`super`/`parent` is not a language construct at all** (inherited methods dispatch via
+  `this.m()`), so the planned `E-MI-SUPER-AMBIGUOUS` reservation is moot until that feature lands.
+
 - **Declaration visibility** (`public`/`internal`/`private`) ships for top-level declarations, but a
   few related cases are deliberately deferred: a visibility keyword **on a `type` alias**
   (`private type X = …` is a parse error — aliases are file-local and erased, so they cannot re-export

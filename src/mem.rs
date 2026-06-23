@@ -64,8 +64,23 @@ mod tests {
 
     #[test]
     fn peak_is_at_least_current() {
-        // The high-water mark can never be below the current resident set.
-        if let (Some(cur), Some(peak)) = (current_rss_kb(), peak_rss_kb()) {
+        // The kernel guarantees `VmHWM >= VmRSS` only *within a single snapshot* of
+        // `/proc/self/status`. `current_rss_kb()` and `peak_rss_kb()` do two separate reads, and
+        // cargo runs these tests in parallel threads of one process — a sibling allocating (raising
+        // the shared VmRSS) or calling `reset_peak_rss` (lowering the shared VmHWM) between the two
+        // reads can make `peak < cur` even though the invariant always holds per-snapshot. So read
+        // both fields from ONE snapshot here.
+        let Ok(status) = std::fs::read_to_string("/proc/self/status") else {
+            return; // non-Linux / no procfs — nothing to assert
+        };
+        let field = |prefix: &str| -> Option<u64> {
+            status.lines().find_map(|l| {
+                l.strip_prefix(prefix)
+                    .and_then(|r| r.split_whitespace().next())
+                    .and_then(|n| n.parse().ok())
+            })
+        };
+        if let (Some(cur), Some(peak)) = (field("VmRSS:"), field("VmHWM:")) {
             assert!(peak >= cur, "VmHWM {peak} < VmRSS {cur}");
         }
     }

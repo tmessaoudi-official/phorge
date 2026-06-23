@@ -6,6 +6,34 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — multiple inheritance: `extends A, B` with explicit resolution (M-RT S6b)
+
+A class may inherit from several parents at once (`class C extends A, B`). Cross-parent method
+collisions are never silent: they must be resolved explicitly, and the whole feature is byte-identical
+across the interpreter, the VM, and transpiled PHP 8.4 (`examples/guide/inheritance-multi.phg`).
+
+- **Dispatch is single-sourced** through `ast::class_method_origins` — one resolved
+  `(class, name) → (declaring class, method)` table both backends consume (the interpreter looks it up;
+  the compiler aliases its bytecode method-table entry to it). This replaced the prior split where the
+  interpreter walked only the first-parent chain while the compiler BFS-flattened every parent — a
+  latent `run`≠`runvm` divergence on any method inherited from a non-first parent.
+- **Resolution clauses** in the class body: `use P.m` (pick a parent's method for the colliding name),
+  `rename P.m as n` (keep both, the renamed one under a fresh name), `exclude P.m` (drop one). An
+  unresolved collision is `E-MI-CONFLICT`. A **diamond** shared base auto-merges (a method reached
+  identically through two arms is never a conflict).
+- **`abstract` classes & methods**: an `abstract class` cannot be instantiated
+  (`E-ABSTRACT-INSTANTIATE`); a concrete subclass must implement every abstract method it declares or
+  inherits (`E-ABSTRACT-UNIMPL`); an abstract method is implicitly `open`; `open static` is rejected
+  (`E-OPEN-STATIC`, statics aren't virtual).
+- **No new `Op`, no `Value` change** — all composition, collision detection, and resolution happen in
+  the checker/AST before any backend runs (the same front-end-only discipline as `erase_generics`).
+- **Transpile**: PHP has no multiple inheritance, so each parent lowers to an `interface I<name>` +
+  `trait T<name>`; a multi-parent class emits `class C implements I…, I… { use T…, T… { …insteadof/as… } }`
+  and each decomposed ancestor also gets a concrete `class <name> implements I<name> { use T<name>; }`.
+  Resolution clauses become `insteadof`/`as`; the diamond shared base auto-dedups in PHP.
+- New diagnostics self-document via `phg explain`: `E-MI-CONFLICT`, `E-ABSTRACT-INSTANTIATE`,
+  `E-ABSTRACT-UNIMPL`, `E-OPEN-STATIC` (plus S6a's `E-EXTEND-FINAL`/`E-OVERRIDE-FINAL`/`E-MI-CYCLE`).
+
 ### Added — method & function overloading: dynamic multiple dispatch (M-RT)
 
 Several free functions or class methods may share a name with distinct parameter signatures. Phorge
