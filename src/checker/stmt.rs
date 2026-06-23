@@ -138,50 +138,11 @@ impl Checker {
                     if !self.ty_assignable(&c, &Ty::Bool) {
                         self.err(*span, format!("`if` condition must be `bool`, found `{c}`"));
                     }
-                    // instanceof smart-cast (M-RT S1, extended to interfaces in S2): inside the
-                    // then-block, a local tested by `if (x instanceof T)` is narrowed to `T` — a
-                    // class or an interface — so member/method access through it type-checks. Reuses
-                    // the if-let scope mechanism (push_scope + declare). Only a bare-identifier
-                    // operand against a known class/interface narrows.
-                    let mut narrowed = false;
-                    if let crate::ast::Expr::InstanceOf {
-                        value, type_name, ..
-                    } = cond
-                    {
-                        if let crate::ast::Expr::Ident(name, _) = &**value {
-                            if self.classes.contains_key(type_name)
-                                || self.interfaces.contains_key(type_name)
-                            {
-                                self.push_scope();
-                                // `instanceof` carries no type arguments at runtime (`instanceof
-                                // Box<int>` ≡ `instanceof Box`), so a narrowed generic class instance
-                                // has erased (poison) type arguments — its generic members read as
-                                // `mixed` (M-RT generics-all).
-                                let arity = self
-                                    .classes
-                                    .get(type_name)
-                                    .map_or(0, |c| c.type_params.len());
-                                let args = vec![Ty::Error; arity];
-                                // The narrowed shadow inherits the outer binding's mutability, so a
-                                // `mutable` variable stays reassignable inside the narrowed block
-                                // (reassignment is still type-checked against the narrowed type, so
-                                // narrowing stays sound) — M-mut.1 smart-cast interaction.
-                                let m = self.lookup_binding(name).map(|(_, m)| m).unwrap_or(false);
-                                self.declare_binding(
-                                    name,
-                                    Ty::Named(type_name.clone(), args),
-                                    m,
-                                    *span,
-                                );
-                                self.check_block(then_block);
-                                self.pop_scope();
-                                narrowed = true;
-                            }
-                        }
-                    }
-                    if !narrowed {
-                        self.check_block(then_block);
-                    }
+                    // Flow-narrowing (S5.3): the then-block sees the variables the condition implies
+                    // when *true* (e.g. `if (x instanceof T)` narrows `x` to `T`). The narrowed shadows
+                    // are installed in a child scope and dropped after the block.
+                    let narrowings = self.narrow_from_condition(cond, true);
+                    self.check_block_narrowed(then_block, &narrowings, *span);
                 }
                 if let Some(eb) = else_block {
                     self.check_block(eb);
@@ -331,6 +292,67 @@ impl Checker {
                 }
             }
         }
+    }
+
+    /// Check `block` with the given flow-narrowings (`(var, narrowed-type)`) installed as shadows in
+    /// a fresh child scope. Each narrowed shadow inherits its outer binding's mutability, so a
+    /// `mutable` variable stays reassignable inside the narrowed block (reassignment is still checked
+    /// against the narrowed type, keeping narrowing sound — the M-mut.1 smart-cast interaction). An
+    /// empty narrowing list just checks the block in the current scope (no extra frame).
+    pub(super) fn check_block_narrowed(
+        &mut self,
+        block: &[crate::ast::Stmt],
+        narrowings: &[(String, Ty)],
+        span: Span,
+    ) {
+        if narrowings.is_empty() {
+            self.check_block(block);
+            return;
+        }
+        self.push_scope();
+        for (name, ty) in narrowings {
+            let m = self.lookup_binding(name).map(|(_, m)| m).unwrap_or(false);
+            self.declare_binding(name, ty.clone(), m, span);
+        }
+        self.check_block(block);
+        self.pop_scope();
+    }
+
+    /// The variables a boolean condition narrows when it evaluates to `polarity` (`true` = then-branch,
+    /// `false` = else-branch), as `(var, narrowed-type)` shadows. Flow-narrowing engine (S5.3); a `&self`
+    /// query (installation is the caller's job). T1 recognizes the one pre-existing source — a bare
+    /// `x instanceof T` at `polarity = true` — preserving the prior smart-cast behavior exactly; later
+    /// tasks add the negative/else, equality and `&&`/`!` forms.
+    pub(super) fn narrow_from_condition(
+        &self,
+        cond: &crate::ast::Expr,
+        polarity: bool,
+    ) -> Vec<(String, Ty)> {
+        use crate::ast::Expr;
+        let mut out = Vec::new();
+        if let Expr::InstanceOf {
+            value, type_name, ..
+        } = cond
+        {
+            if polarity {
+                if let Expr::Ident(name, _) = &**value {
+                    if self.classes.contains_key(type_name)
+                        || self.interfaces.contains_key(type_name)
+                    {
+                        // `instanceof` carries no type arguments at runtime (`instanceof Box<int>` ≡
+                        // `instanceof Box`), so a narrowed generic class instance has erased (poison)
+                        // type arguments — its generic members read as `mixed` (M-RT generics-all).
+                        let arity = self
+                            .classes
+                            .get(type_name)
+                            .map_or(0, |c| c.type_params.len());
+                        let args = vec![Ty::Error; arity];
+                        out.push((name.clone(), Ty::Named(type_name.clone(), args)));
+                    }
+                }
+            }
+        }
+        out
     }
 
     pub(super) fn check_for(&mut self, stmt: &crate::ast::Stmt) {
