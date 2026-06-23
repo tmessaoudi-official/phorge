@@ -90,8 +90,25 @@
   - **Diamond-with-ctor:** a shared base reached through two arms has its ctor run **twice** (once per
     arm) under either approach — but identically on all three backends, so byte-identity holds; the
     double-run is harmless for the immutable field-set. (Documented, not special-cased.)
-  - Claude's lean: **inline-bodies-with-per-body-scope** (less new machinery), accepting the per-body
-    return/scope discipline + an explicit early-return-in-parent-ctor differential test. Awaiting go.
+  - Claude's lean (revised): **init-functions** — byte-safe by construction (each parent body gets its
+    own frame, so the early-return/scope-leak trap of the inline approach cannot occur); the project's
+    spine is byte-identity, so the extra machinery (synthetic init fns + `__phorge_init_*` methods) is
+    worth eliminating the whole trap class rather than defending against it. Awaiting go.
+
+- **S6c.3 COMPLETE** (`f682531`) — done *before* S6c.2b (correctness-before-feature; self-contained;
+  prerequisite the eventual 2b "with state + instanceof" guide needs): `instanceof`/subtyping across the
+  full lattice. **Root bug found:** the runtime oracle (`class_implements`) held only interfaces, so
+  `d instanceof Animal` against a *parent class* was wrongly `false` on both Rust backends — single AND
+  multi inheritance, latent because no example tested it; the transpiler also emitted `instanceof Swimmer`
+  (concrete) where a multi-parent subtype only `implements ISwimmer`. Fix: `ast::instanceof_table` =
+  `class_supertypes` ∪ `class_implements`, the single oracle for `instanceof` + match type-patterns +
+  overload subtyping on both backends (a `Dog` now correctly matches an `Animal` param); transpiler
+  `type_pos_ref` emits the interface form for a decomposed ancestor in type positions only
+  (construction/`extends` stay concrete). `examples/guide/inheritance-lattice.phg` (single + multi +
+  diamond) byte-identical run≡runvm≡real PHP 8.4. 803 tests green; no new `Op`.
+
+**Remaining S6c work: S6c.2b only** (multi-parent orchestrating constructor — the combined "multi-parent
+with state + instanceof" guide lands with it). Everything else in S6 is complete.
 
 ## Sub-slice S6a — single `extends` + override + the `open`/`final` model
 
