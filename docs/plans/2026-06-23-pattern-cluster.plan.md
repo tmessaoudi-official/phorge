@@ -63,6 +63,11 @@
 > type-context (intersection/union); `<<` is a new token; `>>` is two adjacent `Gt` in expr position
 > (NEVER a lexer token — protects nested generics `List<List<int>>`). Gap map to be appended to the SSOT.
 
+> [2026-06-23] PROGRESS: S5.1 match-arm guards SHIPPED (`c7e7f13`/`63e2e6c`); if-let guards DEFERRED
+> (fold into S5.3). Primitives **P1 number literals SHIPPED** (`70e15df`) + **P2 bitwise SHIPPED**
+> (`0e529ad`). All green, byte-identical run≡runvm≡PHP-8.4, 832 tests. **NEXT: P3** (Console.print +
+> Text/Math/List breadth) → S5.2 → S5.3(+if-let guards).
+
 ## Formal Plan
 
 > **For agentic workers:** implement task-by-task. Each task is independently testable and ends with a
