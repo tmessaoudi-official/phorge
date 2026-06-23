@@ -119,6 +119,26 @@ in `docs/MILESTONES.md`; prune research raw/ if desired; final full gate.
   (tests are children again) — **zero `pub(super)` in native**, fully sealed. 823 green, clippy
   --all-targets + fmt clean. This is the template for every later wave's tests.
 
+### Status checkpoint (2026-06-23 ~17:45)
+**DONE + committed green (823 tests, clippy --all-targets + fmt, PHP 8.4 floor):**
+- W0.1 `0d4bdd4` · W0.2 `51adb06` (test extraction) · docs `49d154b`
+- W1.1 `3725649` (native split) · W1.1b `d3efa34` (native per-submodule sealed test files — the pattern)
+- W1.2 `79164e4` (cli explain/bench split)
+
+**PATTERN LOCKED (apply to every remaining wave):** split source to cohesion sub-modules inside one
+`mod`; split that module's tests into per-concept sibling `*_tests.rs` files declared as `#[cfg(test)]
+#[path] mod tests;` children → sealed modules (private internals), zero `pub(crate)`/`pub(super)` holes,
+tests mirror source. Gate each wave: build → fmt → clippy --all-targets → `PHORGE_REQUIRE_PHP=1` test.
+
+**NEXT (in order):**
+- (follow-up) cli per-submodule test split (bench/explain tests → sealed children) — deferred, low value.
+- W1.3 checker self-contained rewrites (`rewrite_html`/`rewrite_generics`/`rewrite_alias`) + stateless
+  helpers (`common.rs`) — pure-fn extractions, ~1436 lines out of the whale.
+- **W2 checker impl split (6769→~330 mod.rs + 10 cluster files)** — the headline; LARGE, warrants focused
+  context. Per the checker-map raw report's cluster table + tests split alongside.
+- W3 parser/loader/ast/lexer · W4 backends (compiler/transpile/interpreter/vm — coupled trio stays whole)
+  · W5 close (binary rebuild, ARCHITECTURE/CHANGELOG/MILESTONES).
+
 ### Rollback
 Each wave is one commit on `master`; a regressing wave is reverted with `git revert <sha>` (clean,
 since each commit is self-contained and green). Nothing is pushed until you ask.
