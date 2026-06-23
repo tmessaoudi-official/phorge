@@ -1,4 +1,6 @@
 use super::*;
+// bench_report helpers moved to the bench submodule (M-Decomp W1.2); the timing tests call them.
+use super::bench::{bench_report, bench_report_opts};
 
 /// Prepend the reserved `package Main;` (M5 S1: every file is packaged, never inferred) unless
 /// already declared, so the CLI command tests need no per-case package boilerplate. The segment

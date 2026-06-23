@@ -1,0 +1,549 @@
+/// The prose explanation for a diagnostic `code`, or `None` if the code is unknown. The codes are
+/// the stable identifiers carried by [`crate::diagnostic::Diagnostic::code`] and shown in `[…]`
+/// beneath a rendered error.
+pub fn explain_text(code: &str) -> Option<String> {
+    let body = match code {
+        "E-UNKNOWN-IDENT" => {
+            "E-UNKNOWN-IDENT — a name was used that is not in scope.\n\n\
+             Phorge resolves identifiers lexically: block-scope locals (including `var` bindings\n\
+             and `for` loop variables), parameters, top-level functions, and — inside a method —\n\
+             the current class's fields. A typo or an out-of-scope reference triggers this; the\n\
+             diagnostic suggests the nearest in-scope name when one is close.\n"
+        }
+        "E-UNKNOWN-TYPE" => {
+            "E-UNKNOWN-TYPE — a type name was used that is not defined.\n\n\
+             Built-in types are `int`, `float`, `bool`, `string`, `List<T>`, `Map<K,V>`, `Set<T>`.\n\
+             User types come from `class`, `enum`, and `type` alias declarations. Check the\n\
+             spelling and that the declaration is present.\n"
+        }
+        "E-INFER-NULL" => {
+            "E-INFER-NULL — `var` cannot infer a type from `null` alone.\n\n\
+             `null` has no element type on its own, so `var x = null;` is rejected. Annotate the\n\
+             optional instead, e.g. `int? x = null;`.\n"
+        }
+        "E-ALIAS-CYCLE" => {
+            "E-ALIAS-CYCLE — a `type` alias refers to itself.\n\n\
+             `type A = B; type B = A;` has no underlying type. Break the cycle so every alias\n\
+             bottoms out at a built-in, class, or enum type.\n"
+        }
+        "E-RANGE-TYPE" => {
+            "E-RANGE-TYPE — a range bound is not an `int`.\n\n\
+             Both bounds of `a..b` / `a..=b` must be `int`; the range materializes to a\n\
+             `List<int>` (its role this slice is `for (int i in 0..n)`). Use integer bounds, or\n\
+             build a `List` explicitly if you need other element types.\n"
+        }
+        "E-MAP-KEY" => {
+            "E-MAP-KEY — a map's key type is not hashable.\n\n\
+             A `Map<K, V>` key must be `int`, `bool`, or `string` (the hashable subset) — a\n\
+             `float`, list, instance, or other composite can't be a key. Change the key type, or\n\
+             model the lookup differently (e.g. key by a `string` id).\n"
+        }
+        "E-NO-PACKAGE" => {
+            "E-NO-PACKAGE — a file has no `package` declaration.\n\n\
+             Everything is namespaced (\"nothing in the wind\"): every file must declare its package\n\
+             as its first line, never inferred. A runnable program declares `package Main;` (the\n\
+             reserved entry); library code declares a dotted path like `package app.util;`.\n"
+        }
+        "E-RESERVED-PACKAGE" => {
+            "E-RESERVED-PACKAGE — a user file claimed a `core` package root.\n\n\
+             The `core.` root is reserved for the standard library (`Core.Console`, `Core.Math`,\n\
+             `Core.File`, …), like a built-in type name. Root your own packages elsewhere, e.g.\n\
+             `package app;` or `package app.util;`.\n"
+        }
+        "E-PKG-PATH" => {
+            "E-PKG-PATH — a file's `package` does not match its location.\n\n\
+             In a project, the directory under the source root IS the package (folder = path, Go's\n\
+             model): `src/app/util/*.phg` must declare `package app.util;`. `package Main;` is exempt\n\
+             (runnable anywhere). Move the file, or fix its package to match the directory.\n"
+        }
+        "E-PKG-TYPE" => {
+            "E-PKG-TYPE — a class/enum was declared in a library (non-`main`) package.\n\n\
+             M5 S2c namespaces *functions* across packages; cross-package types are a later slice.\n\
+             A library package may export functions only — move the `class`/`enum` to `package Main;`\n\
+             for now, or await the M5 type-namespacing follow-up.\n"
+        }
+        "E-SHADOW-IMPORT" => {
+            "E-SHADOW-IMPORT — a local binding shadows an imported module qualifier.\n\n\
+             Everything is namespaced (\"nothing in the wind\"): after `import Core.Console;` the\n\
+             name `console` is a module qualifier, so a value binding (variable, parameter, loop or\n\
+             match binding) of the same name would make `Console.x()` ambiguous — the run backends\n\
+             would read a method call, the transpiler a native. Rename the binding, or drop the\n\
+             matching import.\n"
+        }
+        "E-SHADOW-FN" => {
+            "E-SHADOW-FN — a local binding shadows a top-level function name.\n\n\
+             Functions are first-class values, so a bare `f` resolves to the function and a bare\n\
+             `f(…)` calls it. A local binding (variable, parameter, loop or match binding) of the\n\
+             same name would be ambiguous — the run backends dispatch functions-first while the\n\
+             transpiler emits the local, a silent divergence. Rename the binding so a local never\n\
+             shares a name with a function.\n"
+        }
+        "E-OPT-ASSIGN" => {
+            "E-OPT-ASSIGN — an optional `T?` was used where a non-optional `T` is required.\n\n\
+             A non-optional value can never be `null`, so a `T?` cannot flow into a `T` binding,\n\
+             parameter, field, or return without handling absence first. Unwrap it with `??`\n\
+             (default), `?.` (safe access), `if (var x = opt) { … }`, or `opt!` (checked).\n"
+        }
+        "E-ASSIGN-IMMUTABLE" => {
+            "E-ASSIGN-IMMUTABLE — a reassignment targeted an immutable binding.\n\n\
+             Bindings are immutable by default. Only a binding declared `mutable` may be reassigned\n\
+             with `x = …;`. Declare it `mutable int x = …;` (or `mutable var x = …;`) — or, if it\n\
+             never changes, keep it immutable and introduce a new binding instead.\n"
+        }
+        "E-ASSIGN-TYPE" => {
+            "E-ASSIGN-TYPE — a reassigned value's type does not match the binding's type.\n\n\
+             Reassignment keeps the binding's declared type; the new value must be assignable to it\n\
+             (the same rule as the original declaration). Convert the value, or change the binding's\n\
+             declared type.\n"
+        }
+        "E-ASSIGN-UNKNOWN" => {
+            "E-ASSIGN-UNKNOWN — a reassignment targeted a name that is not an in-scope local.\n\n\
+             `x = …;` reassigns an existing local variable; the name must already be declared in\n\
+             scope. Declare it first (`mutable int x = …;`), or check for a typo.\n"
+        }
+        "E-ASSIGN-TARGET" => {
+            "E-ASSIGN-TARGET — an assignment target is not a simple variable.\n\n\
+             Only `name = expr;` (reassigning a local) is supported in this slice. Field assignment\n\
+             (`obj.field = …`) and element assignment (`xs[i] = …`) land in a later mutation slice.\n"
+        }
+        "E-HOOK-NO-GET" => {
+            "E-HOOK-NO-GET — a property hook with no `get` was read.\n\n\
+             A property hook may be read-only, write-only, or both. Reading one that declares only a\n\
+             `set` is not allowed. Add a `get => …;` clause, or do not read this property.\n"
+        }
+        "E-HOOK-NO-SET" => {
+            "E-HOOK-NO-SET — a property hook with no `set` was assigned.\n\n\
+             A read-only computed property (only a `get`) cannot be assigned. Add a `set(T v) { … }`\n\
+             clause to make it writable, or do not assign this property.\n"
+        }
+        "E-HOOK-TYPE" => {
+            "E-HOOK-TYPE — a property hook's `get` result or `set` parameter does not match its type.\n\n\
+             A hook `T name { … }` reads as `T`, so its `get` expression must yield `T`; its `set`\n\
+             parameter must be declared `set(T v)`. Align the get expression / set parameter with the\n\
+             hook's declared type.\n"
+        }
+        "E-HOOK-DUP" => {
+            "E-HOOK-DUP — a property hook collides with another member.\n\n\
+             A hook is virtual (it has no storage), so its name must be distinct from every field,\n\
+             static, method, and other hook in the class. Rename the hook or the colliding member.\n"
+        }
+        "E-VIS-PRIVATE" => {
+            "E-VIS-PRIVATE — a `private` declaration was referenced from another file.\n\n\
+             A declaration marked `private` (visibility modifiers) is visible only within its own\n\
+             `.phg` file. Referencing it from any other file — even one in the same package — fails.\n\
+             Mark it `internal` (visible package-wide) or `public` (visible everywhere) to widen it.\n"
+        }
+        "E-VIS-INTERNAL" => {
+            "E-VIS-INTERNAL — an `internal` declaration was referenced from another package.\n\n\
+             A declaration marked `internal` is visible only within its own package (all its files),\n\
+             not from other packages. A cross-package reference (an `import type`, or a qualified\n\
+             `pkg.fn()` call) fails. Mark it `public` to export it across packages.\n"
+        }
+        "E-OPT-USE" => {
+            "E-OPT-USE — a plain `.field` / `.method()` was used on an optional `T?` receiver.\n\n\
+             The receiver could be `null`, so a plain member access risks a null dereference. Use\n\
+             `?.` for null-safe access (the whole access yields `null` when the receiver is null),\n\
+             or first narrow the optional with `if (var x = opt) { … }` or `opt!` (checked).\n"
+        }
+        "E-IF-LET-TYPE" => {
+            "E-IF-LET-TYPE — `if (var x = …)` was given a non-optional scrutinee.\n\n\
+             The if-let form narrows an optional `T?` to its non-null inner `T`, binding it inside\n\
+             the then-block. A scrutinee that is already non-optional has nothing to narrow — use a\n\
+             plain `if (cond)` for a boolean test, or make the scrutinee a `T?`.\n"
+        }
+        "E-OPT-UNWRAP" => {
+            "E-OPT-UNWRAP — force-unwrap `!` was applied to a non-optional value.\n\n\
+             `opt!` asserts that an optional `T?` is non-null and unwraps it to `T` (faulting at\n\
+             runtime if it is null). A value that is already a non-optional `T` has nothing to\n\
+             unwrap — remove the `!`.\n"
+        }
+        "W-FORCE-UNWRAP" => {
+            "W-FORCE-UNWRAP — a force-unwrap `!` may fault at runtime (lint).\n\n\
+             `opt!` aborts the program if the optional is null. This is a deliberate guardrail: it\n\
+             flags every `!` so you can prefer a total alternative — `??` (default value), `?.`\n\
+             (safe access), or `if (var x = opt) { … }` (narrow) — where null is a real possibility.\n"
+        }
+        "E-LAMBDA-THIS" => {
+            "E-LAMBDA-THIS — a lambda references `this`.\n\n\
+             A lambda cannot capture `this` directly yet: capturing the receiver would extend its\n\
+             lifetime past the method call in ways the value-capture model does not yet model.\n\
+             Workaround: bind `var self = this;` before the lambda and capture `self` instead.\n"
+        }
+        "E-VENDOR-MISSING" => {
+            "E-VENDOR-MISSING — a `[require]` dependency is declared but not vendored.\n\n\
+             Dependencies resolve offline from the committed `vendor/` tree — Phorge never fetches on\n\
+             `run`/`check`/`transpile`. Run `phg vendor` to clone each `[require]` dependency at its\n\
+             pinned tag/rev into `vendor/` and write `phorge.lock`, then commit both.\n"
+        }
+        "E-VENDOR-MAIN" => {
+            "E-VENDOR-MAIN — a vendored dependency declared `package Main`.\n\n\
+             A dependency is a library: it exports dotted packages (e.g. `package acme.strutil;`),\n\
+             never the reserved `package Main` (which would collide with the consuming program's\n\
+             entry). Fix the dependency to use a dotted package, or remove the stray `main` File.\n"
+        }
+        "E-DUP-DEF" => {
+            "E-DUP-DEF — two functions share a name within one package.\n\n\
+             After the project + its vendored dependencies are merged, every function is keyed by\n\
+             `(package, name)` and must be unique. Two files declaring the same `package` cannot both\n\
+             define a function of the same name — rename one, or move it to a different package.\n"
+        }
+        "E-HTML-HOLE" => {
+            "E-HTML-HOLE — a value of an un-renderable type was interpolated into `html\"…\"`.\n\n\
+             An `html\"…\"` hole `{e}` accepts an `Html` fragment (embedded as-is), a `string`, or a\n\
+             primitive (`int`/`float`/`bool`, escaped). Anything else — a class, enum, list, optional\n\
+             — has no safe HTML rendering. Render it first: build it with the html builders\n\
+             (`Html.el(…)`), produce a `string` and let the hole escape it, or wrap audited markup in\n\
+             `Html.raw(…)`.\n"
+        }
+        "E-HTML-IMPORT" => {
+            "E-HTML-IMPORT — `html\"…\"` was used without importing Core.Html.\n\n\
+             The `html\"…\"` literal desugars to `Html.raw`/`Html.text`/`Html.concat` kernel calls, so\n\
+             the module must be in scope. Add `import Core.Html;` (or `import Core.Html as h;`) to the\n\
+             File.\n"
+        }
+        "E-NAME-CASE" => {
+            "E-NAME-CASE — a value identifier is not camelCase.\n\n\
+             Functions, methods, parameters, fields, variable bindings, and lambda parameters must be\n\
+             camelCase: a lowercase first letter and no underscores (e.g. `splitOnce`, `cToF`, `area`).\n\
+             This is the value half of Phorge's casing rule (types/enums/variants are PascalCase via\n\
+             E-TYPE-CASE); both are front-end-only, so they never change the generated PHP. Rename the\n\
+             identifier — the diagnostic suggests the converted form (`split_once` → `splitOnce`).\n"
+        }
+        "E-TYPE-CASE" => {
+            "E-TYPE-CASE — a type identifier is not PascalCase.\n\n\
+             Class names, enum names, enum variant names, and `type` alias names must be PascalCase: an\n\
+             uppercase first letter and no underscores (e.g. `Shape`, `Circle`, `HttpRequest`). This is\n\
+             the type half of Phorge's casing rule (functions/variables/params are camelCase via\n\
+             E-NAME-CASE); both are front-end-only, so they never change the generated PHP. Rename the\n\
+             type — the diagnostic suggests the converted form (`shape` → `Shape`).\n"
+        }
+        "E-PKG-CASE" => {
+            "E-PKG-CASE — a package or import segment is not PascalCase.\n\n\
+             Every package/folder segment is PascalCase (e.g. `package Acme.StringUtil;` lives in\n\
+             `src/Acme/StringUtil/`), and so are import path segments and an import `as` alias\n\
+             (`import Acme.StringUtil as Strutil;`). This makes the source-to-PHP namespace mapping 1:1\n\
+             with no casing transform (`Acme.StringUtil` ⇒ `Acme\\StringUtil`). The reserved roots\n\
+             `Main` (the runnable entry) and `Core` (the standard library) are already PascalCase. It is\n\
+             front-end-only, so it never changes the generated PHP — rename the segment to the suggested\n\
+             form (`acme` → `Acme`).\n"
+        }
+        "E-INSTANCEOF-TYPE" => {
+            "E-INSTANCEOF-TYPE — an `instanceof` operand is not valid.\n\n\
+             `value instanceof T` tests whether a class instance is of class/interface `T`. The right\n\
+             operand must name a declared **class or interface** (M-RT S2 added interfaces); the left\n\
+             operand must be a class instance. The result is `bool`, and inside `if (x instanceof T)`\n\
+             the operand `x` is smart-cast to `T` in the then-block.\n"
+        }
+        "E-IFACE-IMPL" => {
+            "E-IFACE-IMPL — a name in `implements`/`extends` is not an interface.\n\n\
+             A class `implements` declared interfaces, and an interface `extends` other interfaces. A\n\
+             name that resolves to a class, enum, or nothing cannot appear there. Declare the missing\n\
+             `interface`, or remove the name.\n"
+        }
+        "E-IFACE-UNIMPL" => {
+            "E-IFACE-UNIMPL — a class does not implement an interface method.\n\n\
+             A class that `implements I` must provide every method of `I` and its `extends` chain. PHP\n\
+             would fatal at class-declaration time, so Phorge rejects it up front. Add the missing\n\
+             method (matching the interface's signature) to the class.\n"
+        }
+        "E-IFACE-SIG" => {
+            "E-IFACE-SIG — a class method's signature does not match the interface's.\n\n\
+             An implementing method must match the interface method's parameter types and return type\n\
+             exactly (no variance this slice). Align the class method's signature with the interface\n\
+             declaration.\n"
+        }
+        "E-IFACE-CYCLE" => {
+            "E-IFACE-CYCLE — interfaces form an `extends` cycle.\n\n\
+             `interface A extends B` while `B extends A` (directly or transitively) has no well-founded\n\
+             method set. Break the cycle so every interface's `extends` chain bottoms out.\n"
+        }
+        "E-EXTEND-FINAL" => {
+            "E-EXTEND-FINAL — a class extends a non-`open` class.\n\n\
+             Phorge is final-by-default (M-RT S6): a class can only be a parent if it is declared\n\
+             `open class`. Mark the parent `open` to allow extension, or remove the `extends`. (This is\n\
+             the inheritance dual of the `mutable` opt-in — safe by default, opt into the power.)\n"
+        }
+        "E-EXTEND-UNKNOWN" => {
+            "E-EXTEND-UNKNOWN — a class extends a name that is not a class.\n\n\
+             `extends` lists parent *classes*; the name resolved to an interface, enum, or nothing.\n\
+             Use `implements` for interfaces, or declare the missing parent class.\n"
+        }
+        "E-MI-CYCLE" => {
+            "E-MI-CYCLE — classes form an `extends` cycle.\n\n\
+             `class A extends B` while `B extends A` (directly or transitively) has no well-founded\n\
+             member set. Break the cycle so every class's `extends` chain bottoms out at a root class.\n"
+        }
+        "E-MI-CONFLICT" => {
+            "E-MI-CONFLICT — a method is inherited from more than one parent.\n\n\
+             Under multiple inheritance (`class C extends A, B`, M-RT S6b), if two parents each supply a\n\
+             method of the same name Phorge will not silently pick one. Resolve it in C's body with a\n\
+             clause: `use P.m` (pick parent P's `m`), `rename P.m as n` (keep both under a new name),\n\
+             `exclude P.m` (drop one), or override by declaring `function m(…)` in C. A diamond where\n\
+             both arms reach the *same* declaring method auto-merges and is never a conflict.\n"
+        }
+        "E-USE-UNKNOWN" => {
+            "E-USE-UNKNOWN — a `use` clause names something that is not a declared trait.\n\n\
+             A class composes a trait with `use T;` (M-RT S8). The name must resolve to a `trait`, not a\n\
+             class, interface, or undeclared name. If you meant to inherit a class, use `extends` (a\n\
+             class is an *is-a* supertype); `use` is for *has-the-behavior-of* horizontal reuse. Declare\n\
+             the trait with `trait T { … }`.\n"
+        }
+        "E-USE-AS-TYPE" => {
+            "E-USE-AS-TYPE — a trait was used where a type is expected.\n\n\
+             A trait (M-RT S8) is horizontal reuse, NOT a type: you cannot type a variable/parameter/\n\
+             field as a trait, and `instanceof T` on a trait is rejected. Compose it into a class with\n\
+             `use T;` and type values by the class (or by an interface the class implements).\n"
+        }
+        "E-TRAIT-CTOR-COLLISION" => {
+            "E-TRAIT-CTOR-COLLISION — a class composes constructors from two or more traits.\n\n\
+             A `use`d trait's constructor becomes the class's constructor (M-RT S8). A class can adopt at\n\
+             most one — two trait constructors would collide (PHP fatals on this). Resolve it by giving\n\
+             the class its own `constructor(…)` (which wins and runs the trait initializers explicitly),\n\
+             or by composing only one ctor-bearing trait.\n"
+        }
+        "W-TRAIT-CTOR-SHADOWED" => {
+            "W-TRAIT-CTOR-SHADOWED — a class's own constructor shadows a `use`d trait's constructor.\n\n\
+             When a class declares its own `constructor` AND composes a trait that also has one, the\n\
+             class's ctor wins and the trait's never runs (PHP P1). This is a warning, not an error —\n\
+             intentional if you meant to override. If the trait's initializer must run, call it from the\n\
+             class ctor or drop the class ctor.\n"
+        }
+        "W-TRAIT-CTOR-PARENT-SKIPPED" => {
+            "W-TRAIT-CTOR-PARENT-SKIPPED — a trait constructor runs instead of the parent's.\n\n\
+             When a class `extends` a parent that has a constructor AND composes a trait that also has\n\
+             one (with no class ctor of its own), the trait's constructor wins and the parent's is NOT\n\
+             auto-run (PHP P2). A warning so the silent skip is visible: give the class its own ctor that\n\
+             initializes the parent if that matters.\n"
+        }
+        "E-MI-FIELD-CONFLICT" => {
+            "E-MI-FIELD-CONFLICT — a field is inherited from more than one parent.\n\n\
+             Under multiple inheritance (`class C extends A, B`, M-RT S6c), if two parents each declare\n\
+             an instance field of the same name Phorge will not silently pick one. Unlike a method\n\
+             collision there are no `use`/`rename`/`exclude` clauses — PHP has no `insteadof` for\n\
+             properties. Resolve it by redeclaring the field in C (or renaming it in a parent). A\n\
+             diamond where both arms reach the *same* declaring field auto-merges and is never a\n\
+             conflict.\n"
+        }
+        "E-ABSTRACT-INSTANTIATE" => {
+            "E-ABSTRACT-INSTANTIATE — an abstract class cannot be instantiated.\n\n\
+             An `abstract class` (M-RT S6b) may have bodyless `abstract function` methods, so it has no\n\
+             complete behavior to construct. Instantiate a concrete subclass that implements every\n\
+             abstract method instead.\n"
+        }
+        "E-ABSTRACT-UNIMPL" => {
+            "E-ABSTRACT-UNIMPL — a concrete class leaves an abstract method unimplemented.\n\n\
+             A non-`abstract` class must provide a body for every `abstract` method it declares or\n\
+             inherits. Implement the method (`function name(…) { … }`), or declare the class itself\n\
+             `abstract` so a further subclass implements it.\n"
+        }
+        "E-OPEN-STATIC" => {
+            "E-OPEN-STATIC — a method is both `open` and `static`.\n\n\
+             Static methods are resolved by name, not by an instance's runtime class, so they are not\n\
+             virtual and cannot be overridden. Drop `open` (the method stays callable) or drop `static`\n\
+             (the method becomes a normal, overridable instance method).\n"
+        }
+        "E-OVERRIDE-FINAL" => {
+            "E-OVERRIDE-FINAL — a method overrides a non-`open` ancestor method.\n\n\
+             Methods are final-by-default (M-RT S6): a subclass may only redefine a parent method that\n\
+             the parent declared `open function`. Mark the parent method `open` to allow the override,\n\
+             or rename the subclass method so it does not shadow the inherited one.\n"
+        }
+        "E-UNION-MEMBER" => {
+            "E-UNION-MEMBER — a union member is not an allowed type.\n\n\
+             A union `A | B` (M-RT S4) may combine classes, interfaces, and primitives\n\
+             (`int | string`). Enum members, optional `T?` members, and function-typed members are not\n\
+             supported this slice — an enum is already a closed sum (match its variants directly), and\n\
+             optional/function members complicate the PHP `A|B` emission. Replace the member, or model\n\
+             the case differently.\n"
+        }
+        "E-UNION-ARITY" => {
+            "E-UNION-ARITY — a union needs two or more distinct types.\n\n\
+             `A | A` (or any union whose members are all the same after normalization) collapses to a\n\
+             single type, so it is not a union. Give the union at least two distinct members, or use the\n\
+             single type directly.\n"
+        }
+        "E-MATCH-TYPE" => {
+            "E-MATCH-TYPE — a `match` type pattern is invalid.\n\n\
+             A type pattern (`Circle c => …`, M-RT S4) matches when the scrutinee is an instance of the\n\
+             named **class or interface** — the same runtime test as `instanceof`. The name must be a\n\
+             declared class or interface (not an enum — match an enum's variants directly), and a type\n\
+             pattern is allowed only at the **top level** of a match arm, not nested inside a variant\n\
+             pattern. Use it to match over a union scrutinee.\n"
+        }
+        "E-INTERSECT-MEMBER" => {
+            "E-INTERSECT-MEMBER — an intersection member is not an allowed type.\n\n\
+             An intersection `A & B` (M-RT S5) combines interfaces, plus *at most one* concrete class\n\
+             (`Cls & I & J`). Primitives, enums, optional `T?` members, and function-typed members are\n\
+             not allowed — a value satisfies an intersection by being a single instance that conforms to\n\
+             every member, which only interfaces (and one class) express. Replace the member.\n"
+        }
+        "E-INTERSECT-MULTI-CLASS" => {
+            "E-INTERSECT-MULTI-CLASS — an intersection names two or more concrete classes.\n\n\
+             A value has exactly one class, so it can never be an instance of two distinct classes at\n\
+             once — `Cat & Dog` is uninhabited. Name at most one class and compose the rest with\n\
+             interfaces. (A second class becomes meaningful only once class `extends` lands in S6.)\n"
+        }
+        "E-INTERSECT-ARITY" => {
+            "E-INTERSECT-ARITY — an intersection needs two or more distinct types.\n\n\
+             `A & A` (or any intersection whose members are all the same after normalization) collapses\n\
+             to a single type, so it is not an intersection. Give it at least two distinct members, or\n\
+             use the single type directly.\n"
+        }
+        "E-INTERSECT-SIG" => {
+            "E-INTERSECT-SIG — intersection members share a method with conflicting signatures.\n\n\
+             Two members of `A & B` declare the same method with different parameter or return types.\n\
+             A class satisfying the intersection would need that one method to conform to both — which\n\
+             the current overload-agnostic intersection check cannot verify — so the intersection is\n\
+             rejected. Align the shared method's signature across the members (or drop one).\n"
+        }
+        "E-INTERSECT-NO-MEMBER" => {
+            "E-INTERSECT-NO-MEMBER — a member access on an intersection resolves to nothing.\n\n\
+             A method/field call on an `A & B` value searches every member (each interface, plus the\n\
+             lone class for fields). None of them declares the named method or field. Check the name, or\n\
+             add it to one of the intersection's members.\n"
+        }
+        "E-OVERLOAD-RETURN" => {
+            "E-OVERLOAD-RETURN — overloads of one name must share a return type.\n\n\
+             Phorge overloading is dynamic multiple dispatch: the runtime argument types choose the\n\
+             overload, so the compiler cannot know which one fires at a polymorphic call. Requiring a\n\
+             single return type keeps every overloaded call statically typed. Overloads model one\n\
+             operation over different argument types; if the return must vary with the input, use a\n\
+             generic function (`f<T>(T) -> T`) or separate names.\n"
+        }
+        "E-OVERLOAD-DUPLICATE" => {
+            "E-OVERLOAD-DUPLICATE — two overloads have identical parameter types.\n\n\
+             Each overload of a name must be distinguishable by its parameter signature (arity or\n\
+             parameter types). Two declarations with the same parameters are redundant and could never\n\
+             be told apart at a call. Remove one, or change its parameters.\n"
+        }
+        "E-OVERLOAD-GENERIC" => {
+            "E-OVERLOAD-GENERIC — a generic function/method cannot be overloaded.\n\n\
+             A generic declaration (`f<T>(…)`) must be the only one with its name. Generic overloading\n\
+             (mixing `<T>` overloads with concrete ones) is not supported. Remove the type parameters\n\
+             and write concrete overloads, or rename one declaration.\n"
+        }
+        "E-OVERLOAD-NO-MATCH" => {
+            "E-OVERLOAD-NO-MATCH — no overload accepts the call's argument types.\n\n\
+             The call's static argument types match no overload's parameter types (by arity or\n\
+             assignability). Check the argument types against the available overloads; an argument\n\
+             whose static type is a supertype of every overload's parameter cannot be dispatched.\n"
+        }
+        "E-OVERLOAD-FN-VALUE" => {
+            "E-OVERLOAD-FN-VALUE — an overloaded function has no single first-class value.\n\n\
+             A bare reference to an overloaded function (`var g = f;`) is ambiguous — there is no one\n\
+             signature to give the value. Call the function directly, or wrap the intended overload in\n\
+             a lambda (`var g = fn(int x) => f(x);`).\n"
+        }
+        "E-MISSING-RETURN" => {
+            "E-MISSING-RETURN — a function does not return a value on every path.\n\n\
+             A function whose declared return type carries a value (`-> int`, `-> Shape`, …) must\n\
+             `return` (or diverge) on *every* control-flow path. The classic leak is an `if` with no\n\
+             `else`: the false branch falls through to the end. Add a trailing `return`, give the `if`\n\
+             an `else` that also returns, or diverge (an infinite loop / a `-> never` call). Functions\n\
+             with no return annotation return `unit` and are exempt.\n"
+        }
+        "E-NEVER-RETURN" => {
+            "E-NEVER-RETURN — a `-> never` function can return normally.\n\n\
+             `never` is the bottom type: a function annotated `-> never` promises it never returns —\n\
+             it must diverge on every path (today, an infinite loop or a call to another `never`\n\
+             function; once `throw` lands, also by throwing). This body can fall through and return.\n\
+             Make it diverge, or drop the `never` return type.\n"
+        }
+        "W-UNREACHABLE" => {
+            "W-UNREACHABLE — a statement can never be reached (warning).\n\n\
+             A preceding statement always returns or diverges (a `return`, an infinite loop, or a call\n\
+             to a `-> never` function), so the flagged statement is dead code. This is a non-fatal\n\
+             lint — remove the unreachable statements. It never blocks the build.\n"
+        }
+        "W-MATCH-UNREACHABLE" => {
+            "W-MATCH-UNREACHABLE — a `match` arm can never be reached (warning).\n\n\
+             Either an earlier arm is a catch-all (`_` or a bare identifier binding, which matches\n\
+             everything) so later arms are dead, or this arm duplicates an earlier literal/variant/type\n\
+             pattern. Reorder so the catch-all is last, or remove the duplicate. Non-fatal lint.\n"
+        }
+        "E-PROPAGATE-POSITION" => {
+            "E-PROPAGATE-POSITION — `?` used outside a let-initializer.\n\n\
+             The `?` error-propagation operator is allowed only as the *whole* initializer of a binding\n\
+             (`int a = mayFail()?;`). It is not allowed nested in a larger expression (`g(f()?)`) or in a\n\
+             `return` — PHP, the transpile target, cannot return from the caller inside an expression.\n\
+             Bind the call's result to a local first, then handle it (M-faults).\n"
+        }
+        "E-PROPAGATE-CONTEXT" => {
+            "E-PROPAGATE-CONTEXT — `?` in a function that can't propagate the error.\n\n\
+             `?` unwraps an `Ok` or early-returns the `Err`, so it requires a `Result`-shaped operand\n\
+             (an enum with `Ok`/`Err` variants) AND an enclosing function that returns that same\n\
+             `Result`. Declare the function to return `Result<…>`, or handle the value with a `match`.\n"
+        }
+        "E-PROPAGATE-ERR" => {
+            "E-PROPAGATE-ERR — `?` propagates an incompatible error type.\n\n\
+             The operand's `Err` payload type must be assignable to the enclosing function's `Err`\n\
+             payload type (it is the value `?` early-returns). Widen the function's error type, or map\n\
+             the error before propagating.\n"
+        }
+        "E-RESERVED-INTRINSIC" => {
+            "E-RESERVED-INTRINSIC — a reserved built-in name was redefined.\n\n\
+             `panic`, `todo`, `unreachable`, and `assert` are built-in fault intrinsics (M-faults) and\n\
+             cannot be declared as user functions. Rename your function.\n"
+        }
+        "E-INTRINSIC-LITERAL" => {
+            "E-INTRINSIC-LITERAL — a fault intrinsic's message must be a string literal.\n\n\
+             `panic(\"…\")` and `assert(cond, \"…\")` bake their message at compile time, so it must be a\n\
+             plain string literal — no interpolation or computed expression (yet). Use a literal, or\n\
+             compute the message into a local for a future dynamic form.\n"
+        }
+        "E-THROW-TYPE" => {
+            "E-THROW-TYPE — only an `Error` value may be thrown or declared.\n\n\
+             `throw e` requires `e` to be a value whose type implements the built-in `Error` marker\n\
+             (`class Foo implements Error { … }`), and a `throws T` declaration requires the same of\n\
+             `T`. You cannot throw a primitive, enum, or arbitrary object.\n"
+        }
+        "E-THROW-UNDECLARED" => {
+            "E-THROW-UNDECLARED — a thrown exception is neither caught nor declared.\n\n\
+             A checked exception must be discharged: wrap the `throw` (or the throwing call) in a\n\
+             `try { … } catch (T e) { … }`, or add `throws T` to the enclosing function so callers\n\
+             handle it. Phorge enforces this at compile time — nothing leaks silently.\n"
+        }
+        "E-CALL-UNHANDLED" => {
+            "E-CALL-UNHANDLED — a call can throw a checked exception that isn't handled.\n\n\
+             Calling a `throws T` function obliges the caller to handle `T`: catch it in an enclosing\n\
+             `try`/`catch`, or propagate it with `?` AND declare `throws T` on the enclosing function.\n\
+             A bare call may not silently let the exception escape.\n"
+        }
+        "E-UNCAUGHT-THROW" => {
+            "E-UNCAUGHT-THROW — an exception escapes `main`.\n\n\
+             `main` is the program entry point: it may not declare `throws`, and every exception it\n\
+             (or anything it calls) can raise must be caught before it escapes. Wrap the throwing code\n\
+             in a `try { … } catch (T e) { … }` inside `main`.\n"
+        }
+        "E-THROWS-TOO-BROAD" => {
+            "E-THROWS-TOO-BROAD — `throws Error` is too broad.\n\n\
+             Declare the *specific* exception type(s) a function throws (`throws BadInput`), not the\n\
+             bare `Error` root, so callers know exactly what to catch. A `catch (Error e)` is still\n\
+             allowed — catching broad is fine; declaring broad is not.\n"
+        }
+        "E-CATCH-TYPE" => {
+            "E-CATCH-TYPE — a `catch` clause names a non-`Error` type.\n\n\
+             A `catch (T e)` requires `T` (or every member of a union `catch (A | B e)`) to implement\n\
+             the built-in `Error` marker — you can only catch what can be thrown. Catching the `Error`\n\
+             base itself is allowed (it matches every exception).\n"
+        }
+        "W-CATCH-UNREACHABLE" => {
+            "W-CATCH-UNREACHABLE — a `catch` clause can never run (warning).\n\n\
+             An earlier clause in the same `try` already catches this type (it is the same as, or a\n\
+             supertype of, this one), so control never reaches it. Remove the dead clause, or reorder\n\
+             so the more specific type comes first. This is a lint — it never fails the build.\n"
+        }
+        _ => return None,
+    };
+    Some(body.to_string())
+}
+
+/// `explain <code>`: print the explanation for a diagnostic code, or error on an unknown one.
+pub fn cmd_explain(code: &str) -> Result<String, String> {
+    explain_text(code).ok_or_else(|| {
+        format!(
+            "unknown diagnostic code `{code}` \
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-PKG-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE)"
+        )
+    })
+}
