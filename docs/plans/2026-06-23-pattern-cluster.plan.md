@@ -64,9 +64,16 @@
 > (NEVER a lexer token — protects nested generics `List<List<int>>`). Gap map to be appended to the SSOT.
 
 > [2026-06-23] PROGRESS: S5.1 match-arm guards SHIPPED (`c7e7f13`/`63e2e6c`); if-let guards DEFERRED
-> (fold into S5.3). Primitives **P1 number literals SHIPPED** (`70e15df`) + **P2 bitwise SHIPPED**
-> (`0e529ad`). All green, byte-identical run≡runvm≡PHP-8.4, 832 tests. **NEXT: P3** (Console.print +
-> Text/Math/List breadth) → S5.2 → S5.3(+if-let guards).
+> (fold into S5.3). Primitives **P1 number literals SHIPPED** (`70e15df`), **P2 bitwise SHIPPED**
+> (`0e529ad`), **P3.1 Console.print SHIPPED** (`6f2bf72`). All green, byte-identical run≡runvm≡PHP-8.4,
+> 833 tests.
+> [2026-06-23] SCOPE REFINEMENT (P3): the "stdlib breadth" splits cleanly. **Ship now (P3.2, byte-safe):**
+> `Text.startsWith`/`endsWith`/`repeat`, `Math.round`(→int), `List.length` — all total, non-optional,
+> map 1:1 to PHP (`str_starts_with`/`str_ends_with`/`str_repeat`/`(int)round`/`count`). **DEFER to M4
+> (stdlib milestone):** `Text.parseInt`(→`int?` needs a byte-identical PHP validation helper),
+> `Text.indexOf`/`substring` (optional/bounds), `List.sort`/`contains`/`first`/`last`/`slice` (need
+> generic ordering/equality + optional returns) — these want the optional-return + generic-ordering
+> design M4 will establish, not ad-hoc natives. **NEXT: P3.2 → S5.2 → S5.3(+if-let guards).**
 
 ## Formal Plan
 
