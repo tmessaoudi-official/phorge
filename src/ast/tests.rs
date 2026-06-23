@@ -1,3 +1,4 @@
+use super::walk::collect_free_stmt;
 use super::*;
 use crate::token::Span;
 
