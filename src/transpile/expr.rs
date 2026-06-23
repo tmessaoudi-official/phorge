@@ -1,0 +1,378 @@
+//! PHP transpiler — expr (M-Decomp W4). See mod.rs for the struct + core + entry points.
+
+use super::*;
+
+impl Transpiler {
+    pub(super) fn emit_expr(&mut self, e: &Expr) -> Result<String, String> {
+        match e {
+            Expr::Int(n, _) => Ok(n.to_string()),
+            Expr::Float(x, _) => Ok(format!("{x:?}")), // 12.0 -> "12.0"
+            Expr::Bool(b, _) => Ok(if *b { "true".into() } else { "false".into() }),
+            Expr::Ident(name, _) => Ok(self.resolve_ident(name)),
+            Expr::This(_) => Ok("$this".into()),
+            Expr::Unary { op, expr, .. } => {
+                let inner = self.emit_expr(expr)?;
+                let sym = match op {
+                    UnaryOp::Neg => "-",
+                    UnaryOp::Not => "!",
+                };
+                // Wrap a compound operand so the unary binds only to it (P0-2 — `-(a + b)`, `!(a && b)`).
+                let inner = Self::paren_if_compound(expr, inner);
+                Ok(format!("{sym}{inner}"))
+            }
+            Expr::Binary { op, lhs, rhs, .. } => {
+                let l = self.emit_expr(lhs)?;
+                let r = self.emit_expr(rhs)?;
+                let bs = if self.namespaced { "\\" } else { "" };
+                // `/` and `%` are type-driven in Phorge (int vs float) but PHP's `/` is always float
+                // and `%` always integer. Route through a runtime helper that branches on operand
+                // types at PHP-runtime, mirroring the value kernels (P0-1, P0-4). Helper args are
+                // comma-delimited, so the raw operand code needs no precedence parens.
+                if matches!(op, BinaryOp::Div) {
+                    self.uses_div = true;
+                    return Ok(format!("{bs}__phorge_div({l}, {r})"));
+                }
+                if matches!(op, BinaryOp::Rem) {
+                    self.uses_rem = true;
+                    return Ok(format!("{bs}__phorge_rem({l}, {r})"));
+                }
+                if matches!(op, BinaryOp::Coalesce) {
+                    // `??` binds loosely in PHP; parenthesize to preserve grouping.
+                    return Ok(format!("({l} ?? {r})"));
+                }
+                // Preserve operand grouping: a compound operand is parenthesized so PHP precedence
+                // cannot re-associate it (P0-2 — `a - (b - c)` must not flatten to `a - b - c`).
+                let l = Self::paren_if_compound(lhs, l);
+                let r = Self::paren_if_compound(rhs, r);
+                Ok(format!("{l} {} {r}", Self::binop(op)))
+            }
+            // `value instanceof TypeName` → PHP `$value instanceof TypeName` (M-RT S1). The operand
+            // is parenthesized if compound (PHP `instanceof` binds tighter than `!`/`&&`), and the
+            // class name is emitted bare — single-package programs are flat, and a cross-package type
+            // is rejected upstream (E-PKG-TYPE) until a later slice.
+            Expr::InstanceOf {
+                value, type_name, ..
+            } => {
+                let v = self.emit_expr(value)?;
+                let v = Self::paren_if_compound(value, v);
+                // M-RT S6c.3: against a decomposed MI ancestor, test its interface `I<name>` — the
+                // subtype `implements I<name>` (it does not `extends <name>`).
+                Ok(format!("{v} instanceof {}", self.type_pos_ref(type_name)))
+            }
+            Expr::List(items, _) => {
+                let parts: Result<Vec<_>, _> = items.iter().map(|i| self.emit_expr(i)).collect();
+                Ok(format!("[{}]", parts?.join(", ")))
+            }
+            // A map literal → a PHP `[k => v, …]` array (insertion-ordered, like Phorge), M-RT S3.
+            Expr::Map(pairs, _) => {
+                let mut parts = Vec::with_capacity(pairs.len());
+                for (k, v) in pairs {
+                    parts.push(format!("{} => {}", self.emit_expr(k)?, self.emit_expr(v)?));
+                }
+                Ok(format!("[{}]", parts.join(", ")))
+            }
+            Expr::Null(_) => Ok("null".into()),
+            Expr::Index { object, index, .. } => {
+                let o = self.emit_expr(object)?;
+                let i = self.emit_expr(index)?;
+                Ok(format!("{o}[{i}]"))
+            }
+            Expr::Str(parts, _) => self.emit_string(parts),
+            Expr::Bytes(b, _) => Ok(format!("\"{}\"", php_escape_bytes(b))),
+            Expr::Call { callee, args, .. } => self.emit_call(callee, args),
+            Expr::Member {
+                object, name, safe, ..
+            } => {
+                // Static read `ClassName.field` → PHP `ClassName::$field` (M-mut.7).
+                if !*safe {
+                    if let Some(s) = self.static_ref(object, name) {
+                        return Ok(s);
+                    }
+                }
+                let o = self.emit_expr(object)?;
+                let arrow = if *safe { "?->" } else { "->" };
+                Ok(format!("{o}{arrow}{name}"))
+            }
+            // `inner!` → a once-per-file helper that throws on null, else returns the value (M3
+            // S2.5). The null-fault message differs from the Phorge backends' (no name/line) — a
+            // documented transpile-only divergence (KNOWN_ISSUES); the present-value case is exact.
+            Expr::Force { inner, .. } => {
+                let v = self.emit_expr(inner)?;
+                self.uses_force = true;
+                // Namespaced mode puts the helper in the nameless global block → call it `\…`.
+                let bs = if self.namespaced { "\\" } else { "" };
+                Ok(format!("{bs}__phorge_unwrap({v})"))
+            }
+            // `?` propagation is hoisted at the `VarDecl` statement level (the only position the checker
+            // permits, M-faults 2a), so it never reaches expression emission in a valid program.
+            Expr::Propagate { .. } => Err(
+                "internal: `?` propagation reached expression emission (checker restricts it to a let-initializer)"
+                    .to_string(),
+            ),
+            // `obj with { f = e }` → a fresh instance with the named fields overridden and the
+            // constructor bypassed — byte-identical to the backends (M-mut.4a). An empty override list
+            // is just `clone($obj)` (valid since PHP 5). A non-empty list lowers to the
+            // `__phorge_clone_with` helper rather than PHP 8.5's native two-arg `clone($o, [...])`,
+            // because the transpile floor is PHP 8.4 (where two-arg `clone` is a parse error).
+            Expr::CloneWith { object, fields, .. } => {
+                let o = self.emit_expr(object)?;
+                if fields.is_empty() {
+                    return Ok(format!("clone({o})"));
+                }
+                let mut pairs = Vec::with_capacity(fields.len());
+                for (name, e) in fields {
+                    let v = self.emit_expr(e)?;
+                    pairs.push(format!("'{name}' => {v}"));
+                }
+                self.uses_clone_with = true;
+                // In multi-package (namespaced) mode the helper lives in the global namespace, so the
+                // call is fully qualified (`\__phorge_clone_with`), mirroring `__phorge_div`/`_str`.
+                let bs = if self.namespaced { "\\" } else { "" };
+                Ok(format!("{bs}__phorge_clone_with({o}, [{}])", pairs.join(", ")))
+            }
+            // Expression-position `match` (M11): wrap the SAME if-chain `emit_match` produces in
+            // statement position inside an immediately-invoked closure, so both positions share one
+            // lowering and cannot diverge. Over-capture every enclosing local by value via `use(…)`
+            // — Phorge values are immutable, so by-value capture is exact; pattern-bound payload vars
+            // are declared *inside* the closure and so are intentionally excluded. A regular closure
+            // auto-binds `$this`, so a match inside a method keeps working.
+            Expr::Match {
+                scrutinee, arms, ..
+            } => {
+                let captures: BTreeSet<String> = self.locals.iter().flatten().cloned().collect();
+                let use_clause = if captures.is_empty() {
+                    String::new()
+                } else {
+                    let names: Vec<String> = captures.iter().map(|n| format!("${n}")).collect();
+                    format!(" use ({})", names.join(", "))
+                };
+                // Render the if-chain into a temporary buffer (one indent level deep), then splice it
+                // into the closure body. Save/restore `out` and `indent` so the surrounding emission
+                // is untouched.
+                let saved_out = std::mem::take(&mut self.out);
+                let saved_indent = self.indent;
+                self.indent = 1;
+                let chain = self.emit_match(scrutinee, arms, MatchTarget::Return);
+                let body = std::mem::replace(&mut self.out, saved_out);
+                self.indent = saved_indent;
+                chain?;
+                Ok(format!("(function(){use_clause} {{\n{body}}})()"))
+            }
+            // `__phorge_range` reproduces Phorge's range semantics under PHP: an empty/reversed range
+            // (`start > hi`) yields `[]`, where PHP's bare `range()` would *descend* (QW-13 — formerly
+            // a transpile-only divergence). The `run`/`runvm` backends were always byte-identical.
+            Expr::Range {
+                start,
+                end,
+                inclusive,
+                ..
+            } => {
+                let s = self.emit_expr(start)?;
+                let e = self.emit_expr(end)?;
+                self.uses_range = true;
+                let bs = if self.namespaced { "\\" } else { "" };
+                Ok(format!(
+                    "{bs}__phorge_range({s}, {e}, {})",
+                    if *inclusive { "true" } else { "false" }
+                ))
+            }
+            // Expression `if` → a PHP ternary (the idiomatic conditional expression, the TS→JS
+            // analogue); parenthesized so it composes safely inside any larger expression.
+            Expr::If {
+                cond,
+                then_expr,
+                else_expr,
+                ..
+            } => {
+                let c = self.emit_expr(cond)?;
+                let t = self.emit_expr(then_expr)?;
+                let e = self.emit_expr(else_expr)?;
+                Ok(format!("({c} ? {t} : {e})"))
+            }
+            // Expression-body lambda → PHP arrow function (auto by-value capture — no explicit
+            // `use` clause needed).
+            // Statement-body lambda → PHP `function($x) use ($cap, ...) { … }` (by-value capture
+            // with an explicit `use` clause listing only captured enclosing locals).
+            Expr::Lambda { params, body, .. } => {
+                let ps = params
+                    .iter()
+                    .map(|p| format!("${}", p.name))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                match body {
+                    LambdaBody::Expr(e) => Ok(format!("fn({ps}) => {}", self.emit_expr(e)?)),
+                    LambdaBody::Block(stmts) => {
+                        // Compute captures: free variables that are enclosing locals, not
+                        // top-level function names, variants, or classes.
+                        let caps: Vec<String> = crate::ast::free_vars(params, body)
+                            .into_iter()
+                            .filter(|n| {
+                                self.is_local(n)
+                                    && !self.funcs.contains(n)
+                                    && !self.variants.contains(n)
+                                    && !self.classes.contains(n)
+                            })
+                            .map(|n| format!("${n}"))
+                            .collect();
+                        let use_clause = if caps.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" use ({})", caps.join(", "))
+                        };
+                        // Emit the block body into a temporary buffer (swapping `self.out`)
+                        // so `emit_stmt` can write indented lines, then collect them as the
+                        // inline closure body. Params and captures are declared in a fresh
+                        // scope so inner expressions resolve them correctly.
+                        let saved_out = std::mem::take(&mut self.out);
+                        let saved_indent = self.indent;
+                        self.indent = 0;
+                        self.push_scope();
+                        // Declare captures first (so params can shadow same-named captures).
+                        for cap in &caps {
+                            // Strip the leading `$` to get the bare name.
+                            self.declare(&cap[1..]);
+                        }
+                        for p in params {
+                            self.declare(&p.name);
+                        }
+                        for s in stmts {
+                            self.emit_stmt(s)?;
+                        }
+                        self.pop_scope();
+                        self.indent = saved_indent;
+                        let body_php = std::mem::replace(&mut self.out, saved_out);
+                        // The body_php has one "line" per statement (each ends with '\n' from
+                        // `self.line()`). Trim trailing whitespace and join with spaces for a
+                        // compact inline representation.
+                        let body_php = body_php
+                            .lines()
+                            .map(|l| l.trim())
+                            .filter(|l| !l.is_empty())
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        Ok(format!("function({ps}){use_clause} {{ {body_php} }}"))
+                    }
+                }
+            }
+            // `html"…"` literals are erased to `html.concat([…])` kernel calls by
+            // `checker::resolve_html` before transpilation; the transpiler never sees one.
+            Expr::Html(..) => unreachable!("html literal not resolved before transpilation"),
+        }
+    }
+
+    /// Emit an interpolated string literal as a PHP concatenation of quoted literal chunks
+    /// and parenthesized expressions. Always-correct (avoids PHP's interpolation limits,
+    /// e.g. free function calls inside `"{…}"`).
+    pub(super) fn emit_string(&mut self, parts: &[StrPart]) -> Result<String, String> {
+        if parts.is_empty() {
+            return Ok("\"\"".into());
+        }
+        let mut chunks: Vec<String> = Vec::new();
+        for p in parts {
+            match p {
+                StrPart::Literal(s) => chunks.push(format!("\"{}\"", php_escape(s))),
+                StrPart::Expr(e) => {
+                    let code = self.emit_expr(e)?;
+                    // Coerce via `__phorge_str` so a `bool` renders `true`/`false` (not PHP's `1`/``)
+                    // — mirrors Value::as_display (P0-3). A no-op for int/float/string. The helper
+                    // call is itself a primary, so it replaces the old grouping parens.
+                    self.uses_str = true;
+                    let bs = if self.namespaced { "\\" } else { "" };
+                    chunks.push(format!("{bs}__phorge_str({code})"));
+                }
+            }
+        }
+        Ok(chunks.join(" . "))
+    }
+
+    /// A PHP reference to an enum variant subclass: fully-qualified when its enum lives in a package
+    /// namespace (`new \Acme\Geometry\Circle(…)`, an `instanceof` against it), bare for a `package
+    /// main` enum (`Circle`) — byte-identical to the pre-lift output for a single-package program.
+    pub(super) fn variant_ref(&self, variant: &str) -> String {
+        match self.variant_ns.get(variant) {
+            Some(ns) if ns != "Main" => format!("\\{ns}\\{variant}"),
+            _ => variant.to_string(),
+        }
+    }
+
+    /// A PHP "primary" expression: emits self-contained, so it never needs wrapping parens when used
+    /// as an operand. Compound expressions (`Binary`/`Unary`/`If`/`Match`/`Lambda`) are NOT primary
+    /// and get parenthesized by `paren_if_compound` (P0-2). `Force`/`Range`/`Call`/`Member`/`Index`
+    /// emit as `__phorge_unwrap(…)` / `__phorge_range(…)` / `f(…)` / `$o->x` / `$o[$i]` — all primary.
+    pub(super) fn is_primary(e: &Expr) -> bool {
+        matches!(
+            e,
+            Expr::Int(..)
+                | Expr::Float(..)
+                | Expr::Bool(..)
+                | Expr::Str(..)
+                | Expr::Bytes(..)
+                | Expr::Ident(..)
+                | Expr::This(..)
+                | Expr::Null(..)
+                | Expr::Call { .. }
+                | Expr::Member { .. }
+                | Expr::Index { .. }
+                | Expr::Force { .. }
+                | Expr::Range { .. }
+                | Expr::List(..)
+                | Expr::Map(..)
+        )
+    }
+
+    /// Parenthesize an operand's emitted `code` when the operand is compound, so PHP operator
+    /// precedence cannot re-associate it (P0-2). Conservatively over-parenthesizes — correctness
+    /// over minimal parens; a precedence-table refinement is a deferred polish.
+    pub(super) fn paren_if_compound(e: &Expr, code: String) -> String {
+        if Self::is_primary(e) {
+            code
+        } else {
+            format!("({code})")
+        }
+    }
+
+    pub(super) fn binop(op: &BinaryOp) -> &'static str {
+        use BinaryOp::*;
+        match op {
+            Add => "+",
+            Sub => "-",
+            Mul => "*",
+            // `/` and `%` are routed through `__phorge_div`/`__phorge_rem` before binop() (P0-1/P0-4).
+            Div => unreachable!("Div handled via __phorge_div before binop()"),
+            Rem => unreachable!("Rem handled via __phorge_rem before binop()"),
+            Eq => "==",
+            NotEq => "!=",
+            Lt => "<",
+            Le => "<=",
+            Gt => ">",
+            Ge => ">=",
+            And => "&&",
+            Or => "||",
+            // `??` is parenthesized at the call site, so it never reaches `binop()`.
+            Coalesce => unreachable!("Coalesce handled before binop()"),
+            Pipe => unreachable!("`|>` is lowered to a call in the parser"),
+        }
+    }
+
+    pub(super) fn resolve_ident(&self, name: &str) -> String {
+        if self.is_local(name) {
+            format!("${name}")
+        } else if self
+            .cur_class_fields
+            .as_ref()
+            .is_some_and(|f| f.contains(name))
+        {
+            format!("$this->{name}")
+        } else if self.funcs.contains(name) {
+            // Bare named-function reference in value position — PHP 8.1 first-class callable.
+            // Reuses the same FQN logic as emit_call: cross-package mangled names get a leading `\`.
+            if self.namespaced && name.contains('\\') {
+                format!("\\{name}(...)")
+            } else {
+                format!("{name}(...)")
+            }
+        } else {
+            format!("${name}") // best-effort; the checker guarantees resolution
+        }
+    }
+}
