@@ -24,8 +24,8 @@ byte-identity spine is unaffected.
 ```
 src/
   main.phg                  package Main      — imports the public Rect across packages
-  acme/shapes/shapes.phg    package acme.shapes — public class Rect; internal fn scale
-  acme/shapes/helpers.phg   package acme.shapes — internal fn factor; private fn clamp
+  Acme/Shapes/shapes.phg    package Acme.Shapes — public class Rect; internal fn scale
+  Acme/Shapes/helpers.phg   package Acme.Shapes — internal fn factor; private fn clamp
 ```
 
 Run it (byte-identical on both backends and real PHP):
@@ -38,7 +38,7 @@ phg transpile src/main.phg | php   # area: 12
 
 The legal references it exercises:
 
-- `main` imports `Rect` — **public**, so the cross-package `import type acme.shapes.Rect;` is allowed.
+- `main` imports `Rect` — **public**, so the cross-package `import type Acme.Shapes.Rect;` is allowed.
 - `scale` (in `shapes.phg`) calls `factor` (in `helpers.phg`) — both **internal**, same package, different
   file — allowed.
 - `factor` calls `clamp` — `clamp` is **private** but the call is in the *same file* — allowed.
@@ -49,9 +49,9 @@ Every shipped example must produce identical *Ok* output, so a compile error can
 documented here instead. Each of the following, added to `main.phg`, is a **compile error**:
 
 ```phorge
-// scale is `internal` to acme.shapes — not exportable to another package:
-import type acme.shapes.Scale;   //  no such public type
-util.scale(12);                  //  E-VIS-INTERNAL: scale is internal to acme.shapes
+// scale is `internal` to Acme.Shapes — not exportable to another package:
+import type Acme.Shapes.Scale;   //  no such public type
+Shapes.scale(12);                  //  E-VIS-INTERNAL: scale is internal to Acme.Shapes
 
 // clamp is `private` to helpers.phg — not visible to any other file:
 //   (referenced from shapes.phg or main.phg)

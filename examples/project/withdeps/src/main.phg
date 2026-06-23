@@ -4,10 +4,10 @@ package Main;
 // [require], fetched by `phg vendor` into vendor/, pinned by phorge.lock). The dependency is
 // consumed exactly like a first-party package: import it, then call through its leaf qualifier.
 import Core.Console;
-import acme.strutil;
+import Acme.Strutil;
 
 function main() {
   // Qualified calls into the vendored dependency (leaf-qualified, exactly like core.*).
-  Console.println(strutil.banner("Phorge deps"));
-  Console.println(strutil.shout("vendored offline"));
+  Console.println(Strutil.banner("Phorge deps"));
+  Console.println(Strutil.shout("vendored offline"));
 }

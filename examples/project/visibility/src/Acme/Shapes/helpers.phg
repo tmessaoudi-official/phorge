@@ -1,6 +1,6 @@
-package acme.shapes;
+package Acme.Shapes;
 
-// Same package as shapes.phg (folder = package: src/acme/shapes/ ⇒ acme.shapes), second file.
+// Same package as shapes.phg (folder = package: src/Acme/Shapes/ ⇒ Acme.Shapes), second file.
 
 // `internal` — shapes.phg's `scale` calls this across the file boundary (allowed: same package).
 internal function factor() -> int {

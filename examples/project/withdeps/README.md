@@ -8,14 +8,14 @@ and **vendored** for offline, deterministic builds. It is the companion showcase
 
 ```
 withdeps/
-├── phorge.toml                     # name + [require] git dependency
+├── phorge.toml                     # module + [require] git dependency
 ├── phorge.lock                     # resolved commit SHA + content hash (generated)
 ├── src/
-│   └── main.phg                    # package Main — imports & calls acme.strutil
+│   └── main.phg                    # package Main — imports & calls Acme.Strutil
 └── vendor/                         # committed offline dependency tree (generated)
     └── acme/strutil/               #   vendor/<vendor>/<package>/ — this dep's own root
-        └── acme/strutil/
-            └── text.phg            #   package acme.strutil
+        └── Acme/Strutil/
+            └── text.phg            #   package Acme.Strutil
 ```
 
 ## Run it
@@ -62,7 +62,7 @@ zero network, the same determinism rule that defers URL/network features to M6.
 - **Illustrative dependency.** `acme/strutil`'s source is committed under `vendor/` (Go's vendoring
   model). The `git` URL is a documented coordinate; its source is right here, so the example runs
   with no network. `rev` and `hash` in `phorge.lock` are the real values for the vendored source.
-- **A dependency is a library:** it exports dotted packages (here `package acme.strutil;`), never
+- **A dependency is a library:** it exports dotted packages (here `package Acme.Strutil;`), never
   `package Main` — that is reserved for the consuming program's entry.
 - **Transpiled PHP:** the vendored package becomes a `namespace Acme\Strutil { … }` block in the
   emitted single-file PHP, called as `\Acme\Strutil\banner(...)` — and runs under stock `php`.

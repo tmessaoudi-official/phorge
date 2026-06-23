@@ -7,9 +7,9 @@ package Main;
 // (`new \Acme\Geometry\Rect(…)`, `instanceof \Acme\Geometry\Shape`), byte-identical on
 // run / runvm / real PHP.
 import Core.Console;
-import type acme.geometry.Shape;
-import type acme.geometry.Rect;
-import type acme.geometry.Paint;
+import type Acme.Geometry.Shape;
+import type Acme.Geometry.Rect;
+import type Acme.Geometry.Paint;
 
 // Typed by an imported INTERFACE — any implementer flows in (nominal subtyping, cross-package).
 function describe(Shape s) -> int {

@@ -2,18 +2,18 @@ package Main;
 
 // A multi-file Phorge project (M5). Every file declares a `package`; the runnable entry is the
 // reserved `package Main`. Library code lives in dotted packages whose folder must match the path
-// (folder = path): `acme.convert` is `src/acme/convert/`, `acme.label` is `src/acme/label/`.
+// (folder = path): `Acme.Convert` is `src/Acme/Convert/`, `Acme.Label` is `src/Acme/Label/`.
 //
 // Cross-package functions are imported by their package, then called *leaf-qualified* (Go's
 // `import "fmt"` -> `fmt.Println`). An import may be aliased with `as` to rename the leaf.
 import Core.Console;
-import acme.convert;
-import acme.label as fmt;
+import Acme.Convert;
+import Acme.Label as Fmt;
 
 function main() {
-    // `convert.cToF` is a cross-package qualified call; `fmt.tag` is a call on the *aliased* leaf.
-    int freezing = convert.cToF(0);
-    int boiling = convert.cToF(100);
-    Console.println(fmt.tag("freezing", freezing));
-    Console.println(fmt.tag("boiling", boiling));
+    // `Convert.cToF` is a cross-package qualified call; `Fmt.tag` is a call on the *aliased* leaf.
+    int freezing = Convert.cToF(0);
+    int boiling = Convert.cToF(100);
+    Console.println(Fmt.tag("freezing", freezing));
+    Console.println(Fmt.tag("boiling", boiling));
 }

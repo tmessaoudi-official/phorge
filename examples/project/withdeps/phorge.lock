@@ -5,4 +5,4 @@
 name = "acme/strutil"
 git = "https://github.com/phorge-lang/example-strutil.phg"
 rev = "3bd6e8ea62f50f3aea9ba4033b1d49af0965ec3f"
-hash = "5fd31ccc45b47eba"
+hash = "f25c43369ccd293a"

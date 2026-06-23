@@ -1,4 +1,4 @@
-package acme.convert;
+package Acme.Convert;
 
 // The Celsius->Fahrenheit scale factor, in exact integer arithmetic: 0 -> 0, 100 -> 180.
 function scale(int c) -> int {

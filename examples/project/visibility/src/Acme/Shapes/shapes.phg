@@ -1,4 +1,4 @@
-package acme.shapes;
+package Acme.Shapes;
 
 // Declaration visibility (visibility modifiers) — three levels on any top-level declaration:
 //
@@ -6,7 +6,7 @@ package acme.shapes;
 //   internal                                — visible across THIS package's files, not other packages
 //   private                                 — visible only inside THIS .phg file
 //
-// `Rect` is `public`, so `main` (a different package) may `import type acme.shapes.Rect`.
+// `Rect` is `public`, so `main` (a different package) may `import type Acme.Shapes.Rect`.
 public class Rect {
   constructor(public int w, public int h) {}
   function area() -> int {

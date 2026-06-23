@@ -1,8 +1,8 @@
-package acme.geometry;
+package Acme.Geometry;
 
 // A library package that EXPORTS types — a class, an interface, and an enum — for OTHER packages to
 // import with `import type` (the E-PKG-TYPE lift, M-RT cross-package types). Folder = package: this
-// file lives in `src/acme/geometry/`, so it is `package acme.geometry`. Every definition is mangled
+// file lives in `src/Acme/Geometry/`, so it is `package Acme.Geometry`. Every definition is mangled
 // to a PHP namespace (`Acme\Geometry\Rect`) and emitted inside a `namespace Acme\Geometry { … }`
 // block; consumers reference it by its fully-qualified name.
 
