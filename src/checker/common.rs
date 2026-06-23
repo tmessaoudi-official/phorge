@@ -269,7 +269,11 @@ pub(super) fn match_arm_key(p: &crate::ast::Pattern) -> Option<String> {
         Pattern::Bool(b, _) => Some(format!("b{b}")),
         Pattern::Null(_) => Some("null".to_string()),
         Pattern::Variant { name, .. } => Some(format!("v{name}")),
-        Pattern::Type { type_name, .. } => Some(format!("t{type_name}")),
+        // A struct pattern is an `instanceof` test like a type pattern, so it shares the `t` keyspace:
+        // `Point { x }` and `Point p` both match any `Point`, so a later one is an unreachable dup.
+        Pattern::Type { type_name, .. } | Pattern::Struct { type_name, .. } => {
+            Some(format!("t{type_name}"))
+        }
         Pattern::Float(_, _) | Pattern::Wildcard(_) | Pattern::Binding { .. } => None,
     }
 }

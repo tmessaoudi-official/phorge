@@ -253,6 +253,14 @@ fn collect_pattern_bindings(pat: &Pattern, bound: &mut std::collections::HashSet
         } => {
             bound.insert(name.clone());
         }
+        // A struct pattern (`Point { x, y }`, S5.2) binds via each field's sub-pattern (recurse —
+        // a nested struct or rename binds too). Missing this would drop struct-bound names from
+        // `free_vars`, miscompiling a lambda that captures one (the guard-recursion lesson).
+        Pattern::Struct { fields, .. } => {
+            for f in fields {
+                collect_pattern_bindings(&f.pat, bound);
+            }
+        }
         _ => {}
     }
 }

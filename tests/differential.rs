@@ -2358,6 +2358,35 @@ function main() {
     );
 }
 
+/// Pattern cluster S5.2 — struct (named-field) destructuring: shorthand `Circle { r }`, rename
+/// `Point { x: px }`, and nesting `Line { from: Point { x, y }, to }`. The instance test reuses
+/// `Op::IsInstance` (no new op); each field is read by name. The nested `fx + fy` exercises the CTy
+/// operand path (a struct-bound int must be an arithmetic operand on the VM). run ≡ runvm ≡ real PHP.
+#[test]
+fn struct_destructuring_byte_identical() {
+    agree_out_php(
+        "import Core.Console;
+class Circle { constructor(public float r) {} }
+class Square { constructor(public float side) {} }
+class Point { constructor(public int x, public int y) {} }
+class Line { constructor(public Point from, public Point to) {} }
+function areaOf(Circle | Square sh) -> float {
+    return match sh { Circle { r } => r, Square { side } => side, };
+}
+function originSum(Line l) -> int {
+    return match l { Line { from: Point { x: fx, y: fy }, to } => fx + fy + to.x, _ => 0, };
+}
+function main() {
+    float a = areaOf(Circle(2.5));
+    float b = areaOf(Square(4.0));
+    int d = originSum(Line(Point(1, 2), Point(10, 20)));
+    Console.println(\"a={a} b={b} d={d}\");
+}",
+        "a=2.5 b=4 d=13\n",
+        "struct_destructuring",
+    );
+}
+
 /// Primitives sweep P3.2 — the byte-safe stdlib subset: `Text.startsWith`/`endsWith`/`repeat`,
 /// `Math.round` (→ int, half-away-from-zero like PHP's default), and `List.length`. Each erases 1:1
 /// to a PHP builtin (`str_starts_with`/`str_ends_with`/`str_repeat`/`(int)round`/`count`). Bools are

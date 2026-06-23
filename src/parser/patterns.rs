@@ -55,6 +55,47 @@ impl Parser {
                         fields,
                         span: sp,
                     })
+                } else if self.check(&TokenKind::LBrace)
+                    && name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+                {
+                    // Struct pattern `Point { x, y }` (S5.2). Gated on a PascalCase head so a bare
+                    // lowercase binding can never steal a following `{`. Each entry is `field` with an
+                    // optional `: <sub-pattern>`; shorthand `x` desugars to `x: x` (a `Binding`).
+                    self.advance(); // `{`
+                    let mut fields = Vec::new();
+                    if !self.check(&TokenKind::RBrace) {
+                        loop {
+                            let fsp = self.peek_span();
+                            let field = match self.peek().clone() {
+                                TokenKind::Ident(f) => {
+                                    self.advance();
+                                    f
+                                }
+                                _ => return Err(self.error("a field name in a struct pattern")),
+                            };
+                            let pat = if self.eat(&TokenKind::Colon) {
+                                self.parse_pattern()?
+                            } else {
+                                Pattern::Binding {
+                                    name: field.clone(),
+                                    span: fsp,
+                                }
+                            };
+                            fields.push(FieldPat { field, pat });
+                            if !self.eat(&TokenKind::Comma) {
+                                break;
+                            }
+                            if self.check(&TokenKind::RBrace) {
+                                break; // trailing comma
+                            }
+                        }
+                    }
+                    self.expect(&TokenKind::RBrace, "'}' to close struct pattern")?;
+                    Ok(Pattern::Struct {
+                        type_name: name,
+                        fields,
+                        span: sp,
+                    })
                 } else if let TokenKind::Ident(binder) = self.peek().clone() {
                     // The contextual guard keyword `when` is never a type-pattern binder — leave it
                     // for the enclosing match arm so `Circle when c => …` reads as a guard, not a

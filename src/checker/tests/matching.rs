@@ -114,6 +114,66 @@ fn unknown_variant_pattern_errors() {
 }
 
 #[test]
+fn struct_destructuring_patterns() {
+    const SHAPES: &str = "class Circle { constructor(public float r) {} } \
+                          class Square { constructor(public float side) {} }";
+    const PL: &str = "class Point { constructor(public int x, public int y) {} } \
+                      class Line { constructor(public Point from, public Point to) {} }";
+
+    // Shorthand struct patterns over a union are exhaustive and type-check; the bound fields are
+    // usable at their declared type (here `float`).
+    let ok = format!(
+        "{SHAPES} function f(Circle | Square s) -> float {{ return match s {{ \
+             Circle {{ r }} => r, Square {{ side }} => side, }}; }}"
+    );
+    assert!(errors_of(&ok).is_empty(), "{:?}", errors_of(&ok));
+
+    // Rename + nested destructuring + a CTy operand (`x + y`, both `int` binds): type-checks.
+    let nested = format!(
+        "{PL} function f(Line l) -> int {{ return match l {{ \
+             Line {{ from: Point {{ x, y }}, to }} => x + y + to.x, _ => 0, }}; }}"
+    );
+    assert!(errors_of(&nested).is_empty(), "{:?}", errors_of(&nested));
+
+    // E-STRUCT-PAT-TYPE — the head names something that isn't a class.
+    let bad_type = format!(
+        "{SHAPES} function f(Circle | Square s) -> float {{ return match s {{ \
+             Nope {{ r }} => r, _ => 0.0, }}; }}"
+    );
+    assert!(
+        errors_of(&bad_type)
+            .iter()
+            .any(|d| d.code == Some("E-STRUCT-PAT-TYPE")),
+        "{:?}",
+        errors_of(&bad_type)
+    );
+
+    // E-STRUCT-FIELD-UNKNOWN — a field that the class does not declare.
+    let bad_field = format!(
+        "{SHAPES} function f(Circle | Square s) -> float {{ return match s {{ \
+             Circle {{ q }} => 0.0, Square {{ side }} => side, }}; }}"
+    );
+    assert!(
+        errors_of(&bad_field)
+            .iter()
+            .any(|d| d.code == Some("E-STRUCT-FIELD-UNKNOWN")),
+        "{:?}",
+        errors_of(&bad_field)
+    );
+
+    // E-PATTERN-DUP-BIND — `x` is bound twice (field `x` and renamed field `y`).
+    let dup = "class Point { constructor(public int x, public int y) {} } \
+         function f(Point p) -> int { return match p { Point { x, y: x } => x, _ => 0, }; }";
+    assert!(
+        errors_of(dup)
+            .iter()
+            .any(|d| d.code == Some("E-PATTERN-DUP-BIND")),
+        "{:?}",
+        errors_of(dup)
+    );
+}
+
+#[test]
 fn match_arm_guards() {
     // A guarded arm plus an unguarded fallback for the same shape is exhaustive and type-checks.
     let ok = format!(

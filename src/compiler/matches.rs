@@ -58,7 +58,7 @@ impl Compiler<'_> {
         &mut self,
         pat: &Pattern,
         m_slot: usize,
-        path: &[usize],
+        path: &[PathSeg],
         skips: &mut Vec<usize>,
         line: u32,
     ) -> Result<(), String> {
@@ -90,7 +90,7 @@ impl Compiler<'_> {
                 skips.push(self.emit_jump(Op::JumpIfFalse(0), line));
                 for (i, fp) in fields.iter().enumerate() {
                     let mut sub = path.to_vec();
-                    sub.push(i);
+                    sub.push(PathSeg::Enum(i));
                     self.emit_pattern_test(fp, m_slot, &sub, skips, line)?;
                 }
             }
@@ -102,6 +102,23 @@ impl Compiler<'_> {
                 self.emit(Op::IsInstance(type_name.clone()), line);
                 skips.push(self.emit_jump(Op::JumpIfFalse(0), line));
             }
+            // S5.2 struct pattern: `instanceof` test (reusing `Op::IsInstance`, no new op), then each
+            // field's sub-pattern tests against `path + Field(field)`. A binding sub-pattern emits no
+            // test here — the value is re-extracted lazily on use (so an unused binding never reads
+            // the field); a literal/nested-struct sub-pattern reads the field to compare/recurse.
+            Pattern::Struct {
+                type_name, fields, ..
+            } => {
+                self.emit_load_path(m_slot, path, line);
+                self.emit(Op::IsInstance(type_name.clone()), line);
+                skips.push(self.emit_jump(Op::JumpIfFalse(0), line));
+                for fp in fields {
+                    let idx = self.field_name_index(&fp.field)?;
+                    let mut sub = path.to_vec();
+                    sub.push(PathSeg::Field(idx));
+                    self.emit_pattern_test(&fp.pat, m_slot, &sub, skips, line)?;
+                }
+            }
         }
         Ok(())
     }
@@ -110,7 +127,7 @@ impl Compiler<'_> {
     pub(super) fn emit_literal_test(
         &mut self,
         m_slot: usize,
-        path: &[usize],
+        path: &[PathSeg],
         lit: Value,
         skips: &mut Vec<usize>,
         line: u32,
@@ -128,7 +145,7 @@ impl Compiler<'_> {
         &mut self,
         pat: &Pattern,
         m_slot: usize,
-        path: &[usize],
+        path: &[PathSeg],
         cur_ty: CTy,
     ) -> Result<(), String> {
         match pat {
@@ -147,9 +164,28 @@ impl Compiler<'_> {
                     .clone();
                 for (i, fp) in fields.iter().enumerate() {
                     let mut sub = path.to_vec();
-                    sub.push(i);
+                    sub.push(PathSeg::Enum(i));
                     let ty = field_tags.get(i).cloned().unwrap_or(CTy::Other);
                     self.register_bindings(fp, m_slot, &sub, ty)?;
+                }
+            }
+            // S5.2 struct pattern: each field binds (or sub-binds) at `path + Field(field)`. The
+            // field's CTy comes from the program-wide class-field table so a struct-bound int is a
+            // first-class arithmetic operand on the VM (`Point { x } => x + 1`), the operand trap.
+            Pattern::Struct {
+                type_name, fields, ..
+            } => {
+                for fp in fields {
+                    let idx = self.field_name_index(&fp.field)?;
+                    let mut sub = path.to_vec();
+                    sub.push(PathSeg::Field(idx));
+                    let ty = self
+                        .class_field_ctys
+                        .get(type_name)
+                        .and_then(|m| m.get(&fp.field))
+                        .cloned()
+                        .unwrap_or(CTy::Other);
+                    self.register_bindings(&fp.pat, m_slot, &sub, ty)?;
                 }
             }
             // M-RT S4 type pattern: bind the matched value (the whole sub-value at `path`) as the

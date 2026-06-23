@@ -84,6 +84,27 @@ pub enum Pattern {
         binding: Option<String>,
         span: Span,
     },
+    /// `Point { x, y }` / `Point { x: px }` / `Line { from: Point { x, y }, to }` — a **struct
+    /// pattern** (M-RT pattern cluster S5.2): matches when the scrutinee is an instance of
+    /// `type_name` (a class — the same `instanceof` runtime test as a [`Pattern::Type`], reusing
+    /// `Op::IsInstance`), then matches each named field's sub-pattern against that field's value.
+    /// Each [`FieldPat`] carries the field name and a sub-pattern; shorthand `x` and rename `x: px`
+    /// both desugar to a [`Pattern::Binding`] sub-pattern, so all the existing per-backend pattern
+    /// recursion (bind / literal / nested struct) is reused without a new field-target enum.
+    Struct {
+        type_name: String,
+        fields: Vec<FieldPat>,
+        span: Span,
+    },
+}
+
+/// One `field: sub-pattern` entry of a [`Pattern::Struct`]. Shorthand `Point { x }` is sugar for
+/// `Point { x: x }` — the parser fills `pat` with `Pattern::Binding { name: field }` — so a field
+/// target is always a full [`Pattern`] (bind, literal, wildcard, nested struct, …).
+#[derive(Debug, Clone, PartialEq)]
+pub struct FieldPat {
+    pub field: String,
+    pub pat: Pattern,
 }
 
 /// One segment of a (possibly interpolated) string literal.

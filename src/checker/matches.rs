@@ -71,7 +71,11 @@ impl Checker {
                     guarded_shapes.push(name.clone());
                 }
             }
-            if let Pattern::Type { type_name, .. } = &arm.pattern {
+            // A type pattern (`Circle c`) and a struct pattern (`Circle { r }`) are both `instanceof`
+            // tests over a union member, so both discharge that member's coverage (S5.2).
+            if let Pattern::Type { type_name, .. } | Pattern::Struct { type_name, .. } =
+                &arm.pattern
+            {
                 if unguarded {
                     covered_types.push(type_name.clone());
                 } else {
@@ -316,6 +320,63 @@ impl Checker {
                     self.declare(name, Ty::Named(type_name.clone(), args), *span);
                 }
             }
+            Pattern::Struct {
+                type_name,
+                fields,
+                span,
+            } => {
+                // The head must name a class — interfaces and enums carry no fields to destructure.
+                let is_class = self.classes.contains_key(type_name);
+                if !is_class && !matches!(scrut, Ty::Error) {
+                    let hint = if self.interfaces.contains_key(type_name) {
+                        "an interface has no fields — use a type pattern `Iface x` to bind it"
+                    } else {
+                        "a struct pattern destructures the fields of a class instance"
+                    };
+                    self.err_coded(
+                        *span,
+                        format!("struct pattern `{type_name}` must name a class"),
+                        "E-STRUCT-PAT-TYPE",
+                        Some(hint.into()),
+                    );
+                }
+                // Duplicate bind names anywhere in this pattern (incl. nested) — one would silently
+                // shadow the other in the arm body.
+                let mut binds: Vec<String> = Vec::new();
+                collect_binds(pat, &mut binds);
+                let mut seen = std::collections::HashSet::new();
+                for b in &binds {
+                    if !seen.insert(b.clone()) {
+                        self.err_coded(
+                            *span,
+                            format!("duplicate binding `{b}` in struct pattern"),
+                            "E-PATTERN-DUP-BIND",
+                            Some("each destructured binding needs a distinct name".into()),
+                        );
+                    }
+                }
+                // Each named field must exist on the class; its sub-pattern checks against the
+                // field's declared type (so a nested struct / literal / rename binds at the right
+                // type — the operand-type then flows to the compiler's `CTy` via class_field_ctys).
+                for fp in fields {
+                    let fty = self
+                        .classes
+                        .get(type_name)
+                        .and_then(|ci| ci.fields.get(&fp.field).cloned());
+                    match fty {
+                        Some(t) => self.check_pattern(&fp.pat, &t),
+                        None if is_class => {
+                            self.err_coded(
+                                *span,
+                                format!("class `{type_name}` has no field `{}`", fp.field),
+                                "E-STRUCT-FIELD-UNKNOWN",
+                                Some("destructure only the class's declared fields".into()),
+                            );
+                        }
+                        None => {}
+                    }
+                }
+            }
         }
     }
 
@@ -332,5 +393,29 @@ impl Checker {
                 format!("pattern of type `{want}` cannot match scrutinee of type `{scrut}`"),
             );
         }
+    }
+}
+
+/// Collect every variable name a pattern binds, in source order (with repeats), for the struct
+/// pattern's duplicate-binding check (`E-PATTERN-DUP-BIND`). Mirrors `ast::collect_pattern_bindings`
+/// but keeps a `Vec` so duplicates are visible rather than collapsed into a set.
+fn collect_binds(pat: &crate::ast::Pattern, acc: &mut Vec<String>) {
+    use crate::ast::Pattern;
+    match pat {
+        Pattern::Binding { name, .. } => acc.push(name.clone()),
+        Pattern::Type {
+            binding: Some(n), ..
+        } => acc.push(n.clone()),
+        Pattern::Variant { fields, .. } => {
+            for f in fields {
+                collect_binds(f, acc);
+            }
+        }
+        Pattern::Struct { fields, .. } => {
+            for f in fields {
+                collect_binds(&f.pat, acc);
+            }
+        }
+        _ => {}
     }
 }

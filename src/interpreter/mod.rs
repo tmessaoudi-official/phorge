@@ -632,6 +632,37 @@ fn match_pattern(
             }
             is
         }
+        // S5.2 struct pattern: matches iff `value` is an instance of `type_name` (same `instanceof`
+        // test as a type pattern), then each named field's sub-pattern matches that field's value.
+        // A field absent at runtime (a declared-but-uninitialized explicit field) is a no-match here;
+        // struct patterns are intended for classes whose fields are all initialized — promoted ctor
+        // params — exactly like a direct `obj.field` read (KNOWN_ISSUES).
+        Pattern::Struct {
+            type_name, fields, ..
+        } => {
+            let is = matches!(value, Value::Instance(inst)
+                if inst.class == *type_name
+                    || implements
+                        .get(&inst.class)
+                        .is_some_and(|ifaces| ifaces.iter().any(|i| i == type_name)));
+            if !is {
+                return false;
+            }
+            if let Value::Instance(inst) = value {
+                for fp in fields {
+                    let fv = inst.fields.borrow().get(&fp.field).cloned();
+                    match fv {
+                        Some(v) => {
+                            if !match_pattern(&fp.pat, &v, implements, out) {
+                                return false;
+                            }
+                        }
+                        None => return false,
+                    }
+                }
+            }
+            true
+        }
     }
 }
 

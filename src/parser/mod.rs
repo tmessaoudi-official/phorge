@@ -1,9 +1,9 @@
 //! Recursive-descent + Pratt parser: turns the lexer's token stream into the AST.
 
 use crate::ast::{
-    BinaryOp, ClassDecl, ClassMember, CtorParam, EnumDecl, EnumVariant, Expr, FunctionDecl, Item,
-    LambdaBody, MatchArm, Modifier, Param, Pattern, Program, Stmt, StrPart, Type, UnaryOp,
-    Visibility,
+    BinaryOp, ClassDecl, ClassMember, CtorParam, EnumDecl, EnumVariant, Expr, FieldPat,
+    FunctionDecl, Item, LambdaBody, MatchArm, Modifier, Param, Pattern, Program, Stmt, StrPart,
+    Type, UnaryOp, Visibility,
 };
 use crate::diagnostic::{Diagnostic, Stage};
 use crate::limits::MAX_NEST_DEPTH;

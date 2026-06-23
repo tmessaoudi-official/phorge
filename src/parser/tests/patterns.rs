@@ -38,6 +38,53 @@ fn parses_patterns() {
 }
 
 #[test]
+fn parses_struct_patterns() {
+    // shorthand `Point { x, y }` — each field desugars to a binding of the same name.
+    match pat("Point { x, y }") {
+        Pattern::Struct {
+            type_name, fields, ..
+        } => {
+            assert_eq!(type_name, "Point");
+            assert_eq!(fields.len(), 2);
+            assert_eq!(fields[0].field, "x");
+            assert!(matches!(&fields[0].pat, Pattern::Binding { name, .. } if name == "x"));
+            assert_eq!(fields[1].field, "y");
+            assert!(matches!(&fields[1].pat, Pattern::Binding { name, .. } if name == "y"));
+        }
+        other => panic!("got {other:?}"),
+    }
+    // rename `Point { x: px }` — the field binds to a differently-named variable.
+    match pat("Point { x: px }") {
+        Pattern::Struct { fields, .. } => {
+            assert_eq!(fields[0].field, "x");
+            assert!(matches!(&fields[0].pat, Pattern::Binding { name, .. } if name == "px"));
+        }
+        other => panic!("got {other:?}"),
+    }
+    // nested `Line { from: Point { x, y }, to }` — a struct sub-pattern + a shorthand bind.
+    match pat("Line { from: Point { x, y }, to }") {
+        Pattern::Struct {
+            type_name, fields, ..
+        } => {
+            assert_eq!(type_name, "Line");
+            assert_eq!(fields.len(), 2);
+            assert_eq!(fields[0].field, "from");
+            match &fields[0].pat {
+                Pattern::Struct {
+                    type_name, fields, ..
+                } => {
+                    assert_eq!(type_name, "Point");
+                    assert_eq!(fields.len(), 2);
+                }
+                other => panic!("nested field is {other:?}"),
+            }
+            assert!(matches!(&fields[1].pat, Pattern::Binding { name, .. } if name == "to"));
+        }
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
 fn parses_match_arm_guards() {
     // A contextual `when` after the arm pattern attaches an optional guard. An arm with no
     // `when` parses exactly as before (guard = None).

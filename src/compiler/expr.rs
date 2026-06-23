@@ -20,9 +20,7 @@ impl Compiler<'_> {
                 // `this.field`). An unresolved name is a compiler bug (the checker ran first).
                 if let Some((slot, path)) = self.resolve_binding(name) {
                     self.emit(Op::GetLocal(slot), sp.line);
-                    for i in path {
-                        self.emit(Op::GetEnumField(i), sp.line);
-                    }
+                    self.emit_path(&path, sp.line);
                 } else if let Some(slot) = self.resolve_local(name) {
                     self.emit(Op::GetLocal(slot), sp.line);
                 } else if let (Some(this), true) =
@@ -383,9 +381,7 @@ impl Compiler<'_> {
                 ) {
                     // Re-extract the closure from its binding path.
                     self.emit(Op::GetLocal(slot), line);
-                    for i in path {
-                        self.emit(Op::GetEnumField(i), line);
-                    }
+                    self.emit_path(&path, line);
                     for a in args {
                         self.expr(a)?;
                     }

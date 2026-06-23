@@ -384,6 +384,25 @@ pub fn explain_text(code: &str) -> Option<String> {
              evaluated with the arm's pattern bindings in scope. It must have type `bool` — wrap a\n\
              non-boolean value in a comparison (`when n > 0`) rather than relying on truthiness.\n"
         }
+        "E-STRUCT-PAT-TYPE" => {
+            "E-STRUCT-PAT-TYPE — a struct pattern's head is not a class.\n\n\
+             A struct pattern (`Point { x, y } => …`, pattern cluster S5.2) destructures a class\n\
+             instance's named fields — its head must be a declared **class**. An interface has no\n\
+             fields (use a type pattern `Iface x` to bind it); an enum is matched by its variants\n\
+             (`Some(v)`), not by fields.\n"
+        }
+        "E-STRUCT-FIELD-UNKNOWN" => {
+            "E-STRUCT-FIELD-UNKNOWN — a struct pattern names a field the class does not declare.\n\n\
+             Each `field` (or `field: sub-pattern`) in a struct pattern (`Point { x, y }`) must be a\n\
+             field declared on the class (including inherited fields). Destructure only declared\n\
+             fields — check for a typo or a field on a different class.\n"
+        }
+        "E-PATTERN-DUP-BIND" => {
+            "E-PATTERN-DUP-BIND — a pattern binds the same name twice.\n\n\
+             A struct pattern (`Point { x, y: x }`) or any nested pattern must give each destructured\n\
+             binding a distinct name — two bindings of `x` would have one silently shadow the other.\n\
+             Rename one (`Point { x, y: y2 }`).\n"
+        }
         "E-INTERSECT-MEMBER" => {
             "E-INTERSECT-MEMBER — an intersection member is not an allowed type.\n\n\
              An intersection `A & B` (M-RT S5) combines interfaces, plus *at most one* concrete class\n\
@@ -557,7 +576,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-PKG-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-PKG-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE, E-STRUCT-PAT-TYPE, E-STRUCT-FIELD-UNKNOWN, E-PATTERN-DUP-BIND)"
         )
     })
 }

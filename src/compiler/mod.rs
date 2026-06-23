@@ -96,14 +96,23 @@ struct VariantMeta {
     field_tags: Vec<CTy>,
 }
 
+/// One step from the `$match` scrutinee to a sub-value: an enum-payload index (`Op::GetEnumField`)
+/// or a named instance field (`Op::GetField` into the names pool). The mixed sequence lets a binding
+/// reach, e.g., `Wrapper(Point { x })` — an enum field then a struct field — with no new `Op` (S5.2).
+#[derive(Clone)]
+enum PathSeg {
+    Enum(usize),
+    Field(usize),
+}
+
 /// A `match`-arm payload binding: the name, the slot of the hidden `$match` scrutinee local, and
-/// the payload-index `path` from the scrutinee to the bound value. Bindings are *re-extracted* at
-/// each use (`GetLocal $match` + `GetEnumField` per path step) rather than stored as stack locals,
-/// which keeps arm bodies stack-neutral and sidesteps mid-expression slot bookkeeping (P4-7).
+/// the `path` from the scrutinee to the bound value. Bindings are *re-extracted* at each use
+/// (`GetLocal $match` + a `GetEnumField`/`GetField` per path step) rather than stored as stack
+/// locals, which keeps arm bodies stack-neutral and sidesteps mid-expression slot bookkeeping (P4-7).
 struct MatchBinding {
     name: String,
     match_slot: usize,
-    path: Vec<usize>,
+    path: Vec<PathSeg>,
     ty: CTy,
 }
 
@@ -722,7 +731,7 @@ impl<'a> Compiler<'a> {
 
     /// Resolve a `match`-arm binding by name (innermost shadows). Returns the `$match` slot and the
     /// payload path to re-extract, cloned so the caller can emit without holding a borrow on `self`.
-    fn resolve_binding(&self, name: &str) -> Option<(usize, Vec<usize>)> {
+    fn resolve_binding(&self, name: &str) -> Option<(usize, Vec<PathSeg>)> {
         self.match_bindings
             .iter()
             .rev()
@@ -730,12 +739,21 @@ impl<'a> Compiler<'a> {
             .map(|b| (b.match_slot, b.path.clone()))
     }
 
-    /// Push the sub-value of the `$match` scrutinee (slot `m_slot`) reached by `path`.
-    fn emit_load_path(&mut self, m_slot: usize, path: &[usize], line: u32) {
-        self.emit(Op::GetLocal(m_slot), line);
-        for &i in path {
-            self.emit(Op::GetEnumField(i), line);
+    /// Emit the per-step field loads of a binding `path` (the value to descend from is already on
+    /// the stack). Each step is an enum-payload index or a named instance-field read.
+    fn emit_path(&mut self, path: &[PathSeg], line: u32) {
+        for seg in path {
+            match seg {
+                PathSeg::Enum(i) => self.emit(Op::GetEnumField(*i), line),
+                PathSeg::Field(idx) => self.emit(Op::GetField(*idx), line),
+            }
         }
+    }
+
+    /// Push the sub-value of the `$match` scrutinee (slot `m_slot`) reached by `path`.
+    fn emit_load_path(&mut self, m_slot: usize, path: &[PathSeg], line: u32) {
+        self.emit(Op::GetLocal(m_slot), line);
+        self.emit_path(path, line);
     }
 }
 

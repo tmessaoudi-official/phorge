@@ -276,6 +276,19 @@ fn explain_covers_totality_codes() {
 }
 
 #[test]
+fn explain_covers_struct_pattern_codes() {
+    // The pattern-cluster S5.2 struct-destructuring diagnostics self-document via `phg explain`.
+    for code in [
+        "E-STRUCT-PAT-TYPE",
+        "E-STRUCT-FIELD-UNKNOWN",
+        "E-PATTERN-DUP-BIND",
+    ] {
+        let body = explain_text(code).unwrap_or_else(|| panic!("{code} has an explanation"));
+        assert!(body.starts_with(code), "{body}");
+    }
+}
+
+#[test]
 fn explain_covers_error_model_2a_codes() {
     // The M-faults Slice 2a diagnostics (`?` propagation + fault intrinsics) self-document.
     for code in [

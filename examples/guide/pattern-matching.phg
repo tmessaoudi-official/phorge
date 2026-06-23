@@ -43,6 +43,32 @@ function describe(Circle | Square sh) -> string {
     };
 }
 
+class Point {
+    constructor(public int x, public int y) {}
+}
+
+class Line {
+    constructor(public Point from, public Point to) {}
+}
+
+// Struct (named-field) destructuring (S5.2): bind a class instance's fields by name. Shorthand
+// `Circle { r }`, rename `Point { x: fx }`, and nesting `Line { from: Point { x, y }, to }` — the
+// same `instanceof` test as a type pattern (no new op), then field reads. Bound fields are usable as
+// typed values (here `fx + fy` as an `int` operand — the CTy operand path).
+function areaOf(Circle | Square sh) -> float {
+    return match sh {
+        Circle { r } => r,
+        Square { side } => side,
+    };
+}
+
+function originSum(Line l) -> int {
+    return match l {
+        Line { from: Point { x: fx, y: fy }, to } => fx + fy + to.x,
+        _ => 0,
+    };
+}
+
 function main() {
     Console.println(classify(Code(503)));
     Console.println(classify(Code(404)));
@@ -51,4 +77,10 @@ function main() {
     Console.println(describe(Circle(2.0)));
     Console.println(describe(Circle(0.5)));
     Console.println(describe(Square(3.0)));
+
+    // struct destructuring: shorthand, rename, nested
+    float ac = areaOf(Circle(2.5));
+    float aq = areaOf(Square(4.0));
+    int d = originSum(Line(Point(1, 2), Point(10, 20)));
+    Console.println("areaOf circle = {ac}, square = {aq}, origin sum = {d}");
 }
