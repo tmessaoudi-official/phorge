@@ -537,10 +537,11 @@ impl<'a> Vm<'a> {
                 self.statics[idx] = self.pop();
             }
             Op::IsInstance(name) => {
-                // `value instanceof name` (M-RT S1; interfaces S2): true iff the popped value is an
-                // instance whose class equals `name` OR implements interface `name` (via the shared
-                // `class_implements` table). A non-instance is `false`, never a fault — byte-identical
-                // to the interpreter (`Expr::InstanceOf`) and PHP's `instanceof`.
+                // `value instanceof name` (M-RT S1; interfaces S2; class ancestors S6c.3): true iff the
+                // popped value is an instance whose class equals `name` OR has `name` among its
+                // supertypes — parent classes AND interfaces, via the shared `instanceof_table` oracle
+                // (stored in `class_implements`). A non-instance is `false`, never a fault —
+                // byte-identical to the interpreter (`Expr::InstanceOf`) and PHP's `instanceof`.
                 let v = self.pop();
                 let is = matches!(&v, Value::Instance(inst)
                     if inst.class == name

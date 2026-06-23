@@ -1,0 +1,61 @@
+// Subtyping and `instanceof` across the full inheritance lattice (M-RT S6c.3).
+//
+// A subclass is a subtype of *every* ancestor — its parent classes (single and multiple) and their
+// interfaces. That subtyping is observable three ways, all shown below:
+//   1. `instanceof` against any ancestor class is true (not just against interfaces).
+//   2. a value flows into an ancestor-typed binding (a parent-typed local / parameter).
+//   3. a `match` type-pattern narrows on an ancestor class.
+//
+// Under the hood a multi-parent class lowers to PHP `implements I<Parent>` (interface + trait), so the
+// transpiler tests the *interface* form (`instanceof ISwimmer`) — a Duck implements ISwimmer but does
+// not `extends Swimmer`. The interpreter and VM share one subtype oracle (parent classes AND
+// interfaces), so all three backends agree byte-for-byte.
+package Main;
+
+import Core.Console;
+
+open class Animal {
+    open function name() -> string {
+        return "animal";
+    }
+}
+
+// Single inheritance: Fish IS-A Animal.
+open class Fish extends Animal {
+    open function move() -> string {
+        return "swims";
+    }
+}
+
+open class Bird extends Animal {
+    open function move() -> string {
+        return "flies";
+    }
+}
+
+// Multiple inheritance: a Duck is a Fish AND a Bird (and, through both, an Animal — the diamond).
+class Duck extends Fish, Bird {
+    use Fish.move
+}
+
+// A parameter typed as an ancestor accepts any subtype (subtyping at a call boundary).
+function describe(Animal a) -> string {
+    return a.name();
+}
+
+function main() {
+    Duck d = Duck();
+
+    // (1) `instanceof` against every ancestor in the lattice — all true.
+    Console.println("{d instanceof Duck} {d instanceof Fish} {d instanceof Bird} {d instanceof Animal}");
+
+    // (2) the Duck flows into ancestor-typed bindings; dispatch stays dynamic.
+    Fish f = d;
+    Animal a = d;
+    Console.println("{f.move()} {a.name()}");
+    Console.println(describe(d)); // a Duck passed where an Animal is expected
+
+    // (3) a non-subtype test is false — Bird is an ancestor of Duck, but a fresh Animal is not a Bird.
+    Animal plain = Animal();
+    Console.println("{plain instanceof Bird}");
+}

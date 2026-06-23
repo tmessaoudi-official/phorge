@@ -385,6 +385,30 @@ pub fn class_supertypes(program: &Program) -> std::collections::BTreeMap<String,
     out
 }
 
+/// The **runtime subtype oracle** (M-RT S6c.3): for each class, every type name it is an instance of —
+/// its transitive parent classes ([`class_supertypes`]) **and** its transitive interfaces
+/// ([`class_implements`]). This is the single source consumed by `instanceof`, match type-patterns, and
+/// overload subtyping on **both** backends, so a `Dog instanceof Animal` / `Duck instanceof Swimmer`
+/// (a *class* ancestor, not just an interface) is true and can never diverge between `run` and `runvm`.
+/// (The checker keeps a separate interfaces-only `class_implements` for interface *conformance*; its
+/// `is_subtype` already consults `class_supertypes` independently.)
+pub fn instanceof_table(program: &Program) -> std::collections::BTreeMap<String, Vec<String>> {
+    let mut table = class_implements(program);
+    for (cls, sups) in class_supertypes(program) {
+        let entry = table.entry(cls).or_default();
+        for s in sups {
+            if !entry.contains(&s) {
+                entry.push(s);
+            }
+        }
+    }
+    for v in table.values_mut() {
+        v.sort();
+        v.dedup();
+    }
+    table
+}
+
 /// Method-resolution order for every class: `class_mro[c]` is `c`'s ancestor classes in
 /// **nearest-first breadth-first** order (direct parents in `extends` order, then their parents, …),
 /// excluding `c` itself. Cycle-safe via a visited set. This is the **single source of dispatch

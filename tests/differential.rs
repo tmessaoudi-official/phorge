@@ -449,6 +449,57 @@ function main() {
     );
 }
 
+/// M-RT S6c.3 — `instanceof`/subtyping across the full class lattice. The runtime `instanceof` oracle
+/// previously consulted only interfaces (`class_implements`), so `d instanceof Animal` against a
+/// *parent class* was wrongly `false` on both Rust backends — and a multi-parent class lowers to PHP
+/// `implements I…`, so `instanceof Swimmer` (the concrete class) was wrong there too. The fix threads
+/// the transitive parent-class set into the oracle (`ast::instanceof_table`) and emits the interface
+/// form for a decomposed ancestor in PHP. Single-parent, multi-parent, and a parent-typed param must
+/// all be byte-identical run≡runvm≡real PHP.
+#[test]
+fn s6c_instanceof_across_lattice_is_byte_identical() {
+    // single-parent: `instanceof` against the parent class is true
+    agree_out_php(
+        r#"import Core.Console;
+open class Animal {}
+class Dog extends Animal {}
+function main() {
+    Dog d = Dog();
+    Console.println("{d instanceof Animal} {d instanceof Dog}");
+}"#,
+        "true true\n",
+        "s6c_instanceof_single_parent",
+    );
+    // multi-parent: `instanceof` against each parent + a parent-typed param accepts the subtype
+    agree_out_php(
+        r#"import Core.Console;
+open class Swimmer { open function move() -> string { return "swims"; } }
+open class Flyer { open function soar() -> string { return "soars"; } }
+class Duck extends Swimmer, Flyer {}
+function describe(Swimmer s) -> string { return s.move(); }
+function main() {
+    Duck d = Duck();
+    Console.println(describe(d));
+    Console.println("{d instanceof Swimmer} {d instanceof Flyer}");
+}"#,
+        "swims\ntrue true\n",
+        "s6c_instanceof_multi_parent",
+    );
+    // a non-subtype `instanceof` stays false across the lattice
+    agree_out_php(
+        r#"import Core.Console;
+open class A {}
+open class B {}
+class C extends A {}
+function main() {
+    C c = C();
+    Console.println("{c instanceof A} {c instanceof B}");
+}"#,
+        "true false\n",
+        "s6c_instanceof_non_subtype",
+    );
+}
+
 /// M3 S0.2 — `var` local type inference is a front-end-only feature (type erased after checking),
 /// so both backends must run a `var` program byte-identically.
 #[test]

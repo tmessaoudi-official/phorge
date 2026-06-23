@@ -356,8 +356,10 @@ impl Interp {
                 Item::TypeAlias { .. } => {}
             }
         }
-        // The single shared interface table (same algorithm as the checker + VM, no divergence).
-        self.class_implements = crate::ast::class_implements(program);
+        // The single shared runtime subtype oracle (M-RT S6c.3): parent classes AND interfaces, so
+        // `instanceof`/match-patterns/overload-subtyping see a class ancestor too. Same algorithm as the
+        // VM (the BytecodeProgram builds the identical table), no divergence.
+        self.class_implements = crate::ast::instanceof_table(program);
         // The single shared method-dispatch table (M-RT S6b): `call_method` resolves `(class, name)`
         // to its `(declaring_class, method)` — the same table the compiler pre-flattens into the VM's
         // method table, so multi-parent / resolution-clause / renamed dispatch can never diverge. The
@@ -792,11 +794,12 @@ impl Interp {
             Expr::InstanceOf {
                 value, type_name, ..
             } => {
-                // Runtime type test (M-RT S1; interfaces added S2): true iff `value` is an instance
-                // whose class equals `type_name` OR whose class implements interface `type_name`
-                // (via the shared `class_implements` table). A non-instance value is `false` (never a
-                // fault) — matching PHP's `instanceof`. The class name is single-sourced on
-                // `Value::Instance` (P4-4), so all three backends agree.
+                // Runtime type test (M-RT S1; interfaces S2; class ancestors S6c.3): true iff `value`
+                // is an instance whose class equals `type_name` OR has `type_name` among its
+                // supertypes — parent classes AND interfaces, via the shared `instanceof_table`
+                // oracle. A non-instance value is `false` (never a fault) — matching PHP's
+                // `instanceof`. The class name is single-sourced on `Value::Instance` (P4-4), so all
+                // three backends agree.
                 let v = self.eval(value)?;
                 let is = matches!(&v, Value::Instance(inst)
                     if inst.class == *type_name

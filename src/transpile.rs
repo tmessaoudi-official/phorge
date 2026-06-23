@@ -514,7 +514,22 @@ impl Transpiler {
         None
     }
 
-    fn emit_type(ty: &Type) -> String {
+    /// Render a type-name reference in a *type position* (param/return/field type, `instanceof` RHS,
+    /// match type-pattern). M-RT S6c.3: a reference to a **decomposed** class (an ancestor of some
+    /// multi-parent class, lowered to `interface I<name>` + `trait T<name>`) emits as its interface
+    /// `I<name>` — a multi-parent subtype `implements I<name>` but does NOT `extends <name>`, so a
+    /// `<name>`-typed slot or `instanceof <name>` would reject it under PHP. Construction (`new <name>`)
+    /// and single `extends <name>` keep the concrete class (they use `php_type_ref` directly). S6 is
+    /// `package Main`-only, so a decomposed name is bare ⇒ `I<name>` needs no namespace.
+    fn type_pos_ref(&self, name: &str) -> String {
+        if self.decomposed.contains(name) {
+            format!("I{name}")
+        } else {
+            php_type_ref(name)
+        }
+    }
+
+    fn emit_type(&self, ty: &Type) -> String {
         match ty {
             Type::Named { name, .. } => match name.as_str() {
                 "int" => "int".into(),
@@ -530,7 +545,9 @@ impl Transpiler {
                 // return position, which is where a `-> never` function uses it.
                 "never" => "never".into(),
                 "List" | "Map" | "Set" => "array".into(),
-                other => php_type_ref(other), // enum / class / interface name (FQN if cross-package)
+                // enum / class / interface name (FQN if cross-package; `I<name>` if a decomposed
+                // multi-inheritance ancestor — M-RT S6c.3).
+                other => self.type_pos_ref(other),
             },
             // A union → PHP 8.0 native `A|B` (M-RT S4). Members emit via the same `emit_type`, so a
             // cross-package member would carry its FQN; dedup defensively (the checker already
@@ -538,7 +555,7 @@ impl Transpiler {
             Type::Union(members, _) => {
                 let mut parts: Vec<String> = Vec::new();
                 for m in members {
-                    let p = Self::emit_type(m);
+                    let p = self.emit_type(m);
                     if !parts.contains(&p) {
                         parts.push(p);
                     }
@@ -552,7 +569,7 @@ impl Transpiler {
             Type::Intersection(members, _) => {
                 let mut parts: Vec<String> = Vec::new();
                 for m in members {
-                    let p = Self::emit_type(m);
+                    let p = self.emit_type(m);
                     if !parts.contains(&p) {
                         parts.push(p);
                     }
@@ -569,9 +586,9 @@ impl Transpiler {
         }
     }
 
-    fn ret_hint(ret: &Option<Type>) -> String {
+    fn ret_hint(&self, ret: &Option<Type>) -> String {
         match ret {
-            Some(t) => Self::emit_type(t),
+            Some(t) => self.emit_type(t),
             None => "void".into(),
         }
     }
@@ -591,7 +608,7 @@ impl Transpiler {
         let params: Vec<String> = f
             .params
             .iter()
-            .map(|p| format!("{} ${}", Self::emit_type(&p.ty), p.name))
+            .map(|p| format!("{} ${}", self.emit_type(&p.ty), p.name))
             .collect();
         // In namespaced mode a top-level function is declared inside its `namespace` block, so emit
         // only its trailing segment (`Acme\Util\compute` ⇒ `compute`). Methods keep their name.
@@ -604,7 +621,7 @@ impl Transpiler {
             "function {}({}): {} {{",
             disp,
             params.join(", "),
-            Self::ret_hint(&f.ret)
+            self.ret_hint(&f.ret)
         ));
         self.indent += 1;
         self.push_scope();
@@ -689,7 +706,7 @@ impl Transpiler {
         } else {
             name.to_string()
         };
-        let ret = Self::ret_hint(&ovls[0].ret);
+        let ret = self.ret_hint(&ovls[0].ret);
         self.line(&format!("function {disp}(...$args): {ret} {{"));
         self.indent += 1;
         for &i in &order {
@@ -755,7 +772,7 @@ impl Transpiler {
                 let props: Vec<String> = v
                     .fields
                     .iter()
-                    .map(|p| format!("public {} ${}", Self::emit_type(&p.ty), p.name))
+                    .map(|p| format!("public {} ${}", self.emit_type(&p.ty), p.name))
                     .collect();
                 self.line(&format!(
                     "public function __construct({}) {{}}",
@@ -877,13 +894,13 @@ impl Transpiler {
                         };
                         self.line(&format!(
                             "{v} static {} ${name} = {init_php};",
-                            Self::emit_type(ty)
+                            self.emit_type(ty)
                         ));
                     } else if is_error && exception_reserved(name) {
                         // Collides with an inherited \Exception property → emit untyped.
                         self.line(&format!("{v} ${name};"));
                     } else {
-                        self.line(&format!("{v} {} ${name};", Self::emit_type(ty)));
+                        self.line(&format!("{v} {} ${name};", self.emit_type(ty)));
                     }
                 }
                 ClassMember::Constructor { params, body, .. } => {
@@ -908,11 +925,11 @@ impl Transpiler {
                             if is_cause(p) {
                                 format!("{v} ?\\Throwable ${}", p.name)
                             } else if v.is_empty() {
-                                format!("{} ${}", Self::emit_type(&p.ty), p.name)
+                                format!("{} ${}", self.emit_type(&p.ty), p.name)
                             } else if untyped {
                                 format!("{} ${}", v, p.name)
                             } else {
-                                format!("{} {} ${}", v, Self::emit_type(&p.ty), p.name)
+                                format!("{} {} ${}", v, self.emit_type(&p.ty), p.name)
                             }
                         })
                         .collect();
@@ -976,7 +993,7 @@ impl Transpiler {
                 ClassMember::Hook {
                     ty, name, get, set, ..
                 } => {
-                    let pty = Self::emit_type(ty);
+                    let pty = self.emit_type(ty);
                     self.line(&format!("public {pty} ${name} {{"));
                     self.indent += 1;
                     if let Some(g) = get {
@@ -1031,13 +1048,13 @@ impl Transpiler {
                 let params: Vec<String> = f
                     .params
                     .iter()
-                    .map(|p| format!("{} ${}", Self::emit_type(&p.ty), p.name))
+                    .map(|p| format!("{} ${}", self.emit_type(&p.ty), p.name))
                     .collect();
                 self.line(&format!(
                     "public function {}({}): {};",
                     f.name,
                     params.join(", "),
-                    Self::ret_hint(&f.ret)
+                    self.ret_hint(&f.ret)
                 ));
             }
         }
@@ -1227,13 +1244,13 @@ impl Transpiler {
             let params: Vec<String> = m
                 .params
                 .iter()
-                .map(|p| format!("{} ${}", Self::emit_type(&p.ty), p.name))
+                .map(|p| format!("{} ${}", self.emit_type(&p.ty), p.name))
                 .collect();
             self.line(&format!(
                 "public function {}({}): {};",
                 m.name,
                 params.join(", "),
-                Self::ret_hint(&m.ret)
+                self.ret_hint(&m.ret)
             ));
         }
         self.indent -= 1;
@@ -1577,7 +1594,9 @@ impl Transpiler {
             } => {
                 let v = self.emit_expr(value)?;
                 let v = Self::paren_if_compound(value, v);
-                Ok(format!("{v} instanceof {}", php_type_ref(type_name)))
+                // M-RT S6c.3: against a decomposed MI ancestor, test its interface `I<name>` — the
+                // subtype `implements I<name>` (it does not `extends <name>`).
+                Ok(format!("{v} instanceof {}", self.type_pos_ref(type_name)))
             }
             Expr::List(items, _) => {
                 let parts: Result<Vec<_>, _> = items.iter().map(|i| self.emit_expr(i)).collect();
@@ -2066,9 +2085,10 @@ impl Transpiler {
                         None => String::new(),
                     };
                     let body = self.emit_expr(&arm.body)?;
+                    // M-RT S6c.3: a match type-pattern against a decomposed MI ancestor tests `I<name>`.
+                    let tref = self.type_pos_ref(type_name);
                     self.line(&format!(
-                        "{cond_kw} ({subj} instanceof {}) {{ {bind}{} }}",
-                        php_type_ref(type_name),
+                        "{cond_kw} ({subj} instanceof {tref}) {{ {bind}{} }}",
                         yield_stmt(&target, &body)
                     ));
                     self.pop_scope();

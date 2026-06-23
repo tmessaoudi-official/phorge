@@ -669,9 +669,10 @@ fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
         class_descs,
         names,
         methods,
-        // The single shared interface table — same algorithm as the interpreter + checker, so the
-        // VM's `Op::IsInstance` against an interface is byte-identical (M-RT S2).
-        class_implements: crate::ast::class_implements(program),
+        // The single shared runtime subtype oracle (M-RT S6c.3) — parent classes AND interfaces —
+        // same algorithm as the interpreter, so the VM's `Op::IsInstance`/match/overload-dispatch
+        // against a class ancestor (not just an interface) is byte-identical.
+        class_implements: crate::ast::instanceof_table(program),
         static_inits,
         overloads,
         method_overloads,
