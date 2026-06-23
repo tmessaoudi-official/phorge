@@ -30,7 +30,7 @@ not a panic:
   uses no parent-typed binding/`instanceof`). (2) **MI field & constructor composition** (a synthesized
   orchestrating constructor across parents) — the S6b guide is field/constructor-free. (3) A class that is
   **both a multi-parent leaf and an ancestor of another multi-parent class** ("multi-of-multi") takes the
-  `implements/use` path and is not also emitted as a trait — a deep edge case outside S6's `package main`
+  `implements/use` path and is not also emitted as a trait — a deep edge case outside S6's `package Main`
   scope. (4) **`super`/`parent` is not a language construct at all** (inherited methods dispatch via
   `this.m()`), so the planned `E-MI-SUPER-AMBIGUOUS` reservation is moot until that feature lands.
 
@@ -230,12 +230,12 @@ type argument (`instanceof Box<int>` ≡ `instanceof Box`). These refinements ar
 - **Generic *interface* methods** are a non-parse — an interface method's signature is built with an
   empty type-parameter list, so a `<T>` there is never consumed. Generic methods on *classes* work.
 - **Cross-package generic *library* types** are not validated this slice — a generic class is
-  `package main`-only (the loader leaves a class type parameter unchanged and erasure removes it, so it
+  `package Main`-only (the loader leaves a class type parameter unchanged and erasure removes it, so it
   may happen to work, but it is untested). Cross-package *monomorphic* types ship (`E-PKG-TYPE` lifted).
 - **Explicit type arguments at construction** (`Box<int>(7)`) are not parsed — the type argument is
   inferred from the constructor arguments. An explicit *annotation* (`Box<int> b = Box(7)`) does work.
 - **Generic enums** (`enum Option<T>` / `enum Result<T, E>`) ship, with the same scope as generic
-  classes: `package main`-only, inference-only construction (no `Some<int>(7)` explicit-argument form —
+  classes: `package Main`-only, inference-only construction (no `Some<int>(7)` explicit-argument form —
   use an annotation, `Option<int> n = None();`), invariant, no bounds, no generic *enum methods* (enums
   have no methods). A match-bound payload is reified at the scrutinee's concrete type (`Some(n)` over an
   `Option<int>` binds `n: int`), but — like every erased generic — that payload is `mixed` to the
@@ -266,13 +266,13 @@ or simply unavailable, never a crash):
 
 - **A lambda cannot reference `this`** — rejected with `E-LAMBDA-THIS` (`phg explain E-LAMBDA-THIS`).
   Workaround: `var self = this;` before the lambda, then capture `self`.
-- **Lambdas and first-class function references are supported in `package main` (and single-file
+- **Lambdas and first-class function references are supported in `package Main` (and single-file
   programs), not yet inside library (non-`main`) packages.** The M5 loader's name-mangling pass
   rewrites *call sites*, but not a bare function reference used as a *value* nor the body of a lambda,
   so a same-package call inside a lambda body — or a bare named-fn value — declared in a dotted
   library package is not rewritten to its mangled target. In practice this is rejected cleanly
   (`E-UNKNOWN-IDENT`); avoid lambdas / function values in library packages this slice (the guide
-  example and every `package main` program are unaffected). Loader-resolving lambda bodies and
+  example and every `package Main` program are unaffected). Loader-resolving lambda bodies and
   fn-value references is a follow-up. Qualified / cross-package function *values* (passing
   `acme.util.compute` itself, vs. *calling* it) are likewise deferred — call them directly.
 - **Statement-body lambdas require an explicit `-> T`** — the return type of a block-body lambda is
@@ -439,11 +439,11 @@ closure-from-native mechanism — `NativeEval::HigherOrder` + a re-entrant VM cl
   helper without the source name/line. The *present-value* case is byte-identical; only the null-fault
   message differs (a transpile-only caveat, parallel to the range/index-OOB notes). The differential
   harness excludes fault cases by design.
-- **`package main` function names must avoid PHP built-in names (transpile target).** A top-level
-  function in `package main` transpiles to a *global* PHP function, so naming one `serialize`,
+- **`package Main` function names must avoid PHP built-in names (transpile target).** A top-level
+  function in `package Main` transpiles to a *global* PHP function, so naming one `serialize`,
   `strlen`, `header`, … collides with the PHP builtin (`Cannot redeclare function …`). The Phorge
   backends are unaffected (everything is namespaced); only the PHP round-trip fails. Library packages
-  are namespaced and immune. Pick non-builtin names for `package main` functions intended to transpile
+  are namespaced and immune. Pick non-builtin names for `package Main` functions intended to transpile
   (e.g. `serializeResponse`, not `serialize`).
 - **Externally-read fields must be `public`, not `private` (transpile target).** Phorge's
   `run`/`runvm` do not enforce field visibility, so an external read `obj.field` of a `private`
