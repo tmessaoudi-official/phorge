@@ -201,12 +201,12 @@ exactly-representable values (now in KNOWN_ISSUES; the run↔runvm spine is alwa
 chose to build the complete Go-shaped, `src/`-rooted, mandatory-packaged, strict-folder=path project
 model (design `docs/specs/2026-06-18-m5-project-model-design.md`, plan
 `docs/plans/2026-06-18-m5-modules-packages.md`). Decisions: **mandatory `package` everywhere, never
-inferred** (even `-e`/stdin); reserved **`package main;`** = runnable entry (Go model); `core` reserved;
+inferred** (even `-e`/stdin); reserved **`package Main;`** = runnable entry (Go model); `core` reserved;
 **single-file brace-namespace PHP emission** (no Composer/autoloader — chosen because PSR-4 can't
 autoload free functions, and Phorge is function-heavy); project detection = `phorge.toml` walk-up;
 git-based deps pinned + vendored for determinism. **M5 S1 COMPLETE** (single-file `package` decl + parse
 + checker `E-NO-PACKAGE`/`E-RESERVED-PACKAGE` + flat PHP unchanged → byte-identical; all 24 examples +
-every test program migrated to `package main;`; also fixed Wave-1 `README.md` drift). **M5 S2a COMPLETE**
+every test program migrated to `package Main;`; also fixed Wave-1 `README.md` drift). **M5 S2a COMPLETE**
 (`src/manifest.rs`: std-only `phorge.toml` parser → `Manifest`/`Dependency`/`Pin` + `Project::detect`
 walk-up + source-root + PSR-4 `namespace_root()`; 18 unit tests; byte-safe — unconsumed, no backend
 touched). **Manifest = Composer's *vocabulary* in an honest TOML container** (developer-chosen): `name =
@@ -249,7 +249,7 @@ subtree). `loader::load_project` merges vendored packages **exactly like first-p
 (mangle + resolve *before* any backend ⇒ run≡runvm structural; the transpiler de-mangles to
 `namespace Acme\Strutil { … }`), and is **offline-only** — vendor is consulted only when `[require]` is
 non-empty and `run`/`check`/`transpile` **never fetch** (`E-VENDOR-MISSING` when a required dep isn't
-vendored). New guards: **`E-VENDOR-MAIN`** (a vendored `package main` would collide with the entry) and
+vendored). New guards: **`E-VENDOR-MAIN`** (a vendored `package Main` would collide with the entry) and
 **`E-DUP-DEF`** (duplicate `(package,name)` after the flat merge — previously a silent `HashMap`
 overwrite since S2c). Example `examples/project/withdeps/` (consumes a vendored `acme/strutil`) ships its
 committed `vendor/` + `phorge.lock`; the project-aware harness loads it offline → byte-identical on
@@ -282,7 +282,7 @@ Response` model in **pure Phorge** — `Request`/`Response` classes + `parse_req
 deferred to S3). Two new natives (**no new `Op`** — both `Op::CallNative`): `bytes.find(bytes,bytes) ->
 int?` (CRLFCRLF boundary; `find(h,b"")`=0 per PHP `strpos`) and `text.split_once(string,string) ->
 List<string>` (robust `Name: value`; → PHP `explode($sep,$s,2)`). `examples/web/handler.phg` byte-identical
-run/runvm/**real PHP**. **Two transpile gotchas found + in KNOWN_ISSUES:** (1) `package main` fns become
+run/runvm/**real PHP**. **Two transpile gotchas found + in KNOWN_ISSUES:** (1) `package Main` fns become
 *global* PHP fns → a name like `serialize` collides with a PHP builtin (renamed `serialize_response`);
 (2) PHP enforces `private` but the Phorge backends don't → externally-read promoted fields must be
 **`public`** (or use an accessor). **W2 (static exact-match router) is next.** Also this session: **the
@@ -329,7 +329,7 @@ sorted, cycle-safe) is computed once and consumed verbatim by checker + interpre
 (`BytecodeProgram.class_implements`); subtyping threads through `Ty::assignable_with(_, _, &oracle)`
 (old `Ty::assignable` = no-subtype delegate). Transpiles to PHP `interface`/`implements`/`extends`,
 byte-identical run≡runvm≡real PHP; `examples/guide/interfaces.phg`; codes `E-IFACE-IMPL`/`-UNIMPL`/
-`-SIG`/`-CYCLE` (+ backfilled `E-INSTANCEOF-TYPE` explain). Interfaces are `package main`-only this
+`-SIG`/`-CYCLE` (+ backfilled `E-INSTANCEOF-TYPE` explain). Interfaces are `package Main`-only this
 slice (`E-PKG-TYPE`); exact signature match (no variance yet). **S3 COMPLETE (Map foundation):**
 `Map<K,V>` literals `[k => v]` + indexing `m[k]` — keys are the hashable subset (`int`/`bool`/`string`,
 else `E-MAP-KEY`), a missing key faults cleanly (`"map key not found"`, like list-OOB), insertion-ordered
@@ -362,8 +362,7 @@ first-class *value*, an empty `[]` into a generic param, bounds, variance.
 **STDLIB NAMESPACE RENAME COMPLETE** (`c4479d6`, namespace reshape part 1): the stdlib is now PascalCase
 — `Core.Console`/`Core.Math`/`Core.Text`/`Core.File`/`Core.Bytes`/`Core.Html` (fn names stay camelCase);
 `import Core.Console;` + `Console.println(...)`; `Core` reserved. E-SHADOW-IMPORT now only bites a
-lowercase **user**-package leaf. Codemod `tools/core_rename*.py` retained. *Pending broader reshape:*
-`package main`→`package Main`, user-package casing (E-PKG-CASE), manifest `name`→`module`, lift E-PKG-TYPE.
+lowercase **user**-package leaf. Codemod `tools/core_rename*.py` retained. **Broader reshape COMPLETE 2026-06-23** (`15a5745`/`e963abb`/`0aa5a90`): `package Main`→`package Main`, user-package PascalCase + `E-PKG-CASE` (package decl + import path + `as` alias segments; reuses is_pascal/to_pascal; `phg explain E-PKG-CASE`), manifest `module` (earlier), E-PKG-TYPE lifted (w/ generics-all). Examples/projects/vendored-dep/fixtures migrated; distributable coordinates (manifest `module`, `[require]` keys, vendor dir, lockfile `name`) stay lowercase. Output-preserving → run≡runvm≡PHP-8.4 byte-identical.
 
 **Developer decisions (2026-06-20, post-S7a):** generics reach = **ALL** (methods + generic types/classes
 too); `core.list` map/filter/reduce = **higher-order native** (`NativeEval::HigherOrder` + backend
@@ -427,7 +426,7 @@ runtime type argument (`instanceof Box<int>` ≡ `instanceof Box`). **Zero backe
 `resolve_cty`/`emit_type` already key a class on its name and drop args, so the byte-identity spine is
 safe by construction (front-end-only). **No new `Op`, no `Value` change.** `examples/guide/generic-types.phg`
 byte-identical run≡runvm≡**real PHP**; 446 lib + differential PHP oracle + 53 integration green.
-New diagnostic reuse `E-GENERIC-PARAM` (method type param shadowing a class one). Scope: `package main`
+New diagnostic reuse `E-GENERIC-PARAM` (method type param shadowing a class one). Scope: `package Main`
 only; inference-only construction (no `Box<int>(7)`); invariant, no bounds, no generic enums. **Verified
 limitation (KNOWN_ISSUES):** a generic-typed *result* erases to `mixed` (`CTy::Other`), so it is not a
 specialized arithmetic operand — `id(7) + 1` / `box.get() + 1` runs on the interpreter but the VM rejects
@@ -451,7 +450,7 @@ disambiguates a type pattern as two idents (`Circle c`); a lone `Circle =>` stay
 (footgun preserved). `expect_prim` relaxed so literal patterns match a primitive-union scrutinee
 (`match code { 0 => …, "ok" => … }`). Transpiles to PHP 8.0 `A|B`. Byte-identical run≡runvm≡**real PHP**
 (`examples/guide/unions.phg`); 461 lib + differential PHP oracle + 53 integration green. New codes
-`E-UNION-MEMBER`/`E-UNION-ARITY`/`E-MATCH-TYPE` (+ `phg explain`). Scope: `package main` only; union
+`E-UNION-MEMBER`/`E-UNION-ARITY`/`E-MATCH-TYPE` (+ `phg explain`). Scope: `package Main` only; union
 members are classes/interfaces/primitives (enum/optional/function members rejected). **Deferred**
 (KNOWN_ISSUES): enum-in-union, intersection/negative-flow narrowing, common-member access on a raw
 union, whole-union optional `(A|B)?`, type pattern nested in a variant payload.
@@ -475,7 +474,7 @@ one genuinely new mechanism) searches every member (`check_method_call`/`check_m
 intersection *operand*. Transpiles to PHP 8.1 native `A&B`. Byte-identical run≡runvm≡**real PHP**
 (`examples/guide/intersections.phg`); 474 lib + differential PHP oracle + 53 integration green. New
 codes `E-INTERSECT-MEMBER`/`-MULTI-CLASS`/`-ARITY`/`-SIG`/`-NO-MEMBER` (+ `phg explain`). Scope:
-`package main` plus cross-package interface members (for free). **Deferred** (KNOWN_ISSUES): `instanceof`
+`package Main` plus cross-package interface members (for free). **Deferred** (KNOWN_ISSUES): `instanceof`
 with an intersection *right side*, optional/function members, whole-intersection optional `(A & B)?`, no
 match-over-intersection (not a sum type).
 
@@ -507,7 +506,7 @@ a new `enum_subst` recovers it at every `match` (so `Some(n)` over `Option<int>`
 `erase_generics` gains an `Item::Enum` arm rewriting a `<T>` payload to `Type::Erased` (PHP `mixed`) +
 clearing the param list before any backend. **No new `Op`, no `Value` change** (`Ty::Named` args are
 checker-only, params erased pre-backend ⇒ byte-identity safe by construction). Scope mirrors generic
-classes: `package main`-only, inference-only construction (annotate to fix a non-inferring variant —
+classes: `package Main`-only, inference-only construction (annotate to fix a non-inferring variant —
 `Option<int> n = None();`), invariant, no bounds, no generic enum methods. Reuses `E-GENERIC-PARAM`;
 `examples/guide/generic-enums.phg` byte-identical run≡runvm≡**real PHP 8.6**; 591 lib + PHP-oracle
 differential + integration green. **Verified gap surfaced (KNOWN_ISSUES, pre-existing & shared with
