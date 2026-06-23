@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Phorge Playground</title>
+  <meta name="description" content="Run Phorge in your browser — interpreter, bytecode VM, and transpiled-PHP, all three live and byte-identical." />
+  <link rel="stylesheet" href="./style.css" />
+  <!-- Example programs (generated from examples/guide/*.phg by gen_examples.py). -->
+  <script src="./examples.js" defer></script>
+</head>
+<body>
+  <header>
+    <h1>Phorge Playground</h1>
+    <div class="toolbar">
+      <label>Example
+        <select id="examples" title="Load a guide example"></select>
+      </label>
+      <button id="run" class="primary" title="Run (Ctrl/Cmd+Enter)">▶ Run</button>
+      <label class="toggle" title="Also execute the transpiled PHP in-browser (php-wasm, PHP 8.4)">
+        <input type="checkbox" id="php-toggle" checked /> Run PHP
+      </label>
+      <button id="share" title="Copy a shareable link (source encoded in the URL)">🔗 Share</button>
+      <span id="version" class="version"></span>
+    </div>
+  </header>
+
+  <main>
+    <section id="editor-pane" aria-label="Source editor"></section>
+
+    <section id="output-pane">
+      <div id="badge" class="badge neutral">Ready — press Run.</div>
+      <nav class="tabs" role="tablist">
+        <button class="tab active" data-pane="run" role="tab">run</button>
+        <button class="tab" data-pane="runvm" role="tab">runvm</button>
+        <button class="tab" data-pane="php" role="tab">PHP output</button>
+        <button class="tab" data-pane="phpsrc" role="tab">PHP source</button>
+        <button class="tab" data-pane="diag" role="tab">diagnostics <span id="diag-count"></span></button>
+      </nav>
+      <pre class="pane active" id="pane-run" role="tabpanel"></pre>
+      <pre class="pane" id="pane-runvm" role="tabpanel"></pre>
+      <pre class="pane" id="pane-php" role="tabpanel"></pre>
+      <pre class="pane" id="pane-phpsrc" role="tabpanel"></pre>
+      <div class="pane" id="pane-diag" role="tabpanel"></div>
+    </section>
+  </main>
+
+  <div id="explain" class="explain hidden" role="dialog" aria-label="Diagnostic explanation">
+    <div class="explain-head"><span id="explain-code"></span><button id="explain-close" aria-label="Close">×</button></div>
+    <pre id="explain-body"></pre>
+  </div>
+
+  <footer>
+    <span>Phorge runs entirely in your browser — interpreter + bytecode VM (Rust → WASM) and the
+      transpiled PHP (php-wasm). Nothing is sent to a server.</span>
+    <a href="https://github.com/tmessaoudi-official/phorge" target="_blank" rel="noopener">GitHub</a>
+  </footer>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

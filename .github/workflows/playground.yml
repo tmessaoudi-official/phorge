@@ -1,0 +1,75 @@
+# Build the WASM playground and deploy it to GitHub Pages on every push to master, so the live site
+# always runs the latest `phg`. Additive to ci.yml (tests + PHP oracle + cross-build), which is the
+# correctness gate; this workflow only ships the playground.
+name: playground
+
+on:
+  push:
+    branches: [master]
+    # Only rebuild when something the playground depends on changes.
+    paths:
+      - "src/**"
+      - "playground/**"
+      - "examples/guide/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".github/workflows/playground.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; cancel an in-progress run when a newer commit lands.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # rust-toolchain.toml pins the channel and declares the wasm32 target; rustup honours both.
+      - name: Add wasm target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      # MAX_CALL_DEPTH is 4096 (src/limits.rs); the default 1 MiB wasm stack would overflow on deep
+      # recursion, so bump the shadow stack. (The native path uses a 256 MiB thread for the same reason.)
+      - name: Build wasm
+        run: wasm-pack build playground --target web --release --out-dir web/pkg
+        env:
+          RUSTFLAGS: "-C link-arg=-zstack-size=33554432"
+
+      - name: Generate examples
+        run: python3 playground/web/gen_examples.py
+
+      - name: Assemble dist/
+        run: |
+          mkdir -p dist
+          cp -r playground/web/. dist/
+          # The python generator and its pycache are not web assets.
+          rm -f dist/gen_examples.py
+          rm -rf dist/__pycache__
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

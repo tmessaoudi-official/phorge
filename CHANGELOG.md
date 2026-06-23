@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — WASM playground (DX)
+
+A free, zero-backend browser playground (`playground/`), auto-deployed to GitHub Pages on every push
+to `master` so the live site always runs the latest `phg`. Spec
+`docs/specs/2026-06-24-playground-wasm-design.md`, plan `docs/plans/2026-06-24-playground-wasm.plan.md`.
+
+- New `phorge-playground` **workspace member** (cdylib): thin `#[wasm_bindgen]` exports over plain,
+  native-testable `*_json` wrappers (`check`/`run`/`runvm`/`transpile`/`explain`) that bypass
+  `on_deep_stack` (no threads on wasm) and call the public pipeline directly. The core `phorge` crate
+  is unchanged — still dependency-free + `#![forbid(unsafe_code)]`; `wasm-bindgen` is a wasm32-only dep
+  confined to the member. New `cli::parse_program` seam for non-aborting diagnostics. 9 native tests.
+- Browser frontend (CodeMirror 6 + a Web Worker with a runaway-program timeout): all three backends
+  live — `run`, `runvm`, transpiled-PHP **source**, and that PHP **executed in-browser** (php-wasm,
+  PHP 8.4) — with a 3-way agreement badge / diff-on-mismatch. Examples picker (from `examples/guide/`),
+  shareable permalink (source in the URL hash, browser-native compression), and clickable `phg explain`
+  diagnostics.
+- `.github/workflows/playground.yml` builds the wasm + deploys to Pages (additive to `ci.yml`).
+
 ### Added — Pattern cluster (M-RT S5) + primitives sweep
 
 Post-M-RT language-ergonomics, front-end-only (no new `Op`, no `Value` change), byte-identical
