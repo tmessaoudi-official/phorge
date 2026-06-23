@@ -17,6 +17,15 @@ fn list_natives_eval_and_emit() {
         }
         other => panic!("reverse returned {other:?}"),
     }
+    // length: generic over the element type — the count of any list (byte-identical to PHP count).
+    assert!(matches!(
+        list_length(std::slice::from_ref(&nums), &mut o),
+        Ok(Value::Int(3))
+    ));
+    assert!(matches!(
+        list_length(&[Value::List(std::rc::Rc::new(vec![]))], &mut o),
+        Ok(Value::Int(0))
+    ));
     // sum: concrete List<int> -> int.
     assert!(matches!(
         list_sum(std::slice::from_ref(&nums), &mut o),
@@ -40,6 +49,10 @@ fn list_natives_eval_and_emit() {
     assert_eq!(
         (registry()[index_of("Core.List", "reverse").unwrap()].php)(&["$xs".into()]),
         "array_reverse($xs)"
+    );
+    assert_eq!(
+        (registry()[index_of("Core.List", "length").unwrap()].php)(&["$xs".into()]),
+        "count($xs)"
     );
     assert_eq!(
         (registry()[index_of("Core.List", "sum").unwrap()].php)(&["$xs".into()]),

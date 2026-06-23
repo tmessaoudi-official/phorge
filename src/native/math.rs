@@ -48,6 +48,15 @@ fn math_max(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("Math.max expects (int, int)".into()),
     }
 }
+fn math_round(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        // PHP `round()` defaults to round-half-away-from-zero, matching Rust `f64::round`; the `(int)`
+        // cast then truncates the already-integral result. Saturating `as i64` keeps EV-7 (no panic on
+        // a huge magnitude); examples use small exact-representable values to stay byte-identical.
+        [Value::Float(x)] => Ok(Value::Int(x.round() as i64)),
+        _ => Err("Math.round expects (float)".into()),
+    }
+}
 
 /// The `Core.Math` registry entries (M3 Track B Wave 2).
 pub(crate) fn math_natives() -> Vec<NativeFn> {
@@ -107,6 +116,14 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             eval: NativeEval::Pure(math_max),
             php: |a| format!("max({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.Math",
+            name: "round",
+            params: vec![Ty::Float],
+            ret: Ty::Int,
+            eval: NativeEval::Pure(math_round),
+            php: |a| format!("(int)round({})", parg(a, 0)),
         },
     ]
 }

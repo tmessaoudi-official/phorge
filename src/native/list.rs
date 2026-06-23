@@ -12,6 +12,13 @@ fn list_reverse(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("List.reverse expects (List<T>)".into()),
     }
 }
+fn list_length(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        // Generic over the element type — the count of any list, byte-identical to PHP `count`.
+        [Value::List(xs)] => Ok(Value::Int(xs.len() as i64)),
+        _ => Err("List.length expects (List<T>)".into()),
+    }
+}
 fn list_sum(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::List(xs)] => {
@@ -111,6 +118,14 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(list_reverse),
             // array_reverse re-indexes a list (sequential keys) — byte-identical to the Rust Vec.
             php: |a| format!("array_reverse({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "length",
+            params: vec![Ty::List(Box::new(t()))],
+            ret: Ty::Int,
+            eval: NativeEval::Pure(list_length),
+            php: |a| format!("count({})", parg(a, 0)),
         },
         NativeFn {
             module: "Core.List",

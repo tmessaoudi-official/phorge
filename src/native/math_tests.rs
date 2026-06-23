@@ -36,4 +36,21 @@ fn math_natives_eval_and_emit() {
         (registry()[index_of("Core.Math", "min").unwrap()].php)(&["$a".into(), "$b".into()]),
         "min($a, $b)"
     );
+    // round → int, half-away-from-zero (matches PHP's default mode), then truncating cast.
+    assert!(matches!(
+        math_round(&[Value::Float(2.5)], &mut out),
+        Ok(Value::Int(3))
+    ));
+    assert!(matches!(
+        math_round(&[Value::Float(2.4)], &mut out),
+        Ok(Value::Int(2))
+    ));
+    assert!(matches!(
+        math_round(&[Value::Float(-2.5)], &mut out),
+        Ok(Value::Int(-3))
+    ));
+    assert_eq!(
+        (registry()[index_of("Core.Math", "round").unwrap()].php)(&["$x".into()]),
+        "(int)round($x)"
+    );
 }

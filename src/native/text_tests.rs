@@ -76,3 +76,52 @@ fn text_natives_eval_and_emit() {
         index_of("Core.Text", "len")
     );
 }
+
+#[test]
+fn text_p3_byte_safe_natives() {
+    let mut o = String::new();
+    // startsWith / endsWith — byte-level prefix/suffix tests (PHP str_starts_with/str_ends_with).
+    assert!(matches!(
+        text_starts_with(
+            &[Value::Str("hello".into()), Value::Str("he".into())],
+            &mut o
+        ),
+        Ok(Value::Bool(true))
+    ));
+    assert!(matches!(
+        text_starts_with(
+            &[Value::Str("hello".into()), Value::Str("lo".into())],
+            &mut o
+        ),
+        Ok(Value::Bool(false))
+    ));
+    assert!(matches!(
+        text_ends_with(
+            &[Value::Str("hello".into()), Value::Str("lo".into())],
+            &mut o
+        ),
+        Ok(Value::Bool(true))
+    ));
+    // repeat — n copies; n == 0 is the empty string.
+    assert!(
+        matches!(text_repeat(&[Value::Str("ab".into()), Value::Int(3)], &mut o), Ok(Value::Str(s)) if s == "ababab")
+    );
+    assert!(
+        matches!(text_repeat(&[Value::Str("ab".into()), Value::Int(0)], &mut o), Ok(Value::Str(s)) if s.is_empty())
+    );
+    // EV-7: a negative count faults cleanly (never panics / over-allocates).
+    assert!(text_repeat(&[Value::Str("ab".into()), Value::Int(-1)], &mut o).is_err());
+    // PHP erasure to the same-named builtins.
+    assert_eq!(
+        (registry()[index_of("Core.Text", "startsWith").unwrap()].php)(&["$s".into(), "$p".into()]),
+        "str_starts_with($s, $p)"
+    );
+    assert_eq!(
+        (registry()[index_of("Core.Text", "endsWith").unwrap()].php)(&["$s".into(), "$p".into()]),
+        "str_ends_with($s, $p)"
+    );
+    assert_eq!(
+        (registry()[index_of("Core.Text", "repeat").unwrap()].php)(&["$s".into(), "$n".into()]),
+        "str_repeat($s, $n)"
+    );
+}

@@ -18,7 +18,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/operators.phg` | arithmetic, comparison, logical, unary operators; `bool` |
 | `guide/control-flow.phg` | `if`/`else`, `for…in`, recursion, mutual recursion |
 | `guide/functions.phg` | functions: typed params, return types, a no-return function, composition, a `List<int>`-returning function |
-| `guide/collections.phg` | `List<T>` literals, nested `List<List<int>>`, nested `for`, list of instances |
+| `guide/collections.phg` | `List<T>` literals, nested `List<List<int>>`, nested `for`, list of instances, `List.length` |
 | `guide/classes.phg` | constructor promotion, methods, `this`, composition, a method call on a field |
 | `guide/enums-match.phg` | payload + zero-payload variants; literal, binding, and variant patterns |
 | `guide/match-expr.phg` | `match` in expression position (operand / call argument) + literal patterns; transpiles to an IIFE (M11) |
@@ -59,9 +59,9 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/result.phg` | error-as-value `Result<T, E>` + the **`?` propagation operator** (in a let-initializer: unwrap `Ok` or early-return `Err`); the unchecked-fault tier — `panic`/`todo`/`unreachable` (`never`-typed) and `assert(cond[, "msg"])` — shown via a passing `assert` (faults can't be runnable examples) (M-faults Slice 2a) |
 | `guide/errors.phg` | **checked exceptions** — `throws A \| B` declarations, `throw`, `try`/multiple `catch (X e)`/union `catch (A \| B e)`/`finally`, and `?`-throws propagation (a throwing call's exceptions flow to the enclosing `throws`); a thrown type implements the built-in `Error` marker → PHP class `extends \Exception`; native unwinding on both backends (3 new `Op`s: `Throw`/`PushHandler`/`PopHandler`), transpiles to PHP `try`/`catch`/`finally` (M-faults Slice 2b) |
 | `guide/cause-chain.phg` | **exception cause chains** — a conventional `cause` field of type `Error?` on an `Error` subtype preserves the lower-level error that triggered a higher-level one; it is routed into PHP's native exception chain (`parent::__construct($message, 0, $cause)` → `getPrevious()`), so the transpiled PHP reports an idiomatic "caused by" while the Phorge backends read it back as a plain field (M-faults Slice 2c) |
-| `guide/math.phg` | the `Core.Math` stdlib module — `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` (M3 Track B Wave 2) |
+| `guide/math.phg` | the `Core.Math` stdlib module — `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max`/`round` (M3 Track B Wave 2; `round` added P3.2) |
 | `guide/floats.phg` | `float` stringification — shortest-round-trip, always-positional, byte-identical across `run`/`runvm`/PHP for every finite magnitude (irrational, large, small) via the `__phorge_float` transpile helper |
-| `guide/text.phg` | the `Core.Text` stdlib module — `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace` (M3 Track B Wave 2) |
+| `guide/text.phg` | the `Core.Text` stdlib module — `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace`/`startsWith`/`endsWith`/`repeat` (M3 Track B Wave 2; last three added P3.2) |
 | `guide/file.phg` | the `Core.File` stdlib module — `read` (→ `string?`), `exists`; reads a committed fixture, composes with S2 `??` / if-let (M3 Track B Wave 2) |
 | `guide/bytes.phg` | the `bytes` type + `b"…"` literals (`\xHH`) + `Core.Bytes` interop — `fromString`/`toString` (→ `string?`)/`len`/`concat`/`slice` (M6 W0) |
 | `guide/html.phg` | `Core.Html` — the escape **kernel** (`text`/`raw`/`render`), the typed element **builders** (`el`/`voidEl`/`attr`/`boolAttr`/`concat`), **named per-tag helpers** (`div`/`p`/`a`/`ul`/`li`/`br`/…), and the **`html"<h1>{name}</h1>"` literal sugar** (holes escape by type unless already `Html`); `Html`/`Attr` are distinct from `string`, XSS-safe by construction (Core.Html Waves 1–3) |
@@ -105,9 +105,9 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | error model: `Result<T,E>` + `?` propagation, fault intrinsics (`panic`/`todo`/`unreachable`/`assert`) | `guide/result` |
 | `var` local type inference, `type` aliases | `guide/inference` |
 | `Console.println(string)` (after `import Core.Console;`) | every example |
-| `Core.Math` stdlib: `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max` | `guide/math` |
+| `Core.Math` stdlib: `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max`/`round` | `guide/math` |
 | `float` shortest-round-trip rendering, byte-identical across backends + PHP | `guide/floats` |
-| `Core.Text` stdlib: `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace` | `guide/text` |
+| `Core.Text` stdlib: `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace`/`startsWith`/`endsWith`/`repeat` | `guide/text` |
 | `Core.File` stdlib: `read` (→ `string?`), `exists` (fixture-gated) | `guide/file` |
 | `Core.Html` kernel (`text`/`raw`/`render`) + builders (`el`/`voidEl`/`attr`/`boolAttr`/`concat`) + named per-tag helpers (`div`/`p`/`a`/`ul`/`li`/`br`/…) + `html"…"` literal sugar (type-directed hole escaping); `Html`/`Attr` ≠ `string` (XSS-safe by construction) | `guide/html` |
 | `Core.Bytes`: `find` (→ `int?`); `Core.Text`: `splitOnce` (→ `List<string>`) | `web/handler` |

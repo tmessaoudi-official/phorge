@@ -74,6 +74,13 @@
 > `Text.indexOf`/`substring` (optional/bounds), `List.sort`/`contains`/`first`/`last`/`slice` (need
 > generic ordering/equality + optional returns) — these want the optional-return + generic-ordering
 > design M4 will establish, not ad-hoc natives. **NEXT: P3.2 → S5.2 → S5.3(+if-let guards).**
+> [2026-06-23] PROGRESS: **P3.2 byte-safe stdlib subset SHIPPED** — `Text.startsWith`/`endsWith`/`repeat`
+> (→ `str_starts_with`/`str_ends_with`/`str_repeat`), `Math.round`→int (→ `(int)round`, half-away-from-zero
+> matching PHP's default mode), `List.length` generic (→ `count`). All five are additive registry entries
+> (no plumbing change — the four-backend native path was already generic); `Text.repeat` faults cleanly on
+> a negative count (EV-7). Examples `text.phg`/`math.phg`/`collections.phg` extended + README coverage rows;
+> bool results rendered via expression-`if` (PHP echoes a bool as `1`/`""`, not `true`/`false`). 835 tests
+> green, byte-identical run≡runvm≡real PHP 8.4. **NEXT: S5.2 struct/nested destructuring → S5.3 (+if-let).**
 
 ## Formal Plan
 

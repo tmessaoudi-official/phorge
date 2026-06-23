@@ -86,6 +86,31 @@ fn text_replace(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("Text.replace expects (string, string, string)".into()),
     }
 }
+fn text_starts_with(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s), Value::Str(pre)] => Ok(Value::Bool(s.starts_with(pre.as_str()))),
+        _ => Err("Text.startsWith expects (string, string)".into()),
+    }
+}
+fn text_ends_with(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s), Value::Str(suf)] => Ok(Value::Bool(s.ends_with(suf.as_str()))),
+        _ => Err("Text.endsWith expects (string, string)".into()),
+    }
+}
+fn text_repeat(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        // PHP `str_repeat` requires count >= 0 (a `ValueError` otherwise); a negative count faults
+        // cleanly here (EV-7 — never panic; `n as usize` on a negative i64 would be a huge alloc).
+        [Value::Str(s), Value::Int(n)] => {
+            if *n < 0 {
+                return Err("Text.repeat count must be >= 0".into());
+            }
+            Ok(Value::Str(s.repeat(*n as usize)))
+        }
+        _ => Err("Text.repeat expects (string, int)".into()),
+    }
+}
 
 /// The `Core.Text` registry entries (M3 Track B Wave 2). NOTE the PHP arg order: `explode`/`implode`
 /// take the separator first, and `str_replace` is `(search, replace, subject)` — the `php` closures
@@ -175,6 +200,30 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
                     parg(a, 0)
                 )
             },
+        },
+        NativeFn {
+            module: "Core.Text",
+            name: "startsWith",
+            params: vec![s(), s()],
+            ret: Ty::Bool,
+            eval: NativeEval::Pure(text_starts_with),
+            php: |a| format!("str_starts_with({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.Text",
+            name: "endsWith",
+            params: vec![s(), s()],
+            ret: Ty::Bool,
+            eval: NativeEval::Pure(text_ends_with),
+            php: |a| format!("str_ends_with({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.Text",
+            name: "repeat",
+            params: vec![s(), Ty::Int],
+            ret: Ty::String,
+            eval: NativeEval::Pure(text_repeat),
+            php: |a| format!("str_repeat({}, {})", parg(a, 0), parg(a, 1)),
         },
     ]
 }

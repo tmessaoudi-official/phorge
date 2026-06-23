@@ -21,4 +21,9 @@ function main() {
     int smaller = Math.min(3, 8);
     int larger = Math.max(3, 8);
     Console.println("abs(-7) = {magnitude}, min(3,8) = {smaller}, max(3,8) = {larger}");
+
+    // round → int, half-away-from-zero (PHP's default mode), then a truncating cast.
+    int near = Math.round(2.5);
+    int far = Math.round(-2.5);
+    Console.println("round(2.5) = {near}, round(-2.5) = {far}");
 }

@@ -29,4 +29,11 @@ function main() {
 
     string swapped = Text.replace(greeting, "Phorge", "World");
     Console.println("replaced = {swapped}");
+
+    // P3.2 byte-safe subset: prefix/suffix tests (→ str_starts_with/str_ends_with) and repeat
+    // (→ str_repeat). Bool results render via expression-`if` (PHP echoes a bool as 1/"").
+    string sw = if (Text.startsWith(greeting, "Hello")) { "yes" } else { "no" };
+    string ew = if (Text.endsWith(greeting, "Phorge")) { "yes" } else { "no" };
+    string bar = Text.repeat("=", 5);
+    Console.println("startsWith 'Hello' = {sw}, endsWith 'Phorge' = {ew}, bar = {bar}");
 }
