@@ -51,6 +51,18 @@
 > synthetic-local desugar, disproportionate to its marginal value now that match-arm guards (the
 > headline) are done. Recorded in KNOWN_ISSUES; can land later as its own small slice.
 
+> [2026-06-23] AGREED (primitives sweep + re-sequence): a primitives-coverage sweep (bidirectional,
+> inline) found Tier-1 byte-identical gaps the big feature-audit under-weighted. Developer asked for the
+> recommended order; locked sequence (interleaved before the cluster's S5.2): **(P1) number literals
+> `0x`/`0b`/`0o`/`1_000`/`1e9` → (P2) bitwise `& | ^ ~ << >>` + `**` → (P3) `Console.print` +
+> `Text`/`Math`/`List` breadth (incl. `parseInt`) → (S5.2) struct/nested destructuring → (S5.3)
+> flow-narrowing engine, with the deferred if-let `when` guards FOLDED IN here** (both live in the
+> `Stmt::If` arm — doing them together makes the ~18-site change cheap). Rationale: bank the cheap,
+> high-certainty, dependency-free primitives first (they answer the developer's "are we covered?"
+> concern); the cluster loses nothing by waiting. Bitwise design notes: `&`/`|` are expr-context vs
+> type-context (intersection/union); `<<` is a new token; `>>` is two adjacent `Gt` in expr position
+> (NEVER a lexer token — protects nested generics `List<List<int>>`). Gap map to be appended to the SSOT.
+
 ## Formal Plan
 
 > **For agentic workers:** implement task-by-task. Each task is independently testable and ends with a

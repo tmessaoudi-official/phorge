@@ -57,18 +57,87 @@ impl<'a> Lexer<'a> {
     }
 
     fn scan_number(&mut self, start: usize, line: u32, col: u32) -> Result<Token, Diagnostic> {
-        while matches!(self.peek(), Some(b) if b.is_ascii_digit()) {
+        // Base-prefixed integers `0x` / `0b` / `0o` (Rust-style; a bare leading `0` stays decimal —
+        // implicit octal is a PHP footgun we deliberately drop). Underscore separators are allowed.
+        if self.peek() == Some(b'0') {
+            if let Some(radix) = match self.src.get(self.pos + 1) {
+                Some(b'x' | b'X') => Some(16u32),
+                Some(b'b' | b'B') => Some(2),
+                Some(b'o' | b'O') => Some(8),
+                _ => None,
+            } {
+                self.bump();
+                self.bump(); // consume the `0x` / `0b` / `0o` prefix
+                let mut digits = String::new();
+                while let Some(c) = self.peek() {
+                    if c == b'_' {
+                        self.bump();
+                    } else if (c as char).is_digit(radix) {
+                        digits.push(c as char);
+                        self.bump();
+                    } else {
+                        break;
+                    }
+                }
+                if digits.is_empty() {
+                    return Err(Diagnostic::new(
+                        Stage::Lex,
+                        "expected a digit after the numeric base prefix",
+                        line,
+                        col,
+                    ));
+                }
+                let i = i64::from_str_radix(&digits, radix).map_err(|_| {
+                    Diagnostic::new(Stage::Lex, "integer literal out of range", line, col)
+                })?;
+                return Ok(Token {
+                    kind: TokenKind::Int(i),
+                    span: Span {
+                        start,
+                        len: self.pos - start,
+                        line,
+                        col,
+                    },
+                });
+            }
+        }
+        // Decimal — digits with optional `_` separators, optional fraction, optional exponent.
+        while matches!(self.peek(), Some(b) if b.is_ascii_digit() || b == b'_') {
             self.bump();
         }
         let mut is_float = false;
         if self.peek() == Some(b'.') && matches!(self.peek2(), Some(d) if d.is_ascii_digit()) {
             is_float = true;
             self.bump(); // consume '.'
-            while matches!(self.peek(), Some(b) if b.is_ascii_digit()) {
+            while matches!(self.peek(), Some(b) if b.is_ascii_digit() || b == b'_') {
                 self.bump();
             }
         }
-        let text = std::str::from_utf8(&self.src[start..self.pos]).unwrap();
+        // Exponent `e`/`E`, only when followed by an optional sign and at least one digit (so `3em`
+        // is `3` then the identifier `em`, not a malformed exponent).
+        if matches!(self.peek(), Some(b'e' | b'E')) {
+            let exp_ok = match self.src.get(self.pos + 1) {
+                Some(d) if d.is_ascii_digit() => true,
+                Some(b'+' | b'-') => {
+                    matches!(self.src.get(self.pos + 2), Some(d) if d.is_ascii_digit())
+                }
+                _ => false,
+            };
+            if exp_ok {
+                is_float = true;
+                self.bump(); // 'e'
+                if matches!(self.peek(), Some(b'+' | b'-')) {
+                    self.bump();
+                }
+                while matches!(self.peek(), Some(b) if b.is_ascii_digit() || b == b'_') {
+                    self.bump();
+                }
+            }
+        }
+        let raw = std::str::from_utf8(&self.src[start..self.pos]).unwrap();
+        // Strip `_` separators before parsing; the literal's value (not its surface form) is what
+        // reaches the AST, so every base/format collapses to the same Int/Float — byte-identical.
+        let text: String = raw.chars().filter(|c| *c != '_').collect();
         let kind = if is_float {
             let f: f64 = text.parse().map_err(|_| {
                 Diagnostic::new(Stage::Lex, "float literal out of range", line, col)

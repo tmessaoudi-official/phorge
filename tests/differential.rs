@@ -2302,3 +2302,23 @@ function main() {
         "match_arm_guards_union",
     );
 }
+
+/// Primitives sweep P1 — number-literal formats (hex / binary / octal / underscore separators). The
+/// literal's *value* (not its surface form) reaches the AST, so every base collapses to the same
+/// integer and stays byte-identical across backends + PHP; the result is also a real arithmetic operand.
+#[test]
+fn number_literal_formats_byte_identical() {
+    agree_out_php(
+        "import Core.Console;
+function main() {
+    int mask = 0xFF;
+    int flags = 0b1010;
+    int perms = 0o17;
+    int big = 1_000_000;
+    Console.println(\"{mask} {flags} {perms} {big}\");
+    Console.println(\"{mask + flags}\");
+}",
+        "255 10 15 1000000\n265\n",
+        "number_literal_formats",
+    );
+}

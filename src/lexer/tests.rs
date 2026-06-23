@@ -104,6 +104,39 @@ fn leading_zero_int_collapses() {
 }
 
 #[test]
+fn number_literal_formats() {
+    // Base prefixes (Rust-style; a leading `0` is NOT octal — that PHP footgun is dropped).
+    assert_eq!(kinds("0xFF"), vec![TokenKind::Int(255), TokenKind::Eof]);
+    assert_eq!(kinds("0xff"), vec![TokenKind::Int(255), TokenKind::Eof]);
+    assert_eq!(kinds("0b1010"), vec![TokenKind::Int(10), TokenKind::Eof]);
+    assert_eq!(kinds("0o17"), vec![TokenKind::Int(15), TokenKind::Eof]);
+    // Underscore digit separators (int and float).
+    assert_eq!(
+        kinds("1_000_000"),
+        vec![TokenKind::Int(1_000_000), TokenKind::Eof]
+    );
+    assert_eq!(
+        kinds("1_000.500_5"),
+        vec![TokenKind::Float(1000.5005), TokenKind::Eof]
+    );
+    // Scientific notation → float.
+    assert_eq!(kinds("1e3"), vec![TokenKind::Float(1000.0), TokenKind::Eof]);
+    assert_eq!(
+        kinds("2.5e-2"),
+        vec![TokenKind::Float(0.025), TokenKind::Eof]
+    );
+    // `e` not followed by a (signed) digit is not an exponent: `3em` = Int(3) then ident `em`.
+    assert_eq!(
+        kinds("3em"),
+        vec![
+            TokenKind::Int(3),
+            TokenKind::Ident("em".into()),
+            TokenKind::Eof
+        ]
+    );
+}
+
+#[test]
 fn integer_overflow_is_error_not_panic() {
     // 26-digit literal exceeds i64::MAX; must yield Diagnostic, never panic.
     let err = lex("99999999999999999999999999").unwrap_err();
@@ -114,8 +147,8 @@ fn integer_overflow_is_error_not_panic() {
 
 #[test]
 fn float_overflow_is_error_not_panic() {
-    // The lexer's float grammar is digits '.' digits (no exponent), so we use a
-    // literal whose integer part exceeds f64::MAX (~1.8e308) to force inf.
+    // A literal whose integer part alone exceeds f64::MAX (~1.8e308) overflows to inf, which the
+    // lexer rejects as out-of-range (rather than panicking or yielding a non-finite value).
     let huge = format!("{}.0", "9".repeat(320));
     let err = lex(&huge).unwrap_err();
     assert!(err.message.contains("out of range"), "got: {}", err.message);
