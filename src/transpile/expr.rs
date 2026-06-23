@@ -15,6 +15,7 @@ impl Transpiler {
                 let sym = match op {
                     UnaryOp::Neg => "-",
                     UnaryOp::Not => "!",
+                    UnaryOp::BitNot => "~",
                 };
                 // Wrap a compound operand so the unary binds only to it (P0-2 — `-(a + b)`, `!(a && b)`).
                 let inner = Self::paren_if_compound(expr, inner);
@@ -348,6 +349,13 @@ impl Transpiler {
             Ge => ">=",
             And => "&&",
             Or => "||",
+            // Bitwise (primitives P2) — PHP's integer-native operators match the value kernels 1:1
+            // (no runtime helper needed). Compound operands are parenthesized by the caller.
+            BitAnd => "&",
+            BitOr => "|",
+            BitXor => "^",
+            Shl => "<<",
+            Shr => ">>",
             // `??` is parenthesized at the call site, so it never reaches `binop()`.
             Coalesce => unreachable!("Coalesce handled before binop()"),
             Pipe => unreachable!("`|>` is lowered to a call in the parser"),

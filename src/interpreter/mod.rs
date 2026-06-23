@@ -534,6 +534,33 @@ fn arith(op: BinaryOp, l: Value, r: Value) -> R<Value> {
     }
 }
 
+/// Bitwise binaries on ints (primitives P2) — the same single-sourced `value` kernels the VM uses,
+/// so a negative-shift fault can't diverge between backends.
+fn bitwise(op: BinaryOp, l: Value, r: Value) -> R<Value> {
+    use BinaryOp::*;
+    match (l, r) {
+        (Value::Int(a), Value::Int(b)) => match op {
+            BitAnd => Ok(Value::Int(crate::value::int_bitand(a, b))),
+            BitOr => Ok(Value::Int(crate::value::int_bitor(a, b))),
+            BitXor => Ok(Value::Int(crate::value::int_bitxor(a, b))),
+            Shl => match crate::value::int_shl(a, b) {
+                Ok(n) => Ok(Value::Int(n)),
+                Err(msg) => rt(msg),
+            },
+            Shr => match crate::value::int_shr(a, b) {
+                Ok(n) => Ok(Value::Int(n)),
+                Err(msg) => rt(msg),
+            },
+            _ => unreachable!("bitwise only called with & | ^ << >>"),
+        },
+        (l, r) => rt(format!(
+            "cannot apply {op:?} to {} and {}",
+            l.type_name(),
+            r.type_name()
+        )),
+    }
+}
+
 fn compare(op: BinaryOp, l: Value, r: Value) -> R<Value> {
     use BinaryOp::*;
     // The ordering + comparability fault is single-sourced in `value::compare_ord` (the VM calls the

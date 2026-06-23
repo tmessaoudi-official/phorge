@@ -108,6 +108,8 @@ pub struct MatchArm {
 pub enum UnaryOp {
     Neg,
     Not,
+    /// `~` — bitwise NOT on an `int` operand (primitives P2).
+    BitNot,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,6 +130,13 @@ pub enum BinaryOp {
     Pipe,
     /// `??` null-coalesce (M3 S2).
     Coalesce,
+    /// Bitwise operators on `int` operands (primitives P2). PHP-identical integer semantics; shifts
+    /// fault on a negative count and yield 0 / sign-fill for a count ≥ 64.
+    BitAnd,
+    BitOr,
+    BitXor,
+    Shl,
+    Shr,
 }
 
 /// Expressions.

@@ -294,6 +294,7 @@ impl Interp {
             },
             (UnaryOp::Neg, Value::Float(x)) => Ok(Value::Float(-x)),
             (UnaryOp::Not, Value::Bool(b)) => Ok(Value::Bool(!b)),
+            (UnaryOp::BitNot, Value::Int(n)) => Ok(Value::Int(crate::value::int_bitnot(n))),
             (op, v) => rt(format!("cannot apply {op:?} to {}", v.type_name())),
         }
     }
@@ -321,6 +322,7 @@ impl Interp {
         let r = self.eval(rhs)?;
         match op {
             Add | Sub | Mul | Div | Rem => arith(op, l, r),
+            BitAnd | BitOr | BitXor | Shl | Shr => bitwise(op, l, r),
             Eq => Ok(Value::Bool(l.eq_val(&r))),
             NotEq => Ok(Value::Bool(!l.eq_val(&r))),
             Lt | Gt | Le | Ge => compare(op, l, r),

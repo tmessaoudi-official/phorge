@@ -78,6 +78,17 @@ fn compound_assign_and_incdec_operators() {
 }
 
 #[test]
+fn bitwise_operator_tokens() {
+    use TokenKind::*;
+    // `<<` is a two-char token; `^`/`~` are single-char; bare `&`/`|` are Amp/Bar (shared with
+    // intersection/union types). There is no `>>` token — it is two `Gt` (protects nested generics).
+    assert_eq!(
+        kinds("& | ^ ~ << >>"),
+        vec![Amp, Bar, Caret, Tilde, Shl, Gt, Gt, Eof]
+    );
+}
+
+#[test]
 fn range_operators_lex_longest_match() {
     use TokenKind::*;
     // `..=` (3) beats `..` (2) beats `.` (1); `0` stays an Int (no digit after the dot).

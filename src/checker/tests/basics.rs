@@ -27,6 +27,28 @@ fn arithmetic_mixing_int_float_errors() {
 }
 
 #[test]
+fn bitwise_requires_int_operands() {
+    // int & int → int (accepted, used as an int).
+    assert!(errors_of("function main() { int x = 0xFF & 0x0F; int y = x << 2; }").is_empty());
+    // unary `~` on an int is fine.
+    assert!(errors_of("function main() { int x = ~5; }").is_empty());
+    // bitwise on a non-int operand is rejected.
+    let errs = errors_of("function main() { int x = 3 & 2.0; }");
+    assert!(
+        errs.iter()
+            .any(|e| e.message.contains("bitwise operators require `int`")),
+        "{errs:?}"
+    );
+    // unary `~` on a non-int is rejected.
+    let e2 = errors_of("function main() { var x = ~true; }");
+    assert!(
+        e2.iter()
+            .any(|e| e.message.contains("unary `~` requires `int`")),
+        "{e2:?}"
+    );
+}
+
+#[test]
 fn if_condition_must_be_bool() {
     let errs = errors_of("function main() { if (1) { } }");
     assert!(

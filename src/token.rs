@@ -96,7 +96,17 @@ pub enum TokenKind {
     /// A lone `&` — the intersection-type separator `A & B` (M-RT S5). Distinct from `&&` (`AndAnd`),
     /// which the lexer's two-char dispatch claims first, so a bare `&` falls through to this
     /// single-char token. Binds tighter than `|` in `parse_type` (`A | B & C` ≡ `A | (B & C)`).
+    /// In *expression* position `&` is bitwise-AND (primitives P2); type-vs-expr is decided by the
+    /// parsing context, never the token.
     Amp,
+    /// `^` — bitwise XOR (primitives P2); expression-only.
+    Caret,
+    /// `~` — unary bitwise NOT (primitives P2); expression-only.
+    Tilde,
+    /// `<<` — bitwise shift-left (primitives P2). Shift-*right* `>>` is intentionally NOT a token: it
+    /// is two adjacent `Gt` handled in `parse_binary`, so nested generics (`List<List<int>>`) still
+    /// close with two `>`.
+    Shl,
     LParen,
     RParen,
     LBrace,

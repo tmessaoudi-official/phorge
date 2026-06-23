@@ -58,6 +58,7 @@ pub(super) fn sexpr(e: &Expr) -> String {
             let o = match op {
                 UnaryOp::Neg => "-",
                 UnaryOp::Not => "!",
+                UnaryOp::BitNot => "~",
             };
             format!("({o} {})", sexpr(expr))
         }
@@ -78,6 +79,11 @@ pub(super) fn sexpr(e: &Expr) -> String {
                 BinaryOp::Or => "||",
                 BinaryOp::Pipe => "|>",
                 BinaryOp::Coalesce => "??",
+                BinaryOp::BitAnd => "&",
+                BinaryOp::BitOr => "|",
+                BinaryOp::BitXor => "^",
+                BinaryOp::Shl => "<<",
+                BinaryOp::Shr => ">>",
             };
             format!("({o} {} {})", sexpr(lhs), sexpr(rhs))
         }

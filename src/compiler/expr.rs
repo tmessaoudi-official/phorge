@@ -60,6 +60,7 @@ impl Compiler<'_> {
                 match op {
                     UnaryOp::Neg => self.emit(Op::Neg, span.line),
                     UnaryOp::Not => self.emit(Op::Not, span.line),
+                    UnaryOp::BitNot => self.emit(Op::BitNot, span.line),
                 }
             }
             Expr::Binary { op, lhs, rhs, span } => self.compile_binary(*op, lhs, rhs, span.line)?,
@@ -305,6 +306,23 @@ impl Compiler<'_> {
                         Gt => Op::Gt,
                         Le => Op::Le,
                         Ge => Op::Ge,
+                        _ => unreachable!(),
+                    },
+                    line,
+                );
+            }
+            // Bitwise binaries (primitives P2): int-only (checker-guaranteed), so the int Op is
+            // emitted directly — no `NumTy` dispatch.
+            BitAnd | BitOr | BitXor | Shl | Shr => {
+                self.expr(lhs)?;
+                self.expr(rhs)?;
+                self.emit(
+                    match op {
+                        BitAnd => Op::BitAnd,
+                        BitOr => Op::BitOr,
+                        BitXor => Op::BitXor,
+                        Shl => Op::Shl,
+                        Shr => Op::Shr,
                         _ => unreachable!(),
                     },
                     line,

@@ -2322,3 +2322,20 @@ function main() {
         "number_literal_formats",
     );
 }
+
+/// Primitives sweep P2 — bitwise operators `& | ^ ~ << >>` (int-only, PHP-identical). Includes the
+/// CTy-operand case `(a & b) + 1` (a bitwise result must specialize as an arithmetic operand on the
+/// VM) and shift-right `>>` (two adjacent `Gt` in the parser, so nested generics are unaffected).
+#[test]
+fn bitwise_operators_byte_identical() {
+    agree_out_php(
+        "import Core.Console;
+function main() {
+    int a = 0b1100;
+    int b = 0b1010;
+    Console.println(\"{a & b} {a | b} {a ^ b} {a << 2} {a >> 1} {~a} {(a & b) + 1}\");
+}",
+        "8 14 6 48 6 -13 9\n",
+        "bitwise_operators",
+    );
+}

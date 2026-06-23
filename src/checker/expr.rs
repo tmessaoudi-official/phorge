@@ -163,6 +163,8 @@ impl Checker {
             ),
             UnaryOp::Not if t == Ty::Bool => Ty::Bool,
             UnaryOp::Not => self.err(span, format!("unary `!` requires `bool`, found `{t}`")),
+            UnaryOp::BitNot if t == Ty::Int => Ty::Int,
+            UnaryOp::BitNot => self.err(span, format!("unary `~` requires `int`, found `{t}`")),
         }
     }
 
@@ -247,6 +249,20 @@ impl Checker {
                         span,
                         format!("left operand of `??` must be optional, found `{other}`"),
                     ),
+                }
+            }
+            BinaryOp::BitAnd
+            | BinaryOp::BitOr
+            | BinaryOp::BitXor
+            | BinaryOp::Shl
+            | BinaryOp::Shr => {
+                if l == Ty::Int && r == Ty::Int {
+                    Ty::Int
+                } else {
+                    self.err(
+                        span,
+                        format!("bitwise operators require `int` operands, found `{l}` and `{r}`"),
+                    )
                 }
             }
             BinaryOp::Pipe => unreachable!("`|>` is lowered to a call in the parser"),

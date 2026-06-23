@@ -359,6 +359,8 @@ pub const FAULT_MOD_ZERO: &str = "modulo by zero";
 /// Canonical fault body for any integer op whose result leaves `i64` range
 /// (`MAX + 1`, `MIN - 1`, `MIN * -1`, `MIN / -1`, `MIN % -1`, `-MIN`).
 pub const FAULT_INT_OVERFLOW: &str = "integer overflow";
+/// Canonical fault body for a bitwise shift by a negative count (PHP throws `ArithmeticError`).
+pub const FAULT_NEGATIVE_SHIFT: &str = "bit shift by negative number";
 
 /// Checked integer addition; overflow is a clean fault, never a panic (EV-7).
 pub fn int_add(a: i64, b: i64) -> Result<i64, String> {
@@ -395,6 +397,42 @@ pub fn int_rem(a: i64, b: i64) -> Result<i64, String> {
 pub fn int_neg(n: i64) -> Result<i64, String> {
     n.checked_neg()
         .ok_or_else(|| FAULT_INT_OVERFLOW.to_string())
+}
+
+/// Bitwise AND / OR / XOR on `int` (never fault — total over `i64`). PHP-identical.
+pub fn int_bitand(a: i64, b: i64) -> i64 {
+    a & b
+}
+pub fn int_bitor(a: i64, b: i64) -> i64 {
+    a | b
+}
+pub fn int_bitxor(a: i64, b: i64) -> i64 {
+    a ^ b
+}
+/// Bitwise NOT — `~n == -n - 1`, total over `i64`.
+pub fn int_bitnot(n: i64) -> i64 {
+    !n
+}
+/// Shift-left, PHP semantics: a negative count faults (`ArithmeticError`); a count ≥ 64 yields 0;
+/// otherwise the low 64 bits of the shifted value (`wrapping_shl` would mask the count, so the ≥ 64
+/// case is handled explicitly — `1 << 64` is 0, not 1).
+pub fn int_shl(a: i64, n: i64) -> Result<i64, String> {
+    if n < 0 {
+        return Err(FAULT_NEGATIVE_SHIFT.to_string());
+    }
+    if n >= 64 {
+        return Ok(0);
+    }
+    Ok(a.wrapping_shl(n as u32))
+}
+/// Shift-right (arithmetic, sign-preserving — PHP semantics): a negative count faults; a count ≥ 64
+/// fills with the sign bit (`8 >> 64 == 0`, `-8 >> 64 == -1`); otherwise an arithmetic right shift.
+pub fn int_shr(a: i64, n: i64) -> Result<i64, String> {
+    if n < 0 {
+        return Err(FAULT_NEGATIVE_SHIFT.to_string());
+    }
+    let n = if n >= 64 { 63 } else { n as u32 };
+    Ok(a >> n)
 }
 
 /// Float addition. Floats never fault — NaN/inf are valid `f64`.

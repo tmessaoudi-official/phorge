@@ -59,6 +59,28 @@ impl<'a> Vm<'a> {
                 self.stack.push(Value::Float(crate::value::float_rem(a, b)));
             }
 
+            // Bitwise ops on ints (primitives P2) — shared `value::*` kernels (interpreter parity).
+            Op::BitAnd => {
+                let (a, b) = self.pop2_int()?;
+                self.stack.push(Value::Int(crate::value::int_bitand(a, b)));
+            }
+            Op::BitOr => {
+                let (a, b) = self.pop2_int()?;
+                self.stack.push(Value::Int(crate::value::int_bitor(a, b)));
+            }
+            Op::BitXor => {
+                let (a, b) = self.pop2_int()?;
+                self.stack.push(Value::Int(crate::value::int_bitxor(a, b)));
+            }
+            Op::Shl => {
+                let (a, b) = self.pop2_int()?;
+                self.push_i(crate::value::int_shl(a, b))?;
+            }
+            Op::Shr => {
+                let (a, b) = self.pop2_int()?;
+                self.push_i(crate::value::int_shr(a, b))?;
+            }
+
             Op::Neg => match self.pop() {
                 // `value::int_neg` is shared with the interpreter (`eval_unary`): negating
                 // `i64::MIN` is a clean `"integer overflow"` runtime error, never a panic.
@@ -69,6 +91,10 @@ impl<'a> Vm<'a> {
             Op::Not => match self.pop() {
                 Value::Bool(b) => self.stack.push(Value::Bool(!b)),
                 v => return Err(format!("cannot apply ! to {}", v.type_name())),
+            },
+            Op::BitNot => match self.pop() {
+                Value::Int(n) => self.stack.push(Value::Int(crate::value::int_bitnot(n))),
+                v => return Err(format!("cannot apply ~ to {}", v.type_name())),
             },
 
             Op::Eq => {

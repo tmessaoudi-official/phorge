@@ -65,6 +65,12 @@ impl Parser {
         &self.tokens[self.pos.min(self.tokens.len() - 1)].kind
     }
 
+    /// The kind of the next-but-one token (one beyond `peek`). `Eof` at/after the end. Used to
+    /// recognize shift-right `>>` as two adjacent `Gt` tokens in expression position (primitives P2).
+    fn peek2(&self) -> &TokenKind {
+        &self.tokens[(self.pos + 1).min(self.tokens.len() - 1)].kind
+    }
+
     /// Span of the current token (or the final Eof's span at the end).
     fn peek_span(&self) -> Span {
         self.tokens[self.pos.min(self.tokens.len() - 1)].span

@@ -33,22 +33,29 @@ impl Parser {
     /// Returns None if the token is not an infix operator. Higher binds tighter.
     pub(super) fn infix_op(kind: &TokenKind) -> Option<(u8, BinaryOp)> {
         use TokenKind as T;
+        // Precedence follows PHP (higher binds tighter): `|>` `??` `||` `&&` then bitwise
+        // `|` `^` `&`, then `==`/`!=`, comparison, shifts, `+ -`, `* / %`. Shift-right `>>` is not a
+        // token (two `Gt`); it is handled at level 10 directly in `parse_binary`.
         Some(match kind {
             T::Pipe => (1, BinaryOp::Pipe),
             T::QuestionQuestion => (2, BinaryOp::Coalesce),
             T::OrOr => (3, BinaryOp::Or),
             T::AndAnd => (4, BinaryOp::And),
-            T::EqEq => (5, BinaryOp::Eq),
-            T::NotEq => (5, BinaryOp::NotEq),
-            T::Lt => (6, BinaryOp::Lt),
-            T::Gt => (6, BinaryOp::Gt),
-            T::Le => (6, BinaryOp::Le),
-            T::Ge => (6, BinaryOp::Ge),
-            T::Plus => (7, BinaryOp::Add),
-            T::Minus => (7, BinaryOp::Sub),
-            T::Star => (8, BinaryOp::Mul),
-            T::Slash => (8, BinaryOp::Div),
-            T::Percent => (8, BinaryOp::Rem),
+            T::Bar => (5, BinaryOp::BitOr),
+            T::Caret => (6, BinaryOp::BitXor),
+            T::Amp => (7, BinaryOp::BitAnd),
+            T::EqEq => (8, BinaryOp::Eq),
+            T::NotEq => (8, BinaryOp::NotEq),
+            T::Lt => (9, BinaryOp::Lt),
+            T::Gt => (9, BinaryOp::Gt),
+            T::Le => (9, BinaryOp::Le),
+            T::Ge => (9, BinaryOp::Ge),
+            T::Shl => (10, BinaryOp::Shl),
+            T::Plus => (11, BinaryOp::Add),
+            T::Minus => (11, BinaryOp::Sub),
+            T::Star => (12, BinaryOp::Mul),
+            T::Slash => (12, BinaryOp::Div),
+            T::Percent => (12, BinaryOp::Rem),
             _ => return None,
         })
     }
@@ -59,10 +66,10 @@ impl Parser {
     pub(super) fn parse_binary(&mut self, min_bp: u8) -> Result<Expr, Diagnostic> {
         let mut lhs = self.parse_unary()?;
         loop {
-            // `instanceof` is a type test at precedence 5 (like `==`), but its right operand is a
+            // `instanceof` is a type test at precedence 8 (like `==`), but its right operand is a
             // *type name*, not an expression — so it is parsed here rather than via `infix_op`. The
             // left operand and result type (`bool`) are validated by the checker (M-RT S1).
-            if matches!(self.peek(), TokenKind::Instanceof) && 5 >= min_bp {
+            if matches!(self.peek(), TokenKind::Instanceof) && 8 >= min_bp {
                 let sp = self.peek_span();
                 self.advance(); // consume `instanceof`
                 let type_name = match self.peek().clone() {
@@ -75,6 +82,25 @@ impl Parser {
                 lhs = Expr::InstanceOf {
                     value: Box::new(lhs),
                     type_name,
+                    span: sp,
+                };
+                continue;
+            }
+            // Shift-right `>>` is two adjacent `Gt` tokens (never a single token — that protects
+            // nested generics `List<List<int>>`). In expression position two consecutive `Gt` can
+            // only be `>>`; a single `>` falls through to `infix_op` as comparison. Level 10.
+            if matches!(self.peek(), TokenKind::Gt)
+                && matches!(self.peek2(), TokenKind::Gt)
+                && 10 >= min_bp
+            {
+                let sp = self.peek_span();
+                self.advance(); // first `>`
+                self.advance(); // second `>`
+                let rhs = self.parse_binary(10 + 1)?;
+                lhs = Expr::Binary {
+                    op: BinaryOp::Shr,
+                    lhs: Box::new(lhs),
+                    rhs: Box::new(rhs),
                     span: sp,
                 };
                 continue;
@@ -133,6 +159,7 @@ impl Parser {
         let op = match self.peek() {
             TokenKind::Minus => Some(UnaryOp::Neg),
             TokenKind::Bang => Some(UnaryOp::Not),
+            TokenKind::Tilde => Some(UnaryOp::BitNot),
             _ => None,
         };
         let result = if let Some(op) = op {

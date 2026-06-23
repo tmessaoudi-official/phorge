@@ -368,11 +368,14 @@ impl<'a> Compiler<'a> {
             Op::Const(_) | Op::GetLocal(_) => 1,
             Op::AddI | Op::SubI | Op::MulI | Op::DivI | Op::RemI => -1,
             Op::AddF | Op::SubF | Op::MulF | Op::DivF | Op::RemF => -1,
+            // Bitwise binaries pop two, push one (primitives P2).
+            Op::BitAnd | Op::BitOr | Op::BitXor | Op::Shl | Op::Shr => -1,
             Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge => -1,
             Op::Pop | Op::SetLocal(_) | Op::JumpIfFalse(_) | Op::Index | Op::MakeRange(_) => -1,
             // SetIndex pops (container, index, value) and pushes the new container: net -2.
             Op::SetIndex => -2,
-            Op::Neg | Op::Not | Op::Len | Op::Jump(_) => 0,
+            // BitNot is unary (pop one, push one) like Neg/Not.
+            Op::Neg | Op::Not | Op::BitNot | Op::Len | Op::Jump(_) => 0,
             Op::MatchTag(_) | Op::GetEnumField(_) => 0, // pop one, push one
             Op::Concat(n) | Op::MakeList(n) => 1 - *n as isize,
             Op::MakeMap(n) => 1 - 2 * *n as isize, // pops 2n (key+value pairs), pushes the map

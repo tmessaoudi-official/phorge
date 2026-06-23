@@ -93,10 +93,19 @@ pub enum Op {
     MulF,
     DivF,
     RemF,
+    // Bitwise ops on `int` operands (primitives P2; the checker guarantees int operands). Shifts
+    // fault on a negative count, yield 0 / sign-fill for a count ≥ 64.
+    BitAnd,
+    BitOr,
+    BitXor,
+    Shl,
+    Shr,
     /// Negate the top of stack (int or float).
     Neg,
     /// Logical not (bool).
     Not,
+    /// Bitwise NOT of the top of stack (int).
+    BitNot,
     // Comparison / equality — runtime-generic (decision P2-8).
     Eq,
     Ne,
@@ -467,8 +476,14 @@ impl BytecodeProgram {
                     | Op::MulF
                     | Op::DivF
                     | Op::RemF
+                    | Op::BitAnd
+                    | Op::BitOr
+                    | Op::BitXor
+                    | Op::Shl
+                    | Op::Shr
                     | Op::Neg
                     | Op::Not
+                    | Op::BitNot
                     | Op::Eq
                     | Op::Ne
                     | Op::Lt

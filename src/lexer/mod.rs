@@ -618,6 +618,10 @@ pub fn lex(src: &str) -> Result<Vec<Token>, Diagnostic> {
                     (b'%', Some(b'=')) => Some(TokenKind::PercentEq),
                     (b'+', Some(b'+')) => Some(TokenKind::PlusPlus),
                     (b'-', Some(b'-')) => Some(TokenKind::MinusMinus),
+                    // `<<` bitwise shift-left (primitives P2). `<=` is claimed above; a bare `<` falls
+                    // through to the single-char dispatch. There is deliberately no `>>` token (it
+                    // would break nested generics) — shift-right is two `Gt` handled in the parser.
+                    (b'<', Some(b'<')) => Some(TokenKind::Shl),
                     _ => None,
                 };
                 if let Some(k) = matched_two {
@@ -660,9 +664,12 @@ pub fn lex(src: &str) -> Result<Vec<Token>, Diagnostic> {
                     // A lone `|` is the union-type separator (`A | B`, M-RT S4). `|>` and `||` are
                     // claimed by the two-char dispatch above, so reaching here means a single `|`.
                     b'|' => Some(TokenKind::Bar),
-                    // A lone `&` is the intersection-type separator (`A & B`, M-RT S5). `&&` is
-                    // claimed by the two-char dispatch above, so reaching here means a single `&`.
+                    // A lone `&` is the intersection-type separator (`A & B`, M-RT S5) or bitwise-AND
+                    // in expression position. `&&` is claimed by the two-char dispatch above.
                     b'&' => Some(TokenKind::Amp),
+                    // `^` bitwise XOR, `~` unary bitwise NOT (primitives P2; expression-only).
+                    b'^' => Some(TokenKind::Caret),
+                    b'~' => Some(TokenKind::Tilde),
                     _ => None,
                 };
                 match kind {
