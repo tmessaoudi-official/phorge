@@ -36,6 +36,22 @@
   practice (the Book's `#[cfg(test)] mod tests` private-access model), just with the body in a sibling
   file. Rule going forward: **when a module's source splits, its tests split alongside, one per concept.**
 
+- [2026-06-23] AGREED (W2 done `558baf5`): the `impl Checker` whale split into 11 sibling cluster
+  files (resolve/collect/throws/program/casing/stmt/expr/calls/assign/matches + common.rs);
+  mod.rs 5678→454. **Mechanism refinement:** moved inherent *methods* take `pub(super)` (children
+  aren't visible to ancestors/siblings — unlike struct *fields*, which descendants see for free);
+  common helpers re-exposed module-wide via one `use common::*;` in mod.rs (picked up by each
+  cluster's `use super::*`). Zero crate-public widening. 823 tests green on PHP-8.4 oracle.
+- [2026-06-23] AGREED (W2b test structure — developer leaned Option 2, I challenged + concurred):
+  **checker tests split BY LANGUAGE FEATURE, not by source cluster.** Rationale: the checker source
+  is by-*phase* (exhaustive-match coupling forbids by-construct), but tests are feature-centric
+  integration tests through the public `check()` — a feature is checked *across* clusters, so it has
+  no honest single-cluster home. By-feature is how the tests already self-name and how a feature is
+  developed/navigated (the rustc model: phase-organized source, feature-organized tests). This
+  **deliberately does NOT mirror the source clusters** — the "tests mirror source" rule (forged on
+  `native`, where source WAS by-feature) is overridden here because source-by-phase + tests-by-feature
+  is the honest structure. Taxonomy documented; re-bucketing any test is free (all run via `check()`).
+
 ## ~~Open question for the brainstorm~~ RESOLVED → Hybrid (see Decisions Log)
 Mechanism locked by research: keep splits inside one `mod { }` (bundle/ precedent → child files keep
 private-field visibility, zero `pub(crate)` churn); the three coupled `Op` matches stay whole; native
