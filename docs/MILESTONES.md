@@ -129,6 +129,28 @@ incl. methods+classes+enums (`Option<T>`/`Result<T, E>`), unions `A|B`, intersec
 horizontal reuse — methods, state, constructors, abstract requirements, property hooks; reuse not a type;
 native PHP `trait`/`use`)) and the **mutation milestone** (below) also run under M3's umbrella.
 
+## M-Decomp — Codebase decomposition — ✅ COMPLETE (2026-06-23)
+
+Behavior-preserving, cohesion-based split of the whale source files into per-module directories
+(`foo/mod.rs` + cluster files), verified by the `run ≡ runvm ≡ real PHP 8.4` byte-identity spine
+(823 tests green throughout; every wave its own commit). Plan
+`docs/plans/2026-06-23-decomposition-milestone.plan.md`, design
+`docs/specs/2026-06-23-decomposition-milestone-design.md`, module map in `docs/ARCHITECTURE.md`.
+
+- **Axis = hybrid by-phase**, not by-construct (4 research agents converged: every production compiler
+  files by phase). Splits live inside one `mod` so child files see the parent struct's private
+  members; moved inherent methods take `pub(super)` — **zero crate-public widening**. The three coupled
+  exhaustive `Op` matches (`vm::exec_op`, `chunk::validate`, `compiler::stack_effect`) stay **whole**,
+  verified by a dummy-`Op`-variant smoke check.
+- **Front-end:** `checker/` 9786→454 (11 clusters + 3 rewrite passes) · `parser/` 1934→199 (5 construct
+  clusters) · `ast/` 1465→669 (`walk`/`classes`) · `loader/` 1220→588 (`resolve`/`fs`).
+  **Backends:** `compiler/` 2967→740 · `transpile/` 2407→355 · `interpreter/` 1757→612 · `vm/` 915→322.
+  No source file exceeds ~1500 lines; `lexer/` (621, one scanner) and `chunk.rs` (shared `Op` contract)
+  left single by design.
+- **Tests mirror the split** as sealed child modules: **by language feature** for the cross-cutting
+  `checker/tests/` (integration tests through `check()`), **by construct** for `parser/tests/`. Backend
+  test files (< 460 lines) kept flat.
+
 ## M-mut — In-place mutation — ✅ FEATURE-COMPLETE (2026-06-21)
 
 Phorge began as a pure single-assignment language (no assignment statement); the mutation milestone

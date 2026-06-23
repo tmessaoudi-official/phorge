@@ -6,6 +6,26 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — M-Decomp: behavior-preserving codebase decomposition
+
+The whale source files were split into cohesion sub-modules — **zero behavior change** (the
+`run ≡ runvm ≡ real PHP 8.4` byte-identity spine is the proof; 823 tests green throughout, every
+wave its own commit). Plan `docs/plans/2026-06-23-decomposition-milestone.plan.md`, design
+`docs/specs/2026-06-23-decomposition-milestone-design.md`, module map in `docs/ARCHITECTURE.md`.
+
+- **Axis = hybrid by-phase** (cohesion sub-files inside one `mod`), not by-construct: the three
+  coupled exhaustive `Op` matches (`vm::exec_op`, `chunk::validate`, `compiler::stack_effect`) stay
+  **whole** — verified by a dummy-`Op`-variant smoke check (all three fail to compile, then reverted).
+- **Mechanism:** splits live inside one module so child files see the parent struct's private
+  fields/methods; moved inherent methods take `pub(super)`, **nothing crate-public widens**.
+- **`checker/`** 9786→454 (mod.rs): `resolve`/`collect`/`throws`/`program`/`casing`/`stmt`/`expr`/
+  `calls`/`assign`/`matches`/`common`. **`parser/`** 1934→199: `exprs`/`stmts`/`items`/`types`/
+  `patterns`. **`ast/`** 1465→669: `walk`/`classes`. **`loader/`** 1220→588: `resolve`/`fs`.
+  **`compiler/`** 2967→740 · **`transpile/`** 2407→355 · **`interpreter/`** 1757→612 · **`vm/`**
+  915→322 (`exec`/`closure`). No source file exceeds ~1500 lines; `lexer/` and `chunk.rs` left single.
+- **Tests mirror the split** as sealed child modules — **by language feature** for `checker/tests/`
+  (cross-cutting integration tests through `check()`) and **by construct** for `parser/tests/`.
+
 ### Added — M-RT S8: traits (`trait` / `use`) — M-RT CLOSED
 
 Horizontal code reuse via `trait T { … }` composed by a class with `use T;` (design

@@ -165,12 +165,22 @@ in `docs/MILESTONES.md`; prune research raw/ if desired; final full gate.
   (free_vars + collect_free_*) + `classes.rs` (class graph queries), re-exported so callers unchanged;
   type defs stay. ast/tests.rs kept flat (small); one walk internal made `pub(super)`. 823 green.
 
-**W3 REMAINING:** W3.2 loader (1219, *under* the 1500 target — fs/symbols/resolve cohesion split,
-free-fn+struct heavy) · W3.4 lexer (621 — **under target, single cohesive scanner → SKIP/keep**).
-**W4 backends (HIGH care):** compiler 3.3k / transpile 2.8k / interpreter 2.1k / vm — the coupled
-`Op` trio (`vm::exec_op` / `chunk::validate` / `compiler::stack_effect`) MUST stay whole; `self.height`
-discipline; `emit_stmt` guard-arm order. **W5 close:** rebuild release binary, update
-ARCHITECTURE/CHANGELOG/MILESTONES, dummy-Op smoke check.
+- [2026-06-23] **W3.2 DONE** (`9747068`) — `loader/mod.rs` 1220→588 → `resolve.rs` (name-resolution
+  walkers) + `fs.rs` (filesystem/parse); context structs + orchestration stay in mod.rs (walkers read
+  their privates for free). W3.4 lexer **SKIPPED** (621, single cohesive scanner, under target). 823 green.
+- [2026-06-23] **W4 DONE** (backends, the high-care wave): W4.1 compiler `4fef1be` (2967→740:
+  program/stmt/expr/matches; `stack_effect` kept whole) · W4.2 transpile `cae9c1b` (2407→355:
+  program/types/stmt/expr/call/matches) · W4.3 interpreter `cac1e3b` (1757→612: stmt/expr/call/construct)
+  · W4.4 vm `64665df` (915→322: `exec` [exec_op whole] / `closure`). **Exhaustiveness smoke check PASSED**
+  — a dummy `Op` variant made exactly the three coupled matches (`chunk::validate`,
+  `compiler::stack_effect`, `vm::exec_op`) fail to compile; reverted. 823 green each wave.
+- [2026-06-23] **W5 DONE — M-Decomp COMPLETE.** Release binary rebuilt (`target/release/phg`); module
+  map in `docs/ARCHITECTURE.md`, CHANGELOG + MILESTONES updated (M-Decomp CLOSED). Acceptance criteria
+  met: no source file > ~1500 lines (largest `checker/collect.rs` 1215), no `_` wildcard in any coupled
+  match, byte-identity preserved throughout, clippy --all-targets + fmt clean. Backend test files
+  (< 460 lines) kept flat by the pragmatic rule; checker+parser test suites split (the whales).
+
+**MILESTONE COMPLETE** — 13 green commits (`558baf5`..`64665df` + docs). Nothing pushed (Rule 10).
 
 ### Status checkpoint (2026-06-23 ~17:45)
 **DONE + committed green (823 tests, clippy --all-targets + fmt, PHP 8.4 floor):**

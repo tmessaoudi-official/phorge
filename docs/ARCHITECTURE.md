@@ -31,23 +31,51 @@ limits in `limits.rs`, not Rust's ambient stack, bound recursion (invariant #6).
 
 ## Modules (`src/`)
 
-| File | Role |
+Each large module is a **directory** (`foo/mod.rs` + cohesion sub-files) since the M-Decomp
+milestone; see "Module decomposition" below. The roles are unchanged.
+
+| Module | Role |
 |------|------|
-| `lexer.rs` / `token.rs` | source → tokens; `Span` = source-position truth |
-| `parser.rs` / `ast.rs` | tokens → untyped AST |
-| `checker.rs` | type-check gate (no annotation) |
-| `interpreter.rs` | tree-walking evaluator — the reference semantics |
-| `compiler.rs` | AST → `BytecodeProgram` |
+| `lexer/` · `token.rs` | source → tokens; `Span` = source-position truth |
+| `parser/` · `ast/` | tokens → untyped AST |
+| `checker/` | type-check gate (no annotation) |
+| `interpreter/` | tree-walking evaluator — the reference semantics |
+| `compiler/` | AST → `BytecodeProgram` |
 | `chunk.rs` | `Op`, `Chunk` (code + consts + line table), `BytecodeProgram` + `validate` |
-| `vm.rs` | stack VM; `exec_op` dispatch; reified call `Frame { func, ip, slot_base }` |
-| `transpile.rs` | AST → PHP source |
+| `vm/` | stack VM; `exec_op` dispatch; reified call `Frame { func, ip, slot_base }` |
+| `transpile/` | AST → PHP source |
 | `value.rs` | `Value` + single-sourced arith/compare kernels (both backends) |
-| `native.rs` | namespaced stdlib registry keyed by `(module,name)` (`console.println`, …); single-sources each native's checker sig + shared `eval` + PHP emission; target of `import core.*` + `Op::CallNative` |
+| `native/` | namespaced stdlib registry keyed by `(module,name)` (`console.println`, …); single-sources each native's checker sig + shared `eval` + PHP emission; target of `import core.*` + `Op::CallNative` |
+| `loader/` | multi-file project loader + cross-package name resolution |
 | `diagnostic.rs` | unified `Diagnostic { stage, message, line, col }` |
 | `limits.rs` | recursion/nesting caps + numeric-width policy |
 | `mem.rs` | std-only Linux `/proc` RSS sampler (`VmRSS`/`VmHWM` + `clear_refs` peak reset) for `bench` |
 | `serve.rs` | M6 HTTP serve runtime — `Transport` seam + `TcpTransport`; the determinism quarantine (outside `tests/differential.rs`, covered by `tests/serve.rs`) |
-| `cli.rs` / `main.rs` | command pipelines (`run`/`runvm`/`check`/`parse`/`lex`/`transpile`/`disasm`/`bench`/`build`/`vendor`/`serve`/`explain`) + thin dispatcher |
+| `cli/` · `main.rs` | command pipelines (`run`/`runvm`/`check`/`parse`/`lex`/`transpile`/`disasm`/`bench`/`build`/`vendor`/`serve`/`explain`) + thin dispatcher |
+
+### Module decomposition (M-Decomp)
+
+Each whale module was split into cohesion sub-files **inside one `mod`**, so child files see the
+parent struct's private fields/methods — moved inherent methods take `pub(super)`; nothing crate-public
+widens. The three coupled exhaustive `Op` matches (`vm::exec_op` in `vm/exec.rs`, `chunk::validate`,
+`compiler::stack_effect` in `compiler/mod.rs`) each stay **whole** in one method (verified by a dummy-variant
+smoke check). Layout:
+
+| Module | mod.rs keeps | cluster files |
+|------|------|------|
+| `checker/` | struct + diagnostic/scope prims + entry fns | `resolve` `collect` `throws` `program` `casing` `stmt` `expr` `calls` `assign` `matches` `common` + `rewrite_{alias,generics,html}` |
+| `parser/` | `Parser` struct + token primitives | `exprs` `stmts` `items` `types` `patterns` |
+| `ast/` | type definitions | `walk` (free-var analysis) · `classes` (class-graph queries) |
+| `loader/` | API + orchestration + context structs | `resolve` (name-resolution walkers) · `fs` (filesystem/parse) |
+| `compiler/` | struct + emission/scope core + `stack_effect` | `program` `stmt` `expr` `matches` |
+| `transpile/` | `Transpiler` + output/scope core + `emit` | `program` `types` `stmt` `expr` `call` `matches` |
+| `interpreter/` | `Interp` + `CallScopes` + driver + `match_pattern` | `stmt` `expr` `call` `construct` |
+| `vm/` | `Vm` + driver + stack primitives | `exec` (`exec_op`, kept whole) · `closure` |
+
+**Tests mirror the split** as sealed child modules (`#[cfg(test)] #[path] mod`), one file per concept —
+**by language feature** for the cross-cutting `checker/tests/` (integration tests through `check()`), and
+**by construct** for `parser/tests/` (which mirror the source clusters). `lexer/` (621 lines, one cohesive
+scanner) and `chunk.rs` (shared `Op`/`validate` contract) are deliberately left single.
 
 ## Two `Frame`s — not the same thing
 `vm::Frame` is a reified call record (`{func, ip, slot_base}`) on an explicit frame stack — the
