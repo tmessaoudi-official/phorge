@@ -383,6 +383,16 @@ pub fn explain_text(code: &str) -> Option<String> {
              E-NAME-CASE); both are front-end-only, so they never change the generated PHP. Rename the\n\
              type — the diagnostic suggests the converted form (`shape` → `Shape`).\n"
         }
+        "E-PKG-CASE" => {
+            "E-PKG-CASE — a package or import segment is not PascalCase.\n\n\
+             Every package/folder segment is PascalCase (e.g. `package Acme.StringUtil;` lives in\n\
+             `src/Acme/StringUtil/`), and so are import path segments and an import `as` alias\n\
+             (`import Acme.StringUtil as Strutil;`). This makes the source-to-PHP namespace mapping 1:1\n\
+             with no casing transform (`Acme.StringUtil` ⇒ `Acme\\StringUtil`). The reserved roots\n\
+             `Main` (the runnable entry) and `Core` (the standard library) are already PascalCase. It is\n\
+             front-end-only, so it never changes the generated PHP — rename the segment to the suggested\n\
+             form (`acme` → `Acme`).\n"
+        }
         "E-INSTANCEOF-TYPE" => {
             "E-INSTANCEOF-TYPE — an `instanceof` operand is not valid.\n\n\
              `value instanceof T` tests whether a class instance is of class/interface `T`. The right\n\
@@ -656,7 +666,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-PKG-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE)"
         )
     })
 }

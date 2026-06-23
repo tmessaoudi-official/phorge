@@ -1705,6 +1705,50 @@ impl Checker {
                 Some("use a different root, e.g. `package App;`".into()),
             );
         }
+        // Reshape slice 2b: package + import path segments are PascalCase (`E-PKG-CASE`) — a 1:1
+        // mapping to PHP namespaces with no casing transform. Front-end-only, so it cannot affect
+        // byte-identity (every backend sees the same AST; the rule only gates which programs reach
+        // them). The reserved `Main`/`Core` roots are already PascalCase. An empty package is left to
+        // `E-NO-PACKAGE` above (the loop is empty), so the two never double-report.
+        for seg in &program.package {
+            if !is_pascal(seg) {
+                self.err_coded(
+                    program.span,
+                    format!("package segment `{seg}` must be PascalCase"),
+                    "E-PKG-CASE",
+                    Some(format!("did you mean `package {}`?", to_pascal(seg))),
+                );
+            }
+        }
+        for item in &program.items {
+            if let Item::Import {
+                path, alias, span, ..
+            } = item
+            {
+                for seg in path {
+                    if !is_pascal(seg) {
+                        self.err_coded(
+                            *span,
+                            format!("import segment `{seg}` must be PascalCase"),
+                            "E-PKG-CASE",
+                            Some(format!("did you mean `{}`?", to_pascal(seg))),
+                        );
+                    }
+                }
+                // An alias renames the call-site qualifier (`import A.B as C;`), so it occupies a
+                // package-leaf position and follows the same PascalCase rule.
+                if let Some(a) = alias {
+                    if !is_pascal(a) {
+                        self.err_coded(
+                            *span,
+                            format!("import alias `{a}` must be PascalCase"),
+                            "E-PKG-CASE",
+                            Some(format!("did you mean `as {}`?", to_pascal(a))),
+                        );
+                    }
+                }
+            }
+        }
         for item in &program.items {
             match item {
                 Item::Function(f) => self.check_function(f),
@@ -7685,14 +7729,48 @@ mod tests {
             e2.iter().any(|d| d.code == Some("E-RESERVED-PACKAGE")),
             "got {e2:?}"
         );
-        let e3 = errors_of_raw("package Core.evil; function main() {}");
+        let e3 = errors_of_raw("package Core.Evil; function main() {}");
         assert!(
             e3.iter().any(|d| d.code == Some("E-RESERVED-PACKAGE")),
             "got {e3:?}"
         );
-        // A well-formed user package (and the reserved `main`) type-check cleanly.
-        assert!(check(&prog_raw("package app.util; function main() {}")).is_ok());
+        // A well-formed user package (and the reserved `Main`) type-check cleanly.
+        assert!(check(&prog_raw("package App.Util; function main() {}")).is_ok());
         assert!(check(&prog_raw("package Main; function main() {}")).is_ok());
+    }
+
+    #[test]
+    fn package_and_import_segments_must_be_pascalcase() {
+        // Reshape slice 2b: a lowercase package segment is rejected (E-PKG-CASE).
+        let e = errors_of_raw("package app.util; function main() {}");
+        assert!(e.iter().any(|d| d.code == Some("E-PKG-CASE")), "got {e:?}");
+        // Each non-PascalCase segment is flagged; a single-segment lowercase package too.
+        let e2 = errors_of_raw("package acme; function main() {}");
+        assert!(
+            e2.iter().any(|d| d.code == Some("E-PKG-CASE")),
+            "got {e2:?}"
+        );
+        // A lowercase import path segment is rejected.
+        let e3 =
+            errors_of_raw("package Main; import acme.util; function main() { int x = util.f(); }");
+        assert!(
+            e3.iter().any(|d| d.code == Some("E-PKG-CASE")),
+            "got {e3:?}"
+        );
+        // A lowercase import alias is rejected (it occupies a leaf position).
+        let e4 = errors_of_raw(
+            "package Main; import Acme.Util as util; function main() { int x = util.f(); }",
+        );
+        assert!(
+            e4.iter().any(|d| d.code == Some("E-PKG-CASE")),
+            "got {e4:?}"
+        );
+        // PascalCase package + import + alias type-check cleanly (no E-PKG-CASE noise).
+        let ok = errors_of_raw("package App.Util; function main() {}");
+        assert!(
+            !ok.iter().any(|d| d.code == Some("E-PKG-CASE")),
+            "got {ok:?}"
+        );
     }
 
     #[test]

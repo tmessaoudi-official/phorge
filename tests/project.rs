@@ -1,8 +1,8 @@
 //! M5 S2b/S2c integration: a multi-file project loads through `loader::load`, resolves cross-package
 //! calls, and runs byte-identically on both backends. S2c qualifies cross-package calls
-//! (`util.compute(x)` via an import leaf or alias), tightens the S2b bare-call interim (unqualified
-//! cross-package calls now fail), rejects library-package types (`E-PKG-TYPE`), and transpiles to
-//! one PHP `namespace` brace-block per package.
+//! (`Util.compute(x)` via an import leaf or alias), tightens the S2b bare-call interim (unqualified
+//! cross-package calls now fail), supports cross-package types via `import type`, and transpiles to
+//! one PHP `namespace` brace-block per package. Packages are PascalCase (`E-PKG-CASE`).
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -43,16 +43,16 @@ fn run_both(entry: &Path) -> (String, String) {
 fn multi_file_project_qualified_call_runs_byte_identically() {
     let tmp = TempDir::new();
     tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
-    // S2c: cross-package calls are *qualified* via an import leaf (`util.compute`), no longer the
+    // S2c: cross-package calls are *qualified* via an import leaf (`Util.compute`), no longer the
     // S2b bare form. The loader resolves it against the imported package's mangled symbol.
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Console;\nimport acme.util;\n\
-         function main() {\n    Console.println(\"{util.compute(20)}\");\n}",
+        "package Main;\nimport Core.Console;\nimport Acme.Util;\n\
+         function main() {\n    Console.println(\"{Util.compute(20)}\");\n}",
     );
     tmp.write(
-        "src/acme/util/compute.phg",
-        "package acme.util;\nfunction compute(int n) -> int {\n    return n + n + 2;\n}",
+        "src/Acme/Util/compute.phg",
+        "package Acme.Util;\nfunction compute(int n) -> int {\n    return n + n + 2;\n}",
     );
 
     let (run, runvm) = run_both(&entry);
@@ -64,15 +64,15 @@ fn multi_file_project_qualified_call_runs_byte_identically() {
 fn import_alias_resolves_qualified_call() {
     let tmp = TempDir::new();
     tmp.write("phorge.toml", "module = \"acme/app\"");
-    // `import acme.util as u;` binds the leaf `u`; the call qualifies on the alias.
+    // `import Acme.Util as U;` binds the leaf `u`; the call qualifies on the alias.
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Console;\nimport acme.util as u;\n\
-         function main() {\n    Console.println(\"{u.compute(20)}\");\n}",
+        "package Main;\nimport Core.Console;\nimport Acme.Util as U;\n\
+         function main() {\n    Console.println(\"{U.compute(20)}\");\n}",
     );
     tmp.write(
-        "src/acme/util/compute.phg",
-        "package acme.util;\nfunction compute(int n) -> int {\n    return n + n + 2;\n}",
+        "src/Acme/Util/compute.phg",
+        "package Acme.Util;\nfunction compute(int n) -> int {\n    return n + n + 2;\n}",
     );
 
     let (run, runvm) = run_both(&entry);
@@ -88,16 +88,16 @@ fn same_package_cross_file_bare_call_resolves() {
     tmp.write("phorge.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Console;\nimport acme.util;\n\
-         function main() {\n    Console.println(\"{util.outer(20)}\");\n}",
+        "package Main;\nimport Core.Console;\nimport Acme.Util;\n\
+         function main() {\n    Console.println(\"{Util.outer(20)}\");\n}",
     );
     tmp.write(
-        "src/acme/util/outer.phg",
-        "package acme.util;\nfunction outer(int n) -> int {\n    return inner(n) + 2;\n}",
+        "src/Acme/Util/outer.phg",
+        "package Acme.Util;\nfunction outer(int n) -> int {\n    return inner(n) + 2;\n}",
     );
     tmp.write(
-        "src/acme/util/inner.phg",
-        "package acme.util;\nfunction inner(int n) -> int {\n    return n + n;\n}",
+        "src/Acme/Util/inner.phg",
+        "package Acme.Util;\nfunction inner(int n) -> int {\n    return n + n;\n}",
     );
 
     let (run, runvm) = run_both(&entry);
@@ -112,12 +112,12 @@ fn unqualified_cross_package_call_is_rejected() {
     tmp.write("phorge.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Console;\nimport acme.util;\n\
+        "package Main;\nimport Core.Console;\nimport Acme.Util;\n\
          function main() {\n    Console.println(\"{compute(20)}\");\n}",
     );
     tmp.write(
-        "src/acme/util/compute.phg",
-        "package acme.util;\nfunction compute(int n) -> int {\n    return n + 2;\n}",
+        "src/Acme/Util/compute.phg",
+        "package Acme.Util;\nfunction compute(int n) -> int {\n    return n + 2;\n}",
     );
     let unit = loader::load(&entry).expect("project loads");
     // Both backends reject identically (the bare `compute` no longer names any function).
@@ -138,12 +138,12 @@ fn library_package_type_is_usable_cross_package() {
     tmp.write("phorge.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Console;\nimport type acme.util.Shape;\n\
+        "package Main;\nimport Core.Console;\nimport type Acme.Util.Shape;\n\
          function main() {\n    Shape s = Shape(5);\n    Console.println(\"{s.w}\");\n}",
     );
     tmp.write(
-        "src/acme/util/shape.phg",
-        "package acme.util;\nclass Shape { constructor(public int w) {} }",
+        "src/Acme/Util/shape.phg",
+        "package Acme.Util;\nclass Shape { constructor(public int w) {} }",
     );
     let unit = loader::load(&entry).expect("project with a cross-package type loads");
     // Both backends agree (the type def + every reference were mangled before either backend ran).
@@ -160,11 +160,11 @@ fn import_type_unknown_is_rejected() {
     tmp.write("phorge.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport type acme.util.Nope;\nfunction main() {}",
+        "package Main;\nimport type Acme.Util.Nope;\nfunction main() {}",
     );
     tmp.write(
-        "src/acme/util/shape.phg",
-        "package acme.util;\nclass Shape { constructor(public int w) {} }",
+        "src/Acme/Util/shape.phg",
+        "package Acme.Util;\nclass Shape { constructor(public int w) {} }",
     );
     let err = loader::load(&entry).unwrap_err();
     assert!(err.contains("E-TYPE-IMPORT-UNKNOWN"), "got: {err}");
@@ -177,15 +177,15 @@ fn import_type_conflict_is_rejected() {
     tmp.write("phorge.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport type acme.a.Shape;\nimport type acme.b.Shape;\nfunction main() {}",
+        "package Main;\nimport type Acme.A.Shape;\nimport type Acme.B.Shape;\nfunction main() {}",
     );
     tmp.write(
-        "src/acme/a/shape.phg",
-        "package acme.a;\nclass Shape { constructor(public int w) {} }",
+        "src/Acme/A/shape.phg",
+        "package Acme.A;\nclass Shape { constructor(public int w) {} }",
     );
     tmp.write(
-        "src/acme/b/shape.phg",
-        "package acme.b;\nclass Shape { constructor(public int w) {} }",
+        "src/Acme/B/shape.phg",
+        "package Acme.B;\nclass Shape { constructor(public int w) {} }",
     );
     let err = loader::load(&entry).unwrap_err();
     assert!(err.contains("E-TYPE-IMPORT-CONFLICT"), "got: {err}");
@@ -198,11 +198,11 @@ fn import_type_builtin_is_rejected() {
     tmp.write("phorge.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport type acme.util.List;\nfunction main() {}",
+        "package Main;\nimport type Acme.Util.List;\nfunction main() {}",
     );
     tmp.write(
-        "src/acme/util/u.phg",
-        "package acme.util;\nfunction noop() {}",
+        "src/Acme/Util/u.phg",
+        "package Acme.Util;\nfunction noop() {}",
     );
     let err = loader::load(&entry).unwrap_err();
     assert!(err.contains("E-TYPE-IMPORT-BUILTIN"), "got: {err}");
@@ -213,19 +213,19 @@ fn import_type_builtin_is_rejected() {
 fn import_type_shadow_is_rejected() {
     let tmp = TempDir::new();
     tmp.write("phorge.toml", "module = \"acme/app\"");
-    // A class named `util` (lowercase is unusual but the loader is casing-agnostic) clashing with the
-    // `acme.util` module-import leaf `util`. The shadow guard keeps the two import kinds disjoint.
+    // A type named `Util` (bound bare by `import type Acme.Types.Util`) clashing with the
+    // `Acme.Util` module-import leaf `Util`. The shadow guard keeps the two import kinds disjoint.
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport acme.util;\nimport type acme.types.util;\nfunction main() {}",
+        "package Main;\nimport Acme.Util;\nimport type Acme.Types.Util;\nfunction main() {}",
     );
     tmp.write(
-        "src/acme/util/u.phg",
-        "package acme.util;\nfunction noop() {}",
+        "src/Acme/Util/u.phg",
+        "package Acme.Util;\nfunction noop() {}",
     );
     tmp.write(
-        "src/acme/types/t.phg",
-        "package acme.types;\nclass util { constructor(public int w) {} }",
+        "src/Acme/Types/t.phg",
+        "package Acme.Types;\nclass Util { constructor(public int w) {} }",
     );
     let err = loader::load(&entry).unwrap_err();
     assert!(err.contains("E-TYPE-IMPORT-SHADOW"), "got: {err}");
@@ -237,12 +237,12 @@ fn multi_package_transpiles_to_brace_namespaces() {
     tmp.write("phorge.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Console;\nimport acme.util;\n\
-         function main() {\n    Console.println(\"{util.compute(20)}\");\n}",
+        "package Main;\nimport Core.Console;\nimport Acme.Util;\n\
+         function main() {\n    Console.println(\"{Util.compute(20)}\");\n}",
     );
     tmp.write(
-        "src/acme/util/compute.phg",
-        "package acme.util;\nfunction compute(int n) -> int {\n    return n + n + 2;\n}",
+        "src/Acme/Util/compute.phg",
+        "package Acme.Util;\nfunction compute(int n) -> int {\n    return n + n + 2;\n}",
     );
     let unit = loader::load(&entry).expect("project loads");
     let php = cli::transpile_program(&unit.program, &unit.diag_src).expect("transpiles");
@@ -260,7 +260,7 @@ fn folder_path_violation_is_reported() {
     let tmp = TempDir::new();
     tmp.write("phorge.toml", "module = \"acme/app\"");
     let entry = tmp.write("src/main.phg", "package Main;\nfunction main() {}");
-    tmp.write("src/acme/util/x.phg", "package acme.bad;\nfunction x() {}");
+    tmp.write("src/Acme/Util/x.phg", "package Acme.Bad;\nfunction x() {}");
     let err = loader::load(&entry).unwrap_err();
     assert!(err.contains("E-PKG-PATH"), "got: {err}");
 }
@@ -269,7 +269,7 @@ fn folder_path_violation_is_reported() {
 fn loose_non_main_file_is_rejected() {
     let tmp = TempDir::new();
     // No phorge.toml anywhere above → loose mode; a dotted package is illegal.
-    let entry = tmp.write("script.phg", "package app.util;\nfunction f() {}");
+    let entry = tmp.write("script.phg", "package App.Util;\nfunction f() {}");
     let err = loader::load(&entry).unwrap_err();
     assert!(err.contains("requires a phorge.toml project"), "got: {err}");
 }

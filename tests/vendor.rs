@@ -85,8 +85,8 @@ fn build_upstream(dir: &TempDir) {
         "module = \"acme/greet\"\nversion = \"1.0.0\"\nsource = \"src\"\n",
     );
     dir.write(
-        "src/acme/greet/hello.phg",
-        "package acme.greet;\nfunction hi(string who) -> string { return \"hi {who}\"; }\n",
+        "src/Acme/Greet/hello.phg",
+        "package Acme.Greet;\nfunction hi(string who) -> string { return \"hi {who}\"; }\n",
     );
     let p = dir.path();
     git(&["init", "-q"], p);
@@ -111,8 +111,8 @@ fn vendor_fetches_and_loads_offline() {
     );
     let entry = consumer.write(
         "src/main.phg",
-        "package Main;\nimport Core.Console;\nimport acme.greet;\n\
-         function main() { Console.println(greet.hi(\"phorge\")); }\n",
+        "package Main;\nimport Core.Console;\nimport Acme.Greet;\n\
+         function main() { Console.println(Greet.hi(\"phorge\")); }\n",
     );
 
     // --- vendor (the network/git path, here over file://) ------------------
@@ -132,7 +132,7 @@ fn vendor_fetches_and_loads_offline() {
     // The vendored source landed under vendor/<name>/<package-path>/.
     let vendored = consumer
         .path()
-        .join("vendor/acme/greet/acme/greet/hello.phg");
+        .join("vendor/acme/greet/Acme/Greet/hello.phg");
     assert!(
         vendored.is_file(),
         "vendored file at {}",
