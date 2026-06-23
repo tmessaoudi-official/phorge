@@ -65,6 +65,34 @@
   - **De-risked by S6c.1:** cross-parent same-named promoted fields are already `E-MI-FIELD-CONFLICT`, so
     the concatenated synthesized params carry distinct field names (bounds the "implicit positional" critique).
 
+- **S6c.2a COMPLETE** (`4e97018`): single-parent constructor inheritance. `ast::effective_ctor`
+  (own-else-nearest-single-parent) is the single decision, consumed by the compiler (instance descriptor +
+  synthetic ctor + arity) and mirrored by the interpreter's `effective_ctor_parts`; the checker inherits
+  the ctor signature into a no-own-ctor class (`ClassInfo.has_ctor` distinguishes a zero-arg ctor from
+  none). Transpiler unchanged — PHP inherits the parent ctor natively. Non-vacuous `agree_out_php` helper
+  added (asserts exact output across run/runvm/PHP, not a shared-failure `agree`). 802 tests green, 8.4 floor.
+
+- **S6c.2b — NOT STARTED — design fork surfaced (needs decision before build):** the multi-parent
+  orchestrating constructor. Checker (concat parent ctor sigs) + interpreter (run each parent's effective
+  ctor with a sliced arg range) are tractable. The fork is the **compiler + transpiler** lowering of
+  *multiple parent ctor bodies into one construction*:
+  - **Inline-bodies (in C's synthetic ctor):** concat all parents' params, run each parent body in
+    sequence. Cheaper, but must isolate each body in its own scope AND scope each body's `return` to the
+    end of *that* body (not the ctor epilogue) — else an early `return` in parent A's body skips parent
+    B's init (the interpreter runs them as separate calls, so it would NOT skip — a byte-identity break).
+    Fiddly but localized to `compile_constructor`; transpiler inlines bodies into one PHP `__construct`,
+    decomposed parent traits emit fields-only (no `__construct`, stripping promotion), concrete parent
+    classes keep their own `__construct` so direct `new Parent(...)` still works.
+  - **Init-functions (spec's "uniquely-named init method"):** each parent ctor → a callable that inits an
+    *existing* instance; C's ctor calls each. Matches the interpreter's separate-call semantics for free
+    (no return/scope-leak trap), but adds new synthetic functions + dispatch in the compiler and
+    `__phorge_init_<Parent>` methods in the transpiler. More machinery, more byte-safe by construction.
+  - **Diamond-with-ctor:** a shared base reached through two arms has its ctor run **twice** (once per
+    arm) under either approach — but identically on all three backends, so byte-identity holds; the
+    double-run is harmless for the immutable field-set. (Documented, not special-cased.)
+  - Claude's lean: **inline-bodies-with-per-body-scope** (less new machinery), accepting the per-body
+    return/scope discipline + an explicit early-return-in-parent-ctor differential test. Awaiting go.
+
 ## Sub-slice S6a — single `extends` + override + the `open`/`final` model
 
 **Deliverable:** `open class A {…}  class B extends A {…}` with method override; `open` opt-in; `final` keyword retired; single-parent `super(...)`/`parent` works; subtyping + `instanceof` against the parent chain. One parent only (multi-parent is `E-…` deferred to S6b). Byte-identical run≡runvm≡PHP.
