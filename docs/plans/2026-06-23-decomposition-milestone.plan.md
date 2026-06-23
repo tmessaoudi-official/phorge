@@ -146,6 +146,32 @@ in `docs/MILESTONES.md`; prune research raw/ if desired; final full gate.
   comment (scan up for the contiguous leading `///` block), not the `fn` line. CRITICAL for W2 (checker
   impl split has ~110 doc'd methods).
 
+- [2026-06-23] **W2 DONE** (`558baf5`) — `impl Checker` whale → 11 sibling cluster files
+  (resolve/collect/throws/program/casing/stmt/expr/calls/assign/matches + common.rs); `checker/mod.rs`
+  9786(orig)→454. Built with a Rust-lexer-aware extractor (method-end = first `^    }`; doc-block
+  scan-up); moved methods `pub(super)`, helpers re-exposed via `use common::*;`. 823 green PHP-8.4.
+- [2026-06-23] **W2b DONE** (`bf43ed4`) — flat 2999-line `checker/tests.rs` → `tests/` module, 18
+  by-feature files + `support.rs` (helpers + const fixtures `pub(super)`, `pub(super) use super::super::*`).
+  251 checker tests preserved, 823 green. **W2 (the headline) is COMPLETE.** Two extractor gotchas hit +
+  fixed: (1) helper `pub(super)` substitution must target the fn line inside the doc-led block, not `^fn`;
+  (2) the script must also relocate col-0 `const` fixtures (SHAPE/GREETER/OPTION/…), not just `fn`s.
+
+- [2026-06-23] **W3.1 DONE** (`94bb02b`) — `impl Parser` whale → exprs/stmts/items/types/patterns
+  cluster files; `parser/mod.rs` 1934→199 (struct + token primitives + 2 free helpers kept). 823 green.
+- [2026-06-23] **W3.1b DONE** (`9b072bd`) — `parser/tests.rs` (1392) → `tests/` by construct
+  (exprs/stmts/items/types/patterns + support.rs), **mirroring the source** (parser tests ARE
+  construct-shaped, unlike checker's). 75 tests preserved, 823 green.
+- [2026-06-23] **W3.3 DONE** (`4481093`) — `ast/mod.rs` (1465→682): free-fn analyses → `walk.rs`
+  (free_vars + collect_free_*) + `classes.rs` (class graph queries), re-exported so callers unchanged;
+  type defs stay. ast/tests.rs kept flat (small); one walk internal made `pub(super)`. 823 green.
+
+**W3 REMAINING:** W3.2 loader (1219, *under* the 1500 target — fs/symbols/resolve cohesion split,
+free-fn+struct heavy) · W3.4 lexer (621 — **under target, single cohesive scanner → SKIP/keep**).
+**W4 backends (HIGH care):** compiler 3.3k / transpile 2.8k / interpreter 2.1k / vm — the coupled
+`Op` trio (`vm::exec_op` / `chunk::validate` / `compiler::stack_effect`) MUST stay whole; `self.height`
+discipline; `emit_stmt` guard-arm order. **W5 close:** rebuild release binary, update
+ARCHITECTURE/CHANGELOG/MILESTONES, dummy-Op smoke check.
+
 ### Status checkpoint (2026-06-23 ~17:45)
 **DONE + committed green (823 tests, clippy --all-targets + fmt, PHP 8.4 floor):**
 - W0.1 `0d4bdd4` · W0.2 `51adb06` (test extraction) · docs `49d154b`
