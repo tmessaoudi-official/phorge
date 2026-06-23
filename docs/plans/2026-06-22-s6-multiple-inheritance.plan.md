@@ -107,8 +107,25 @@
   (construction/`extends` stay concrete). `examples/guide/inheritance-lattice.phg` (single + multi +
   diamond) byte-identical run≡runvm≡real PHP 8.4. 803 tests green; no new `Op`.
 
-**Remaining S6c work: S6c.2b only** (multi-parent orchestrating constructor — the combined "multi-parent
-with state + instanceof" guide lands with it). Everything else in S6 is complete.
+- **S6c.2b COMPLETE** (`ffc9ff4`) — multi-parent orchestrating constructor; **S6c is now done and M-RT
+  S6 (multiple inheritance) is CLOSED.** A class with ≥2 parents and no own ctor gets a synthesized
+  orchestrating ctor: params = parents' ctor params concatenated in `extends` order; constructing it runs
+  each parent's ctor (its arg slice) on the one instance, initializing every inherited field (parent ctor
+  may have a body). `ast::ctor_plan` (replaced `effective_ctor`) is the shared ordered plan — own, else
+  single-parent's, else every parent's concatenated. Compiler: descriptor + synth ctor load all promoted
+  params → `MakeInstance`, then each entry's body in its own return-jump set (early `return` ends only
+  that body, matching the interpreter's separate per-parent calls). Interpreter: promote all, then run
+  each body with its arg slice. Checker: concatenated signature. Transpiler: a decomposed parent's trait
+  emits promoted params as PLAIN public fields + NO `__construct` (two trait `__construct`s = PHP fatal);
+  the concrete class and the multi-parent subclass each get an explicit-assignment `__construct`
+  (`emit_class_members` gained `as_trait`; new `emit_synth_construct`). `examples/guide/inheritance-state.phg`
+  byte-identical run≡runvm≡real PHP 8.4. No new `Op`, no `Value`. 804 tests green. Deferred → KNOWN_ISSUES:
+  a child with its own ctor under inheritance (the `super`-replacement follow-up); cross-parent
+  non-promoted param name collision.
+
+**S6 MULTIPLE INHERITANCE COMPLETE** — S6a (single `extends`/override/`open`-final) + S6b (multi-parent
+compose/resolution/`abstract`) + S6c (field conflict, ctor composition single+multi, instanceof across
+the lattice). Next M-RT: S8 traits; error-model Slice 2 in parallel.
 
 ## Sub-slice S6a — single `extends` + override + the `open`/`final` model
 
