@@ -1,8 +1,13 @@
 use super::*;
-use crate::token::TokenKind;
+use crate::token::{StrSeg, TokenKind};
 
 fn kinds(src: &str) -> Vec<TokenKind> {
     lex(src).unwrap().into_iter().map(|t| t.kind).collect()
+}
+
+/// A `Str` token of a single literal segment (the common no-interpolation case).
+fn lit(s: &str) -> TokenKind {
+    TokenKind::Str(vec![StrSeg::Lit(s.into())])
 }
 
 #[test]
@@ -264,24 +269,57 @@ fn mutable_keyword_is_recognized() {
 #[test]
 fn string_literals() {
     use TokenKind::*;
-    assert_eq!(kinds("\"hello\""), vec![Str("hello".into()), Eof]);
+    assert_eq!(kinds("\"hello\""), vec![lit("hello"), Eof]);
     // escapes
-    assert_eq!(
-        kinds("\"a\\nb\\t\\\"c\""),
-        vec![Str("a\nb\t\"c".into()), Eof]
-    );
-    // interpolation body preserved verbatim (split happens in the parser)
+    assert_eq!(kinds("\"a\\nb\\t\\\"c\""), vec![lit("a\nb\t\"c"), Eof]);
+    // interpolation is now split by the lexer into literal + interp segments.
     assert_eq!(
         kinds("\"Hello {name}\""),
-        vec![Str("Hello {name}".into()), Eof]
+        vec![
+            Str(vec![
+                StrSeg::Lit("Hello ".into()),
+                StrSeg::Interp("name".into())
+            ]),
+            Eof
+        ]
     );
 }
 
 #[test]
-fn utf8_string_body_preserved() {
+fn literal_braces_via_backslash() {
     use TokenKind::*;
-    assert_eq!(kinds("\"café\""), vec![Str("café".into()), Eof]);
-    assert_eq!(kinds("\"a 🎉 b\""), vec![Str("a 🎉 b".into()), Eof]);
+    // `\{` / `\}` are literal braces — a single literal segment, no interpolation.
+    assert_eq!(kinds(r#""\{x\}""#), vec![lit("{x}"), Eof]);
+    // mixed: literal braces around a real interpolation.
+    assert_eq!(
+        kinds(r#""\{{n}\}""#),
+        vec![
+            Str(vec![
+                StrSeg::Lit("{".into()),
+                StrSeg::Interp("n".into()),
+                StrSeg::Lit("}".into())
+            ]),
+            Eof
+        ]
+    );
+}
+
+#[test]
+fn raw_strings() {
+    use TokenKind::*;
+    // No escapes, no interpolation — every byte literal.
+    assert_eq!(kinds(r#"r"a\n{x}b""#), vec![lit(r"a\n{x}b"), Eof]);
+    // `#`-delimited raw string carries embedded quotes.
+    assert_eq!(kinds(r##"r#"say "hi""#"##), vec![lit(r#"say "hi""#), Eof]);
+    // a bare `r` / `rx` is an ordinary identifier, not a raw string.
+    assert_eq!(kinds("r"), vec![Ident("r".into()), Eof]);
+}
+
+#[test]
+fn utf8_string_body_preserved() {
+    use TokenKind::Eof;
+    assert_eq!(kinds("\"café\""), vec![lit("café"), Eof]);
+    assert_eq!(kinds("\"a 🎉 b\""), vec![lit("a 🎉 b"), Eof]);
 }
 
 #[test]
@@ -360,10 +398,10 @@ fn html_literal_errors() {
 fn unicode_escape_expands_to_utf8() {
     use TokenKind::*;
     // `\u{1F600}` (😀) is the 4-byte UTF-8 sequence; `\u{41}` is `A`.
-    assert_eq!(kinds(r#""\u{41}""#), vec![Str("A".into()), Eof]);
-    assert_eq!(kinds(r#""x\u{1F600}y""#), vec![Str("x😀y".into()), Eof]);
+    assert_eq!(kinds(r#""\u{41}""#), vec![lit("A"), Eof]);
+    assert_eq!(kinds(r#""x\u{1F600}y""#), vec![lit("x😀y"), Eof]);
     // `\u{9}` is a tab; composes with the other escapes.
-    assert_eq!(kinds(r#""a\u{9}b""#), vec![Str("a\tb".into()), Eof]);
+    assert_eq!(kinds(r#""a\u{9}b""#), vec![lit("a\tb"), Eof]);
 }
 
 #[test]

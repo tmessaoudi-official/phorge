@@ -3,7 +3,7 @@
 //! surface as a unified `diagnostic::Diagnostic` (`Stage::Lex`) carrying line/col.
 
 use crate::diagnostic::{Diagnostic, Stage};
-use crate::token::{Span, Token, TokenKind};
+use crate::token::{Span, StrSeg, Token, TokenKind};
 
 pub struct Lexer<'a> {
     src: &'a [u8],
@@ -205,13 +205,20 @@ impl<'a> Lexer<'a> {
 
     fn scan_string(&mut self, start: usize, line: u32, col: u32) -> Result<Token, Diagnostic> {
         self.bump(); // opening quote
-                     // Accumulate the body as raw bytes: literal bytes (including multi-byte UTF-8
-                     // sequences) are copied verbatim, escapes expand to their ASCII byte. The source
-                     // is already valid UTF-8, so the final from_utf8 cannot fail.
-        let mut bytes: Vec<u8> = Vec::new();
+                     // Single pass that BOTH expands escapes AND splits interpolation — only here do
+                     // we know whether a `{` is a real interpolation brace or a `\{` literal escape (a
+                     // parser-side split on the escape-expanded value couldn't tell `\{` from `\\{`).
+                     // Escapes expand into whichever buffer is active: the literal run, or — when
+                     // inside `{…}` — the interpolation's inner source (so an escaped quote `\"` in
+                     // `"{m[\"k\"]}"` becomes a real `"` in the re-lexed expression, matching the old
+                     // expand-then-split pipeline). A bare unescaped `{` opens an interpolation, the
+                     // first unescaped `}` closes it (no nesting — matching the prior splitter). Source
+                     // is valid UTF-8, so the `from_utf8` calls cannot fail.
+        let mut segs: Vec<StrSeg> = Vec::new();
+        let mut lit: Vec<u8> = Vec::new();
+        let mut interp: Option<Vec<u8>> = None; // `Some` while inside `{…}`
         loop {
-            // Snapshot the position of this unit before consuming, so an invalid escape
-            // can report the column of the offending backslash.
+            // Snapshot before consuming, so an invalid escape reports the backslash's column.
             let (el, ec) = (self.line, self.col);
             match self.bump() {
                 None => {
@@ -222,40 +229,138 @@ impl<'a> Lexer<'a> {
                         col,
                     ))
                 }
-                Some(b'"') => break,
-                Some(b'\\') => match self.bump() {
-                    Some(b'n') => bytes.push(b'\n'),
-                    Some(b't') => bytes.push(b'\t'),
-                    Some(b'r') => bytes.push(b'\r'),
-                    Some(b'\\') => bytes.push(b'\\'),
-                    Some(b'"') => bytes.push(b'"'),
-                    // `\u{HEX}` — a Unicode escape (Phase 1 string slice): 1–6 hex digits naming a
-                    // codepoint, expanded to its UTF-8 bytes at lex time. Independent of the i18n
-                    // string-indexing work — this is just byte production.
-                    Some(b'u') => self.scan_unicode_escape(&mut bytes, el, ec)?,
-                    Some(other) => {
+                Some(b'"') => {
+                    if interp.is_some() {
                         return Err(Diagnostic::new(
                             Stage::Lex,
-                            format!("invalid escape \\{}", other as char),
-                            el,
-                            ec,
-                        ))
-                    }
-                    None => {
-                        return Err(Diagnostic::new(
-                            Stage::Lex,
-                            "unterminated string",
+                            "unterminated interpolation '{' in string",
                             line,
                             col,
-                        ))
+                        ));
                     }
-                },
-                Some(other) => bytes.push(other),
+                    break;
+                }
+                // A bare `{` outside an interpolation opens one (flush the pending literal first); a
+                // `{` already inside one is just a character of the inner expression source.
+                Some(b'{') if interp.is_none() => {
+                    if !lit.is_empty() {
+                        segs.push(StrSeg::Lit(
+                            String::from_utf8(std::mem::take(&mut lit)).expect("valid UTF-8"),
+                        ));
+                    }
+                    interp = Some(Vec::new());
+                }
+                // The first unescaped `}` closes the interpolation; a `}` outside one is an error
+                // (write `\}` for a literal brace).
+                Some(b'}') if interp.is_some() => {
+                    segs.push(StrSeg::Interp(
+                        String::from_utf8(interp.take().expect("inside interp"))
+                            .expect("valid UTF-8"),
+                    ));
+                }
+                Some(b'}') => return Err(Diagnostic::new(
+                    Stage::Lex,
+                    "unexpected '}' in string (no matching '{'; write `\\}` for a literal brace)",
+                    el,
+                    ec,
+                )),
+                Some(b'\\') => {
+                    // Expand the escape into the active buffer (interpolation inner if inside one,
+                    // else the literal run).
+                    let buf = interp.as_mut().unwrap_or(&mut lit);
+                    match self.bump() {
+                        Some(b'n') => buf.push(b'\n'),
+                        Some(b't') => buf.push(b'\t'),
+                        Some(b'r') => buf.push(b'\r'),
+                        Some(b'\\') => buf.push(b'\\'),
+                        Some(b'"') => buf.push(b'"'),
+                        // `\{` / `\}` — a literal brace (Phase 1 string slice): emitted as a byte into
+                        // the active buffer, so it never opens/closes an interpolation.
+                        Some(b'{') => buf.push(b'{'),
+                        Some(b'}') => buf.push(b'}'),
+                        // `\u{HEX}` — a Unicode escape: 1–6 hex digits → UTF-8 bytes at lex time.
+                        Some(b'u') => self.scan_unicode_escape(buf, el, ec)?,
+                        Some(other) => {
+                            return Err(Diagnostic::new(
+                                Stage::Lex,
+                                format!("invalid escape \\{}", other as char),
+                                el,
+                                ec,
+                            ))
+                        }
+                        None => {
+                            return Err(Diagnostic::new(
+                                Stage::Lex,
+                                "unterminated string",
+                                line,
+                                col,
+                            ))
+                        }
+                    }
+                }
+                Some(other) => interp.as_mut().unwrap_or(&mut lit).push(other),
             }
         }
-        let value = String::from_utf8(bytes).expect("source string body is valid UTF-8");
+        if !lit.is_empty() {
+            segs.push(StrSeg::Lit(
+                String::from_utf8(lit).expect("string literal run is valid UTF-8"),
+            ));
+        }
         Ok(Token {
-            kind: TokenKind::Str(value),
+            kind: TokenKind::Str(segs),
+            span: Span {
+                start,
+                len: self.pos - start,
+                line,
+                col,
+            },
+        })
+    }
+
+    /// Scan a raw string body (`r#*"` already consumed): copy bytes verbatim — no escapes, no
+    /// interpolation — until a closing `"` followed by `hashes` `#`s. A `"` with the wrong number of
+    /// trailing `#`s is a literal `"`, so any content (including `"#`) is expressible by choosing a
+    /// longer `#`-run. Produces a single `StrSeg::Lit` (Phase 1 string slice).
+    fn scan_raw_string(
+        &mut self,
+        start: usize,
+        line: u32,
+        col: u32,
+        hashes: usize,
+    ) -> Result<Token, Diagnostic> {
+        let mut body: Vec<u8> = Vec::new();
+        loop {
+            match self.peek() {
+                None => {
+                    return Err(Diagnostic::new(
+                        Stage::Lex,
+                        "unterminated raw string",
+                        line,
+                        col,
+                    ))
+                }
+                Some(b'"') => {
+                    // A closing delimiter iff the `"` is followed by exactly `hashes` `#`s.
+                    let closes = (0..hashes).all(|i| self.src.get(self.pos + 1 + i) == Some(&b'#'));
+                    if closes {
+                        self.bump(); // `"`
+                        for _ in 0..hashes {
+                            self.bump(); // each closing `#`
+                        }
+                        break;
+                    }
+                    body.push(b'"');
+                    self.bump();
+                }
+                Some(c) => {
+                    body.push(c);
+                    self.bump();
+                }
+            }
+        }
+        let value = String::from_utf8(body).expect("raw string body is valid UTF-8");
+        Ok(Token {
+            kind: TokenKind::Str(vec![StrSeg::Lit(value)]),
             span: Span {
                 start,
                 len: self.pos - start,
@@ -583,6 +688,25 @@ pub fn lex(src: &str) -> Result<Vec<Token>, Diagnostic> {
                     let t = lx.scan_html(start, line, col)?;
                     out.push(t);
                     continue;
+                }
+
+                // `r"…"` / `r#"…"#` raw string — literal bytes, NO escapes, NO interpolation (for
+                // JSON, regex, templates). Rust-style `#`-run delimiter so embedded `"` is
+                // expressible. Triggered only by `r` + zero-or-more `#` + `"`; a bare `r` / `rx` is
+                // an ordinary identifier (must precede the identifier scan).
+                if b == b'r' {
+                    let after = &lx.src[lx.pos + 1..];
+                    let hashes = after.iter().take_while(|&&c| c == b'#').count();
+                    if after.get(hashes) == Some(&b'"') {
+                        lx.bump(); // `r`
+                        for _ in 0..hashes {
+                            lx.bump(); // each `#`
+                        }
+                        lx.bump(); // opening `"`
+                        let t = lx.scan_raw_string(start, line, col, hashes)?;
+                        out.push(t);
+                        continue;
+                    }
                 }
 
                 // `b"…"` byte-string literal — must precede the identifier scan (a bare `b` is a

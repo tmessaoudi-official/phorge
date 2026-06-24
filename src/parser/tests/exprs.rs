@@ -223,8 +223,14 @@ fn parses_string_interpolation() {
 
 #[test]
 fn unterminated_interpolation_errors() {
-    let mut p = parser("\"Hello {name\"");
-    assert!(p.parse_expr().is_err());
+    // The lexer now owns the interpolation split (so `\{` literal braces are unambiguous), so an
+    // unterminated `{` is caught at lex stage rather than parse.
+    let e = lex("\"Hello {name\"").unwrap_err();
+    assert!(
+        e.message.contains("unterminated interpolation"),
+        "{}",
+        e.message
+    );
 }
 
 #[test]

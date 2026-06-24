@@ -1,12 +1,17 @@
 // Extended string ergonomics (Language Evolution Phase 1, string slice).
 //
-// Two additions over basic interpolation (see `strings.phg`):
+// Four additions over basic interpolation (see `strings.phg`):
 //   * `+` concatenation — `string + string` → `string`. Type-directed with NO coercion: `"x" + 1`
 //     is a compile error (the typed system kills JS's `"1" + 1` footgun). Only `+` concatenates;
 //     `-`/`*` stay numeric. Transpiles via a runtime helper (PHP's `+` is numeric-only; `.` concats).
 //   * `\u{HEX}` Unicode escapes — 1–6 hex digits naming a codepoint, expanded to UTF-8 at lex time.
+//   * `\{` / `\}` literal braces — a literal brace in an interpolated string (so `{n}` still
+//     interpolates while the surrounding braces stay literal). The lexer owns the split, so a `\{`
+//     is never mistaken for interpolation.
+//   * raw strings `r"…"` / `r#"…"#` — every byte literal, NO escapes and NO interpolation (for JSON,
+//     regex, templates); the `#`-run delimiter lets embedded `"` appear unescaped.
 //
-// Both are byte-identical on `run`, `runvm`, and real PHP.
+// All four are byte-identical on `run`, `runvm`, and real PHP.
 package Main;
 
 import Core.Console;
@@ -31,4 +36,13 @@ function main() -> void {
     // `\u{}` works mid-string and alongside the other escapes.
     string mixed = "tab\u{9}then\u{2192}arrow";
     Console.println(mixed);
+
+    // Literal braces with `\{` / `\}` — the surrounding braces are literal, `{n}` still interpolates.
+    int n = 8;
+    Console.println("\{margin: {n}px\}");
+
+    // Raw strings: no escapes, no interpolation. The `r#"…"#` form carries embedded `"` and any
+    // braces/backslashes verbatim — ideal for a JSON or regex literal.
+    string json = r#"{"unit": "px", "pattern": "\d{2,3}"}"#;
+    Console.println(json);
 }

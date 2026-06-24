@@ -98,4 +98,10 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
 - **Defer set:** `\u{}`→pull forward ✓; tuples→defer; let-destructuring→full+`else` ✓; **fixed-length
   lists `[T; N]`** added ✓; `this`-capture→build ✓; generic-fn-value→defer; decimal/BigInt→M-NUM.
 - **Reject confirmed:** single-quotes; `<=>`; `.` concat; `switch`.
+- **Literal braces (decided 2026-06-24, after surfacing an implementation wrinkle):** `\{`/`\}`
+  backslash escapes (the spec's choice — reads like C/JSON) **and** raw strings `r"…"`/`r#"…"#`. The
+  `\{` form needs a lexer-side interpolation split (`TokenKind::Str` → segment list) so the lexer
+  distinguishes a literal `\{` from a bare interpolation `{` (the parser-side split on a flat value
+  couldn't — `\{` and `\\{` collapse to the same bytes). Raw strings fall out of the same refactor
+  (a single literal segment). String-slice part 1 (`+`, `\u{}`) shipped in `a0a3c95`.
 - **Introspection depth:** typeName+className+hierarchy+**member enumeration** (read-only).

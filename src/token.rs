@@ -10,12 +10,28 @@ pub struct Span {
     pub col: u32,  // 1-based
 }
 
+/// One segment of a lexed string literal. The lexer splits interpolation (`{expr}`) from literal
+/// runs because only the lexer knows whether a `{` is a real interpolation brace or a `\{` literal
+/// escape — a parser-side split on a flat, escape-expanded value couldn't tell them apart (a literal
+/// `\{` and a `\\{` collapse to the same bytes). Literal runs have their escapes already expanded
+/// (`\n`, `\u{…}`, `\{`→`{`, …); interpolation segments carry the **raw** inner expression source,
+/// re-lexed + parsed by the parser. A raw string (`r"…"`) is a single `Lit` with no escapes.
+#[derive(Debug, Clone, PartialEq)]
+pub enum StrSeg {
+    /// An escape-expanded literal run.
+    Lit(String),
+    /// The raw source between `{` and `}` — a Phorge expression the parser re-lexes and parses.
+    Interp(String),
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     // literals
     Int(i64),
     Float(f64),
-    Str(String),    // processed string body (interpolation split deferred to parser)
+    /// A string literal, pre-split into literal + interpolation segments (the lexer owns the split
+    /// so `\{` literal braces are unambiguous). Empty vec = the empty string `""`.
+    Str(Vec<StrSeg>),
     Bytes(Vec<u8>), // `b"…"` raw byte-string literal (no interpolation)
     Html(String),   // `html"…"` literal body (interpolation split + desugar deferred to parser)
     Ident(String),

@@ -6,7 +6,9 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
-### Added — Language Evolution Phase 1 (string slice, part 1): `+` concat + `\u{}`
+### Added — Language Evolution Phase 1 (string slice): `+` concat, `\u{}`, literal braces, raw strings
+
+`examples/guide/strings-ext.phg`; all byte-identical `run ≡ runvm ≡ real PHP 8.5`.
 
 - **String concatenation with `+`** — `string + string` → `string`, type-directed with **no
   coercion** (`"x" + 1` is a compile error, killing JS's `"1" + 1` footgun). Only `+` concatenates;
@@ -14,8 +16,13 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
   is recognized — no new `Op`); transpiles via a new `__phorge_add` runtime helper (`is_string ? . :
   +`, since PHP's `+` is numeric-only).
 - **`\u{HEX}` Unicode escapes** — 1–6 hex digits naming a codepoint, expanded to UTF-8 bytes at lex
-  time (independent of i18n string indexing). `examples/guide/strings-ext.phg`. Byte-identical
-  `run ≡ runvm ≡ real PHP 8.5`.
+  time (independent of i18n string indexing).
+- **Literal braces `\{` / `\}`** — a literal brace inside an interpolated string (`"\{a {n} b\}"` →
+  `{a … b}`). The interpolation split moved into the lexer (`TokenKind::Str` now carries pre-split
+  literal/interpolation segments) so a `\{` literal brace is never confused with an interpolation
+  brace — a flat parser-side split couldn't tell `\{` from `\\{`.
+- **Raw strings `r"…"` / `r#"…"#`** — every byte literal, no escapes, no interpolation (JSON, regex,
+  templates); a Rust-style `#`-run delimiter makes embedded `"` expressible.
 
 ### Added — Language Evolution Phase 0: `void`/`Empty` + mandatory return types
 

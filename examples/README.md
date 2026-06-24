@@ -23,7 +23,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/enums-match.phg` | payload + zero-payload variants; literal, binding, and variant patterns |
 | `guide/match-expr.phg` | `match` in expression position (operand / call argument) + literal patterns; transpiles to an IIFE (M11) |
 | `guide/strings.phg` | string interpolation |
-| `guide/strings-ext.phg` | extended string ergonomics — `+` concatenation (`string + string`, type-directed, no coercion; transpiles via a runtime helper since PHP's `+` is numeric-only) and `\u{HEX}` Unicode escapes (1–6 hex digits → UTF-8 at lex time) (Language Evolution Phase 1, string slice) |
+| `guide/strings-ext.phg` | extended string ergonomics — `+` concatenation (`string + string`, type-directed, no coercion; transpiles via a runtime helper since PHP's `+` is numeric-only), `\u{HEX}` Unicode escapes (1–6 hex digits → UTF-8 at lex time), `\{`/`\}` literal braces (the lexer owns the interpolation split, so a literal brace is unambiguous), and raw strings `r"…"`/`r#"…"#` (no escapes, no interpolation; `#`-run delimiter for embedded `"`) (Language Evolution Phase 1, string slice) |
 | `guide/inference.phg` | `var` local type inference + `type` aliases (M3 S0) |
 | `guide/ergonomics.phg` | indexing `xs[i]`, integer ranges `0..n` / `0..=n`, expression `if` (M3 S1) |
 | `guide/mutable.phg` | the `mutable` binding modifier + variable reassignment (`x = e;`) — immutable-by-default, `mutable`/`mutable var` opt-in, reassignment as a loop accumulator, a two-binding scalar-copy case; reassignment reuses `Op::SetLocal` (no new Op), `mutable` erased in PHP output (mutation milestone M-mut.1) |

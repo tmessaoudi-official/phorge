@@ -15,9 +15,17 @@ impl Parser {
                 self.advance();
                 Ok(Pattern::Float(f, sp))
             }
-            TokenKind::Str(s) => {
+            TokenKind::Str(segs) => {
                 self.advance();
-                Ok(Pattern::Str(s, sp))
+                // A string pattern must be a plain literal — interpolation makes no sense in a
+                // pattern. The lexer pre-split the literal; require exactly one (or zero, the empty
+                // string) literal segment.
+                use crate::token::StrSeg;
+                match segs.as_slice() {
+                    [] => Ok(Pattern::Str(String::new(), sp)),
+                    [StrSeg::Lit(s)] => Ok(Pattern::Str(s.clone(), sp)),
+                    _ => Err(self.error("a string pattern cannot contain interpolation `{…}`")),
+                }
             }
             TokenKind::True => {
                 self.advance();

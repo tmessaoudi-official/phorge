@@ -317,9 +317,9 @@ impl Parser {
                 self.advance();
                 Ok(Expr::Ident(name, sp))
             }
-            TokenKind::Str(body) => {
+            TokenKind::Str(segs) => {
                 self.advance();
-                let parts = self.split_interpolation(&body, sp)?;
+                let parts = self.segments_to_parts(segs, sp)?;
                 Ok(Expr::Str(parts, sp))
             }
             TokenKind::Bytes(b) => {
@@ -411,9 +411,45 @@ impl Parser {
         }
     }
 
+    /// Turn the lexer's pre-split string segments into `StrPart`s: a `Lit` becomes a literal run
+    /// (escapes, incl. `\{`, already expanded by the lexer); an `Interp` carries raw expression
+    /// source that is re-lexed + parsed here. An all-empty input yields a single empty literal. This
+    /// is the `Str` path; `html"…"` still uses [`Self::split_interpolation`] on its flat body.
+    pub(super) fn segments_to_parts(
+        &self,
+        segs: Vec<crate::token::StrSeg>,
+        sp: Span,
+    ) -> Result<Vec<StrPart>, Diagnostic> {
+        use crate::token::StrSeg;
+        let mut parts = Vec::new();
+        for seg in segs {
+            match seg {
+                StrSeg::Lit(s) => parts.push(StrPart::Literal(s)),
+                StrSeg::Interp(src) => {
+                    let sub_tokens = crate::lexer::lex(&src).map_err(|e| {
+                        Diagnostic::new(
+                            Stage::Parse,
+                            format!("in interpolation: {}", e.message),
+                            sp.line,
+                            sp.col,
+                        )
+                    })?;
+                    let mut sub = Parser::new(sub_tokens);
+                    let e = sub.parse_expr()?;
+                    sub.expect(&TokenKind::Eof, "end of interpolation expression")?;
+                    parts.push(StrPart::Expr(Box::new(e)));
+                }
+            }
+        }
+        if parts.is_empty() {
+            parts.push(StrPart::Literal(String::new()));
+        }
+        Ok(parts)
+    }
+
     /// Split a string body into literal runs and `{expr}` interpolations.
     /// Each interpolation is re-lexed + re-parsed as a standalone expression.
-    /// M1 limitation: literal braces (`{{`) are not supported.
+    /// Used by `html"…"` (whose body is still a flat string).
     pub(super) fn split_interpolation(
         &self,
         body: &str,
