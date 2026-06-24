@@ -35,15 +35,29 @@
 - [ ] **Slice 7 — Text natives** `Text.charAt` / `Text.substring` (safe alternative to `s[0]`).
 
 ### Phase 2 (introspection + process)
-- [ ] **Core.Reflect** — `typeName`/`className`/`implements`/`parents`/`traits`/`methodNames`/`fieldNames`
-  via `NativeEval::Reflective(fn(&[Value], &ClassTables))`. No new `Op`. Read-only, name-level.
-- [ ] **Process I/O** — `Core.Process.args()`, `Core.Env.get/all` on a quarantine seam (impure-native,
-  excluded from `differential.rs`; README walkthrough, not a gated example). CLI `phg run f.phg -- args`.
-- [ ] **Superglobal map** — docs/routing only (no new mechanism).
+- [⏸ BLOCKED — needs developer decision] **Core.Reflect** — F-006: real byte-identity-vs-erasure
+  tension (`typeName` on `Map`/`Set`/`bytes`/enum can't be reproduced in PHP → spine break in user code).
+  NOT shipped autonomously. Options A/B/C in the forks file; my rec = A (dedicated design pass).
+- [⏸ BLOCKED — needs developer decision] **Process I/O** — F-007: quarantine-seam mechanism +
+  `differential.rs` skip-logic + CLI argv threading is a milestone-scale seam ("M-Batteries kickoff");
+  improvising it risks flaky CI. Deferred to a short design pass.
+- [ ] **Superglobal map** — docs/routing only; trails Slice 3.
 
 ### Beyond the plan (if time remains before morning)
 - [ ] Next roadmap milestone — re-read `ROADMAP.md` / `docs/MILESTONES.md` at that point, pick the
   highest needle-mover that's autonomous-safe (design largely resolved), log the choice here.
+
+## Night outcome (checkpoint)
+**Shipped:** Slice 6 **UFCS** (`0dc071c`, green, byte-identical run≡runvm≡PHP 8.5) + the interpolation
+absolute-span root-cause fix + session docs (`88f8af1`). Phase 1 ergonomics perimeter **closed**.
+**Stopped at:** the rest of the master plan (Phase 2: Reflect, Process I/O) is **blocked on genuine
+design decisions** (F-005/006/007) — Reflect would break the byte-identity spine if shipped fragilely,
+Process I/O needs a quarantine-seam design. Per the standing directive (max rigor, protect the spine,
+never decide a genuine fork silently), I parked them for morning review rather than force risky scope.
+**Not pushed** (per directive — local only). **Next move is yours:** resolve F-001..F-007 in the forks
+file and I continue. The forks needing a *decision before I can build* are **F-006 (Reflect)** and
+**F-007 (Process I/O)**; F-001..F-005 are provisional calls already shipped/applied that you can confirm
+or flip.
 
 ## Progress log
 - [2026-06-25 start] Plan files created; baseline green; beginning Slice 6 (UFCS).

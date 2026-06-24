@@ -92,6 +92,73 @@ were close, I favored the one that removes a surprise without removing capabilit
 - **Reversal cost if you change it:** medium (loader would need to resolve UFCS heads cross-package).
 - **Status:** ⏳ AWAITING CONFIRMATION
 
+### F-005 — Slice 7 (`Text.charAt` / `Text.substring`) deferred to M4 / M-text
+- **Slice / context:** Phase 1 Slice 7. The master plan lists it as *"`Text.charAt` / `Text.substring`
+  natives (the safe alternative to `s[0]`; **→ M4**)"* — the `→ M4` annotation already routes it to the
+  stdlib-charter milestone.
+- **The fork:** Build byte-indexed `charAt`/`substring` now, or defer?
+- **Options considered:**
+  - A) Build now with **byte** semantics (matching PHP `substr`, byte-identical for ASCII; multibyte is
+    a documented caveat like the existing `sqrt(2.0)` float case).
+  - B) Defer to **M4 / M-text**, where byte-vs-codepoint is decided holistically (`s[0]` codepoint
+    indexing is *explicitly* deferred there in the master plan).
+- **My provisional call:** **B (defer).** Shipping byte semantics now and switching to codepoint in
+  M-text would be a breaking change to a *shipped* stdlib function — exactly the entanglement M-text
+  exists to resolve. The `→ M4` annotation already points this way. Phase 1's ergonomics perimeter is
+  effectively **closed at Slice 6 (UFCS)**; I proceed to Phase 2 (introspection + process I/O).
+- **Byte-identity / Op impact:** none (nothing built).
+- **Reversal cost if you change it:** low — if you want them now, they're a small additive pair of
+  `Core.Text` natives (the generic call path is already in place); say the word and I build them.
+- **Status:** ⏳ AWAITING CONFIRMATION
+
+### F-006 — Core.Reflect (Phase 2 Slice 1) is BLOCKED on a real byte-identity-vs-erasure tension — NOT shipped
+- **Slice / context:** Phase 2 Slice 1 (introspection). The spec says the reflect natives "erase to PHP
+  `get_class`/`class_implements`/`class_parents`/`class_uses`/`gettype`" and are byte-identity-gated.
+- **The blocker (verified by reading the transpiler erasure model):** PHP **erases** Phorge's finer type
+  distinctions, so several reflect natives **cannot** be byte-identical run≡runvm≡real PHP for arbitrary
+  inputs — a spine break in *user* code, not just examples:
+  - `typeName(x)`: `bytes` → PHP `string`; `List`/`Map`/`Set` all → PHP `array` (PHP cannot tell them
+    apart to return `"List"`/`"Map"`/`"Set"`); enum variants → generated PHP classes (name ≠ Phorge enum
+    name). So `typeName(aMap)` = `"Map"` on Rust backends, unreproducible in PHP.
+  - `className(x)`: salvageable for **class instances** (`get_class` matches a `package Main` class name)
+    + `null` for non-objects — but the **enum** case depends on enum PHP erasure (unverified) and the
+    composite cases need care.
+  - `implements`/`parents`/`traits`/`methodNames`/`fieldNames`: return `List<string>` whose **order** must
+    match PHP's `class_*`/`get_class_methods` order — the same ordering hazard as `Map.keys` vs PHP. Plus
+    they need a new `NativeEval::Reflective(&[Value], &ClassTables)` arm threaded into both backends
+    (the VM's `BytecodeProgram` would carry a new `ClassTables` bundle).
+- **Options:**
+  - A) **Defer the whole module to a dedicated design pass** (my recommendation) — resolve the erasure
+    tension explicitly: e.g. restrict `typeName`'s contract, define each list native to return a
+    **sorted** list with a matching `sort()` PHP wrapper, verify enum erasure, decide the `ClassTables`
+    plumbing. This is design work, not a mechanical slice.
+  - B) Ship only the **byte-identity-safe subset** now — `className` restricted to class-instance/null —
+    and defer `typeName` + the enumeration natives. Thin, and arguably should be designed as one module.
+  - C) Make the reflect list natives **run/runvm-only** (drop them from the PHP oracle, like the
+    quarantine seam) — a real departure from the "everything is byte-identical with PHP" thesis;
+    needs your explicit blessing.
+- **My provisional call:** **A — do NOT ship Core.Reflect autonomously tonight.** It needs a design
+  decision about the reflection-vs-erasure tension that I shouldn't make silently while you sleep
+  (shipping a `typeName` that diverges for `Map`/`Set`/`bytes`/enums would break the byte-identity spine
+  in user programs — the one invariant I won't risk autonomously). Phase 2 Slice 1 is parked pending your
+  call on A/B/C.
+- **Byte-identity / Op impact:** none (nothing built).
+- **Status:** ⏳ AWAITING CONFIRMATION — **needs your decision before I build it.**
+
+### F-007 — Phase 2 Slice 3 (Process I/O) also needs a seam decision before autonomous build
+- **Slice / context:** Phase 2 Slice 3 — `Core.Process.args()` / `Core.Env.get/all`. The spec marks it
+  **non-deterministic → off the byte-identity differential**, on a new "impure native" **quarantine
+  seam**, and calls it "the **M-Batteries kickoff**" (milestone-scale, not a quick slice).
+- **The fork:** the quarantine seam has open mechanism decisions — how an impure native is *marked*
+  (a `NativeEval` variant? a per-native flag?), how `differential.rs` *detects + skips* a program that
+  uses one, and how CLI argv (`phg run f.phg -- args`) threads to the interpreter/VM/serve paths.
+- **My provisional call:** **defer to a short design pass** rather than improvise a harness-affecting
+  seam autonomously (a wrong quarantine could let a non-deterministic program silently onto the oracle
+  and cause flaky CI). Low byte-identity risk by intent, but the seam design deserves your sign-off.
+- **Byte-identity / Op impact:** none (nothing built); the seam exists precisely to keep these *off* the
+  spine.
+- **Status:** ⏳ AWAITING CONFIRMATION
+
 <!-- TEMPLATE for each fork — copy below the line:
 
 ### F-NNN — <short title>

@@ -85,9 +85,18 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
    `this.v` (KNOWN_ISSUES).
 5. **Destructuring** — `var Point { x, y } = p` (irrefutable) + `var [a, b] = xs else { … }` (refutable
    list bail-out). After slice 3 so fixed-list destructuring is irrefutable.
-6. **UFCS** — `x.f(a)` ≡ `f(x, a)`, **general** (any free function), **method-first** resolution (real
-   method on x's type wins; else free-function fallback). Enables `xs.length()`, `xs.filter(p).map(g)`.
-7. **stdlib** — `Text.charAt` / `Text.substring` natives (the safe alternative to `s[0]`; → M4).
+6. **UFCS — ✅ DONE** (`0dc071c`, 2026-06-25). `x.f(a)` ≡ `f(x, a)`, **method-first**: a real method
+   wins; else `f` falls back to a user free function OR any *imported* `Core.*` native whose first
+   parameter accepts the receiver (`unify`-selected, so generic natives match). Enables `xs.length()`,
+   `xs.filter(p).map(g)`. Type-directed post-check rewrite `checker::rewrite_ufcs` (span-keyed like
+   `resolve_html`, applied last in `check_and_expand`); **no new `Op`/`Value`**; `E-UFCS-AMBIGUOUS`.
+   Root-cause fix shipped alongside: interpolation sub-expr `Span.start` made absolute via
+   `StrSeg::Interp(String, usize)` (was segment-relative → span-keyed rewrites collided inside `"{…}"`).
+   `examples/guide/ufcs.phg` byte-identical run≡runvm≡real PHP 8.5; 7 checker unit tests.
+7. **stdlib — ⏸ DEFERRED to M4 / M-text** (autonomous decision 2026-06-25, F-005). `Text.charAt` /
+   `Text.substring` entangle byte-vs-codepoint semantics that M-text exists to resolve (the plan already
+   annotated this `→ M4`); shipping byte-semantics now would risk a breaking change later. **Phase 1's
+   ergonomics perimeter is closed at Slice 6.**
 
 ### Phase 2 — Introspection + process (spec: introspection-strings-process)
 - **Core.Reflect** (deterministic, byte-safe): `typeName`/`className`/`implements`/`parents`/`traits`/
