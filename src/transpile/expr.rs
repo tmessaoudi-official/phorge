@@ -93,8 +93,13 @@ impl Transpiler {
             Expr::Member {
                 object, name, safe, ..
             } => {
-                // Static read `ClassName.field` → PHP `ClassName::$field` (M-mut.7).
+                // A `const` class constant `ClassName.NAME` → PHP `ClassName::NAME` (Feature A),
+                // checked before the static-field `::$name` path.
                 if !*safe {
+                    if let Some(s) = self.const_ref(object, name) {
+                        return Ok(s);
+                    }
+                    // Static read `ClassName.field` → PHP `ClassName::$field` (M-mut.7).
                     if let Some(s) = self.static_ref(object, name) {
                         return Ok(s);
                     }

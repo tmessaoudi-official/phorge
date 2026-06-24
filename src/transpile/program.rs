@@ -640,7 +640,20 @@ impl Transpiler {
                     // `mutable int x;`) emits as `public` — the spine-safe choice (M-mut.6).
                     let v = vis(modifiers);
                     let v = if v.is_empty() { "public" } else { v };
-                    if modifiers.contains(&Modifier::Static) {
+                    if modifiers.contains(&Modifier::Const) {
+                        // A `const` class constant (Feature A) → a PHP **typed class constant**
+                        // `[vis] const TYPE NAME = <literal>;` (PHP 8.3+; floor 8.5 ✓). Accessed
+                        // `Class::NAME` (no `$`), distinct from a static field's `Class::$name`. The
+                        // initializer is a checker-validated literal, so it round-trips byte-identically.
+                        let init_php = match init {
+                            Some(e) => self.emit_expr(e)?,
+                            None => "null".to_string(),
+                        };
+                        self.line(&format!(
+                            "{v} const {} {name} = {init_php};",
+                            self.emit_type(ty)
+                        ));
+                    } else if modifiers.contains(&Modifier::Static) {
                         // A `static` field (M-mut.7) → PHP `public static <type> $name = <init>;`. The
                         // initializer is a literal constant (checker-enforced), so it round-trips.
                         let init_php = match init {

@@ -214,6 +214,13 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
     // table. The VM seeds its runtime `statics` vector from this once at startup; the interpreter
     // seeds its own map from the same `const_literal` kernel (F3). The checker guarantees every
     // static has a literal-const initializer, so `unwrap_or(Unit)` is checker-unreachable.
+    // Class constants (Feature A): the shared table flattens inheritance + traits. Each `(class, NAME)`
+    // carries its inlined literal `Value` and operand `CTy` (from the declared `Type`), consumed by
+    // `const_value`/`const_cty`. No runtime slot — a const access emits `Op::Const`.
+    let consts_index: HashMap<(String, String), (Value, CTy)> = crate::ast::class_consts(program)
+        .into_iter()
+        .map(|(key, (v, ty))| (key, (v, resolve_cty(&ty))))
+        .collect();
     let mut statics_index: HashMap<(String, String), (usize, CTy)> = HashMap::new();
     let mut static_inits: Vec<Value> = Vec::new();
     for c in &class_decls {
@@ -460,6 +467,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
             &enum_descs,
             &classes,
             &statics_index,
+            &consts_index,
             &class_descs,
             &names_index,
             &empty_fields,
@@ -498,6 +506,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
             &enum_descs,
             &classes,
             &statics_index,
+            &consts_index,
             &class_descs,
             &names_index,
             &class_field_ctys[&cd.name],
@@ -520,6 +529,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
             &enum_descs,
             &classes,
             &statics_index,
+            &consts_index,
             &class_descs,
             &names_index,
             &class_field_ctys[class_name],
@@ -569,6 +579,7 @@ pub(super) fn compile_constructor<'a>(
     enum_descs: &'a [EnumDesc],
     classes: &'a HashMap<String, usize>,
     statics_index: &'a HashMap<(String, String), (usize, CTy)>,
+    consts_index: &'a HashMap<(String, String), (Value, CTy)>,
     class_descs: &'a [ClassDesc],
     names_index: &'a HashMap<String, usize>,
     field_tags: &'a HashMap<String, CTy>,
@@ -590,6 +601,7 @@ pub(super) fn compile_constructor<'a>(
         enum_descs,
         classes,
         statics_index,
+        consts_index,
         class_descs,
         names_index,
         field_tags,
@@ -654,6 +666,7 @@ pub(super) fn compile_method<'a>(
     enum_descs: &'a [EnumDesc],
     classes: &'a HashMap<String, usize>,
     statics_index: &'a HashMap<(String, String), (usize, CTy)>,
+    consts_index: &'a HashMap<(String, String), (Value, CTy)>,
     class_descs: &'a [ClassDesc],
     names_index: &'a HashMap<String, usize>,
     field_tags: &'a HashMap<String, CTy>,
@@ -668,6 +681,7 @@ pub(super) fn compile_method<'a>(
         enum_descs,
         classes,
         statics_index,
+        consts_index,
         class_descs,
         names_index,
         field_tags,

@@ -143,6 +143,40 @@ pub(super) fn is_pascal(s: &str) -> bool {
     s.chars().next().is_some_and(|c| c.is_ascii_uppercase()) && !s.contains('_')
 }
 
+/// SCREAMING_SNAKE_CASE (Feature A — `const` names): an uppercase ASCII first letter, and every
+/// character an uppercase letter, a digit, or `_` — no lowercase. `MAX`, `TAG`, `MAX_SIZE`, `HTTP_2`
+/// qualify; `maxVal`, `Max` do not. The PHP/C/Java constant convention, chosen for legibility.
+pub(super) fn is_screaming_snake(s: &str) -> bool {
+    s.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+        && s.chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+}
+
+/// Convert an identifier to the suggested SCREAMING_SNAKE_CASE form (`maxVal` → `MAX_VAL`,
+/// `max_size` → `MAX_SIZE`, `PI` → `PI`): split on `_` and on camelCase humps, uppercase each word,
+/// join with `_`.
+pub(super) fn to_screaming_snake(s: &str) -> String {
+    // First split existing `_` words, then split each on uppercase humps (`maxVal` → `max`,`Val`).
+    let mut words: Vec<String> = Vec::new();
+    for w in case_words(s) {
+        let mut cur = String::new();
+        for c in w.chars() {
+            if c.is_ascii_uppercase() && !cur.is_empty() {
+                words.push(std::mem::take(&mut cur));
+            }
+            cur.push(c);
+        }
+        if !cur.is_empty() {
+            words.push(cur);
+        }
+    }
+    words
+        .iter()
+        .map(|w| w.to_ascii_uppercase())
+        .collect::<Vec<_>>()
+        .join("_")
+}
+
 /// Split a snake_case-or-otherwise identifier into its `_`-delimited words, dropping empties (so a
 /// leading/trailing/doubled `_` does not yield a blank word). Shared by both converters.
 pub(super) fn case_words(s: &str) -> Vec<&str> {

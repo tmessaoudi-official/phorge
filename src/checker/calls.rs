@@ -709,6 +709,42 @@ impl Checker {
         if !safe {
             if let crate::ast::Expr::Ident(cls, _) = object {
                 if self.lookup_binding(cls).is_none() && self.classes.contains_key(cls) {
+                    // A `const` class constant (Feature A) is resolved before a static field — it is
+                    // class-name-only and visibility-checked. `consts` already carries inherited
+                    // entries (merge_inherited), so `Sub.MAX` resolves an inherited `MAX`.
+                    if let Some(entry) = self.classes[cls].consts.get(name).cloned() {
+                        let visible = match entry.vis {
+                            MemberVis::Public => true,
+                            MemberVis::Private => {
+                                self.cur_class.as_deref() == Some(entry.owner.as_str())
+                            }
+                            MemberVis::Protected => self
+                                .cur_class
+                                .as_deref()
+                                .is_some_and(|c| self.is_subtype(c, &entry.owner)),
+                        };
+                        if !visible {
+                            let kind = if entry.vis == MemberVis::Private {
+                                "private"
+                            } else {
+                                "protected"
+                            };
+                            self.err_coded(
+                                span,
+                                format!("`{name}` is a {kind} constant of `{}`", entry.owner),
+                                "E-CONST-VISIBILITY",
+                                Some(format!(
+                                    "it is readable only {}",
+                                    if entry.vis == MemberVis::Private {
+                                        format!("inside `{}`", entry.owner)
+                                    } else {
+                                        format!("inside `{}` and its subclasses", entry.owner)
+                                    }
+                                )),
+                            );
+                        }
+                        return entry.ty;
+                    }
                     return match self.classes[cls].statics.get(name).cloned() {
                         Some(t) => t,
                         None => self.err_coded(
@@ -762,6 +798,20 @@ impl Checker {
                     // `T` field reads at the concrete type (`Box<int>().value : int`) — identity for a
                     // non-generic class (M-RT generics-all).
                     Some(t) => apply_subst(&t, &self.class_subst(&cls, &cargs)),
+                    // A `const` is class-name-only: reading it through an instance (`c.MAX`) is an
+                    // error, with a hint pointing at the correct `ClassName.MAX` form (Feature A).
+                    None if self
+                        .classes
+                        .get(&cls)
+                        .is_some_and(|info| info.consts.contains_key(name)) =>
+                    {
+                        self.err_coded(
+                            span,
+                            format!("`{name}` is a constant of `{cls}` — read it as `{cls}.{name}`, not through an instance"),
+                            "E-CONST-INSTANCE-ACCESS",
+                            Some(format!("write `{cls}.{name}`")),
+                        )
+                    }
                     None => self.err(span, format!("type `{cls}` has no field `{name}`")),
                 }
             }

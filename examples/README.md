@@ -20,6 +20,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/functions.phg` | functions: typed params, return types, a no-return function, composition, a `List<int>`-returning function |
 | `guide/collections.phg` | `List<T>` literals, nested `List<List<int>>`, nested `for`, list of instances, `List.length` |
 | `guide/classes.phg` | constructor promotion, methods, `this`, composition, a method call on a field |
+| `guide/constants.phg` | `const` class constants — public/`private` visibility, class-name-only access (`ClassName.NAME`), a constant as an arithmetic operand, and inheritance via the subclass name; transpiles to a PHP typed class constant (Feature A) |
 | `guide/enums-match.phg` | payload + zero-payload variants; literal, binding, and variant patterns |
 | `guide/match-expr.phg` | `match` in expression position (operand / call argument) + literal patterns; transpiles to an IIFE (M11) |
 | `guide/strings.phg` | string interpolation |

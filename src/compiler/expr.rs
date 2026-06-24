@@ -91,9 +91,13 @@ impl Compiler<'_> {
                 // (decision P4-5). Runtime lookup keeps the compiler untyped; the fault on a miss
                 // is byte-identical to the interpreter's. `?.` (safe) short-circuits a null receiver.
                 let line = span.line;
-                // Static read `ClassName.field` (M-mut.7): the head is a class name (not a local),
-                // so this is program-level state, not an instance field.
-                if let Some(idx) = self.static_slot(object, name) {
+                // A `const` class constant (Feature A): inline the literal `Value` via `Op::Const` —
+                // no runtime store. Checked before the static path (a const is never a static slot).
+                if let Some(v) = self.const_value(object, name) {
+                    self.emit_const(v, line);
+                } else if let Some(idx) = self.static_slot(object, name) {
+                    // Static read `ClassName.field` (M-mut.7): the head is a class name (not a local),
+                    // so this is program-level state, not an instance field.
                     self.emit(Op::GetStatic(idx), line);
                 } else if let Some(getm) = self.hook_get_method(object, name) {
                     // Property hook read `o.name` (M-mut.7b) → call the synthetic `<name>$get`
@@ -694,6 +698,7 @@ impl Compiler<'_> {
             self.enum_descs,
             self.classes,
             self.statics_index,
+            self.consts_index,
             self.class_descs,
             self.names_index,
             &empty_fields,

@@ -66,6 +66,11 @@ impl Interp {
                 if !*safe {
                     if let Expr::Ident(cls, _) = &**object {
                         if self.frame.lookup(cls).is_none() && self.classes.contains_key(cls) {
+                            // A `const` class constant (Feature A) is inlined before a static field;
+                            // the checker has already enforced visibility + class-name-only access.
+                            if let Some(v) = self.consts.get(&(cls.clone(), name.clone())) {
+                                return Ok(v.clone());
+                            }
                             return match self.statics.get(&(cls.clone(), name.clone())) {
                                 Some(v) => Ok(v.clone()),
                                 None => rt(format!("no static field `{name}` on `{cls}`")),

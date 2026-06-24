@@ -15,6 +15,18 @@ impl Transpiler {
         None
     }
 
+    /// Render a `ClassName.NAME` **class-constant** access as PHP `ClassName::NAME` (Feature A) — no
+    /// `$`, distinct from a static field's `ClassName::$name`. Checked before `static_ref` so a const
+    /// never takes the static `::$` path. PHP resolves an inherited `Sub::MAX` itself.
+    pub(super) fn const_ref(&self, object: &Expr, name: &str) -> Option<String> {
+        if let Expr::Ident(cls, _) = object {
+            if !self.is_local(cls) && self.consts.contains(&(cls.clone(), name.to_string())) {
+                return Some(format!("{cls}::{name}"));
+            }
+        }
+        None
+    }
+
     /// Render a type-name reference in a *type position* (param/return/field type, `instanceof` RHS,
     /// match type-pattern). M-RT S6c.3: a reference to a **decomposed** class (an ancestor of some
     /// multi-parent class, lowered to `interface I<name>` + `trait T<name>`) emits as its interface

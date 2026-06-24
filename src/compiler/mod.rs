@@ -149,6 +149,12 @@ struct Compiler<'a> {
     /// static used as an arithmetic operand (`C.total + 1` specializes — without it the VM would
     /// reject what the interpreter accepts, the documented CTy-operand trap).
     statics_index: &'a HashMap<(String, String), (usize, CTy)>,
+    /// Class constants (Feature A): `(class, NAME)` → (inlined literal `Value`, operand `CTy`).
+    /// Inheritance + traits already flattened (the shared [`crate::ast::class_consts`] table). A
+    /// `ClassName.NAME` access emits the literal via `Op::Const` (no runtime store) and `ctype` reads
+    /// the `CTy` so a const is a first-class arithmetic operand — same CTy-operand discipline as a
+    /// static.
+    consts_index: &'a HashMap<(String, String), (Value, CTy)>,
     /// The shared class-descriptor table — `stack_effect` reads `MakeInstance`'s field count from it.
     class_descs: &'a [ClassDesc],
     /// Field/member name → its index in `BytecodeProgram.names` (for `GetField`/`CallMethod`).
@@ -335,6 +341,7 @@ impl<'a> Compiler<'a> {
         enum_descs: &'a [EnumDesc],
         classes: &'a HashMap<String, usize>,
         statics_index: &'a HashMap<(String, String), (usize, CTy)>,
+        consts_index: &'a HashMap<(String, String), (Value, CTy)>,
         class_descs: &'a [ClassDesc],
         names_index: &'a HashMap<String, usize>,
         field_tags: &'a HashMap<String, CTy>,
@@ -355,6 +362,7 @@ impl<'a> Compiler<'a> {
             enum_descs,
             classes,
             statics_index,
+            consts_index,
             class_descs,
             names_index,
             this_slot: None,
@@ -574,6 +582,11 @@ impl<'a> Compiler<'a> {
                 None => Err("`this` used outside a method".into()),
             },
             Expr::Member { object, name, .. } => {
+                // A `const` class constant resolves to its declared operand `CTy` (Feature A) — checked
+                // first (before statics and `ctype(object)`, which would reject the bare class name).
+                if let Some(cty) = self.const_cty(object, name) {
+                    return Ok(cty);
+                }
                 // Static read `ClassName.field` resolves to the static's declared `CTy` (M-mut.7) —
                 // checked first, since `ctype(object)` would reject the bare class name.
                 if let Some(cty) = self.static_cty(object, name) {
@@ -713,6 +726,36 @@ impl<'a> Compiler<'a> {
             if self.resolve_local(name).is_none() && self.classes.contains_key(name) {
                 return self
                     .statics_index
+                    .get(&(name.clone(), field.to_string()))
+                    .map(|(_, cty)| cty.clone());
+            }
+        }
+        None
+    }
+
+    /// The inlined literal `Value` of a `ClassName.NAME` class-constant access, or `None` if it is not
+    /// a const (Feature A). Mirrors [`Self::static_slot`]; checked *before* it so a const access never
+    /// looks for a (non-existent) static slot.
+    fn const_value(&self, object: &Expr, field: &str) -> Option<Value> {
+        if let Expr::Ident(name, _) = object {
+            if self.resolve_local(name).is_none() && self.classes.contains_key(name) {
+                return self
+                    .consts_index
+                    .get(&(name.clone(), field.to_string()))
+                    .map(|(v, _)| v.clone());
+            }
+        }
+        None
+    }
+
+    /// The operand `CTy` of a `ClassName.NAME` class-constant access (Feature A) — lets `ctype` treat a
+    /// const as an arithmetic operand (`Limits.MAX + 1` specializes), the same CTy-operand discipline
+    /// as a static. Mirror of [`Self::static_cty`].
+    fn const_cty(&self, object: &Expr, field: &str) -> Option<CTy> {
+        if let Expr::Ident(name, _) = object {
+            if self.resolve_local(name).is_none() && self.classes.contains_key(name) {
+                return self
+                    .consts_index
                     .get(&(name.clone(), field.to_string()))
                     .map(|(_, cty)| cty.clone());
             }

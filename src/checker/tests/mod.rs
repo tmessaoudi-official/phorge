@@ -5,6 +5,7 @@ mod basics;
 mod calls;
 mod casing;
 mod collections;
+mod constants;
 mod generics;
 mod inheritance;
 mod interfaces;

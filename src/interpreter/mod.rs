@@ -160,6 +160,10 @@ pub struct Interp {
     /// Program-lifetime `static` field storage (M-mut.7), keyed by `(class, field)`. Seeded once at
     /// load from each static's literal-const initializer; read/written via `ClassName.field`.
     statics: HashMap<(String, String), Value>,
+    /// Class constants (Feature A), keyed by `(class, NAME)` → inlined literal `Value`. Seeded once at
+    /// load from the shared [`crate::ast::class_consts`] table (inheritance + traits already
+    /// flattened), and read — before `statics` — on a `ClassName.NAME` access.
+    consts: HashMap<(String, String), Value>,
     frame: CallScopes,
     this: Option<Value>,
     out: String,
@@ -194,6 +198,7 @@ pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
         method_origins: std::collections::BTreeMap::new(),
         variants: HashMap::new(),
         statics: HashMap::new(),
+        consts: HashMap::new(),
         frame: CallScopes::new(),
         this: None,
         out: String::new(),
@@ -265,6 +270,7 @@ pub fn call_named(
         method_origins: std::collections::BTreeMap::new(),
         variants: HashMap::new(),
         statics: HashMap::new(),
+        consts: HashMap::new(),
         frame: CallScopes::new(),
         this: None,
         out: String::new(),
@@ -425,6 +431,12 @@ impl Interp {
         // conflict list is checker-only (E-MI-CONFLICT); a clean program reaches here conflict-free.
         let (origins, _conflicts) = crate::ast::class_method_origins(program);
         self.method_origins = origins;
+        // Class constants (Feature A): the shared table already flattens inheritance + traits. Drop the
+        // declared `Type` — the interpreter inlines only the literal `Value` at each `ClassName.NAME`.
+        self.consts = crate::ast::class_consts(program)
+            .into_iter()
+            .map(|(key, (v, _ty))| (key, v))
+            .collect();
     }
 
     /// Run a callable body in a fresh frame: bind `args` to `names` in the base

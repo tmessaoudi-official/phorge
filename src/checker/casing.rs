@@ -23,8 +23,17 @@ impl Checker {
                     }
                     for m in &c.members {
                         match m {
-                            ClassMember::Field { name, span, .. } => {
-                                self.want_name_case(name, *span);
+                            ClassMember::Field {
+                                name,
+                                span,
+                                modifiers,
+                                ..
+                            } => {
+                                if modifiers.contains(&crate::ast::Modifier::Const) {
+                                    self.want_const_case(name, *span);
+                                } else {
+                                    self.want_name_case(name, *span);
+                                }
                             }
                             ClassMember::Constructor { params, .. } => {
                                 for p in params {
@@ -62,8 +71,17 @@ impl Checker {
                     self.want_type_case(&t.name, t.span);
                     for m in &t.members {
                         match m {
-                            ClassMember::Field { name, span, .. } => {
-                                self.want_name_case(name, *span)
+                            ClassMember::Field {
+                                name,
+                                span,
+                                modifiers,
+                                ..
+                            } => {
+                                if modifiers.contains(&crate::ast::Modifier::Const) {
+                                    self.want_const_case(name, *span);
+                                } else {
+                                    self.want_name_case(name, *span);
+                                }
                             }
                             ClassMember::Constructor { params, .. } => {
                                 for p in params {
@@ -314,6 +332,20 @@ impl Checker {
                 format!("`{leaf}` must be camelCase"),
                 "E-NAME-CASE",
                 Some(format!("did you mean `{}`?", to_camel(leaf))),
+            );
+        }
+    }
+
+    /// A `const` class-constant name must be SCREAMING_SNAKE_CASE (Feature A); otherwise
+    /// `E-CONST-CASE` with a converted-form hint. The PHP/C/Java constant convention.
+    pub(super) fn want_const_case(&mut self, name: &str, span: Span) {
+        let leaf = leaf_ident(name);
+        if !is_screaming_snake(leaf) {
+            self.err_coded(
+                span,
+                format!("`{leaf}` must be SCREAMING_SNAKE_CASE (it is a `const`)"),
+                "E-CONST-CASE",
+                Some(format!("did you mean `{}`?", to_screaming_snake(leaf))),
             );
         }
     }

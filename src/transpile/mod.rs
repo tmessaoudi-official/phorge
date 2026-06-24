@@ -9,6 +9,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 pub fn emit(program: &Program) -> Result<String, String> {
     let mut t = Transpiler::new();
     t.class_implements = crate::ast::class_implements(program);
+    t.consts = crate::ast::class_consts(program).into_keys().collect();
     t.decomposed = decomposed_classes(program);
     t.collect(program);
     t.emit_program(program)?;
@@ -52,6 +53,11 @@ fn decomposed_classes(program: &Program) -> BTreeSet<String> {
 struct Transpiler {
     funcs: HashSet<String>,
     classes: HashSet<String>,
+    /// `(class, NAME)` pairs that name a `const` class constant (Feature A), inheritance/traits already
+    /// flattened (the shared [`crate::ast::class_consts`] table). A `ClassName.NAME` access whose pair
+    /// is in this set emits as `ClassName::NAME` (no `$`) — checked before the static-field `::$name`
+    /// path. PHP resolves an inherited `Sub::MAX` itself, so only the keys are needed.
+    consts: HashSet<(String, String)>,
     variants: HashSet<String>,
     variant_fields: HashMap<String, Vec<String>>,
     /// An enum variant's PHP namespace (`namespace_of` of the — possibly mangled — enum name), so a
@@ -210,6 +216,7 @@ impl Transpiler {
         Transpiler {
             funcs: HashSet::new(),
             classes: HashSet::new(),
+            consts: HashSet::new(),
             variants: HashSet::new(),
             variant_fields: HashMap::new(),
             variant_ns: HashMap::new(),

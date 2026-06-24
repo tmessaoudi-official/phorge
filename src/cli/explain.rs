@@ -582,6 +582,47 @@ pub fn explain_text(code: &str) -> Option<String> {
              supertype of, this one), so control never reaches it. Remove the dead clause, or reorder\n\
              so the more specific type comes first. This is a lint — it never fails the build.\n"
         }
+        "E-CONST-NO-INIT" => {
+            "E-CONST-NO-INIT — a `const` class constant has no initializer.\n\n\
+             A constant is fixed at declaration, so it must be assigned a value: `const int MAX = 100;`.\n"
+        }
+        "E-CONST-NOT-LITERAL" => {
+            "E-CONST-NOT-LITERAL — a `const` initializer is not a compile-time literal.\n\n\
+             A class constant must be a literal (int/float/bool/string/null) this slice — not a call,\n\
+             method, or another expression. For a computed class-level value, use a `static` field (or,\n\
+             once available, an expression field initializer).\n"
+        }
+        "E-CONST-MUTABLE" => {
+            "E-CONST-MUTABLE — a `const` was also declared `mutable`.\n\n\
+             A constant is immutable by definition; `const mutable` is contradictory. Drop `mutable`, or\n\
+             use a `static mutable` field for class-level mutable state.\n"
+        }
+        "E-CONST-INIT-TYPE" => {
+            "E-CONST-INIT-TYPE — a `const` initializer's type does not match its declared type.\n\n\
+             The literal must be assignable to the constant's type — e.g. `const int MAX = 100;`, not\n\
+             `const int MAX = \"x\";`.\n"
+        }
+        "E-CONST-CASE" => {
+            "E-CONST-CASE — a `const` name is not SCREAMING_SNAKE_CASE.\n\n\
+             Class constants follow the PHP/C/Java convention: uppercase letters, digits, and `_`\n\
+             (`MAX`, `MAX_SIZE`, `HTTP_2`). Rename `maxVal` to `MAX_VAL`.\n"
+        }
+        "E-CONST-VISIBILITY" => {
+            "E-CONST-VISIBILITY — a `private`/`protected` constant was read from outside its class.\n\n\
+             A `private const` is readable only inside the declaring class; a `protected const` only\n\
+             inside that class and its subclasses. Make it `public` (the default) to read it elsewhere,\n\
+             or access it from within the class hierarchy.\n"
+        }
+        "E-CONST-INSTANCE-ACCESS" => {
+            "E-CONST-INSTANCE-ACCESS — a constant was read through an instance.\n\n\
+             A `const` lives on the class, not the instance: read it as `ClassName.NAME`, never\n\
+             `instance.NAME` (the same class-name-only rule as a `static` field).\n"
+        }
+        "E-CONST-REASSIGN" => {
+            "E-CONST-REASSIGN — a `const` class constant was assigned to.\n\n\
+             Constants are fixed at declaration and can never be reassigned. For class-level state that\n\
+             changes, use a `static mutable` field instead.\n"
+        }
         _ => return None,
     };
     Some(body.to_string())

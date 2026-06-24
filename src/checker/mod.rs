@@ -75,6 +75,11 @@ struct ClassInfo {
     /// `static` field name → type (M-mut.7). Class-level, accessed as `ClassName.field` — disjoint
     /// from `fields` (statics are never instance members). Each has a literal-const initializer.
     statics: HashMap<String, Ty>,
+    /// `const NAME` → its [`ConstEntry`] (Feature A). Class-level, compile-time, immutable, accessed
+    /// only `ClassName.NAME` — disjoint from `fields`/`statics`. Inherited consts are merged into a
+    /// subclass (own/nearer wins), so `Sub.MAX` resolves an inherited `MAX`. Visibility is enforced at
+    /// the access site.
+    consts: HashMap<String, ConstEntry>,
     /// The subset of `statics` declared `static mutable` — only these may be the target of
     /// `ClassName.field = e` (`E-ASSIGN-IMMUTABLE`).
     static_mut: std::collections::HashSet<String>,
@@ -110,6 +115,42 @@ struct HookInfo {
     ty: Ty,
     has_get: bool,
     has_set: bool,
+}
+
+/// Member-level visibility (Feature A — `const` class constants). Distinct from `ast::Visibility`
+/// (declaration/file scope): a *member* is `public` (default), `protected`, or `private`, derived from
+/// the `Modifier::{Public,Private,Protected}` set. Const access is the one site Phorge enforces member
+/// visibility — required because the transpiler emits a PHP `private const`, which PHP would reject if
+/// read from outside the class (a `run`↔PHP byte-identity break otherwise).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum MemberVis {
+    Public,
+    Protected,
+    Private,
+}
+
+impl MemberVis {
+    /// The member visibility carried by a modifier set: `private` > `protected` > `public` (default).
+    pub(super) fn of(mods: &[crate::ast::Modifier]) -> MemberVis {
+        use crate::ast::Modifier;
+        if mods.contains(&Modifier::Private) {
+            MemberVis::Private
+        } else if mods.contains(&Modifier::Protected) {
+            MemberVis::Protected
+        } else {
+            MemberVis::Public
+        }
+    }
+}
+
+/// A class constant (Feature A): its declared type, member visibility, and the class that *declares*
+/// it (preserved through inheritance so a `private`/`protected` access is checked against the real
+/// owner, not the accessing subclass).
+#[derive(Clone)]
+struct ConstEntry {
+    ty: Ty,
+    vis: MemberVis,
+    owner: String,
 }
 
 /// An interface's own method signatures plus its declared parent interfaces (`extends`). The

@@ -629,6 +629,10 @@ impl Checker {
                         }
                     }
                 }
+                // Feature A: a `use`d trait's constants flatten into the using class (own wins).
+                for (k, v) in &tinfo.consts {
+                    child.consts.entry(k.clone()).or_insert_with(|| v.clone());
+                }
                 // M-RT S8 (T4): a `use`d trait's property hooks flatten into the using class so
                 // `c.hookName` resolves (the backends dispatch the synthetic `$get`/`$set` methods).
                 for (k, v) in &tinfo.hooks {
@@ -683,6 +687,12 @@ impl Checker {
                         child.static_mut.insert(k.clone());
                     }
                 }
+            }
+            // Feature A: inherit class constants (own/nearer wins). The `owner` in each `ConstEntry`
+            // is preserved, so a `private`/`protected` access is checked against the declaring class —
+            // `Sub.MAX` resolves an inherited `MAX` and PHP's `Sub::MAX` resolves it the same way.
+            for (k, v) in &parent_info.consts {
+                child.consts.entry(k.clone()).or_insert_with(|| v.clone());
             }
             for (k, v) in &parent_info.methods {
                 child.methods.entry(k.clone()).or_insert_with(|| v.clone());
@@ -1000,6 +1010,7 @@ impl Checker {
                 fields: HashMap::new(),
                 mutable_fields: std::collections::HashSet::new(),
                 statics: HashMap::new(),
+                consts: HashMap::new(),
                 static_mut: std::collections::HashSet::new(),
                 methods: HashMap::new(),
                 hooks: HashMap::new(),
@@ -1013,6 +1024,7 @@ impl Checker {
         let mut fields = HashMap::new();
         let mut mutable_fields = std::collections::HashSet::new();
         let mut statics: HashMap<String, Ty> = HashMap::new();
+        let mut consts: HashMap<String, ConstEntry> = HashMap::new();
         let mut static_mut = std::collections::HashSet::new();
         let mut methods: HashMap<String, Vec<FnSig>> = HashMap::new();
         let mut hooks: HashMap<String, HookInfo> = HashMap::new();
@@ -1038,7 +1050,61 @@ impl Checker {
                     self.active_type_params = class_tp.clone();
                     let fty = self.resolve_type(ty);
                     self.active_type_params.clear();
-                    if modifiers.contains(&Modifier::Static) {
+                    if modifiers.contains(&Modifier::Const) {
+                        // A `const` class constant (Feature A): compile-time, immutable, class-level,
+                        // accessed only `ClassName.NAME`. It needs a literal-const initializer and must
+                        // not be `mutable`. Disjoint from instance fields and statics.
+                        if modifiers.contains(&Modifier::Mutable) {
+                            self.err_coded(
+                                *span,
+                                format!("`const {name}` cannot be `mutable` — a constant is immutable"),
+                                "E-CONST-MUTABLE",
+                                Some("drop `mutable`, or use a `static mutable` field for class-level state".into()),
+                            );
+                        }
+                        match init {
+                            None => {
+                                self.err_coded(
+                                    *span,
+                                    format!("`const {name}` needs an initializer"),
+                                    "E-CONST-NO-INIT",
+                                    Some("e.g. `const int MAX = 100;`".into()),
+                                );
+                            }
+                            Some(e) => {
+                                if crate::value::const_literal(e).is_none() {
+                                    self.err_coded(
+                                        Self::expr_span(e),
+                                        format!(
+                                            "`const {name}` initializer must be a literal constant"
+                                        ),
+                                        "E-CONST-NOT-LITERAL",
+                                        Some("use an int/float/bool/string/null literal".into()),
+                                    );
+                                } else {
+                                    let ity = self.check_expr(e);
+                                    if !self.ty_assignable(&ity, &fty) {
+                                        self.err_coded(
+                                            Self::expr_span(e),
+                                            format!(
+                                                "`const {name}: {fty}` initialized with `{ity}`"
+                                            ),
+                                            "E-CONST-INIT-TYPE",
+                                            None,
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        consts.insert(
+                            name.clone(),
+                            ConstEntry {
+                                ty: fty,
+                                vis: MemberVis::of(modifiers),
+                                owner: c.name.clone(),
+                            },
+                        );
+                    } else if modifiers.contains(&Modifier::Static) {
                         // A `static` field is class-level state (M-mut.7): it needs a literal-const
                         // initializer (no constructor sets it) and is NOT an instance field.
                         match init {
@@ -1215,6 +1281,7 @@ impl Checker {
         info.fields = fields;
         info.mutable_fields = mutable_fields;
         info.statics = statics;
+        info.consts = consts;
         info.static_mut = static_mut;
         info.methods = methods;
         info.hooks = hooks;

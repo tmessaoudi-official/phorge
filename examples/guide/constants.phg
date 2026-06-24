@@ -1,0 +1,28 @@
+package Main;
+import Core.Console;
+
+// Feature A — `const` class constants. A `const` member is a compile-time, immutable, class-name-only
+// constant with member visibility. Unlike a PHP property default it lives on the class (never the
+// instance), is accessed `ClassName.NAME` (never `instance.NAME`), and transpiles to a PHP typed class
+// constant (`const int MAX = 100;` / `Limits::MAX`). Const names are SCREAMING_SNAKE_CASE.
+
+open class Limits {
+    const int MAX = 100;                  // public by default
+    private const string TAG = "limits";  // private — readable only inside the class
+
+    // A private const used internally, and a public const read via the class name.
+    function describe() -> string {
+        return "{Limits.TAG}: {Limits.MAX}";
+    }
+}
+
+// A subclass inherits the constant; it is reached via the SUBCLASS's own name (PHP semantics).
+class Sub extends Limits {}
+
+function main() -> void {
+    Console.println("{Limits.MAX}");      // 100
+    Console.println("{Limits.MAX + 1}");  // 101  — a const is a first-class arithmetic operand
+    Limits lim = Limits();
+    Console.println(lim.describe());       // limits: 100
+    Console.println("{Sub.MAX}");         // 100  — inherited const via the subclass name
+}

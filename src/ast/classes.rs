@@ -497,6 +497,109 @@ pub fn class_field_conflicts(program: &Program) -> Vec<(String, String, Span)> {
     ctx.conflicts
 }
 
+/// The flattened **class-constant** table (Feature A — `const` class constants): for each
+/// `(class, NAME)` it gives the constant's literal `Value` and its declared `Type`. Includes a class's
+/// own `const` members **plus** those inherited through `extends` and folded in from `use`d traits —
+/// own declaration wins over an inherited one (PHP redeclare semantics; the field analog of
+/// [`class_field_conflicts`]). A subclass therefore reaches an inherited const through its **own** name
+/// (`Sub.MAX` resolves even when `MAX` is declared on a parent), matching PHP.
+///
+/// This is the single source consumed by all three backends — the interpreter inlines the `Value`, the
+/// compiler emits `Op::Const` + derives the operand `CTy` from the `Type`, and the transpiler keys its
+/// `ClassName::NAME` access emission on the table's keys — so a const access can never diverge between
+/// `run`, `runvm`, and real PHP. The checker validates each initializer is a compile-time literal
+/// before any backend runs, so `const_literal` here is total (a checker-unreachable non-literal folds
+/// to `Unit`, like a static's). The `extends`/`use` walk is cycle-safe via a visited set.
+pub fn class_consts(
+    program: &Program,
+) -> std::collections::BTreeMap<(String, String), (crate::value::Value, Type)> {
+    use std::collections::{BTreeMap, BTreeSet};
+    // Own `const` members per class/trait: NAME → (literal Value, Type).
+    let mut own: BTreeMap<String, BTreeMap<String, (crate::value::Value, Type)>> = BTreeMap::new();
+    let mut extends: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut uses: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let collect_own = |members: &[ClassMember]| -> BTreeMap<String, (crate::value::Value, Type)> {
+        let mut m = BTreeMap::new();
+        for mem in members {
+            if let ClassMember::Field {
+                modifiers,
+                name,
+                ty,
+                init,
+                ..
+            } = mem
+            {
+                if modifiers.contains(&Modifier::Const) {
+                    let v = init
+                        .as_ref()
+                        .and_then(crate::value::const_literal)
+                        .unwrap_or(crate::value::Value::Unit);
+                    m.insert(name.clone(), (v, ty.clone()));
+                }
+            }
+        }
+        m
+    };
+    for item in &program.items {
+        match item {
+            Item::Class(c) => {
+                own.insert(c.name.clone(), collect_own(&c.members));
+                extends.insert(c.name.clone(), c.extends.clone());
+                uses.insert(
+                    c.name.clone(),
+                    c.uses.iter().map(|u| u.name.clone()).collect(),
+                );
+            }
+            Item::Trait(t) => {
+                own.insert(t.name.clone(), collect_own(&t.members));
+            }
+            _ => {}
+        }
+    }
+    // Flatten `c`'s consts: own + each `use`d trait's + each parent's (transitively), own/nearer wins.
+    fn flatten(
+        c: &str,
+        own: &BTreeMap<String, BTreeMap<String, (crate::value::Value, Type)>>,
+        extends: &BTreeMap<String, Vec<String>>,
+        uses: &BTreeMap<String, Vec<String>>,
+        seen: &mut BTreeSet<String>,
+    ) -> BTreeMap<String, (crate::value::Value, Type)> {
+        let mut acc: BTreeMap<String, (crate::value::Value, Type)> = BTreeMap::new();
+        if !seen.insert(c.to_string()) {
+            return acc; // `extends` cycle — `E-MI-CYCLE` reported elsewhere
+        }
+        // Own declarations win — insert them first and never overwrite.
+        if let Some(m) = own.get(c) {
+            for (k, v) in m {
+                acc.insert(k.clone(), v.clone());
+            }
+        }
+        // Then `use`d traits, then parents — only filling names not already bound (nearer wins).
+        for t in uses.get(c).map(Vec::as_slice).unwrap_or(&[]) {
+            for (k, v) in flatten(t, own, extends, uses, seen) {
+                acc.entry(k).or_insert(v);
+            }
+        }
+        for p in extends.get(c).map(Vec::as_slice).unwrap_or(&[]) {
+            for (k, v) in flatten(p, own, extends, uses, seen) {
+                acc.entry(k).or_insert(v);
+            }
+        }
+        seen.remove(c);
+        acc
+    }
+    let mut out: BTreeMap<(String, String), (crate::value::Value, Type)> = BTreeMap::new();
+    for item in &program.items {
+        if let Item::Class(c) = item {
+            let mut seen = BTreeSet::new();
+            for (name, vt) in flatten(&c.name, &own, &extends, &uses, &mut seen) {
+                out.insert((c.name.clone(), name), vt);
+            }
+        }
+    }
+    out
+}
+
 /// The ordered list of constructors a `ClassName(args)` call runs (M-RT S6c.2). Each entry is one
 /// `(params, body)` to execute, in order, on the single instance being built; the call's full argument
 /// list is the entries' params concatenated in this order, sliced per entry.

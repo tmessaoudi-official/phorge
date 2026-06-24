@@ -159,6 +159,16 @@ impl Checker {
         if let crate::ast::Expr::Ident(cls, _) = object {
             if self.lookup_binding(cls).is_none() && self.classes.contains_key(cls) {
                 let info = &self.classes[cls];
+                // A `const` class constant is immutable — reassigning it is always an error (Feature A).
+                if info.consts.contains_key(name) {
+                    self.err_coded(
+                        span,
+                        format!("`{name}` is a constant of `{cls}` and cannot be reassigned"),
+                        "E-CONST-REASSIGN",
+                        Some("constants are fixed at declaration; use a `static mutable` field for class-level mutable state".into()),
+                    );
+                    return;
+                }
                 match info.statics.get(name).cloned() {
                     None => {
                         self.err_coded(

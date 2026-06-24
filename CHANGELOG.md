@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `const` class constants (Feature A)
+
+`examples/guide/constants.phg`; byte-identical `run ≡ runvm ≡ real PHP 8.5`. No new `Op`/`Value`.
+
+- **`[visibility] const TYPE NAME = <literal>;`** — a compile-time, immutable, class-level constant
+  with member visibility (`public` default / `private` / `protected`), accessed **class-name-only**
+  (`ClassName.NAME`, never through an instance). Names are SCREAMING_SNAKE_CASE.
+- **Inlined on the Rust backends, idiomatic on PHP** — the shared `ast::class_consts` table (with
+  inheritance + trait consts flattened, own/nearer wins) feeds all three backends: the interpreter
+  returns the literal `Value`, the compiler emits `Op::Const` (+ a `CTy` so `MAX + 1` specializes —
+  the CTy-operand discipline), and the transpiler emits a PHP **typed class constant**
+  (`public const int MAX = 100;`, 8.3+) accessed as `ClassName::MAX` (no `$`).
+- **Inheritance** — a subclass reads an inherited constant via its own name (`Sub.MAX`), matching PHP.
+- **Visibility is enforced at the access site** (the one place Phorge checks member visibility) —
+  required because the transpiled PHP `private const` would otherwise diverge from the Rust backends.
+- New diagnostics (all `phg explain`-documented): `E-CONST-NO-INIT`, `E-CONST-NOT-LITERAL`,
+  `E-CONST-MUTABLE`, `E-CONST-INIT-TYPE`, `E-CONST-CASE`, `E-CONST-VISIBILITY`,
+  `E-CONST-INSTANCE-ACCESS`, `E-CONST-REASSIGN`.
+
 ### Added — Language Evolution Phase 1 (string slice): `+` concat, `\u{}`, literal braces, raw strings
 
 `examples/guide/strings-ext.phg`; all byte-identical `run ≡ runvm ≡ real PHP 8.5`.
