@@ -56,11 +56,15 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
    - **or-patterns — ✅ DONE** (`d8365ab`). `1 | 2 | 3 => …` / `Red() | Yellow() => …`; parser desugars
      to one arm per alternative (no backend change), binding-free only (`E-OR-PATTERN-BIND`).
      `examples/guide/pattern-matching.phg`.
-   - **ternary `? :` — BLOCKED on a design decision.** Genuine grammar collision with the existing
-     **postfix-`?` propagation** (`f()?`): one-token lookahead can't separate `c ? -1 : 1` (ternary)
-     from `f()? - 1` (propagate-then-subtract). Options: (A) backtracking disambiguation — try ternary,
-     fall back to propagation if no `:`; (B) rely on the existing **expression-`if`** (`if (c) { a }
-     else { b }`, already shipped) and reject ternary as redundant; (C) defer. Awaiting developer choice.
+   - **ternary `? :` — ✅ DEFERRED (developer decision 2026-06-24).** Genuine grammar collision with the
+     existing **postfix-`?` propagation** (`f()?`): one-token lookahead can't separate `c ? -1 : 1`
+     (ternary) from `f()? - 1` (propagate-then-subtract). Backtracking would resolve it mechanically
+     (low impl risk, zero byte-identity risk — lowers to `Expr::If`), but a triple-meaning `?`
+     (propagation / `?.` safe-access / ternary) is a permanent reader-legibility cost. The already-
+     shipped **expression-`if`** (`int x = if (c) { 1 } else { 2 };`) covers the capability
+     unambiguously, so ternary adds no expressive power. **Deferred (not rejected):** mechanism is
+     scoped; revisit if real usage shows the missing `? :` chafes. **Slice 2 is COMPLETE** (`**` +
+     or-patterns + the existing expr-if).
 3. **Types** — parenthesized return-position function types (`() -> ((int) -> bool)`); fixed-length
    lists `[T; N]` (alongside `List<T>`; compile-time length + static bounds; length-immutable; erases
    to PHP array). *(writable `void`/`Empty` already done in S0a.)*
@@ -98,6 +102,12 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
   re-verify of the deployed page (editor + 3-way badge + PHP tab no-redeclare).
 
 ## Decisions Log (2026-06-24)
+- **Ternary `? :` — DEFERRED, not rejected (decided 2026-06-24).** The `?` collides with the existing
+  postfix-`?` propagation; backtracking would resolve it mechanically (low risk, lowers to `Expr::If`),
+  but overloading `?` to a third meaning is a permanent reader-legibility cost, and the already-shipped
+  **expression-`if`** covers the capability unambiguously (ternary adds no expressive power). Kept on the
+  roadmap (mechanism scoped) to revisit with real usage data. **Slice 2 closed** with `**` power +
+  or-patterns + expr-if.
 - **Static field initializers — EAGER, no config (decided 2026-06-24).** Feature B-static evaluates
   static expression initializers **once at program start, in declaration order, before `main`** —
   matching the existing Rust static-init model (interpreter/VM already seed statics eagerly at startup;
