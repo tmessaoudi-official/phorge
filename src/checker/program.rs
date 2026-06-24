@@ -105,7 +105,7 @@ impl Checker {
             match m {
                 ClassMember::Method(f) => self.check_function(f),
                 ClassMember::Constructor { params, body, .. } => {
-                    let prev_ret = std::mem::replace(&mut self.cur_ret, Ty::Unit);
+                    let prev_ret = std::mem::replace(&mut self.cur_ret, Ty::Void);
                     // type params in scope for any `T` annotation in the body
                     self.active_type_params = type_params.to_vec();
                     self.push_scope();
@@ -145,7 +145,7 @@ impl Checker {
                         self.pop_scope();
                     }
                     if let Some((p, body)) = set {
-                        let prev_ret = std::mem::replace(&mut self.cur_ret, Ty::Unit);
+                        let prev_ret = std::mem::replace(&mut self.cur_ret, Ty::Void);
                         self.push_scope();
                         let pty = self.resolve_type(&p.ty);
                         if !(self.ty_assignable(&pty, &hook_ty)
@@ -187,7 +187,7 @@ impl Checker {
         self.active_type_params = active;
         let ret = match &f.ret {
             Some(t) => self.resolve_type(t),
-            None => Ty::Unit,
+            None => Ty::Void,
         };
         // Resolve + validate the declared throws set (type params still in scope), then make it the
         // active discharge context for the body (M-faults 2b).
@@ -317,7 +317,7 @@ impl Checker {
 
     /// Return-on-all-paths gate (M-RT totality cluster). A function whose declared return type carries
     /// a value must return (or diverge) on every path; `never` is the inverse — it must provably
-    /// diverge. `unit` (the no-annotation default) and `<error>` (poison) are exempt.
+    /// diverge. `void` (the no-annotation default), `Empty`, and `<error>` (poison) are exempt.
     pub(super) fn check_return_totality(
         &mut self,
         ret: &Ty,
@@ -325,7 +325,10 @@ impl Checker {
         span: Span,
     ) {
         match ret {
-            Ty::Unit | Ty::Error => {}
+            // `void` (the common nothing, incl. the no-annotation default) and `Empty` (the holdable
+            // nothing) are both value-less: a function may fall off the end (it implicitly produces
+            // the empty value), so neither requires a `return` on all paths. `<error>` is poison.
+            Ty::Void | Ty::Empty | Ty::Error => {}
             Ty::Never => {
                 if !self.block_terminates(body) {
                     self.err_coded(

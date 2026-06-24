@@ -228,7 +228,7 @@ impl Checker {
             scopes: Vec::new(),
             errors: Vec::new(),
             warnings: Vec::new(),
-            cur_ret: Ty::Unit,
+            cur_ret: Ty::Void,
             cur_throws: Vec::new(),
             cur_is_main: false,
             try_catch_stack: Vec::new(),

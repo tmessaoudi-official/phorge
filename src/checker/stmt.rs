@@ -65,6 +65,23 @@ impl Checker {
                         declared
                     }
                 };
+                // S0a: a `void` value is uncapturable. Binding one into a variable is an error —
+                // *unless* the declared type is the holdable `Empty` (`Empty x = noop();`), the
+                // explicit escape hatch (`void <: Empty`). This catches both `var x = noop()`
+                // (inferred `declared` = `Void`) and `void x = noop()` (declared = `Void`).
+                let declared = if actual == Ty::Void && declared != Ty::Empty {
+                    self.err_coded(
+                        *span,
+                        "a `void` value cannot be captured — the expression produces nothing",
+                        "E-VOID-CAPTURE",
+                        Some(
+                            "drop the binding and call it as a statement; or, to hold the empty value, annotate it `Empty` (e.g. `Empty x = …;`)"
+                                .into(),
+                        ),
+                    )
+                } else {
+                    declared
+                };
                 self.declare_binding(name, declared, *mutable, *span);
             }
             Stmt::Assign {
@@ -101,7 +118,7 @@ impl Checker {
             Stmt::Return { value, span } => {
                 let actual = match value {
                     Some(e) => self.check_expr(e),
-                    None => Ty::Unit,
+                    None => Ty::Void,
                 };
                 let want = self.cur_ret.clone();
                 if !self.ty_assignable(&actual, &want) {

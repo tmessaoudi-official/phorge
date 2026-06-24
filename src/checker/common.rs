@@ -306,6 +306,8 @@ pub(super) fn is_builtin_type_name(name: &str) -> bool {
             | "string"
             | "bytes"
             | "never"
+            | "void"
+            | "Empty"
             | "Html"
             | "Attr"
             | "List"

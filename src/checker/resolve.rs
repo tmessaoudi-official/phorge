@@ -170,6 +170,12 @@ impl Checker {
                 // The bottom type (M-RT totality cluster): a `-> never` function never returns. Only
                 // meaningful in return position, but resolvable anywhere a type name appears.
                 "never" => self.no_args(name, args, *span, Ty::Never),
+                // The two-type "nothing" model (S0a). `void` = uncapturable (the implicit return
+                // type); `Empty` = the holdable nothing. Both resolve here; the *position* rules
+                // (void rejected as a param/field type, void value uncapturable) are enforced at the
+                // collection / var-decl sites, not here.
+                "void" => self.no_args(name, args, *span, Ty::Void),
+                "Empty" => self.no_args(name, args, *span, Ty::Empty),
                 "Html" => self.no_args(name, args, *span, Ty::Html),
                 "Attr" => self.no_args(name, args, *span, Ty::Attr),
                 "List" => Ty::List(Box::new(self.one_arg(name, args, *span))),

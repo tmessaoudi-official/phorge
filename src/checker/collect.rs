@@ -96,7 +96,7 @@ impl Checker {
             let params = m.params.iter().map(|p| self.resolve_type(&p.ty)).collect();
             let ret = match &m.ret {
                 Some(t) => self.resolve_type(t),
-                None => Ty::Unit,
+                None => Ty::Void,
             };
             methods.insert(
                 m.name.clone(),
@@ -839,7 +839,7 @@ impl Checker {
         let params = f.params.iter().map(|p| self.resolve_type(&p.ty)).collect();
         let ret = match &f.ret {
             Some(t) => self.resolve_type(t),
-            None => Ty::Unit,
+            None => Ty::Void,
         };
         // Resolve the declared throws set with the type parameters still in scope, then clear. A
         // union `throws A | B` is flattened to its members (`throws` is a set of exception types).
@@ -1133,7 +1133,7 @@ impl Checker {
                     let p = f.params.iter().map(|p| self.resolve_type(&p.ty)).collect();
                     let ret = match &f.ret {
                         Some(t) => self.resolve_type(t),
-                        None => Ty::Unit,
+                        None => Ty::Void,
                     };
                     let throws = Self::flatten_throws(
                         f.throws.iter().map(|t| self.resolve_type(t)).collect(),

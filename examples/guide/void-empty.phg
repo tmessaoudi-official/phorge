@@ -1,0 +1,40 @@
+// The two-type "nothing" model — `void` and `Empty` (S0a).
+//
+// `void` is the type of an expression that produces *no* value ("literally nothing") — the common
+// return type of a side-effecting function, and the implicit type of an un-annotated function. A
+// `void` value is UNCAPTURABLE: `var x = note("hi");` is a compile error (E-VOID-CAPTURE), because
+// there is nothing to hold.
+//
+// `Empty` is the rare *holdable* nothing — a real type with a single value. A function may return
+// `Empty`, and a caller may bind it. The one widening edge `void <: Empty` means a void-returning
+// call also flows into an `Empty` slot, so the two-type model stays ergonomic.
+//
+// Both are checker-only distinctions over the same runtime value, so this transpiles 1:1 and runs
+// byte-identically on `run`, `runvm`, and real PHP (`void` -> PHP `: void`; `Empty` -> a plain
+// capturable value).
+package Main;
+
+import Core.Console;
+
+// The common case: a side-effecting function returns `void` — nothing to capture.
+function note(string msg) -> void {
+    Console.println(msg);
+}
+
+// `Empty` is the holdable nothing: a function may return it and fall off the end (it implicitly
+// produces the empty value, like `void` — no `return` required).
+function doNothing() -> Empty {
+}
+
+function main() -> void {
+    note("start");
+
+    // Hold the empty value — the explicit escape from E-VOID-CAPTURE.
+    Empty a = doNothing();
+
+    // `void <: Empty`: a void-returning call also flows into an `Empty` binding. The side effect
+    // still happens; the captured empty value is never inspected (there is nothing to inspect).
+    Empty b = note("middle");
+
+    note("end");
+}

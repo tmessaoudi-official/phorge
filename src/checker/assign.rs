@@ -423,7 +423,7 @@ impl Checker {
                         self.require_str_literal(m, span);
                     }
                 }
-                Some(Ty::Unit)
+                Some(Ty::Void)
             }
             _ => None,
         }

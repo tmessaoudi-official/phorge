@@ -22,7 +22,20 @@ pub enum Ty {
     /// separate so an attribute fragment can't be spliced where element content (`Html`) is expected
     /// and vice versa. core.html Wave 2 (the builders).
     Attr,
-    Unit,
+    /// **`void`** — the type of an expression/function that produces *no* value ("literally
+    /// nothing"). It is the implicit return type of an un-annotated function and the return type of a
+    /// statement-effect native. A `void` value is **uncapturable**: binding it into a variable is
+    /// `E-VOID-CAPTURE` (`var x = noop()`). It widens to [`Ty::Empty`] (`void <: Empty`) so an
+    /// everyday side-effecting callback still flows into a generic `(T) -> Empty` slot. Transpiles to
+    /// PHP `: void`. (Replaced the former implicit `Ty::Unit`; the developer chose a two-type model —
+    /// `void` = the common uncapturable nothing, `Empty` = the rare holdable nothing.)
+    Void,
+    /// **`Empty`** — a real, inhabited type with a single value: the *holdable* "nothing". Unlike
+    /// [`Ty::Void`] it can be bound (`Empty x = noop();`), passed, and composed with generics
+    /// (`(T) -> Empty`, `T = Empty`). Transpiles to a plain capturable PHP value (the function returns
+    /// PHP `null`; emitted as `: mixed`, **not** `: void`, so capturing stays valid → byte-identity
+    /// safe). `void <: Empty` is the one widening edge between the two.
+    Empty,
     /// The **bottom type** (M-RT totality cluster): the type of an expression that never produces a
     /// value because control never returns from it — an infinite loop, or a call to a `-> never`
     /// function. Inhabited by nothing, so it is a subtype of *every* `T` (a `never` expression may
@@ -206,6 +219,12 @@ impl Ty {
             // recurse a `never` into them first (`never -> T?` bottoms out here); nothing is assignable
             // *to* `never` except `never` itself, which the final `from == to` arm already covers.
             (Ty::Never, _) => true,
+            // `void` widens to `Empty` — the one edge of the two-type nothing model: a side-effecting
+            // (`-> void`) callback flows into a generic `(T) -> Empty` slot, and `Empty x = noop();`
+            // (the explicit "hold nothing" escape from `E-VOID-CAPTURE`) type-checks. Not symmetric:
+            // `Empty` does not widen to `void`. Reflexive `void→void` / `Empty→Empty` fall through to
+            // the final `from == to` arm.
+            (Ty::Void, Ty::Empty) => true,
             _ => from == to,
         }
     }
@@ -221,7 +240,8 @@ impl fmt::Display for Ty {
             Ty::Bytes => write!(f, "bytes"),
             Ty::Html => write!(f, "Html"),
             Ty::Attr => write!(f, "Attr"),
-            Ty::Unit => write!(f, "unit"),
+            Ty::Void => write!(f, "void"),
+            Ty::Empty => write!(f, "Empty"),
             Ty::Never => write!(f, "never"),
             Ty::Named(n, args) => {
                 if args.is_empty() {

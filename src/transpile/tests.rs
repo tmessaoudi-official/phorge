@@ -84,6 +84,27 @@ fn no_return_type_is_void() {
 }
 
 #[test]
+fn explicit_void_return_emits_php_void() {
+    let out = php("function f() -> void { return; }");
+    assert!(out.contains("function f(): void {"), "{out}");
+}
+
+#[test]
+fn empty_return_emits_no_php_hint() {
+    // `Empty` must NOT emit `: void`/`: mixed`/`: null` — PHP would reject a fall-off or a bare
+    // `return;`. No hint → PHP infers a capturable `null`.
+    let out = php("function f() -> Empty { } function main() { Empty x = f(); }");
+    assert!(
+        out.contains("function f() {"),
+        "expected no return hint:\n{out}"
+    );
+    assert!(
+        !out.contains("function f():"),
+        "must not have a colon hint:\n{out}"
+    );
+}
+
+#[test]
 fn if_and_for_and_unary() {
     // Phorge is immutable (no reassignment) — use fresh var decls inside branches.
     let out = php("function f(int n) -> int { \

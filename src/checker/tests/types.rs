@@ -155,3 +155,57 @@ fn var_decl_type_mismatch_errors() {
 fn good_var_decl_and_arithmetic_ok() {
     assert!(errors_of("function main() { int a = 1; int b = a + 2; }").is_empty());
 }
+
+// --- S0a: the two-type nothing model (`void` + `Empty`) ---
+
+#[test]
+fn capturing_a_void_value_is_an_error() {
+    // `noop()` is `-> void` (no value); binding it is E-VOID-CAPTURE.
+    let errs = errors_of("function noop() -> void {} function main() { var x = noop(); }");
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-VOID-CAPTURE")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn explicit_void_annotation_on_a_binding_is_also_a_capture_error() {
+    // `void` is return-only — even an explicit `void x = …` is uncapturable.
+    let errs = errors_of("function noop() -> void {} function main() { void x = noop(); }");
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-VOID-CAPTURE")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn holding_a_void_value_as_empty_is_the_escape_hatch() {
+    // `Empty x = noop();` is the explicit way to hold the empty value — `void <: Empty`.
+    assert!(
+        errors_of("function noop() -> void {} function main() { Empty x = noop(); }").is_empty()
+    );
+}
+
+#[test]
+fn empty_returning_function_may_be_captured() {
+    assert!(
+        errors_of("function nothing() -> Empty {} function main() { Empty x = nothing(); }")
+            .is_empty()
+    );
+}
+
+#[test]
+fn empty_returning_function_need_not_return_on_all_paths() {
+    // `Empty` is value-less like `void`: falling off the end is fine (no E-MISSING-RETURN).
+    let errs = errors_of("function nothing() -> Empty {} function main() {}");
+    assert!(
+        !errs.iter().any(|e| e.code == Some("E-MISSING-RETURN")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn void_returning_callback_flows_into_an_empty_slot() {
+    // The widening edge `void <: Empty`: a void value is assignable to an `Empty` binding.
+    assert!(errors_of("function fx() -> void {} function main() { Empty e = fx(); }").is_empty());
+}

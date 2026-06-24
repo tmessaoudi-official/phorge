@@ -58,7 +58,7 @@ pub(crate) fn file_natives() -> Vec<NativeFn> {
             module: "Core.File",
             name: "write",
             params: vec![Ty::String, Ty::String],
-            ret: Ty::Unit,
+            ret: Ty::Void,
             eval: NativeEval::Pure(file_write),
             php: |a| format!("file_put_contents({}, {})", parg(a, 0), parg(a, 1)),
         },

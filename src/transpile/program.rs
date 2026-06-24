@@ -295,10 +295,10 @@ impl Transpiler {
             None => &f.name,
         };
         self.line(&format!(
-            "function {}({}): {} {{",
+            "function {}({}){} {{",
             disp,
             params.join(", "),
-            self.ret_hint(&f.ret)
+            self.ret_suffix(&f.ret)
         ));
         self.indent += 1;
         self.push_scope();
@@ -383,8 +383,8 @@ impl Transpiler {
         } else {
             name.to_string()
         };
-        let ret = self.ret_hint(&ovls[0].ret);
-        self.line(&format!("function {disp}(...$args): {ret} {{"));
+        let ret = self.ret_suffix(&ovls[0].ret);
+        self.line(&format!("function {disp}(...$args){ret} {{"));
         self.indent += 1;
         for &i in &order {
             let test = self.overload_branch_test(&kinds[i]);
@@ -863,10 +863,10 @@ impl Transpiler {
                     .map(|p| format!("{} ${}", self.emit_type(&p.ty), p.name))
                     .collect();
                 self.line(&format!(
-                    "public function {}({}): {};",
+                    "public function {}({}){};",
                     f.name,
                     params.join(", "),
-                    self.ret_hint(&f.ret)
+                    self.ret_suffix(&f.ret)
                 ));
             }
         }
@@ -1084,10 +1084,10 @@ impl Transpiler {
                 .map(|p| format!("{} ${}", self.emit_type(&p.ty), p.name))
                 .collect();
             self.line(&format!(
-                "public function {}({}): {};",
+                "public function {}({}){};",
                 m.name,
                 params.join(", "),
-                self.ret_hint(&m.ret)
+                self.ret_suffix(&m.ret)
             ));
         }
         self.indent -= 1;

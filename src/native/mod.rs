@@ -126,7 +126,7 @@ fn build() -> Vec<NativeFn> {
         module: "Core.Console",
         name: "println",
         params: vec![Ty::String],
-        ret: Ty::Unit,
+        ret: Ty::Void,
         eval: NativeEval::Pure(console_println),
         php: |args| {
             let a = args
@@ -140,7 +140,7 @@ fn build() -> Vec<NativeFn> {
         module: "Core.Console",
         name: "print",
         params: vec![Ty::String],
-        ret: Ty::Unit,
+        ret: Ty::Void,
         eval: NativeEval::Pure(console_print),
         php: |args| {
             let a = args
