@@ -42,10 +42,12 @@ jobs:
 
       # MAX_CALL_DEPTH is 4096 (src/limits.rs); the default 1 MiB wasm stack would overflow on deep
       # recursion, so bump the shadow stack. (The native path uses a 256 MiB thread for the same reason.)
+      # --cap-lints=warn mirrors the cross-build job in ci.yml: target-specific lints (e.g. dead code
+      # behind `#[cfg(unix)]` excluded on wasm32) must not trip the core crate's `warnings = "deny"` gate.
       - name: Build wasm
         run: wasm-pack build playground --target web --release --out-dir web/pkg
         env:
-          RUSTFLAGS: "-C link-arg=-zstack-size=33554432"
+          RUSTFLAGS: "-C link-arg=-zstack-size=33554432 --cap-lints=warn"
 
       - name: Generate examples
         run: python3 playground/web/gen_examples.py
