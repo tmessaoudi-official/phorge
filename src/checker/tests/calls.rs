@@ -136,7 +136,7 @@ function main() -> void { var dbl = fn(int x) => x + 1000; }"#,
 
 #[test]
 fn variant_constructor_returns_enum() {
-    let src = format!("{SHAPE} function main() -> void {{ Shape s = Circle(2.0); }}");
+    let src = format!("{SHAPE} function main() -> void {{ Shape s = new Circle(2.0); }}");
     assert!(errors_of(&src).is_empty());
 }
 
@@ -153,7 +153,7 @@ fn variant_constructor_arg_type_checked() {
 #[test]
 fn constructor_call_and_method_call_ok() {
     let src = format!(
-        "{GREETER} function main() -> void {{ Greeter g = Greeter(\"Tak\"); string s = g.greet(); }}"
+        "{GREETER} function main() -> void {{ Greeter g = new Greeter(\"Tak\"); string s = g.greet(); }}"
     );
     assert!(errors_of(&src).is_empty(), "{:?}", errors_of(&src));
 }
@@ -182,7 +182,7 @@ fn unknown_method_errors() {
 
 #[test]
 fn field_access_typed() {
-    let src = "class Box { public int n; constructor(int n) {} } function main() -> void { Box b = Box(1); int x = b.n; }";
+    let src = "class Box { public int n; constructor(int n) {} } function main() -> void { Box b = new Box(1); int x = b.n; }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
 

@@ -121,6 +121,8 @@ fn collect_free_expr(
                 LambdaBody::Block(stmts) => collect_free_block(stmts, &mut inner_bound, found),
             }
         }
+        // `new <call>` (Feature C): captures whatever its inner construction captures.
+        Expr::New(inner, _) => collect_free_expr(inner, bound, found),
     }
 }
 

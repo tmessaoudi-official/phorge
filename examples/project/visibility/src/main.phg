@@ -7,7 +7,7 @@ import Core.Console;
 import type Acme.Shapes.Rect;
 
 function main() -> void {
-  Rect r = Rect(3, 4);
+  Rect r = new Rect(3, 4);
   // area() = scale(3 * 4) = scale(12) = 12 * factor() = 12 * clamp(1) = 12 * 1 = 12.
   Console.println("area: {r.area()}");
 }

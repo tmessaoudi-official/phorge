@@ -277,6 +277,15 @@ pub enum Expr {
         fields: Vec<(String, Expr)>,
         span: Span,
     },
+    /// `new <call>` — the mandatory construction keyword (Feature C). Wraps the inner construction
+    /// `Expr::Call` (a class instantiation `new Counter()` or an enum-variant construction `new
+    /// Some(7)`). The checker validates that the inner callee really is a class/enum variant
+    /// (`E-NEW-ON-NONCONSTRUCT`) and that every construction is `new`-wrapped (`E-NEW-REQUIRED`), then
+    /// **unwraps** this node to its inner `Call` (`checker::unwrap_new`, alongside `expand_aliases`/
+    /// `erase_generics`) **before any backend runs** — so the interpreter/compiler/transpiler never see
+    /// it and construction semantics + the byte-identity spine are unchanged. A bare `new` not followed
+    /// by a call is a parse error.
+    New(Box<Expr>, Span),
     /// `html"<h1>{name}</h1>"` — a typed HTML literal (core.html Wave 3). The parser captures it as
     /// interpolation `parts` (literal chunks + `{expr}` holes, exactly like [`Expr::Str`]); the
     /// **checker** resolves each hole by type (an `Html` hole embeds as-is, a `string`/primitive hole

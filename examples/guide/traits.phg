@@ -59,7 +59,7 @@ class Employee {
 }
 
 function main() -> void {
-    Employee e = Employee(1000); // Paid's constructor runs: annual = 1000 * 12 = 12000
+    Employee e = new Employee(1000); // Paid's constructor runs: annual = 1000 * 12 = 12000
     e.raise(10); // 12000 + 10% = 13200
 
     Console.println(e.shout("hello")); // Loud: hello!

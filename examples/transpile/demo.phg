@@ -22,6 +22,6 @@ function area(Shape s) -> float {
 }
 
 function main() -> void {
-    Named n = Named("demo");
-    Console.println("{n.labelOf()}: circle area = {area(Circle(2.0))}");
+    Named n = new Named("demo");
+    Console.println("{n.labelOf()}: circle area = {area(new Circle(2.0))}");
 }

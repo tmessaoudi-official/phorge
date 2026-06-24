@@ -22,7 +22,7 @@ function main() -> void {
         }
     }
 
-    List<Point> pts = [Point(0, 0), Point(1, 2)];
+    List<Point> pts = [new Point(0, 0), new Point(1, 2)];
     for (Point p in pts) {
         Console.println(p.show());
     }

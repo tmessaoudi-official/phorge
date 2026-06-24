@@ -23,7 +23,7 @@ function allocateChain(int n) -> int {
     if (n <= 0) {
         return 0;
     }
-    Cell c = Cell(n);
+    Cell c = new Cell(n);
     int rest = allocateChain(n - 1);
     return c.squared() + rest;
 }
@@ -47,7 +47,7 @@ function main() -> void {
     Console.println("chain(1000) = {allocateChain(1000)}");
 
     // Object iteration: a method call + field read per element of a list literal.
-    for (Cell c in [Cell(3), Cell(4), Cell(5)]) {
+    for (Cell c in [new Cell(3), new Cell(4), new Cell(5)]) {
         Console.println("cell^2 = {c.squared()}");
     }
 }

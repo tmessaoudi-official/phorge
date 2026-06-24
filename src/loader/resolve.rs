@@ -425,6 +425,10 @@ pub(super) fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
             },
             span,
         },
+        // Feature C: `new <call>` — resolve the inner construction so a cross-package class/variant
+        // callee is mangled to its FQN (`new Rect(…)` ⇒ `new \Acme\Geometry\Rect(…)`); the checker
+        // later validates + unwraps it. Without this it would fall into the `leaf` arm unresolved.
+        Expr::New(inner, span) => Expr::New(Box::new(resolve_expr(*inner, ctx)), span),
         // Leaves carry no nested call site or type name: Int / Float / Bool / Null / Bytes / This.
         leaf => leaf,
     }

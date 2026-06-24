@@ -27,7 +27,7 @@ function main() -> void {
     Console.println("coalesce: {some ?? -1} {none ?? -1}");
 
     // `?.` reads through a present receiver and short-circuits a null one to `null`.
-    Box? box = Box(42);
+    Box? box = new Box(42);
     Box? nobox = null;
     Console.println("safe: {(box?.get()) ?? -1} {(nobox?.get()) ?? -1}");
 

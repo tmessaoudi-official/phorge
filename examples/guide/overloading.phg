@@ -42,12 +42,12 @@ function main() -> void {
 
   Console.println("{combine(1)} {combine(1, 2)} {combine(1, 2, 3)}");
 
-  Circle c = Circle(5);
-  Square q = Square(4);
+  Circle c = new Circle(5);
+  Square q = new Square(4);
   Console.println("circle area = {area(c)}");
   Console.println("square area (Shape fallback) = {area(q)}");
 
-  Formatter f = Formatter(":");
+  Formatter f = new Formatter(":");
   Console.println(f.render(7));
   Console.println(f.render("tag"));
   Console.println(f.render(c));

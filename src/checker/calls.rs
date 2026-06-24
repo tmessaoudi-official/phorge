@@ -93,6 +93,17 @@ impl Checker {
         // instead of discharging locally). Taken before the variant/ctor probe so it cannot leak —
         // the flag is only ever set for a free throwing function (`free_call_throws`), never a ctor.
         let skip_throws = std::mem::take(&mut self.skip_throws_discharge);
+        // Feature C: take the `new`-prefix flag BEFORE checking args, so a bare construction *argument*
+        // still requires its own `new`. A construction reached without `new` is `E-NEW-REQUIRED`.
+        let was_new = std::mem::take(&mut self.under_new);
+        if self.is_construction_name(name) && !was_new {
+            self.err_coded(
+                span,
+                format!("construct `{name}` with `new {name}(…)`"),
+                "E-NEW-REQUIRED",
+                Some(format!("write `new {name}(…)`")),
+            );
+        }
         if let Some(t) = self.try_variant_or_class_call(name, args, span) {
             return t;
         }

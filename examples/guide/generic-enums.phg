@@ -38,8 +38,8 @@ function describe(Option<int> o) -> string {
 // Returns a generic enum: divide, or report the reason as a string error.
 function safeDiv(int a, int b) -> Result<int, string> {
     return match b {
-        0 => Err("divide by zero"),
-        _ => Ok(a / b),
+        0 => new Err("divide by zero"),
+        _ => new Ok(a / b),
     };
 }
 
@@ -51,8 +51,8 @@ function report(Result<int, string> r) -> string {
 }
 
 function main() -> void {
-    var some = Some(7); // Option<int> — T inferred from `7`
-    Option<int> none = None(); // None mentions no T — annotate to fix Option<int>
+    var some = new Some(7); // Option<int> — T inferred from `7`
+    Option<int> none = new None(); // None mentions no T — annotate to fix Option<int>
 
     Console.println(describe(some)); // some 7
     Console.println(describe(none)); // none
@@ -62,7 +62,7 @@ function main() -> void {
     // is `mixed` to the backend, so it is not a *specialized* arithmetic operand on the VM — to do math
     // on it, return it into a typed local first (`int got = …; got + got`), exactly as with a generic
     // class method result. String interpolation of the payload needs no such hint and works directly.
-    var os = Some("phorge"); // Option<string>
+    var os = new Some("phorge"); // Option<string>
     string label = match os {
         Some(s) => "label {s}",
         None()  => "label none",

@@ -22,7 +22,7 @@ class Sub extends Limits {}
 function main() -> void {
     Console.println("{Limits.MAX}");      // 100
     Console.println("{Limits.MAX + 1}");  // 101  — a const is a first-class arithmetic operand
-    Limits lim = Limits();
+    Limits lim = new Limits();
     Console.println(lim.describe());       // limits: 100
     Console.println("{Sub.MAX}");         // 100  — inherited const via the subclass name
 }

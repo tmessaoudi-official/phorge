@@ -7,8 +7,8 @@ fn propagate_in_result_fn_is_clean() {
     // `?` in a let-initializer inside a `Result`-returning fn unwraps the `Ok` payload (an `int`).
     let ok = errors_of(&format!(
         "{RESULT_DEF} \
-             function f() -> Result<int, string> {{ return Ok(1); }} \
-             function g() -> Result<int, string> {{ int x = f()?; return Ok(x + 1); }} \
+             function f() -> Result<int, string> {{ return new Ok(1); }} \
+             function g() -> Result<int, string> {{ int x = f()?; return new Ok(x + 1); }} \
              function main() -> void {{}}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
@@ -19,8 +19,8 @@ fn propagate_outside_let_initializer_is_position_error() {
     // `?` nested in a larger expression is `E-PROPAGATE-POSITION` (not a whole let-initializer).
     let bad = errors_of(&format!(
         "{RESULT_DEF} \
-             function f() -> Result<int, string> {{ return Ok(1); }} \
-             function g() -> Result<int, string> {{ int x = f()? + 1; return Ok(x); }} \
+             function f() -> Result<int, string> {{ return new Ok(1); }} \
+             function g() -> Result<int, string> {{ int x = f()? + 1; return new Ok(x); }} \
              function main() -> void {{}}"
     ));
     assert!(
@@ -72,7 +72,7 @@ fn propagate_in_non_result_fn_is_context_error() {
     // `?` requires the enclosing fn to return the same `Result` — otherwise `E-PROPAGATE-CONTEXT`.
     let bad = errors_of(&format!(
         "{RESULT_DEF} \
-             function f() -> Result<int, string> {{ return Ok(1); }} \
+             function f() -> Result<int, string> {{ return new Ok(1); }} \
              function g() -> int {{ int x = f()?; return x; }} \
              function main() -> void {{}}"
     ));
@@ -86,7 +86,7 @@ fn propagate_in_non_result_fn_is_context_error() {
 fn throw_undeclared_and_uncaught_is_error() {
     // A helper that throws but neither declares `throws` nor wraps it in a `try`.
     let bad = errors_of(&format!(
-        "{ERRDEF} function f() -> void {{ throw BadInput(\"x\"); }} function main() -> void {{}}"
+        "{ERRDEF} function f() -> void {{ throw new BadInput(\"x\"); }} function main() -> void {{}}"
     ));
     assert!(
         bad.iter().any(|d| d.code == Some("E-THROW-UNDECLARED")),
@@ -99,7 +99,7 @@ fn throw_declared_then_caught_at_call_is_clean() {
     // `f` declares `throws BadInput` (discharges its own throw); `main` calls it inside a `try`
     // catching `BadInput` (discharges the call). Both sides handled — clean.
     let ok = errors_of(&format!(
-        "{ERRDEF} function f() -> void throws BadInput {{ throw BadInput(\"x\"); }} \
+        "{ERRDEF} function f() -> void throws BadInput {{ throw new BadInput(\"x\"); }} \
              function main() -> void {{ try {{ f(); }} catch (BadInput e) {{}} }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
@@ -108,7 +108,7 @@ fn throw_declared_then_caught_at_call_is_clean() {
 #[test]
 fn throw_in_main_is_uncaught() {
     let bad = errors_of(&format!(
-        "{ERRDEF} function main() -> void {{ throw BadInput(\"x\"); }}"
+        "{ERRDEF} function main() -> void {{ throw new BadInput(\"x\"); }}"
     ));
     assert!(
         bad.iter().any(|d| d.code == Some("E-UNCAUGHT-THROW")),
@@ -119,7 +119,7 @@ fn throw_in_main_is_uncaught() {
 #[test]
 fn main_may_not_declare_throws() {
     let bad = errors_of(&format!(
-        "{ERRDEF} function main() -> void throws BadInput {{ throw BadInput(\"x\"); }}"
+        "{ERRDEF} function main() -> void throws BadInput {{ throw new BadInput(\"x\"); }}"
     ));
     assert!(
         bad.iter().any(|d| d.code == Some("E-UNCAUGHT-THROW")),
@@ -130,7 +130,7 @@ fn main_may_not_declare_throws() {
 #[test]
 fn throws_error_root_is_too_broad() {
     let bad = errors_of(&format!(
-        "{ERRDEF} function f() -> void throws Error {{ throw BadInput(\"x\"); }} \
+        "{ERRDEF} function f() -> void throws Error {{ throw new BadInput(\"x\"); }} \
              function main() -> void {{ try {{ f(); }} catch (Error e) {{}} }}"
     ));
     assert!(
@@ -151,7 +151,7 @@ fn throw_non_error_value_is_type_error() {
 #[test]
 fn bare_call_to_throwing_fn_is_unhandled() {
     let bad = errors_of(&format!(
-        "{ERRDEF} function f() -> void throws BadInput {{ throw BadInput(\"x\"); }} \
+        "{ERRDEF} function f() -> void throws BadInput {{ throw new BadInput(\"x\"); }} \
              function main() -> void {{ f(); }}"
     ));
     assert!(
@@ -164,7 +164,7 @@ fn bare_call_to_throwing_fn_is_unhandled() {
 fn propagate_throws_to_declared_is_clean() {
     // `g` propagates `f`'s `BadInput` with `?` and declares it — clean; `main` catches the call.
     let ok = errors_of(&format!(
-        "{ERRDEF} function f() -> void throws BadInput {{ throw BadInput(\"x\"); }} \
+        "{ERRDEF} function f() -> void throws BadInput {{ throw new BadInput(\"x\"); }} \
              function g() -> void throws BadInput {{ f()?; }} \
              function main() -> void {{ try {{ g(); }} catch (BadInput e) {{}} }}"
     ));
@@ -175,7 +175,7 @@ fn propagate_throws_to_declared_is_clean() {
 fn propagate_throws_without_declaration_is_unhandled() {
     // `g` uses `?` but does not declare `throws BadInput` — the propagation is unhandled.
     let bad = errors_of(&format!(
-        "{ERRDEF} function f() -> void throws BadInput {{ throw BadInput(\"x\"); }} \
+        "{ERRDEF} function f() -> void throws BadInput {{ throw new BadInput(\"x\"); }} \
              function g() -> void {{ f()?; }} function main() -> void {{}}"
     ));
     assert!(
@@ -199,7 +199,7 @@ fn catch_non_error_type_is_error() {
 fn shadowed_catch_clause_warns() {
     // A second `catch (BadInput …)` after the first can never run — a non-fatal lint.
     let warns = warnings_of(&format!(
-        "{ERRDEF} function f() -> void throws BadInput {{ throw BadInput(\"x\"); }} \
+        "{ERRDEF} function f() -> void throws BadInput {{ throw new BadInput(\"x\"); }} \
              function main() -> void {{ try {{ f(); }} catch (BadInput e) {{}} catch (BadInput e2) {{}} }}"
     ));
     assert!(
@@ -234,7 +234,7 @@ fn try_falling_through_misses_return() {
 fn throw_tail_satisfies_totality() {
     // A `throw` diverges, so a `-> int` fn whose only statement is a `throw` is total.
     let ok = errors_of(&format!(
-        "{ERRDEF} function g() -> int throws BadInput {{ throw BadInput(\"x\"); }} \
+        "{ERRDEF} function g() -> int throws BadInput {{ throw new BadInput(\"x\"); }} \
              function main() -> void {{ try {{ var n = g(); }} catch (BadInput e) {{}} }}"
     ));
     assert!(ok.is_empty(), "expected clean (throw diverges), got {ok:?}");
@@ -245,7 +245,7 @@ fn throws_mode_propagate_is_recorded_for_erasure() {
     // A throws-mode `?` is a checker-only marker: it must be recorded (mapped to the bare call)
     // so `resolve_html` erases the `Propagate` node before any backend sees it.
     let p = prog(&format!(
-        "{ERRDEF} function f() -> void throws BadInput {{ throw BadInput(\"x\"); }} \
+        "{ERRDEF} function f() -> void throws BadInput {{ throw new BadInput(\"x\"); }} \
              function g() -> void throws BadInput {{ f()?; }} function main() -> void {{}}"
     ));
     let (_warns, subst) = check_resolutions(&p).expect("checks clean");

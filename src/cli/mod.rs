@@ -15,8 +15,10 @@ use crate::vm::Vm;
 // `bench` profiling suite. Re-exported so callers keep referring to `cli::cmd_explain` etc.
 mod bench;
 mod explain;
+mod rewrite_new;
 pub use bench::{cmd_bench, cmd_bench_vs_php};
 pub use explain::{cmd_explain, explain_text};
+pub use rewrite_new::cmd_rewrite_new;
 
 /// The `--version` line: `phg <version>` (from `CARGO_PKG_VERSION`).
 pub fn version_line() -> String {
@@ -259,9 +261,11 @@ pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, Strin
             // De-alias types, erase `html"…"` literals into their `Html.concat([…])` kernel calls
             // (built by the checker, keyed by span), then erase generic type parameters — all three
             // are front-end sugar removed before any backend runs (M-RT S7 adds the last).
-            Ok(crate::checker::erase_generics(
+            // Feature C: `unwrap_new` strips the `Expr::New` construction wrapper last (after the
+            // type sugar is gone), so every backend sees the plain construction `Call`.
+            Ok(crate::checker::unwrap_new(crate::checker::erase_generics(
                 crate::checker::resolve_html(crate::checker::expand_aliases(prog), &html),
-            ))
+            )))
         }
         Err(errs) => {
             let lines: Vec<String> = errs.iter().map(|e| e.render(diag_src)).collect();

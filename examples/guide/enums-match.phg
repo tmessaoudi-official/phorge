@@ -29,7 +29,7 @@ function sign(int n) -> string {
 }
 
 function main() -> void {
-    List<Json> vals = [JNull(), JBool(true), JNum(42), JStr("hi")];
+    List<Json> vals = [new JNull(), new JBool(true), new JNum(42), new JStr("hi")];
     for (Json j in vals) {
         Console.println(show(j));
     }

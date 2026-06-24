@@ -34,8 +34,8 @@ function announce(Speaker s) -> string {
 }
 
 function main() -> void {
-    var d = Dog("Rex");
-    var r = Robot();
+    var d = new Dog("Rex");
+    var r = new Robot();
 
     // Called polymorphically — both a Dog and a Robot are Speakers.
     Console.println(announce(d)); // Woof

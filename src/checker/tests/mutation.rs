@@ -54,8 +54,8 @@ fn mutable_var_stays_reassignable_in_narrowed_block() {
     // smart-cast interaction (M-mut.1): the narrowed `instanceof` shadow inherits the outer
     // binding's mutability, so a `mutable` var is still reassignable inside the narrowed block.
     let src = "class Dog { constructor() {} } \
-                   function main() -> void { mutable Dog d = Dog(); \
-                     if (d instanceof Dog) { d = Dog(); } }";
+                   function main() -> void { mutable Dog d = new Dog(); \
+                     if (d instanceof Dog) { d = new Dog(); } }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
 
@@ -113,14 +113,14 @@ fn increment_on_mutable_is_ok() {
 #[test]
 fn clone_with_valid_is_ok() {
     let src = "class P { constructor(public int x, public int y) {} } \
-                   function main() -> void { P p = P(1, 2); P q = p with { x = 9 }; }";
+                   function main() -> void { P p = new P(1, 2); P q = p with { x = 9 }; }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
 
 #[test]
 fn clone_with_unknown_field_is_error() {
     let src = "class P { constructor(public int x) {} } \
-                   function main() -> void { P p = P(1); P q = p with { z = 9 }; }";
+                   function main() -> void { P p = new P(1); P q = p with { z = 9 }; }";
     let bad = errors_of(src);
     assert!(
         bad.iter().any(|e| e.code == Some("E-WITH-FIELD")),
@@ -131,7 +131,7 @@ fn clone_with_unknown_field_is_error() {
 #[test]
 fn clone_with_type_mismatch_is_error() {
     let src = "class P { constructor(public int x) {} } \
-                   function main() -> void { P p = P(1); P q = p with { x = \"s\" }; }";
+                   function main() -> void { P p = new P(1); P q = p with { x = \"s\" }; }";
     let bad = errors_of(src);
     assert!(bad.iter().any(|e| e.code == Some("E-WITH-TYPE")), "{bad:?}");
 }
@@ -190,14 +190,14 @@ fn element_compound_set_is_ok() {
 #[test]
 fn field_set_on_mutable_field_is_ok() {
     let src = "class P { constructor(public mutable int x) {} } \
-                   function main() -> void { P p = P(1); p.x = 2; }";
+                   function main() -> void { P p = new P(1); p.x = 2; }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
 
 #[test]
 fn field_set_on_immutable_field_is_error() {
     let src = "class P { constructor(public int x) {} } \
-                   function main() -> void { P p = P(1); p.x = 2; }";
+                   function main() -> void { P p = new P(1); p.x = 2; }";
     let bad = errors_of(src);
     assert!(
         bad.iter().any(|e| e.code == Some("E-ASSIGN-IMMUTABLE")),
@@ -208,7 +208,7 @@ fn field_set_on_immutable_field_is_error() {
 #[test]
 fn field_set_unknown_field_is_error() {
     let src = "class P { constructor(public mutable int x) {} } \
-                   function main() -> void { P p = P(1); p.y = 2; }";
+                   function main() -> void { P p = new P(1); p.y = 2; }";
     let bad = errors_of(src);
     assert!(
         bad.iter().any(|e| e.code == Some("E-ASSIGN-UNKNOWN")),
@@ -219,7 +219,7 @@ fn field_set_unknown_field_is_error() {
 #[test]
 fn field_set_wrong_value_type_is_error() {
     let src = "class P { constructor(public mutable int x) {} } \
-                   function main() -> void { P p = P(1); p.x = \"s\"; }";
+                   function main() -> void { P p = new P(1); p.x = \"s\"; }";
     let bad = errors_of(src);
     assert!(
         bad.iter().any(|e| e.code == Some("E-ASSIGN-TYPE")),
@@ -234,7 +234,7 @@ fn field_set_via_this_in_method_is_ok() {
     let src = "class C { mutable int n; \
                      constructor(public mutable int seed) { this.n = seed; } \
                      function bump() -> int { this.n = this.n + 1; return this.n; } } \
-                   function main() -> void { C c = C(10); c.bump(); }";
+                   function main() -> void { C c = new C(10); c.bump(); }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
 
@@ -242,7 +242,7 @@ fn field_set_via_this_in_method_is_ok() {
 fn field_set_through_safe_access_is_error() {
     // `o?.f = e` is a meaningless assignment target → `E-ASSIGN-TARGET`.
     let src = "class P { constructor(public mutable int x) {} } \
-                   function main() -> void { P? p = P(1); p?.x = 2; }";
+                   function main() -> void { P? p = new P(1); p?.x = 2; }";
     let bad = errors_of(src);
     assert!(
         bad.iter().any(|e| e.code == Some("E-ASSIGN-TARGET")),

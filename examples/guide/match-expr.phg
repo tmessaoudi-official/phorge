@@ -21,7 +21,7 @@ function main() -> void {
     int code = (match 2 { 1 => 10, 2 => 20, other => other }) + base;
 
     // expression position: a match used as a call argument (its arms produce enum values)
-    string picked = name(match base { 100 => Blue(), x => Red() });
+    string picked = name(match base { 100 => new Blue(), x => new Red() });
 
     // literal-pattern match in return position, via a helper
     Console.println("code={code} picked={picked} sign={sign(0)} sign2={sign(7)}");

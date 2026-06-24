@@ -24,10 +24,10 @@ class Greeter {
 }
 
 function main() -> void {
-    Greeter g = Greeter("Tak");
+    Greeter g = new Greeter("Tak");
     Console.println(g.greet());
 
-    List<Shape> shapes = [Circle(2.0), Rect(3.0, 4.0)];
+    List<Shape> shapes = [new Circle(2.0), new Rect(3.0, 4.0)];
     for (Shape s in shapes) {
         Console.println("area = {area(s)}");
     }

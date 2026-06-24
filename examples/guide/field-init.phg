@@ -23,7 +23,7 @@ class Task {
 }
 
 function main() -> void {
-    Task t = Task("alpha");
+    Task t = new Task("alpha");
     Console.println(t.summary());                // alpha: w=31 d=62
     Console.println("{t.weight + t.doubled}");   // 93
 }

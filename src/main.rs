@@ -39,6 +39,27 @@ fn main() {
         }
         _ => {}
     }
+    // Feature C migration tool (internal, not in USAGE): `phg rewrite-new <file>` rewrites every
+    // class/enum-variant construction to `new …` in place. Handled before the run-family dispatch.
+    if args.get(1).map(String::as_str) == Some("rewrite-new") {
+        let path = match args.get(2) {
+            Some(p) => p,
+            None => {
+                eprintln!("usage: phg rewrite-new <file.phg>");
+                exit(2);
+            }
+        };
+        match cli::cmd_rewrite_new(path) {
+            Ok(text) => {
+                print!("{text}");
+                return;
+            }
+            Err(err) => {
+                eprintln!("{err}");
+                exit(1);
+            }
+        }
+    }
     let cmd = match args.get(1).map(String::as_str) {
         Some(
             c @ ("run" | "runvm" | "check" | "parse" | "lex" | "transpile" | "disasm" | "bench"

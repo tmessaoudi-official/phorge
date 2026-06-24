@@ -9,7 +9,7 @@ fn interface_conformance_and_subtyping_ok() {
     let src = "interface Speaker { function speak() -> string; } \
                    class Dog implements Speaker { function speak() -> string { return \"w\"; } } \
                    function announce(Speaker s) -> string { return s.speak(); } \
-                   function main() -> void { Speaker sp = Dog(); announce(sp); }";
+                   function main() -> void { Speaker sp = new Dog(); announce(sp); }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
 
@@ -54,7 +54,7 @@ fn interface_is_not_assignable_to_unrelated_class() {
     // A Speaker is not a Dog: interface → concrete class is not a subtype.
     let src = "interface Speaker { function speak() -> string; } \
                    class Dog implements Speaker { function speak() -> string { return \"w\"; } } \
-                   function main() -> void { Speaker s = Dog(); Dog d = s; }";
+                   function main() -> void { Speaker s = new Dog(); Dog d = s; }";
     let e = errors_of(src);
     assert!(!e.is_empty(), "expected an assignability error, got none");
 }
@@ -65,7 +65,7 @@ fn instanceof_against_interface_narrows() {
     // smart-cast to the interface so its methods resolve.
     let src = "interface Speaker { function speak() -> string; } \
                    class Dog implements Speaker { function speak() -> string { return \"w\"; } } \
-                   function main() -> void { Dog d = Dog(); \
+                   function main() -> void { Dog d = new Dog(); \
                      if (d instanceof Speaker) { d.speak(); } }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }

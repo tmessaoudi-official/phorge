@@ -36,7 +36,7 @@ class Util {
 }
 
 function main() -> void {
-  var u = Util();
+  var u = new Util();
 
   // `identity` reused at three different concrete types — one method definition, no duplication.
   int n = u.identity(7);

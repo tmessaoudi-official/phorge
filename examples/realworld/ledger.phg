@@ -18,9 +18,9 @@ class Account {
 
     function apply(Tx t) -> Account {
         return match t {
-            Deposit(c)      => Account(owner, cents + c),
-            Withdraw(c)     => Account(owner, cents - c),
-            Transfer(c, to) => Account(owner, cents - c),
+            Deposit(c)      => new Account(owner, cents + c),
+            Withdraw(c)     => new Account(owner, cents - c),
+            Transfer(c, to) => new Account(owner, cents - c),
         };
     }
 }
@@ -42,14 +42,14 @@ function grow(int cents, int years) -> int {
 }
 
 function main() -> void {
-    Account a0 = Account("Ada", 1000);
-    Account a1 = a0.apply(Deposit(500));
-    Account a2 = a1.apply(Withdraw(200));
-    Account a3 = a2.apply(Transfer(100, "Bob"));
+    Account a0 = new Account("Ada", 1000);
+    Account a1 = a0.apply(new Deposit(500));
+    Account a2 = a1.apply(new Withdraw(200));
+    Account a3 = a2.apply(new Transfer(100, "Bob"));
 
     Console.println("{a3.ownerName()} balance = {a3.balance()}c");
 
-    List<Tx> log = [Deposit(500), Withdraw(200), Transfer(100, "Bob")];
+    List<Tx> log = [new Deposit(500), new Withdraw(200), new Transfer(100, "Bob")];
     for (Tx t in log) {
         Console.println(describe(t));
     }

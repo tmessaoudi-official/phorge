@@ -44,7 +44,7 @@ function describe(Animal a) -> string {
 }
 
 function main() -> void {
-    Duck d = Duck();
+    Duck d = new Duck();
 
     // (1) `instanceof` against every ancestor in the lattice — all true.
     Console.println("{d instanceof Duck} {d instanceof Fish} {d instanceof Bird} {d instanceof Animal}");
@@ -56,6 +56,6 @@ function main() -> void {
     Console.println(describe(d)); // a Duck passed where an Animal is expected
 
     // (3) a non-subtype test is false — Bird is an ancestor of Duck, but a fresh Animal is not a Bird.
-    Animal plain = Animal();
+    Animal plain = new Animal();
     Console.println("{plain instanceof Bird}");
 }

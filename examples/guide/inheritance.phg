@@ -33,7 +33,7 @@ class LoudGreeter extends Greeter {
 }
 
 function main() -> void {
-    LoudGreeter g = LoudGreeter();
+    LoudGreeter g = new LoudGreeter();
     Console.println(g.greet()); // inherited greet() dispatches to the overridden kind()
     Console.println(g.kind());
 

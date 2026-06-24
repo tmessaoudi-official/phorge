@@ -7,7 +7,7 @@ fn intersection_param_accepts_a_class_implementing_both() {
     // all-members-required-in: a Badge (implements Drawable AND Named) flows into the intersection.
     let ok = errors_of(&format!(
         "{IFACES} function describe(Drawable & Named x) -> string {{ return x.draw(); }} \
-             function main() -> void {{ string s = describe(Badge(\"b\")); }}"
+             function main() -> void {{ string s = describe(new Badge(\"b\")); }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
@@ -17,7 +17,7 @@ fn intersection_member_access_reaches_each_member() {
     // A method from *each* member interface is in scope on the intersection value.
     let ok = errors_of(&format!(
             "{IFACES} function f(Drawable & Named x) -> string {{ return \"{{x.draw()}} {{x.name()}}\"; }} \
-             function main() -> void {{ string s = f(Badge(\"b\")); }}"
+             function main() -> void {{ string s = f(new Badge(\"b\")); }}"
         ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
@@ -38,7 +38,7 @@ fn intersection_one_class_plus_interface_is_allowed() {
     // D1: at most one concrete class plus interfaces is a well-formed intersection.
     let ok = errors_of(&format!(
         "{IFACES} function f(Badge & Drawable x) -> string {{ return x.draw(); }} \
-             function main() -> void {{ string s = f(Badge(\"b\")); }}"
+             function main() -> void {{ string s = f(new Badge(\"b\")); }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }

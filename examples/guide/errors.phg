@@ -19,10 +19,10 @@ class TooLarge implements Error {
 // `throws A | B` declares the checked exceptions this function may raise (the union is a set).
 function validate(int n) -> int throws NegativeInput | TooLarge {
   if (n < 0) {
-    throw NegativeInput("must not be negative");
+    throw new NegativeInput("must not be negative");
   }
   if (n > 100) {
-    throw TooLarge("must be at most 100");
+    throw new TooLarge("must be at most 100");
   }
   return n;
 }

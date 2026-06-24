@@ -15,9 +15,11 @@ use crate::types::Ty;
 mod rewrite_alias;
 mod rewrite_generics;
 mod rewrite_html;
+mod rewrite_new;
 pub use rewrite_alias::expand_aliases;
 pub use rewrite_generics::erase_generics;
 pub use rewrite_html::resolve_html;
+pub use rewrite_new::unwrap_new;
 
 // impl-cluster cohesion split (M-Decomp W2): one `impl Checker` block per cluster
 // file; all share the private struct via `use super::*`.
@@ -207,6 +209,11 @@ pub struct Checker {
     /// One-shot flag set by a throws-mode `?` so the immediately-wrapped throwing call skips its own
     /// call-site discharge check (the `?` propagates instead). Consumed (taken) by the call.
     skip_throws_discharge: bool,
+    /// One-shot flag (Feature C) set by `check_new` so the immediately-wrapped construction call
+    /// recognizes it was `new`-prefixed and skips `E-NEW-REQUIRED`. Taken (cleared) at the top of
+    /// `check_named_call` — before its arguments are checked — so a bare construction *argument* still
+    /// requires its own `new`.
+    under_new: bool,
     /// class currently being checked (for `this` and bare field refs)
     cur_class: Option<String>,
     /// live `check_expr` recursion depth, bounded by [`MAX_EXPR_DEPTH`]
@@ -274,6 +281,7 @@ impl Checker {
             cur_is_main: false,
             try_catch_stack: Vec::new(),
             skip_throws_discharge: false,
+            under_new: false,
             cur_class: None,
             depth: 0,
             loop_depth: 0,

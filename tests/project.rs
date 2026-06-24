@@ -139,7 +139,7 @@ fn library_package_type_is_usable_cross_package() {
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Console;\nimport type Acme.Util.Shape;\n\
-         function main() -> void {\n    Shape s = Shape(5);\n    Console.println(\"{s.w}\");\n}",
+         function main() -> void {\n    Shape s = new Shape(5);\n    Console.println(\"{s.w}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/shape.phg",

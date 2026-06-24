@@ -57,7 +57,7 @@ function parseRequest(bytes raw) -> Request? {
   List<string> rl = Text.split(requestLine, " ");
   string method = rl[0];
   string path = rl[1];
-  return Request(method, path, body, lines);
+  return new Request(method, path, body, lines);
 }
 
 // A route's destination, as an enum tag (no first-class functions yet → Track A). The exhaustive
@@ -73,9 +73,9 @@ class Route {
 // which the exhaustiveness check enforces).
 function routes() -> List<Route> {
   return [
-    Route("GET", "/", Home()),
-    Route("GET", "/greet", Greet()),
-    Route("GET", "/health", Health()),
+    new Route("GET", "/", new Home()),
+    new Route("GET", "/greet", new Greet()),
+    new Route("GET", "/health", new Health()),
   ];
 }
 
@@ -87,30 +87,30 @@ function matchRoute(string method, string path) -> Handler {
       if (r.path == path) { return r.tag; }
     }
   }
-  return NotFound();
+  return new NotFound();
 }
 
 function handleHome(Request req) -> Response {
   bytes body = Bytes.fromString("Phorge web — home");
-  return Response(200, body, ["Content-Type: text/plain"]);
+  return new Response(200, body, ["Content-Type: text/plain"]);
 }
 
 function handleGreet(Request req) -> Response {
   string host = req.header("Host") ?? "world";
   bytes body = Bytes.fromString("Hello {host}");
-  return Response(200, body, ["Content-Type: text/plain"]);
+  return new Response(200, body, ["Content-Type: text/plain"]);
 }
 
 function handleHealth(Request req) -> Response {
   bytes body = Bytes.fromString("ok");
-  return Response(200, body, ["Content-Type: text/plain"]);
+  return new Response(200, body, ["Content-Type: text/plain"]);
 }
 
 function handleNotFound(Request req) -> Response {
   string m = req.method;
   string p = req.path;
   bytes body = Bytes.fromString("not found: {m} {p}");
-  return Response(404, body, ["Content-Type: text/plain"]);
+  return new Response(404, body, ["Content-Type: text/plain"]);
 }
 
 // The router: route the request to its handler. The `match` is exhaustive over `Handler`.

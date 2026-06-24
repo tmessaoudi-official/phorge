@@ -217,7 +217,7 @@ class Dog extends Animal {
     function kind() -> string { return "dog"; }
 }
 function main() -> void {
-    Dog d = Dog();
+    Dog d = new Dog();
     Console.println(d.speak());
     Console.println(d.kind());
     Animal a = d;
@@ -244,7 +244,7 @@ open class Flyer {
 }
 class Duck extends Swimmer, Flyer {}
 function main() -> void {
-    Duck d = Duck();
+    Duck d = new Duck();
     Console.println(d.move()); // first parent
     Console.println(d.soar()); // SECOND parent — the latent divergence
     Console.println(d.wet());  // inherited, non-overridden
@@ -264,7 +264,7 @@ open class Left extends Base {}
 open class Right extends Base {}
 class Mid extends Left, Right {}
 function main() -> void {
-    Mid m = Mid();
+    Mid m = new Mid();
     Console.println(m.tag());
     Base b = m;
     Console.println(b.tag());
@@ -286,7 +286,7 @@ class Duck extends Swimmer, Flyer {
     use Flyer.move
 }
 function main() -> void {
-    Duck d = Duck();
+    Duck d = new Duck();
     Console.println(d.move()); // Flyer's, per the resolution clause
 }"#,
     );
@@ -305,7 +305,7 @@ class Duck extends Swimmer, Flyer {
     rename Flyer.move as glide
 }
 function main() -> void {
-    Duck d = Duck();
+    Duck d = new Duck();
     Console.println(d.move());  // Swimmer's (the remaining source)
     Console.println(d.glide()); // Flyer's, under the new name
 }"#,
@@ -329,7 +329,7 @@ class Square extends Shape {
     function area() -> int { return this.side * this.side; }
 }
 function main() -> void {
-    Square s = Square(3);
+    Square s = new Square(3);
     Console.println("{s.area()}");
     Console.println(s.describe()); // describe() dispatches to Square.area()
     Shape sh = s;
@@ -406,7 +406,7 @@ fn s6c_single_parent_ctor_inheritance_is_byte_identical() {
 open class Named { constructor(public string name) {} }
 class Greeter extends Named {}
 function main() -> void {
-    Greeter g = Greeter("Ada");
+    Greeter g = new Greeter("Ada");
     Console.println(g.name);
 }"#,
         "Ada\n",
@@ -428,7 +428,7 @@ open class Counter {
 }
 class Tally extends Counter {}
 function main() -> void {
-    Tally t = Tally(7);
+    Tally t = new Tally(7);
     Console.println("{t.value()}");
 }"#,
         "7\n",
@@ -441,7 +441,7 @@ open class Root { constructor(public int id) {} }
 open class Mid extends Root {}
 class Leaf extends Mid {}
 function main() -> void {
-    Leaf l = Leaf(42);
+    Leaf l = new Leaf(42);
     Console.println("{l.id}");
 }"#,
         "42\n",
@@ -462,7 +462,7 @@ open class Named { constructor(public string name) {} }
 open class Aged { constructor(public int age) {} }
 class Person extends Named, Aged {}
 function main() -> void {
-    Person p = Person("Ada", 36);
+    Person p = new Person("Ada", 36);
     Console.println("{p.name} is {p.age}");
 }"#,
         "Ada is 36\n",
@@ -478,7 +478,7 @@ open class Scored {
 }
 class Player extends Named, Scored {}
 function main() -> void {
-    Player p = Player("Bo", 21);
+    Player p = new Player("Bo", 21);
     Console.println("{p.name} {p.doubled}");
 }"#,
         "Bo 42\n",
@@ -501,7 +501,7 @@ fn s6c_instanceof_across_lattice_is_byte_identical() {
 open class Animal {}
 class Dog extends Animal {}
 function main() -> void {
-    Dog d = Dog();
+    Dog d = new Dog();
     Console.println("{d instanceof Animal} {d instanceof Dog}");
 }"#,
         "true true\n",
@@ -515,7 +515,7 @@ open class Flyer { open function soar() -> string { return "soars"; } }
 class Duck extends Swimmer, Flyer {}
 function describe(Swimmer s) -> string { return s.move(); }
 function main() -> void {
-    Duck d = Duck();
+    Duck d = new Duck();
     Console.println(describe(d));
     Console.println("{d instanceof Swimmer} {d instanceof Flyer}");
 }"#,
@@ -529,7 +529,7 @@ open class A {}
 open class B {}
 class C extends A {}
 function main() -> void {
-    C c = C();
+    C c = new C();
     Console.println("{c instanceof A} {c instanceof B}");
 }"#,
         "true false\n",
@@ -750,7 +750,7 @@ enum Grade { Pass(int score), Fail(int score), }
                Fail(s) => "FAIL ({s})",
            };
        }
-       function main() -> void { Console.println(describe(Pass(90))); Console.println(describe(Fail(40))); }"#,
+       function main() -> void { Console.println(describe(new Pass(90))); Console.println(describe(new Fail(40))); }"#,
     // bare (no-payload) variants, wildcard arm, `match` in var-decl-init position
     r#"import Core.Console;
 enum Color { Red, Green, Blue, }
@@ -798,7 +798,7 @@ enum Pair { P(int a, int b), }
                P(a, b) => match a { 0 => "first=zero b={b}", _ => "a={a} b={b}", },
            };
        }
-       function main() -> void { Console.println(f(P(0, 9))); Console.println(f(P(5, 2))); }"#,
+       function main() -> void { Console.println(f(new P(0, 9))); Console.println(f(new P(5, 2))); }"#,
 ];
 
 #[test]
@@ -814,37 +814,37 @@ const P4B_PROGRAMS: &[&str] = &[
     // promoted fields; field reads in interpolation
     r#"import Core.Console;
 class Point { constructor(public int x, public int y) {} }
-       function main() -> void { Point p = Point(3, 4); Console.println("{p.x},{p.y}"); }"#,
+       function main() -> void { Point p = new Point(3, 4); Console.println("{p.x},{p.y}"); }"#,
     // field read flowing through a typed local, then used as an arithmetic operand
     r#"import Core.Console;
 class Point { constructor(public int x, public int y) {} }
-       function main() -> void { Point p = Point(3, 4); int s = p.x; Console.println("{s + p.y}"); }"#,
+       function main() -> void { Point p = new Point(3, 4); int s = p.x; Console.println("{s + p.y}"); }"#,
     // constructor *body* runs for side effects (a `println` in the ctor), using a promoted param
     r#"import Core.Console;
 class Greeter { constructor(public string name) { Console.println("made {name}"); } }
-       function main() -> void { Greeter g = Greeter("Ada"); Console.println("hello {g.name}"); }"#,
+       function main() -> void { Greeter g = new Greeter("Ada"); Console.println("hello {g.name}"); }"#,
     // a no-constructor class builds an empty instance; structural instance equality
     r#"import Core.Console;
 class Empty {}
-       function main() -> void { Empty a = Empty(); Empty b = Empty(); Console.println("{a == b}"); }"#,
+       function main() -> void { Empty a = new Empty(); Empty b = new Empty(); Console.println("{a == b}"); }"#,
     // instance equality is structural over fields (same class + equal fields)
     r#"import Core.Console;
 class P { constructor(public int x) {} }
-       function main() -> void { P a = P(1); P b = P(1); P c = P(2); Console.println("{a == b} {a == c}"); }"#,
+       function main() -> void { P a = new P(1); P b = new P(1); P c = new P(2); Console.println("{a == b} {a == c}"); }"#,
     // only *promoted* params become fields (the bare `seed` param is not a field)
     r#"import Core.Console;
 class Acc { constructor(public int total, int seed) {} }
-       function main() -> void { Acc a = Acc(10, 99); Console.println("{a.total}"); }"#,
+       function main() -> void { Acc a = new Acc(10, 99); Console.println("{a.total}"); }"#,
     // a field read as a call argument
     r#"import Core.Console;
 class Box { constructor(public int v) {} }
        function dbl(int n) -> int { return n * 2; }
-       function main() -> void { Box b = Box(21); Console.println("{dbl(b.v)}"); }"#,
+       function main() -> void { Box b = new Box(21); Console.println("{dbl(b.v)}"); }"#,
     // a bare `return;` in the ctor body is an early exit, but the promoted instance is *still*
     // returned (interpreter parity) — exercises the synthetic ctor's epilogue redirect.
     r#"import Core.Console;
 class C { constructor(public int x) { if (x > 0) { return; } Console.println("nonpos"); } }
-       function main() -> void { C a = C(5); Console.println("{a.x}"); C b = C(0); Console.println("{b.x}"); }"#,
+       function main() -> void { C a = new C(5); Console.println("{a.x}"); C b = new C(0); Console.println("{b.x}"); }"#,
 ];
 
 #[test]
@@ -864,7 +864,7 @@ fn p4b_field_miss_faults_identically() {
     agree_err(
         r#"import Core.Console;
 class Box { public int tag; constructor(public int x) {} }
-           function main() -> void { Box b = Box(5); Console.println("{b.tag}"); }"#,
+           function main() -> void { Box b = new Box(5); Console.println("{b.tag}"); }"#,
     );
 }
 
@@ -876,26 +876,26 @@ const P4C_PROGRAMS: &[&str] = &[
     // a method reads a *bare* field (`total` resolves to `this.total`) + a param
     r#"import Core.Console;
 class Counter { constructor(private int total) {} function add(int n) -> int { return total + n; } }
-       function main() -> void { Counter c = Counter(100); Console.println("{c.add(23)}"); }"#,
+       function main() -> void { Counter c = new Counter(100); Console.println("{c.add(23)}"); }"#,
     // a method calls another method via `this`, and reads a field via `this.`
     r#"import Core.Console;
 class C { constructor(public int x) {}
            function dbl() -> int { return this.x + this.x; }
            function quad() -> int { int d = this.dbl(); return d + d; } }
-       function main() -> void { C c = C(5); Console.println("{c.quad()}"); }"#,
+       function main() -> void { C c = new C(5); Console.println("{c.quad()}"); }"#,
     // mixed bare-field + explicit-`this` field reads in one expression
     r#"import Core.Console;
 class P { constructor(public int x, public int y) {} function sum() -> int { return x + this.y; } }
-       function main() -> void { P p = P(3, 4); Console.println("{p.sum()}"); }"#,
+       function main() -> void { P p = new P(3, 4); Console.println("{p.sum()}"); }"#,
     // recursion *through* a method (`this.fact(n - 1)`)
     r#"import Core.Console;
 class F { constructor(public int base) {}
            function fact(int n) -> int { if (n <= 1) { return 1; } return n * this.fact(n - 1); } }
-       function main() -> void { F f = F(0); Console.println("{f.fact(5)}"); }"#,
+       function main() -> void { F f = new F(0); Console.println("{f.fact(5)}"); }"#,
     // a void (no-return) method invoked as a statement, twice (side effects + Unit result)
     r#"import Core.Console;
 class Logger { constructor(public string tag) {} function log() -> void { Console.println("log {tag}"); } }
-       function main() -> void { Logger l = Logger("X"); l.log(); l.log(); }"#,
+       function main() -> void { Logger l = new Logger("X"); l.log(); l.log(); }"#,
 ];
 
 #[test]
@@ -1053,26 +1053,26 @@ const WAVE4_PROGRAMS: &[&str] = &[
     // (A) field of an arbitrary instance local, used as an arithmetic operand
     r#"import Core.Console;
 class Point { constructor(public int x, public int y) {} }
-       function main() -> void { Point p = Point(7, 4); Console.println("{p.x + 1}"); }"#,
+       function main() -> void { Point p = new Point(7, 4); Console.println("{p.x + 1}"); }"#,
     // (B) method-call result used arithmetically
     r#"import Core.Console;
 class C { constructor(public int x) {} function get() -> int { return this.x; } }
-       function main() -> void { C c = C(5); Console.println("{c.get() + 1}"); }"#,
+       function main() -> void { C c = new C(5); Console.println("{c.get() + 1}"); }"#,
     // (C) nested field read `a.inner.x` — a class-typed field's field
     r#"import Core.Console;
 class Inner { constructor(public int x) {} }
        class Outer { constructor(public Inner inner) {} }
-       function main() -> void { Outer a = Outer(Inner(10)); Console.println("{a.inner.x + 1}"); }"#,
+       function main() -> void { Outer a = new Outer(new Inner(10)); Console.println("{a.inner.x + 1}"); }"#,
     // (D) a class-typed enum payload, bound in `match` and read arithmetically
     r#"import Core.Console;
 class Point { constructor(public int x) {} }
        enum Opt { Some(Point p), Zero(int z), }
        function f(Opt o) -> int { return match o { Some(p) => p.x + 1, Zero(z) => z, }; }
-       function main() -> void { Console.println("{f(Some(Point(41)))}"); Console.println("{f(Zero(0))}"); }"#,
+       function main() -> void { Console.println("{f(new Some(new Point(41)))}"); Console.println("{f(new Zero(0))}"); }"#,
     // (E) a free function returning an instance, then a field of the result, used arithmetically
     r#"import Core.Console;
 class Point { constructor(public int x) {} }
-       function mk() -> Point { return Point(3); }
+       function mk() -> Point { return new Point(3); }
        function main() -> void { Console.println("{mk().x + 1}"); }"#,
 ];
 
@@ -1171,11 +1171,11 @@ fn s2_safe_access_is_byte_identical() {
     // the receiver is present. Field read and method call both go through `?.`.
     let cls = "class Box { constructor(private int v) {} function vOf() -> int { return v; } function plus(int n) -> int { return v + n; } }";
     let field = cls.to_string()
-        + "import Core.Console;  function main() -> void { Box? a = null; Console.println(\"{(a?.v) ?? -1}\"); Box? b = Box(7); Console.println(\"{(b?.v) ?? -1}\"); }";
+        + "import Core.Console;  function main() -> void { Box? a = null; Console.println(\"{(a?.v) ?? -1}\"); Box? b = new Box(7); Console.println(\"{(b?.v) ?? -1}\"); }";
     assert_eq!(cmd_run(&with_pkg(&field)).as_deref(), Ok("-1\n7\n"));
     agree(&field);
     let method = cls.to_string()
-        + "import Core.Console;  function main() -> void { Box? a = null; Console.println(\"{(a?.vOf()) ?? -1}\"); Box? b = Box(9); Console.println(\"{(b?.vOf()) ?? -1}\"); }";
+        + "import Core.Console;  function main() -> void { Box? a = null; Console.println(\"{(a?.vOf()) ?? -1}\"); Box? b = new Box(9); Console.println(\"{(b?.vOf()) ?? -1}\"); }";
     assert_eq!(cmd_run(&with_pkg(&method)).as_deref(), Ok("-1\n9\n"));
     agree(&method);
     // short-circuit: a safe call on a null receiver must NOT evaluate its arguments (no "SIDE").
@@ -1243,7 +1243,7 @@ fn s2_multiple_null_ops_in_one_expr_are_byte_identical() {
 
     let cls = "class Box { constructor(private int v) {} function get() -> int { return v; } }";
     let two_safe = cls.to_string()
-        + "import Core.Console;  function main() -> void { Box? a = Box(7); Box? b = null; Console.println(\"{(a?.get()) ?? -1} {(b?.get()) ?? -1}\"); }";
+        + "import Core.Console;  function main() -> void { Box? a = new Box(7); Box? b = null; Console.println(\"{(a?.get()) ?? -1} {(b?.get()) ?? -1}\"); }";
     assert_eq!(cmd_run(&with_pkg(&two_safe)).as_deref(), Ok("7 -1\n"));
     agree(&two_safe);
 
@@ -1277,7 +1277,7 @@ fn lambdas_agree() {
     // Lambda call inside string interpolation (height-sensitive — F13)
     agree("import Core.Console; function main()-> void { var inc=fn(int x)=>x+1; Console.println(\"{inc(1)} {inc(2)}\"); }");
     // Lambda call inside a match arm (height-sensitive — F13)
-    agree("import Core.Console; enum E{A(),B()} function pick(E e,(int)->int f)->int{ return match e { A()=>f(1), B()=>f(2) }; } function main()-> void { Console.println(\"{pick(A(), fn(int x)=>x*10)}\"); }");
+    agree("import Core.Console; enum E{A(),B()} function pick(E e,(int)->int f)->int{ return match e { A()=>f(1), B()=>f(2) }; } function main()-> void { Console.println(\"{pick(new A(), fn(int x)=>x*10)}\"); }");
     // Zero-param lambda
     agree("import Core.Console; function main()-> void { var greet=fn()=>42; Console.println(\"{greet()}\"); }");
 }
@@ -1390,16 +1390,16 @@ fn mutation_instance_field_set_agrees() {
     // M-mut.6: shared-mutable instance field set `o.f = e` — handle semantics, byte-identical on
     // run/runvm + real PHP (`agree` is the 3-way oracle).
     // Basic field set + read-back.
-    agree("import Core.Console; class P { constructor(public mutable int x) {} } function main()-> void { P p = P(1); p.x = 42; Console.println(\"{p.x}\"); }"); // 42
-                                                                                                                                                                 // HANDLE semantics (the P0 catcher, F13): mutate via one binding, observe via the alias — BOTH
-                                                                                                                                                                 // see it (the opposite of value-type COW). This is the value/handle slip a 2-binding test catches.
-    agree("import Core.Console; class P { constructor(public mutable int x) {} } function main()-> void { P p = P(1); P q = p; p.x = 99; Console.println(\"{p.x} {q.x}\"); }"); // 99 99
-                                                                                                                                                                                // `this.f = e` inside a method, visible through the original binding across calls.
-    agree("import Core.Console; class C { constructor(public mutable int n) {} function bump() -> int { this.n = this.n + 1; return this.n; } } function main()-> void { C c = C(10); c.bump(); c.bump(); Console.println(\"{c.n}\"); }"); // 12
-                                                                                                                                                                                                                                           // A declared (non-promoted) `mutable` field initialized in the ctor body via `this.f = e`.
-    agree("import Core.Console; class B { mutable int v; constructor(int seed) { this.v = seed * 2; } function get() -> int { return this.v; } } function main()-> void { B b = B(5); b.v = b.v + 1; Console.println(\"{b.get()}\"); }"); // 11
-                                                                                                                                                                                                                                          // Field set on an instance reached through another field (`a.b.c = e`) — handle semantics all the way.
-    agree("import Core.Console; class Inner { constructor(public mutable int v) {} } class Outer { constructor(public Inner inner) {} } function main()-> void { Outer o = Outer(Inner(1)); o.inner.v = 7; Console.println(\"{o.inner.v}\"); }");
+    agree("import Core.Console; class P { constructor(public mutable int x) {} } function main()-> void { P p = new P(1); p.x = 42; Console.println(\"{p.x}\"); }"); // 42
+                                                                                                                                                                     // HANDLE semantics (the P0 catcher, F13): mutate via one binding, observe via the alias — BOTH
+                                                                                                                                                                     // see it (the opposite of value-type COW). This is the value/handle slip a 2-binding test catches.
+    agree("import Core.Console; class P { constructor(public mutable int x) {} } function main()-> void { P p = new P(1); P q = p; p.x = 99; Console.println(\"{p.x} {q.x}\"); }"); // 99 99
+                                                                                                                                                                                    // `this.f = e` inside a method, visible through the original binding across calls.
+    agree("import Core.Console; class C { constructor(public mutable int n) {} function bump() -> int { this.n = this.n + 1; return this.n; } } function main()-> void { C c = new C(10); c.bump(); c.bump(); Console.println(\"{c.n}\"); }"); // 12
+                                                                                                                                                                                                                                               // A declared (non-promoted) `mutable` field initialized in the ctor body via `this.f = e`.
+    agree("import Core.Console; class B { mutable int v; constructor(int seed) { this.v = seed * 2; } function get() -> int { return this.v; } } function main()-> void { B b = new B(5); b.v = b.v + 1; Console.println(\"{b.get()}\"); }"); // 11
+                                                                                                                                                                                                                                              // Field set on an instance reached through another field (`a.b.c = e`) — handle semantics all the way.
+    agree("import Core.Console; class Inner { constructor(public mutable int v) {} } class Outer { constructor(public Inner inner) {} } function main()-> void { Outer o = new Outer(new Inner(1)); o.inner.v = 7; Console.println(\"{o.inner.v}\"); }");
     // 7
 }
 
@@ -1408,11 +1408,11 @@ fn mutation_static_field_agrees() {
     // M-mut.7: program-lifetime `static mutable` class fields, read/written as `ClassName.field` —
     // byte-identical run/runvm + real PHP. A static is shared across all instances (one program-level
     // slot), so a counter incremented in the constructor accumulates across constructions.
-    agree("import Core.Console; class Counter { static mutable int total = 0; constructor() { Counter.total = Counter.total + 1; } } function main()-> void { Counter(); Counter(); Counter(); Console.println(\"{Counter.total}\"); }"); // 3
-                                                                                                                                                                                                                                          // Direct read/write from a free function; an immutable static string too.
+    agree("import Core.Console; class Counter { static mutable int total = 0; constructor() { Counter.total = Counter.total + 1; } } function main()-> void { new Counter(); new Counter(); new Counter(); Console.println(\"{Counter.total}\"); }"); // 3
+                                                                                                                                                                                                                                                      // Direct read/write from a free function; an immutable static string too.
     agree("import Core.Console; class Cfg { static mutable int n = 10; static string name = \"cfg\"; } function main()-> void { Cfg.n = Cfg.n + 5; Console.println(\"{Cfg.name}={Cfg.n}\"); }"); // cfg=15
                                                                                                                                                                                                  // A static read used as an arithmetic operand inside a method (the CTy-operand path).
-    agree("import Core.Console; class C { static mutable int k = 1; function step() -> int { C.k = C.k * 2; return C.k + 1; } } function main()-> void { C c = C(); Console.println(\"{c.step()} {c.step()}\"); }");
+    agree("import Core.Console; class C { static mutable int k = 1; function step() -> int { C.k = C.k * 2; return C.k + 1; } } function main()-> void { C c = new C(); Console.println(\"{c.step()} {c.step()}\"); }");
     // 3 5
 }
 
@@ -1422,27 +1422,27 @@ fn mutation_property_hooks_agrees() {
     // set intercepts a write (typically mutating a backing `mutable` field). Byte-identical on
     // run/runvm + real PHP (the synthetic-method VM lowering ≡ the PHP 8.4 property hook).
     // A read-only computed hook reads a backing field.
-    agree("import Core.Console; class C { constructor(public mutable int raw) {} int doubled { get => this.raw * 2; } } function main()-> void { C c = C(21); Console.println(\"{c.doubled}\"); }"); // 42
-                                                                                                                                                                                                     // A get used as an arithmetic operand — the CTy-operand path (`o.hook + 1` must specialize on the VM).
-    agree("import Core.Console; class C { constructor(public mutable int raw) {} int doubled { get => this.raw * 2; } } function main()-> void { C c = C(21); Console.println(\"{c.doubled + 1}\"); }"); // 43
-                                                                                                                                                                                                         // A set writes a backing field; observe through both the hook (get) and the raw field.
-    agree("import Core.Console; class C { constructor(public mutable int raw) {} int half { get => this.raw; set(int v) { this.raw = v / 2; } } } function main()-> void { C c = C(0); c.half = 10; Console.println(\"{c.raw} {c.half}\"); }"); // 5 5
-                                                                                                                                                                                                                                                // HANDLE semantics through a hook: set via one binding, observe via the alias.
-    agree("import Core.Console; class C { constructor(public mutable int raw) {} int v { get => this.raw; set(int n) { this.raw = n; } } } function main()-> void { C c = C(1); C d = c; c.v = 99; Console.println(\"{d.v}\"); }"); // 99
-                                                                                                                                                                                                                                    // A float computed property with exactly-representable values (Celsius↔Fahrenheit round-trip).
-    agree("import Core.Console; class Temp { constructor(public mutable float celsius) {} float fahrenheit { get => this.celsius * 9.0 / 5.0 + 32.0; set(float f) { this.celsius = (f - 32.0) * 5.0 / 9.0; } } } function main()-> void { Temp t = Temp(100.0); Console.println(\"{t.fahrenheit}\"); t.fahrenheit = 32.0; Console.println(\"{t.celsius}\"); }");
+    agree("import Core.Console; class C { constructor(public mutable int raw) {} int doubled { get => this.raw * 2; } } function main()-> void { C c = new C(21); Console.println(\"{c.doubled}\"); }"); // 42
+                                                                                                                                                                                                         // A get used as an arithmetic operand — the CTy-operand path (`o.hook + 1` must specialize on the VM).
+    agree("import Core.Console; class C { constructor(public mutable int raw) {} int doubled { get => this.raw * 2; } } function main()-> void { C c = new C(21); Console.println(\"{c.doubled + 1}\"); }"); // 43
+                                                                                                                                                                                                             // A set writes a backing field; observe through both the hook (get) and the raw field.
+    agree("import Core.Console; class C { constructor(public mutable int raw) {} int half { get => this.raw; set(int v) { this.raw = v / 2; } } } function main()-> void { C c = new C(0); c.half = 10; Console.println(\"{c.raw} {c.half}\"); }"); // 5 5
+                                                                                                                                                                                                                                                    // HANDLE semantics through a hook: set via one binding, observe via the alias.
+    agree("import Core.Console; class C { constructor(public mutable int raw) {} int v { get => this.raw; set(int n) { this.raw = n; } } } function main()-> void { C c = new C(1); C d = c; c.v = 99; Console.println(\"{d.v}\"); }"); // 99
+                                                                                                                                                                                                                                        // A float computed property with exactly-representable values (Celsius↔Fahrenheit round-trip).
+    agree("import Core.Console; class Temp { constructor(public mutable float celsius) {} float fahrenheit { get => this.celsius * 9.0 / 5.0 + 32.0; set(float f) { this.celsius = (f - 32.0) * 5.0 / 9.0; } } } function main()-> void { Temp t = new Temp(100.0); Console.println(\"{t.fahrenheit}\"); t.fahrenheit = 32.0; Console.println(\"{t.celsius}\"); }");
     // 212 then 0
 }
 
 #[test]
 fn mutation_clone_with_agrees() {
     // M-mut.4a: `obj with { f = e }` — fresh instance, source unchanged, byte-identical on both.
-    agree("import Core.Console; class P { constructor(public int x, public int y) {} } function main()-> void { P p = P(1, 2); P q = p with { x = 9 }; Console.println(\"{p.x} {p.y} {q.x} {q.y}\"); }"); // 1 2 9 2
-    agree("import Core.Console; class P { constructor(public int x, public int y) {} } function main()-> void { P p = P(1, 2); P q = p with { x = 7, y = 8 }; Console.println(\"{q.x} {q.y}\"); }"); // 7 8
-                                                                                                                                                                                                     // A method works on the cloned instance (the clone is a real instance; the ctor was not re-run).
-    agree("import Core.Console; class P { constructor(public int x, public int y) {} function sum() -> int { return this.x + this.y; } } function main()-> void { P p = P(1, 2); P q = p with { x = 10 }; Console.println(\"{q.sum()}\"); }"); // 12
-                                                                                                                                                                                                                                               // The override value may reference the source's own fields.
-    agree("import Core.Console; class P { constructor(public int x, public int y) {} } function main()-> void { P p = P(3, 4); P q = p with { x = p.x + p.y }; Console.println(\"{q.x} {q.y}\"); }");
+    agree("import Core.Console; class P { constructor(public int x, public int y) {} } function main()-> void { P p = new P(1, 2); P q = p with { x = 9 }; Console.println(\"{p.x} {p.y} {q.x} {q.y}\"); }"); // 1 2 9 2
+    agree("import Core.Console; class P { constructor(public int x, public int y) {} } function main()-> void { P p = new P(1, 2); P q = p with { x = 7, y = 8 }; Console.println(\"{q.x} {q.y}\"); }"); // 7 8
+                                                                                                                                                                                                         // A method works on the cloned instance (the clone is a real instance; the ctor was not re-run).
+    agree("import Core.Console; class P { constructor(public int x, public int y) {} function sum() -> int { return this.x + this.y; } } function main()-> void { P p = new P(1, 2); P q = p with { x = 10 }; Console.println(\"{q.sum()}\"); }"); // 12
+                                                                                                                                                                                                                                                   // The override value may reference the source's own fields.
+    agree("import Core.Console; class P { constructor(public int x, public int y) {} } function main()-> void { P p = new P(3, 4); P q = p with { x = p.x + p.y }; Console.println(\"{q.x} {q.y}\"); }");
     // 7 4
 }
 
@@ -1530,12 +1530,12 @@ fn generic_methods_agree() {
     // A generic method (`<T>` on a method of a non-generic class) inferred from arguments must run
     // byte-identically on both backends — the type variable is erased before either backend, like a
     // generic free function (M-RT generics-all). `identity` reused at three concrete types.
-    agree("import Core.Console; class U { function id<T>(T x)->T { return x; } } function main()-> void { var u=U(); Console.println(\"{u.id(7)} {u.id(\\\"hi\\\")} {u.id(true)}\"); }"); // 7 hi true
-                                                                                                                                                                                          // `T` inferred from a `List<T>` argument; the fallback shares it.
-    agree("import Core.Console; class U { function firstOr<T>(List<T> xs, T d)->T { for (T x in xs) { return x; } return d; } } function main()-> void { var u=U(); Console.println(\"{u.firstOr([10,20], -1)} {u.firstOr([], 99)}\"); }"); // 10 99
-                                                                                                                                                                                                                                            // A type parameter inside a function-typed parameter, and the closure invoked in the method body
-                                                                                                                                                                                                                                            // (exercises the VM's re-entrant closure path from inside a generic method).
-    agree("import Core.Console; class U { function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } function main()-> void { var u=U(); Console.println(\"{u.applyTwice(5, fn(int v)=>v+1)}\"); }");
+    agree("import Core.Console; class U { function id<T>(T x)->T { return x; } } function main()-> void { var u=new U(); Console.println(\"{u.id(7)} {u.id(\\\"hi\\\")} {u.id(true)}\"); }"); // 7 hi true
+                                                                                                                                                                                              // `T` inferred from a `List<T>` argument; the fallback shares it.
+    agree("import Core.Console; class U { function firstOr<T>(List<T> xs, T d)->T { for (T x in xs) { return x; } return d; } } function main()-> void { var u=new U(); Console.println(\"{u.firstOr([10,20], -1)} {u.firstOr([], 99)}\"); }"); // 10 99
+                                                                                                                                                                                                                                                // A type parameter inside a function-typed parameter, and the closure invoked in the method body
+                                                                                                                                                                                                                                                // (exercises the VM's re-entrant closure path from inside a generic method).
+    agree("import Core.Console; class U { function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } function main()-> void { var u=new U(); Console.println(\"{u.applyTwice(5, fn(int v)=>v+1)}\"); }");
     // 7
 }
 
@@ -1563,7 +1563,7 @@ fn overloaded_free_functions_agree() {
            class Square implements Shape { constructor(public int s) {} } \
            function area(Circle c)->int { return c.r*c.r*3; } \
            function area(Shape s)->int { return 0; } \
-           function main()-> void { Circle c=Circle(2); Square q=Square(4); Console.println(\"{area(c)} {area(q)}\"); }");
+           function main()-> void { Circle c=new Circle(2); Square q=new Square(4); Console.println(\"{area(c)} {area(q)}\"); }");
 }
 
 #[test]
@@ -1579,8 +1579,8 @@ fn overloaded_methods_agree() {
              function show(string s)->string { return \"{this.tag}/str:{s}\"; } \
              function show(Circle c)->string { return \"{this.tag}/circle:{c.r}\"; } \
            } \
-           function main()-> void { Printer p=Printer(\"P\"); \
-             Console.println(p.show(7)); Console.println(p.show(\"hi\")); Console.println(p.show(Circle(3))); }");
+           function main()-> void { Printer p=new Printer(\"P\"); \
+             Console.println(p.show(7)); Console.println(p.show(\"hi\")); Console.println(p.show(new Circle(3))); }");
 }
 
 #[test]
@@ -1595,7 +1595,7 @@ fn ambiguous_overloaded_call_faults_on_both_backends() {
                class Both implements A, B { constructor(public int v) {} } \
                function pick(A x, B y)->int { return 1; } \
                function pick(B x, A y)->int { return 2; } \
-               function main()-> void { Both b=Both(0); Console.println(\"{pick(b, b)}\"); }",
+               function main()-> void { Both b=new Both(0); Console.println(\"{pick(b, b)}\"); }",
     );
 }
 
@@ -1603,7 +1603,7 @@ fn ambiguous_overloaded_call_faults_on_both_backends() {
 fn transpiles_generic_method_to_mixed() {
     // A generic method erases to `mixed`-typed PHP (params and return), exactly as a generic free
     // function does; `List<T>` → `array`, `(T)->T` → `\Closure`. No type variable reaches the output.
-    let php = transpile_ok("package Main; class U { function id<T>(T x)->T { return x; } function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } function main()-> void { var u=U(); var n = u.id(1); var m = u.applyTwice(2, fn(int v)=>v+1); }");
+    let php = transpile_ok("package Main; class U { function id<T>(T x)->T { return x; } function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } function main()-> void { var u=new U(); var n = u.id(1); var m = u.applyTwice(2, fn(int v)=>v+1); }");
     assert!(php.contains("function id(mixed $x): mixed"), "{php}");
     assert!(
         php.contains("function applyTwice(mixed $x, \\Closure $f): mixed"),
@@ -1628,7 +1628,7 @@ fn escaping_and_nested_lambdas_agree() {
     // 5 40
     // A lambda inside a METHOD body (capturing a method param) — the constructor/method compile
     // loops number their lambdas from the same trailing block, so this guards that path too.
-    agree("import Core.Console; class Box { constructor(public int v) {} function scaledBy(int k)->int{ var f=fn(int x)->int{ return x*k; }; return f(this.v); } } function main()-> void { var b=Box(7); Console.println(\"{b.scaledBy(3)}\"); }");
+    agree("import Core.Console; class Box { constructor(public int v) {} function scaledBy(int k)->int{ var f=fn(int x)->int{ return x*k; }; return f(this.v); } } function main()-> void { var b=new Box(7); Console.println(\"{b.scaledBy(3)}\"); }");
     // 21
 }
 
@@ -1665,7 +1665,7 @@ fn html_literal_sugar_agrees() {
 fn html_literal_bad_hole_rejected_by_both() {
     // A non-renderable hole type (an enum value) is `E-HTML-HOLE` — rejected on both backends.
     agree_err(
-        r#"import Core.Html; enum E { A() } function main()-> void { var p = html"<h1>{A()}</h1>"; }"#,
+        r#"import Core.Html; enum E { A() } function main()-> void { var p = html"<h1>{new A()}</h1>"; }"#,
     );
     // `html"…"` without `import Core.Html;` is `E-HTML-IMPORT` — rejected on both backends.
     agree_err(r#"function main()-> void { var p = html"<h1>x</h1>"; }"#);
@@ -1792,7 +1792,7 @@ class Duck extends Swimmer, Flyer {
     rename Flyer.move as glide
 }
 function main() -> void {
-    Duck d = Duck();
+    Duck d = new Duck();
     Console.println(d.move());
     Console.println(d.glide());
 }"#,
@@ -2004,7 +2004,7 @@ fn error_base_type_reserved_and_implementable() {
     assert!(
         check_errs(
             r#"class P implements Error { constructor(public string message) {} }
-function main() -> void { P p = P("x"); if (p instanceof Error) { } }"#
+function main() -> void { P p = new P("x"); if (p instanceof Error) { } }"#
         )
         .is_empty(),
         "instanceof Error must type-check"
@@ -2023,7 +2023,7 @@ fn error_subtype_value_is_byte_identical() {
     let src = with_pkg(
         r#"import Core.Console;
 class BadInput implements Error { constructor(public string message) {} }
-function main() -> void { BadInput e = BadInput("bad input"); Console.println(e.message); }"#,
+function main() -> void { BadInput e = new BadInput("bad input"); Console.println(e.message); }"#,
     );
     let tree = cmd_run(&src);
     let vm = cmd_runvm(&src);
@@ -2050,7 +2050,7 @@ fn throw_caught_and_finally_runs_on_both_backends() {
     // Normal path runs `a = parse(5)`; the throw path is caught; `finally` runs on every exit edge.
     agree(&format!(
         "{ERR_HDR} \
-         function parse(int n) -> int throws E1 {{ if (n < 0) {{ throw E1(\"neg\"); }} return n + 1; }} \
+         function parse(int n) -> int throws E1 {{ if (n < 0) {{ throw new E1(\"neg\"); }} return n + 1; }} \
          function main() -> void {{ \
            try {{ \
              var a = parse(5); Console.println(\"a={{a}}\"); \
@@ -2068,7 +2068,7 @@ fn return_through_finally_and_nested_rethrow_agree() {
     agree(&format!(
         "{ERR_HDR} \
          function pick(int n) -> int throws E1 {{ \
-           try {{ if (n < 0) {{ throw E1(\"inner\"); }} return n; }} \
+           try {{ if (n < 0) {{ throw new E1(\"inner\"); }} return n; }} \
            finally {{ Console.println(\"fin {{n}}\"); }} \
          }} \
          function main() -> void {{ \
@@ -2085,7 +2085,7 @@ fn multiple_and_union_catch_dispatch_agree() {
     agree(&format!(
         "{ERR_HDR} \
          function risky(int n) -> int throws E1 | E2 {{ \
-           if (n == 1) {{ throw E1(\"one\"); }} if (n == 2) {{ throw E2(\"two\"); }} return n; \
+           if (n == 1) {{ throw new E1(\"one\"); }} if (n == 2) {{ throw new E2(\"two\"); }} return n; \
          }} \
          function main() -> void {{ for (int i in [1, 2, 3]) {{ \
            try {{ var r = risky(i); Console.println(\"ok {{r}}\"); }} \
@@ -2114,7 +2114,7 @@ fn propagate_throws_with_question_mark_agrees() {
     // `f()?` on a throwing call propagates to the enclosing `throws`; the outer `try` catches it.
     agree(&format!(
         "{ERR_HDR} \
-         function f() -> int throws E1 {{ throw E1(\"x\"); }} \
+         function f() -> int throws E1 {{ throw new E1(\"x\"); }} \
          function g() -> int throws E1 {{ return f()?; }} \
          function main() -> void {{ try {{ var n = g(); }} catch (E1 e) {{ Console.println(\"g threw {{e.message}}\"); }} }}"
     ));
@@ -2140,7 +2140,7 @@ fn s8_trait_method_reuse_is_byte_identical() {
         "import Core.Console;
 trait Loud { function shout(string s) -> string { return s; } function greet() -> string { return this.shout(\"hi\"); } }
 class Crier { use Loud; }
-function main() -> void { Console.println(Crier().greet()); }",
+function main() -> void { Console.println(new Crier().greet()); }",
         "hi\n",
         "s8_trait_method_reuse",
     );
@@ -2154,7 +2154,7 @@ fn s8_trait_mutable_field_is_byte_identical() {
         "import Core.Console;
 trait Counter { mutable int n; function bump() -> void { this.n = this.n + 1; } function read() -> int { return this.n; } }
 class C { use Counter; constructor() { this.n = 0; } }
-function main() -> void { C c = C(); c.bump(); c.bump(); c.bump(); Console.println(\"{c.read()}\"); }",
+function main() -> void { C c = new C(); c.bump(); c.bump(); c.bump(); Console.println(\"{c.read()}\"); }",
         "3\n",
         "s8_trait_mutable_field",
     );
@@ -2183,7 +2183,7 @@ fn s8_trait_private_method_is_byte_identical() {
         "import Core.Console;
 trait Loud { private function amp(string s) -> string { return \"{s}!\"; } function shout(string s) -> string { return this.amp(s); } }
 class C { use Loud; }
-function main() -> void { Console.println(C().shout(\"hi\")); }",
+function main() -> void { Console.println(new C().shout(\"hi\")); }",
         "hi!\n",
         "s8_trait_private_method",
     );
@@ -2197,7 +2197,7 @@ fn s8_trait_constructor_promotion_is_byte_identical() {
         "import Core.Console;
 trait Stamped { constructor(public int id) {} }
 class Doc { use Stamped; }
-function main() -> void { Doc d = Doc(7); Console.println(\"{d.id}\"); }",
+function main() -> void { Doc d = new Doc(7); Console.println(\"{d.id}\"); }",
         "7\n",
         "s8_trait_ctor_promotion",
     );
@@ -2211,7 +2211,7 @@ fn s8_trait_constructor_body_is_byte_identical() {
         "import Core.Console;
 trait Paid { mutable int annual; constructor(int monthly) { this.annual = monthly * 12; } }
 class Emp { use Paid; }
-function main() -> void { Emp e = Emp(1000); Console.println(\"{e.annual}\"); }",
+function main() -> void { Emp e = new Emp(1000); Console.println(\"{e.annual}\"); }",
         "12000\n",
         "s8_trait_ctor_body",
     );
@@ -2225,7 +2225,7 @@ fn s8_trait_get_hook_is_byte_identical() {
         "import Core.Console;
 trait Labeled { mutable string raw; string display { get => \"<{this.raw}>\"; } }
 class Tag { use Labeled; constructor() { this.raw = \"x\"; } }
-function main() -> void { Tag t = Tag(); Console.println(t.display); }",
+function main() -> void { Tag t = new Tag(); Console.println(t.display); }",
         "<x>\n",
         "s8_trait_get_hook",
     );
@@ -2238,7 +2238,7 @@ fn s8_trait_get_set_hook_is_byte_identical() {
         "import Core.Console;
 trait Clamped { mutable int raw; int value { get => this.raw; set(int v) { this.raw = v * 2; } } }
 class Box { use Clamped; constructor() { this.raw = 0; } }
-function main() -> void { Box b = Box(); b.value = 5; Console.println(\"{b.value}\"); }",
+function main() -> void { Box b = new Box(); b.value = 5; Console.println(\"{b.value}\"); }",
         "10\n",
         "s8_trait_get_set_hook",
     );
@@ -2252,7 +2252,7 @@ fn s8_trait_abstract_requirement_satisfied_is_byte_identical() {
         "import Core.Console;
 trait Greeter { abstract function name() -> string; function hello() -> string { return this.name(); } }
 class Person { use Greeter; function name() -> string { return \"Ada\"; } }
-function main() -> void { Console.println(Person().hello()); }",
+function main() -> void { Console.println(new Person().hello()); }",
         "Ada\n",
         "s8_trait_abstract_requirement",
     );
@@ -2274,9 +2274,9 @@ function classify(Code c) -> string {
     };
 }
 function main() -> void {
-    Console.println(classify(Num(503)));
-    Console.println(classify(Num(404)));
-    Console.println(classify(Num(200)));
+    Console.println(classify(new Num(503)));
+    Console.println(classify(new Num(404)));
+    Console.println(classify(new Num(200)));
 }",
         "server\nclient\nother (200)\n",
         "match_arm_guards_enum",
@@ -2299,9 +2299,9 @@ function describe(Circle | Square sh) -> string {
     };
 }
 function main() -> void {
-    Console.println(describe(Circle(2.0)));
-    Console.println(describe(Circle(0.5)));
-    Console.println(describe(Square(3.0)));
+    Console.println(describe(new Circle(2.0)));
+    Console.println(describe(new Circle(0.5)));
+    Console.println(describe(new Square(3.0)));
 }",
         "big circle\nsmall circle\nsquare\n",
         "match_arm_guards_union",
@@ -2382,9 +2382,9 @@ function originSum(Line l) -> int {
     return match l { Line { from: Point { x: fx, y: fy }, to } => fx + fy + to.x, _ => 0, };
 }
 function main() -> void {
-    float a = areaOf(Circle(2.5));
-    float b = areaOf(Square(4.0));
-    int d = originSum(Line(Point(1, 2), Point(10, 20)));
+    float a = areaOf(new Circle(2.5));
+    float b = areaOf(new Square(4.0));
+    int d = originSum(new Line(new Point(1, 2), new Point(10, 20)));
     Console.println(\"a={a} b={b} d={d}\");
 }",
         "a=2.5 b=4 d=13\n",
@@ -2401,8 +2401,8 @@ fn if_let_when_guard_byte_identical() {
         "import Core.Console;
 class User { constructor(public string name, public int age) {} }
 function lookup(int id) -> User? {
-    if (id == 1) { return User(\"Ada\", 36); }
-    if (id == 2) { return User(\"Bob\", 15); }
+    if (id == 1) { return new User(\"Ada\", 36); }
+    if (id == 2) { return new User(\"Bob\", 15); }
     return null;
 }
 function greet(int id) -> string {
@@ -2436,8 +2436,8 @@ function dim(Circle | Square s) -> float {
     return s.r;
 }
 function main() -> void {
-    float a = dim(Circle(2.5));
-    float b = dim(Square(4.0));
+    float a = dim(new Circle(2.5));
+    float b = dim(new Square(4.0));
     Console.println(\"a={a} b={b}\");
 }",
         "a=2.5 b=4\n",
@@ -2458,8 +2458,8 @@ function dim(Circle | Square s) -> float {
     if (s instanceof Circle) { return s.r; } else { return s.side; }
 }
 function main() -> void {
-    float a = dim(Circle(2.5));
-    float b = dim(Square(4.0));
+    float a = dim(new Circle(2.5));
+    float b = dim(new Square(4.0));
     Console.println(\"a={a} b={b}\");
 }",
         "a=2.5 b=4\n",
@@ -2484,8 +2484,8 @@ function f(Boxed b) -> float {
     return match b { W(Circle c) => c.r + 1.0, W(Square s) => s.side, _ => 0.0, };
 }
 function main() -> void {
-    float a = f(W(Circle(2.5)));
-    float b = f(W(Square(4.0)));
+    float a = f(new W(new Circle(2.5)));
+    float b = f(new W(new Square(4.0)));
     Console.println(\"a={a} b={b}\");
 }",
         "a=3.5 b=4\n",

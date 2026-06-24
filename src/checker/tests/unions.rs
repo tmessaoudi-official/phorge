@@ -6,7 +6,7 @@ use super::support::*;
 fn union_catch_covers_each_member() {
     // `catch (BadInput | NotFound e)` discharges a call that throws `BadInput` (a member).
     let ok = errors_of(&format!(
-        "{ERRDEF} function f() -> void throws BadInput {{ throw BadInput(\"x\"); }} \
+        "{ERRDEF} function f() -> void throws BadInput {{ throw new BadInput(\"x\"); }} \
              function main() -> void {{ try {{ f(); }} catch (BadInput | NotFound e) {{}} }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
@@ -16,7 +16,7 @@ fn union_catch_covers_each_member() {
 fn union_param_accepts_each_member() {
     let ok = errors_of(&format!(
         "{SHAPES} function f(Circle | Square s) -> void {{}} \
-             function main() -> void {{ f(Circle(1)); f(Square(2)); }}"
+             function main() -> void {{ f(new Circle(1)); f(new Square(2)); }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
@@ -38,7 +38,7 @@ fn match_over_union_exhaustive_ok() {
     let ok = errors_of(&format!(
         "{SHAPES} function area(Circle | Square s) -> int {{ \
                return match s {{ Circle c => c.radius, Square sq => sq.side }}; }} \
-             function main() -> void {{ int a = area(Circle(2)); }}"
+             function main() -> void {{ int a = area(new Circle(2)); }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }

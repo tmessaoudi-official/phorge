@@ -74,7 +74,7 @@ fn generic_method_typechecks_and_infers() {
     // A generic method on a non-generic class, inferred from arguments at two distinct types.
     let ok = errors_of(
         "class U { function id<T>(T x) -> T { return x; } } \
-             function main() -> void { var u = U(); int n = u.id(42); string s = u.id(\"hi\"); }",
+             function main() -> void { var u = new U(); int n = u.id(42); string s = u.id(\"hi\"); }",
     );
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
@@ -116,8 +116,8 @@ fn generic_class_construction_infers_and_substitutes() {
             "class Box<T> { constructor(private T value) {} function get() -> T { return this.value; } } \
              class Pair<A, B> { constructor(private A first, private B second) {} \
                 function left() -> A { return this.first; } function right() -> B { return this.second; } } \
-             function main() -> void { var b = Box(7); int x = b.get(); \
-                var p = Pair(1, \"s\"); int l = p.left(); string r = p.right(); }",
+             function main() -> void { var b = new Box(7); int x = b.get(); \
+                var p = new Pair(1, \"s\"); int l = p.left(); string r = p.right(); }",
         );
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
@@ -157,7 +157,7 @@ fn generic_class_annotation_arity_checked() {
 fn generic_class_explicit_type_argument_ok() {
     let ok = errors_of(
             "class Box<T> { constructor(private T value) {} function get() -> T { return this.value; } } \
-             function main() -> void { Box<int> b = Box(7); int x = b.get(); }",
+             function main() -> void { Box<int> b = new Box(7); int x = b.get(); }",
         );
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
@@ -167,7 +167,7 @@ fn generic_enum_construction_infers_and_binds() {
     // `Some(7)` infers `Option<int>`; matching it binds the payload at the concrete int, so using
     // the binding where an int is expected is clean.
     let ok = errors_of(&format!(
-        "{OPTION} function main() -> void {{ var o = Some(7); \
+        "{OPTION} function main() -> void {{ var o = new Some(7); \
              int x = match o {{ Some(n) => n, None() => 0 }}; }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
@@ -198,7 +198,7 @@ fn generic_enum_annotation_arity_checked() {
 fn generic_enum_annotated_non_inferring_variant_ok() {
     // `None` mentions no `T`, so it cannot infer the argument — annotating the binding fixes it.
     let ok = errors_of(&format!(
-        "{OPTION} function main() -> void {{ Option<int> n = None(); \
+        "{OPTION} function main() -> void {{ Option<int> n = new None(); \
              int x = match n {{ Some(v) => v, None() => 0 }}; }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
@@ -208,8 +208,8 @@ fn generic_enum_annotated_non_inferring_variant_ok() {
 fn generic_enum_two_params_independent() {
     // `Result<T, E>` binds `T` from `Ok`'s argument and `E` from `Err`'s, independently.
     let ok = errors_of(&format!(
-        "{RESULT} function ok() -> Result<int, string> {{ return Ok(1); }} \
-             function bad() -> Result<int, string> {{ return Err(\"no\"); }} \
+        "{RESULT} function ok() -> Result<int, string> {{ return new Ok(1); }} \
+             function bad() -> Result<int, string> {{ return new Err(\"no\"); }} \
              function main() -> void {{ string r = match ok() {{ Ok(v) => \"v\", Err(e) => e }}; }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");

@@ -33,9 +33,9 @@ function bulk(int unit, int n) -> int {
 
 function main() -> void {
     List<Item> cart = [
-        Item("Widget", 1000, None()),
-        Item("Gadget", 2000, Percent(10)),
-        Item("Gizmo", 1500, Flat(300)),
+        new Item("Widget", 1000, new None()),
+        new Item("Gadget", 2000, new Percent(10)),
+        new Item("Gizmo", 1500, new Flat(300)),
     ];
     for (Item it in cart) {
         Console.println("{it.nameOf()} = {it.price()}c");

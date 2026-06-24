@@ -47,7 +47,7 @@ function parseRequest(bytes raw) -> Request? {
   List<string> rl = Text.split(requestLine, " ");
   string method = rl[0];
   string path = rl[1];
-  return Request(method, path, body);
+  return new Request(method, path, body);
 }
 
 function serializeResponse(Response resp) -> bytes {
@@ -64,14 +64,14 @@ function serializeResponse(Response resp) -> bytes {
 function dispatch(Request req) -> Response {
   if (req.method == "GET") {
     if (req.path == "/") {
-      return Response(200, Bytes.fromString("home"), ["Content-Type: text/plain"]);
+      return new Response(200, Bytes.fromString("home"), ["Content-Type: text/plain"]);
     }
   }
-  return Response(404, Bytes.fromString("not found"), ["Content-Type: text/plain"]);
+  return new Response(404, Bytes.fromString("not found"), ["Content-Type: text/plain"]);
 }
 
 function badRequest() -> Response {
-  return Response(400, Bytes.fromString("bad request"), ["Content-Type: text/plain"]);
+  return new Response(400, Bytes.fromString("bad request"), ["Content-Type: text/plain"]);
 }
 
 function respond(bytes raw) -> bytes {

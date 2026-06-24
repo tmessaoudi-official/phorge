@@ -270,7 +270,7 @@ fn constructors_and_hooks_are_exempt() {
     // an annotation. (Expression-body lambdas infer and are tested with the closures slice.)
     assert!(errors_of(
         "class C { constructor(public int x) {} int doubled { get => this.x * 2; } } \
-             function main() -> void { C c = C(2); int d = c.doubled; }"
+             function main() -> void { C c = new C(2); int d = c.doubled; }"
     )
     .is_empty());
 }

@@ -26,11 +26,11 @@ function paintName(Paint p) -> string {
 }
 
 function main() -> void {
-  Rect r = Rect(3, 4); // instantiate an imported class
+  Rect r = new Rect(3, 4); // instantiate an imported class
   int a = describe(r); // pass it where an imported interface is expected
   Console.println("area: {a}");
   Console.println("{r instanceof Shape}"); // true — Rect implements Shape (cross-package)
   Console.println("{r instanceof Rect}"); // true
-  Paint p = Green(); // construct an imported enum's variant
+  Paint p = new Green(); // construct an imported enum's variant
   Console.println("paint: {paintName(p)}");
 }

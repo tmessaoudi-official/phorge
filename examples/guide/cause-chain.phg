@@ -19,9 +19,9 @@ class ConfigError implements Error {
 // Simulate a low-level failure, then wrap it in a higher-level error that preserves the cause.
 function readConfig() -> int throws ConfigError {
   try {
-    throw IoError("disk offline");
+    throw new IoError("disk offline");
   } catch (IoError e) {
-    throw ConfigError("could not load config", e);
+    throw new ConfigError("could not load config", e);
   }
 }
 

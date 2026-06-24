@@ -17,9 +17,9 @@ class Character {
 
     function act(Action a) -> Character {
         return match a {
-            Attack(d) => Character(name, hp - d),
-            Heal(h)   => Character(name, hp + h),
-            Defend()  => Character(name, hp),
+            Attack(d) => new Character(name, hp - d),
+            Heal(h)   => new Character(name, hp + h),
+            Defend()  => new Character(name, hp),
         };
     }
 }
@@ -33,12 +33,12 @@ function resolve(Action a) -> string {
 }
 
 function main() -> void {
-    Character hero = Character("Hero", 30);
-    Character hurt = hero.act(Attack(12));
-    Character healed = hurt.act(Heal(5));
+    Character hero = new Character("Hero", 30);
+    Character hurt = hero.act(new Attack(12));
+    Character healed = hurt.act(new Heal(5));
     Console.println("{healed.nameOf()} hp = {healed.hpOf()}");
 
-    List<Action> turns = [Attack(12), Heal(5), Defend()];
+    List<Action> turns = [new Attack(12), new Heal(5), new Defend()];
     for (Action a in turns) {
         Console.println(resolve(a));
     }

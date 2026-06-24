@@ -23,16 +23,16 @@ enum Result<T, E> {
 // Parse a small "config" of two integer fields. Each lookup may fail; `?` propagates the first failure.
 function field(int key) -> Result<int, string> {
     if (key < 0) {
-        return Err("negative key {key}");
+        return new Err("negative key {key}");
     }
-    return Ok(key * 10);
+    return new Ok(key * 10);
 }
 
 // Straight-line happy path: every `?` either unwraps or short-circuits the whole function to its `Err`.
 function combine(int a, int b) -> Result<int, string> {
     int x = field(a)?; // unwrap or early-return Err
     int y = field(b)?;
-    return Ok(x + y);
+    return new Ok(x + y);
 }
 
 function show(Result<int, string> r) -> string {

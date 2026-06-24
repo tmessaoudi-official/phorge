@@ -68,7 +68,7 @@ function parseRequest(bytes raw) -> Request? {
   string method = rl[0];
   string path = rl[1];
   // Pass ALL lines (incl. the request-line) — header() skips colon-free lines.
-  return Request(method, path, body, lines);
+  return new Request(method, path, body, lines);
 }
 
 // Serialize a Response to raw HTTP/1.1 Bytes. Always (re)computes Content-Length from the body.
@@ -90,7 +90,7 @@ function handle(Request req) -> Response {
   string path = req.path;
   string msg = "Hello {path} (host {host})";
   bytes body = Bytes.fromString(msg);
-  return Response(200, body, ["Content-Type: text/plain"]);
+  return new Response(200, body, ["Content-Type: text/plain"]);
 }
 
 function main() -> void {

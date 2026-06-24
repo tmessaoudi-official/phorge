@@ -178,7 +178,29 @@ impl Parser {
 
     /// Parse a primary, then apply any chain of postfix operators.
     pub(super) fn parse_postfix(&mut self) -> Result<Expr, Diagnostic> {
-        let mut e = self.parse_primary()?;
+        // Feature C: `new <Name>(<args>)` — the mandatory construction keyword. Parse exactly the
+        // construction call (a primary callee + its argument list) and wrap it in `Expr::New`; the
+        // postfix loop below then applies any `.`/`[]`/`!`/`?`/`with` to the constructed value (so
+        // `new C().m()` is `(new C()).m()`). A bare `new` not followed by a call is a parse error.
+        let mut e = if matches!(self.peek(), TokenKind::New) {
+            let sp = self.peek_span();
+            self.advance();
+            let callee = self.parse_primary()?;
+            self.expect(
+                &TokenKind::LParen,
+                "'(' — `new` must be followed by a constructor call, e.g. `new Counter()`",
+            )?;
+            let args = self.parse_arg_list()?;
+            self.expect(&TokenKind::RParen, "')' to close arguments")?;
+            let call = Expr::Call {
+                callee: Box::new(callee),
+                args,
+                span: sp,
+            };
+            Expr::New(Box::new(call), sp)
+        } else {
+            self.parse_primary()?
+        };
         loop {
             let sp = self.peek_span();
             match self.peek() {

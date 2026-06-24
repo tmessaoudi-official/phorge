@@ -42,7 +42,7 @@ class Duck extends Swimmer, Flyer {
 }
 
 function main() -> void {
-    Duck d = Duck();
+    Duck d = new Duck();
     Console.println(d.move()); // "swims" — resolved by `use Swimmer.move`
     Console.println(d.name()); // "animal" — diamond shared base, auto-merged
 }

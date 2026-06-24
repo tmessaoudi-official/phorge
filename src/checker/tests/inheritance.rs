@@ -8,8 +8,8 @@ fn subclass_is_assignable_and_inherits_methods() {
     let errs = errors_of(
         "open class Animal { function name() -> string { return \"a\"; } } \
              class Dog extends Animal {} \
-             function f() -> string { Animal a = Dog(); return a.name(); } \
-             function g() -> string { Dog d = Dog(); return d.name(); }",
+             function f() -> string { Animal a = new Dog(); return a.name(); } \
+             function g() -> string { Dog d = new Dog(); return d.name(); }",
     );
     assert!(errs.is_empty(), "expected clean, got {errs:?}");
 }

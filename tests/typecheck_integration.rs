@@ -29,10 +29,10 @@ class Greeter {
 }
 
 function main() -> void {
-    Greeter g = Greeter("Tak");
+    Greeter g = new Greeter("Tak");
     Console.println(g.greet());
 
-    List<Shape> shapes = [Circle(2.0), Rect(3.0, 4.0)];
+    List<Shape> shapes = [new Circle(2.0), new Rect(3.0, 4.0)];
     for (Shape s in shapes) {
         Console.println("area = {area(s)}");
     }
@@ -65,7 +65,7 @@ fn non_exhaustive_match_in_full_program_errors() {
 
 #[test]
 fn wrong_constructor_arg_in_full_program_errors() {
-    let broken = SAMPLE.replace(r#"Greeter("Tak")"#, "Greeter(123)");
+    let broken = SAMPLE.replace(r#"new Greeter("Tak")"#, "new Greeter(123)");
     let errs = check_src(&broken).expect_err("should be a type error");
     assert!(
         errs.iter().any(|e| e.message.contains("argument 1")),

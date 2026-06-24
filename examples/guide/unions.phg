@@ -54,9 +54,9 @@ function classify(int | string code) -> string {
 }
 
 function main() -> void {
-    Circle c = Circle(2);
-    Square s = Square(3);
-    Triangle t = Triangle(4, 3);
+    Circle c = new Circle(2);
+    Square s = new Square(3);
+    Triangle t = new Triangle(4, 3);
 
     Console.println("area circle = {area(c)}");     // 4
     Console.println("area square = {area(s)}");     // 9

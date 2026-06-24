@@ -45,6 +45,7 @@ pub(super) fn lambda_uses_this(body: &crate::ast::LambdaBody) -> bool {
             } => in_expr(cond) || in_expr(then_expr) || in_expr(else_expr),
             // Nested lambdas: do not recurse — `this` in a nested lambda is a separate error site.
             Expr::Lambda { .. } => false,
+            Expr::New(inner, _) => in_expr(inner),
         }
     }
     fn in_stmts(stmts: &[Stmt]) -> bool {

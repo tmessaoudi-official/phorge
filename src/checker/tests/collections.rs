@@ -28,7 +28,7 @@ fn map_key_must_be_hashable() {
 #[test]
 fn list_literal_unifies_elements() {
     let src = format!(
-        "{SHAPE} function main() -> void {{ List<Shape> xs = [Circle(1.0), Rect(2.0, 3.0)]; }}"
+        "{SHAPE} function main() -> void {{ List<Shape> xs = [new Circle(1.0), new Rect(2.0, 3.0)]; }}"
     );
     assert!(errors_of(&src).is_empty());
 }
@@ -46,7 +46,7 @@ fn list_literal_mixed_elements_error() {
 fn for_in_binds_element_type() {
     let src = format!(
             "{SHAPE} function area(Shape s) -> float {{ return 0.0; }} \
-             function main() -> void {{ List<Shape> xs = [Circle(1.0)]; for (Shape s in xs) {{ float a = area(s); }} }}"
+             function main() -> void {{ List<Shape> xs = [new Circle(1.0)]; for (Shape s in xs) {{ float a = area(s); }} }}"
         );
     assert!(errors_of(&src).is_empty(), "{:?}", errors_of(&src));
 }

@@ -32,9 +32,9 @@ function fee(float days) -> float {
 
 function main() -> void {
     List<Book> shelf = [
-        Book("The Rust Book", Available()),
-        Book("Crafting Interpreters", Borrowed("Ada")),
-        Book("SICP", Lost()),
+        new Book("The Rust Book", new Available()),
+        new Book("Crafting Interpreters", new Borrowed("Ada")),
+        new Book("SICP", new Lost()),
     ];
     for (Book b in shelf) {
         Console.println("{b.titleOf()}: {describe(b.statusOf())}");

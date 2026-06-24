@@ -13,7 +13,7 @@ class Point {
 }
 
 function main() -> void {
-    Point origin = Point(0, 0);
+    Point origin = new Point(0, 0);
 
     // Override one field — `origin` is untouched.
     Point right = origin with { x = 3 };

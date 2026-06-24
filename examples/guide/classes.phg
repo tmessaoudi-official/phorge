@@ -16,6 +16,6 @@ class Car {
 }
 
 function main() -> void {
-    Car c = Car("Phorge", Engine(250));
+    Car c = new Car("Phorge", new Engine(250));
     Console.println("{c.makeOf()} has {c.horsepower()} hp");
 }

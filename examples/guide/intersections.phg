@@ -42,8 +42,8 @@ function justDraw(Drawable d) -> string {
 }
 
 function main() -> void {
-    var badge = Badge("ok");
-    var sticker = Sticker("hi");
+    var badge = new Badge("ok");
+    var sticker = new Sticker("hi");
 
     // Both implement Drawable AND Named, so both flow into `Drawable & Named`.
     Console.println(describe(badge));   // ok => [ok]

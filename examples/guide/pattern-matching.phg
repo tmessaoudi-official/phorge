@@ -108,8 +108,8 @@ class User {
 }
 
 function lookup(int id) -> User? {
-    if (id == 1) { return User("Ada", 36); }
-    if (id == 2) { return User("Bob", 15); }
+    if (id == 1) { return new User("Ada", 36); }
+    if (id == 2) { return new User("Bob", 15); }
     return null;
 }
 
@@ -126,23 +126,23 @@ function greet(int id) -> string {
 }
 
 function main() -> void {
-    Console.println(classify(Code(503)));
-    Console.println(classify(Code(404)));
-    Console.println(classify(Code(200)));
-    Console.println(classify(Code(100)));
-    Console.println(describe(Circle(2.0)));
-    Console.println(describe(Circle(0.5)));
-    Console.println(describe(Square(3.0)));
+    Console.println(classify(new Code(503)));
+    Console.println(classify(new Code(404)));
+    Console.println(classify(new Code(200)));
+    Console.println(classify(new Code(100)));
+    Console.println(describe(new Circle(2.0)));
+    Console.println(describe(new Circle(0.5)));
+    Console.println(describe(new Square(3.0)));
 
     // struct destructuring: shorthand, rename, nested
-    float ac = areaOf(Circle(2.5));
-    float aq = areaOf(Square(4.0));
-    int d = originSum(Line(Point(1, 2), Point(10, 20)));
+    float ac = areaOf(new Circle(2.5));
+    float aq = areaOf(new Square(4.0));
+    int d = originSum(new Line(new Point(1, 2), new Point(10, 20)));
     Console.println("areaOf circle = {ac}, square = {aq}, origin sum = {d}");
 
     // nested type pattern in a variant payload
-    Console.println(speak(Holds(Cat("Tom"))));
-    Console.println(speak(Holds(Dog("Rex"))));
+    Console.println(speak(new Holds(new Cat("Tom"))));
+    Console.println(speak(new Holds(new Dog("Rex"))));
 
     // if-let with a `when` guard
     Console.println(greet(1));  // Ada, 36 → welcome
@@ -150,7 +150,7 @@ function main() -> void {
     Console.println(greet(3));  // null → bind fails → denied
 
     // flow-narrowing (early-return guard)
-    float r = radiusOrZero(Circle(3.0));
-    float z = radiusOrZero(Square(5.0));
+    float r = radiusOrZero(new Circle(3.0));
+    float z = radiusOrZero(new Square(5.0));
     Console.println("r={r} z={z}");
 }

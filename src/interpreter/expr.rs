@@ -244,6 +244,9 @@ impl Interp {
             // `html"…"` literals are erased to `html.concat([…])` kernel calls by
             // `checker::resolve_html` before any backend runs; the interpreter never sees one.
             Expr::Html(..) => unreachable!("html literal not resolved before interpretation"),
+            Expr::New(..) => {
+                unreachable!("Expr::New is unwrapped before interpretation (checker::unwrap_new)")
+            }
         }
     }
 

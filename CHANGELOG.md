@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — mandatory `new` for construction (Feature C, breaking)
+
+Every class instantiation and enum-variant construction now **requires** `new`: `new Counter()`,
+`new Some(7)`, `new Circle(2.0)`. One uniform rule (a deliberate Phorge departure — no surface
+language `new`s a sum-type variant). Byte-identical `run ≡ runvm ≡ real PHP 8.5`; **no new
+`Op`/`Value`/backend change**.
+
+- **Front-end only:** the parser wraps a construction in `Expr::New`; the checker validates it
+  (`E-NEW-REQUIRED` for a bare construction, `E-NEW-ON-NONCONSTRUCT` for `new` on a free function /
+  value — both `phg explain`-documented) then a new `checker::unwrap_new` pass strips `Expr::New` to
+  its inner `Call` (alongside `expand_aliases`/`erase_generics`/`resolve_html`) **before any backend**,
+  so construction semantics and the byte-identity spine are untouched. The project loader's
+  cross-package resolution pass also descends into `Expr::New` (so `new Rect(…)` mangles to
+  `new \Acme\Geometry\Rect(…)`).
+- **Migration:** `phg rewrite-new <file>` — an AST-span codemod that wraps every class/variant
+  construction (patterns and free-function calls are left untouched; idempotent). Applied across all
+  examples, projects, and the test corpus. Match patterns (`Some(n) =>`), enum-variant *declarations*,
+  and the raw `lex→parse→interpret` test path keep bare names.
+
 ### Added — runtime static field initializers (Feature B-static)
 
 `examples/guide/static-init.phg`; byte-identical `run ≡ runvm ≡ real PHP 8.5`. No new `Op`/`Value`.

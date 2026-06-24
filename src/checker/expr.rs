@@ -88,6 +88,7 @@ impl Checker {
                 span,
             } => self.check_instanceof(value, type_name, *span),
             Expr::Call { callee, args, span } => self.check_call(callee, args, *span), // Task 4
+            Expr::New(inner, span) => self.check_new(inner, *span),
             Expr::Member {
                 object,
                 name,
@@ -142,6 +143,52 @@ impl Checker {
             } => self.check_lambda(params, ret, body, *span),
             Expr::Html(parts, span) => self.check_html(parts, *span),
         }
+    }
+
+    /// `new <call>` (Feature C). Validates the inner is a class/enum-variant construction
+    /// (`E-NEW-ON-NONCONSTRUCT` otherwise) and, when it is, type-checks it with the `under_new` flag so
+    /// the construction does not also fire `E-NEW-REQUIRED`. Returns the construction's type (or the
+    /// inner's type on the error path, to avoid a cascade). The node is later stripped by `unwrap_new`.
+    pub(super) fn check_new(&mut self, inner: &crate::ast::Expr, span: Span) -> Ty {
+        use crate::ast::Expr;
+        match inner {
+            Expr::Call { callee, .. } if self.is_construction_callee(callee) => {
+                self.under_new = true;
+                let t = self.check_expr(inner);
+                self.under_new = false; // defensive — the construction call already took it
+                t
+            }
+            _ => {
+                let t = self.check_expr(inner); // check normally to avoid a cascade
+                self.err_coded(
+                    span,
+                    "`new` is only for constructing a class or enum variant".to_string(),
+                    "E-NEW-ON-NONCONSTRUCT",
+                    Some("call a function without `new`; `new` precedes a class/variant construction".into()),
+                );
+                t
+            }
+        }
+    }
+
+    /// Whether `callee` names a class or enum variant *constructor* (Feature C) — an unshadowed
+    /// identifier that is a known class name or enum-variant name. A local binding of the same name
+    /// shadows it (then it is a value, never a construction).
+    pub(super) fn is_construction_callee(&self, callee: &crate::ast::Expr) -> bool {
+        match callee {
+            crate::ast::Expr::Ident(name, _) => self.is_construction_name(name),
+            _ => false,
+        }
+    }
+
+    /// Whether `name` is a class or enum-variant constructor not shadowed by a local binding.
+    pub(super) fn is_construction_name(&self, name: &str) -> bool {
+        self.lookup(name).is_none()
+            && (self.classes.contains_key(name)
+                || self
+                    .enums
+                    .values()
+                    .any(|info| info.variants.contains_key(name)))
     }
 
     pub(super) fn check_unary(
@@ -461,6 +508,7 @@ impl Checker {
             | Expr::If { span, .. }
             | Expr::Lambda { span, .. }
             | Expr::CloneWith { span, .. }
+            | Expr::New(_, span)
             | Expr::Html(_, span) => *span,
         }
     }
