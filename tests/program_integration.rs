@@ -28,7 +28,7 @@ class Greeter {
     }
 }
 
-function main() {
+function main() -> void {
     Greeter g = Greeter("Tak");
     Console.println(g.greet());
 
@@ -81,7 +81,8 @@ fn parses_full_sample_program() {
     match &prog.items[4] {
         Item::Function(f) => {
             assert_eq!(f.name, "main");
-            assert!(f.ret.is_none());
+            // `main` is `-> void` (S0b mandates a return type on every function, incl. main).
+            assert!(f.ret.is_some());
             // Greeter g = …;  console.println(…);  List<Shape> shapes = …;  for (…) {…}
             assert_eq!(f.body.len(), 4);
         }

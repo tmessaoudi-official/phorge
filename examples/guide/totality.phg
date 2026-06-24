@@ -40,7 +40,7 @@ function spinForever() -> never {
     while (true) {}
 }
 
-function main() {
+function main() -> void {
     Console.println(classify(95));
     Console.println(classify(75));
     Console.println(classify(40));

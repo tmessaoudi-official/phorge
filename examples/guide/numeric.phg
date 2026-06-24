@@ -10,7 +10,7 @@
 package Main;
 import Core.Console;
 
-function main() {
+function main() -> void {
     // The same value written four ways.
     int a = 255;
     int b = 0xFF;

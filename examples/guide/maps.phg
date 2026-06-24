@@ -3,7 +3,7 @@ import Core.Console;
 
 // M-RT S3 "Map foundation": `Map<K, V>` literals `[k => v]` and indexing `m[k]`.
 // Keys are the hashable subset (int / bool / string); a missing key faults cleanly.
-function main() {
+function main() -> void {
     // A string-keyed lookup table (Map<string, int>).
     Map<string, int> ages = ["alice" => 30, "bob" => 25, "carol" => 41];
     // A string-literal index inside "{…}" would nest quotes (the shared interpolation rule),

@@ -6,7 +6,7 @@ import Core.Console;
 // and `private` helper `clamp` are NOT importable here — see README.md for the rejected cases.
 import type Acme.Shapes.Rect;
 
-function main() {
+function main() -> void {
   Rect r = Rect(3, 4);
   // area() = scale(3 * 4) = scale(12) = 12 * factor() = 12 * clamp(1) = 12 * 1 = 12.
   Console.println("area: {r.area()}");

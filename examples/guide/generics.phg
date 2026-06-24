@@ -35,7 +35,7 @@ function lastOfTwo<T>(T a, T b) -> T {
   return b;
 }
 
-function main() {
+function main() -> void {
   // `identity` reused at three different concrete types — one definition, no duplication.
   int n = identity(7);
   string s = identity("phorge");

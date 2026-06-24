@@ -39,7 +39,7 @@ fn out(src: &str) -> String {
 fn prints_a_literal_string() {
     assert_eq!(
         out(r#"import Core.Console;
-function main() { Console.println("hi"); }"#),
+function main() -> void { Console.println("hi"); }"#),
         "hi\n"
     );
 }
@@ -48,7 +48,7 @@ function main() { Console.println("hi"); }"#),
 fn integer_arithmetic_in_interpolation() {
     assert_eq!(
         out(r#"import Core.Console;
-function main() { Console.println("{1 + 2 * 3}"); }"#),
+function main() -> void { Console.println("{1 + 2 * 3}"); }"#),
         "7\n"
     );
 }
@@ -57,7 +57,7 @@ function main() { Console.println("{1 + 2 * 3}"); }"#),
 fn float_arithmetic() {
     assert_eq!(
         out(r#"import Core.Console;
-function main() { Console.println("{3.0 * 4.0}"); }"#),
+function main() -> void { Console.println("{3.0 * 4.0}"); }"#),
         "12\n"
     );
 }
@@ -65,7 +65,7 @@ function main() { Console.println("{3.0 * 4.0}"); }"#),
 #[test]
 fn division_by_zero_is_runtime_error() {
     let e = run(r#"import Core.Console;
-function main() { Console.println("{1 / 0}"); }"#)
+function main() -> void { Console.println("{1 / 0}"); }"#)
     .unwrap_err();
     assert!(e.message.contains("division by zero"), "{}", e.message);
 }
@@ -74,12 +74,12 @@ function main() { Console.println("{1 / 0}"); }"#)
 fn comparison_and_logical_short_circuit() {
     assert_eq!(
         out(r#"import Core.Console;
-function main() { Console.println("{1 < 2 && 3 >= 3}"); }"#),
+function main() -> void { Console.println("{1 < 2 && 3 >= 3}"); }"#),
         "true\n"
     );
     assert_eq!(
         out(r#"import Core.Console;
-function main() { Console.println("{1 > 2 || false}"); }"#),
+function main() -> void { Console.println("{1 > 2 || false}"); }"#),
         "false\n"
     );
 }
@@ -88,7 +88,7 @@ function main() { Console.println("{1 > 2 || false}"); }"#),
 fn unary_negation_and_not() {
     assert_eq!(
         out(r#"import Core.Console;
-function main() { Console.println("{-5}"); Console.println("{!true}"); }"#),
+function main() -> void { Console.println("{-5}"); Console.println("{!true}"); }"#),
         "-5\nfalse\n"
     );
 }
@@ -97,7 +97,7 @@ function main() { Console.println("{-5}"); Console.println("{!true}"); }"#),
 fn var_decl_and_use() {
     assert_eq!(
         out(r#"import Core.Console;
-function main() { int x = 10; Console.println("{x + 5}"); }"#),
+function main() -> void { int x = 10; Console.println("{x + 5}"); }"#),
         "15\n"
     );
 }
@@ -105,7 +105,7 @@ function main() { int x = 10; Console.println("{x + 5}"); }"#),
 #[test]
 fn if_else_picks_branch() {
     let src = r#"import Core.Console;
-function main() { if (1 < 2) { Console.println("yes"); } else { Console.println("no"); } }"#;
+function main() -> void { if (1 < 2) { Console.println("yes"); } else { Console.println("no"); } }"#;
     assert_eq!(out(src), "yes\n");
 }
 
@@ -114,7 +114,7 @@ fn function_call_and_return() {
     let src = r#"import Core.Console;
 
             function dbl(int n) -> int { return n * 2; }
-            function main() { Console.println("{dbl(21)}"); }
+            function main() -> void { Console.println("{dbl(21)}"); }
         "#;
     assert_eq!(out(src), "42\n");
 }
@@ -127,7 +127,7 @@ fn recursion_works() {
                 if (n <= 1) { return 1; }
                 return n * fac(n - 1);
             }
-            function main() { Console.println("{fac(5)}"); }
+            function main() -> void { Console.println("{fac(5)}"); }
         "#;
     assert_eq!(out(src), "120\n");
 }
@@ -143,7 +143,7 @@ fn enum_variant_and_match() {
                     Rect(w, h) => w * h,
                 };
             }
-            function main() { Console.println("{area(Rect(3.0, 4.0))}"); }
+            function main() -> void { Console.println("{area(Rect(3.0, 4.0))}"); }
         "#;
     assert_eq!(out(src), "12\n");
 }
@@ -155,7 +155,7 @@ fn match_wildcard_is_catch_all() {
 
             enum Shape { Circle(float r), Rect(float w, float h), }
             function kind(Shape s) -> int { return match s { Circle(r) => 1, _ => 2, }; }
-            function main() { Console.println("{kind(Rect(1.0, 2.0))}"); }
+            function main() -> void { Console.println("{kind(Rect(1.0, 2.0))}"); }
         "#;
     assert_eq!(out(src), "2\n");
 }
@@ -169,7 +169,7 @@ fn class_construction_promotion_and_method() {
                 constructor(private string name) {}
                 function greet() -> string { return "Hi {name}"; }
             }
-            function main() { Greeter g = Greeter("Tak"); Console.println(g.greet()); }
+            function main() -> void { Greeter g = Greeter("Tak"); Console.println(g.greet()); }
         "#;
     assert_eq!(out(src), "Hi Tak\n");
 }
@@ -178,7 +178,7 @@ fn class_construction_promotion_and_method() {
 fn for_loop_over_list() {
     let src = r#"import Core.Console;
 
-            function main() {
+            function main() -> void {
                 List<int> xs = [1, 2, 3];
                 for (int x in xs) { Console.println("{x}"); }
             }
@@ -190,7 +190,7 @@ fn for_loop_over_list() {
 fn indexing_reads_elements() {
     assert_eq!(
         out(r#"import Core.Console;
-function main() { List<int> xs = [7, 8, 9]; Console.println("{xs[0]} {xs[2]}"); }"#),
+function main() -> void { List<int> xs = [7, 8, 9]; Console.println("{xs[0]} {xs[2]}"); }"#),
         "7 9\n"
     );
 }
@@ -198,7 +198,7 @@ function main() { List<int> xs = [7, 8, 9]; Console.println("{xs[0]} {xs[2]}"); 
 #[test]
 fn indexing_out_of_range_is_runtime_error() {
     let e = run(r#"import Core.Console;
-function main() { List<int> xs = [1]; Console.println("{xs[3]}"); }"#)
+function main() -> void { List<int> xs = [1]; Console.println("{xs[3]}"); }"#)
     .unwrap_err();
     assert!(
         e.message.contains("list index out of range"),
@@ -211,18 +211,18 @@ function main() { List<int> xs = [1]; Console.println("{xs[3]}"); }"#)
 fn ranges_iterate_like_lists() {
     assert_eq!(
         out(r#"import Core.Console;
-function main() { for (int i in 0..3) { Console.println("{i}"); } }"#),
+function main() -> void { for (int i in 0..3) { Console.println("{i}"); } }"#),
         "0\n1\n2\n"
     );
     assert_eq!(
         out(r#"import Core.Console;
-function main() { for (int i in 1..=3) { Console.println("{i}"); } }"#),
+function main() -> void { for (int i in 1..=3) { Console.println("{i}"); } }"#),
         "1\n2\n3\n"
     );
     // empty range (start >= end): body never runs
     assert_eq!(
         out(r#"import Core.Console;
-function main() { for (int i in 5..2) { Console.println("{i}"); } Console.println("done"); }"#),
+function main() -> void { for (int i in 5..2) { Console.println("{i}"); } Console.println("done"); }"#),
         "done\n"
     );
 }
@@ -231,12 +231,12 @@ function main() { for (int i in 5..2) { Console.println("{i}"); } Console.printl
 fn expression_if_picks_branch_value() {
     assert_eq!(
         out(r#"import Core.Console;
-function main() { var x = if (1 < 2) { 7 } else { 9 }; Console.println("{x}"); }"#),
+function main() -> void { var x = if (1 < 2) { 7 } else { 9 }; Console.println("{x}"); }"#),
         "7\n"
     );
     assert_eq!(
         out(r#"import Core.Console;
-function main() { var x = if (1 > 2) { 7 } else { 9 }; Console.println("{x}"); }"#),
+function main() -> void { var x = if (1 > 2) { 7 } else { 9 }; Console.println("{x}"); }"#),
         "9\n"
     );
 }
@@ -244,14 +244,14 @@ function main() { var x = if (1 > 2) { 7 } else { 9 }; Console.println("{x}"); }
 #[test]
 fn integer_overflow_is_runtime_error_not_panic() {
     let src = r#"import Core.Console;
-function main() { Console.println("{9223372036854775807 + 1}"); }"#;
+function main() -> void { Console.println("{9223372036854775807 + 1}"); }"#;
     let e = run(src).unwrap_err();
     assert!(e.message.contains("overflow"), "{}", e.message);
 }
 
 #[test]
 fn missing_main_is_runtime_error() {
-    let e = run(r#"function other() {}"#).unwrap_err();
+    let e = run(r#"function other() -> void {}"#).unwrap_err();
     assert!(e.message.contains("main"), "{}", e.message);
 }
 
@@ -274,7 +274,7 @@ fn check_errs(src: &str) -> Vec<crate::diagnostic::Diagnostic> {
 fn lambda_value_call_interpreter() {
     let out = out(r#"package Main;
 import Core.Console;
-function main() {
+function main() -> void {
     var double = fn(int x) => x * 2;
     Console.println("{double(5)}");
 }"#);
@@ -285,7 +285,7 @@ function main() {
 fn lambda_captures_two_vars_interpreter() {
     let out = out(r#"package Main;
 import Core.Console;
-function main() {
+function main() -> void {
     var a = 10;
     var b = 100;
     var f = fn(int x) => x + a + b;
@@ -299,7 +299,7 @@ fn higher_order_user_function_interpreter() {
     let out = out(r#"package Main;
 import Core.Console;
 function twice(int x, (int) -> int f) -> int { return f(f(x)); }
-function main() {
+function main() -> void {
     Console.println("{twice(3, fn(int n) => n + 1)}");
 }"#);
     assert_eq!(out, "5\n");
@@ -311,7 +311,7 @@ fn lambda_cannot_reference_this() {
         r#"package Main;
 class C { constructor(public int x) {}
   function method() -> (int) -> int { return fn(int n) => n + this.x; } }
-function main() { }"#,
+function main() -> void { }"#,
     );
     assert!(
         errs.iter().any(|e| e.message.contains("`this`")),
@@ -324,7 +324,7 @@ fn interpolating_an_object_errors() {
     let src = r#"import Core.Console;
 
             class C { constructor() {} }
-            function main() { C c = C(); Console.println("{c}"); }
+            function main() -> void { C c = C(); Console.println("{c}"); }
         "#;
     let e = run(src).unwrap_err();
     assert!(

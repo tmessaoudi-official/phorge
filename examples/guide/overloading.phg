@@ -35,7 +35,7 @@ class Formatter {
   function render(Circle c) -> string { return "circle{this.sep}{c.r}"; }
 }
 
-function main() {
+function main() -> void {
   Console.println(describe(42));
   Console.println(describe("hi"));
   Console.println(describe(true));

@@ -362,7 +362,7 @@ mod tests {
 
     #[test]
     fn render_underlines_the_offending_span_and_appends_hint_and_code() {
-        let src = "function main() {\n    foo;\n}";
+        let src = "function main() -> void {\n    foo;\n}";
         let d = Diagnostic::new(Stage::Type, "unknown identifier `foo`", 2, 5)
             .with_code("E-UNKNOWN-IDENT")
             .with_hint("did you mean `for`?");

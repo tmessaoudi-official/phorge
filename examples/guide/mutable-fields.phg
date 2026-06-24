@@ -19,7 +19,7 @@ class Counter {
     }
 }
 
-function main() {
+function main() -> void {
     mutable Counter c = Counter(10);
 
     // Direct field set.

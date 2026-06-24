@@ -41,7 +41,7 @@ function grow(int cents, int years) -> int {
     return grow(cents + cents * 5 / 100, years - 1);
 }
 
-function main() {
+function main() -> void {
     Account a0 = Account("Ada", 1000);
     Account a1 = a0.apply(Deposit(500));
     Account a2 = a1.apply(Withdraw(200));

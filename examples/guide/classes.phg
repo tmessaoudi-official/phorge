@@ -15,7 +15,7 @@ class Car {
     function horsepower() -> int { return engine.powerOf(); }
 }
 
-function main() {
+function main() -> void {
     Car c = Car("Phorge", Engine(250));
     Console.println("{c.makeOf()} has {c.horsepower()} hp");
 }

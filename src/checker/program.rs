@@ -180,6 +180,22 @@ impl Checker {
     /// type parameters are made active for the whole body so `T`-typed params/locals resolve to
     /// `Ty::Param` (M-RT S7). Functions never nest, so a flat set + clear is sufficient.
     pub(super) fn check_function(&mut self, f: &crate::ast::FunctionDecl) {
+        // S0b: every function and method declares its return type — no exemptions where a return
+        // slot exists (constructors and property hooks are separate `ClassMember` variants, so they
+        // never reach here; expression-body lambdas infer and are not `FunctionDecl`s). Even `main`
+        // must be annotated. Falling off the end of a value-carrying function was the soundness leak
+        // the totality cluster closed; mandating the annotation makes every signature self-describing.
+        if f.ret.is_none() {
+            self.err_coded(
+                f.span,
+                format!("`{}` must declare a return type", f.name),
+                "E-MISSING-RETURN-TYPE",
+                Some(
+                    "every function and method declares its return type — add `-> void` for a side-effecting function (or `-> Empty` to return the holdable empty value)"
+                        .into(),
+                ),
+            );
+        }
         // A method of a generic class sees both the class's type parameters and its own (M-RT
         // generics-all); `cur_class_type_params` is empty for free functions and non-generic classes.
         let mut active = self.cur_class_type_params.clone();

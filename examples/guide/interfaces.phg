@@ -33,7 +33,7 @@ function announce(Speaker s) -> string {
     return s.speak();
 }
 
-function main() {
+function main() -> void {
     var d = Dog("Rex");
     var r = Robot();
 

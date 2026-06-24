@@ -10,7 +10,7 @@ import Core.Console;
 import Acme.Convert;
 import Acme.Label as Fmt;
 
-function main() {
+function main() -> void {
     // `Convert.cToF` is a cross-package qualified call; `Fmt.tag` is a call on the *aliased* leaf.
     int freezing = Convert.cToF(0);
     int boiling = Convert.cToF(100);

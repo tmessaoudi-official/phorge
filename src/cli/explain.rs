@@ -333,7 +333,7 @@ pub fn explain_text(code: &str) -> Option<String> {
         "E-ABSTRACT-UNIMPL" => {
             "E-ABSTRACT-UNIMPL — a concrete class leaves an abstract method unimplemented.\n\n\
              A non-`abstract` class must provide a body for every `abstract` method it declares or\n\
-             inherits. Implement the method (`function name(…) { … }`), or declare the class itself\n\
+             inherits. Implement the method (`function name(…) -> void { … }`), or declare the class itself\n\
              `abstract` so a further subclass implements it.\n"
         }
         "E-OPEN-STATIC" => {
@@ -472,8 +472,24 @@ pub fn explain_text(code: &str) -> Option<String> {
              A function whose declared return type carries a value (`-> int`, `-> Shape`, …) must\n\
              `return` (or diverge) on *every* control-flow path. The classic leak is an `if` with no\n\
              `else`: the false branch falls through to the end. Add a trailing `return`, give the `if`\n\
-             an `else` that also returns, or diverge (an infinite loop / a `-> never` call). Functions\n\
-             with no return annotation return `unit` and are exempt.\n"
+             an `else` that also returns, or diverge (an infinite loop / a `-> never` call). A `-> void`\n\
+             or `-> Empty` function carries no value and is exempt.\n"
+        }
+        "E-MISSING-RETURN-TYPE" => {
+            "E-MISSING-RETURN-TYPE — a function or method declares no return type.\n\n\
+             Every function and method must declare its return type — including `main`. Add `-> void`\n\
+             for a side-effecting function that returns nothing, `-> Empty` to return the holdable\n\
+             empty value, or the concrete type it returns (`-> int`, `-> Shape`, …). Constructors have\n\
+             no return slot and property hooks are typed by their property, so neither needs one;\n\
+             expression-body lambdas (`fn(x) => e`) infer their return from the expression.\n"
+        }
+        "E-VOID-CAPTURE" => {
+            "E-VOID-CAPTURE — a `void` value cannot be captured.\n\n\
+             `void` is the type of an expression that produces *nothing* (a side-effecting call like\n\
+             `Console.println(…)`), so there is nothing to bind: `var x = note(\"hi\");` is rejected.\n\
+             Call it as a statement instead (drop the binding). If you genuinely need to hold the\n\
+             empty value — e.g. to satisfy a generic slot — annotate it `Empty` (`Empty x = note(…);`):\n\
+             `void` widens to the holdable `Empty`.\n"
         }
         "E-NEVER-RETURN" => {
             "E-NEVER-RETURN — a `-> never` function can return normally.\n\n\

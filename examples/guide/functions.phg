@@ -25,11 +25,11 @@ function upTo(int n) -> List<int> {
 }
 
 // No return type: this function just prints.
-function banner(string title) {
+function banner(string title) -> void {
     Console.println("== {title} ==");
 }
 
-function main() {
+function main() -> void {
     banner("functions");
     Console.println("add(2, 3) = {add(2, 3)}");
     Console.println(greet("phorge"));

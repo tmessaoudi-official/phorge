@@ -28,7 +28,7 @@ class Greeter {
     }
 }
 
-function main() {
+function main() -> void {
     Greeter g = Greeter("Tak");
     Console.println(g.greet());
 
@@ -60,7 +60,7 @@ fn program_without_main_errors() {
 #[test]
 fn division_by_zero_does_not_panic() {
     let e = run(r#"import Core.Console;
-function main() { Console.println("{1 / 0}"); }"#)
+function main() -> void { Console.println("{1 / 0}"); }"#)
     .unwrap_err();
     assert!(e.message.contains("division by zero"), "{}", e.message);
 }

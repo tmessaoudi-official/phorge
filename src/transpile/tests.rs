@@ -40,7 +40,7 @@ fn clone_with_lowers_to_php84_helper_not_85_native() {
     // parse error on the 8.4 transpile floor (the CI php). It lowers to the `__phorge_clone_with`
     // runtime helper instead (clone + per-field set). Regression guard for the CI floor fix.
     let out = php("class P { constructor(public int x, public int y) {} } \
-             function main() { P a = P(1, 2); P b = a with { x = 9 }; }");
+             function main() -> void { P a = P(1, 2); P b = a with { x = 9 }; }");
     assert!(
         out.contains("__phorge_clone_with("),
         "clone-with call uses the 8.4 helper:\n{out}"
@@ -79,7 +79,7 @@ fn error_cause_routed_to_php_previous_chain() {
 
 #[test]
 fn no_return_type_is_void() {
-    let out = php("function f() { return; }");
+    let out = php("function f() -> void { return; }");
     assert!(out.contains("function f(): void {"), "{out}");
 }
 
@@ -93,7 +93,7 @@ fn explicit_void_return_emits_php_void() {
 fn empty_return_emits_no_php_hint() {
     // `Empty` must NOT emit `: void`/`: mixed`/`: null` — PHP would reject a fall-off or a bare
     // `return;`. No hint → PHP infers a capturable `null`.
-    let out = php("function f() -> Empty { } function main() { Empty x = f(); }");
+    let out = php("function f() -> Empty { } function main() -> void { Empty x = f(); }");
     assert!(
         out.contains("function f() {"),
         "expected no return hint:\n{out}"
@@ -132,11 +132,11 @@ fn ranges_emit_php_range() {
     // Ranges route through `__phorge_range` (QW-13): the helper yields `[]` for an empty/reversed
     // range, where PHP's bare `range()` would descend. The `inclusive` flag is the third arg.
     let out = php(r#"import Core.Console;
-function main() { for (int i in 0..3) { Console.println("{i}"); } }"#);
+function main() -> void { for (int i in 0..3) { Console.println("{i}"); } }"#);
     assert!(out.contains("__phorge_range(0, 3, false)"), "{out}");
     assert!(out.contains("function __phorge_range"), "{out}");
     let inc = php(r#"import Core.Console;
-function main() { for (int i in 1..=3) { Console.println("{i}"); } }"#);
+function main() -> void { for (int i in 1..=3) { Console.println("{i}"); } }"#);
     assert!(inc.contains("__phorge_range(1, 3, true)"), "{inc}");
 }
 
@@ -220,13 +220,13 @@ fn expression_position_match_emits_iife() {
 
 #[test]
 fn println_becomes_echo() {
-    let out = php("import Core.Console; function main() { Console.println(\"hi\"); }");
+    let out = php("import Core.Console; function main() -> void { Console.println(\"hi\"); }");
     assert!(out.contains(r#"echo "hi" . "\n";"#), "{out}");
 }
 
 #[test]
 fn main_is_invoked_when_present() {
-    let out = php("import Core.Console; function main() { Console.println(\"hi\"); }");
+    let out = php("import Core.Console; function main() -> void { Console.println(\"hi\"); }");
     assert!(out.trim_end().ends_with("main();"), "{out}");
     // no main -> no call
     let no_main = php("function helper() -> int { return 1; }");
@@ -310,7 +310,7 @@ fn member_access_and_method_call() {
     let out = php(
         "import core.console; class Greeter { constructor(private string name) {} \
                function greet() -> string { return name; } } \
-             function main() { Greeter g = Greeter(\"Tak\"); Console.println(g.greet()); }",
+             function main() -> void { Greeter g = Greeter(\"Tak\"); Console.println(g.greet()); }",
     );
     assert!(out.contains(r#"$g = new Greeter("Tak");"#), "{out}");
     assert!(out.contains("$g->greet()"), "{out}");
@@ -382,13 +382,13 @@ fn match_as_call_argument_emits_iife() {
 
 #[test]
 fn transpiles_expression_lambda_to_arrow_fn() {
-    let php_out = php("package Main; import Core.Console; function main(){ var d = fn(int x) => x*2; Console.println(\"{d(5)}\"); }");
+    let php_out = php("package Main; import Core.Console; function main()-> void { var d = fn(int x) => x*2; Console.println(\"{d(5)}\"); }");
     assert!(php_out.contains("fn($x) => $x * 2"), "{php_out}");
 }
 
 #[test]
 fn transpiles_named_fn_reference() {
-    let php_out = php("package Main; function inc(int x)->int{return x+1;} function apply(int x,(int)->int f)->int{return f(x);} function main(){ apply(1, inc); }");
+    let php_out = php("package Main; function inc(int x)->int{return x+1;} function apply(int x,(int)->int f)->int{return f(x);} function main()-> void { apply(1, inc); }");
     assert!(
         php_out.contains("inc(...)"),
         "first-class callable: {php_out}"

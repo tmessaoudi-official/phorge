@@ -5,7 +5,7 @@ import Core.Console;
 // Every form below is pure SUGAR: `x op= e` lowers to `x = x op e`, `x++` to `x = x + 1`,
 // `x ??= e` to `x = x ?? e`. They reuse the M-mut.1 reassignment, so a target must be `mutable`.
 
-function main() {
+function main() -> void {
     // The five arithmetic compound operators.
     mutable int x = 10;
     x += 5; // 15

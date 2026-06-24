@@ -86,7 +86,7 @@ fn check_json_error_emits_diagnostic_array_exit_1_no_stderr() {
             "check",
             "--json",
             "-e",
-            "package Main; function main(){ var x = nope; }",
+            "package Main; function main()-> void { var x = nope; }",
         ])
         .output()
         .expect("spawn phg");
@@ -151,7 +151,7 @@ fn run_reads_program_from_stdin() {
         .write_all(
             br#"package Main;
 import Core.Console;
-function main() { Console.println("{1 + 2}"); }"#,
+function main() -> void { Console.println("{1 + 2}"); }"#,
         )
         .unwrap();
     let out = child.wait_with_output().expect("wait");
@@ -168,7 +168,7 @@ fn run_eval_inline_code() {
                 flag,
                 r#"package Main;
 import Core.Console;
-function main() { Console.println("{2 * 3}"); }"#,
+function main() -> void { Console.println("{2 * 3}"); }"#,
             ])
             .output()
             .expect("spawn phorge");
@@ -183,7 +183,7 @@ fn run_double_dash_then_path_is_a_file() {
         "dashdash",
         r#"package Main;
 import Core.Console;
-function main() { Console.println("ok"); }"#,
+function main() -> void { Console.println("ok"); }"#,
     );
     let out = Command::new(BIN)
         .args(["run", "--", path.to_str().unwrap()])
@@ -225,7 +225,7 @@ fn lex_subcommand_dumps_tokens_exit_0() {
 fn transpile_ill_typed_exits_1_with_type_error() {
     let path = write_temp(
         "ill_typed",
-        r#"package Main; function main() { int x = "no"; }"#,
+        r#"package Main; function main() -> void { int x = "no"; }"#,
     );
     let out = Command::new(BIN)
         .args(["transpile", path.to_str().unwrap()])
@@ -242,7 +242,7 @@ fn run_runtime_error_exits_1() {
         "runtime_err",
         r#"package Main;
 import Core.Console;
-function main() { Console.println("{1 / 0}"); }"#,
+function main() -> void { Console.println("{1 / 0}"); }"#,
     );
     let out = Command::new(BIN)
         .args(["run", path.to_str().unwrap()])
@@ -259,7 +259,7 @@ fn runvm_simple_program_exits_0() {
         "runvm_ok",
         r#"package Main;
 import Core.Console;
-function main() { Console.println("{1 + 1}"); }"#,
+function main() -> void { Console.println("{1 + 1}"); }"#,
     );
     let out = Command::new(BIN)
         .args(["runvm", path.to_str().unwrap()])
@@ -276,7 +276,7 @@ fn runvm_runtime_error_exits_1() {
         "runvm_rt",
         r#"package Main;
 import Core.Console;
-function main() { Console.println("{1 / 0}"); }"#,
+function main() -> void { Console.println("{1 / 0}"); }"#,
     );
     let out = Command::new(BIN)
         .args(["runvm", path.to_str().unwrap()])

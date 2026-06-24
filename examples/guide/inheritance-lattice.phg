@@ -43,7 +43,7 @@ function describe(Animal a) -> string {
     return a.name();
 }
 
-function main() {
+function main() -> void {
     Duck d = Duck();
 
     // (1) `instanceof` against every ancestor in the lattice — all true.

@@ -5,11 +5,11 @@ use super::support::*;
 #[test]
 fn function_call_arity_and_type_checked() {
     assert!(errors_of(
-        "function inc(int n) -> int { return n + 1; } function main() { int x = inc(1); }"
+        "function inc(int n) -> int { return n + 1; } function main() -> void { int x = inc(1); }"
     )
     .is_empty());
     let bad_arity = errors_of(
-        "function inc(int n) -> int { return n; } function main() { int x = inc(1, 2); }",
+        "function inc(int n) -> int { return n; } function main() -> void { int x = inc(1, 2); }",
     );
     assert!(
         bad_arity
@@ -18,7 +18,7 @@ fn function_call_arity_and_type_checked() {
         "{bad_arity:?}"
     );
     let bad_type = errors_of(
-        "function inc(int n) -> int { return n; } function main() { int x = inc(true); }",
+        "function inc(int n) -> int { return n; } function main() -> void { int x = inc(true); }",
     );
     assert!(
         bad_type.iter().any(|e| e.message.contains("argument 1")),
@@ -28,7 +28,7 @@ fn function_call_arity_and_type_checked() {
 
 #[test]
 fn unknown_function_call_errors() {
-    let errs = errors_of("function main() { nope(); }");
+    let errs = errors_of("function main() -> void { nope(); }");
     assert!(
         errs.iter().any(|e| e.message.contains("unknown function")),
         "{errs:?}"
@@ -39,7 +39,7 @@ fn unknown_function_call_errors() {
 fn println_accepts_string() {
     assert!(errors_of(
         r#"import Core.Console;
-function main() { Console.println("hi"); }"#
+function main() -> void { Console.println("hi"); }"#
     )
     .is_empty());
 }
@@ -49,7 +49,7 @@ fn console_println_rejects_non_string() {
     // The native's signature is `(string)`, so an `int` argument is a type error (M3 Wave 1).
     let errs = errors_of(
         r#"import Core.Console;
-function main() { Console.println(42); }"#,
+function main() -> void { Console.println(42); }"#,
     );
     assert!(
         errs.iter().any(|e| e.message.contains("Console.println")),
@@ -60,7 +60,7 @@ function main() { Console.println(42); }"#,
 #[test]
 fn bare_println_is_unknown_function() {
     // The global `println` is retired: a bare call now resolves as an unknown free function.
-    let errs = errors_of(r#"function main() { println("hi"); }"#);
+    let errs = errors_of(r#"function main() -> void { println("hi"); }"#);
     assert!(
         errs.iter()
             .any(|e| e.message.contains("unknown function") && e.message.contains("println")),
@@ -72,7 +72,7 @@ fn bare_println_is_unknown_function() {
 fn console_println_without_import_errors() {
     // "nothing in the wind": without `import Core.Console;`, the qualifier is unbound, so the
     // member call cannot resolve to the native and is an error.
-    let errs = errors_of(r#"function main() { Console.println("hi"); }"#);
+    let errs = errors_of(r#"function main() -> void { Console.println("hi"); }"#);
     assert!(!errs.is_empty(), "expected an error without the import");
 }
 
@@ -84,7 +84,7 @@ fn local_shadowing_imported_qualifier_errors() {
     // lowercase user-package leaf, which is what this exercises.)
     let errs = errors_of(
         r#"import acme.helper;
-function main() { int helper = 0; int x = helper; }"#,
+function main() -> void { int helper = 0; int x = helper; }"#,
     );
     assert!(
         errs.iter().any(|e| e.code == Some("E-SHADOW-IMPORT")),
@@ -99,7 +99,7 @@ fn html_literal_bad_hole_is_coded() {
     let errs = errors_of(
         r#"import Core.Html;
 enum E { A() }
-function main() { var p = html"<h1>{A()}</h1>"; }"#,
+function main() -> void { var p = html"<h1>{A()}</h1>"; }"#,
     );
     assert!(
         errs.iter().any(|e| e.code == Some("E-HTML-HOLE")),
@@ -111,7 +111,7 @@ function main() { var p = html"<h1>{A()}</h1>"; }"#,
 fn html_literal_without_import_is_coded() {
     // `html"…"` desugars to Core.Html kernel calls, so the module must be imported; otherwise
     // `E-HTML-IMPORT`.
-    let errs = errors_of(r#"function main() { var p = html"<h1>x</h1>"; }"#);
+    let errs = errors_of(r#"function main() -> void { var p = html"<h1>x</h1>"; }"#);
     assert!(
         errs.iter().any(|e| e.code == Some("E-HTML-IMPORT")),
         "{errs:?}"
@@ -126,7 +126,7 @@ fn local_shadowing_function_name_errors() {
     // in M3 S3). Coded `E-SHADOW-FN`. See `declare`.
     let errs = errors_of(
         r#"function dbl(int x) -> int { return x * 2; }
-function main() { var dbl = fn(int x) => x + 1000; }"#,
+function main() -> void { var dbl = fn(int x) => x + 1000; }"#,
     );
     assert!(
         errs.iter().any(|e| e.code == Some("E-SHADOW-FN")),
@@ -136,13 +136,13 @@ function main() { var dbl = fn(int x) => x + 1000; }"#,
 
 #[test]
 fn variant_constructor_returns_enum() {
-    let src = format!("{SHAPE} function main() {{ Shape s = Circle(2.0); }}");
+    let src = format!("{SHAPE} function main() -> void {{ Shape s = Circle(2.0); }}");
     assert!(errors_of(&src).is_empty());
 }
 
 #[test]
 fn variant_constructor_arg_type_checked() {
-    let src = format!("{SHAPE} function main() {{ Shape s = Circle(true); }}");
+    let src = format!("{SHAPE} function main() -> void {{ Shape s = Circle(true); }}");
     let errs = errors_of(&src);
     assert!(
         errs.iter().any(|e| e.message.contains("argument 1")),
@@ -153,14 +153,14 @@ fn variant_constructor_arg_type_checked() {
 #[test]
 fn constructor_call_and_method_call_ok() {
     let src = format!(
-        "{GREETER} function main() {{ Greeter g = Greeter(\"Tak\"); string s = g.greet(); }}"
+        "{GREETER} function main() -> void {{ Greeter g = Greeter(\"Tak\"); string s = g.greet(); }}"
     );
     assert!(errors_of(&src).is_empty(), "{:?}", errors_of(&src));
 }
 
 #[test]
 fn constructor_arg_type_checked() {
-    let src = format!("{GREETER} function main() {{ Greeter g = Greeter(123); }}");
+    let src = format!("{GREETER} function main() -> void {{ Greeter g = Greeter(123); }}");
     let errs = errors_of(&src);
     assert!(
         errs.iter().any(|e| e.message.contains("argument 1")),
@@ -170,7 +170,8 @@ fn constructor_arg_type_checked() {
 
 #[test]
 fn unknown_method_errors() {
-    let src = format!("{GREETER} function main() {{ Greeter g = Greeter(\"x\"); g.missing(); }}");
+    let src =
+        format!("{GREETER} function main() -> void {{ Greeter g = Greeter(\"x\"); g.missing(); }}");
     let errs = errors_of(&src);
     assert!(
         errs.iter()
@@ -181,7 +182,7 @@ fn unknown_method_errors() {
 
 #[test]
 fn field_access_typed() {
-    let src = "class Box { public int n; constructor(int n) {} } function main() { Box b = Box(1); int x = b.n; }";
+    let src = "class Box { public int n; constructor(int n) {} } function main() -> void { Box b = Box(1); int x = b.n; }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
 
@@ -193,7 +194,7 @@ fn bare_field_visible_in_method() {
 
 #[test]
 fn this_outside_method_errors() {
-    let errs = errors_of("function main() { string s = this; }");
+    let errs = errors_of("function main() -> void { string s = this; }");
     assert!(
         errs.iter().any(|e| e.message.contains("`this`")),
         "{errs:?}"
@@ -202,13 +203,15 @@ fn this_outside_method_errors() {
 
 #[test]
 fn interpolation_allows_primitives() {
-    assert!(errors_of("function main() { float x = 1.5; string s = \"v = {x}\"; }").is_empty());
-    assert!(errors_of("function main() { int n = 3; string s = \"n = {n}\"; }").is_empty());
+    assert!(
+        errors_of("function main() -> void { float x = 1.5; string s = \"v = {x}\"; }").is_empty()
+    );
+    assert!(errors_of("function main() -> void { int n = 3; string s = \"n = {n}\"; }").is_empty());
 }
 
 #[test]
 fn interpolation_rejects_objects() {
-    let src = "class C { private int n; constructor(int n) {} } function main() { C c = C(1); string s = \"{c}\"; }";
+    let src = "class C { private int n; constructor(int n) {} } function main() -> void { C c = C(1); string s = \"{c}\"; }";
     let errs = errors_of(src);
     assert!(
         errs.iter()
@@ -260,7 +263,7 @@ fn unmodified_ctor_param_is_not_a_field() {
 #[test]
 fn function_typed_binding_rejects_non_function() {
     // (int) -> int f = 5;  -> int not assignable to a function type
-    let errs = errors_of("function main() { (int) -> int f = 5; }");
+    let errs = errors_of("function main() -> void { (int) -> int f = 5; }");
     assert!(
         errs.iter().any(|e| e.message.contains("(int) -> int")),
         "{errs:?}"

@@ -32,7 +32,7 @@ function resolve(Action a) -> string {
     };
 }
 
-function main() {
+function main() -> void {
     Character hero = Character("Hero", 30);
     Character hurt = hero.act(Attack(12));
     Character healed = hurt.act(Heal(5));

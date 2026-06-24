@@ -151,46 +151,46 @@ fn agree_err(src: &str) {
 const P2_PROGRAMS: &[&str] = &[
     // literals + interpolation
     r#"import Core.Console;
-function main() { Console.println("hello"); }"#,
+function main() -> void { Console.println("hello"); }"#,
     r#"import Core.Console;
-function main() { Console.println("{42}"); Console.println("{3.14}"); Console.println("{true}"); }"#,
+function main() -> void { Console.println("{42}"); Console.println("{3.14}"); Console.println("{true}"); }"#,
     // int + float arithmetic (formatting parity: 12.0 -> "12")
     r#"import Core.Console;
-function main() { Console.println("{1 + 2 * 3 - 4}"); }"#,
+function main() -> void { Console.println("{1 + 2 * 3 - 4}"); }"#,
     r#"import Core.Console;
-function main() { Console.println("{2.0 * 3.0}"); Console.println("{7.5 / 2.5}"); }"#,
+function main() -> void { Console.println("{2.0 * 3.0}"); Console.println("{7.5 / 2.5}"); }"#,
     r#"import Core.Console;
-function main() { Console.println("{7 % 3}"); Console.println("{7.5 % 2.0}"); }"#,
+function main() -> void { Console.println("{7 % 3}"); Console.println("{7.5 % 2.0}"); }"#,
     // comparison + equality + logical short-circuit
     r#"import Core.Console;
-function main() { Console.println("{1 < 2}"); Console.println("{2 <= 2}"); Console.println("{3 > 4}"); }"#,
+function main() -> void { Console.println("{1 < 2}"); Console.println("{2 <= 2}"); Console.println("{3 > 4}"); }"#,
     r#"import Core.Console;
-function main() { Console.println("{1 == 1}"); Console.println("{1 != 2}"); }"#,
+function main() -> void { Console.println("{1 == 1}"); Console.println("{1 != 2}"); }"#,
     r#"import Core.Console;
-function main() { Console.println("{1 < 2 && 2 < 3}"); Console.println("{1 > 2 || 3 > 2}"); }"#,
+function main() -> void { Console.println("{1 < 2 && 2 < 3}"); Console.println("{1 > 2 || 3 > 2}"); }"#,
     // unary
     r#"import Core.Console;
-function main() { Console.println("{-5}"); Console.println("{!false}"); }"#,
+function main() -> void { Console.println("{-5}"); Console.println("{!false}"); }"#,
     // locals (int + float + string + bool)
     r#"import Core.Console;
-function main() { int x = 10; float y = 2.5; Console.println("{x}"); Console.println("{y}"); }"#,
+function main() -> void { int x = 10; float y = 2.5; Console.println("{x}"); Console.println("{y}"); }"#,
     r#"import Core.Console;
-function main() { string s = "hi"; bool b = true; Console.println("{s}"); Console.println("{b}"); }"#,
+function main() -> void { string s = "hi"; bool b = true; Console.println("{s}"); Console.println("{b}"); }"#,
     r#"import Core.Console;
-function main() { int a = 3; int b = 4; Console.println("{a * a + b * b}"); }"#,
+function main() -> void { int a = 3; int b = 4; Console.println("{a * a + b * b}"); }"#,
     // if / else
     r#"import Core.Console;
-function main() { if (1 < 2) { Console.println("a"); } else { Console.println("b"); } }"#,
+function main() -> void { if (1 < 2) { Console.println("a"); } else { Console.println("b"); } }"#,
     r#"import Core.Console;
-function main() { int n = 5; if (n > 3) { Console.println("big"); } Console.println("end"); }"#,
+function main() -> void { int n = 5; if (n > 3) { Console.println("big"); } Console.println("end"); }"#,
     // for-in over list literals
     r#"import Core.Console;
-function main() { List<int> xs = [1, 2, 3]; for (int x in xs) { Console.println("{x}"); } }"#,
+function main() -> void { List<int> xs = [1, 2, 3]; for (int x in xs) { Console.println("{x}"); } }"#,
     r#"import Core.Console;
-function main() { for (float f in [1.5, 2.5]) { Console.println("{f * 2.0}"); } }"#,
+function main() -> void { for (float f in [1.5, 2.5]) { Console.println("{f * 2.0}"); } }"#,
     // nested blocks + for body locals
     r#"import Core.Console;
-function main() { for (int x in [10, 20]) { int y = x + 1; Console.println("{y}"); } }"#,
+function main() -> void { for (int x in [10, 20]) { int y = x + 1; Console.println("{y}"); } }"#,
     // NB: `println` is single-arg only (the checker enforces it) — no multi-arg case here.
 ];
 
@@ -216,7 +216,7 @@ open class Animal {
 class Dog extends Animal {
     function kind() -> string { return "dog"; }
 }
-function main() {
+function main() -> void {
     Dog d = Dog();
     Console.println(d.speak());
     Console.println(d.kind());
@@ -243,7 +243,7 @@ open class Flyer {
     open function soar() -> string { return "soars"; }
 }
 class Duck extends Swimmer, Flyer {}
-function main() {
+function main() -> void {
     Duck d = Duck();
     Console.println(d.move()); // first parent
     Console.println(d.soar()); // SECOND parent — the latent divergence
@@ -263,7 +263,7 @@ open class Base { open function tag() -> string { return "base"; } }
 open class Left extends Base {}
 open class Right extends Base {}
 class Mid extends Left, Right {}
-function main() {
+function main() -> void {
     Mid m = Mid();
     Console.println(m.tag());
     Base b = m;
@@ -285,7 +285,7 @@ open class Flyer { open function move() -> string { return "flies"; } }
 class Duck extends Swimmer, Flyer {
     use Flyer.move
 }
-function main() {
+function main() -> void {
     Duck d = Duck();
     Console.println(d.move()); // Flyer's, per the resolution clause
 }"#,
@@ -304,7 +304,7 @@ open class Flyer { open function move() -> string { return "flies"; } }
 class Duck extends Swimmer, Flyer {
     rename Flyer.move as glide
 }
-function main() {
+function main() -> void {
     Duck d = Duck();
     Console.println(d.move());  // Swimmer's (the remaining source)
     Console.println(d.glide()); // Flyer's, under the new name
@@ -328,7 +328,7 @@ class Square extends Shape {
     constructor(public int side) {}
     function area() -> int { return this.side * this.side; }
 }
-function main() {
+function main() -> void {
     Square s = Square(3);
     Console.println("{s.area()}");
     Console.println(s.describe()); // describe() dispatches to Square.area()
@@ -405,7 +405,7 @@ fn s6c_single_parent_ctor_inheritance_is_byte_identical() {
         r#"import Core.Console;
 open class Named { constructor(public string name) {} }
 class Greeter extends Named {}
-function main() {
+function main() -> void {
     Greeter g = Greeter("Ada");
     Console.println(g.name);
 }"#,
@@ -427,7 +427,7 @@ open class Counter {
     function value() -> int { return this.n; }
 }
 class Tally extends Counter {}
-function main() {
+function main() -> void {
     Tally t = Tally(7);
     Console.println("{t.value()}");
 }"#,
@@ -440,7 +440,7 @@ function main() {
 open class Root { constructor(public int id) {} }
 open class Mid extends Root {}
 class Leaf extends Mid {}
-function main() {
+function main() -> void {
     Leaf l = Leaf(42);
     Console.println("{l.id}");
 }"#,
@@ -461,7 +461,7 @@ fn s6c_multi_parent_ctor_is_byte_identical() {
 open class Named { constructor(public string name) {} }
 open class Aged { constructor(public int age) {} }
 class Person extends Named, Aged {}
-function main() {
+function main() -> void {
     Person p = Person("Ada", 36);
     Console.println("{p.name} is {p.age}");
 }"#,
@@ -477,7 +477,7 @@ open class Scored {
     constructor(int score) { this.doubled = score * 2; }
 }
 class Player extends Named, Scored {}
-function main() {
+function main() -> void {
     Player p = Player("Bo", 21);
     Console.println("{p.name} {p.doubled}");
 }"#,
@@ -500,7 +500,7 @@ fn s6c_instanceof_across_lattice_is_byte_identical() {
         r#"import Core.Console;
 open class Animal {}
 class Dog extends Animal {}
-function main() {
+function main() -> void {
     Dog d = Dog();
     Console.println("{d instanceof Animal} {d instanceof Dog}");
 }"#,
@@ -514,7 +514,7 @@ open class Swimmer { open function move() -> string { return "swims"; } }
 open class Flyer { open function soar() -> string { return "soars"; } }
 class Duck extends Swimmer, Flyer {}
 function describe(Swimmer s) -> string { return s.move(); }
-function main() {
+function main() -> void {
     Duck d = Duck();
     Console.println(describe(d));
     Console.println("{d instanceof Swimmer} {d instanceof Flyer}");
@@ -528,7 +528,7 @@ function main() {
 open class A {}
 open class B {}
 class C extends A {}
-function main() {
+function main() -> void {
     C c = C();
     Console.println("{c instanceof A} {c instanceof B}");
 }"#,
@@ -543,7 +543,7 @@ function main() {
 fn s0_var_inference_is_byte_identical() {
     agree(
         r#"import Core.Console;
-function main() {
+function main() -> void {
             var x = 21;
             var s = "n=";
             Console.println("{s}{x + x}");
@@ -558,7 +558,7 @@ fn s0_var_inference_from_call_and_match_inits() {
     agree(
         r#"import Core.Console;
 function dbl(int n) -> int { return n * 2; }
-        function main() {
+        function main() -> void {
             var a = dbl(10);
             var b = match a { 20 => 100, n => n };
             Console.println("{a + b}");
@@ -574,7 +574,7 @@ fn s0_type_alias_is_byte_identical() {
         r#"import Core.Console;
 type Count = int;
         function tally(Count n) -> Count { return n + 1; }
-        function main() { Console.println("{tally(41)}"); }"#,
+        function main() -> void { Console.println("{tally(41)}"); }"#,
     );
 }
 
@@ -585,12 +585,12 @@ type Count = int;
 fn s1_indexing_is_byte_identical() {
     agree(
         r#"import Core.Console;
-function main() { List<int> xs = [10, 20, 30]; Console.println("{xs[0]} {xs[2]}"); }"#,
+function main() -> void { List<int> xs = [10, 20, 30]; Console.println("{xs[0]} {xs[2]}"); }"#,
     );
     // an index expression on a list literal, with the index coming from a loop variable
     agree(
         r#"import Core.Console;
-function main() { for (int i in [0, 1, 2]) { Console.println("{[5, 6, 7][i]}"); } }"#,
+function main() -> void { for (int i in [0, 1, 2]) { Console.println("{[5, 6, 7][i]}"); } }"#,
     );
 }
 
@@ -598,7 +598,7 @@ function main() { for (int i in [0, 1, 2]) { Console.println("{[5, 6, 7][i]}"); 
 fn s1_index_oob_faults_identically() {
     agree_err(
         r#"import Core.Console;
-function main() { List<int> xs = [1, 2]; Console.println("{xs[5]}"); }"#,
+function main() -> void { List<int> xs = [1, 2]; Console.println("{xs[5]}"); }"#,
     );
 }
 
@@ -610,16 +610,16 @@ function main() { List<int> xs = [1, 2]; Console.println("{xs[5]}"); }"#,
 fn s1_index_result_in_arithmetic_is_byte_identical() {
     agree(
         r#"import Core.Console;
-function main() { List<int> xs = [10, 20]; Console.println("{xs[0] + 1}"); }"#,
+function main() -> void { List<int> xs = [10, 20]; Console.println("{xs[0] + 1}"); }"#,
     );
     agree(
         r#"import Core.Console;
-function main() { List<float> fs = [1.5, 2.5]; Console.println("{fs[0] + fs[1]}"); }"#,
+function main() -> void { List<float> fs = [1.5, 2.5]; Console.println("{fs[0] + fs[1]}"); }"#,
     );
     // index result of a range-materialized list, used arithmetically
     agree(
         r#"import Core.Console;
-function main() { var xs = 0..5; Console.println("{xs[2] * 10}"); }"#,
+function main() -> void { var xs = 0..5; Console.println("{xs[2] * 10}"); }"#,
     );
 }
 
@@ -630,30 +630,30 @@ function main() { var xs = 0..5; Console.println("{xs[2] * 10}"); }"#,
 fn s1_ranges_are_byte_identical() {
     agree(
         r#"import Core.Console;
-function main() { for (int i in 0..3) { Console.println("{i}"); } }"#,
+function main() -> void { for (int i in 0..3) { Console.println("{i}"); } }"#,
     ); // 0,1,2
     agree(
         r#"import Core.Console;
-function main() { for (int i in 1..=3) { Console.println("{i}"); } }"#,
+function main() -> void { for (int i in 1..=3) { Console.println("{i}"); } }"#,
     ); // 1,2,3
        // empty range (start >= end): the body never runs on either backend
     agree(
         r#"import Core.Console;
-function main() { for (int i in 5..5) { Console.println("{i}"); } Console.println("done"); }"#,
+function main() -> void { for (int i in 5..5) { Console.println("{i}"); } Console.println("done"); }"#,
     );
     agree(
         r#"import Core.Console;
-function main() { for (int i in 5..2) { Console.println("{i}"); } Console.println("empty"); }"#,
+function main() -> void { for (int i in 5..2) { Console.println("{i}"); } Console.println("empty"); }"#,
     );
     // a range bound to a `var` (typed `List<int>`), then iterated
     agree(
         r#"import Core.Console;
-function main() { var xs = 0..3; for (int i in xs) { Console.println("{i + 1}"); } }"#,
+function main() -> void { var xs = 0..3; for (int i in xs) { Console.println("{i + 1}"); } }"#,
     );
     // range bounds from expressions
     agree(
         r#"import Core.Console;
-function lo() -> int { return 2; } function main() { for (int i in lo()..lo() + 3) { Console.println("{i}"); } }"#,
+function lo() -> int { return 2; } function main() -> void { for (int i in lo()..lo() + 3) { Console.println("{i}"); } }"#,
     );
 }
 
@@ -665,23 +665,23 @@ fn s1_expression_if_is_byte_identical() {
     // value-position in a `var` initializer, then used arithmetically (specialization parity)
     agree(
         r#"import Core.Console;
-function main() { var x = if (1 < 2) { 10 } else { 20 }; Console.println("{x + x}"); }"#,
+function main() -> void { var x = if (1 < 2) { 10 } else { 20 }; Console.println("{x + x}"); }"#,
     );
     // in return position, both branches taken across two calls
     agree(
         r#"import Core.Console;
 function pick(bool b) -> int { return if (b) { 1 } else { 2 }; }
-           function main() { Console.println("{pick(true)} {pick(false)}"); }"#,
+           function main() -> void { Console.println("{pick(true)} {pick(false)}"); }"#,
     );
     // as a call argument (string-typed branches), inside a range loop
     agree(
         r#"import Core.Console;
-function main() { for (int i in 0..3) { Console.println(if (i == 1) { "one" } else { "x" }); } }"#,
+function main() -> void { for (int i in 0..3) { Console.println(if (i == 1) { "one" } else { "x" }); } }"#,
     );
     // nested / float branches
     agree(
         r#"import Core.Console;
-function main() { float r = if (true) { 1.5 } else { 2.5 }; Console.println("{r * 2.0}"); }"#,
+function main() -> void { float r = if (true) { 1.5 } else { 2.5 }; Console.println("{r * 2.0}"); }"#,
     );
 }
 
@@ -691,43 +691,43 @@ function main() { float r = if (true) { 1.5 } else { 2.5 }; Console.println("{r 
 const P3_PROGRAMS: &[&str] = &[
     // single call used in interpolation
     r#"import Core.Console;
-function inc(int n) -> int { return n + 1; } function main() { Console.println("{inc(41)}"); }"#,
+function inc(int n) -> int { return n + 1; } function main() -> void { Console.println("{inc(41)}"); }"#,
     // multiple params + call inside arithmetic
     r#"import Core.Console;
 function add(int a, int b) -> int { return a + b; }
-       function main() { Console.println("{add(2, 3) * 10}"); }"#,
+       function main() -> void { Console.println("{add(2, 3) * 10}"); }"#,
     // recursion (classic fib)
     r#"import Core.Console;
 function fib(int n) -> int {
            if (n < 2) { return n; }
            return fib(n - 1) + fib(n - 2);
        }
-       function main() { Console.println("{fib(12)}"); }"#,
+       function main() -> void { Console.println("{fib(12)}"); }"#,
     // return in a branch vs fall-through
     r#"import Core.Console;
 function sign(int n) -> int { if (n < 0) { return -1; } return 1; }
-       function main() { Console.println("{sign(-9)}"); Console.println("{sign(4)}"); }"#,
+       function main() -> void { Console.println("{sign(-9)}"); Console.println("{sign(4)}"); }"#,
     // mutual recursion (forward reference: isEven calls isOdd declared later)
     r#"import Core.Console;
 function isEven(int n) -> bool { if (n == 0) { return true; } return isOdd(n - 1); }
        function isOdd(int n) -> bool { if (n == 0) { return false; } return isEven(n - 1); }
-       function main() { Console.println("{isEven(10)}"); Console.println("{isOdd(7)}"); }"#,
+       function main() -> void { Console.println("{isEven(10)}"); Console.println("{isOdd(7)}"); }"#,
     // nested calls
     r#"import Core.Console;
 function sq(int n) -> int { return n * n; }
-       function main() { Console.println("{sq(sq(2))}"); }"#,
+       function main() -> void { Console.println("{sq(sq(2))}"); }"#,
     // float-returning function in float arithmetic
     r#"import Core.Console;
 function half(float x) -> float { return x / 2.0; }
-       function main() { Console.println("{half(5.0) + 1.0}"); }"#,
+       function main() -> void { Console.println("{half(5.0) + 1.0}"); }"#,
     // void function (no return type) called for its side effect
     r#"import Core.Console;
-function greet(string who) { Console.println("hi, {who}"); }
-       function main() { greet("Phorge"); greet("world"); }"#,
+function greet(string who) -> void { Console.println("hi, {who}"); }
+       function main() -> void { greet("Phorge"); greet("world"); }"#,
     // call used as a statement (return value discarded)
     r#"import Core.Console;
 function noisy(int n) -> int { Console.println("got {n}"); return n; }
-       function main() { noisy(42); Console.println("done"); }"#,
+       function main() -> void { noisy(42); Console.println("done"); }"#,
 ];
 
 #[test]
@@ -750,11 +750,11 @@ enum Grade { Pass(int score), Fail(int score), }
                Fail(s) => "FAIL ({s})",
            };
        }
-       function main() { Console.println(describe(Pass(90))); Console.println(describe(Fail(40))); }"#,
+       function main() -> void { Console.println(describe(Pass(90))); Console.println(describe(Fail(40))); }"#,
     // bare (no-payload) variants, wildcard arm, `match` in var-decl-init position
     r#"import Core.Console;
 enum Color { Red, Green, Blue, }
-       function main() {
+       function main() -> void {
            Color c = Green;
            string name = match c { Red => "red", Green => "green", _ => "other", };
            Console.println(name);
@@ -764,21 +764,21 @@ enum Color { Red, Green, Blue, }
 function label(int n) -> string {
            return match n { 0 => "zero", 1 => "one", x => "many ({x})", };
        }
-       function main() { Console.println(label(0)); Console.println(label(1)); Console.println(label(7)); }"#,
+       function main() -> void { Console.println(label(0)); Console.println(label(1)); Console.println(label(7)); }"#,
     // bool literal patterns
     r#"import Core.Console;
 function yn(bool b) -> string { return match b { true => "Y", false => "N", }; }
-       function main() { Console.println(yn(true)); Console.println(yn(false)); }"#,
+       function main() -> void { Console.println(yn(true)); Console.println(yn(false)); }"#,
     // string literal patterns + wildcard
     r#"import Core.Console;
 function kind(string s) -> string {
            return match s { "a" => "first", "b" => "second", _ => "rest", };
        }
-       function main() { Console.println(kind("a")); Console.println(kind("b")); Console.println(kind("z")); }"#,
+       function main() -> void { Console.println(kind("a")); Console.println(kind("b")); Console.println(kind("z")); }"#,
     // enum value flows through a local and equality (`==` on enums) before matching
     r#"import Core.Console;
 enum Dir { N, S, }
-       function main() {
+       function main() -> void {
            Dir d = N;
            Console.println("{d == N}");
            string t = match d { N => "north", S => "south", };
@@ -788,7 +788,7 @@ enum Dir { N, S, }
     // stack (exercises the compiler's operand-height tracking for the scrutinee slot).
     r#"import Core.Console;
 function g(int n) -> int { return 1 + match n { 0 => 10, _ => 20 }; }
-       function main() { Console.println("{g(0)}"); Console.println("{g(5)}"); }"#,
+       function main() -> void { Console.println("{g(0)}"); Console.println("{g(5)}"); }"#,
     // nested `match` whose inner arm references the *outer* arm's binding (re-extraction across
     // two live scrutinees — the hardest binding/height case in P4a).
     r#"import Core.Console;
@@ -798,7 +798,7 @@ enum Pair { P(int a, int b), }
                P(a, b) => match a { 0 => "first=zero b={b}", _ => "a={a} b={b}", },
            };
        }
-       function main() { Console.println(f(P(0, 9))); Console.println(f(P(5, 2))); }"#,
+       function main() -> void { Console.println(f(P(0, 9))); Console.println(f(P(5, 2))); }"#,
 ];
 
 #[test]
@@ -814,37 +814,37 @@ const P4B_PROGRAMS: &[&str] = &[
     // promoted fields; field reads in interpolation
     r#"import Core.Console;
 class Point { constructor(public int x, public int y) {} }
-       function main() { Point p = Point(3, 4); Console.println("{p.x},{p.y}"); }"#,
+       function main() -> void { Point p = Point(3, 4); Console.println("{p.x},{p.y}"); }"#,
     // field read flowing through a typed local, then used as an arithmetic operand
     r#"import Core.Console;
 class Point { constructor(public int x, public int y) {} }
-       function main() { Point p = Point(3, 4); int s = p.x; Console.println("{s + p.y}"); }"#,
+       function main() -> void { Point p = Point(3, 4); int s = p.x; Console.println("{s + p.y}"); }"#,
     // constructor *body* runs for side effects (a `println` in the ctor), using a promoted param
     r#"import Core.Console;
 class Greeter { constructor(public string name) { Console.println("made {name}"); } }
-       function main() { Greeter g = Greeter("Ada"); Console.println("hello {g.name}"); }"#,
+       function main() -> void { Greeter g = Greeter("Ada"); Console.println("hello {g.name}"); }"#,
     // a no-constructor class builds an empty instance; structural instance equality
     r#"import Core.Console;
 class Empty {}
-       function main() { Empty a = Empty(); Empty b = Empty(); Console.println("{a == b}"); }"#,
+       function main() -> void { Empty a = Empty(); Empty b = Empty(); Console.println("{a == b}"); }"#,
     // instance equality is structural over fields (same class + equal fields)
     r#"import Core.Console;
 class P { constructor(public int x) {} }
-       function main() { P a = P(1); P b = P(1); P c = P(2); Console.println("{a == b} {a == c}"); }"#,
+       function main() -> void { P a = P(1); P b = P(1); P c = P(2); Console.println("{a == b} {a == c}"); }"#,
     // only *promoted* params become fields (the bare `seed` param is not a field)
     r#"import Core.Console;
 class Acc { constructor(public int total, int seed) {} }
-       function main() { Acc a = Acc(10, 99); Console.println("{a.total}"); }"#,
+       function main() -> void { Acc a = Acc(10, 99); Console.println("{a.total}"); }"#,
     // a field read as a call argument
     r#"import Core.Console;
 class Box { constructor(public int v) {} }
        function dbl(int n) -> int { return n * 2; }
-       function main() { Box b = Box(21); Console.println("{dbl(b.v)}"); }"#,
+       function main() -> void { Box b = Box(21); Console.println("{dbl(b.v)}"); }"#,
     // a bare `return;` in the ctor body is an early exit, but the promoted instance is *still*
     // returned (interpreter parity) — exercises the synthetic ctor's epilogue redirect.
     r#"import Core.Console;
 class C { constructor(public int x) { if (x > 0) { return; } Console.println("nonpos"); } }
-       function main() { C a = C(5); Console.println("{a.x}"); C b = C(0); Console.println("{b.x}"); }"#,
+       function main() -> void { C a = C(5); Console.println("{a.x}"); C b = C(0); Console.println("{b.x}"); }"#,
 ];
 
 #[test]
@@ -864,7 +864,7 @@ fn p4b_field_miss_faults_identically() {
     agree_err(
         r#"import Core.Console;
 class Box { public int tag; constructor(public int x) {} }
-           function main() { Box b = Box(5); Console.println("{b.tag}"); }"#,
+           function main() -> void { Box b = Box(5); Console.println("{b.tag}"); }"#,
     );
 }
 
@@ -876,26 +876,26 @@ const P4C_PROGRAMS: &[&str] = &[
     // a method reads a *bare* field (`total` resolves to `this.total`) + a param
     r#"import Core.Console;
 class Counter { constructor(private int total) {} function add(int n) -> int { return total + n; } }
-       function main() { Counter c = Counter(100); Console.println("{c.add(23)}"); }"#,
+       function main() -> void { Counter c = Counter(100); Console.println("{c.add(23)}"); }"#,
     // a method calls another method via `this`, and reads a field via `this.`
     r#"import Core.Console;
 class C { constructor(public int x) {}
            function dbl() -> int { return this.x + this.x; }
            function quad() -> int { int d = this.dbl(); return d + d; } }
-       function main() { C c = C(5); Console.println("{c.quad()}"); }"#,
+       function main() -> void { C c = C(5); Console.println("{c.quad()}"); }"#,
     // mixed bare-field + explicit-`this` field reads in one expression
     r#"import Core.Console;
 class P { constructor(public int x, public int y) {} function sum() -> int { return x + this.y; } }
-       function main() { P p = P(3, 4); Console.println("{p.sum()}"); }"#,
+       function main() -> void { P p = P(3, 4); Console.println("{p.sum()}"); }"#,
     // recursion *through* a method (`this.fact(n - 1)`)
     r#"import Core.Console;
 class F { constructor(public int base) {}
            function fact(int n) -> int { if (n <= 1) { return 1; } return n * this.fact(n - 1); } }
-       function main() { F f = F(0); Console.println("{f.fact(5)}"); }"#,
+       function main() -> void { F f = F(0); Console.println("{f.fact(5)}"); }"#,
     // a void (no-return) method invoked as a statement, twice (side effects + Unit result)
     r#"import Core.Console;
-class Logger { constructor(public string tag) {} function log() { Console.println("log {tag}"); } }
-       function main() { Logger l = Logger("X"); l.log(); l.log(); }"#,
+class Logger { constructor(public string tag) {} function log() -> void { Console.println("log {tag}"); } }
+       function main() -> void { Logger l = Logger("X"); l.log(); l.log(); }"#,
 ];
 
 #[test]
@@ -1039,7 +1039,7 @@ fn all_example_projects_match_between_backends() {
 fn namespaced_console_println_matches_between_backends() {
     agree(
         r#"import Core.Console;
-             function main() { Console.println("hello"); Console.println("{2 + 2}"); }"#,
+             function main() -> void { Console.println("hello"); Console.println("{2 + 2}"); }"#,
     );
 }
 
@@ -1053,27 +1053,27 @@ const WAVE4_PROGRAMS: &[&str] = &[
     // (A) field of an arbitrary instance local, used as an arithmetic operand
     r#"import Core.Console;
 class Point { constructor(public int x, public int y) {} }
-       function main() { Point p = Point(7, 4); Console.println("{p.x + 1}"); }"#,
+       function main() -> void { Point p = Point(7, 4); Console.println("{p.x + 1}"); }"#,
     // (B) method-call result used arithmetically
     r#"import Core.Console;
 class C { constructor(public int x) {} function get() -> int { return this.x; } }
-       function main() { C c = C(5); Console.println("{c.get() + 1}"); }"#,
+       function main() -> void { C c = C(5); Console.println("{c.get() + 1}"); }"#,
     // (C) nested field read `a.inner.x` — a class-typed field's field
     r#"import Core.Console;
 class Inner { constructor(public int x) {} }
        class Outer { constructor(public Inner inner) {} }
-       function main() { Outer a = Outer(Inner(10)); Console.println("{a.inner.x + 1}"); }"#,
+       function main() -> void { Outer a = Outer(Inner(10)); Console.println("{a.inner.x + 1}"); }"#,
     // (D) a class-typed enum payload, bound in `match` and read arithmetically
     r#"import Core.Console;
 class Point { constructor(public int x) {} }
        enum Opt { Some(Point p), Zero(int z), }
        function f(Opt o) -> int { return match o { Some(p) => p.x + 1, Zero(z) => z, }; }
-       function main() { Console.println("{f(Some(Point(41)))}"); Console.println("{f(Zero(0))}"); }"#,
+       function main() -> void { Console.println("{f(Some(Point(41)))}"); Console.println("{f(Zero(0))}"); }"#,
     // (E) a free function returning an instance, then a field of the result, used arithmetically
     r#"import Core.Console;
 class Point { constructor(public int x) {} }
        function mk() -> Point { return Point(3); }
-       function main() { Console.println("{mk().x + 1}"); }"#,
+       function main() -> void { Console.println("{mk().x + 1}"); }"#,
 ];
 
 #[test]
@@ -1091,21 +1091,21 @@ fn wave4_programs_match_between_backends() {
 const ERR_PROGRAMS: &[&str] = &[
     // integer overflow: negating i64::MIN
     r#"import Core.Console;
-function main() { int x = -9223372036854775807 - 1; Console.println("{-x}"); }"#,
+function main() -> void { int x = -9223372036854775807 - 1; Console.println("{-x}"); }"#,
     // integer overflow: i64::MAX + 1
     r#"import Core.Console;
-function main() { Console.println("{9223372036854775807 + 1}"); }"#,
+function main() -> void { Console.println("{9223372036854775807 + 1}"); }"#,
     // division by zero
     r#"import Core.Console;
-function main() { int z = 0; Console.println("{1 / z}"); }"#,
+function main() -> void { int z = 0; Console.println("{1 / z}"); }"#,
     // modulo by zero
     r#"import Core.Console;
-function main() { int z = 0; Console.println("{1 % z}"); }"#,
+function main() -> void { int z = 0; Console.println("{1 % z}"); }"#,
     // unbounded recursion: trips the shared `MAX_CALL_DEPTH` guard on both backends.
     // Before Task 0.3 the interpreter recursed on the native stack and SIGABRTed (exit 134)
     // while the VM cleanly reported "stack overflow" — a parity divergence in the fault path.
     r#"import Core.Console;
-function rec(int n) -> int { return rec(n) + 1; } function main() { Console.println("{rec(0)}"); }"#,
+function rec(int n) -> int { return rec(n) + 1; } function main() -> void { Console.println("{rec(0)}"); }"#,
 ];
 
 #[test]
@@ -1123,13 +1123,13 @@ fn error_parity_between_backends() {
 #[test]
 fn deep_nesting_faults_identically() {
     let parens = format!(
-        "import Core.Console; function main() {{ int x = {}1{}; Console.println(\"{{x}}\"); }}",
+        "import Core.Console; function main() -> void {{ int x = {}1{}; Console.println(\"{{x}}\"); }}",
         "(".repeat(5000),
         ")".repeat(5000),
     );
     agree_err(&parens);
     let unary = format!(
-        "import Core.Console; function main() {{ bool b = {}true; Console.println(\"{{b}}\"); }}",
+        "import Core.Console; function main() -> void {{ bool b = {}true; Console.println(\"{{b}}\"); }}",
         "!".repeat(5000),
     );
     agree_err(&unary);
@@ -1137,7 +1137,7 @@ fn deep_nesting_faults_identically() {
     // limit but produces a deeply left-leaning AST. The checker's depth guard (the gate both
     // backends share) must fault it identically rather than letting a walker overflow its stack.
     let chain = format!(
-        "import Core.Console; function main() {{ int x = 1{}; Console.println(\"{{x}}\"); }}",
+        "import Core.Console; function main() -> void {{ int x = 1{}; Console.println(\"{{x}}\"); }}",
         "+1".repeat(20_000),
     );
     agree_err(&chain);
@@ -1148,7 +1148,7 @@ fn s2_null_and_optional_bind_and_run_on_both_backends() {
     // Task 1 foundation: `null` is a real runtime value and a non-null `T` widens to `T?`.
     // (Observing the null *value* needs the unwrap operators from later S2 tasks.) The exact-output
     // assertion is deliberate: `agree` alone passes vacuously if both backends share a rejection.
-    let src = "import Core.Console; function main() { int? x = null; int? y = 5; Console.println(\"optionals ok\"); }";
+    let src = "import Core.Console; function main() -> void { int? x = null; int? y = 5; Console.println(\"optionals ok\"); }";
     assert_eq!(cmd_run(&with_pkg(src)).as_deref(), Ok("optionals ok\n"));
     agree(src); // run ≡ runvm
 }
@@ -1156,11 +1156,11 @@ fn s2_null_and_optional_bind_and_run_on_both_backends() {
 #[test]
 fn s2_coalesce_is_byte_identical() {
     // `??`: a null lhs falls through to the default; a present value is kept.
-    let src = "import Core.Console; function main() { int? x = null; Console.println(\"{x ?? 7}\"); int? y = 9; Console.println(\"{y ?? 0}\"); }";
+    let src = "import Core.Console; function main() -> void { int? x = null; Console.println(\"{x ?? 7}\"); int? y = 9; Console.println(\"{y ?? 0}\"); }";
     assert_eq!(cmd_run(&with_pkg(src)).as_deref(), Ok("7\n9\n"));
     agree(src);
     // Short-circuit: the default (a printing call) must not run when the lhs is non-null.
-    let sc = "import Core.Console; function side() -> int { Console.println(\"SIDE\"); return 0; } function main() { int? y = 9; Console.println(\"{y ?? side()}\"); }";
+    let sc = "import Core.Console; function side() -> int { Console.println(\"SIDE\"); return 0; } function main() -> void { int? y = 9; Console.println(\"{y ?? side()}\"); }";
     assert_eq!(cmd_run(&with_pkg(sc)).as_deref(), Ok("9\n"));
     agree(sc);
 }
@@ -1171,16 +1171,16 @@ fn s2_safe_access_is_byte_identical() {
     // the receiver is present. Field read and method call both go through `?.`.
     let cls = "class Box { constructor(private int v) {} function vOf() -> int { return v; } function plus(int n) -> int { return v + n; } }";
     let field = cls.to_string()
-        + "import Core.Console;  function main() { Box? a = null; Console.println(\"{(a?.v) ?? -1}\"); Box? b = Box(7); Console.println(\"{(b?.v) ?? -1}\"); }";
+        + "import Core.Console;  function main() -> void { Box? a = null; Console.println(\"{(a?.v) ?? -1}\"); Box? b = Box(7); Console.println(\"{(b?.v) ?? -1}\"); }";
     assert_eq!(cmd_run(&with_pkg(&field)).as_deref(), Ok("-1\n7\n"));
     agree(&field);
     let method = cls.to_string()
-        + "import Core.Console;  function main() { Box? a = null; Console.println(\"{(a?.vOf()) ?? -1}\"); Box? b = Box(9); Console.println(\"{(b?.vOf()) ?? -1}\"); }";
+        + "import Core.Console;  function main() -> void { Box? a = null; Console.println(\"{(a?.vOf()) ?? -1}\"); Box? b = Box(9); Console.println(\"{(b?.vOf()) ?? -1}\"); }";
     assert_eq!(cmd_run(&with_pkg(&method)).as_deref(), Ok("-1\n9\n"));
     agree(&method);
     // short-circuit: a safe call on a null receiver must NOT evaluate its arguments (no "SIDE").
     let sc = cls.to_string()
-        + "import Core.Console;  function side() -> int { Console.println(\"SIDE\"); return 0; } function main() { Box? a = null; Console.println(\"{(a?.plus(side())) ?? -1}\"); }";
+        + "import Core.Console;  function side() -> int { Console.println(\"SIDE\"); return 0; } function main() -> void { Box? a = null; Console.println(\"{(a?.plus(side())) ?? -1}\"); }";
     assert_eq!(cmd_run(&with_pkg(&sc)).as_deref(), Ok("-1\n"));
     agree(&sc);
 }
@@ -1190,17 +1190,17 @@ fn s2_if_let_is_byte_identical() {
     // `if (var x = opt)`: the then-branch runs (with `x` bound to the non-null inner) only when the
     // optional is present; otherwise the else-branch runs.
     let present =
-        "import Core.Console; function main() { int? o = 5; if (var x = o) { Console.println(\"got {x}\"); } else { Console.println(\"none\"); } }";
+        "import Core.Console; function main() -> void { int? o = 5; if (var x = o) { Console.println(\"got {x}\"); } else { Console.println(\"none\"); } }";
     assert_eq!(cmd_run(&with_pkg(present)).as_deref(), Ok("got 5\n"));
     agree(present);
     let absent =
-        "import Core.Console; function main() { int? o = null; if (var x = o) { Console.println(\"got {x}\"); } else { Console.println(\"none\"); } }";
+        "import Core.Console; function main() -> void { int? o = null; if (var x = o) { Console.println(\"got {x}\"); } else { Console.println(\"none\"); } }";
     assert_eq!(cmd_run(&with_pkg(absent)).as_deref(), Ok("none\n"));
     agree(absent);
     // The smart-cast inner is a real arithmetic operand: `x + 1` must specialize identically on both
     // backends (guards the run↔runvm operand-type gap — see the cty-tracks-operand-types invariant).
     let arith =
-        "import Core.Console; function main() { int? o = 41; if (var x = o) { Console.println(\"{x + 1}\"); } else { Console.println(\"none\"); } }";
+        "import Core.Console; function main() -> void { int? o = 41; if (var x = o) { Console.println(\"{x + 1}\"); } else { Console.println(\"none\"); } }";
     assert_eq!(cmd_run(&with_pkg(arith)).as_deref(), Ok("42\n"));
     agree(arith);
 }
@@ -1208,13 +1208,14 @@ fn s2_if_let_is_byte_identical() {
 #[test]
 fn s2_force_unwrap_is_byte_identical() {
     // `opt!` on a present optional yields the inner value, identically on both backends.
-    let present = "import Core.Console; function main() { int? o = 5; Console.println(\"{o!}\"); }";
+    let present =
+        "import Core.Console; function main() -> void { int? o = 5; Console.println(\"{o!}\"); }";
     assert_eq!(cmd_run(&with_pkg(present)).as_deref(), Ok("5\n"));
     agree(present);
     // The unwrapped value is a real arithmetic operand: `o! + 1` must specialize identically
     // (guards the run↔runvm operand-type gap — see the cty-tracks-operand-types invariant).
     let arith =
-        "import Core.Console; function main() { int? o = 41; Console.println(\"{o! + 1}\"); }";
+        "import Core.Console; function main() -> void { int? o = 41; Console.println(\"{o! + 1}\"); }";
     assert_eq!(cmd_run(&with_pkg(arith)).as_deref(), Ok("42\n"));
     agree(arith);
 }
@@ -1222,7 +1223,7 @@ fn s2_force_unwrap_is_byte_identical() {
 #[test]
 fn s2_force_unwrap_null_faults_identically() {
     // `opt!` on null is a clean fault with the SAME FaultKind on both backends (no crash, no UB).
-    let src = "function main() { int? o = null; int x = o!; }";
+    let src = "function main() -> void { int? o = null; int x = o!; }";
     agree_err(src); // FaultKind::ForceUnwrap on both
 }
 
@@ -1232,23 +1233,23 @@ fn s2_multiple_null_ops_in_one_expr_are_byte_identical() {
     // that slot is the receiver's frame position (`height-1`), so live transients from an earlier
     // segment must not shift it. The interpreter is the oracle; the VM must match (not fault).
     let two_coalesce =
-        "import Core.Console; function main() { int? a = 5; int? b = null; Console.println(\"{a ?? -1} {b ?? -1}\"); }";
+        "import Core.Console; function main() -> void { int? a = 5; int? b = null; Console.println(\"{a ?? -1} {b ?? -1}\"); }";
     assert_eq!(cmd_run(&with_pkg(two_coalesce)).as_deref(), Ok("5 -1\n"));
     agree(two_coalesce);
 
-    let two_force = "import Core.Console; function main() { int? a = 1; int? b = 2; Console.println(\"{a!} {b!}\"); }";
+    let two_force = "import Core.Console; function main() -> void { int? a = 1; int? b = 2; Console.println(\"{a!} {b!}\"); }";
     assert_eq!(cmd_run(&with_pkg(two_force)).as_deref(), Ok("1 2\n"));
     agree(two_force);
 
     let cls = "class Box { constructor(private int v) {} function get() -> int { return v; } }";
     let two_safe = cls.to_string()
-        + "import Core.Console;  function main() { Box? a = Box(7); Box? b = null; Console.println(\"{(a?.get()) ?? -1} {(b?.get()) ?? -1}\"); }";
+        + "import Core.Console;  function main() -> void { Box? a = Box(7); Box? b = null; Console.println(\"{(a?.get()) ?? -1} {(b?.get()) ?? -1}\"); }";
     assert_eq!(cmd_run(&with_pkg(&two_safe)).as_deref(), Ok("7 -1\n"));
     agree(&two_safe);
 
     // Mixed + nested: a coalesce whose default is itself a safe-access-coalesce, beside a force.
     let mixed = cls.to_string()
-        + "import Core.Console;  function main() { Box? a = null; int? b = 9; Console.println(\"{(a?.get()) ?? (b ?? 0)} {b!}\"); }";
+        + "import Core.Console;  function main() -> void { Box? a = null; int? b = 9; Console.println(\"{(a?.get()) ?? (b ?? 0)} {b!}\"); }";
     assert_eq!(cmd_run(&with_pkg(&mixed)).as_deref(), Ok("9 9\n"));
     agree(&mixed);
 }
@@ -1258,7 +1259,7 @@ fn s2_match_over_optional_is_byte_identical() {
     // `match opt { null => …, v => … }`: the null arm fires on null, the binding arm narrows `v` to
     // the non-null inner `int` (used here as an arithmetic operand — guards the operand-type gap).
     let src = "import Core.Console; function f(int? o) -> int { return match o { null => -1, v => v + 1 }; } \
-               function main() { int? a = null; int? b = 7; Console.println(\"{f(a)}\"); Console.println(\"{f(b)}\"); }";
+               function main() -> void { int? a = null; int? b = 7; Console.println(\"{f(a)}\"); Console.println(\"{f(b)}\"); }";
     assert_eq!(cmd_run(&with_pkg(src)).as_deref(), Ok("-1\n8\n"));
     agree(src);
 }
@@ -1268,34 +1269,35 @@ fn s2_match_over_optional_is_byte_identical() {
 #[test]
 fn lambdas_agree() {
     // Basic lambda var call
-    agree("import Core.Console; function main() { var d = fn(int x) => x*2; Console.println(\"{d(5)}\"); }");
+    agree("import Core.Console; function main() -> void { var d = fn(int x) => x*2; Console.println(\"{d(5)}\"); }");
     // Lambda capturing TWO enclosing vars (slot-ordering trigger — invariant #8)
-    agree("import Core.Console; function main() { var a=10; var b=100; var f=fn(int x)=>x+a+b; Console.println(\"{f(1)}\"); }");
+    agree("import Core.Console; function main() -> void { var a=10; var b=100; var f=fn(int x)=>x+a+b; Console.println(\"{f(1)}\"); }");
     // Higher-order user function (lambda passed as argument)
-    agree("import Core.Console; function twice(int x,(int)->int f)->int{return f(f(x));} function main(){ Console.println(\"{twice(3, fn(int n)=>n+1)}\"); }");
+    agree("import Core.Console; function twice(int x,(int)->int f)->int{return f(f(x));} function main()-> void { Console.println(\"{twice(3, fn(int n)=>n+1)}\"); }");
     // Lambda call inside string interpolation (height-sensitive — F13)
-    agree("import Core.Console; function main(){ var inc=fn(int x)=>x+1; Console.println(\"{inc(1)} {inc(2)}\"); }");
+    agree("import Core.Console; function main()-> void { var inc=fn(int x)=>x+1; Console.println(\"{inc(1)} {inc(2)}\"); }");
     // Lambda call inside a match arm (height-sensitive — F13)
-    agree("import Core.Console; enum E{A(),B()} function pick(E e,(int)->int f)->int{ return match e { A()=>f(1), B()=>f(2) }; } function main(){ Console.println(\"{pick(A(), fn(int x)=>x*10)}\"); }");
+    agree("import Core.Console; enum E{A(),B()} function pick(E e,(int)->int f)->int{ return match e { A()=>f(1), B()=>f(2) }; } function main()-> void { Console.println(\"{pick(A(), fn(int x)=>x*10)}\"); }");
     // Zero-param lambda
-    agree("import Core.Console; function main(){ var greet=fn()=>42; Console.println(\"{greet()}\"); }");
+    agree("import Core.Console; function main()-> void { var greet=fn()=>42; Console.println(\"{greet()}\"); }");
 }
 
 #[test]
 fn lambda_call_errors_agree() {
     // Arity mismatch: lambda expects 1 arg, called with 2
-    agree_err("import Core.Console; function main(){ var f=fn(int x)=>x; Console.println(\"{f(1,2)}\"); }");
+    agree_err("import Core.Console; function main()-> void { var f=fn(int x)=>x; Console.println(\"{f(1,2)}\"); }");
 }
 
 #[test]
 fn statement_body_lambda_agrees() {
-    agree("import Core.Console; function main(){ var base=100; var f = fn(int x) -> int { var y = x*2; return y + base; }; Console.println(\"{f(3)}\"); }");
+    agree("import Core.Console; function main()-> void { var base=100; var f = fn(int x) -> int { var y = x*2; return y + base; }; Console.println(\"{f(3)}\"); }");
     // 106
 }
 
 #[test]
 fn statement_body_lambda_needs_return_type() {
-    let errs = check_errs("package Main; function main(){ var f = fn(int x) { return x; }; }");
+    let errs =
+        check_errs("package Main; function main()-> void { var f = fn(int x) { return x; }; }");
     assert!(
         errs.iter().any(|e| e.message.contains("explicit `-> T`")),
         "{errs:?}"
@@ -1304,7 +1306,7 @@ fn statement_body_lambda_needs_return_type() {
 
 #[test]
 fn transpiles_statement_lambda_with_use_clause() {
-    let php = transpile_ok("package Main; import Core.Console; function main(){ var base=100; var f = fn(int x) -> int { return x + base; }; Console.println(\"{f(3)}\"); }");
+    let php = transpile_ok("package Main; import Core.Console; function main()-> void { var base=100; var f = fn(int x) -> int { return x + base; }; Console.println(\"{f(3)}\"); }");
     assert!(
         php.contains("function($x) use ($base)") && php.contains("return $x + $base"),
         "{php}"
@@ -1314,47 +1316,47 @@ fn transpiles_statement_lambda_with_use_clause() {
 #[test]
 fn pipe_agrees() {
     // `5 |> dbl |> inc` == inc(dbl(5)) == 11 (left-associative)
-    agree("import Core.Console; function dbl(int x)->int{return x*2;} function inc(int x)->int{return x+1;} function main(){ Console.println(\"{5 |> dbl |> inc}\"); }");
+    agree("import Core.Console; function dbl(int x)->int{return x*2;} function inc(int x)->int{return x+1;} function main()-> void { Console.println(\"{5 |> dbl |> inc}\"); }");
     // inline lambda on the right: `3 |> fn(int v) => v + 10` == 13
-    agree("import Core.Console; function main(){ var add=fn(int a,int b)->int{return a+b;}; Console.println(\"{3 |> fn(int v) => v + 10}\"); }");
+    agree("import Core.Console; function main()-> void { var add=fn(int a,int b)->int{return a+b;}; Console.println(\"{3 |> fn(int v) => v + 10}\"); }");
     // precedence: `1 + 2 |> dbl` == dbl(1+2) == 6
-    agree("import Core.Console; function dbl(int x)->int{return x*2;} function main(){ Console.println(\"{1 + 2 |> dbl}\"); }");
+    agree("import Core.Console; function dbl(int x)->int{return x*2;} function main()-> void { Console.println(\"{1 + 2 |> dbl}\"); }");
 }
 
 #[test]
 fn mutation_reassign_agrees() {
     // M-mut.1: mutable locals + reassignment, byte-identical on both backends.
     // Plain reassignment.
-    agree("import Core.Console; function main(){ mutable int x = 1; x = 2; Console.println(\"{x}\"); }");
+    agree("import Core.Console; function main()-> void { mutable int x = 1; x = 2; Console.println(\"{x}\"); }");
     // Reassign from the variable's own value.
-    agree("import Core.Console; function main(){ mutable int x = 1; x = x + 5; Console.println(\"{x}\"); }");
+    agree("import Core.Console; function main()-> void { mutable int x = 1; x = x + 5; Console.println(\"{x}\"); }");
     // `mutable var` (inferred type) reassignment.
-    agree("import Core.Console; function main(){ mutable var x = 10; x = x * 3; Console.println(\"{x}\"); }");
+    agree("import Core.Console; function main()-> void { mutable var x = 10; x = x * 3; Console.println(\"{x}\"); }");
     // Two-binding SCALAR case (F13): a scalar copies, so reassigning `b` must not change `a`.
-    agree("import Core.Console; function main(){ int a = 10; mutable int b = a; b = 99; Console.println(\"{a} {b}\"); }");
+    agree("import Core.Console; function main()-> void { int a = 10; mutable int b = a; b = 99; Console.println(\"{a} {b}\"); }");
     // Reassignment inside a loop body (accumulator).
-    agree("import Core.Console; function main(){ mutable int sum = 0; for (int n in 1..=3) { sum = sum + n; } Console.println(\"{sum}\"); }");
+    agree("import Core.Console; function main()-> void { mutable int sum = 0; for (int n in 1..=3) { sum = sum + n; } Console.println(\"{sum}\"); }");
 }
 
 #[test]
 fn mutation_compound_assign_agrees() {
     // M-mut.2: compound-assign + ++/-- + ??= desugar to `Stmt::Assign`, byte-identical on both.
     // The five op= forms as accumulators.
-    agree("import Core.Console; function main(){ mutable int x = 10; x += 5; x -= 3; x *= 2; Console.println(\"{x}\"); }"); // 24
-                                                                                                                            // Integer `/=` routes through the intdiv kernel (F7): 24 / 5 = 4 (truncating), NOT float 4.8.
-    agree("import Core.Console; function main(){ mutable int x = 24; x /= 5; Console.println(\"{x}\"); }"); // 4
-                                                                                                            // `%=` with a NEGATIVE dividend — PHP's sign-follows-dividend (spec §8 #3): -7 % 3 = -1.
-    agree("import Core.Console; function main(){ mutable int x = 0 - 7; x %= 3; Console.println(\"{x}\"); }"); // -1
-                                                                                                               // `%=` positive dividend, negative divisor: 7 % -3 = 1 (sign follows dividend).
-    agree("import Core.Console; function main(){ mutable int x = 7; x %= 0 - 3; Console.println(\"{x}\"); }"); // 1
-                                                                                                               // `??=` on an optional: assigns only when null.
-    agree("import Core.Console; function main(){ mutable int? a = null; a ??= 7; mutable int? b = 3; b ??= 9; Console.println(\"{a ?? -1} {b ?? -1}\"); }"); // 7 3
-                                                                                                                                                             // Statement `++`/`--` counter.
-    agree("import Core.Console; function main(){ mutable int n = 0; n++; n++; n++; n--; Console.println(\"{n}\"); }"); // 2
-                                                                                                                       // Two-binding SCALAR observe (F13): a compound op on `b` must not touch `a` (value-copy).
-    agree("import Core.Console; function main(){ int a = 5; mutable int b = a; b += 100; Console.println(\"{a} {b}\"); }"); // 5 105
-                                                                                                                            // Compound-assign inside a loop accumulator.
-    agree("import Core.Console; function main(){ mutable int sum = 0; for (int i in 1..=5) { sum += i; } Console.println(\"{sum}\"); }");
+    agree("import Core.Console; function main()-> void { mutable int x = 10; x += 5; x -= 3; x *= 2; Console.println(\"{x}\"); }"); // 24
+                                                                                                                                    // Integer `/=` routes through the intdiv kernel (F7): 24 / 5 = 4 (truncating), NOT float 4.8.
+    agree("import Core.Console; function main()-> void { mutable int x = 24; x /= 5; Console.println(\"{x}\"); }"); // 4
+                                                                                                                    // `%=` with a NEGATIVE dividend — PHP's sign-follows-dividend (spec §8 #3): -7 % 3 = -1.
+    agree("import Core.Console; function main()-> void { mutable int x = 0 - 7; x %= 3; Console.println(\"{x}\"); }"); // -1
+                                                                                                                       // `%=` positive dividend, negative divisor: 7 % -3 = 1 (sign follows dividend).
+    agree("import Core.Console; function main()-> void { mutable int x = 7; x %= 0 - 3; Console.println(\"{x}\"); }"); // 1
+                                                                                                                       // `??=` on an optional: assigns only when null.
+    agree("import Core.Console; function main()-> void { mutable int? a = null; a ??= 7; mutable int? b = 3; b ??= 9; Console.println(\"{a ?? -1} {b ?? -1}\"); }"); // 7 3
+                                                                                                                                                                     // Statement `++`/`--` counter.
+    agree("import Core.Console; function main()-> void { mutable int n = 0; n++; n++; n++; n--; Console.println(\"{n}\"); }"); // 2
+                                                                                                                               // Two-binding SCALAR observe (F13): a compound op on `b` must not touch `a` (value-copy).
+    agree("import Core.Console; function main()-> void { int a = 5; mutable int b = a; b += 100; Console.println(\"{a} {b}\"); }"); // 5 105
+                                                                                                                                    // Compound-assign inside a loop accumulator.
+    agree("import Core.Console; function main()-> void { mutable int sum = 0; for (int i in 1..=5) { sum += i; } Console.println(\"{sum}\"); }");
     // 15
 }
 
@@ -1362,17 +1364,17 @@ fn mutation_compound_assign_agrees() {
 fn mutation_element_set_agrees() {
     // M-mut.5: value-type element set xs[i]=e / m[k]=e — byte-identical on both backends.
     // List element set.
-    agree("import Core.Console; function main(){ mutable List<int> xs = [1, 2, 3]; xs[1] = 20; Console.println(\"{xs[0]} {xs[1]} {xs[2]}\"); }"); // 1 20 3
-                                                                                                                                                  // Compound element set rides the M-mut.2 desugar.
-    agree("import Core.Console; function main(){ mutable List<int> xs = [1, 2, 3]; xs[0] += 100; xs[2] *= 5; Console.println(\"{xs[0]} {xs[2]}\"); }"); // 101 15
-                                                                                                                                                        // COPY-ON-WRITE value semantics (the P0 catcher, F13): mutating `ys` must not touch `xs`.
-    agree("import Core.Console; function main(){ mutable List<int> xs = [1, 2]; mutable List<int> ys = xs; ys[0] = 999; Console.println(\"{xs[0]} {ys[0]}\"); }"); // 1 999
-                                                                                                                                                                   // Map update (existing key) + insert (new key), insertion-ordered.
-    agree("import Core.Console; function main(){ mutable Map<string, int> m = [\"a\" => 1]; m[\"a\"] = 10; m[\"b\"] = 20; Console.println(\"{m[\"a\"]} {m[\"b\"]}\"); }"); // 10 20
-                                                                                                                                                                           // Map COW: a copy is independent.
-    agree("import Core.Console; function main(){ mutable Map<string, int> m = [\"a\" => 1]; mutable Map<string, int> n = m; n[\"a\"] = 99; Console.println(\"{m[\"a\"]} {n[\"a\"]}\"); }"); // 1 99
-                                                                                                                                                                                            // Set element in a loop (accumulate into a list).
-    agree("import Core.Console; function main(){ mutable List<int> xs = [0, 0, 0]; for (mutable int i = 0; i < 3; i++) { xs[i] = i * i; } Console.println(\"{xs[0]} {xs[1]} {xs[2]}\"); }");
+    agree("import Core.Console; function main()-> void { mutable List<int> xs = [1, 2, 3]; xs[1] = 20; Console.println(\"{xs[0]} {xs[1]} {xs[2]}\"); }"); // 1 20 3
+                                                                                                                                                          // Compound element set rides the M-mut.2 desugar.
+    agree("import Core.Console; function main()-> void { mutable List<int> xs = [1, 2, 3]; xs[0] += 100; xs[2] *= 5; Console.println(\"{xs[0]} {xs[2]}\"); }"); // 101 15
+                                                                                                                                                                // COPY-ON-WRITE value semantics (the P0 catcher, F13): mutating `ys` must not touch `xs`.
+    agree("import Core.Console; function main()-> void { mutable List<int> xs = [1, 2]; mutable List<int> ys = xs; ys[0] = 999; Console.println(\"{xs[0]} {ys[0]}\"); }"); // 1 999
+                                                                                                                                                                           // Map update (existing key) + insert (new key), insertion-ordered.
+    agree("import Core.Console; function main()-> void { mutable Map<string, int> m = [\"a\" => 1]; m[\"a\"] = 10; m[\"b\"] = 20; Console.println(\"{m[\"a\"]} {m[\"b\"]}\"); }"); // 10 20
+                                                                                                                                                                                   // Map COW: a copy is independent.
+    agree("import Core.Console; function main()-> void { mutable Map<string, int> m = [\"a\" => 1]; mutable Map<string, int> n = m; n[\"a\"] = 99; Console.println(\"{m[\"a\"]} {n[\"a\"]}\"); }"); // 1 99
+                                                                                                                                                                                                    // Set element in a loop (accumulate into a list).
+    agree("import Core.Console; function main()-> void { mutable List<int> xs = [0, 0, 0]; for (mutable int i = 0; i < 3; i++) { xs[i] = i * i; } Console.println(\"{xs[0]} {xs[1]} {xs[2]}\"); }");
     // 0 1 4
 }
 
@@ -1380,7 +1382,7 @@ fn mutation_element_set_agrees() {
 fn mutation_element_set_oob_faults_agree() {
     // M-mut.5: an out-of-range list element SET faults identically on both Rust backends
     // (FaultKind::IndexOob). NOT PHP-gated — PHP would *extend* the array instead (KNOWN_ISSUES).
-    agree_err("import Core.Console; function main(){ mutable List<int> xs = [1, 2]; xs[5] = 9; Console.println(\"unreached\"); }");
+    agree_err("import Core.Console; function main()-> void { mutable List<int> xs = [1, 2]; xs[5] = 9; Console.println(\"unreached\"); }");
 }
 
 #[test]
@@ -1388,16 +1390,16 @@ fn mutation_instance_field_set_agrees() {
     // M-mut.6: shared-mutable instance field set `o.f = e` — handle semantics, byte-identical on
     // run/runvm + real PHP (`agree` is the 3-way oracle).
     // Basic field set + read-back.
-    agree("import Core.Console; class P { constructor(public mutable int x) {} } function main(){ P p = P(1); p.x = 42; Console.println(\"{p.x}\"); }"); // 42
-                                                                                                                                                         // HANDLE semantics (the P0 catcher, F13): mutate via one binding, observe via the alias — BOTH
-                                                                                                                                                         // see it (the opposite of value-type COW). This is the value/handle slip a 2-binding test catches.
-    agree("import Core.Console; class P { constructor(public mutable int x) {} } function main(){ P p = P(1); P q = p; p.x = 99; Console.println(\"{p.x} {q.x}\"); }"); // 99 99
-                                                                                                                                                                        // `this.f = e` inside a method, visible through the original binding across calls.
-    agree("import Core.Console; class C { constructor(public mutable int n) {} function bump() -> int { this.n = this.n + 1; return this.n; } } function main(){ C c = C(10); c.bump(); c.bump(); Console.println(\"{c.n}\"); }"); // 12
-                                                                                                                                                                                                                                   // A declared (non-promoted) `mutable` field initialized in the ctor body via `this.f = e`.
-    agree("import Core.Console; class B { mutable int v; constructor(int seed) { this.v = seed * 2; } function get() -> int { return this.v; } } function main(){ B b = B(5); b.v = b.v + 1; Console.println(\"{b.get()}\"); }"); // 11
-                                                                                                                                                                                                                                  // Field set on an instance reached through another field (`a.b.c = e`) — handle semantics all the way.
-    agree("import Core.Console; class Inner { constructor(public mutable int v) {} } class Outer { constructor(public Inner inner) {} } function main(){ Outer o = Outer(Inner(1)); o.inner.v = 7; Console.println(\"{o.inner.v}\"); }");
+    agree("import Core.Console; class P { constructor(public mutable int x) {} } function main()-> void { P p = P(1); p.x = 42; Console.println(\"{p.x}\"); }"); // 42
+                                                                                                                                                                 // HANDLE semantics (the P0 catcher, F13): mutate via one binding, observe via the alias — BOTH
+                                                                                                                                                                 // see it (the opposite of value-type COW). This is the value/handle slip a 2-binding test catches.
+    agree("import Core.Console; class P { constructor(public mutable int x) {} } function main()-> void { P p = P(1); P q = p; p.x = 99; Console.println(\"{p.x} {q.x}\"); }"); // 99 99
+                                                                                                                                                                                // `this.f = e` inside a method, visible through the original binding across calls.
+    agree("import Core.Console; class C { constructor(public mutable int n) {} function bump() -> int { this.n = this.n + 1; return this.n; } } function main()-> void { C c = C(10); c.bump(); c.bump(); Console.println(\"{c.n}\"); }"); // 12
+                                                                                                                                                                                                                                           // A declared (non-promoted) `mutable` field initialized in the ctor body via `this.f = e`.
+    agree("import Core.Console; class B { mutable int v; constructor(int seed) { this.v = seed * 2; } function get() -> int { return this.v; } } function main()-> void { B b = B(5); b.v = b.v + 1; Console.println(\"{b.get()}\"); }"); // 11
+                                                                                                                                                                                                                                          // Field set on an instance reached through another field (`a.b.c = e`) — handle semantics all the way.
+    agree("import Core.Console; class Inner { constructor(public mutable int v) {} } class Outer { constructor(public Inner inner) {} } function main()-> void { Outer o = Outer(Inner(1)); o.inner.v = 7; Console.println(\"{o.inner.v}\"); }");
     // 7
 }
 
@@ -1406,11 +1408,11 @@ fn mutation_static_field_agrees() {
     // M-mut.7: program-lifetime `static mutable` class fields, read/written as `ClassName.field` —
     // byte-identical run/runvm + real PHP. A static is shared across all instances (one program-level
     // slot), so a counter incremented in the constructor accumulates across constructions.
-    agree("import Core.Console; class Counter { static mutable int total = 0; constructor() { Counter.total = Counter.total + 1; } } function main(){ Counter(); Counter(); Counter(); Console.println(\"{Counter.total}\"); }"); // 3
-                                                                                                                                                                                                                                  // Direct read/write from a free function; an immutable static string too.
-    agree("import Core.Console; class Cfg { static mutable int n = 10; static string name = \"cfg\"; } function main(){ Cfg.n = Cfg.n + 5; Console.println(\"{Cfg.name}={Cfg.n}\"); }"); // cfg=15
-                                                                                                                                                                                         // A static read used as an arithmetic operand inside a method (the CTy-operand path).
-    agree("import Core.Console; class C { static mutable int k = 1; function step() -> int { C.k = C.k * 2; return C.k + 1; } } function main(){ C c = C(); Console.println(\"{c.step()} {c.step()}\"); }");
+    agree("import Core.Console; class Counter { static mutable int total = 0; constructor() { Counter.total = Counter.total + 1; } } function main()-> void { Counter(); Counter(); Counter(); Console.println(\"{Counter.total}\"); }"); // 3
+                                                                                                                                                                                                                                          // Direct read/write from a free function; an immutable static string too.
+    agree("import Core.Console; class Cfg { static mutable int n = 10; static string name = \"cfg\"; } function main()-> void { Cfg.n = Cfg.n + 5; Console.println(\"{Cfg.name}={Cfg.n}\"); }"); // cfg=15
+                                                                                                                                                                                                 // A static read used as an arithmetic operand inside a method (the CTy-operand path).
+    agree("import Core.Console; class C { static mutable int k = 1; function step() -> int { C.k = C.k * 2; return C.k + 1; } } function main()-> void { C c = C(); Console.println(\"{c.step()} {c.step()}\"); }");
     // 3 5
 }
 
@@ -1420,27 +1422,27 @@ fn mutation_property_hooks_agrees() {
     // set intercepts a write (typically mutating a backing `mutable` field). Byte-identical on
     // run/runvm + real PHP (the synthetic-method VM lowering ≡ the PHP 8.4 property hook).
     // A read-only computed hook reads a backing field.
-    agree("import Core.Console; class C { constructor(public mutable int raw) {} int doubled { get => this.raw * 2; } } function main(){ C c = C(21); Console.println(\"{c.doubled}\"); }"); // 42
-                                                                                                                                                                                             // A get used as an arithmetic operand — the CTy-operand path (`o.hook + 1` must specialize on the VM).
-    agree("import Core.Console; class C { constructor(public mutable int raw) {} int doubled { get => this.raw * 2; } } function main(){ C c = C(21); Console.println(\"{c.doubled + 1}\"); }"); // 43
-                                                                                                                                                                                                 // A set writes a backing field; observe through both the hook (get) and the raw field.
-    agree("import Core.Console; class C { constructor(public mutable int raw) {} int half { get => this.raw; set(int v) { this.raw = v / 2; } } } function main(){ C c = C(0); c.half = 10; Console.println(\"{c.raw} {c.half}\"); }"); // 5 5
-                                                                                                                                                                                                                                        // HANDLE semantics through a hook: set via one binding, observe via the alias.
-    agree("import Core.Console; class C { constructor(public mutable int raw) {} int v { get => this.raw; set(int n) { this.raw = n; } } } function main(){ C c = C(1); C d = c; c.v = 99; Console.println(\"{d.v}\"); }"); // 99
-                                                                                                                                                                                                                            // A float computed property with exactly-representable values (Celsius↔Fahrenheit round-trip).
-    agree("import Core.Console; class Temp { constructor(public mutable float celsius) {} float fahrenheit { get => this.celsius * 9.0 / 5.0 + 32.0; set(float f) { this.celsius = (f - 32.0) * 5.0 / 9.0; } } } function main(){ Temp t = Temp(100.0); Console.println(\"{t.fahrenheit}\"); t.fahrenheit = 32.0; Console.println(\"{t.celsius}\"); }");
+    agree("import Core.Console; class C { constructor(public mutable int raw) {} int doubled { get => this.raw * 2; } } function main()-> void { C c = C(21); Console.println(\"{c.doubled}\"); }"); // 42
+                                                                                                                                                                                                     // A get used as an arithmetic operand — the CTy-operand path (`o.hook + 1` must specialize on the VM).
+    agree("import Core.Console; class C { constructor(public mutable int raw) {} int doubled { get => this.raw * 2; } } function main()-> void { C c = C(21); Console.println(\"{c.doubled + 1}\"); }"); // 43
+                                                                                                                                                                                                         // A set writes a backing field; observe through both the hook (get) and the raw field.
+    agree("import Core.Console; class C { constructor(public mutable int raw) {} int half { get => this.raw; set(int v) { this.raw = v / 2; } } } function main()-> void { C c = C(0); c.half = 10; Console.println(\"{c.raw} {c.half}\"); }"); // 5 5
+                                                                                                                                                                                                                                                // HANDLE semantics through a hook: set via one binding, observe via the alias.
+    agree("import Core.Console; class C { constructor(public mutable int raw) {} int v { get => this.raw; set(int n) { this.raw = n; } } } function main()-> void { C c = C(1); C d = c; c.v = 99; Console.println(\"{d.v}\"); }"); // 99
+                                                                                                                                                                                                                                    // A float computed property with exactly-representable values (Celsius↔Fahrenheit round-trip).
+    agree("import Core.Console; class Temp { constructor(public mutable float celsius) {} float fahrenheit { get => this.celsius * 9.0 / 5.0 + 32.0; set(float f) { this.celsius = (f - 32.0) * 5.0 / 9.0; } } } function main()-> void { Temp t = Temp(100.0); Console.println(\"{t.fahrenheit}\"); t.fahrenheit = 32.0; Console.println(\"{t.celsius}\"); }");
     // 212 then 0
 }
 
 #[test]
 fn mutation_clone_with_agrees() {
     // M-mut.4a: `obj with { f = e }` — fresh instance, source unchanged, byte-identical on both.
-    agree("import Core.Console; class P { constructor(public int x, public int y) {} } function main(){ P p = P(1, 2); P q = p with { x = 9 }; Console.println(\"{p.x} {p.y} {q.x} {q.y}\"); }"); // 1 2 9 2
-    agree("import Core.Console; class P { constructor(public int x, public int y) {} } function main(){ P p = P(1, 2); P q = p with { x = 7, y = 8 }; Console.println(\"{q.x} {q.y}\"); }"); // 7 8
-                                                                                                                                                                                             // A method works on the cloned instance (the clone is a real instance; the ctor was not re-run).
-    agree("import Core.Console; class P { constructor(public int x, public int y) {} function sum() -> int { return this.x + this.y; } } function main(){ P p = P(1, 2); P q = p with { x = 10 }; Console.println(\"{q.sum()}\"); }"); // 12
-                                                                                                                                                                                                                                       // The override value may reference the source's own fields.
-    agree("import Core.Console; class P { constructor(public int x, public int y) {} } function main(){ P p = P(3, 4); P q = p with { x = p.x + p.y }; Console.println(\"{q.x} {q.y}\"); }");
+    agree("import Core.Console; class P { constructor(public int x, public int y) {} } function main()-> void { P p = P(1, 2); P q = p with { x = 9 }; Console.println(\"{p.x} {p.y} {q.x} {q.y}\"); }"); // 1 2 9 2
+    agree("import Core.Console; class P { constructor(public int x, public int y) {} } function main()-> void { P p = P(1, 2); P q = p with { x = 7, y = 8 }; Console.println(\"{q.x} {q.y}\"); }"); // 7 8
+                                                                                                                                                                                                     // A method works on the cloned instance (the clone is a real instance; the ctor was not re-run).
+    agree("import Core.Console; class P { constructor(public int x, public int y) {} function sum() -> int { return this.x + this.y; } } function main()-> void { P p = P(1, 2); P q = p with { x = 10 }; Console.println(\"{q.sum()}\"); }"); // 12
+                                                                                                                                                                                                                                               // The override value may reference the source's own fields.
+    agree("import Core.Console; class P { constructor(public int x, public int y) {} } function main()-> void { P p = P(3, 4); P q = p with { x = p.x + p.y }; Console.println(\"{q.x} {q.y}\"); }");
     // 7 4
 }
 
@@ -1448,58 +1450,58 @@ fn mutation_clone_with_agrees() {
 fn mutation_condition_loops_agree() {
     // M-mut.3: while / do-while / C-for / while-let / break / continue, byte-identical on both.
     // Plain while accumulator.
-    agree("import Core.Console; function main(){ mutable int i = 0; mutable int s = 0; while (i < 4) { s += i; i += 1; } Console.println(\"{s}\"); }"); // 6
-                                                                                                                                                        // do-while runs the body once even when the condition is false up front.
-    agree("import Core.Console; function main(){ mutable int n = 10; do { Console.println(\"once\"); n += 1; } while (n < 5); }");
+    agree("import Core.Console; function main()-> void { mutable int i = 0; mutable int s = 0; while (i < 4) { s += i; i += 1; } Console.println(\"{s}\"); }"); // 6
+                                                                                                                                                                // do-while runs the body once even when the condition is false up front.
+    agree("import Core.Console; function main()-> void { mutable int n = 10; do { Console.println(\"once\"); n += 1; } while (n < 5); }");
     // continue skips, break stops.
-    agree("import Core.Console; function main(){ mutable int i = 0; mutable int hit = 0; while (true) { i += 1; if (i == 2) { continue; } if (i >= 5) { break; } hit += 1; } Console.println(\"{hit}\"); }"); // i=1,3,4 → 3
-                                                                                                                                                                                                              // C-style for with continue + break.
-    agree("import Core.Console; function main(){ mutable int sum = 0; for (mutable int k = 0; k < 6; k++) { if (k == 1) { continue; } if (k == 5) { break; } sum += k; } Console.println(\"{sum}\"); }"); // 0+2+3+4=9
-                                                                                                                                                                                                          // Nested C-for: an inner break exits only the inner loop.
-    agree("import Core.Console; function main(){ mutable int t = 0; for (mutable int a = 0; a < 3; a += 1) { for (mutable int b = 0; b < 9; b += 1) { if (b == 2) { break; } t += 1; } } Console.println(\"{t}\"); }"); // 3*2=6
-                                                                                                                                                                                                                        // while-let drains an optional.
-    agree("import Core.Console; function main(){ mutable int? o = 7; while (var v = o) { Console.println(\"{v}\"); o = null; } Console.println(\"done\"); }");
+    agree("import Core.Console; function main()-> void { mutable int i = 0; mutable int hit = 0; while (true) { i += 1; if (i == 2) { continue; } if (i >= 5) { break; } hit += 1; } Console.println(\"{hit}\"); }"); // i=1,3,4 → 3
+                                                                                                                                                                                                                      // C-style for with continue + break.
+    agree("import Core.Console; function main()-> void { mutable int sum = 0; for (mutable int k = 0; k < 6; k++) { if (k == 1) { continue; } if (k == 5) { break; } sum += k; } Console.println(\"{sum}\"); }"); // 0+2+3+4=9
+                                                                                                                                                                                                                  // Nested C-for: an inner break exits only the inner loop.
+    agree("import Core.Console; function main()-> void { mutable int t = 0; for (mutable int a = 0; a < 3; a += 1) { for (mutable int b = 0; b < 9; b += 1) { if (b == 2) { break; } t += 1; } } Console.println(\"{t}\"); }"); // 3*2=6
+                                                                                                                                                                                                                                // while-let drains an optional.
+    agree("import Core.Console; function main()-> void { mutable int? o = 7; while (var v = o) { Console.println(\"{v}\"); o = null; } Console.println(\"done\"); }");
     // break inside a for-in (the existing range loop) exits it.
-    agree("import Core.Console; function main(){ mutable int last = 0; for (int x in 1..=10) { if (x == 4) { break; } last = x; } Console.println(\"{last}\"); }"); // 3
-                                                                                                                                                                    // continue inside a for-in skips one iteration.
-    agree("import Core.Console; function main(){ mutable int s = 0; for (int x in 1..=5) { if (x == 3) { continue; } s += x; } Console.println(\"{s}\"); }"); // 1+2+4+5=12
-                                                                                                                                                              // for(;;) terminated by break.
-    agree("import Core.Console; function main(){ mutable int c = 0; for (;;) { c += 1; if (c == 3) { break; } } Console.println(\"{c}\"); }");
+    agree("import Core.Console; function main()-> void { mutable int last = 0; for (int x in 1..=10) { if (x == 4) { break; } last = x; } Console.println(\"{last}\"); }"); // 3
+                                                                                                                                                                            // continue inside a for-in skips one iteration.
+    agree("import Core.Console; function main()-> void { mutable int s = 0; for (int x in 1..=5) { if (x == 3) { continue; } s += x; } Console.println(\"{s}\"); }"); // 1+2+4+5=12
+                                                                                                                                                                      // for(;;) terminated by break.
+    agree("import Core.Console; function main()-> void { mutable int c = 0; for (;;) { c += 1; if (c == 3) { break; } } Console.println(\"{c}\"); }");
     // 3
 }
 
 #[test]
 fn named_fn_ref_as_value_agrees() {
     // named fn defined BEFORE use
-    agree("import Core.Console; function dbl(int x)->int{return x*2;} function twice(int x,(int)->int f)->int{return f(f(x));} function main(){ Console.println(\"{twice(2, dbl)}\"); }"); // 8
-                                                                                                                                                                                           // named fn defined AFTER use (forward reference)
-    agree("import Core.Console; function apply(int x,(int)->int f)->int{return f(x);} function callsLater(int n)->int{ return apply(n, bump); } function bump(int x)->int{return x+5;} function main(){ Console.println(\"{callsLater(10)}\"); }");
+    agree("import Core.Console; function dbl(int x)->int{return x*2;} function twice(int x,(int)->int f)->int{return f(f(x));} function main()-> void { Console.println(\"{twice(2, dbl)}\"); }"); // 8
+                                                                                                                                                                                                   // named fn defined AFTER use (forward reference)
+    agree("import Core.Console; function apply(int x,(int)->int f)->int{return f(x);} function callsLater(int n)->int{ return apply(n, bump); } function bump(int x)->int{return x+5;} function main()-> void { Console.println(\"{callsLater(10)}\"); }");
     // 15
     // A bare named function bound to a `var`, then called THROUGH the local. The compiler infers
     // the local's `CTy::Fn` from the named-fn reference so the call dispatches via `CallValue`
     // (without the inference the VM rejected `f(5)` as "not a function").
-    agree("import Core.Console; function dbl(int x)->int{return x*2;} function main(){ var f=dbl; Console.println(\"{f(5)}\"); }");
+    agree("import Core.Console; function dbl(int x)->int{return x*2;} function main()-> void { var f=dbl; Console.println(\"{f(5)}\"); }");
     // 10
 }
 
 #[test]
 fn transpiles_lambda_literal_call_target() {
-    let php = transpile_ok("package Main; import Core.Console; function main(){ Console.println(\"{3 |> fn(int v) => v + 100}\"); }");
+    let php = transpile_ok("package Main; import Core.Console; function main()-> void { Console.println(\"{3 |> fn(int v) => v + 100}\"); }");
     assert!(php.contains("(fn($v) => $v + 100)(3)"), "{php}");
 }
 
 #[test]
 fn higher_order_natives_agree() {
     // map / filter / reduce with inline lambdas (results shown via List.sum — PHP can't echo arrays).
-    agree("import Core.Console; import Core.List; function main(){ var d=List.map([1,2,3], fn(int x)=>x*2); Console.println(\"{List.sum(d)}\"); }"); // 12
-    agree("import Core.Console; import Core.List; function main(){ var e=List.filter([1,2,3,4], fn(int x)=>x%2==0); Console.println(\"{List.sum(e)}\"); }"); // 6
-    agree("import Core.Console; import Core.List; function main(){ Console.println(\"{List.reduce([1,2,3,4], 1, fn(int a,int x)=>a*x)}\"); }"); // 24
-                                                                                                                                                // A lambda capturing an enclosing local, passed to a native (capture window parity, invariant #8).
-    agree("import Core.Console; import Core.List; function main(){ var k=10; var s=List.map([1,2,3], fn(int x)=>x*k); Console.println(\"{List.sum(s)}\"); }"); // 60
-                                                                                                                                                               // A bare NAMED function reference (zero-capture closure) passed straight to a native.
-    agree("import Core.Console; import Core.List; function dbl(int x)->int{return x*2;} function main(){ var d=List.map([1,2,3], dbl); Console.println(\"{List.sum(d)}\"); }"); // 12
-                                                                                                                                                                                // RE-ENTRANCY: a native called from inside another native's closure (map nested in reduce's fn).
-    agree("import Core.Console; import Core.List; function main(){ Console.println(\"{List.reduce([1,2,3], 0, fn(int a,int x)=>a + List.sum(List.map([x], fn(int y)=>y*y)))}\"); }");
+    agree("import Core.Console; import Core.List; function main()-> void { var d=List.map([1,2,3], fn(int x)=>x*2); Console.println(\"{List.sum(d)}\"); }"); // 12
+    agree("import Core.Console; import Core.List; function main()-> void { var e=List.filter([1,2,3,4], fn(int x)=>x%2==0); Console.println(\"{List.sum(e)}\"); }"); // 6
+    agree("import Core.Console; import Core.List; function main()-> void { Console.println(\"{List.reduce([1,2,3,4], 1, fn(int a,int x)=>a*x)}\"); }"); // 24
+                                                                                                                                                        // A lambda capturing an enclosing local, passed to a native (capture window parity, invariant #8).
+    agree("import Core.Console; import Core.List; function main()-> void { var k=10; var s=List.map([1,2,3], fn(int x)=>x*k); Console.println(\"{List.sum(s)}\"); }"); // 60
+                                                                                                                                                                       // A bare NAMED function reference (zero-capture closure) passed straight to a native.
+    agree("import Core.Console; import Core.List; function dbl(int x)->int{return x*2;} function main()-> void { var d=List.map([1,2,3], dbl); Console.println(\"{List.sum(d)}\"); }"); // 12
+                                                                                                                                                                                        // RE-ENTRANCY: a native called from inside another native's closure (map nested in reduce's fn).
+    agree("import Core.Console; import Core.List; function main()-> void { Console.println(\"{List.reduce([1,2,3], 0, fn(int a,int x)=>a + List.sum(List.map([x], fn(int y)=>y*y)))}\"); }");
     // 14
 }
 
@@ -1508,13 +1510,13 @@ fn higher_order_native_closure_fault_agrees() {
     // A fault raised *inside* a closure run by a native must propagate byte-identically on both
     // backends (interpreter `call_closure` ⇄ VM re-entrant `call_closure_value`). Can't be a runnable
     // example (every example must produce identical Ok output) — lives here as a fault-parity case.
-    agree_err("import Core.Console; import Core.List; function main(){ var d=List.map([1,2,3], fn(int x)=>x/0); Console.println(\"{List.sum(d)}\"); }");
+    agree_err("import Core.Console; import Core.List; function main()-> void { var d=List.map([1,2,3], fn(int x)=>x/0); Console.println(\"{List.sum(d)}\"); }");
     // DivZero on both
 }
 
 #[test]
 fn transpiles_higher_order_natives() {
-    let php = transpile_ok("package Main; import Core.Console; import Core.List; function main(){ var d=List.map([1,2,3], fn(int x)=>x*2); var e=List.filter(d, fn(int x)=>x>2); Console.println(\"{List.reduce(e, 0, fn(int a,int x)=>a+x)}\"); }");
+    let php = transpile_ok("package Main; import Core.Console; import Core.List; function main()-> void { var d=List.map([1,2,3], fn(int x)=>x*2); var e=List.filter(d, fn(int x)=>x>2); Console.println(\"{List.reduce(e, 0, fn(int a,int x)=>a+x)}\"); }");
     assert!(php.contains("array_map(fn($x) => $x * 2,"), "{php}");
     assert!(php.contains("array_values(array_filter("), "{php}");
     assert!(php.contains("array_reduce("), "{php}");
@@ -1525,12 +1527,12 @@ fn generic_methods_agree() {
     // A generic method (`<T>` on a method of a non-generic class) inferred from arguments must run
     // byte-identically on both backends — the type variable is erased before either backend, like a
     // generic free function (M-RT generics-all). `identity` reused at three concrete types.
-    agree("import Core.Console; class U { function id<T>(T x)->T { return x; } } function main(){ var u=U(); Console.println(\"{u.id(7)} {u.id(\\\"hi\\\")} {u.id(true)}\"); }"); // 7 hi true
-                                                                                                                                                                                  // `T` inferred from a `List<T>` argument; the fallback shares it.
-    agree("import Core.Console; class U { function firstOr<T>(List<T> xs, T d)->T { for (T x in xs) { return x; } return d; } } function main(){ var u=U(); Console.println(\"{u.firstOr([10,20], -1)} {u.firstOr([], 99)}\"); }"); // 10 99
-                                                                                                                                                                                                                                    // A type parameter inside a function-typed parameter, and the closure invoked in the method body
-                                                                                                                                                                                                                                    // (exercises the VM's re-entrant closure path from inside a generic method).
-    agree("import Core.Console; class U { function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } function main(){ var u=U(); Console.println(\"{u.applyTwice(5, fn(int v)=>v+1)}\"); }");
+    agree("import Core.Console; class U { function id<T>(T x)->T { return x; } } function main()-> void { var u=U(); Console.println(\"{u.id(7)} {u.id(\\\"hi\\\")} {u.id(true)}\"); }"); // 7 hi true
+                                                                                                                                                                                          // `T` inferred from a `List<T>` argument; the fallback shares it.
+    agree("import Core.Console; class U { function firstOr<T>(List<T> xs, T d)->T { for (T x in xs) { return x; } return d; } } function main()-> void { var u=U(); Console.println(\"{u.firstOr([10,20], -1)} {u.firstOr([], 99)}\"); }"); // 10 99
+                                                                                                                                                                                                                                            // A type parameter inside a function-typed parameter, and the closure invoked in the method body
+                                                                                                                                                                                                                                            // (exercises the VM's re-entrant closure path from inside a generic method).
+    agree("import Core.Console; class U { function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } function main()-> void { var u=U(); Console.println(\"{u.applyTwice(5, fn(int v)=>v+1)}\"); }");
     // 7
 }
 
@@ -1542,13 +1544,13 @@ fn overloaded_free_functions_agree() {
            function d(int n)->string { return \"int:{n}\"; } \
            function d(string s)->string { return \"str:{s}\"; } \
            function d(bool b)->string { return \"bool:{b}\"; } \
-           function main(){ Console.println(d(42)); Console.println(d(\"hi\")); Console.println(d(true)); }");
+           function main()-> void { Console.println(d(42)); Console.println(d(\"hi\")); Console.println(d(true)); }");
     // Arity overloads.
     agree(
         "import Core.Console; \
            function add(int a)->int { return a; } \
            function add(int a, int b)->int { return a+b; } \
-           function main(){ Console.println(\"{add(5)} {add(5,6)}\"); }",
+           function main()-> void { Console.println(\"{add(5)} {add(5,6)}\"); }",
     );
     // Class + interface overloads with most-specific dispatch: a `Circle` value picks `area(Circle)`,
     // a `Square` (only a `Shape`) picks the `area(Shape)` fallback — same choice on both backends.
@@ -1558,7 +1560,7 @@ fn overloaded_free_functions_agree() {
            class Square implements Shape { constructor(public int s) {} } \
            function area(Circle c)->int { return c.r*c.r*3; } \
            function area(Shape s)->int { return 0; } \
-           function main(){ Circle c=Circle(2); Square q=Square(4); Console.println(\"{area(c)} {area(q)}\"); }");
+           function main()-> void { Circle c=Circle(2); Square q=Square(4); Console.println(\"{area(c)} {area(q)}\"); }");
 }
 
 #[test]
@@ -1574,7 +1576,7 @@ fn overloaded_methods_agree() {
              function show(string s)->string { return \"{this.tag}/str:{s}\"; } \
              function show(Circle c)->string { return \"{this.tag}/circle:{c.r}\"; } \
            } \
-           function main(){ Printer p=Printer(\"P\"); \
+           function main()-> void { Printer p=Printer(\"P\"); \
              Console.println(p.show(7)); Console.println(p.show(\"hi\")); Console.println(p.show(Circle(3))); }");
 }
 
@@ -1590,7 +1592,7 @@ fn ambiguous_overloaded_call_faults_on_both_backends() {
                class Both implements A, B { constructor(public int v) {} } \
                function pick(A x, B y)->int { return 1; } \
                function pick(B x, A y)->int { return 2; } \
-               function main(){ Both b=Both(0); Console.println(\"{pick(b, b)}\"); }",
+               function main()-> void { Both b=Both(0); Console.println(\"{pick(b, b)}\"); }",
     );
 }
 
@@ -1598,7 +1600,7 @@ fn ambiguous_overloaded_call_faults_on_both_backends() {
 fn transpiles_generic_method_to_mixed() {
     // A generic method erases to `mixed`-typed PHP (params and return), exactly as a generic free
     // function does; `List<T>` → `array`, `(T)->T` → `\Closure`. No type variable reaches the output.
-    let php = transpile_ok("package Main; class U { function id<T>(T x)->T { return x; } function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } function main(){ var u=U(); var n = u.id(1); var m = u.applyTwice(2, fn(int v)=>v+1); }");
+    let php = transpile_ok("package Main; class U { function id<T>(T x)->T { return x; } function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } function main()-> void { var u=U(); var n = u.id(1); var m = u.applyTwice(2, fn(int v)=>v+1); }");
     assert!(php.contains("function id(mixed $x): mixed"), "{php}");
     assert!(
         php.contains("function applyTwice(mixed $x, \\Closure $f): mixed"),
@@ -1612,18 +1614,18 @@ fn escaping_and_nested_lambdas_agree() {
     // param, then it is called after the function has returned. Captures live in the closure's Rc,
     // so both backends must agree. (Guards the trailing-lambda-block layout: a lambda defined in a
     // function *before* `main` must not shift `main`'s entry index.)
-    agree("import Core.Console; function mk(int a)->(int)->int{ return fn(int b)=>a+b; } function main(){ var f=mk(10); Console.println(\"{f(5)}\"); }"); // 15
-                                                                                                                                                          // Escaping closure capturing a `var` local of the enclosing function (not a param).
-    agree("import Core.Console; function mk(int z)->(int)->int{ var a=z*2; return fn(int b)=>a+b; } function main(){ var f=mk(10); Console.println(\"{f(5)}\"); }"); // 25
-                                                                                                                                                                     // Lexically NESTED lambda: a lambda whose body defines and returns another capturing lambda.
-    agree("import Core.Console; function mk(int a)->(int)->int{ var outer=fn(int b)->(int)->int{ return fn(int c)=>a+b+c; }; return outer(a); } function main(){ var f=mk(100); Console.println(\"{f(11)}\"); }"); // 100+100+11 = 211
-                                                                                                                                                                                                                   // Two functions defined before `main`, the first bearing a lambda — exercises the entry-index
-                                                                                                                                                                                                                   // and Op::Call stability under the trailing-lambda block (a regression would call the wrong fn).
-    agree("import Core.Console; function a(int x)->int{ var inc=fn(int n)=>n+1; return inc(x); } function b(int x)->int{ return x*10; } function main(){ Console.println(\"{a(4)} {b(4)}\"); }");
+    agree("import Core.Console; function mk(int a)->(int)->int{ return fn(int b)=>a+b; } function main()-> void { var f=mk(10); Console.println(\"{f(5)}\"); }"); // 15
+                                                                                                                                                                  // Escaping closure capturing a `var` local of the enclosing function (not a param).
+    agree("import Core.Console; function mk(int z)->(int)->int{ var a=z*2; return fn(int b)=>a+b; } function main()-> void { var f=mk(10); Console.println(\"{f(5)}\"); }"); // 25
+                                                                                                                                                                             // Lexically NESTED lambda: a lambda whose body defines and returns another capturing lambda.
+    agree("import Core.Console; function mk(int a)->(int)->int{ var outer=fn(int b)->(int)->int{ return fn(int c)=>a+b+c; }; return outer(a); } function main()-> void { var f=mk(100); Console.println(\"{f(11)}\"); }"); // 100+100+11 = 211
+                                                                                                                                                                                                                           // Two functions defined before `main`, the first bearing a lambda — exercises the entry-index
+                                                                                                                                                                                                                           // and Op::Call stability under the trailing-lambda block (a regression would call the wrong fn).
+    agree("import Core.Console; function a(int x)->int{ var inc=fn(int n)=>n+1; return inc(x); } function b(int x)->int{ return x*10; } function main()-> void { Console.println(\"{a(4)} {b(4)}\"); }");
     // 5 40
     // A lambda inside a METHOD body (capturing a method param) — the constructor/method compile
     // loops number their lambdas from the same trailing block, so this guards that path too.
-    agree("import Core.Console; class Box { constructor(public int v) {} function scaledBy(int k)->int{ var f=fn(int x)->int{ return x*k; }; return f(this.v); } } function main(){ var b=Box(7); Console.println(\"{b.scaledBy(3)}\"); }");
+    agree("import Core.Console; class Box { constructor(public int v) {} function scaledBy(int k)->int{ var f=fn(int x)->int{ return x*k; }; return f(this.v); } } function main()-> void { var b=Box(7); Console.println(\"{b.scaledBy(3)}\"); }");
     // 21
 }
 
@@ -1634,25 +1636,25 @@ fn html_literal_sugar_agrees() {
     // glob test below adds run ≡ php on examples/guide/html.phg.)
     // A string hole auto-escapes; literal chunks pass through.
     agree(
-        r#"import Core.Console; import Core.Html; function main(){ var n="a&<b>"; Console.println(Html.render(html"<h1>{n}</h1>")); }"#,
+        r#"import Core.Console; import Core.Html; function main()-> void { var n="a&<b>"; Console.println(Html.render(html"<h1>{n}</h1>")); }"#,
     ); // <h1>a&amp;&lt;b&gt;</h1>
        // A primitive hole stringifies then escapes.
     agree(
-        r#"import Core.Console; import Core.Html; function main(){ var n=42; Console.println(Html.render(html"<p>{n}</p>")); }"#,
+        r#"import Core.Console; import Core.Html; function main()-> void { var n=42; Console.println(Html.render(html"<p>{n}</p>")); }"#,
     ); // <p>42</p>
        // An Html hole embeds verbatim (no double-escape).
     agree(
-        r#"import Core.Console; import Core.Html; function main(){ var inner=Html.text("a&b"); Console.println(Html.render(html"<div>{inner}</div>")); }"#,
+        r#"import Core.Console; import Core.Html; function main()-> void { var inner=Html.text("a&b"); Console.println(Html.render(html"<div>{inner}</div>")); }"#,
     ); // <div>a&amp;b</div>
        // A nested html"…" as an Html hole — recursion through resolve_html.
     agree(
-        r#"import Core.Console; import Core.Html; function main(){ var n="x"; var inner=html"<b>{n}</b>"; Console.println(Html.render(html"<p>{inner}</p>")); }"#,
+        r#"import Core.Console; import Core.Html; function main()-> void { var n="x"; var inner=html"<b>{n}</b>"; Console.println(Html.render(html"<p>{inner}</p>")); }"#,
     ); // <p><b>x</b></p>
        // Multi-line literal (spans lines for free, like a plain string).
-    agree("import Core.Console; import Core.Html; function main(){ var n=\"z\"; Console.println(Html.render(html\"<ul>\n  <li>{n}</li>\n</ul>\")); }");
+    agree("import Core.Console; import Core.Html; function main()-> void { var n=\"z\"; Console.println(Html.render(html\"<ul>\n  <li>{n}</li>\n</ul>\")); }");
     // A literal with no holes is still Html.
     agree(
-        r#"import Core.Console; import Core.Html; function main(){ Console.println(Html.render(html"<hr/>")); }"#,
+        r#"import Core.Console; import Core.Html; function main()-> void { Console.println(Html.render(html"<hr/>")); }"#,
     ); // <hr/>
 }
 
@@ -1660,10 +1662,10 @@ fn html_literal_sugar_agrees() {
 fn html_literal_bad_hole_rejected_by_both() {
     // A non-renderable hole type (an enum value) is `E-HTML-HOLE` — rejected on both backends.
     agree_err(
-        r#"import Core.Html; enum E { A() } function main(){ var p = html"<h1>{A()}</h1>"; }"#,
+        r#"import Core.Html; enum E { A() } function main()-> void { var p = html"<h1>{A()}</h1>"; }"#,
     );
     // `html"…"` without `import Core.Html;` is `E-HTML-IMPORT` — rejected on both backends.
-    agree_err(r#"function main(){ var p = html"<h1>x</h1>"; }"#);
+    agree_err(r#"function main()-> void { var p = html"<h1>x</h1>"; }"#);
 }
 
 #[test]
@@ -1671,7 +1673,7 @@ fn transpiles_html_literal_to_kernel_calls() {
     // The desugaring targets only Wave-1/2 natives, so the PHP is the kernel emission: literal
     // chunks as strings, a string hole through htmlspecialchars(ENT_QUOTES), all joined by implode.
     let php = transpile_ok(
-        r#"package Main; import Core.Console; import Core.Html; function main(){ var n="x"; Console.println(Html.render(html"<h1>{n}</h1>")); }"#,
+        r#"package Main; import Core.Console; import Core.Html; function main()-> void { var n="x"; Console.println(Html.render(html"<h1>{n}</h1>")); }"#,
     );
     assert!(php.contains("implode('', ["), "{php}");
     assert!(
@@ -1686,19 +1688,19 @@ fn named_tag_helpers_agree() {
     // so it inherits parity. (run ≡ runvm here; the glob test adds run ≡ php on the guide example.)
     // Content element: attribute value escaped, text child escaped.
     agree(
-        r#"import Core.Console; import Core.Html; function main(){ Console.println(Html.render(Html.a([Html.attr("href","/?x=1&y=2")],[Html.text("A & B")]))); }"#,
+        r#"import Core.Console; import Core.Html; function main()-> void { Console.println(Html.render(Html.a([Html.attr("href","/?x=1&y=2")],[Html.text("A & B")]))); }"#,
     ); // <a href="/?x=1&amp;y=2">A &amp; B</a>
        // Empty attr list accepted in call-arg position; tags nest.
     agree(
-        r#"import Core.Console; import Core.Html; function main(){ Console.println(Html.render(Html.ul([],[Html.li([],[Html.text("x")])]))); }"#,
+        r#"import Core.Console; import Core.Html; function main()-> void { Console.println(Html.render(Html.ul([],[Html.li([],[Html.text("x")])]))); }"#,
     ); // <ul><li>x</li></ul>
        // A void (self-closing) element.
     agree(
-        r#"import Core.Console; import Core.Html; function main(){ Console.println(Html.render(Html.hr([]))); }"#,
+        r#"import Core.Console; import Core.Html; function main()-> void { Console.println(Html.render(Html.hr([]))); }"#,
     ); // <hr/>
        // A tag helper and the equivalent el() call produce identical bytes.
     agree(
-        r#"import Core.Console; import Core.Html; function main(){ Console.println(Html.render(Html.p([],[Html.text("hi")]))); Console.println(Html.render(Html.el("p",[],[Html.text("hi")]))); }"#,
+        r#"import Core.Console; import Core.Html; function main()-> void { Console.println(Html.render(Html.p([],[Html.text("hi")]))); Console.println(Html.render(Html.el("p",[],[Html.text("hi")]))); }"#,
     ); // <p>hi</p>\n<p>hi</p>
 }
 
@@ -1706,7 +1708,7 @@ fn named_tag_helpers_agree() {
 fn transpiles_named_tag_to_baked_php() {
     // A named tag erases to the same baked closure the kernel uses, with the tag compiled in (no $t).
     let php = transpile_ok(
-        r#"package Main; import Core.Console; import Core.Html; function main(){ Console.println(Html.render(Html.div([],[Html.text("x")]))); }"#,
+        r#"package Main; import Core.Console; import Core.Html; function main()-> void { Console.println(Html.render(Html.div([],[Html.text("x")]))); }"#,
     );
     assert!(php.contains("'<div'"), "{php}");
     assert!(php.contains("'</div>'"), "{php}");
@@ -1786,7 +1788,7 @@ open class Flyer { open function move() -> string { return "flies"; } }
 class Duck extends Swimmer, Flyer {
     rename Flyer.move as glide
 }
-function main() {
+function main() -> void {
     Duck d = Duck();
     Console.println(d.move());
     Console.println(d.glide());
@@ -1886,7 +1888,7 @@ fn all_example_projects_transpile_and_match_php() {
 fn m7_emitter_uses_correctness_helpers() {
     // P0-1 (int `/` ⇒ intdiv) + P0-4 (`%` ⇒ type-driven) route through runtime helpers, not bare ops.
     let div = transpile_ok(
-        "package Main; import Core.Console; function main(){ Console.println(\"{7 / 2}\"); Console.println(\"{5 % 2}\"); }",
+        "package Main; import Core.Console; function main()-> void { Console.println(\"{7 / 2}\"); Console.println(\"{5 % 2}\"); }",
     );
     assert!(div.contains("__phorge_div(7, 2)"), "{div}");
     assert!(div.contains("__phorge_rem(5, 2)"), "{div}");
@@ -1900,7 +1902,7 @@ fn m7_emitter_uses_correctness_helpers() {
     );
     // P0-3: an interpolated value is coerced via __phorge_str (bool ⇒ "true"/"false").
     let b = transpile_ok(
-        "package Main; import Core.Console; function main(){ Console.println(\"{1 < 2}\"); }",
+        "package Main; import Core.Console; function main()-> void { Console.println(\"{1 < 2}\"); }",
     );
     assert!(
         b.contains("__phorge_str(") && b.contains("\"true\" : \"false\""),
@@ -1908,13 +1910,13 @@ fn m7_emitter_uses_correctness_helpers() {
     );
     // P0-2: a compound operand keeps its grouping parens (no PHP re-association).
     let p = transpile_ok(
-        "package Main; import Core.Console; function main(){ int a=1; int b=2; int c=3; Console.println(\"{a - (b - c)}\"); Console.println(\"{!(a < b)}\"); }",
+        "package Main; import Core.Console; function main()-> void { int a=1; int b=2; int c=3; Console.println(\"{a - (b - c)}\"); Console.println(\"{!(a < b)}\"); }",
     );
     assert!(p.contains("$a - ($b - $c)"), "{p}");
     assert!(p.contains("!($a < $b)"), "{p}");
     // QW-13: ranges route through the empty/reversed-safe helper (PHP range() descends; Phorge ⇒ []).
     let r = transpile_ok(
-        "package Main; import Core.Console; function main(){ for (int i in 5..2) { Console.println(\"{i}\"); } }",
+        "package Main; import Core.Console; function main()-> void { for (int i in 5..2) { Console.println(\"{i}\"); } }",
     );
     assert!(r.contains("__phorge_range(5, 2, false)"), "{r}");
 }
@@ -1923,7 +1925,7 @@ fn m7_emitter_uses_correctness_helpers() {
 /// leg is gated by the oracle over the division-bearing examples.)
 #[test]
 fn m7_int_division_truncates_toward_zero() {
-    let src = "import Core.Console; function main(){ Console.println(\"{7 / 2} {-7 / 2} {7 / -2} {-7 / -2}\"); }";
+    let src = "import Core.Console; function main()-> void { Console.println(\"{7 / 2} {-7 / 2} {7 / -2} {-7 / -2}\"); }";
     assert_eq!(cmd_run(&with_pkg(src)).as_deref(), Ok("3 -3 -3 3\n"));
     agree(src);
 }
@@ -1934,12 +1936,12 @@ fn m7_int_division_truncates_toward_zero() {
 #[test]
 fn m7_large_range_faults_identically() {
     agree_err(
-        "import Core.Console; function main(){ for (int i in 0..2000000000) { Console.println(\"{i}\"); } }",
+        "import Core.Console; function main()-> void { for (int i in 0..2000000000) { Console.println(\"{i}\"); } }",
     );
-    agree_err("import Core.Console; function main(){ var xs = 0..=2000000000; Console.println(\"{xs[0]}\"); }");
+    agree_err("import Core.Console; function main()-> void { var xs = 0..=2000000000; Console.println(\"{xs[0]}\"); }");
     // The exactly-at-cap boundary is also a fault (span >= MAX_RANGE_LEN), while a small range is fine.
     agree(
-        "import Core.Console; function main(){ var xs = 0..1000; Console.println(\"{xs[999]}\"); }",
+        "import Core.Console; function main()-> void { var xs = 0..1000; Console.println(\"{xs[999]}\"); }",
     );
 }
 
@@ -1949,7 +1951,7 @@ fn m7_large_range_faults_identically() {
 #[test]
 fn m7_int_min_div_neg_one_faults_identically() {
     agree_err(
-        "import Core.Console; function main(){ int x = -9223372036854775807 - 1; Console.println(\"{x / -1}\"); }",
+        "import Core.Console; function main()-> void { int x = -9223372036854775807 - 1; Console.println(\"{x / -1}\"); }",
     );
 }
 
@@ -1957,13 +1959,13 @@ fn m7_int_min_div_neg_one_faults_identically() {
 /// `FaultMsg` body → same `FaultKind::Panic`). `assert(true)` is a no-op, so the program completes.
 #[test]
 fn faults_panic_intrinsics_agree() {
-    agree_err(r#"function main(){ panic("boom"); }"#);
-    agree_err("function main(){ todo(); }");
-    agree_err("function main(){ unreachable(); }");
-    agree_err(r#"function main(){ assert(2 < 1, "nope"); }"#);
-    agree_err("function main(){ assert(false); }");
+    agree_err(r#"function main()-> void { panic("boom"); }"#);
+    agree_err("function main()-> void { todo(); }");
+    agree_err("function main()-> void { unreachable(); }");
+    agree_err(r#"function main()-> void { assert(2 < 1, "nope"); }"#);
+    agree_err("function main()-> void { assert(false); }");
     agree(
-        r#"import Core.Console; function main(){ assert(1 < 2, "ok"); Console.println("done"); }"#,
+        r#"import Core.Console; function main()-> void { assert(1 < 2, "ok"); Console.println("done"); }"#,
     );
 }
 
@@ -1972,7 +1974,7 @@ fn faults_panic_intrinsics_agree() {
 #[test]
 fn never_intrinsic_satisfies_return_totality() {
     agree_err(
-        r#"function bad() -> int { panic("never returns"); } function main(){ var x = bad(); }"#,
+        r#"function bad() -> int { panic("never returns"); } function main()-> void { var x = bad(); }"#,
     );
 }
 
@@ -1999,7 +2001,7 @@ fn error_base_type_reserved_and_implementable() {
     assert!(
         check_errs(
             r#"class P implements Error { constructor(public string message) {} }
-function main() { P p = P("x"); if (p instanceof Error) { } }"#
+function main() -> void { P p = P("x"); if (p instanceof Error) { } }"#
         )
         .is_empty(),
         "instanceof Error must type-check"
@@ -2018,7 +2020,7 @@ fn error_subtype_value_is_byte_identical() {
     let src = with_pkg(
         r#"import Core.Console;
 class BadInput implements Error { constructor(public string message) {} }
-function main() { BadInput e = BadInput("bad input"); Console.println(e.message); }"#,
+function main() -> void { BadInput e = BadInput("bad input"); Console.println(e.message); }"#,
     );
     let tree = cmd_run(&src);
     let vm = cmd_runvm(&src);
@@ -2046,7 +2048,7 @@ fn throw_caught_and_finally_runs_on_both_backends() {
     agree(&format!(
         "{ERR_HDR} \
          function parse(int n) -> int throws E1 {{ if (n < 0) {{ throw E1(\"neg\"); }} return n + 1; }} \
-         function main() {{ \
+         function main() -> void {{ \
            try {{ \
              var a = parse(5); Console.println(\"a={{a}}\"); \
              var b = parse(0 - 3); Console.println(\"unreached\"); \
@@ -2066,7 +2068,7 @@ fn return_through_finally_and_nested_rethrow_agree() {
            try {{ if (n < 0) {{ throw E1(\"inner\"); }} return n; }} \
            finally {{ Console.println(\"fin {{n}}\"); }} \
          }} \
-         function main() {{ \
+         function main() -> void {{ \
            try {{ var a = pick(2); Console.println(\"a={{a}}\"); var b = pick(0 - 1); }} \
            catch (E1 e) {{ Console.println(\"outer {{e.message}}\"); }} \
          }}"
@@ -2082,7 +2084,7 @@ fn multiple_and_union_catch_dispatch_agree() {
          function risky(int n) -> int throws E1 | E2 {{ \
            if (n == 1) {{ throw E1(\"one\"); }} if (n == 2) {{ throw E2(\"two\"); }} return n; \
          }} \
-         function main() {{ for (int i in [1, 2, 3]) {{ \
+         function main() -> void {{ for (int i in [1, 2, 3]) {{ \
            try {{ var r = risky(i); Console.println(\"ok {{r}}\"); }} \
            catch (E1 e) {{ Console.println(\"E1 {{e.message}}\"); }} \
            catch (E2 e) {{ Console.println(\"E2 {{e.message}}\"); }} \
@@ -2096,7 +2098,7 @@ fn break_and_continue_through_finally_agree() {
     // handler) before transferring — byte-identical on both backends.
     agree(&format!(
         "{ERR_HDR} \
-         function main() {{ for (int i in [1, 2, 3, 4]) {{ \
+         function main() -> void {{ for (int i in [1, 2, 3, 4]) {{ \
            try {{ \
              if (i == 3) {{ break; }} if (i == 2) {{ continue; }} Console.println(\"body {{i}}\"); \
            }} finally {{ Console.println(\"fin {{i}}\"); }} \
@@ -2111,7 +2113,7 @@ fn propagate_throws_with_question_mark_agrees() {
         "{ERR_HDR} \
          function f() -> int throws E1 {{ throw E1(\"x\"); }} \
          function g() -> int throws E1 {{ return f()?; }} \
-         function main() {{ try {{ var n = g(); }} catch (E1 e) {{ Console.println(\"g threw {{e.message}}\"); }} }}"
+         function main() -> void {{ try {{ var n = g(); }} catch (E1 e) {{ Console.println(\"g threw {{e.message}}\"); }} }}"
     ));
 }
 
@@ -2121,7 +2123,7 @@ fn panic_bypasses_catch_on_both_backends() {
     // enclosing `catch` and aborts identically on both backends (panics are uncatchable by design).
     agree_err(&format!(
         "{ERR_HDR} \
-         function main() {{ var xs = [1, 0, 2]; \
+         function main() -> void {{ var xs = [1, 0, 2]; \
            try {{ for (int x in xs) {{ var q = 10 / x; Console.println(\"q {{q}}\"); }} }} \
            catch (E1 e) {{ Console.println(\"nope\"); }} }}"
     ));
@@ -2135,7 +2137,7 @@ fn s8_trait_method_reuse_is_byte_identical() {
         "import Core.Console;
 trait Loud { function shout(string s) -> string { return s; } function greet() -> string { return this.shout(\"hi\"); } }
 class Crier { use Loud; }
-function main() { Console.println(Crier().greet()); }",
+function main() -> void { Console.println(Crier().greet()); }",
         "hi\n",
         "s8_trait_method_reuse",
     );
@@ -2147,9 +2149,9 @@ fn s8_trait_mutable_field_is_byte_identical() {
     // trait method mutates it. Field access is by name, so the flattened field works on both backends.
     agree_out_php(
         "import Core.Console;
-trait Counter { mutable int n; function bump() { this.n = this.n + 1; } function read() -> int { return this.n; } }
+trait Counter { mutable int n; function bump() -> void { this.n = this.n + 1; } function read() -> int { return this.n; } }
 class C { use Counter; constructor() { this.n = 0; } }
-function main() { C c = C(); c.bump(); c.bump(); c.bump(); Console.println(\"{c.read()}\"); }",
+function main() -> void { C c = C(); c.bump(); c.bump(); c.bump(); Console.println(\"{c.read()}\"); }",
         "3\n",
         "s8_trait_mutable_field",
     );
@@ -2164,7 +2166,7 @@ fn s8_trait_static_is_per_using_class_copy() {
 trait Counted { static mutable int total = 0; }
 class E { use Counted; }
 class F { use Counted; }
-function main() { E.total = 5; F.total = 9; Console.println(\"{E.total} {F.total}\"); }",
+function main() -> void { E.total = 5; F.total = 9; Console.println(\"{E.total} {F.total}\"); }",
         "5 9\n",
         "s8_trait_static_per_class",
     );
@@ -2178,7 +2180,7 @@ fn s8_trait_private_method_is_byte_identical() {
         "import Core.Console;
 trait Loud { private function amp(string s) -> string { return \"{s}!\"; } function shout(string s) -> string { return this.amp(s); } }
 class C { use Loud; }
-function main() { Console.println(C().shout(\"hi\")); }",
+function main() -> void { Console.println(C().shout(\"hi\")); }",
         "hi!\n",
         "s8_trait_private_method",
     );
@@ -2192,7 +2194,7 @@ fn s8_trait_constructor_promotion_is_byte_identical() {
         "import Core.Console;
 trait Stamped { constructor(public int id) {} }
 class Doc { use Stamped; }
-function main() { Doc d = Doc(7); Console.println(\"{d.id}\"); }",
+function main() -> void { Doc d = Doc(7); Console.println(\"{d.id}\"); }",
         "7\n",
         "s8_trait_ctor_promotion",
     );
@@ -2206,7 +2208,7 @@ fn s8_trait_constructor_body_is_byte_identical() {
         "import Core.Console;
 trait Paid { mutable int annual; constructor(int monthly) { this.annual = monthly * 12; } }
 class Emp { use Paid; }
-function main() { Emp e = Emp(1000); Console.println(\"{e.annual}\"); }",
+function main() -> void { Emp e = Emp(1000); Console.println(\"{e.annual}\"); }",
         "12000\n",
         "s8_trait_ctor_body",
     );
@@ -2220,7 +2222,7 @@ fn s8_trait_get_hook_is_byte_identical() {
         "import Core.Console;
 trait Labeled { mutable string raw; string display { get => \"<{this.raw}>\"; } }
 class Tag { use Labeled; constructor() { this.raw = \"x\"; } }
-function main() { Tag t = Tag(); Console.println(t.display); }",
+function main() -> void { Tag t = Tag(); Console.println(t.display); }",
         "<x>\n",
         "s8_trait_get_hook",
     );
@@ -2233,7 +2235,7 @@ fn s8_trait_get_set_hook_is_byte_identical() {
         "import Core.Console;
 trait Clamped { mutable int raw; int value { get => this.raw; set(int v) { this.raw = v * 2; } } }
 class Box { use Clamped; constructor() { this.raw = 0; } }
-function main() { Box b = Box(); b.value = 5; Console.println(\"{b.value}\"); }",
+function main() -> void { Box b = Box(); b.value = 5; Console.println(\"{b.value}\"); }",
         "10\n",
         "s8_trait_get_set_hook",
     );
@@ -2247,7 +2249,7 @@ fn s8_trait_abstract_requirement_satisfied_is_byte_identical() {
         "import Core.Console;
 trait Greeter { abstract function name() -> string; function hello() -> string { return this.name(); } }
 class Person { use Greeter; function name() -> string { return \"Ada\"; } }
-function main() { Console.println(Person().hello()); }",
+function main() -> void { Console.println(Person().hello()); }",
         "Ada\n",
         "s8_trait_abstract_requirement",
     );
@@ -2268,7 +2270,7 @@ function classify(Code c) -> string {
         Num(n) => \"other ({n})\",
     };
 }
-function main() {
+function main() -> void {
     Console.println(classify(Num(503)));
     Console.println(classify(Num(404)));
     Console.println(classify(Num(200)));
@@ -2293,7 +2295,7 @@ function describe(Circle | Square sh) -> string {
         Square s => \"square\",
     };
 }
-function main() {
+function main() -> void {
     Console.println(describe(Circle(2.0)));
     Console.println(describe(Circle(0.5)));
     Console.println(describe(Square(3.0)));
@@ -2310,7 +2312,7 @@ function main() {
 fn number_literal_formats_byte_identical() {
     agree_out_php(
         "import Core.Console;
-function main() {
+function main() -> void {
     int mask = 0xFF;
     int flags = 0b1010;
     int perms = 0o17;
@@ -2330,7 +2332,7 @@ function main() {
 fn bitwise_operators_byte_identical() {
     agree_out_php(
         "import Core.Console;
-function main() {
+function main() -> void {
     int a = 0b1100;
     int b = 0b1010;
     Console.println(\"{a & b} {a | b} {a ^ b} {a << 2} {a >> 1} {~a} {(a & b) + 1}\");
@@ -2346,7 +2348,7 @@ function main() {
 fn console_print_byte_identical() {
     agree_out_php(
         "import Core.Console;
-function main() {
+function main() -> void {
     Console.print(\"a\");
     Console.print(\"b\");
     Console.println(\"c\");
@@ -2376,7 +2378,7 @@ function areaOf(Circle | Square sh) -> float {
 function originSum(Line l) -> int {
     return match l { Line { from: Point { x: fx, y: fy }, to } => fx + fy + to.x, _ => 0, };
 }
-function main() {
+function main() -> void {
     float a = areaOf(Circle(2.5));
     float b = areaOf(Square(4.0));
     int d = originSum(Line(Point(1, 2), Point(10, 20)));
@@ -2407,7 +2409,7 @@ function greet(int id) -> string {
         return \"denied\";
     }
 }
-function main() {
+function main() -> void {
     Console.println(greet(1));
     Console.println(greet(2));
     Console.println(greet(3));
@@ -2430,7 +2432,7 @@ function dim(Circle | Square s) -> float {
     if (!(s instanceof Circle)) { return s.side; }
     return s.r;
 }
-function main() {
+function main() -> void {
     float a = dim(Circle(2.5));
     float b = dim(Square(4.0));
     Console.println(\"a={a} b={b}\");
@@ -2452,7 +2454,7 @@ class Square { constructor(public float side) {} }
 function dim(Circle | Square s) -> float {
     if (s instanceof Circle) { return s.r; } else { return s.side; }
 }
-function main() {
+function main() -> void {
     float a = dim(Circle(2.5));
     float b = dim(Square(4.0));
     Console.println(\"a={a} b={b}\");
@@ -2478,7 +2480,7 @@ enum Boxed { W(Shape inner) }
 function f(Boxed b) -> float {
     return match b { W(Circle c) => c.r + 1.0, W(Square s) => s.side, _ => 0.0, };
 }
-function main() {
+function main() -> void {
     float a = f(W(Circle(2.5)));
     float b = f(W(Square(4.0)));
     Console.println(\"a={a} b={b}\");
@@ -2499,7 +2501,7 @@ fn p3_byte_safe_stdlib_byte_identical() {
 import Core.Text;
 import Core.Math;
 import Core.List;
-function main() {
+function main() -> void {
     string sw = if (Text.startsWith(\"hello\", \"he\")) { \"yes\" } else { \"no\" };
     string ew = if (Text.endsWith(\"hello\", \"lo\")) { \"yes\" } else { \"no\" };
     string rep = Text.repeat(\"ab\", 3);

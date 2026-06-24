@@ -37,7 +37,7 @@ function fib(int n) -> int {
     return fib(n - 1) + fib(n - 2);
 }
 
-function main() {
+function main() -> void {
     // CPU-bound: ~8k calls at depth ~18. (`bench` runs the whole program 101× — kept modest so a
     // casual `phg bench` stays a few seconds, not a minute. The VM's speedup ratio is
     // n-independent, so a smaller n shows the same advantage.)

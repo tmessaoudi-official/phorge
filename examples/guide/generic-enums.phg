@@ -50,7 +50,7 @@ function report(Result<int, string> r) -> string {
     };
 }
 
-function main() {
+function main() -> void {
     var some = Some(7); // Option<int> — T inferred from `7`
     Option<int> none = None(); // None mentions no T — annotate to fix Option<int>
 

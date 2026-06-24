@@ -15,7 +15,7 @@ fn vm_fault_carries_call_stack() {
     let program = compile_source(
         "package Main;\n\
              function f() -> int { var xs = [1]; return xs[5]; }\n\
-             function main() { var r = f(); }",
+             function main() -> void { var r = f(); }",
     );
     let err = Vm::new(&program).run().unwrap_err();
     assert_eq!(err.frames.len(), 2, "callee + main: {:?}", err.frames);
@@ -29,8 +29,8 @@ fn run_and_runvm_traces_match() {
     for src in [
         "package Main;\n\
              function g() -> int { var xs = [1]; return xs[9]; }\n\
-             function main() { var r = g(); }",
-        "package Main;\nfunction main() { var x = 1 / 0; }",
+             function main() -> void { var r = g(); }",
+        "package Main;\nfunction main() -> void { var x = 1 / 0; }",
     ] {
         let unit = crate::loader::load_loose_src(src).unwrap();
         let checked = crate::cli::check_and_expand(&unit.program, &unit.diag_src).unwrap();

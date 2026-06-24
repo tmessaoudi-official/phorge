@@ -12,7 +12,7 @@ function fib(int n) -> int {
     return fib(n - 1) + fib(n - 2);
 }
 
-function main() {
+function main() -> void {
     Console.println("phorge standalone build");
     for (int i in 0..10) {
         Console.println("fib({i}) = {fib(i)}");

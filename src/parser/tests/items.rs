@@ -12,7 +12,7 @@ fn parses_private_class_visibility() {
 
 #[test]
 fn parses_internal_function_visibility() {
-    match &prog("package Main;\ninternal function f() {}").items[0] {
+    match &prog("package Main;\ninternal function f() -> void {}").items[0] {
         Item::Function(f) => assert_eq!(f.vis, Visibility::Internal),
         other => panic!("expected function, got {other:?}"),
     }
@@ -122,7 +122,7 @@ fn parses_fn_throws_clause() {
         other => panic!("expected function, got {other:?}"),
     }
     // `throws A | B` captures the whole union as one `Type::Union`.
-    match &prog("package Main;\nfunction g() throws A | B { return; }").items[0] {
+    match &prog("package Main;\nfunction g() -> void throws A | B { return; }").items[0] {
         Item::Function(f) => {
             assert_eq!(f.throws.len(), 1);
             assert!(matches!(&f.throws[0], Type::Union(members, _) if members.len() == 2));
@@ -130,7 +130,7 @@ fn parses_fn_throws_clause() {
         other => panic!("expected function, got {other:?}"),
     }
     // No throws clause ⇒ empty.
-    match &prog("package Main;\nfunction h() {}").items[0] {
+    match &prog("package Main;\nfunction h() -> void {}").items[0] {
         Item::Function(f) => assert!(f.throws.is_empty()),
         other => panic!("expected function, got {other:?}"),
     }
@@ -153,6 +153,8 @@ fn parses_function_decl() {
 
 #[test]
 fn parses_function_no_ret_no_params() {
+    // The PARSER stays permissive: a function with no `-> T` parses with `ret == None`. The
+    // return-type *mandate* (S0b, `E-MISSING-RETURN-TYPE`) is a CHECKER rule, not a parser one.
     match item("function main() { Console.println(1); }") {
         Item::Function(f) => {
             assert_eq!(f.name, "main");
@@ -292,7 +294,7 @@ fn parses_open_class_with_single_extends() {
 #[test]
 fn open_prefix_on_a_non_class_is_an_error() {
     // S6a.2: `open` only applies to classes.
-    let msg = prog_err("package Main;\nopen function f() {}");
+    let msg = prog_err("package Main;\nopen function f() -> void {}");
     assert!(msg.contains("only a class"), "got: {msg}");
 }
 
@@ -412,24 +414,24 @@ fn parses_import() {
 #[test]
 fn parses_package_declaration() {
     // `package a.b;` is captured on the Program, not as an Item (M5 S1).
-    let prog = parser("package app.util; function main() {}")
+    let prog = parser("package app.util; function main() -> void {}")
         .parse_program()
         .expect("parse ok");
     assert_eq!(prog.package, vec!["app".to_string(), "util".to_string()]);
     // A bare file parses with an empty package — the checker, not the parser, enforces presence.
-    let bare = parser("function main() {}")
+    let bare = parser("function main() -> void {}")
         .parse_program()
         .expect("parse ok");
     assert!(bare.package.is_empty());
     // `package` after another item is a parse error (it must be the first declaration).
-    assert!(parser("function main() {} package app;")
+    assert!(parser("function main() -> void {} package app;")
         .parse_program()
         .is_err());
 }
 
 #[test]
 fn parses_program_multiple_items() {
-    let src = "import Core.Console; enum E { A, } function main() { return; }";
+    let src = "import Core.Console; enum E { A, } function main() -> void { return; }";
     let prog = parser(src).parse_program().expect("parse ok");
     assert_eq!(prog.items.len(), 3);
     assert!(matches!(prog.items[0], Item::Import { .. }));

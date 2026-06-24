@@ -125,7 +125,7 @@ function dispatch(Request req) -> Response {
 }
 
 // Parse one raw request, route it, and print a one-line summary: METHOD PATH -> STATUS REASON: body.
-function show(bytes raw) {
+function show(bytes raw) -> void {
   if (var req = parseRequest(raw)) {
     Response resp = dispatch(req);
     string m = req.method;
@@ -139,7 +139,7 @@ function show(bytes raw) {
   }
 }
 
-function main() {
+function main() -> void {
   // Five raw requests exercising the table: a hit per route, an unknown path (404), and a method
   // mismatch (POST on a GET-only path → 404). CRLFs as explicit `\x0d\x0a` (deterministic, no file).
   show(b"GET / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");

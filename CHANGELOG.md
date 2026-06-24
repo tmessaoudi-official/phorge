@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — Language Evolution Phase 0: `void`/`Empty` + mandatory return types
+
+The foundation slice for the language-evolution roadmap
+(`docs/plans/2026-06-24-language-evolution-master.plan.md`). Two front-end-only changes, byte-identical
+`run ≡ runvm ≡ real PHP 8.5`.
+
+- **S0a — the two-type "nothing" model.** Replaced the implicit `Ty::Unit` with `void` (the common,
+  *uncapturable* nothing — the implicit + side-effect return type) and `Empty` (the rare *holdable*
+  nothing — a real type a caller may bind). The one widening edge `void <: Empty` keeps it ergonomic.
+  New `E-VOID-CAPTURE` (binding a void value, unless annotated `Empty`). Transpiles `void` → PHP
+  `: void`, `Empty` → a hint-less PHP function (capturable `null`). `examples/guide/void-empty.phg`.
+- **S0b — mandatory return types.** Every named function, method (incl. `abstract` + interface
+  signatures), and statement-body lambda must declare a return type (`E-MISSING-RETURN-TYPE`),
+  **including `main`**. Expression-body lambdas (`fn(x) => e`) keep inferring (the `=>` form's whole
+  point; PHP arrow fns carry no return type). Constructors and property hooks are exempt. A repo-wide
+  codemod (`tools/return_type_codemod.py`, a balanced-paren scanner) annotated every existing function
+  with `-> void`. Both new error codes self-document via `phg explain`.
+
 ## [0.5.0-alpha.1] - 2026-06-24
 
 First tagged pre-release. Rolls up all work since the internal 0.4.0 mark: M3 + the full M-RT

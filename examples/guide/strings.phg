@@ -5,7 +5,7 @@ function greet(string who) -> string {
     return "Hello, {who}!";
 }
 
-function main() {
+function main() -> void {
     string name = "Phorge";
     int n = 3;
     float pi = 3.14;

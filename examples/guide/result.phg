@@ -48,7 +48,7 @@ function show(Result<int, string> r) -> string {
 // fault crashes, panics can't appear in a *runnable* example — but a *passing* `assert` runs cleanly and
 // is byte-identical, so we show that form here. (A failing `panic`/`assert` transpiles to a PHP `throw`.)
 
-function main() {
+function main() -> void {
     assert(1 < 2, "arithmetic is intact"); // passes — a no-op; a false condition would fault
     Console.println(show(combine(1, 2))); // ok 30   — both fields succeed (10 + 20)
     Console.println(show(combine(3, -1))); // err negative key -1 — second field fails, `?` short-circuits

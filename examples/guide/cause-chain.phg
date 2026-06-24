@@ -25,7 +25,7 @@ function readConfig() -> int throws ConfigError {
   }
 }
 
-function main() {
+function main() -> void {
   try {
     var n = readConfig();
     Console.println("loaded {n}");

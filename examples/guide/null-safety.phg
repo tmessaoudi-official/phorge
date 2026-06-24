@@ -18,7 +18,7 @@ function describe(int? o) -> string {
     };
 }
 
-function main() {
+function main() -> void {
     // A `T?` holds a value or `null`; a non-optional `T` widens to `T?`.
     int? some = 7;
     int? none = null;

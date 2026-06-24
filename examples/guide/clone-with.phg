@@ -12,7 +12,7 @@ class Point {
     }
 }
 
-function main() {
+function main() -> void {
     Point origin = Point(0, 0);
 
     // Override one field — `origin` is untouched.

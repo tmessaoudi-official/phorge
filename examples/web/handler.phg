@@ -93,7 +93,7 @@ function handle(Request req) -> Response {
   return Response(200, body, ["Content-Type: text/plain"]);
 }
 
-function main() {
+function main() -> void {
   string nl = Bytes.toString(b"\x0d\x0a") ?? "";
   // A canonical raw request, built as a `b"…"` literal with explicit `\x0d\x0a` CRLFs — deterministic
   // (no committed-file autocrlf hazard) and a showcase of W0's byte literals.

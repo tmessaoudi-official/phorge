@@ -23,7 +23,7 @@ function describe(Circle c) -> string {
     return "not a circle";
 }
 
-function main() {
+function main() -> void {
     Circle c = Circle(2);
     Square s = Square(3);
 

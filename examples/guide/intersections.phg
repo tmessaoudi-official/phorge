@@ -41,7 +41,7 @@ function justDraw(Drawable d) -> string {
     return d.draw();
 }
 
-function main() {
+function main() -> void {
     var badge = Badge("ok");
     var sticker = Sticker("hi");
 

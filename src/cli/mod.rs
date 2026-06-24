@@ -63,15 +63,15 @@ pub fn help_for(cmd: &str) -> String {
                   usage:\n  phg run <file | - | -e code> [--]\n\n\
                   examples:\n  \
                   phg run hello.phg\n  \
-                  phg run -e 'function main() { Console.println(\"hi\"); }'\n  \
-                  echo 'function main(){Console.println(\"hi\");}' | phg run -\n"
+                  phg run -e 'function main() -> void { Console.println(\"hi\"); }'\n  \
+                  echo 'function main()-> void {Console.println(\"hi\");}' | phg run -\n"
         }
         "runvm" => {
             "runvm — run the program on the bytecode VM (byte-identical to `run`).\n\n\
                     usage:\n  phg runvm <file | - | -e code>\n\n\
                     examples:\n  \
                     phg runvm hello.phg\n  \
-                    phg runvm -e 'function main() { Console.println(\"{2 + 2}\"); }'\n"
+                    phg runvm -e 'function main() -> void { Console.println(\"{2 + 2}\"); }'\n"
         }
         "check" => {
             "check — type-check only; print OK or the type errors, run nothing.\n\n\
@@ -105,7 +105,7 @@ pub fn help_for(cmd: &str) -> String {
             "disasm — print the compiled bytecode the VM will execute.\n\n\
                      usage:\n  phg disasm <file | - | -e code>\n\n\
                      examples:\n  \
-                     phg disasm -e 'function main() { int x = 1 + 2; }'\n"
+                     phg disasm -e 'function main() -> void { int x = 1 + 2; }'\n"
         }
         "bench" => {
             "bench — benchmark `run` vs `runvm` (median wall-clock + memory).\n\n\

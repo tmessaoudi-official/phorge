@@ -82,7 +82,7 @@ function respond(bytes raw) -> bytes {
   }
 }
 
-function main() {
+function main() -> void {
   bytes raw = b"GET / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a";
   int len = Bytes.len(respond(raw));
   Console.println("served {len} bytes");

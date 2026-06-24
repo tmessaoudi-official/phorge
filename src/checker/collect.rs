@@ -94,6 +94,18 @@ impl Checker {
                 continue;
             }
             let params = m.params.iter().map(|p| self.resolve_type(&p.ty)).collect();
+            // S0b: an interface method signature must declare its return type too (it never flows
+            // through `check_function`, so enforce it here at collection).
+            if m.ret.is_none() {
+                self.err_coded(
+                    m.span,
+                    format!("interface method `{}` must declare a return type", m.name),
+                    "E-MISSING-RETURN-TYPE",
+                    Some(
+                        "every function and method declares its return type — add `-> void` for a side-effecting method".into(),
+                    ),
+                );
+            }
             let ret = match &m.ret {
                 Some(t) => self.resolve_type(t),
                 None => Ty::Void,

@@ -8,7 +8,7 @@ import Core.Math;
 // `__phorge_float` helper reproduces Rust's shortest-round-trip `f64` Display) — see
 // `examples/guide/floats.phg` for the full magnitude/precision showcase.
 
-function main() {
+function main() -> void {
     // float math
     float root = Math.sqrt(16.0);
     float power = Math.pow(2.0, 10.0);

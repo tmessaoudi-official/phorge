@@ -27,15 +27,21 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
 ## Build sequence
 
 ### Phase 0 — Foundation (do first; everything builds on it)
-- **S0a — `void` + `Empty` types.** Add `Ty::Void` (uncapturable) + `Ty::Empty` (holdable), `void <:
-  Empty` in `assignable_with`; make both writable builtins (`is_builtin_type_name`); migrate internal
-  `Ty::Unit` semantics. Capture-of-void → new error `E-VOID-CAPTURE`. Transpiler: `void` → `: void`,
-  `Empty` → plain value.
-- **S0b — Mandatory return types + repo-wide codemod.** Every function/method/**lambda** must declare a
-  return type; **no exemptions** where syntactically applicable (constructors have no return slot →
-  inherently N/A; property hooks are typed by the property). New code is then born annotated.
-  Breaking codemod across all `.phg` + inline test programs + fixtures + vendored deps (mirror the
-  namespace-reshape tooling). New error `E-MISSING-RETURN-TYPE`. Run **before** Phase 1/2.
+- **S0a — `void` + `Empty` types. ✅ DONE (`4606b1f`).** `Ty::Unit` → `Ty::Void` + new `Ty::Empty`;
+  `void <: Empty` in `assignable_with`; both writable builtins; `E-VOID-CAPTURE` when a void value is
+  bound (unless annotated `Empty`); `Empty` exempt from the totality check. Transpiler: `void` → PHP
+  `: void`, `Empty` → **no return hint** (PHP infers a capturable `null`; `: mixed`/`: null` would
+  reject a fall-off or bare `return;`). `examples/guide/void-empty.phg`; byte-identical run≡runvm≡PHP 8.5.
+- **S0b — Mandatory return types + repo-wide codemod. ✅ DONE.** Every named function, method
+  (incl. `abstract` + interface signatures), and **statement-body** lambda must declare a return type
+  (`E-MISSING-RETURN-TYPE`); `main` included. **Expression-body lambdas (`fn(x) => e`) keep inferring**
+  — decided after challenge (the `=>` form's whole point is terseness, the soundness rationale doesn't
+  apply to a single total expression, and PHP arrow fns can't carry a return type anyway). Constructors
+  (no return slot) and property hooks (typed by the property) are exempt. Enforced in `check_function`
+  (fns/methods/abstract) + interface-method collection. Codemod `tools/return_type_codemod.py` (a
+  balanced-paren scanner — function-typed params contain `->`, so a regex won't do) added `-> void` to
+  ~810 sites across all `.phg` + inline Rust test programs; vendored deps already annotated (lock hash
+  untouched). `phg explain E-MISSING-RETURN-TYPE`/`E-VOID-CAPTURE` added.
 
 ### Phase 1 — Ergonomics perimeter (spec: ergonomics-perimeter; 7 slices)
 1. **String** — `+` concat (typed; `string+int` = error), `\u{HEX}` escapes (lex→UTF-8), literal braces
@@ -81,7 +87,12 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
 ## Decisions Log (2026-06-24)
 - **No-value types:** `void` (uncapturable keyword) + `Empty` (PascalCase holdable type), `void <: Empty`.
 - **UFCS:** general, method-first.
-- **Return-type mandate:** all fns/methods/lambdas; no exemptions; folded in, codemod first (S0b).
+- **Return-type mandate:** named fns + methods (incl. abstract/interface) + **statement-body** lambdas;
+  `main` included. **Expression-body lambdas `fn(x) => e` keep inferring** (decided 2026-06-24 after the
+  developer's "Option 2?" instinct was challenged: the `=>` form exists to be terse, an expression body
+  can't fall off the end so the soundness mandate is vacuous there, PHP arrow fns take no return type,
+  and TS/Rust/Kotlin/Swift all infer — so the rule is "every *block-bodied* function is annotated").
+  Constructors + property hooks exempt. Codemod-first (S0b, done).
 - **Contested:** string `+` ✓; UFCS ✓; `s[0]`→defer M-text + Text natives; ternary ✓; `switch`→reject,
   or-patterns instead ✓; power→`**`+`Math.ipow` both ✓.
 - **Defer set:** `\u{}`→pull forward ✓; tuples→defer; let-destructuring→full+`else` ✓; **fixed-length

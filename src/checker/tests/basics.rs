@@ -6,7 +6,7 @@ use super::support::*;
 fn unknown_identifier_suggests_the_nearest_in_scope_name() {
     // `cont` is one edit from the in-scope `count` → the diagnostic carries a code + hint.
     let errs = errors_of(
-        "import Core.Console; function main() { int count = 0; Console.println(\"{cont}\"); }",
+        "import Core.Console; function main() -> void { int count = 0; Console.println(\"{cont}\"); }",
     );
     let d = errs
         .iter()
@@ -22,25 +22,27 @@ fn unknown_identifier_suggests_the_nearest_in_scope_name() {
 
 #[test]
 fn arithmetic_mixing_int_float_errors() {
-    let errs = errors_of("function main() { float x = 1 + 2.0; }");
+    let errs = errors_of("function main() -> void { float x = 1 + 2.0; }");
     assert!(!errs.is_empty(), "mixing int and float must error");
 }
 
 #[test]
 fn bitwise_requires_int_operands() {
     // int & int → int (accepted, used as an int).
-    assert!(errors_of("function main() { int x = 0xFF & 0x0F; int y = x << 2; }").is_empty());
+    assert!(
+        errors_of("function main() -> void { int x = 0xFF & 0x0F; int y = x << 2; }").is_empty()
+    );
     // unary `~` on an int is fine.
-    assert!(errors_of("function main() { int x = ~5; }").is_empty());
+    assert!(errors_of("function main() -> void { int x = ~5; }").is_empty());
     // bitwise on a non-int operand is rejected.
-    let errs = errors_of("function main() { int x = 3 & 2.0; }");
+    let errs = errors_of("function main() -> void { int x = 3 & 2.0; }");
     assert!(
         errs.iter()
             .any(|e| e.message.contains("bitwise operators require `int`")),
         "{errs:?}"
     );
     // unary `~` on a non-int is rejected.
-    let e2 = errors_of("function main() { var x = ~true; }");
+    let e2 = errors_of("function main() -> void { var x = ~true; }");
     assert!(
         e2.iter()
             .any(|e| e.message.contains("unary `~` requires `int`")),
@@ -50,7 +52,7 @@ fn bitwise_requires_int_operands() {
 
 #[test]
 fn if_condition_must_be_bool() {
-    let errs = errors_of("function main() { if (1) { } }");
+    let errs = errors_of("function main() -> void { if (1) { } }");
     assert!(
         errs.iter()
             .any(|e| e.message.contains("condition must be `bool`")),
@@ -60,7 +62,7 @@ fn if_condition_must_be_bool() {
 
 #[test]
 fn equality_requires_same_type() {
-    let errs = errors_of("function main() { bool b = 1 == true; }");
+    let errs = errors_of("function main() -> void { bool b = 1 == true; }");
     assert!(
         errs.iter().any(|e| e.message.contains("cross-type")),
         "{errs:?}"
@@ -69,7 +71,7 @@ fn equality_requires_same_type() {
 
 #[test]
 fn unknown_identifier_errors() {
-    let errs = errors_of("function main() { int n = missing; }");
+    let errs = errors_of("function main() -> void { int n = missing; }");
     assert!(
         errs.iter()
             .any(|e| e.message.contains("unknown identifier")),
@@ -79,7 +81,7 @@ fn unknown_identifier_errors() {
 
 #[test]
 fn block_scoping_pops_bindings() {
-    let errs = errors_of("function main() { { int x = 1; } int y = x; }");
+    let errs = errors_of("function main() -> void { { int x = 1; } int y = x; }");
     assert!(
         errs.iter()
             .any(|e| e.message.contains("unknown identifier")),
@@ -98,15 +100,15 @@ fn return_type_checked_against_signature() {
 
 #[test]
 fn expression_if_unifies_branch_types() {
-    assert!(
-        errors_of("function main() { var x = if (1 < 2) { 10 } else { 20 }; int y = x; }")
-            .is_empty()
-    );
+    assert!(errors_of(
+        "function main() -> void { var x = if (1 < 2) { 10 } else { 20 }; int y = x; }"
+    )
+    .is_empty());
 }
 
 #[test]
 fn expression_if_branch_type_mismatch_errors() {
-    let errs = errors_of("function main() { var x = if (true) { 1 } else { false }; }");
+    let errs = errors_of("function main() -> void { var x = if (true) { 1 } else { false }; }");
     assert!(
         errs.iter()
             .any(|e| e.message.contains("branches must share one type")),
@@ -116,7 +118,7 @@ fn expression_if_branch_type_mismatch_errors() {
 
 #[test]
 fn expression_if_condition_must_be_bool() {
-    let errs = errors_of("function main() { var x = if (3) { 1 } else { 2 }; }");
+    let errs = errors_of("function main() -> void { var x = if (3) { 1 } else { 2 }; }");
     assert!(
         errs.iter()
             .any(|e| e.message.contains("condition must be `bool`")),

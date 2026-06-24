@@ -28,7 +28,7 @@ function sign(int n) -> string {
     };
 }
 
-function main() {
+function main() -> void {
     List<Json> vals = [JNull(), JBool(true), JNum(42), JStr("hi")];
     for (Json j in vals) {
         Console.println(show(j));

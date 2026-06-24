@@ -7,7 +7,7 @@ fn generic_identity_typechecks_and_infers() {
     // A generic function used at two distinct concrete types — both inferred clean.
     let ok = errors_of(
         "function id<T>(T x) -> T { return x; } \
-             function main() { int n = id(42); string s = id(\"hi\"); }",
+             function main() -> void { int n = id(42); string s = id(\"hi\"); }",
     );
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
@@ -16,8 +16,9 @@ fn generic_identity_typechecks_and_infers() {
 fn generic_call_result_is_substituted() {
     // `id(42)` returns `int`, so binding it to a `string` is a type error (the return type was
     // unified to the concrete argument type, not left abstract).
-    let bad =
-        errors_of("function id<T>(T x) -> T { return x; } function main() { string s = id(42); }");
+    let bad = errors_of(
+        "function id<T>(T x) -> T { return x; } function main() -> void { string s = id(42); }",
+    );
     assert!(!bad.is_empty(), "expected a type error, got none");
 }
 
@@ -28,7 +29,7 @@ fn generic_unifies_through_list_and_function() {
     let ok = errors_of(
             "function firstOr<T>(List<T> xs, T fallback) -> T { for (T x in xs) { return x; } return fallback; } \
              function applyTwice<T>(T x, (T) -> T f) -> T { return f(f(x)); } \
-             function main() { List<int> xs = [1, 2]; int a = firstOr(xs, 0); int b = applyTwice(5, fn(int v) => v + 1); }",
+             function main() -> void { List<int> xs = [1, 2]; int a = firstOr(xs, 0); int b = applyTwice(5, fn(int v) => v + 1); }",
         );
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
@@ -39,14 +40,14 @@ fn generic_argument_must_unify_consistently() {
     // `int` bound from the first.
     let bad = errors_of(
         "function pairEq<T>(T a, T b) -> bool { return true; } \
-             function main() { bool r = pairEq(1, \"x\"); }",
+             function main() -> void { bool r = pairEq(1, \"x\"); }",
     );
     assert!(!bad.is_empty(), "expected a unification error, got none");
 }
 
 #[test]
 fn type_param_shadowing_builtin_is_rejected() {
-    let e = errors_of("function f<int>(int x) -> int { return x; } function main() {}");
+    let e = errors_of("function f<int>(int x) -> int { return x; } function main() -> void {}");
     assert!(
         e.iter().any(|d| d.code == Some("E-GENERIC-PARAM")),
         "got {e:?}"
@@ -55,7 +56,7 @@ fn type_param_shadowing_builtin_is_rejected() {
 
 #[test]
 fn duplicate_type_param_is_rejected() {
-    let e = errors_of("function f<T, T>(T x) -> T { return x; } function main() {}");
+    let e = errors_of("function f<T, T>(T x) -> T { return x; } function main() -> void {}");
     assert!(
         e.iter().any(|d| d.code == Some("E-GENERIC-PARAM")),
         "got {e:?}"
@@ -64,7 +65,7 @@ fn duplicate_type_param_is_rejected() {
 
 #[test]
 fn type_param_must_be_pascalcase() {
-    let e = errors_of("function f<t>(t x) -> t { return x; } function main() {}");
+    let e = errors_of("function f<t>(t x) -> t { return x; } function main() -> void {}");
     assert!(e.iter().any(|d| d.code == Some("E-TYPE-CASE")), "got {e:?}");
 }
 
@@ -73,7 +74,7 @@ fn generic_method_typechecks_and_infers() {
     // A generic method on a non-generic class, inferred from arguments at two distinct types.
     let ok = errors_of(
         "class U { function id<T>(T x) -> T { return x; } } \
-             function main() { var u = U(); int n = u.id(42); string s = u.id(\"hi\"); }",
+             function main() -> void { var u = U(); int n = u.id(42); string s = u.id(\"hi\"); }",
     );
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
@@ -85,7 +86,7 @@ fn generic_method_result_is_substituted() {
     // checked by the plain non-generic path.
     let bad = errors_of(
         "class U { function id<T>(T x) -> T { return x; } } \
-             function main() { var u = U(); string s = u.id(42); }",
+             function main() -> void { var u = U(); string s = u.id(42); }",
     );
     assert!(!bad.is_empty(), "expected a type error, got none");
 }
@@ -95,14 +96,15 @@ fn generic_method_argument_must_unify_consistently() {
     // Two `T` parameters of a method bound to incompatible concrete types.
     let bad = errors_of(
         "class U { function pairEq<T>(T a, T b) -> bool { return true; } } \
-             function main() { var u = U(); bool r = u.pairEq(1, \"x\"); }",
+             function main() -> void { var u = U(); bool r = u.pairEq(1, \"x\"); }",
     );
     assert!(!bad.is_empty(), "expected a unification error, got none");
 }
 
 #[test]
 fn generic_method_param_must_be_pascalcase() {
-    let e = errors_of("class U { function f<t>(t x) -> t { return x; } } function main() {}");
+    let e =
+        errors_of("class U { function f<t>(t x) -> t { return x; } } function main() -> void {}");
     assert!(e.iter().any(|d| d.code == Some("E-TYPE-CASE")), "got {e:?}");
 }
 
@@ -114,7 +116,7 @@ fn generic_class_construction_infers_and_substitutes() {
             "class Box<T> { constructor(private T value) {} function get() -> T { return this.value; } } \
              class Pair<A, B> { constructor(private A first, private B second) {} \
                 function left() -> A { return this.first; } function right() -> B { return this.second; } } \
-             function main() { var b = Box(7); int x = b.get(); \
+             function main() -> void { var b = Box(7); int x = b.get(); \
                 var p = Pair(1, \"s\"); int l = p.left(); string r = p.right(); }",
         );
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
@@ -126,7 +128,7 @@ fn generic_class_result_is_substituted() {
     // (the instance carries `T=int`, recovered at the member access), not an abstract/mixed result.
     let bad = errors_of(
             "class Box<T> { constructor(private T value) {} function get() -> T { return this.value; } } \
-             function main() { var b = Box(7); string s = b.get(); }",
+             function main() -> void { var b = Box(7); string s = b.get(); }",
         );
     assert!(!bad.is_empty(), "expected a type error, got none");
 }
@@ -136,7 +138,7 @@ fn generic_class_method_param_substituted() {
     // A method *taking* a `T` rejects a wrong-typed argument at the instance's concrete type.
     let bad = errors_of(
             "class Box<T> { constructor(private T value) {} function orElse(T f) -> T { return this.value; } } \
-             function main() { var b = Box(7); int y = b.orElse(\"x\"); }",
+             function main() -> void { var b = Box(7); int y = b.orElse(\"x\"); }",
         );
     assert!(!bad.is_empty(), "expected an argument type error, got none");
 }
@@ -146,7 +148,7 @@ fn generic_class_annotation_arity_checked() {
     // A bare `Box` annotation (no type argument) on a generic class is an arity error.
     let bad = errors_of(
             "class Box<T> { constructor(private T value) {} function get() -> T { return this.value; } } \
-             function main() { Box b = Box(7); }",
+             function main() -> void { Box b = Box(7); }",
         );
     assert!(!bad.is_empty(), "expected an arity error, got none");
 }
@@ -155,7 +157,7 @@ fn generic_class_annotation_arity_checked() {
 fn generic_class_explicit_type_argument_ok() {
     let ok = errors_of(
             "class Box<T> { constructor(private T value) {} function get() -> T { return this.value; } } \
-             function main() { Box<int> b = Box(7); int x = b.get(); }",
+             function main() -> void { Box<int> b = Box(7); int x = b.get(); }",
         );
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
@@ -165,7 +167,7 @@ fn generic_enum_construction_infers_and_binds() {
     // `Some(7)` infers `Option<int>`; matching it binds the payload at the concrete int, so using
     // the binding where an int is expected is clean.
     let ok = errors_of(&format!(
-        "{OPTION} function main() {{ var o = Some(7); \
+        "{OPTION} function main() -> void {{ var o = Some(7); \
              int x = match o {{ Some(n) => n, None() => 0 }}; }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
@@ -177,7 +179,7 @@ fn generic_enum_match_payload_is_concrete() {
     // proving the payload is reified to int at the match (via the scrutinee's type argument), not
     // left abstract/mixed.
     let bad = errors_of(&format!(
-        "{OPTION} function main() {{ var o = Some(7); \
+        "{OPTION} function main() -> void {{ var o = Some(7); \
              string s = match o {{ Some(n) => n, None() => \"x\" }}; }}"
     ));
     assert!(!bad.is_empty(), "expected a type error, got none");
@@ -187,7 +189,7 @@ fn generic_enum_match_payload_is_concrete() {
 fn generic_enum_annotation_arity_checked() {
     // A bare `Option` annotation (no type argument) on a generic enum is an arity error.
     let bad = errors_of(&format!(
-        "{OPTION} function main() {{ Option o = Some(7); }}"
+        "{OPTION} function main() -> void {{ Option o = Some(7); }}"
     ));
     assert!(!bad.is_empty(), "expected an arity error, got none");
 }
@@ -196,7 +198,7 @@ fn generic_enum_annotation_arity_checked() {
 fn generic_enum_annotated_non_inferring_variant_ok() {
     // `None` mentions no `T`, so it cannot infer the argument — annotating the binding fixes it.
     let ok = errors_of(&format!(
-        "{OPTION} function main() {{ Option<int> n = None(); \
+        "{OPTION} function main() -> void {{ Option<int> n = None(); \
              int x = match n {{ Some(v) => v, None() => 0 }}; }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
@@ -208,7 +210,7 @@ fn generic_enum_two_params_independent() {
     let ok = errors_of(&format!(
         "{RESULT} function ok() -> Result<int, string> {{ return Ok(1); }} \
              function bad() -> Result<int, string> {{ return Err(\"no\"); }} \
-             function main() {{ string r = match ok() {{ Ok(v) => \"v\", Err(e) => e }}; }}"
+             function main() -> void {{ string r = match ok() {{ Ok(v) => \"v\", Err(e) => e }}; }}"
     ));
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
@@ -217,7 +219,7 @@ fn generic_enum_two_params_independent() {
 fn generic_enum_variant_arity_checked() {
     // A generic variant constructor still checks its own arity: `Some` takes exactly one field.
     let bad = errors_of(&format!(
-        "{OPTION} function main() {{ var o = Some(1, 2); }}"
+        "{OPTION} function main() -> void {{ var o = Some(1, 2); }}"
     ));
     assert!(!bad.is_empty(), "expected an arity error, got none");
 }
@@ -225,7 +227,7 @@ fn generic_enum_variant_arity_checked() {
 #[test]
 fn generic_enum_param_must_be_pascalcase() {
     // A type parameter shadowing a built-in type name is `E-GENERIC-PARAM`.
-    let bad = errors_of("enum Box<int> { Wrap(int x) } function main() {}");
+    let bad = errors_of("enum Box<int> { Wrap(int x) } function main() -> void {}");
     assert!(
         bad.iter().any(|d| d.code == Some("E-GENERIC-PARAM")),
         "expected E-GENERIC-PARAM, got {bad:?}"
@@ -235,7 +237,7 @@ fn generic_enum_param_must_be_pascalcase() {
 #[test]
 fn erase_generics_strips_enum_type_params() {
     use crate::ast::{Item, Type};
-    let e = erase_generics(prog(&format!("{OPTION} function main() {{}}")));
+    let e = erase_generics(prog(&format!("{OPTION} function main() -> void {{}}")));
     let en = e
         .items
         .iter()
@@ -260,14 +262,15 @@ fn erase_generics_strips_enum_type_params() {
 #[test]
 fn non_generic_enum_rejects_type_argument() {
     // A plain (non-generic) enum still takes no type arguments.
-    let bad = errors_of("enum Color { Red, Green } function main() { Color<int> c = Red(); }");
+    let bad =
+        errors_of("enum Color { Red, Green } function main() -> void { Color<int> c = Red(); }");
     assert!(!bad.is_empty(), "expected an arity error, got none");
 }
 
 #[test]
 fn generic_class_param_must_be_pascalcase() {
     let e = errors_of(
-        "class Box<t> { constructor(private t value) {} } function main() { var b = Box(7); }",
+        "class Box<t> { constructor(private t value) {} } function main() -> void { var b = Box(7); }",
     );
     assert!(e.iter().any(|d| d.code == Some("E-TYPE-CASE")), "got {e:?}");
 }
@@ -276,7 +279,7 @@ fn generic_class_param_must_be_pascalcase() {
 fn method_type_param_shadowing_class_param_rejected() {
     let e = errors_of(
         "class Box<T> { constructor(private T value) {} function id<T>(T x) -> T { return x; } } \
-             function main() { var b = Box(7); }",
+             function main() -> void { var b = Box(7); }",
     );
     assert!(
         e.iter().any(|d| d.code == Some("E-GENERIC-PARAM")),
@@ -288,7 +291,7 @@ fn method_type_param_shadowing_class_param_rejected() {
 fn erase_generics_strips_class_type_params() {
     use crate::ast::{ClassMember, Item, Type};
     let p = prog(
-            "class Box<T> { constructor(private T value) {} function get() -> T { return this.value; } } function main() {}",
+            "class Box<T> { constructor(private T value) {} function get() -> T { return this.value; } } function main() -> void {}",
         );
     let e = erase_generics(p);
     let c = e
@@ -320,7 +323,7 @@ fn erase_generics_strips_class_type_params() {
 #[test]
 fn erase_generics_strips_method_type_params() {
     use crate::ast::{ClassMember, Item, Type};
-    let p = prog("class U { function id<T>(T x) -> T { return x; } } function main() {}");
+    let p = prog("class U { function id<T>(T x) -> T { return x; } } function main() -> void {}");
     let e = erase_generics(p);
     let m = e
         .items
@@ -349,7 +352,7 @@ fn erase_generics_strips_method_type_params() {
 #[test]
 fn erase_generics_strips_type_params_and_rewrites_types() {
     use crate::ast::{Item, Type};
-    let p = prog("function id<T>(T x) -> T { return x; } function main() {}");
+    let p = prog("function id<T>(T x) -> T { return x; } function main() -> void {}");
     let e = erase_generics(p);
     let f = e
         .items
@@ -394,7 +397,7 @@ fn generic_native_call_infers_and_substitutes() {
 import Core.Console;
 import Core.List;
 import Core.Map;
-function main() {
+function main() -> void {
     var nums = [1, 2, 3];
     var rev = List.reverse(nums);
     var total = List.sum(rev);
@@ -415,7 +418,7 @@ fn generic_native_key_type_mismatch_errors() {
     let errs = errors_of(
         r#"package Main;
 import Core.Map;
-function main() {
+function main() -> void {
     var ages = ["a" => 10];
     var bad = Map.has(ages, 7);
 }"#,

@@ -53,7 +53,7 @@ function classify(int | string code) -> string {
     };
 }
 
-function main() {
+function main() -> void {
     Circle c = Circle(2);
     Square s = Square(3);
     Triangle t = Triangle(4, 3);

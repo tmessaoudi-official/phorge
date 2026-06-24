@@ -31,7 +31,7 @@ function bulk(int unit, int n) -> int {
     return unit + bulk(unit, n - 1);
 }
 
-function main() {
+function main() -> void {
     List<Item> cart = [
         Item("Widget", 1000, None()),
         Item("Gadget", 2000, Percent(10)),

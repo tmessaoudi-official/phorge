@@ -41,7 +41,7 @@ class Pair<A, B> {
   }
 }
 
-function main() {
+function main() -> void {
   var bi = Box(7); // Box<int>  — T inferred from `7`
   int x = bi.get(); // int
   int y = bi.orElse(0); // int — the T-typed parameter accepts an int

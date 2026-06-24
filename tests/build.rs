@@ -168,7 +168,7 @@ fn built_binary_ignores_argv_runs_embedded() {
 #[test]
 fn build_rejects_ill_typed_program() {
     let bad = std::env::temp_dir().join(format!("phorge_bad_{}.phg", std::process::id()));
-    std::fs::write(&bad, "function main() { int x = \"no\"; }").unwrap();
+    std::fs::write(&bad, "function main() -> void { int x = \"no\"; }").unwrap();
     let out_bin = std::env::temp_dir().join(format!("phorge_bad_out_{}", std::process::id()));
     let _ = std::fs::remove_file(&out_bin);
     let build = Command::new(BIN)

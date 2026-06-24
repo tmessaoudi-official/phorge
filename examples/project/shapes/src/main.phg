@@ -25,7 +25,7 @@ function paintName(Paint p) -> string {
   };
 }
 
-function main() {
+function main() -> void {
   Rect r = Rect(3, 4); // instantiate an imported class
   int a = describe(r); // pass it where an imported interface is expected
   Console.println("area: {a}");

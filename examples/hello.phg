@@ -1,6 +1,6 @@
 package Main;
 import Core.Console;
 
-function main() {
+function main() -> void {
     Console.println("Hello, Phorge!");
 }

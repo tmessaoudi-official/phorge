@@ -28,7 +28,7 @@ class Greeter {
     }
 }
 
-function main() {
+function main() -> void {
     Greeter g = Greeter("Tak");
     Console.println(g.greet());
 

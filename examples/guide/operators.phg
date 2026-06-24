@@ -4,7 +4,7 @@ import Core.Console;
 // Arithmetic, comparison, logical, and unary operators.
 // Integer arithmetic is overflow-checked (a real overflow faults cleanly on both backends).
 
-function main() {
+function main() -> void {
     int a = 7;
     int b = 3;
     Console.println("a + b = {a + b}");

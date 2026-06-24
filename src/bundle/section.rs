@@ -35,8 +35,9 @@ mod tests {
     fn dispatch_routes_pe_to_pe_reader() {
         // An MZ image carrying a `.phorge` section with a real container: find_section must sniff PE,
         // route to the PE reader, and return the raw container that decodes back to the source.
-        let payload =
-            encode_container(b"import Core.Console; function main() { Console.println(\"pe\"); }");
+        let payload = encode_container(
+            b"import Core.Console; function main() -> void { Console.println(\"pe\"); }",
+        );
         let mut img = vec![0u8; 0x40];
         img[0] = b'M';
         img[1] = b'Z';
@@ -56,7 +57,7 @@ mod tests {
         let got = find_section(&img).expect("section");
         assert_eq!(
             crate::bundle::container::decode_container(got).as_deref(),
-            Some(&b"import Core.Console; function main() { Console.println(\"pe\"); }"[..])
+            Some(&b"import Core.Console; function main() -> void { Console.println(\"pe\"); }"[..])
         );
     }
 }

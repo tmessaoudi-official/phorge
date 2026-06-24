@@ -24,7 +24,7 @@ function isOdd(int n) -> bool {
     return isEven(n - 1);
 }
 
-function main() {
+function main() -> void {
     if (fact(5) > 100) {
         Console.println("5! is big: {fact(5)}");
     } else {

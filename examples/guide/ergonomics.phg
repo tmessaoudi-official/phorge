@@ -2,7 +2,7 @@ package Main;
 import Core.Console;
 
 // M3 S1 "core ergonomics": list indexing, integer ranges, and expression `if`.
-function main() {
+function main() -> void {
     // Indexing: read elements out of a list by position.
     List<int> xs = [10, 20, 30];
     Console.println("first={xs[0]} last={xs[2]}");

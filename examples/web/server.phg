@@ -139,7 +139,7 @@ function respond(bytes raw) -> bytes {
 }
 
 // Print the status line + byte count of the response to one canned request (one clean ASCII line).
-function summarize(bytes raw) {
+function summarize(bytes raw) -> void {
   bytes wire = respond(raw);
   string nl = Bytes.toString(b"\x0d\x0a") ?? "";
   string wireStr = Bytes.toString(wire) ?? "(binary)";
@@ -149,7 +149,7 @@ function summarize(bytes raw) {
   Console.println("{statusLine} ({len}B)");
 }
 
-function main() {
+function main() -> void {
   // Exercise the served pipe on five canned requests: a hit per route, an unknown path (404), a
   // method mismatch (404), and a malformed buffer (400) — deterministic, no socket, no File.
   summarize(b"GET / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");

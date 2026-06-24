@@ -33,7 +33,7 @@ function doubled(int n) -> int throws NegativeInput | TooLarge {
   return v * 2;
 }
 
-function main() {
+function main() -> void {
   // Multiple `catch` clauses dispatch by type; `finally` runs on every path (ok, caught, or
   // propagated). `?`-throws inside `doubled` surfaces the exception here.
   for (int n in [50, 0 - 5, 200]) {

@@ -28,7 +28,7 @@ class Counter {
     }
 }
 
-function main() {
+function main() -> void {
     Counter c = Counter(100);
     int t = c.add(23);
     Console.println("counter total = {t}");

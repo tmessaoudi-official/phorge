@@ -69,7 +69,7 @@ fn instantiating_an_abstract_class_errors() {
     // S6b.3: an abstract class cannot be constructed.
     let errs = errors_of(
         "abstract class Shape { abstract function area() -> int; } \
-             function main() { Shape s = Shape(); }",
+             function main() -> void { Shape s = Shape(); }",
     );
     assert!(
         errs.iter()

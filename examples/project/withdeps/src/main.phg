@@ -6,7 +6,7 @@ package Main;
 import Core.Console;
 import Acme.Strutil;
 
-function main() {
+function main() -> void {
   // Qualified calls into the vendored dependency (leaf-qualified, exactly like core.*).
   Console.println(Strutil.banner("Phorge deps"));
   Console.println(Strutil.shout("vendored offline"));

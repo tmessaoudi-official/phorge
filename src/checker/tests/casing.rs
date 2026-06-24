@@ -5,54 +5,56 @@ use super::support::*;
 #[test]
 fn package_is_mandatory_and_core_is_reserved() {
     // M5 S1: every file is packaged, never inferred. No declaration → E-NO-PACKAGE.
-    let e = errors_of_raw("function main() {}");
+    let e = errors_of_raw("function main() -> void {}");
     assert!(
         e.iter().any(|d| d.code == Some("E-NO-PACKAGE")),
         "got {e:?}"
     );
     // The `Core` root is reserved for the standard library → E-RESERVED-PACKAGE.
-    let e2 = errors_of_raw("package Core; function main() {}");
+    let e2 = errors_of_raw("package Core; function main() -> void {}");
     assert!(
         e2.iter().any(|d| d.code == Some("E-RESERVED-PACKAGE")),
         "got {e2:?}"
     );
-    let e3 = errors_of_raw("package Core.Evil; function main() {}");
+    let e3 = errors_of_raw("package Core.Evil; function main() -> void {}");
     assert!(
         e3.iter().any(|d| d.code == Some("E-RESERVED-PACKAGE")),
         "got {e3:?}"
     );
     // A well-formed user package (and the reserved `Main`) type-check cleanly.
-    assert!(check(&prog_raw("package App.Util; function main() {}")).is_ok());
-    assert!(check(&prog_raw("package Main; function main() {}")).is_ok());
+    assert!(check(&prog_raw("package App.Util; function main() -> void {}")).is_ok());
+    assert!(check(&prog_raw("package Main; function main() -> void {}")).is_ok());
 }
 
 #[test]
 fn package_and_import_segments_must_be_pascalcase() {
     // Reshape slice 2b: a lowercase package segment is rejected (E-PKG-CASE).
-    let e = errors_of_raw("package app.util; function main() {}");
+    let e = errors_of_raw("package app.util; function main() -> void {}");
     assert!(e.iter().any(|d| d.code == Some("E-PKG-CASE")), "got {e:?}");
     // Each non-PascalCase segment is flagged; a single-segment lowercase package too.
-    let e2 = errors_of_raw("package acme; function main() {}");
+    let e2 = errors_of_raw("package acme; function main() -> void {}");
     assert!(
         e2.iter().any(|d| d.code == Some("E-PKG-CASE")),
         "got {e2:?}"
     );
     // A lowercase import path segment is rejected.
-    let e3 = errors_of_raw("package Main; import acme.util; function main() { int x = util.f(); }");
+    let e3 = errors_of_raw(
+        "package Main; import acme.util; function main() -> void { int x = util.f(); }",
+    );
     assert!(
         e3.iter().any(|d| d.code == Some("E-PKG-CASE")),
         "got {e3:?}"
     );
     // A lowercase import alias is rejected (it occupies a leaf position).
     let e4 = errors_of_raw(
-        "package Main; import Acme.Util as util; function main() { int x = util.f(); }",
+        "package Main; import Acme.Util as util; function main() -> void { int x = util.f(); }",
     );
     assert!(
         e4.iter().any(|d| d.code == Some("E-PKG-CASE")),
         "got {e4:?}"
     );
     // PascalCase package + import + alias type-check cleanly (no E-PKG-CASE noise).
-    let ok = errors_of_raw("package App.Util; function main() {}");
+    let ok = errors_of_raw("package App.Util; function main() -> void {}");
     assert!(
         !ok.iter().any(|d| d.code == Some("E-PKG-CASE")),
         "got {ok:?}"
@@ -62,7 +64,7 @@ fn package_and_import_segments_must_be_pascalcase() {
 #[test]
 fn snake_case_function_is_rejected() {
     // A function name with `_` is not camelCase → E-NAME-CASE, with a converted-form hint.
-    let errs = errors_of("function c_to_f(int c) -> int { return c; } function main() {}");
+    let errs = errors_of("function c_to_f(int c) -> int { return c; } function main() -> void {}");
     let d = errs
         .iter()
         .find(|d| d.code == Some("E-NAME-CASE"))
@@ -77,7 +79,7 @@ fn snake_case_function_is_rejected() {
 #[test]
 fn snake_case_var_binding_is_rejected() {
     // A `var`/typed local binding with `_` is a value identifier → E-NAME-CASE.
-    let errs = errors_of("function main() { int my_count = 0; }");
+    let errs = errors_of("function main() -> void { int my_count = 0; }");
     assert!(
         errs.iter().any(|d| d.code == Some("E-NAME-CASE")),
         "got {errs:?}"
@@ -87,18 +89,18 @@ fn snake_case_var_binding_is_rejected() {
 #[test]
 fn non_pascal_type_enum_variant_is_rejected() {
     // class name, enum name, and a variant name that are not PascalCase → E-TYPE-CASE.
-    let cls = errors_of("class box {} function main() {}");
+    let cls = errors_of("class box {} function main() -> void {}");
     assert!(
         cls.iter().any(|d| d.code == Some("E-TYPE-CASE")),
         "class: {cls:?}"
     );
-    let en = errors_of("enum color { red() } function main() {}");
+    let en = errors_of("enum color { red() } function main() -> void {}");
     // both the enum name `color` and the variant `red` violate PascalCase.
     assert!(
         en.iter().filter(|d| d.code == Some("E-TYPE-CASE")).count() >= 2,
         "enum: {en:?}"
     );
-    let alias = errors_of("type myInt = int; function main() {}");
+    let alias = errors_of("type myInt = int; function main() -> void {}");
     assert!(
         alias.iter().any(|d| d.code == Some("E-TYPE-CASE")),
         "alias: {alias:?}"
@@ -111,7 +113,7 @@ fn conformant_casing_is_clean() {
     let src = "enum Shape { Circle(float r) } \
                    class Box { constructor(private int width) {} function widthOf() -> int { return width; } } \
                    function areaOf(Shape s) -> int { int localCount = 0; return localCount; } \
-                   function main() {}";
+                   function main() -> void {}";
     let errs = errors_of(src);
     assert!(
         !errs

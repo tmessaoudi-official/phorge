@@ -11,7 +11,8 @@ fn match_over_optional() {
             .is_empty()
     );
     // a `null` pattern requires an optional scrutinee
-    let e1 = errors_of("function main() { int n = 3; int x = match n { null => 0, v => v }; }");
+    let e1 =
+        errors_of("function main() -> void { int n = 3; int x = match n { null => 0, v => v }; }");
     assert!(
         e1.iter().any(|d| d.message.contains("`null` pattern")),
         "got {e1:?}"
@@ -54,7 +55,7 @@ fn non_exhaustive_match_lists_missing_variants_sorted() {
     // so the error message is deterministic across runs (no intermittent test/diff hazard).
     let src = "enum E { Gamma(int x), Alpha(int x), Beta(int x) } \
                    function f(E e) -> int { return match e { Alpha(x) => x, }; } \
-                   function main() {}";
+                   function main() -> void {}";
     let errs = errors_of(src);
     assert!(
         errs.iter().any(|e| e

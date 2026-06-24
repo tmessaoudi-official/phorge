@@ -7,7 +7,7 @@ function inc(int x) -> int { return x + 1; }
 // higher-order: a lambda passed to a user function
 function twice(int x, (int) -> int f) -> int { return f(f(x)); }
 
-function main() {
+function main() -> void {
     var add10 = fn(int x) => x + 10;          // expression-body lambda
     var scaled = fn(int x) -> int {           // statement-body lambda (captures none)
         var t = x * x;

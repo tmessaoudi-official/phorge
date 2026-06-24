@@ -12,7 +12,7 @@ import Core.Console;
 import Core.List;
 import Core.Map;
 
-function main() {
+function main() -> void {
     // --- Core.List: reverse (generic) + sum (concrete List<int> -> int) ---
     var nums = [1, 2, 3, 4, 5];
     var rev = List.reverse(nums);

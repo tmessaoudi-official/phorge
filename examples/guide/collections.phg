@@ -7,7 +7,7 @@ class Point {
     function show() -> string { return "({x}, {y})"; }
 }
 
-function main() {
+function main() -> void {
     List<int> nums = [10, 20, 30];
     int count = List.length(nums);  // → PHP count(); generic over the element type
     Console.println("count = {count}");

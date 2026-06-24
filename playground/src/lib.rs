@@ -144,7 +144,7 @@ mod tests {
     use serde_json::Value;
 
     const HELLO: &str =
-        "package Main;\nimport Core.Console;\nfunction main() {\n    Console.println(\"hi\");\n}\n";
+        "package Main;\nimport Core.Console;\nfunction main() -> void {\n    Console.println(\"hi\");\n}\n";
 
     fn parse(s: &str) -> Value {
         serde_json::from_str(s).expect("wrapper must emit valid JSON")
@@ -161,7 +161,7 @@ mod tests {
 
     #[test]
     fn check_type_error_is_not_ok_and_lists_a_diagnostic() {
-        let bad = "package Main;\nfunction main() {\n    int x = \"not an int\";\n}\n";
+        let bad = "package Main;\nfunction main() -> void {\n    int x = \"not an int\";\n}\n";
         let v = parse(&check_json(bad));
         assert_eq!(v["ok"], json!(false));
         assert!(v["parseError"].is_null(), "type error is not a parse error");
@@ -200,7 +200,7 @@ mod tests {
 
     #[test]
     fn run_index_out_of_range_is_a_fault_not_a_panic() {
-        let oob = "package Main;\nimport Core.Console;\nfunction main() {\n    List<int> xs = [1];\n    Console.println(\"{xs[5]}\");\n}\n";
+        let oob = "package Main;\nimport Core.Console;\nfunction main() -> void {\n    List<int> xs = [1];\n    Console.println(\"{xs[5]}\");\n}\n";
         let v = parse(&run_json(oob));
         assert_eq!(v["ok"], json!(false));
         assert!(
@@ -220,7 +220,7 @@ mod tests {
 
     #[test]
     fn transpile_type_error_reports_error_not_php() {
-        let bad = "package Main;\nfunction main() {\n    int x = \"nope\";\n}\n";
+        let bad = "package Main;\nfunction main() -> void {\n    int x = \"nope\";\n}\n";
         let v = parse(&transpile_json(bad));
         assert_eq!(v["ok"], json!(false));
         assert!(v["php"].is_null());

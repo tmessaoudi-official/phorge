@@ -48,7 +48,7 @@ fn multi_file_project_qualified_call_runs_byte_identically() {
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Console;\nimport Acme.Util;\n\
-         function main() {\n    Console.println(\"{Util.compute(20)}\");\n}",
+         function main() -> void {\n    Console.println(\"{Util.compute(20)}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/compute.phg",
@@ -68,7 +68,7 @@ fn import_alias_resolves_qualified_call() {
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Console;\nimport Acme.Util as U;\n\
-         function main() {\n    Console.println(\"{U.compute(20)}\");\n}",
+         function main() -> void {\n    Console.println(\"{U.compute(20)}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/compute.phg",
@@ -89,7 +89,7 @@ fn same_package_cross_file_bare_call_resolves() {
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Console;\nimport Acme.Util;\n\
-         function main() {\n    Console.println(\"{Util.outer(20)}\");\n}",
+         function main() -> void {\n    Console.println(\"{Util.outer(20)}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/outer.phg",
@@ -113,7 +113,7 @@ fn unqualified_cross_package_call_is_rejected() {
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Console;\nimport Acme.Util;\n\
-         function main() {\n    Console.println(\"{compute(20)}\");\n}",
+         function main() -> void {\n    Console.println(\"{compute(20)}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/compute.phg",
@@ -139,7 +139,7 @@ fn library_package_type_is_usable_cross_package() {
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Console;\nimport type Acme.Util.Shape;\n\
-         function main() {\n    Shape s = Shape(5);\n    Console.println(\"{s.w}\");\n}",
+         function main() -> void {\n    Shape s = Shape(5);\n    Console.println(\"{s.w}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/shape.phg",
@@ -160,7 +160,7 @@ fn import_type_unknown_is_rejected() {
     tmp.write("phorge.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport type Acme.Util.Nope;\nfunction main() {}",
+        "package Main;\nimport type Acme.Util.Nope;\nfunction main() -> void {}",
     );
     tmp.write(
         "src/Acme/Util/shape.phg",
@@ -177,7 +177,7 @@ fn import_type_conflict_is_rejected() {
     tmp.write("phorge.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport type Acme.A.Shape;\nimport type Acme.B.Shape;\nfunction main() {}",
+        "package Main;\nimport type Acme.A.Shape;\nimport type Acme.B.Shape;\nfunction main() -> void {}",
     );
     tmp.write(
         "src/Acme/A/shape.phg",
@@ -198,11 +198,11 @@ fn import_type_builtin_is_rejected() {
     tmp.write("phorge.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport type Acme.Util.List;\nfunction main() {}",
+        "package Main;\nimport type Acme.Util.List;\nfunction main() -> void {}",
     );
     tmp.write(
         "src/Acme/Util/u.phg",
-        "package Acme.Util;\nfunction noop() {}",
+        "package Acme.Util;\nfunction noop() -> void {}",
     );
     let err = loader::load(&entry).unwrap_err();
     assert!(err.contains("E-TYPE-IMPORT-BUILTIN"), "got: {err}");
@@ -217,11 +217,11 @@ fn import_type_shadow_is_rejected() {
     // `Acme.Util` module-import leaf `Util`. The shadow guard keeps the two import kinds disjoint.
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Acme.Util;\nimport type Acme.Types.Util;\nfunction main() {}",
+        "package Main;\nimport Acme.Util;\nimport type Acme.Types.Util;\nfunction main() -> void {}",
     );
     tmp.write(
         "src/Acme/Util/u.phg",
-        "package Acme.Util;\nfunction noop() {}",
+        "package Acme.Util;\nfunction noop() -> void {}",
     );
     tmp.write(
         "src/Acme/Types/t.phg",
@@ -238,7 +238,7 @@ fn multi_package_transpiles_to_brace_namespaces() {
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Console;\nimport Acme.Util;\n\
-         function main() {\n    Console.println(\"{Util.compute(20)}\");\n}",
+         function main() -> void {\n    Console.println(\"{Util.compute(20)}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/compute.phg",
@@ -259,8 +259,11 @@ fn multi_package_transpiles_to_brace_namespaces() {
 fn folder_path_violation_is_reported() {
     let tmp = TempDir::new();
     tmp.write("phorge.toml", "module = \"acme/app\"");
-    let entry = tmp.write("src/main.phg", "package Main;\nfunction main() {}");
-    tmp.write("src/Acme/Util/x.phg", "package Acme.Bad;\nfunction x() {}");
+    let entry = tmp.write("src/main.phg", "package Main;\nfunction main() -> void {}");
+    tmp.write(
+        "src/Acme/Util/x.phg",
+        "package Acme.Bad;\nfunction x() -> void {}",
+    );
     let err = loader::load(&entry).unwrap_err();
     assert!(err.contains("E-PKG-PATH"), "got: {err}");
 }
@@ -269,7 +272,7 @@ fn folder_path_violation_is_reported() {
 fn loose_non_main_file_is_rejected() {
     let tmp = TempDir::new();
     // No phorge.toml anywhere above → loose mode; a dotted package is illegal.
-    let entry = tmp.write("script.phg", "package App.Util;\nfunction f() {}");
+    let entry = tmp.write("script.phg", "package App.Util;\nfunction f() -> void {}");
     let err = loader::load(&entry).unwrap_err();
     assert!(err.contains("requires a phorge.toml project"), "got: {err}");
 }
