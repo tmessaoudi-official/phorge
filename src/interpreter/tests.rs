@@ -306,16 +306,27 @@ function main() -> void {
 }
 
 #[test]
-fn lambda_cannot_reference_this() {
-    let errs = check_errs(
+fn method_lambda_may_capture_this_but_field_init_lambda_may_not() {
+    // A method-body lambda MAY capture `this` (Phase 1 closures slice) — no error.
+    let ok = check_errs(
         r#"package Main;
 class C { constructor(public int x) {}
-  function method() -> (int) -> int { return fn(int n) => n + this.x; } }
+  function method() -> ((int) -> int) { return fn(int n) => n + this.x; } }
 function main() -> void { }"#,
     );
     assert!(
-        errs.iter().any(|e| e.message.contains("`this`")),
-        "{errs:?}"
+        ok.is_empty(),
+        "method-body lambda + this should check: {ok:?}"
+    );
+    // A field-initializer lambda may NOT capture `this` (partially-built instance) → E-LAMBDA-THIS.
+    let bad = check_errs(
+        r#"package Main;
+class C { int x = 1; (() -> int) f = fn() => this.x; }
+function main() -> void { }"#,
+    );
+    assert!(
+        bad.iter().any(|e| e.code == Some("E-LAMBDA-THIS")),
+        "field-init this-capture should be E-LAMBDA-THIS: {bad:?}"
     );
 }
 

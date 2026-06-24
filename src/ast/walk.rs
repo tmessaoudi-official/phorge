@@ -238,6 +238,117 @@ pub(super) fn collect_free_stmt(
     }
 }
 
+/// Returns `true` if the lambda body references `this`, **including transitively through nested
+/// lambdas** (Phase 1 closures slice). Unlike `free_vars`, this recurses into nested lambda bodies:
+/// if an inner lambda touches `this`, the outer lambda must also capture it (so `this` can flow
+/// inward). Drives both the `this`-capture machinery (interpreter + VM) and the checker's
+/// field-initializer guard (a field-default closure may not capture a partially-built `this`).
+pub fn lambda_uses_this(body: &LambdaBody) -> bool {
+    fn in_expr(e: &Expr) -> bool {
+        match e {
+            Expr::This(_) => true,
+            Expr::Int(..)
+            | Expr::Float(..)
+            | Expr::Bool(..)
+            | Expr::Null(..)
+            | Expr::Bytes(..)
+            | Expr::Ident(..) => false,
+            Expr::Str(parts, _) | Expr::Html(parts, _) => parts.iter().any(|p| match p {
+                StrPart::Expr(inner) => in_expr(inner),
+                _ => false,
+            }),
+            Expr::List(items, _) => items.iter().any(in_expr),
+            Expr::Map(pairs, _) => pairs.iter().any(|(k, v)| in_expr(k) || in_expr(v)),
+            Expr::Unary { expr, .. } => in_expr(expr),
+            Expr::Binary { lhs, rhs, .. } => in_expr(lhs) || in_expr(rhs),
+            Expr::InstanceOf { value, .. } => in_expr(value),
+            Expr::Call { callee, args, .. } => in_expr(callee) || args.iter().any(in_expr),
+            Expr::Member { object, .. } => in_expr(object),
+            Expr::Index { object, index, .. } => in_expr(object) || in_expr(index),
+            Expr::Force { inner, .. } => in_expr(inner),
+            Expr::Propagate { inner, .. } => in_expr(inner),
+            Expr::CloneWith { object, fields, .. } => {
+                in_expr(object) || fields.iter().any(|(_, e)| in_expr(e))
+            }
+            Expr::Match {
+                scrutinee, arms, ..
+            } => {
+                in_expr(scrutinee)
+                    || arms
+                        .iter()
+                        .any(|a| a.guard.as_ref().is_some_and(in_expr) || in_expr(&a.body))
+            }
+            Expr::Range { start, end, .. } => in_expr(start) || in_expr(end),
+            Expr::If {
+                cond,
+                then_expr,
+                else_expr,
+                ..
+            } => in_expr(cond) || in_expr(then_expr) || in_expr(else_expr),
+            // Recurse into a nested lambda: a `this` inside it makes *this* lambda capture `this`
+            // too (so it can thread the receiver inward). This is the key difference from the old
+            // checker-only predicate, which stopped here because nesting was rejected.
+            Expr::Lambda { body, .. } => match body {
+                LambdaBody::Expr(e) => in_expr(e),
+                LambdaBody::Block(stmts) => in_stmts(stmts),
+            },
+            Expr::New(inner, _) => in_expr(inner),
+        }
+    }
+    fn in_stmts(stmts: &[Stmt]) -> bool {
+        stmts.iter().any(|s| match s {
+            Stmt::VarDecl { init, .. } => in_expr(init),
+            Stmt::Return { value, .. } => value.as_ref().is_some_and(in_expr),
+            Stmt::If {
+                cond,
+                then_block,
+                else_block,
+                ..
+            } => {
+                in_expr(cond)
+                    || in_stmts(then_block)
+                    || else_block.as_ref().is_some_and(|eb| in_stmts(eb))
+            }
+            Stmt::For { iter, body, .. } => in_expr(iter) || in_stmts(body),
+            Stmt::While { cond, body, .. } => in_expr(cond) || in_stmts(body),
+            Stmt::CFor {
+                init,
+                cond,
+                step,
+                body,
+                ..
+            } => {
+                init.as_deref()
+                    .is_some_and(|s| in_stmts(std::slice::from_ref(s)))
+                    || cond.as_ref().is_some_and(in_expr)
+                    || step
+                        .as_deref()
+                        .is_some_and(|s| in_stmts(std::slice::from_ref(s)))
+                    || in_stmts(body)
+            }
+            Stmt::Break(_) | Stmt::Continue(_) => false,
+            Stmt::Assign { target, value, .. } => in_expr(target) || in_expr(value),
+            Stmt::Block(stmts, _) => in_stmts(stmts),
+            Stmt::Expr(e, _) => in_expr(e),
+            Stmt::Throw { value, .. } => in_expr(value),
+            Stmt::Try {
+                body,
+                catches,
+                finally_block,
+                ..
+            } => {
+                in_stmts(body)
+                    || catches.iter().any(|c| in_stmts(&c.body))
+                    || finally_block.as_ref().is_some_and(|fb| in_stmts(fb))
+            }
+        })
+    }
+    match body {
+        LambdaBody::Expr(e) => in_expr(e),
+        LambdaBody::Block(stmts) => in_stmts(stmts),
+    }
+}
+
 fn collect_pattern_bindings(pat: &Pattern, bound: &mut std::collections::HashSet<String>) {
     match pat {
         Pattern::Binding { name, .. } => {

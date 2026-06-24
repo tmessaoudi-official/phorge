@@ -74,8 +74,15 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
      erases to a PHP array, no new `Op`/`Value`). Codes `E-FIXEDLIST-LEN`/`E-FIXEDLIST-BOUNDS`.
      `examples/guide/fixed-lists.phg`. (writable `void`/`Empty` already done in S0a.) **Irrefutable
      fixed-list destructuring payoff lands in slice 5.**
-4. **Closures** — `this`-capture (live, by-reference Rc handle; remove `E-LAMBDA-THIS`; PHP arrow-fn
-   auto-captures `$this`). Same cycle-leak stance mutation already takes.
+4. **Closures — ✅ COMPLETE.** `this`-capture in method-body lambdas — live (the `Rc` instance
+   handle, so field writes after the closure is built are visible); **no new `Op`/`Value`** (interpreter
+   `ClosureData::Tree.this_capture`; VM implicit first capture at the sub-frame's slot 0 + `this_slot`/
+   `cur_class` on the sub-compiler; PHP arrow-fns auto-bind `$this`). `lambda_uses_this` moved to
+   `ast::walk` (recurses into nested lambdas so `this` flows inward). `E-LAMBDA-THIS` narrowed to
+   field/static initializers (partially-built instance). Verified byte-identical across operand-trap
+   (`this.x+1`), nested lambdas, this+local-capture, statement-body, and higher-order-native paths.
+   `examples/guide/closures-this.phg`. **Deferred:** bare field in a lambda (`fn() => v`) — write
+   `this.v` (KNOWN_ISSUES).
 5. **Destructuring** — `var Point { x, y } = p` (irrefutable) + `var [a, b] = xs else { … }` (refutable
    list bail-out). After slice 3 so fixed-list destructuring is irrefutable.
 6. **UFCS** — `x.f(a)` ≡ `f(x, a)`, **general** (any free function), **method-first** resolution (real

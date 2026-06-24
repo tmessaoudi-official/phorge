@@ -57,6 +57,11 @@ pub enum ClosureData {
         ret: Option<crate::ast::Type>,
         body: crate::ast::LambdaBody,
         env: Vec<(String, Value)>,
+        /// The captured receiver when the lambda references `this` (Phase 1 closures slice), else
+        /// `None`. It is the same `Rc` instance handle the enclosing method holds, so a field
+        /// mutation through it is visible to the closure ("live" capture). Set at closure creation;
+        /// restored as `self.this` while the body runs.
+        this_capture: Option<Value>,
     },
     Named(String),
     /// Bytecode closure — constructed by the VM (Task 4). The interpreter never constructs

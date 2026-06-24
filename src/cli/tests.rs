@@ -366,10 +366,11 @@ fn explain_covers_mi_field_conflict_code() {
 
 #[test]
 fn explain_covers_lambda_this_code() {
-    // The M3 S3 lambda `this`-rejection diagnostic is self-documenting via `phg explain`.
+    // E-LAMBDA-THIS now covers only the field-initializer case (a method-body lambda may capture
+    // `this`); the explanation is self-documenting via `phg explain`.
     let body = explain_text("E-LAMBDA-THIS").expect("E-LAMBDA-THIS has an explanation");
     assert!(
-        body.contains("`this`") && body.contains("var self = this"),
+        body.contains("`this`") && body.contains("initializer"),
         "{body}"
     );
 }

@@ -234,11 +234,20 @@ impl Interp {
                     })
                     .filter_map(|name| self.frame.lookup(&name).map(|v| (name, v.clone())))
                     .collect();
+                // Capture `this` (the live `Rc` instance handle) when the body references it,
+                // including through a nested lambda (Phase 1 closures slice). `None` otherwise, so a
+                // non-`this` lambda is unchanged.
+                let this_capture = if crate::ast::lambda_uses_this(body) {
+                    self.this.clone()
+                } else {
+                    None
+                };
                 Ok(Value::Closure(Rc::new(ClosureData::Tree {
                     params: params.clone(),
                     ret: ret.clone(),
                     body: body.clone(),
                     env,
+                    this_capture,
                 })))
             }
             // `html"…"` literals are erased to `html.concat([…])` kernel calls by

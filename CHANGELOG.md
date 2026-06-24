@@ -6,6 +6,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `this`-capture in closures (Phase 1 closures slice)
+
+A method-body lambda may now reference `this`: `function reader() -> (() -> int) { return fn() =>
+this.n; }`. The receiver is captured **live** (the same instance handle), so a field write made after
+the closure is built is visible when it runs. Byte-identical `run ≡ runvm ≡ real PHP 8.5`; **no new
+`Op`/`Value`** — `this` rides the existing value-capture path (interpreter: a `this_capture` on the
+tree closure; VM: an implicit first capture at the sub-frame's slot 0; PHP: arrow-fns auto-bind `$this`).
+
+- The `E-LAMBDA-THIS` guard is **narrowed to field/static initializers only** — a field-default lambda
+  may not capture `this` (the instance is only partially built when an initializer runs). `this`-capture
+  also threads through nested lambdas and into closures passed to higher-order natives (`List.map`).
+  `examples/guide/closures-this.phg`.
+
 ### Added — fixed-length lists `[T; N]` (Phase 1 types slice)
 
 `[int; 3] rgb = [255, 128, 0];` — a `List<T>` whose length is a compile-time constant. Byte-identical

@@ -359,7 +359,10 @@ impl Checker {
                     }
                     self.active_type_params = type_params.to_vec();
                     let fty = self.resolve_type(ty);
+                    // A field-default lambda may not capture `this` (partially-built instance).
+                    self.in_field_init = true;
                     let ity = self.check_expr(e);
+                    self.in_field_init = false;
                     if !self.ty_assignable(&ity, &fty) {
                         self.err_coded(
                             Self::expr_span(e),

@@ -1,0 +1,36 @@
+package Main;
+import Core.Console;
+import Core.List;
+
+// `this`-capture in closures (Phase 1 closures slice). A method-body lambda may reference `this`:
+// the receiver is captured *live* (the same instance handle), so a field write made after the
+// closure is built is visible when the closure runs. (A field-initializer lambda still may not
+// capture `this` — the instance isn't fully built yet — that stays `E-LAMBDA-THIS`.)
+
+class Counter {
+    constructor(public mutable int n) {}
+
+    // Returns a closure that reads `this.n` each time it is called — `this` is captured, not the
+    // value, so the closure tracks later mutations.
+    function reader() -> (() -> int) {
+        return fn() => this.n;
+    }
+
+    // `this` also flows into a closure passed to a higher-order native: each element is shifted by
+    // the live `this.base`-style field.
+    function shiftAll(List<int> xs) -> List<int> {
+        return List.map(xs, fn(int x) => x + this.n);
+    }
+}
+
+function main() -> void {
+    var c = new Counter(5);
+    var read = c.reader();
+    Console.println("before={read()}");   // 5
+
+    c.n = 99;                              // mutate the field after the closure was built
+    Console.println("after={read()}");    // 99 — live capture
+
+    var shifted = c.shiftAll([1, 2, 3]);   // each + 99
+    Console.println("shifted={shifted[0]},{shifted[1]},{shifted[2]}");
+}

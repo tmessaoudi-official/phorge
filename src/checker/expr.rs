@@ -703,9 +703,11 @@ impl Checker {
 
     /// Type-check a lambda expression (M3 S3, Task 3). Returns `Ty::Function(params, ret)`.
     ///
-    /// The checker rejects a lambda that references `this` (F8 / `E-LAMBDA-THIS`): capturing
-    /// `this` would create a run↔runvm divergence (the interpreter's `this` vs. the VM's slot 0).
-    /// Workaround: `var self = this;` before the lambda captures the value explicitly.
+    /// Type-checks a lambda. A method-body lambda **may** capture `this` (Phase 1 closures slice): it
+    /// is captured by value (the `Rc` instance handle, so mutations stay live), `this` types as the
+    /// enclosing class via `cur_class`, and the two backends + PHP all bind the same receiver. The one
+    /// place it stays rejected is a **field/static initializer** (`in_field_init`): the instance is
+    /// only partially built when an initializer runs, so capturing the receiver is the F8 footgun.
     pub(super) fn check_lambda(
         &mut self,
         params: &[crate::ast::Param],
@@ -714,13 +716,13 @@ impl Checker {
         span: Span,
     ) -> Ty {
         use crate::ast::LambdaBody;
-        // F8: reject any lambda that directly references `this` inside its body.
-        if lambda_uses_this(body) {
+        // A field-default lambda may not capture `this` (partially-built instance, F8).
+        if self.in_field_init && crate::ast::lambda_uses_this(body) {
             self.err_coded(
                 span,
-                "a lambda cannot reference `this` yet",
+                "a field-initializer lambda cannot capture `this` — the instance is not fully built yet",
                 "E-LAMBDA-THIS",
-                Some("bind `var self = this;` before the lambda and capture `self` instead".into()),
+                Some("move the closure into the constructor body, or capture a specific value (`var v = this.x;`) instead".into()),
             );
         }
         let param_tys: Vec<Ty> = params.iter().map(|p| self.resolve_type(&p.ty)).collect();

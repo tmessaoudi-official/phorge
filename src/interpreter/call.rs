@@ -176,7 +176,11 @@ impl Interp {
     pub(super) fn call_closure(&mut self, closure: Rc<ClosureData>, args: Vec<Value>) -> R<Value> {
         match &*closure {
             ClosureData::Tree {
-                params, body, env, ..
+                params,
+                body,
+                env,
+                this_capture,
+                ..
             } => {
                 if args.len() != params.len() {
                     return rt(format!(
@@ -185,7 +189,7 @@ impl Interp {
                         args.len()
                     ));
                 }
-                self.call_tree_closure(params, body, env, args)
+                self.call_tree_closure(params, body, env, this_capture.clone(), args)
             }
             ClosureData::Named(name) => {
                 // A first-class named-function value never refers to an overloaded function
@@ -213,12 +217,14 @@ impl Interp {
     }
 
     /// Core tree-closure call: saves the current frame, populates captured env + params,
-    /// runs the body, then restores the frame.  `this` is always `None` for lambdas.
+    /// runs the body, then restores the frame. `this` is the closure's captured receiver
+    /// (`this_capture`) — `None` unless the lambda referenced `this` (Phase 1 closures slice).
     pub(super) fn call_tree_closure(
         &mut self,
         params: &[Param],
         body: &LambdaBody,
         env: &[(String, Value)],
+        this_capture: Option<Value>,
         args: Vec<Value>,
     ) -> R<Value> {
         if self.depth >= crate::limits::MAX_CALL_DEPTH {
@@ -226,7 +232,8 @@ impl Interp {
         }
         self.depth += 1;
         let saved_frame = std::mem::replace(&mut self.frame, CallScopes::new());
-        let saved_this = self.this.take();
+        // Restore the captured receiver (if any) as `this` for the duration of the body.
+        let saved_this = std::mem::replace(&mut self.this, this_capture);
         // Inject captured environment first so params can shadow captures of the same name.
         for (k, v) in env {
             self.frame.declare(k, v.clone());

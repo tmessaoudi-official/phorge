@@ -164,10 +164,12 @@ pub fn explain_text(code: &str) -> Option<String> {
              (safe access), or `if (var x = opt) { … }` (narrow) — where null is a real possibility.\n"
         }
         "E-LAMBDA-THIS" => {
-            "E-LAMBDA-THIS — a lambda references `this`.\n\n\
-             A lambda cannot capture `this` directly yet: capturing the receiver would extend its\n\
-             lifetime past the method call in ways the value-capture model does not yet model.\n\
-             Workaround: bind `var self = this;` before the lambda and capture `self` instead.\n"
+            "E-LAMBDA-THIS — a field-initializer lambda captures `this`.\n\n\
+             A method-body lambda MAY capture `this` (it is captured live, by the instance handle). The\n\
+             one place it is rejected is a field or static initializer: that code runs while the\n\
+             instance is only partially built, so capturing the receiver would expose half-initialized\n\
+             fields. Move the closure into the constructor body, or capture a specific value\n\
+             (`var v = this.x;`) before building the closure.\n"
         }
         "E-VENDOR-MISSING" => {
             "E-VENDOR-MISSING — a `[require]` dependency is declared but not vendored.\n\n\

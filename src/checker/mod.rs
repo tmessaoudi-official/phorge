@@ -214,6 +214,11 @@ pub struct Checker {
     /// `check_named_call` — before its arguments are checked — so a bare construction *argument* still
     /// requires its own `new`.
     under_new: bool,
+    /// Set while type-checking a **field/static initializer** (Phase 1 closures slice). A lambda
+    /// default there may not capture `this` (`E-LAMBDA-THIS`): the instance is only partially built
+    /// when an initializer runs, so capturing the receiver is the F8 footgun. Outside this context a
+    /// method-body lambda *may* capture `this`.
+    in_field_init: bool,
     /// class currently being checked (for `this` and bare field refs)
     cur_class: Option<String>,
     /// live `check_expr` recursion depth, bounded by [`MAX_EXPR_DEPTH`]
@@ -282,6 +287,7 @@ impl Checker {
             try_catch_stack: Vec::new(),
             skip_throws_discharge: false,
             under_new: false,
+            in_field_init: false,
             cur_class: None,
             depth: 0,
             loop_depth: 0,

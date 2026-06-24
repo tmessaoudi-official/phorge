@@ -331,8 +331,14 @@ references, and the pipe operator `|>` all ship in M3 S3 and are byte-identical 
 and round-trip through real PHP. These refinements are deliberately deferred (each rejected cleanly
 or simply unavailable, never a crash):
 
-- **A lambda cannot reference `this`** — rejected with `E-LAMBDA-THIS` (`phg explain E-LAMBDA-THIS`).
-  Workaround: `var self = this;` before the lambda, then capture `self`.
+- **`this`-capture ships** (Phase 1 closures slice): a method-body lambda may reference `this`,
+  captured *live* (the instance handle), byte-identical on `run`/`runvm`/PHP. `E-LAMBDA-THIS` now fires
+  only inside a **field/static initializer** (partially-built instance). Deferred corner: a **bare
+  field reference inside a lambda** (`fn() => v` instead of `fn() => this.v`) is *not* captured — it
+  type-checks (the field is in the enclosing method scope) but isn't resolved at runtime (interpreter:
+  "undefined variable"; VM: a compile error). This is pre-existing (a non-`this` lambda was never
+  rejected); **write `this.v` explicitly** inside a lambda. Recognising a bare field as `this.v`
+  (and triggering capture) needs field-set awareness in the capture walker — a follow-up.
 - **Lambdas and first-class function references are supported in `package Main` (and single-file
   programs), not yet inside library (non-`main`) packages.** The M5 loader's name-mangling pass
   rewrites *call sites*, but not a bare function reference used as a *value* nor the body of a lambda,

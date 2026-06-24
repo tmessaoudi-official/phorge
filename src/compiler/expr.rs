@@ -695,7 +695,13 @@ impl Compiler<'_> {
                     .map(|slot| (slot, name))
             })
             .collect();
-        let n_captures = captures.len();
+        // `this`-capture (Phase 1 closures slice): when the body references `this` (directly or
+        // through a nested lambda) and we have a receiver in scope, capture the enclosing `this` as
+        // an extra, *first* capture so it lands at the sub-frame's slot 0 — exactly where the
+        // sub-compiler's `this_slot` will point. The receiver value is the live `Rc` instance handle,
+        // so a field write through it is visible to the closure, matching the interpreter + PHP.
+        let uses_this = self.this_slot.is_some() && crate::ast::lambda_uses_this(body);
+        let n_captures = captures.len() + usize::from(uses_this);
 
         // 3. Build the sub-function's index in the global table.
         //    `base_fn_idx` is the start of this compilation's slice of the trailing lambda block;
@@ -726,8 +732,16 @@ impl Compiler<'_> {
             sub_base,
         );
 
-        // 5. Seed the sub-compiler's locals: captures first, then params.
-        //    Frame layout expected by `Op::CallValue`: [caps.., args..]
+        // 5. Seed the sub-compiler's locals: [this?, captures.., params..] — matching the frame
+        //    layout `Op::CallValue` builds (the receiver, if captured, is pushed first below).
+        if uses_this {
+            // The receiver's operand type is its class, so `this.x + 1` specializes in the lambda
+            // (without `cur_class`, `ctype(This)` would fail — the documented CTy-operand trap).
+            let this_cty = self.cur_class.clone().map_or(CTy::Other, CTy::Class);
+            sub.add_local("$this", this_cty);
+            sub.this_slot = Some(0);
+            sub.cur_class = self.cur_class.clone();
+        }
         for (_, cap_name) in &captures {
             // The capture's type comes from the enclosing scope's local.
             let slot = self
@@ -772,6 +786,14 @@ impl Compiler<'_> {
         self.extra_functions.append(&mut nested_extras);
 
         // 9. Push capture values onto the stack (enclosing scope), then emit MakeClosure.
+        //    The receiver is pushed first (→ sub slot 0), then the free-var captures — matching the
+        //    sub-compiler's local order above and the frame `Op::CallValue` rebuilds.
+        if uses_this {
+            self.emit(
+                Op::GetLocal(self.this_slot.expect("uses_this implies a receiver slot")),
+                line,
+            );
+        }
         for (slot, _) in &captures {
             self.emit(Op::GetLocal(*slot), line);
         }
