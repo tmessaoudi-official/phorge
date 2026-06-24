@@ -123,6 +123,10 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
   couldn't — `\{` and `\\{` collapse to the same bytes). Raw strings fall out of the same refactor
   (a single literal segment). String-slice part 1 (`+`, `\u{}`) shipped in `a0a3c95`.
 - **Introspection depth:** typeName+className+hierarchy+**member enumeration** (read-only).
+- **Mandatory `new` — ✅ DONE (`5fb1259`, 2026-06-24).** Shipped front-end-only (parser `Expr::New` +
+  checker validate/`unwrap_new` + loader resolve arm + `phg rewrite-new` codemod); 723 lib + 108
+  differential + all integration green. `E-NEW-REQUIRED`/`E-NEW-ON-NONCONSTRUCT`. **The
+  const→field-init→new feature plan is now fully complete (Features A, B, C).**
 - **Mandatory `new` — EVERYWHERE (decided 2026-06-24).** `new ClassName(...)` AND `new Variant(...)`
   for enum-variant construction (`new Some(7)`, `new Circle(2.0)`). The developer chose uniformity ("a
   clean `new` everywhere") over my Option-1 rec (classes only) — accepted trade-off: no surface language

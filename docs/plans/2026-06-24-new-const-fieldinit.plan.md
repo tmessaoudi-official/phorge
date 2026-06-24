@@ -98,7 +98,14 @@ lowering), then static (one-time guarded init — the riskier PHP-timing piece).
 
 ---
 
-## Feature C — Mandatory `new` (breaking, last)
+## Feature C — Mandatory `new` (breaking, last) ✅ DONE (`5fb1259`) — PLAN COMPLETE
+
+> Landed front-end-only: parser `Expr::New` wrap; checker validate (`E-NEW-REQUIRED`/
+> `E-NEW-ON-NONCONSTRUCT` via an `under_new` one-shot flag taken before args) + `checker::unwrap_new`
+> strips it before backends; loader `resolve` descends into `New` (cross-package mangle); backends carry
+> `unreachable!` arms. Migration: `phg rewrite-new` AST-span tool (81 .phg) + a string-literal-aware
+> Python codemod for inline test programs (patterns/enum-decls/raw-interpret-path kept bare). 723 lib +
+> 108 differential (PHP oracle) + all integration green. **Features A + B + C all complete.**
 
 **Spec:** mandatory-new. Front-end only — no `Op`/`Value`/backend change.
 
