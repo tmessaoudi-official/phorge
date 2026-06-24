@@ -48,8 +48,19 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
    `Op::Concat(2)` via new `CTy::Str`; `__phorge_add` PHP helper), `\u{HEX}` escapes (lex→UTF-8),
    literal braces `\{`/`\}` + raw strings `r"…"`/`r#"…"#` (lexer-side interpolation split —
    `TokenKind::Str` → `StrSeg::{Lit,Interp}` segments). `examples/guide/strings-ext.phg`.
-2. **Operators/patterns** — ternary `? :` (disambiguate optional `x?` in type pos), or-patterns in
-   `match` (`1 | 2 | 3 =>`), `**` operator (type-directed) + `Math.ipow(int,int)->int`.
+2. **Operators/patterns** — **PARTIAL.**
+   - **`**` power — ✅ DONE** (`2fd6194`). Type-directed (`int**int→int`, `float**float→float`),
+     right-assoc, binds tighter than `*`; no new `Op` (compiler lowers to `Op::CallNative`
+     `Core.Math.ipow`/`pow`; single-sourced `value::int_pow`/`float_pow` kernels). `Math.ipow(int,int)
+     ->int` native. `examples/guide/operators.phg`.
+   - **or-patterns — ✅ DONE** (`d8365ab`). `1 | 2 | 3 => …` / `Red() | Yellow() => …`; parser desugars
+     to one arm per alternative (no backend change), binding-free only (`E-OR-PATTERN-BIND`).
+     `examples/guide/pattern-matching.phg`.
+   - **ternary `? :` — BLOCKED on a design decision.** Genuine grammar collision with the existing
+     **postfix-`?` propagation** (`f()?`): one-token lookahead can't separate `c ? -1 : 1` (ternary)
+     from `f()? - 1` (propagate-then-subtract). Options: (A) backtracking disambiguation — try ternary,
+     fall back to propagation if no `:`; (B) rely on the existing **expression-`if`** (`if (c) { a }
+     else { b }`, already shipped) and reject ternary as redundant; (C) defer. Awaiting developer choice.
 3. **Types** — parenthesized return-position function types (`() -> ((int) -> bool)`); fixed-length
    lists `[T; N]` (alongside `List<T>`; compile-time length + static bounds; length-immutable; erases
    to PHP array). *(writable `void`/`Empty` already done in S0a.)*
