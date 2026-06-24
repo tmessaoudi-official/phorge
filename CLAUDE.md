@@ -33,7 +33,10 @@ The differential harness (`tests/differential.rs`) is the correctness spine — 
 (since M7) the transpiled PHP** must stay byte-identical. The M7 **PHP oracle** there transpiles every
 example/project, runs it under a real `php`, and asserts stdout matches the interpreter; run the full
 gate with `PHORGE_REQUIRE_PHP=1` so a missing `php` **fails** (not skips). `PHORGE_PHP=<path>`
-overrides the binary. Adding an `Op` variant requires extending three exhaustive matches in
+overrides the binary. **Transpile floor = PHP 8.5** (raised from 8.4 on 2026-06-24): test against the
+floor — `PHORGE_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php PHORGE_REQUIRE_PHP=1 cargo test
+--workspace` before pushing. The bare `php` on PATH is 8.6.0-dev (too permissive — an 8.6-only
+construct would pass locally then fail the 8.5 CI gate); CI also runs a non-gating 8.6-dev canary. Adding an `Op` variant requires extending three exhaustive matches in
 the same commit: `src/vm.rs` `exec_op`, `src/chunk.rs` `BytecodeProgram::validate`, and
 `src/compiler.rs` `stack_effect`. `phg bench <file>` measures the two backends (median-of-N,
 output-identity gated) — run it for a before/after number before any perf change.

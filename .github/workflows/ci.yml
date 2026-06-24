@@ -39,26 +39,50 @@ jobs:
       - name: Cache cargo registry + target
         uses: Swatinem/rust-cache@v2
 
-      # The PHP oracle needs a real `php`. Transpiled output uses only core functions
-      # (intdiv / fmod / range / strpos / explode / echo), so a stock 8.4 build suffices.
+      # The PHP oracle needs a real `php`. 8.5 is the transpile floor — testing against the floor is
+      # the strict gate (output valid on 8.5 also runs on 8.6+; testing only on a newer build would
+      # let an 8.5-incompatible construct slip through). Transpiled output uses only core functions
+      # (intdiv / fmod / range / strpos / explode / echo).
       - name: Install PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
+          php-version: '8.5'
 
       - name: cargo fmt --check
         run: cargo fmt --check
 
-      - name: cargo clippy --all-targets -- -D warnings
-        run: cargo clippy --all-targets -- -D warnings
+      - name: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       # PHORGE_REQUIRE_PHP=1 turns a missing or non-working php into a test FAILURE — this is the
       # enforcement CI adds on top of the local hook (which runs the oracle only when php happens
-      # to be on PATH). This line is what "locks in" M7.
+      # to be on PATH). This line is what "locks in" M7. --workspace also gates the playground crate.
       - name: cargo test (PHP oracle enforced)
         env:
           PHORGE_REQUIRE_PHP: '1'
-        run: cargo test
+        run: cargo test --workspace
+
+  oracle-nightly:
+    # Non-gating canary: run the PHP oracle against the in-development 8.6 so bleeding-edge breakage
+    # surfaces early. continue-on-error keeps a flaky/unavailable dev build from failing CI — the 8.5
+    # `gate` job above is the reproducible source of truth.
+    name: oracle on 8.6-dev (non-gating)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+      - name: Install PHP 8.6 (dev)
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.6'
+      - name: cargo test --test differential (PHP oracle, 8.6-dev)
+        env:
+          PHORGE_REQUIRE_PHP: '1'
+        run: cargo test --test differential
 
   cross-build:
     name: cross-build (phg build --target parity)
