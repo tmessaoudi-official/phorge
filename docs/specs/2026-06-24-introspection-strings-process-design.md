@@ -49,6 +49,8 @@ New module `Core.Reflect`:
 | `implements<T>(T x) -> List<string>` | interface names the value's class implements (transitively) | from `ast::class_implements` (already computed) |
 | `parents<T>(T x) -> List<string>` | ancestor class names (nearest-first) | static hierarchy |
 | `traits<T>(T x) -> List<string>` | trait names used by the value's class | static |
+| `methodNames<T>(T x) -> List<string>` | method names on the value's class (incl. inherited) | read-only, from `class_method_origins` |
+| `fieldNames<T>(T x) -> List<string>` | declared field names on the value's class | read-only, static |
 
 These reuse compile-time tables (`class_implements`, `class_method_origins`) that already exist as
 checker/transpiler internals — Slice 1 exposes them read-only at the value level. Erases to PHP
@@ -61,9 +63,9 @@ Explicitly **rejected** (they defeat the static guarantees that are Phorge's rea
 - attribute (`#[Attr]`) reflection and attribute-driven dispatch,
 - mutating fields by reflected name.
 
-Optional, decide-at-review: member *enumeration* (`methodNames`/`fieldNames -> List<string>`) is still
-read-only + deterministic and could be included; it edges toward the anti-pattern, so it is proposed
-but not assumed.
+Member *enumeration* (`methodNames`/`fieldNames -> List<string>`) **is included** (developer-approved
+2026-06-24): still read-only + deterministic, drawn from the existing `class_method_origins` table and
+the class field declarations. It does *not* enable invocation — names only.
 
 **Use it for:** debugging, logging, serialization. **Not for control flow** — type dispatch stays
 `instanceof` + `match` type-patterns (which the checker proves exhaustive).
@@ -161,7 +163,7 @@ Each slice ships independently with its tests + (where deterministic) a guide ex
   introspection; dynamic-dispatch/attribute reflection stays rejected.
 - [2026-06-24] AGREED: literal braces via **both** `\{`/`\}` escapes **and** raw strings `r"…"`.
 - [2026-06-24] AGREED: Slice 1 introspection depth = **typeName + className + hierarchy**
-  (implements/parents/traits).
+  (implements/parents/traits) **+ member enumeration** (methodNames/fieldNames, read-only, names only).
 - [2026-06-24] AGREED: PHP superglobals are **on the roadmap, reshaped** — env/args → M-Batteries
   (Slice 3); request data → M6 typed `Request`; `$_REQUEST`/ambient access rejected.
 - [2026-06-24] CHALLENGE upheld: no ambient superglobals; reflection is read-only name-level only;
