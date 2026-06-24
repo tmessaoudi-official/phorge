@@ -264,6 +264,18 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                 finally_block: finally_block.map(|b| rblock(b, h)),
                 span,
             },
+            // Slice 5: expand `html"…"` holes in the init expr and the `else` block.
+            Stmt::Destructure {
+                pat,
+                init,
+                else_block,
+                span,
+            } => Stmt::Destructure {
+                pat,
+                init: rexpr(init, h),
+                else_block: else_block.map(|b| rblock(b, h)),
+                span,
+            },
         }
     }
 

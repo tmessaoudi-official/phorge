@@ -200,3 +200,54 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
   all three backends. Own design+plan.
 - **Build order: SPECS-FIRST for all three** (`new`, `const`, expression-initializers) before any
   implementation — developer's call. Specs land for review, then plans, then build.
+
+## Slice 5 — let-destructuring (design locked 2026-06-24, autonomous)
+
+**Surface (locked):**
+- **Object (irrefutable):** `var Point { x, y } = p;` — bind named fields; rename `var Point { x: px } = p;`.
+  The init's static type must be assignable to the named class (so `instanceof` always holds). An `else`
+  is a compile error (`E-DESTRUCTURE-ELSE-IRREFUTABLE`).
+- **List (refutable):** `var [a, b] = xs else { … }` — bind positionally; the `else` runs (and must
+  diverge — Swift `guard let` model) when `count(xs) != arity`. `else` is mandatory on a `List<T>` init
+  (`E-DESTRUCTURE-NEEDS-ELSE`) and a non-diverging `else` is `E-DESTRUCTURE-ELSE-FALLTHROUGH`.
+- **List on `[T; N]` (irrefutable, the slice-3 payoff):** `var [a, b] = pair;` where `pair: [T; 2]` —
+  length is a compile-time guarantee, so `else` is forbidden; `N != arity` is `E-FIXEDLIST-DESTRUCTURE-LEN`.
+
+**Mechanism — NO new `Op`, NO new `Value`** (front-end + compiler lowering to existing ops):
+- AST: `Stmt::Destructure { pat: DestructurePat, init, else_block: Option, span }`; `enum DestructurePat
+  { Struct { type_name, fields: Vec<DestructureField> }, List { binders } }`. Binders are immutable
+  (no `mutable var [..]` this slice).
+- Checker: type init; resolve refutability per the rules above; bind each binder into the **current
+  scope** at its resolved type (struct field type / list element type); verify a present `else` diverges
+  via the totality `block_terminates`; check `else` in a scope WITHOUT the binders.
+- Compiler: spill init to a hidden `$destructure` local; struct → `GetLocal;GetField;add_local` per
+  binder (irrefutable, no branch); list → reserve binder slots, `GetLocal;Len;Const arity;Eq;JumpIfFalse
+  else`, success `GetLocal;Const i;Index;SetLocal`, `else` block (diverges), END. Mirrors `compile_if`.
+- Interpreter: eval init; struct → read instance fields, declare binders; list → length-check, run else
+  (propagate its Signal) or declare element binders.
+- Transpiler: struct → `$d = <init>; $x = $d->x; …`; list → `$d = <init>; if (count($d) !== N) { <else> }
+  [$a,$b] = $d;`. Deterministic `$__phorge_d{N}` temp (a `tmp` counter on the Transpiler).
+- Coupled-match discipline: extend every exhaustive `Stmt` match (`cargo check` enumerates them).
+
+**Decisions Log (2026-06-24):**
+- **Dedicated `DestructurePat`, NOT the match `Pattern`** — lists aren't match patterns; adding
+  `Pattern::List` would force match-side handling + exhaustiveness. Flat (no nested sub-patterns) this
+  slice; struct overlaps `Pattern::Struct` only superficially.
+- **No new `Op`** — list length-check reuses `Op::Len`/`Op::Eq`/`Op::JumpIfFalse`, element reads reuse
+  the bounds-checked `Op::Index`, field reads reuse `Op::GetField`. The lowering is structurally `if`.
+- **Cross-package struct head supported** (loader `resolve_type_ref` mangles `type_name`); aliases as a
+  head are NOT resolved (same limitation as `instanceof`'s string type-name — out of scope).
+
+### Slice 5 — let-destructuring ✅ DONE (2026-06-25)
+Shipped exactly as designed. **No new `Op`, no new `Value`** — front-end (`Stmt::Destructure` +
+`DestructurePat` + `DestructureField`) plus a compiler lowering to existing ops (struct → `GetField`
+reads; list → `Len`/`Eq`/`JumpIfFalse` length-check + bounds-checked `Index`, structurally an `if`).
+Reserving the list binder slots up front keeps the locals layout identical on the success and `else`
+paths, so the continuation needs no save/restore. Every exhaustive `Stmt` match extended
+(rustc-enforced; only `cli/rewrite_new` was initially missed). Binders enter the enclosing scope at
+their field/element `CTy`, so a destructured `int` is a first-class VM arithmetic operand (the operand
+trap — covered). Cross-package struct head mangles via the loader; aliases-as-head out of scope (same
+as `instanceof`). New codes: `E-DESTRUCTURE-{TYPE,NOT-CLASS,FIELD-UNKNOWN,NOT-LIST,NEEDS-ELSE,
+ELSE-IRREFUTABLE,ELSE-FALLTHROUGH,DUP-BIND}` + `E-FIXEDLIST-DESTRUCTURE-LEN`, all `phg explain`-backed.
+`examples/guide/destructuring.phg` byte-identical run≡runvm≡real PHP 8.5; 752 lib + workspace (934 w/
+PHP oracle) green, clippy + fmt clean. **Next: Slice 6 — UFCS** (`x.f(a) ≡ f(x, a)`, method-first).

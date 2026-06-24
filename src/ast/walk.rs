@@ -216,6 +216,25 @@ pub(super) fn collect_free_stmt(
         }
         Stmt::Expr(e, _) => collect_free_expr(e, bound, found),
         Stmt::Throw { value, .. } => collect_free_expr(value, bound, found),
+        // Slice 5: the initializer is evaluated before any binder enters scope; the `else` block (run
+        // on the destructure-failed path) sees *none* of the binders; then the binders enter the
+        // enclosing scope. Missing the binders here would drop them from `free_vars`, miscompiling a
+        // lambda that captures one (the struct-pattern guard-recursion lesson).
+        Stmt::Destructure {
+            pat,
+            init,
+            else_block,
+            ..
+        } => {
+            collect_free_expr(init, bound, found);
+            if let Some(eb) = else_block {
+                let mut else_bound = bound.clone();
+                collect_free_block(eb, &mut else_bound, found);
+            }
+            for (name, _) in pat.binders() {
+                bound.insert(name);
+            }
+        }
         Stmt::Try {
             body,
             catches,
@@ -328,6 +347,10 @@ pub fn lambda_uses_this(body: &LambdaBody) -> bool {
             }
             Stmt::Break(_) | Stmt::Continue(_) => false,
             Stmt::Assign { target, value, .. } => in_expr(target) || in_expr(value),
+            // Slice 5: `this` may appear in the destructured init or the diverging `else` block.
+            Stmt::Destructure {
+                init, else_block, ..
+            } => in_expr(init) || else_block.as_ref().is_some_and(|eb| in_stmts(eb)),
             Stmt::Block(stmts, _) => in_stmts(stmts),
             Stmt::Expr(e, _) => in_expr(e),
             Stmt::Throw { value, .. } => in_expr(value),

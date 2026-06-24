@@ -157,6 +157,15 @@ impl Walker<'_> {
                     self.block(fb);
                 }
             }
+            // Slice 5: scan the destructured init and the `else` block for bare constructions.
+            Stmt::Destructure {
+                init, else_block, ..
+            } => {
+                self.expr(init);
+                if let Some(eb) = else_block {
+                    self.block(eb);
+                }
+            }
             Stmt::Break(_) | Stmt::Continue(_) => {}
         }
     }

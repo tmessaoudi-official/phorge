@@ -248,6 +248,33 @@ pub(super) fn resolve_stmt(stmt: Stmt, ctx: &ResolveCtx) -> Stmt {
         },
         Stmt::Break(span) => Stmt::Break(span),
         Stmt::Continue(span) => Stmt::Continue(span),
+        // Slice 5: mangle a cross-package struct head to its FQN (mirrors `instanceof`/`new`), and
+        // resolve the init expr + the `else` block. A list pattern carries no type name.
+        Stmt::Destructure {
+            pat,
+            init,
+            else_block,
+            span,
+        } => {
+            let pat = match pat {
+                crate::ast::DestructurePat::Struct {
+                    type_name,
+                    fields,
+                    span: psp,
+                } => crate::ast::DestructurePat::Struct {
+                    type_name: resolve_type_ref(&type_name, ctx).unwrap_or(type_name),
+                    fields,
+                    span: psp,
+                },
+                list => list,
+            };
+            Stmt::Destructure {
+                pat,
+                init: resolve_expr(init, ctx),
+                else_block: else_block.map(|b| resolve_block(b, ctx)),
+                span,
+            }
+        }
         Stmt::Block(stmts, span) => Stmt::Block(resolve_block(stmts, ctx), span),
         Stmt::Expr(e, span) => Stmt::Expr(resolve_expr(e, ctx), span),
         Stmt::Throw { value, span } => Stmt::Throw {

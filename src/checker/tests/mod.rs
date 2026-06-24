@@ -6,6 +6,7 @@ mod calls;
 mod casing;
 mod collections;
 mod constants;
+mod destructuring;
 mod field_init;
 mod generics;
 mod inheritance;

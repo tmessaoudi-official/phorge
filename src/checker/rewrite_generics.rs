@@ -348,6 +348,21 @@ pub fn erase_generics(program: Program) -> Program {
                     .map(|b| b.iter().map(|s| rstmt(s, params)).collect()),
                 span: *span,
             },
+            // Slice 5: erase generics in the init expr and the `else` block. The struct head is a bare
+            // class name with no type arguments in destructure syntax, so the pattern is cloned as-is.
+            Stmt::Destructure {
+                pat,
+                init,
+                else_block,
+                span,
+            } => Stmt::Destructure {
+                pat: pat.clone(),
+                init: rexpr(init, params),
+                else_block: else_block
+                    .as_ref()
+                    .map(|b| b.iter().map(|s| rstmt(s, params)).collect()),
+                span: *span,
+            },
         }
     }
 

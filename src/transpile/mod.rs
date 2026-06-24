@@ -107,6 +107,11 @@ struct Transpiler {
     /// (byte-identical to pre-S6b output). The multi-parent classes themselves are emitted via
     /// `emit_multi_class` (a class that `implements`+`use`s), not listed here.
     decomposed: BTreeSet<String>,
+    /// Monotonic counter for the hidden `$__phorge_d{N}` temporary that a let-destructuring spills its
+    /// initializer into (Phase 1 slice 5). The name never collides with a user local (`$__phorge_` is
+    /// not a writable Phorge identifier) and the value is immaterial to stdout, so any deterministic
+    /// sequence is byte-identity-safe.
+    tmp: usize,
 }
 
 /// A resolved method origin: `(declaring class, method name)` — mirrors `ast::class_method_origins`.
@@ -235,6 +240,7 @@ impl Transpiler {
             namespaced: false,
             class_implements: std::collections::BTreeMap::new(),
             decomposed: BTreeSet::new(),
+            tmp: 0,
         }
     }
 

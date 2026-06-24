@@ -259,6 +259,51 @@ impl Transpiler {
                 }
                 self.line("}");
             }
+            // Let-destructuring (Phase 1 slice 5). Spill the init to a fresh `$__phorge_d{N}` temp, then:
+            // a STRUCT pattern reads each public PHP property (`$d->field`) into its binder; a LIST
+            // pattern emits the (diverging) `else` guarded by a `count(...)` mismatch, then PHP's native
+            // list assignment `[$a, $b] = $d`. The temp avoids re-evaluating a side-effecting init.
+            Stmt::Destructure {
+                pat,
+                init,
+                else_block,
+                ..
+            } => {
+                use crate::ast::DestructurePat;
+                let e = self.emit_expr(init)?;
+                let tmp = format!("__phorge_d{}", self.tmp);
+                self.tmp += 1;
+                self.line(&format!("${tmp} = {e};"));
+                match pat {
+                    DestructurePat::Struct { fields, .. } => {
+                        for f in fields {
+                            self.declare(&f.binding);
+                            self.line(&format!("${} = ${tmp}->{};", f.binding, f.field));
+                        }
+                    }
+                    DestructurePat::List { binders, .. } => {
+                        if let Some(eb) = else_block {
+                            self.line(&format!("if (count(${tmp}) !== {}) {{", binders.len()));
+                            self.indent += 1;
+                            self.push_scope();
+                            for st in eb {
+                                self.emit_stmt(st)?;
+                            }
+                            self.pop_scope();
+                            self.indent -= 1;
+                            self.line("}");
+                        }
+                        let targets: Vec<String> = binders
+                            .iter()
+                            .map(|(name, _)| {
+                                self.declare(name);
+                                format!("${name}")
+                            })
+                            .collect();
+                        self.line(&format!("[{}] = ${tmp};", targets.join(", ")));
+                    }
+                }
+            }
         }
         Ok(())
     }

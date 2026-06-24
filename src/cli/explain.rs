@@ -658,6 +658,56 @@ pub fn explain_text(code: &str) -> Option<String> {
              The initializer expression must be assignable to the field's type — e.g. `int weight =\n\
              compute(3);`, not `int weight = \"x\";`.\n"
         }
+        "E-DESTRUCTURE-TYPE" => {
+            "E-DESTRUCTURE-TYPE — a struct destructuring's value is not the named class.\n\n\
+             `var Point { x, y } = p;` (Phase 1 slice 5) requires `p` to be a `Point` (or a subtype) so\n\
+             the binding always succeeds. Destructure the value at its own type, or `match` on it if it\n\
+             is a union/interface whose concrete type isn't statically known.\n"
+        }
+        "E-DESTRUCTURE-NOT-CLASS" => {
+            "E-DESTRUCTURE-NOT-CLASS — a struct destructuring's head is not a class.\n\n\
+             `var Name { … } = e;` destructures a class instance's fields, so `Name` must be a declared\n\
+             class. To destructure a list, use the list form `var [a, b] = e else { … };`.\n"
+        }
+        "E-DESTRUCTURE-FIELD-UNKNOWN" => {
+            "E-DESTRUCTURE-FIELD-UNKNOWN — a struct destructuring names a field the class does not have.\n\n\
+             Each `field` (or `field: binding`) in `var Point { x, y } = p;` must be a field declared on\n\
+             the class (including inherited fields). Bind only declared fields.\n"
+        }
+        "E-DESTRUCTURE-NOT-LIST" => {
+            "E-DESTRUCTURE-NOT-LIST — a list destructuring's value is not a list.\n\n\
+             `var [a, b] = e else { … };` requires `e` to be a `List<T>` or a fixed-length `[T; N]`. To\n\
+             destructure a class instance, use the struct form `var Type { … } = e;`.\n"
+        }
+        "E-DESTRUCTURE-NEEDS-ELSE" => {
+            "E-DESTRUCTURE-NEEDS-ELSE — a refutable list destructuring has no `else`.\n\n\
+             A `List<T>` carries no static length, so `var [a, b] = xs;` can fail at runtime. It must\n\
+             carry an `else { … }` that bails out (returns / throws / breaks / continues) when the\n\
+             length doesn't match — the Swift `guard let` model. (A fixed-length `[T; N]` whose length\n\
+             matches the binder count is irrefutable and takes no `else`.)\n"
+        }
+        "E-DESTRUCTURE-ELSE-IRREFUTABLE" => {
+            "E-DESTRUCTURE-ELSE-IRREFUTABLE — an irrefutable destructuring has an `else`.\n\n\
+             A struct destructuring, and a list destructuring over a length-matching `[T; N]`, always\n\
+             succeed — so they cannot have an `else`. Remove it; the binding is unconditional.\n"
+        }
+        "E-DESTRUCTURE-ELSE-FALLTHROUGH" => {
+            "E-DESTRUCTURE-ELSE-FALLTHROUGH — a destructuring `else` can fall through.\n\n\
+             When the refutable destructuring fails, its binders are never created, so control must not\n\
+             continue past the `else`. End every path of the `else` with `return` / `throw` / `break` /\n\
+             `continue` (it is a bail-out block, like a `guard let … else`).\n"
+        }
+        "E-DESTRUCTURE-DUP-BIND" => {
+            "E-DESTRUCTURE-DUP-BIND — a destructuring binds the same name twice.\n\n\
+             Each binder in a destructuring must be distinct: `var [a, a] = xs` and `var Point { x, x }\n\
+             = p` are errors. Rename one binding (`var Point { x, y: x2 } = p`).\n"
+        }
+        "E-FIXEDLIST-DESTRUCTURE-LEN" => {
+            "E-FIXEDLIST-DESTRUCTURE-LEN — a list destructuring's arity differs from the fixed length.\n\n\
+             Destructuring a fixed-length `[T; N]` is irrefutable only when the pattern binds exactly\n\
+             `N` elements: `var [a, b] = pair;` needs `pair: [T; 2]`. Bind exactly `N` elements, or\n\
+             destructure a `List<T>` with an `else` if the length is not statically known.\n"
+        }
         _ => return None,
     };
     Some(body.to_string())
@@ -668,7 +718,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-PKG-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE, E-STRUCT-PAT-TYPE, E-STRUCT-FIELD-UNKNOWN, E-PATTERN-DUP-BIND, E-OR-PATTERN-BIND, E-FIXEDLIST-LEN, E-FIXEDLIST-BOUNDS)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-PKG-CASE, E-INSTANCEOF-TYPE, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE, E-STRUCT-PAT-TYPE, E-STRUCT-FIELD-UNKNOWN, E-PATTERN-DUP-BIND, E-OR-PATTERN-BIND, E-FIXEDLIST-LEN, E-FIXEDLIST-BOUNDS, E-DESTRUCTURE-TYPE, E-DESTRUCTURE-NOT-CLASS, E-DESTRUCTURE-FIELD-UNKNOWN, E-DESTRUCTURE-NOT-LIST, E-DESTRUCTURE-NEEDS-ELSE, E-DESTRUCTURE-ELSE-IRREFUTABLE, E-DESTRUCTURE-ELSE-FALLTHROUGH, E-DESTRUCTURE-DUP-BIND, E-FIXEDLIST-DESTRUCTURE-LEN)"
         )
     })
 }

@@ -28,7 +28,7 @@ impl Parser {
                 let body = self.parse_block()?;
                 Ok(Stmt::Block(body, sp))
             }
-            TokenKind::Var => self.parse_var_inferred(false),
+            TokenKind::Var => self.parse_var_or_destructure(),
             TokenKind::Mutable => self.parse_mutable_var_decl(),
             TokenKind::Throw => self.parse_throw(),
             TokenKind::Try => self.parse_try(),
@@ -80,6 +80,111 @@ impl Parser {
             body,
             catches,
             finally_block,
+            span: sp,
+        })
+    }
+
+    /// Dispatch the three `var`-led statement forms (Phase 1 slice 5): a list destructure (`var [a, b]
+    /// = …`), a struct destructure (`var Type { … } = …`), or a plain inferred binding (`var name =
+    /// …`). The destructure forms are reached only through this (the bare `var` path); `mutable var` is
+    /// always a scalar binding, so `parse_mutable_var_decl` never routes here.
+    pub(super) fn parse_var_or_destructure(&mut self) -> Result<Stmt, Diagnostic> {
+        let sp = self.peek_span();
+        self.expect(&TokenKind::Var, "'var'")?;
+        if self.check(&TokenKind::LBracket) {
+            return self.parse_list_destructure(sp);
+        }
+        if matches!(self.peek(), TokenKind::Ident(_)) && matches!(self.peek2(), TokenKind::LBrace) {
+            return self.parse_struct_destructure(sp);
+        }
+        // Plain `var name = expr;` (the `Var` token is already consumed).
+        let name = self.expect_ident("a variable name after 'var'")?;
+        self.expect(&TokenKind::Eq, "'=' after 'var <name>'")?;
+        let init = self.parse_expr()?;
+        self.expect(&TokenKind::Semicolon, "';' after variable declaration")?;
+        Ok(Stmt::VarDecl {
+            ty: Type::Infer(sp),
+            name,
+            init,
+            mutable: false,
+            span: sp,
+        })
+    }
+
+    /// `[a, b] = expr [else { … }];` — the `var` and `[` have been peeked but not consumed. The
+    /// trailing form is either `else { block }` (refutable, no `;`) or `;` (irrefutable `[T; N]`).
+    fn parse_list_destructure(&mut self, sp: Span) -> Result<Stmt, Diagnostic> {
+        self.expect(&TokenKind::LBracket, "'[' to open a list destructuring")?;
+        let mut binders = Vec::new();
+        loop {
+            let bsp = self.peek_span();
+            let name = self.expect_ident("a binding name in the list destructuring")?;
+            binders.push((name, bsp));
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
+        }
+        self.expect(&TokenKind::RBracket, "']' to close the list destructuring")?;
+        let pat = crate::ast::DestructurePat::List { binders, span: sp };
+        self.finish_destructure(pat, sp)
+    }
+
+    /// `Type { field [: binding], … } = expr [else { … }];` — the `var`, type ident, and `{` have been
+    /// peeked but not consumed.
+    fn parse_struct_destructure(&mut self, sp: Span) -> Result<Stmt, Diagnostic> {
+        let type_name = self.expect_ident("a type name to destructure")?;
+        self.expect(&TokenKind::LBrace, "'{' to open a struct destructuring")?;
+        let mut fields = Vec::new();
+        loop {
+            let fsp = self.peek_span();
+            let field = self.expect_ident("a field name in the struct destructuring")?;
+            // `field: binding` renames; bare `field` binds to its own name.
+            let binding = if self.eat(&TokenKind::Colon) {
+                self.expect_ident("a binding name after ':'")?
+            } else {
+                field.clone()
+            };
+            fields.push(crate::ast::DestructureField {
+                field,
+                binding,
+                span: fsp,
+            });
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
+        }
+        self.expect(&TokenKind::RBrace, "'}' to close the struct destructuring")?;
+        let pat = crate::ast::DestructurePat::Struct {
+            type_name,
+            fields,
+            span: sp,
+        };
+        self.finish_destructure(pat, sp)
+    }
+
+    /// Shared tail of both destructure forms: `= expr`, then either `else { block }` (no `;`) or `;`.
+    /// The checker enforces which form each pattern requires (refutable list ⇒ `else`; everything else
+    /// ⇒ no `else`).
+    fn finish_destructure(
+        &mut self,
+        pat: crate::ast::DestructurePat,
+        sp: Span,
+    ) -> Result<Stmt, Diagnostic> {
+        self.expect(&TokenKind::Eq, "'=' after the destructuring pattern")?;
+        let init = self.parse_expr()?;
+        let else_block = if self.eat(&TokenKind::Else) {
+            Some(self.parse_block()?)
+        } else {
+            self.expect(
+                &TokenKind::Semicolon,
+                "';' or 'else { … }' after the destructuring",
+            )?;
+            None
+        };
+        Ok(Stmt::Destructure {
+            pat,
+            init,
+            else_block,
             span: sp,
         })
     }

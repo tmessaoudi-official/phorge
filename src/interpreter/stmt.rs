@@ -183,6 +183,18 @@ impl Interp {
                 let v = self.eval(value)?;
                 Err(Signal::Throw(v))
             }
+            // Let-destructuring (Phase 1 slice 5): bind each binder into the current scope. A struct
+            // pattern reads the instance's fields; a list pattern length-checks and, on a mismatch,
+            // runs the (diverging) `else` — propagating its signal.
+            Stmt::Destructure {
+                pat,
+                init,
+                else_block,
+                ..
+            } => {
+                let v = self.eval(init)?;
+                self.exec_destructure(pat, v, else_block.as_deref())
+            }
             // `try { … } catch (T e) { … } … [finally { … }]` — native unwinding (M-faults 2b).
             // The body runs; a `Throw` it raises is matched against the catch clauses in order (a
             // catch whose type — or any union member — is the value's class or a supertype). A
@@ -243,6 +255,61 @@ impl Interp {
                     .class_implements
                     .get(&inst.class)
                     .is_some_and(|ifaces| ifaces.iter().any(|i| i == name)))
+    }
+
+    /// Bind a [`Stmt::Destructure`] (Phase 1 slice 5) into the current scope. A struct pattern reads
+    /// the instance's fields by name; a list pattern length-checks against the binder count and, on a
+    /// mismatch, runs the `else` block whose `Signal` (a guaranteed divergence) is propagated. Both
+    /// error paths are checker-unreachable (the checker proves the value's shape) and only defensive.
+    fn exec_destructure(
+        &mut self,
+        pat: &crate::ast::DestructurePat,
+        v: Value,
+        else_block: Option<&[Stmt]>,
+    ) -> R<()> {
+        use crate::ast::DestructurePat;
+        match pat {
+            DestructurePat::Struct {
+                type_name, fields, ..
+            } => match v {
+                Value::Instance(inst) => {
+                    for f in fields {
+                        let fv = inst.fields.borrow().get(&f.field).cloned();
+                        match fv {
+                            Some(val) => self.frame.declare(&f.binding, val),
+                            None => {
+                                return rt(format!("no field `{}` on `{}`", f.field, inst.class))
+                            }
+                        }
+                    }
+                    Ok(())
+                }
+                other => rt(format!(
+                    "cannot destructure {} as `{type_name}`",
+                    other.type_name()
+                )),
+            },
+            DestructurePat::List { binders, .. } => match v {
+                Value::List(items) => {
+                    if items.len() != binders.len() {
+                        // Refutable mismatch → run the (diverging) `else`; propagate its signal.
+                        if let Some(eb) = else_block {
+                            return self.exec_scoped(eb);
+                        }
+                        return rt(format!(
+                            "list destructuring expected {} element(s), found {}",
+                            binders.len(),
+                            items.len()
+                        ));
+                    }
+                    for ((name, _), item) in binders.iter().zip(items.iter()) {
+                        self.frame.declare(name, item.clone());
+                    }
+                    Ok(())
+                }
+                other => rt(format!("cannot list-destructure {}", other.type_name())),
+            },
+        }
     }
 
     /// `while (cond) { .. }` / `do { .. } while (cond);` (M-mut.3). Each iteration runs the body in

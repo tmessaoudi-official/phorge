@@ -417,3 +417,60 @@ fn parses_for_in() {
         other => panic!("got {other:?}"),
     }
 }
+
+#[test]
+fn parses_struct_destructure() {
+    match stmt("var Point { x, y: row } = p;") {
+        Stmt::Destructure {
+            pat:
+                crate::ast::DestructurePat::Struct {
+                    type_name, fields, ..
+                },
+            else_block: None,
+            ..
+        } => {
+            assert_eq!(type_name, "Point");
+            assert_eq!(fields.len(), 2);
+            assert_eq!(fields[0].field, "x");
+            assert_eq!(fields[0].binding, "x"); // shorthand
+            assert_eq!(fields[1].field, "y");
+            assert_eq!(fields[1].binding, "row"); // rename
+        }
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_list_destructure_with_else() {
+    match stmt("var [a, b] = xs else { return; }") {
+        Stmt::Destructure {
+            pat: crate::ast::DestructurePat::List { binders, .. },
+            else_block: Some(eb),
+            ..
+        } => {
+            assert_eq!(binders.len(), 2);
+            assert_eq!(binders[0].0, "a");
+            assert_eq!(binders[1].0, "b");
+            assert_eq!(eb.len(), 1);
+        }
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_list_destructure_no_else() {
+    match stmt("var [a, b] = pair;") {
+        Stmt::Destructure {
+            pat: crate::ast::DestructurePat::List { binders, .. },
+            else_block: None,
+            ..
+        } => assert_eq!(binders.len(), 2),
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn plain_var_still_parses_after_destructure_dispatch() {
+    // The `var` dispatcher must not mistake an ordinary binding for a destructure.
+    assert!(matches!(stmt("var n = 5;"), Stmt::VarDecl { .. }));
+}

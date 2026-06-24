@@ -462,6 +462,68 @@ pub enum Stmt {
         finally_block: Option<Vec<Stmt>>,
         span: Span,
     },
+    /// Let-destructuring (Phase 1 slice 5): `var Point { x, y } = p;` (struct, irrefutable) or
+    /// `var [a, b] = xs else { … };` (list, refutable). The binders enter the **enclosing** scope (a
+    /// binding statement, not a nested block), so they are live for the rest of the block. `else_block`
+    /// is present only for the refutable list form and must diverge (Swift `guard let` model — checked
+    /// via the totality engine); a present `else` on an irrefutable pattern is a compile error. No new
+    /// `Op`/`Value`: the struct form lowers to field reads, the list form to a length-check + indexed
+    /// reads (the same ops as an `if`).
+    Destructure {
+        pat: DestructurePat,
+        init: Expr,
+        else_block: Option<Vec<Stmt>>,
+        span: Span,
+    },
+}
+
+/// The target of a [`Stmt::Destructure`] (Phase 1 slice 5). A dedicated, flat (no nested sub-patterns)
+/// representation — deliberately *not* the match [`Pattern`] enum: a list target is not a match pattern
+/// (adding `Pattern::List` would force match-side handling + exhaustiveness), and let-destructuring
+/// needs eager binding into the enclosing scope, which the lazy match-binding path does not model.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DestructurePat {
+    /// `Point { x, y }` / `Point { x: px }` — `type_name` is a concrete class; each field binds (with
+    /// optional rename). Irrefutable: the init's static type must be assignable to `type_name`.
+    Struct {
+        type_name: String,
+        fields: Vec<DestructureField>,
+        span: Span,
+    },
+    /// `[a, b]` — bind list elements positionally. Refutable on a `List<T>` (mandatory diverging
+    /// `else`), irrefutable on a length-matching `[T; N]`.
+    List {
+        binders: Vec<(String, Span)>,
+        span: Span,
+    },
+}
+
+/// One `field` / `field: binding` entry of a struct [`DestructurePat`] (Phase 1 slice 5). Shorthand
+/// `Point { x }` fills `binding` with `field`; rename `Point { x: px }` sets `binding = "px"`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DestructureField {
+    pub field: String,
+    pub binding: String,
+    pub span: Span,
+}
+
+impl DestructurePat {
+    /// The variable names this pattern binds, each with its span, in source order. Used by every pass
+    /// that introduces the binders into scope (free-var analysis, checker, casing).
+    pub fn binders(&self) -> Vec<(String, Span)> {
+        match self {
+            DestructurePat::Struct { fields, .. } => {
+                fields.iter().map(|f| (f.binding.clone(), f.span)).collect()
+            }
+            DestructurePat::List { binders, .. } => binders.clone(),
+        }
+    }
+
+    pub fn span(&self) -> Span {
+        match self {
+            DestructurePat::Struct { span, .. } | DestructurePat::List { span, .. } => *span,
+        }
+    }
 }
 
 /// One `catch (Type name) { .. }` clause of a [`Stmt::Try`] (M-faults 2b). `ty` may be a union

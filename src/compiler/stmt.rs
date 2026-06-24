@@ -196,6 +196,95 @@ impl Compiler<'_> {
                 finally_block,
                 span,
             } => self.compile_try(body, catches, finally_block.as_deref(), span.line),
+            Stmt::Destructure {
+                pat,
+                init,
+                else_block,
+                span,
+            } => self.compile_destructure(pat, init, else_block.as_deref(), span.line),
+        }
+    }
+
+    /// Let-destructuring (Phase 1 slice 5) — NO new `Op`. Spill the init to a hidden `$destructure`
+    /// local, then: a **struct** pattern reads each field (`GetField`) into a fresh binder
+    /// (irrefutable, no branch); a **list** pattern reserves the binder slots, length-checks
+    /// (`Len`/`Eq`/`JumpIfFalse`), assigns each element on the success path (the bounds-checked
+    /// `Index`), and runs the diverging `else` on the fail path — structurally the same lowering as an
+    /// `if`. Reserving the binder slots up front keeps the locals layout identical on both branches,
+    /// so the continuation (where the binders are live) needs no save/restore.
+    pub(super) fn compile_destructure(
+        &mut self,
+        pat: &crate::ast::DestructurePat,
+        init: &Expr,
+        else_block: Option<&[Stmt]>,
+        line: u32,
+    ) -> Result<(), String> {
+        use crate::ast::DestructurePat;
+        self.expr(init)?; // [.., initval] — spilled to the hidden temp below
+        let init_cty = self.ctype(init).unwrap_or(CTy::Other);
+        let d = self.add_local("$destructure", init_cty.clone());
+        match pat {
+            DestructurePat::Struct {
+                type_name, fields, ..
+            } => {
+                for f in fields {
+                    self.emit(Op::GetLocal(d), line); // [.., instance]
+                    let idx = self.field_name_index(&f.field)?;
+                    self.emit(Op::GetField(idx), line); // [.., fieldval]
+                                                        // The binder's CTy is the class-field type so a destructured int is a first-class
+                                                        // arithmetic operand on the VM (`Point { x } ⇒ x + 1`), the operand trap.
+                    let cty = self
+                        .class_field_ctys
+                        .get(type_name)
+                        .and_then(|m| m.get(&f.field))
+                        .cloned()
+                        .unwrap_or(CTy::Other);
+                    self.add_local(&f.binding, cty); // fieldval becomes the binder
+                }
+                Ok(())
+            }
+            DestructurePat::List { binders, .. } => {
+                let elem_cty = match &init_cty {
+                    CTy::List(e) => (**e).clone(),
+                    _ => CTy::Other,
+                };
+                let arity = binders.len();
+                // Reserve every binder slot (null placeholder) BEFORE the branch so the locals layout
+                // is identical on the success and `else` paths.
+                for (name, _) in binders {
+                    self.emit_const(Value::Null, line);
+                    self.add_local(name, elem_cty.clone());
+                }
+                // len(init) == arity ?
+                self.emit(Op::GetLocal(d), line);
+                self.emit(Op::Len, line);
+                self.emit_const(Value::Int(arity as i64), line);
+                self.emit(Op::Eq, line);
+                let else_jump = self.emit_jump(Op::JumpIfFalse(0), line); // jump to `else` if length differs
+                                                                          // Success: assign each element into its reserved slot (the `Index` is in-range here).
+                for (i, (name, _)) in binders.iter().enumerate() {
+                    let slot = self
+                        .resolve_local(name)
+                        .ok_or_else(|| format!("unresolved destructure binder: {name}"))?;
+                    self.emit(Op::GetLocal(d), line);
+                    self.emit_const(Value::Int(i as i64), line);
+                    self.emit(Op::Index, line);
+                    self.emit(Op::SetLocal(slot), line);
+                }
+                let end_jump = self.emit_jump(Op::Jump(0), line);
+                self.patch_jump(else_jump);
+                // The `else` block (checker-guaranteed to diverge) runs with the binders reserved as
+                // null — harmless, the checker forbids referencing them here.
+                if let Some(eb) = else_block {
+                    self.begin_scope();
+                    for s in eb {
+                        self.stmt(s)?;
+                    }
+                    self.end_scope(line);
+                }
+                self.patch_jump(end_jump);
+                Ok(())
+            }
         }
     }
 

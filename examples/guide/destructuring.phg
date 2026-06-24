@@ -1,0 +1,62 @@
+// Let-destructuring (Phase 1 slice 5) — bind the parts of a value in a single statement, instead of
+// a temporary plus a field read or index per part. Two shapes, distinguished by whether the binding
+// can *fail* at runtime:
+//
+//   • STRUCT  `var Point { x, y } = p;`        — irrefutable. A `Point` always has `x` and `y`, so the
+//                                                 binding can't fail and takes no `else`. `x: col`
+//                                                 renames the field on the way out.
+//   • LIST    `var [a, b] = xs else { … };`     — refutable on a `List<T>` (its length is unknown), so
+//                                                 it MUST carry an `else` that bails out (returns /
+//                                                 throws / breaks) when the length doesn't match.
+//   • LIST    `var [a, b] = pair;`              — on a fixed-length `[T; N]` the length is a
+//                                                 compile-time guarantee, so the SAME list pattern is
+//                                                 irrefutable and takes no `else`.
+//
+// The binders enter the enclosing scope (they live for the rest of the block) at their resolved
+// element/field type — so a destructured `int` is a first-class arithmetic operand on the VM. No new
+// runtime machinery: the struct form lowers to field reads, the list form to a length-check plus
+// indexed reads — the same ops as an `if`. Output is byte-for-byte identical on the interpreter, the
+// bytecode VM, and the transpiled PHP.
+
+package Main;
+
+import Core.Console;
+
+class Point {
+    constructor(public int x, public int y) {}
+}
+
+// Struct destructuring (irrefutable): bind `x`/`y`, and bind the same fields again under new names.
+function describe(Point p) -> string {
+    var Point { x, y } = p;
+    var Point { x: col, y: row } = p;
+    return "x={x} y={y} (col={col} row={row})";
+}
+
+// List destructuring on a `List<T>` (refutable): the `else` runs and bails out when `xs` is not
+// exactly two elements long. `a`/`b` are `int`, so `a + b` is a real arithmetic operand.
+function firstTwoSum(List<int> xs) -> int {
+    var [a, b] = xs else {
+        return -1;
+    }
+    return a + b;
+}
+
+// List destructuring on a `[T; N]` (irrefutable): the length is known at compile time, so no `else`.
+function swap(int a, int b) -> string {
+    [int; 2] pair = [b, a];
+    var [first, second] = pair;
+    return "{first},{second}";
+}
+
+function main() -> void {
+    var p = new Point(3, 4);
+    Console.println(describe(p));
+
+    // Length matches → 10 + 20 = 30.
+    Console.println("sum2={firstTwoSum([10, 20])}");
+    // Length differs → the `else` bails out with -1.
+    Console.println("sum3={firstTwoSum([1, 2, 3])}");
+
+    Console.println(swap(7, 9));
+}

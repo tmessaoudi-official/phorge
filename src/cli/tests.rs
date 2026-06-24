@@ -289,6 +289,25 @@ fn explain_covers_struct_pattern_codes() {
 }
 
 #[test]
+fn explain_covers_destructuring_codes() {
+    // The Phase 1 slice 5 let-destructuring diagnostics self-document via `phg explain`.
+    for code in [
+        "E-DESTRUCTURE-TYPE",
+        "E-DESTRUCTURE-NOT-CLASS",
+        "E-DESTRUCTURE-FIELD-UNKNOWN",
+        "E-DESTRUCTURE-NOT-LIST",
+        "E-DESTRUCTURE-NEEDS-ELSE",
+        "E-DESTRUCTURE-ELSE-IRREFUTABLE",
+        "E-DESTRUCTURE-ELSE-FALLTHROUGH",
+        "E-DESTRUCTURE-DUP-BIND",
+        "E-FIXEDLIST-DESTRUCTURE-LEN",
+    ] {
+        let body = explain_text(code).unwrap_or_else(|| panic!("{code} has an explanation"));
+        assert!(body.starts_with(code), "{body}");
+    }
+}
+
+#[test]
 fn explain_covers_error_model_2a_codes() {
     // The M-faults Slice 2a diagnostics (`?` propagation + fault intrinsics) self-document.
     for code in [

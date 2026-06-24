@@ -53,7 +53,8 @@ fn stmt_line(s: &Stmt) -> u32 {
         | Stmt::While { span, .. }
         | Stmt::CFor { span, .. }
         | Stmt::Throw { span, .. }
-        | Stmt::Try { span, .. } => span.line,
+        | Stmt::Try { span, .. }
+        | Stmt::Destructure { span, .. } => span.line,
         Stmt::Break(s) | Stmt::Continue(s) | Stmt::Block(_, s) | Stmt::Expr(_, s) => s.line,
     }
 }

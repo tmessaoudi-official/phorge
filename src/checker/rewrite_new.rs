@@ -104,6 +104,15 @@ fn ue_stmt(s: &mut Stmt) {
             ue_block(body);
         }
         Stmt::Block(b, _) => ue_block(b),
+        // Slice 5: unwrap `new` in the destructured initializer and the `else` block.
+        Stmt::Destructure {
+            init, else_block, ..
+        } => {
+            ue_expr(init);
+            if let Some(eb) = else_block {
+                ue_block(eb);
+            }
+        }
         Stmt::Expr(e, _) | Stmt::Throw { value: e, .. } => ue_expr(e),
         Stmt::Try {
             body,

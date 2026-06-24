@@ -16,7 +16,8 @@ impl Checker {
             | Stmt::Expr(_, span)
             | Stmt::Block(_, span)
             | Stmt::Throw { span, .. }
-            | Stmt::Try { span, .. } => *span,
+            | Stmt::Try { span, .. }
+            | Stmt::Destructure { span, .. } => *span,
             Stmt::Break(span) | Stmt::Continue(span) => *span,
         }
     }
@@ -337,6 +338,195 @@ impl Checker {
                     self.check_block(fb);
                 }
             }
+            Stmt::Destructure {
+                pat,
+                init,
+                else_block,
+                span,
+            } => self.check_destructure(pat, init, else_block.as_deref(), *span),
+        }
+    }
+
+    /// Let-destructuring (Phase 1 slice 5): type the initializer, decide refutability, enforce the
+    /// `else` rules, then bind every binder into the **current** scope at its resolved element/field
+    /// type. The `else` block (refutable list only) is checked in a scope *without* the binders and
+    /// must diverge (Swift `guard let`); a present `else` on an irrefutable pattern is an error.
+    pub(super) fn check_destructure(
+        &mut self,
+        pat: &crate::ast::DestructurePat,
+        init: &crate::ast::Expr,
+        else_block: Option<&[crate::ast::Stmt]>,
+        span: Span,
+    ) {
+        use crate::ast::DestructurePat;
+        let init_ty = self.check_expr(init);
+        // (binding name, span, resolved type) for each binder, filled per pattern kind below.
+        let mut binds: Vec<(String, Span, Ty)> = Vec::new();
+        // Whether the pattern is refutable (a present `else` is then required and must diverge).
+        let mut refutable = false;
+        match pat {
+            DestructurePat::Struct {
+                type_name, fields, ..
+            } => {
+                // The head names a concrete class; the init must BE that class (irrefutable). A generic
+                // instance must match the head exactly so its type args resolve the fields; a plain
+                // subtype is accepted only for a non-generic class (no args to recover).
+                let class_args: Option<Vec<Ty>> = match &init_ty {
+                    Ty::Error => Some(vec![]), // poison: emit no further errors
+                    Ty::Named(cls, cargs) if cls == type_name => Some(cargs.clone()),
+                    Ty::Named(cls, _)
+                        if self.is_subtype(cls, type_name)
+                            && self
+                                .classes
+                                .get(type_name)
+                                .is_some_and(|i| i.type_params.is_empty()) =>
+                    {
+                        Some(vec![])
+                    }
+                    other => {
+                        self.err_coded(
+                            span,
+                            format!("cannot destructure `{other}` as `{type_name}`"),
+                            "E-DESTRUCTURE-TYPE",
+                            Some(format!(
+                                "the value must be a `{type_name}` (or a subtype) — destructure it at its own type"
+                            )),
+                        );
+                        None
+                    }
+                };
+                if !matches!(init_ty, Ty::Error) && !self.classes.contains_key(type_name) {
+                    self.err_coded(
+                        span,
+                        format!("`{type_name}` is not a class — only classes can be struct-destructured"),
+                        "E-DESTRUCTURE-NOT-CLASS",
+                        Some("list values destructure with `var [a, b] = …`".into()),
+                    );
+                }
+                if let Some(cargs) = class_args {
+                    let subst = self.class_subst(type_name, &cargs);
+                    for f in fields {
+                        let fty = self
+                            .classes
+                            .get(type_name)
+                            .and_then(|i| i.fields.get(&f.field).cloned());
+                        let resolved = match fty {
+                            Some(t) => apply_subst(&t, &subst),
+                            // Only emit "no field" when the class is real and not already poisoned
+                            // (avoids double-reporting against an upstream error).
+                            None => {
+                                if self.classes.contains_key(type_name)
+                                    && !matches!(init_ty, Ty::Error)
+                                {
+                                    self.err_coded(
+                                        f.span,
+                                        format!("type `{type_name}` has no field `{}`", f.field),
+                                        "E-DESTRUCTURE-FIELD-UNKNOWN",
+                                        None,
+                                    );
+                                }
+                                Ty::Error
+                            }
+                        };
+                        binds.push((f.binding.clone(), f.span, resolved));
+                    }
+                }
+            }
+            DestructurePat::List { binders, .. } => {
+                let arity = binders.len();
+                let elem = match &init_ty {
+                    Ty::Error => Ty::Error,
+                    // A `List<T>` carries no static length → refutable, `else` mandatory.
+                    Ty::List(e) => {
+                        refutable = true;
+                        (**e).clone()
+                    }
+                    // A `[T; N]` is irrefutable iff its length matches the pattern arity (slice-3 payoff).
+                    Ty::FixedList(e, n) => {
+                        if *n != arity {
+                            self.err_coded(
+                                span,
+                                format!(
+                                    "destructuring binds {arity} element(s) but the value is `[{e}; {n}]` (length {n})"
+                                ),
+                                "E-FIXEDLIST-DESTRUCTURE-LEN",
+                                Some(format!("bind exactly {n} element(s), or destructure a `List<{e}>` with an `else`")),
+                            );
+                        }
+                        (**e).clone()
+                    }
+                    other => {
+                        self.err_coded(
+                            span,
+                            format!("cannot list-destructure `{other}` — expected a list"),
+                            "E-DESTRUCTURE-NOT-LIST",
+                            Some("struct values destructure with `var Type { … } = …`".into()),
+                        );
+                        Ty::Error
+                    }
+                };
+                for (name, bsp) in binders {
+                    binds.push((name.clone(), *bsp, elem.clone()));
+                }
+            }
+        }
+        // `else` rules: required iff refutable; forbidden otherwise; and a present `else` must diverge.
+        match (refutable, else_block) {
+            (true, None) => {
+                self.err_coded(
+                    span,
+                    "this destructuring can fail at runtime and needs an `else` that bails out",
+                    "E-DESTRUCTURE-NEEDS-ELSE",
+                    Some("add `else { … }` that returns/throws/breaks (a `List` has no static length)".into()),
+                );
+            }
+            (false, Some(_)) => {
+                self.err_coded(
+                    span,
+                    "this destructuring always succeeds, so it cannot have an `else`",
+                    "E-DESTRUCTURE-ELSE-IRREFUTABLE",
+                    Some(
+                        "remove the `else` — an irrefutable destructuring binds unconditionally"
+                            .into(),
+                    ),
+                );
+            }
+            _ => {}
+        }
+        if let Some(eb) = else_block {
+            // The else block sees none of the binders (it runs only on the destructure-failed path).
+            self.push_scope();
+            self.check_block(eb);
+            self.pop_scope();
+            if !self.block_terminates(eb) {
+                self.err_coded(
+                    span,
+                    "the destructuring `else` must not fall through — it has to bail out",
+                    "E-DESTRUCTURE-ELSE-FALLTHROUGH",
+                    Some(
+                        "end every path of the `else` with `return`/`throw`/`break`/`continue`"
+                            .into(),
+                    ),
+                );
+            }
+        }
+        // Bind every binder into the current (enclosing) scope, immutable. A `void`/optional element
+        // type is impossible here (init is a real List/class), so no E-VOID-CAPTURE guard is needed.
+        // A duplicate binder would silently alias one slot on the VM (the SetLocal target collides) —
+        // reject it up front (`var [a, a]` / `var P { x, x }`).
+        let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for (name, bsp, _) in &binds {
+            if !seen.insert(name.as_str()) {
+                self.err_coded(
+                    *bsp,
+                    format!("`{name}` is bound twice in this destructuring"),
+                    "E-DESTRUCTURE-DUP-BIND",
+                    Some("each binder must be distinct — rename one (e.g. `y: y2`)".into()),
+                );
+            }
+        }
+        for (name, bsp, ty) in binds {
+            self.declare_binding(&name, ty, false, bsp);
         }
     }
 

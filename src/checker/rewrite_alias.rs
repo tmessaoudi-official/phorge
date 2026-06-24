@@ -163,6 +163,22 @@ pub fn expand_aliases(program: &Program) -> Program {
                     .map(|b| b.iter().map(|s| rstmt(s, a)).collect()),
                 span: *span,
             },
+            // Slice 5: a destructure carries no type *annotation* (its struct head is a bare class
+            // name, not a `Type`), but its `else` block may hold statements with alias annotations —
+            // recurse there. The init expr is cloned (this pass rewrites annotations only).
+            Stmt::Destructure {
+                pat,
+                init,
+                else_block,
+                span,
+            } => Stmt::Destructure {
+                pat: pat.clone(),
+                init: init.clone(),
+                else_block: else_block
+                    .as_ref()
+                    .map(|b| b.iter().map(|s| rstmt(s, a)).collect()),
+                span: *span,
+            },
             // Throw/Assign/Return/Expr/break/continue carry only exprs or nothing (no type
             // annotations this pass rewrites).
             Stmt::Throw { .. }

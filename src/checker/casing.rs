@@ -198,6 +198,23 @@ impl Checker {
             }
             Stmt::Expr(e, _) => self.check_expr_casing(e),
             Stmt::Throw { value, .. } => self.check_expr_casing(value),
+            // Slice 5: each binder is a value name (camelCase wanted); recurse into init + `else`.
+            Stmt::Destructure {
+                pat,
+                init,
+                else_block,
+                ..
+            } => {
+                for (name, sp) in pat.binders() {
+                    self.want_name_case(&name, sp);
+                }
+                self.check_expr_casing(init);
+                if let Some(eb) = else_block {
+                    for st in eb {
+                        self.check_stmt_casing(st);
+                    }
+                }
+            }
             Stmt::Try {
                 body,
                 catches,
