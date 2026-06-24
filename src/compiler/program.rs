@@ -625,9 +625,19 @@ pub(super) fn compile_constructor<'a>(
     comp.emit(Op::MakeInstance(desc_idx), line);
     let inst_slot = comp.add_local("$this", CTy::Other);
     comp.this_slot = Some(inst_slot); // a ctor body may reference `this` / bare fields
-                                      // Each plan entry's body runs in sequence on the one instance. An early `return` ends *that*
-                                      // body only (matching the interpreter's separate per-parent call) — so each gets its own
-                                      // return-jump set, patched to the end of that body, never skipping a later parent's init.
+                                      // Feature B: expression field initializers run after promotion and before the ctor body, in
+                                      // declaration order (base-first across ancestors). Each lowers to `this.field = <init>`:
+                                      // load the instance, compile the initializer (with `this` live, so it reads an earlier sibling),
+                                      // then `SetField`. The shared `ast::field_initializers` list keeps all three backends in lockstep.
+    for (fname, init) in crate::ast::field_initializers(program, &c.name) {
+        comp.emit(Op::GetLocal(inst_slot), line); // [this]
+        comp.expr(&init)?; // [this, value]
+        let idx = comp.field_name_index(&fname)?;
+        comp.emit(Op::SetField(idx), line); // mutate in place, pop both
+    }
+    // Each plan entry's body runs in sequence on the one instance. An early `return` ends *that*
+    // body only (matching the interpreter's separate per-parent call) — so each gets its own
+    // return-jump set, patched to the end of that body, never skipping a later parent's init.
     for (_, body) in &plan {
         comp.ctor_return_jumps = Some(Vec::new());
         for s in body {

@@ -600,6 +600,69 @@ pub fn class_consts(
     out
 }
 
+/// The class's **own** expression field initializers (Feature B): each `(field_name, init_expr)` for a
+/// plain instance field (non-`static`, non-`const`) carrying an initializer, in declaration order.
+/// Used by the transpiler to build *this* class's `__construct` prelude (PHP doesn't auto-chain, so a
+/// class's constructor runs only its own initializers — see [`field_initializers`]).
+pub fn own_field_initializers(decl: &ClassDecl) -> Vec<(String, Expr)> {
+    decl.members
+        .iter()
+        .filter_map(|m| match m {
+            ClassMember::Field {
+                modifiers,
+                name,
+                init: Some(e),
+                ..
+            } if !modifiers.contains(&Modifier::Static)
+                && !modifiers.contains(&Modifier::Const) =>
+            {
+                Some((name.clone(), e.clone()))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// The ordered **expression field initializers** to run when constructing `class` (Feature B) — the
+/// own initializers of the class whose constructor PHP actually invokes for `new class()`.
+///
+/// PHP does **not** auto-chain `parent::__construct`, so `new C()` runs exactly *one* class's
+/// constructor body+prelude: `C`'s own if `C` declares a constructor or has its own field
+/// initializers, otherwise the nearest ancestor's (the one PHP inherits the constructor from). This
+/// helper returns that class's own field initializers, in declaration order — so an initializer may
+/// read `this` and an **earlier-declared sibling** (a later field is `E-FIELD-INIT-FORWARD-REF`).
+///
+/// Returning the *invoked* constructor's own initializers (rather than every ancestor's) keeps the
+/// three backends byte-identical with PHP's constructor inheritance: the interpreter sets these after
+/// promotion, the compiler emits `SetField` for them, and the transpiler prepends exactly these to the
+/// same class's `__construct`. Cycle-safe (reuses [`class_mro`]).
+pub fn field_initializers(program: &Program, class: &str) -> Vec<(String, Expr)> {
+    let find = |name: &str| -> Option<&ClassDecl> {
+        program.items.iter().find_map(|it| match it {
+            Item::Class(c) if c.name == name => Some(c),
+            _ => None,
+        })
+    };
+    // self-first, then ancestors nearest-first (the order PHP resolves an inherited constructor).
+    let chain: Vec<String> = std::iter::once(class.to_string())
+        .chain(class_mro(program).get(class).cloned().unwrap_or_default())
+        .collect();
+    for cls in &chain {
+        let Some(decl) = find(cls) else { continue };
+        let has_ctor = decl
+            .members
+            .iter()
+            .any(|m| matches!(m, ClassMember::Constructor { .. }));
+        let own = own_field_initializers(decl);
+        // The first class with an own constructor OR own field initializers is the one whose
+        // `__construct` PHP invokes — run its initializers (which may be empty if it only has a ctor).
+        if has_ctor || !own.is_empty() {
+            return own;
+        }
+    }
+    Vec::new()
+}
+
 /// The ordered list of constructors a `ClassName(args)` call runs (M-RT S6c.2). Each entry is one
 /// `(params, body)` to execute, in order, on the single instance being built; the call's full argument
 /// list is the entries' params concatenated in this order, sliced per entry.

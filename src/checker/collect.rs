@@ -1142,18 +1142,10 @@ impl Checker {
                             static_mut.insert(name.clone());
                         }
                     } else {
-                        // An instance field is set via the constructor; a field-level initializer is
-                        // not supported yet (M-mut.7 deferral).
-                        if init.is_some() {
-                            self.err_coded(
-                                *span,
-                                format!("instance field `{name}` cannot have an initializer"),
-                                "E-FIELD-INIT",
-                                Some(format!(
-                                    "set it in the constructor (`this.{name} = …`) or make it `static`"
-                                )),
-                            );
-                        }
+                        // A plain instance field. An optional expression initializer (Feature B) is
+                        // evaluated per-instance at construction (declaration order, after promotion);
+                        // its type + forward-reference are checked in `check_type_body`, where `this`
+                        // and the field scope are live. Just record the field here.
                         fields.insert(name.clone(), fty);
                         if modifiers.contains(&Modifier::Mutable) {
                             mutable_fields.insert(name.clone());

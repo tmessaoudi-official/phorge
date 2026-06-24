@@ -295,12 +295,11 @@ fn static_field_initializer_type_mismatch_is_error() {
 }
 
 #[test]
-fn instance_field_with_initializer_is_error() {
-    let bad = errors_of("class C { int x = 5; constructor() {} }");
-    assert!(
-        bad.iter().any(|e| e.code == Some("E-FIELD-INIT")),
-        "{bad:?}"
-    );
+fn instance_field_with_initializer_is_ok() {
+    // Feature B lifted the old E-FIELD-INIT rejection: an instance field may now carry an expression
+    // initializer (evaluated per-instance at construction). See `checker::tests::field_init`.
+    let src = "class C { int x = 5; constructor() {} } function main() -> void {}";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
 
 #[test]

@@ -1,0 +1,29 @@
+package Main;
+import Core.Console;
+
+// Feature B — expression field initializers. PHP restricts property defaults to *constant
+// expressions* (no calls, no `$this`, no other-property reads — "Constant expression contains
+// invalid operations"). Phorge lifts that: an instance field may be initialized by ANY expression,
+// evaluated per-instance at construction in declaration order, after the promoted constructor params
+// are bound. An initializer may read `this` and EARLIER-declared sibling fields (a later field is
+// `E-FIELD-INIT-FORWARD-REF`). Lowered to a PHP constructor prelude.
+
+function compute(int n) -> int {
+    return n * 10;
+}
+
+class Task {
+    int weight = compute(3) + 1;     // a call in the default → 31
+    int doubled = this.weight * 2;   // reads `this` + an EARLIER sibling → 62
+    constructor(public string label) {}
+
+    function summary() -> string {
+        return "{this.label}: w={this.weight} d={this.doubled}";
+    }
+}
+
+function main() -> void {
+    Task t = Task("alpha");
+    Console.println(t.summary());                // alpha: w=31 d=62
+    Console.println("{t.weight + t.doubled}");   // 93
+}

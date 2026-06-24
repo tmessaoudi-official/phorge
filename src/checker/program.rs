@@ -2,6 +2,88 @@
 
 use super::*;
 
+/// Walk a field initializer (Feature B) for a read of a **not-yet-initialized** field — returns the
+/// first forbidden name reached via `this.X` or a bare `X`. Lambda bodies are skipped: a lambda that
+/// touches `this` is independently rejected (`E-LAMBDA-THIS`), so a closure default cannot smuggle in
+/// a forward reference. The set is the fields that are *not* available when this initializer runs.
+fn field_init_forbidden_ref(
+    e: &crate::ast::Expr,
+    forbidden: &std::collections::HashSet<String>,
+) -> Option<String> {
+    use crate::ast::{Expr, StrPart};
+    fn walk(e: &Expr, f: &std::collections::HashSet<String>, out: &mut Option<String>) {
+        if out.is_some() {
+            return;
+        }
+        match e {
+            Expr::Ident(n, _) if f.contains(n) => *out = Some(n.clone()),
+            Expr::Member { object, name, .. } => {
+                if matches!(&**object, Expr::This(_)) && f.contains(name) {
+                    *out = Some(name.clone());
+                } else {
+                    walk(object, f, out);
+                }
+            }
+            Expr::Str(parts, _) | Expr::Html(parts, _) => {
+                for p in parts {
+                    if let StrPart::Expr(x) = p {
+                        walk(x, f, out);
+                    }
+                }
+            }
+            Expr::List(xs, _) => xs.iter().for_each(|x| walk(x, f, out)),
+            Expr::Map(ps, _) => ps.iter().for_each(|(k, v)| {
+                walk(k, f, out);
+                walk(v, f, out);
+            }),
+            Expr::Unary { expr, .. } => walk(expr, f, out),
+            Expr::Force { inner, .. } | Expr::Propagate { inner, .. } => walk(inner, f, out),
+            Expr::Binary { lhs, rhs, .. } => {
+                walk(lhs, f, out);
+                walk(rhs, f, out);
+            }
+            Expr::InstanceOf { value, .. } => walk(value, f, out),
+            Expr::Call { callee, args, .. } => {
+                walk(callee, f, out);
+                args.iter().for_each(|a| walk(a, f, out));
+            }
+            Expr::Index { object, index, .. } => {
+                walk(object, f, out);
+                walk(index, f, out);
+            }
+            Expr::Match {
+                scrutinee, arms, ..
+            } => {
+                walk(scrutinee, f, out);
+                arms.iter().for_each(|a| walk(&a.body, f, out));
+            }
+            Expr::Range { start, end, .. } => {
+                walk(start, f, out);
+                walk(end, f, out);
+            }
+            Expr::If {
+                cond,
+                then_expr,
+                else_expr,
+                ..
+            } => {
+                walk(cond, f, out);
+                walk(then_expr, f, out);
+                walk(else_expr, f, out);
+            }
+            Expr::CloneWith { object, fields, .. } => {
+                walk(object, f, out);
+                fields.iter().for_each(|(_, v)| walk(v, f, out));
+            }
+            // Literals / `this` / `Lambda` (its `this`-use is `E-LAMBDA-THIS`) read no forbidden field.
+            _ => {}
+        }
+    }
+    let mut out = None;
+    walk(e, forbidden, &mut out);
+    out
+}
+
 impl Checker {
     /// Phase 2 — check every function/method body.
     pub(super) fn check_program(&mut self, program: &Program) {
@@ -98,9 +180,45 @@ impl Checker {
         type_params: &[String],
         members: &[crate::ast::ClassMember],
     ) {
-        use crate::ast::ClassMember;
+        use crate::ast::{ClassMember, Modifier};
         let prev = self.cur_class.replace(type_name.to_string());
         let prev_tp = std::mem::replace(&mut self.cur_class_type_params, type_params.to_vec());
+        // Feature B — expression field initializers. An initializer is evaluated per-instance at
+        // construction in declaration order, after the promoted ctor params are bound. So promoted
+        // params are always available to an initializer; an explicit field is available only to LATER
+        // fields' initializers (it is set in order). `available` tracks what is initialized by the time
+        // each field's initializer runs; reading anything else (a self/later field, or a not-yet-set
+        // plain field) is `E-FIELD-INIT-FORWARD-REF`.
+        let mut available: std::collections::HashSet<String> = members
+            .iter()
+            .filter_map(|m| match m {
+                ClassMember::Constructor { params, .. } => Some(params),
+                _ => None,
+            })
+            .flatten()
+            .filter(|p| {
+                p.modifiers.iter().any(|md| {
+                    matches!(
+                        md,
+                        Modifier::Public | Modifier::Private | Modifier::Protected
+                    )
+                })
+            })
+            .map(|p| p.name.clone())
+            .collect();
+        let instance_fields: std::collections::HashSet<String> = members
+            .iter()
+            .filter_map(|m| match m {
+                ClassMember::Field {
+                    modifiers, name, ..
+                } if !modifiers.contains(&Modifier::Static)
+                    && !modifiers.contains(&Modifier::Const) =>
+                {
+                    Some(name.clone())
+                }
+                _ => None,
+            })
+            .collect();
         for m in members {
             match m {
                 ClassMember::Method(f) => self.check_function(f),
@@ -168,6 +286,48 @@ impl Checker {
                         self.cur_ret = prev_ret;
                     }
                     self.active_type_params.clear();
+                }
+                // Feature B: type-check a plain instance field's initializer with `this` + the field
+                // scope live, and reject a forward reference (reading a not-yet-initialized field).
+                ClassMember::Field {
+                    modifiers,
+                    ty,
+                    name,
+                    init: Some(e),
+                    span,
+                } if !modifiers.contains(&Modifier::Static)
+                    && !modifiers.contains(&Modifier::Const) =>
+                {
+                    let forbidden: std::collections::HashSet<String> = instance_fields
+                        .iter()
+                        .filter(|f| !available.contains(*f))
+                        .cloned()
+                        .collect();
+                    if let Some(bad) = field_init_forbidden_ref(e, &forbidden) {
+                        self.err_coded(
+                            *span,
+                            format!(
+                                "field initializer of `{name}` reads `{bad}`, which is not initialized yet"
+                            ),
+                            "E-FIELD-INIT-FORWARD-REF",
+                            Some(format!(
+                                "an initializer may read `this` and earlier-initialized fields only — declare `{bad}` before `{name}`, or set `{name}` in the constructor"
+                            )),
+                        );
+                    }
+                    self.active_type_params = type_params.to_vec();
+                    let fty = self.resolve_type(ty);
+                    let ity = self.check_expr(e);
+                    if !self.ty_assignable(&ity, &fty) {
+                        self.err_coded(
+                            Self::expr_span(e),
+                            format!("field `{name}: {fty}` initialized with `{ity}`"),
+                            "E-FIELD-INIT-TYPE",
+                            None,
+                        );
+                    }
+                    self.active_type_params.clear();
+                    available.insert(name.clone());
                 }
                 ClassMember::Field { .. } => {}
             }

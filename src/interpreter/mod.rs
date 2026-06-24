@@ -164,6 +164,10 @@ pub struct Interp {
     /// load from the shared [`crate::ast::class_consts`] table (inheritance + traits already
     /// flattened), and read — before `statics` — on a `ClassName.NAME` access.
     consts: HashMap<(String, String), Value>,
+    /// Expression field initializers (Feature B), keyed by class → ordered `(field, init_expr)` list
+    /// (base-first across ancestors, declaration order). Seeded once at load from the shared
+    /// [`crate::ast::field_initializers`]; evaluated per-instance in `construct` after promotion.
+    field_inits: HashMap<String, Vec<(String, Expr)>>,
     frame: CallScopes,
     this: Option<Value>,
     out: String,
@@ -199,6 +203,7 @@ pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
         variants: HashMap::new(),
         statics: HashMap::new(),
         consts: HashMap::new(),
+        field_inits: HashMap::new(),
         frame: CallScopes::new(),
         this: None,
         out: String::new(),
@@ -271,6 +276,7 @@ pub fn call_named(
         variants: HashMap::new(),
         statics: HashMap::new(),
         consts: HashMap::new(),
+        field_inits: HashMap::new(),
         frame: CallScopes::new(),
         this: None,
         out: String::new(),
@@ -437,6 +443,15 @@ impl Interp {
             .into_iter()
             .map(|(key, (v, _ty))| (key, v))
             .collect();
+        // Expression field initializers (Feature B): the shared ordered list per class.
+        for it in &program.items {
+            if let Item::Class(c) = it {
+                self.field_inits.insert(
+                    c.name.clone(),
+                    crate::ast::field_initializers(program, &c.name),
+                );
+            }
+        }
     }
 
     /// Run a callable body in a fresh frame: bind `args` to `names` in the base

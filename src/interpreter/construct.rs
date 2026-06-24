@@ -61,7 +61,10 @@ impl Interp {
             if !args.is_empty() {
                 return rt(format!("`{class_name}` has no constructor but got args"));
             }
-            return Ok(Value::Instance(Rc::new(inst)));
+            // A no-constructor class still runs its expression field initializers (Feature B).
+            let rc = Rc::new(inst);
+            self.run_field_inits(&rc)?;
+            return Ok(Value::Instance(rc));
         }
         if args.len() != total {
             return rt(format!(
@@ -96,6 +99,10 @@ impl Interp {
         // plan entry's body in order with its param slice + `this` in scope. Bodies cannot change the
         // result (a ctor body's return is discarded); their side effect is field initialization.
         let rc = Rc::new(inst);
+        // Feature B: evaluate expression field initializers per-instance, in declaration order, after
+        // promotion and BEFORE any constructor body — so an initializer reads `this` (promoted params
+        // + an earlier-initialized sibling) and the ctor body may still override the result.
+        self.run_field_inits(&rc)?;
         let ctor = format!("{}::new", rc.class);
         let mut offset = 0;
         for (params, body) in &plan {
@@ -111,6 +118,21 @@ impl Interp {
             )?;
         }
         Ok(Value::Instance(rc))
+    }
+
+    /// Evaluate `rc`'s expression field initializers (Feature B) in declaration order, each with `this`
+    /// bound to `rc`, setting the field as it goes — so a later initializer reads an earlier one via
+    /// `this`. Shared by the constructor and no-constructor construction paths. The ordered list comes
+    /// from the shared `ast::field_initializers` (base-first across ancestors), so every backend sets
+    /// the same fields to the same values.
+    pub(super) fn run_field_inits(&mut self, rc: &Rc<Instance>) -> R<()> {
+        if let Some(inits) = self.field_inits.get(&rc.class).cloned() {
+            for (fname, init) in &inits {
+                let v = self.run_hook_get(Value::Instance(rc.clone()), init)?;
+                rc.fields.borrow_mut().insert(fname.clone(), v);
+            }
+        }
+        Ok(())
     }
 
     /// The cloned `get` expression of a property hook `class.name`, if the class declares one with a

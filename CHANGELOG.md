@@ -6,6 +6,29 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — expression field initializers (Feature B, instance)
+
+`examples/guide/field-init.phg`; byte-identical `run ≡ runvm ≡ real PHP 8.5`. No new `Op`/`Value`.
+
+- **`TYPE name = <expr>;` on an instance field** — lifts PHP's constant-expression-only property
+  defaults (PHP forbids calls/`$this`/other-property reads — "Constant expression contains invalid
+  operations"). Phorge allows **any** expression (calls, closures, arithmetic, `this`/sibling reads),
+  evaluated **per-instance at construction in declaration order, after the promoted ctor params are
+  bound and before the constructor body**.
+- **Declaration-order scope** — an initializer may read `this` and any **earlier-declared** field (or
+  a promoted param); a later/self reference is `E-FIELD-INIT-FORWARD-REF`. A field-default closure
+  that captures `this` is rejected by the existing `E-LAMBDA-THIS` (this-capture defers to the
+  closures slice); a non-capturing closure default is fine.
+- **Lowering** — the shared `ast::field_initializers` (the own initializers of the class whose
+  constructor PHP actually invokes — PHP doesn't auto-chain `parent::__construct`) drives all three
+  backends: the interpreter sets each field after promotion, the compiler emits `SetField`, and the
+  transpiler prepends `$this->f = <expr>;` to the constructor prelude (synthesizing a `__construct`
+  when the class has field initializers but no constructor). New codes `E-FIELD-INIT-FORWARD-REF`,
+  `E-FIELD-INIT-TYPE` (both `phg explain`-documented).
+- **Deferred** (KNOWN_ISSUES): a static field still takes a literal-only initializer (Feature B-static
+  lands next); inherited field initializers run via PHP's single-constructor inheritance, matching the
+  Rust backends, but cross-class chaining of multiple ancestors' initializers is not synthesized.
+
 ### Added — `const` class constants (Feature A)
 
 `examples/guide/constants.phg`; byte-identical `run ≡ runvm ≡ real PHP 8.5`. No new `Op`/`Value`.

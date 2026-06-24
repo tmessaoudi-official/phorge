@@ -733,7 +733,11 @@ impl Transpiler {
                         (true, false) => Some("$message"),
                         (false, false) => None,
                     };
-                    if body.is_empty() && parent_args.is_none() {
+                    // Feature B: this class's own expression field initializers lower into the ctor
+                    // prelude (after promotion + any `parent::__construct`, before the body), so an
+                    // initializer reads `this` and an earlier sibling — matching the Rust backends.
+                    let field_inits = crate::ast::own_field_initializers(c);
+                    if body.is_empty() && parent_args.is_none() && field_inits.is_empty() {
                         self.line(&format!("function __construct({}) {{}}", ps.join(", ")));
                     } else {
                         self.line(&format!("function __construct({}) {{", ps.join(", ")));
@@ -744,6 +748,10 @@ impl Transpiler {
                         }
                         if let Some(args) = parent_args {
                             self.line(&format!("parent::__construct({args});"));
+                        }
+                        for (fname, init) in &field_inits {
+                            let e = self.emit_expr(init)?;
+                            self.line(&format!("$this->{fname} = {e};"));
                         }
                         for s in body {
                             self.emit_stmt(s)?;
@@ -799,6 +807,29 @@ impl Transpiler {
                     self.indent -= 1;
                     self.line("}");
                 }
+            }
+        }
+        // Feature B: a class with expression field initializers but NO constructor needs a synthesized
+        // zero-arg `__construct` to run them (PHP property defaults can't be arbitrary expressions). Not
+        // for a decomposed trait body (`as_trait`) — its construction is emitted via `emit_synth_construct`.
+        if !as_trait
+            && !c
+                .members
+                .iter()
+                .any(|m| matches!(m, ClassMember::Constructor { .. }))
+        {
+            let field_inits = crate::ast::own_field_initializers(c);
+            if !field_inits.is_empty() {
+                self.line("function __construct() {");
+                self.indent += 1;
+                self.push_scope();
+                for (fname, init) in &field_inits {
+                    let e = self.emit_expr(init)?;
+                    self.line(&format!("$this->{fname} = {e};"));
+                }
+                self.pop_scope();
+                self.indent -= 1;
+                self.line("}");
             }
         }
         Ok(())

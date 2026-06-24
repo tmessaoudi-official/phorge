@@ -623,6 +623,18 @@ pub fn explain_text(code: &str) -> Option<String> {
              Constants are fixed at declaration and can never be reassigned. For class-level state that\n\
              changes, use a `static mutable` field instead.\n"
         }
+        "E-FIELD-INIT-FORWARD-REF" => {
+            "E-FIELD-INIT-FORWARD-REF — a field initializer reads a not-yet-initialized field.\n\n\
+             Expression field initializers run per-instance at construction, in declaration order, after\n\
+             the promoted constructor params are bound. An initializer may read `this` and any\n\
+             EARLIER-declared field (or a promoted param) — but not a later field, nor itself. Declare\n\
+             the field it depends on first, or set this one in the constructor.\n"
+        }
+        "E-FIELD-INIT-TYPE" => {
+            "E-FIELD-INIT-TYPE — a field initializer's type does not match the field's declared type.\n\n\
+             The initializer expression must be assignable to the field's type — e.g. `int weight =\n\
+             compute(3);`, not `int weight = \"x\";`.\n"
+        }
         _ => return None,
     };
     Some(body.to_string())
