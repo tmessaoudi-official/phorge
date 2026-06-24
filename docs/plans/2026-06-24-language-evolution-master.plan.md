@@ -44,8 +44,10 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
   untouched). `phg explain E-MISSING-RETURN-TYPE`/`E-VOID-CAPTURE` added.
 
 ### Phase 1 — Ergonomics perimeter (spec: ergonomics-perimeter; 7 slices)
-1. **String** — `+` concat (typed; `string+int` = error), `\u{HEX}` escapes (lex→UTF-8), literal braces
-   (`\{`/`\}` + raw strings `r"…"`/`r#"…"#`).
+1. **String — ✅ DONE** (`a0a3c95` + `614b07c`). `+` concat (typed; `string+int` = error; reuses
+   `Op::Concat(2)` via new `CTy::Str`; `__phorge_add` PHP helper), `\u{HEX}` escapes (lex→UTF-8),
+   literal braces `\{`/`\}` + raw strings `r"…"`/`r#"…"#` (lexer-side interpolation split —
+   `TokenKind::Str` → `StrSeg::{Lit,Interp}` segments). `examples/guide/strings-ext.phg`.
 2. **Operators/patterns** — ternary `? :` (disambiguate optional `x?` in type pos), or-patterns in
    `match` (`1 | 2 | 3 =>`), `**` operator (type-directed) + `Math.ipow(int,int)->int`.
 3. **Types** — parenthesized return-position function types (`() -> ((int) -> bool)`); fixed-length
