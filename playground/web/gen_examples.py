@@ -18,7 +18,7 @@ OUT = HERE / "examples.js"
 DEFAULT = """package Main;
 import Core.Console;
 
-function main() {
+function main() -> void {
     List<string> who = ["world", "Phorge"];
     for (string w in who) {
         Console.println("Hello, {w}!");
