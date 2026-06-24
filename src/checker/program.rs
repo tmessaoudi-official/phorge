@@ -153,6 +153,10 @@ impl Checker {
                 }
             }
         }
+        // Feature B-static: type-check every static field's (now arbitrary) initializer, after all
+        // classes + functions are collected, with no `this` — so an initializer may call a function or
+        // read another static.
+        self.check_static_inits(program);
         for item in &program.items {
             match item {
                 Item::Function(f) => self.check_function(f),
@@ -169,6 +173,44 @@ impl Checker {
                 | Item::TypeAlias { .. } => {}
             }
         }
+    }
+
+    /// Feature B-static: type-check each class's static-field initializers (now arbitrary expressions,
+    /// not just literals), evaluated once at program start. Checked with **no `this`** (statics are
+    /// class-level — referencing `this` errors) and after full collection, so an initializer may call a
+    /// function or read another static. A type mismatch is `E-STATIC-INIT-TYPE`.
+    fn check_static_inits(&mut self, program: &crate::ast::Program) {
+        use crate::ast::{ClassMember, Item, Modifier};
+        let prev = self.cur_class.take(); // statics have no instance — `this` is out of scope here
+        for item in &program.items {
+            let Item::Class(c) = item else { continue };
+            for m in &c.members {
+                if let ClassMember::Field {
+                    modifiers,
+                    ty,
+                    name,
+                    init: Some(e),
+                    ..
+                } = m
+                {
+                    if modifiers.contains(&Modifier::Static)
+                        && !modifiers.contains(&Modifier::Const)
+                    {
+                        let fty = self.resolve_type(ty);
+                        let ity = self.check_expr(e);
+                        if !self.ty_assignable(&ity, &fty) {
+                            self.err_coded(
+                                Self::expr_span(e),
+                                format!("static field `{name}: {fty}` initialized with `{ity}`"),
+                                "E-STATIC-INIT-TYPE",
+                                None,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        self.cur_class = prev;
     }
 
     /// Check the method/constructor/hook bodies of a class or trait (M-RT S8 shares this between the

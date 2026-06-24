@@ -68,3 +68,36 @@ fn non_capturing_closure_default_is_ok() {
                function main() -> void {}";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
+
+// --- Feature B-static: runtime static-field initializers ---
+
+#[test]
+fn static_computed_initializer_is_ok() {
+    let src = "function seed() -> int { return 42; } \
+               class C { static int answer = seed(); } \
+               function main() -> void {}";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn static_reading_earlier_static_is_ok() {
+    let src = "class C { static int a = 10; static int b = C.a + 1; } \
+               function main() -> void {}";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn static_without_initializer_is_error() {
+    assert!(errors_of("class C { static int x; }")
+        .iter()
+        .any(|e| e.code == Some("E-STATIC-NO-INIT")));
+}
+
+#[test]
+fn static_initializer_type_mismatch_is_error() {
+    let src = "function seed() -> string { return \"x\"; } \
+               class C { static int answer = seed(); } function main() -> void {}";
+    assert!(errors_of(src)
+        .iter()
+        .any(|e| e.code == Some("E-STATIC-INIT-TYPE")));
+}

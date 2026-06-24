@@ -277,12 +277,11 @@ fn static_field_without_initializer_is_error() {
 }
 
 #[test]
-fn static_field_non_const_initializer_is_error() {
-    let bad = errors_of("class C { static mutable int x = 1 + 1; }");
-    assert!(
-        bad.iter().any(|e| e.code == Some("E-STATIC-INIT-CONST")),
-        "{bad:?}"
-    );
+fn static_field_expression_initializer_is_ok() {
+    // Feature B-static lifted the literal-only restriction: a static field may now carry an arbitrary
+    // expression (evaluated once at program start). See `checker::tests::field_init` / `static_init`.
+    let src = "class C { static mutable int x = 1 + 1; } function main() -> void {}";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
 
 #[test]

@@ -223,6 +223,11 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
         .collect();
     let mut statics_index: HashMap<(String, String), (usize, CTy)> = HashMap::new();
     let mut static_inits: Vec<Value> = Vec::new();
+    // Feature B-static: a static whose initializer is NOT a compile-time literal gets a `Unit`
+    // placeholder in `static_inits` and a `(slot, init expr)` entry here; a `SetStatic` prelude is
+    // emitted at the start of `main` (declaration order) to evaluate it once before any user code —
+    // matching the interpreter's `eval_static_inits` and the transpiler's `__phorge_init_statics`.
+    let mut static_runtime_inits: Vec<(usize, &Expr)> = Vec::new();
     for c in &class_decls {
         for m in &c.members {
             if let ClassMember::Field {
@@ -234,15 +239,17 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
             } = m
             {
                 if modifiers.contains(&Modifier::Static) {
-                    statics_index.insert(
-                        (c.name.clone(), name.clone()),
-                        (static_inits.len(), resolve_cty(ty)),
-                    );
-                    let v = init
-                        .as_ref()
-                        .and_then(crate::value::const_literal)
-                        .unwrap_or(Value::Unit);
-                    static_inits.push(v);
+                    let slot = static_inits.len();
+                    statics_index.insert((c.name.clone(), name.clone()), (slot, resolve_cty(ty)));
+                    match init.as_ref().and_then(crate::value::const_literal) {
+                        Some(v) => static_inits.push(v),
+                        None => {
+                            static_inits.push(Value::Unit); // placeholder, set by the main prelude
+                            if let Some(e) = init {
+                                static_runtime_inits.push((slot, e));
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -480,6 +487,16 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
         }
         c.height = c.locals.len(); // params occupy slots `0..arity` (decision P3-1)
         let last_line = f.span.line;
+        // Feature B-static: evaluate the non-literal static initializers once, at the very start of
+        // `main`, in declaration order — `<init>` then `SetStatic(slot)` — before any user code. A
+        // later static may read an earlier one (its slot is already set). No `this`/locals are needed
+        // (statics are class-level); the compiler context here has none.
+        if f.name == "main" {
+            for (slot, init) in &static_runtime_inits {
+                c.expr(init)?; // [value]
+                c.emit(Op::SetStatic(*slot), last_line); // pop into the static slot
+            }
+        }
         for s in &f.body {
             c.stmt(s)?;
         }

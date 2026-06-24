@@ -21,7 +21,8 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/collections.phg` | `List<T>` literals, nested `List<List<int>>`, nested `for`, list of instances, `List.length` |
 | `guide/classes.phg` | constructor promotion, methods, `this`, composition, a method call on a field |
 | `guide/constants.phg` | `const` class constants — public/`private` visibility, class-name-only access (`ClassName.NAME`), a constant as an arithmetic operand, and inheritance via the subclass name; transpiles to a PHP typed class constant (Feature A) |
-| `guide/field-init.phg` | expression field initializers — a computed default via a call, and a default that reads `this` + an earlier sibling; evaluated per-instance at construction in declaration order, lowered to a PHP constructor prelude (lifts PHP's constant-expression-only property defaults) (Feature B) |
+| `guide/field-init.phg` | expression field initializers — a computed default via a call, and a default that reads `this` + an earlier sibling; evaluated per-instance at construction in declaration order, lowered to a PHP constructor prelude (lifts PHP's constant-expression-only property defaults) (Feature B-instance) |
+| `guide/static-init.phg` | runtime `static` field initializers — a computed static via a call, a static reading an earlier static, and a literal mutable static; evaluated once at program start in declaration order, lowered to a PHP `__phorge_init_statics()` run before `main()` (Feature B-static) |
 | `guide/enums-match.phg` | payload + zero-payload variants; literal, binding, and variant patterns |
 | `guide/match-expr.phg` | `match` in expression position (operand / call argument) + literal patterns; transpiles to an IIFE (M11) |
 | `guide/strings.phg` | string interpolation |

@@ -6,6 +6,26 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — runtime static field initializers (Feature B-static)
+
+`examples/guide/static-init.phg`; byte-identical `run ≡ runvm ≡ real PHP 8.5`. No new `Op`/`Value`.
+
+- **`static TYPE name = <expr>;`** — a static field may now carry an **arbitrary** expression (a call,
+  arithmetic, a read of an earlier static), lifting PHP's constant-expression-only static-property
+  restriction. Evaluated **once at program start, in declaration order, before `main`** (eager — the
+  decided model; lazy + runtime config were rejected, see the master-plan Decisions Log). A literal
+  static still works and stays a plain PHP `static $x = <lit>;` default.
+- **Lowering:** the interpreter evaluates non-literal statics in `eval_static_inits` (after collect,
+  before `main`); the compiler emits a `SetStatic` prelude at the start of `main` (literals stay seeded
+  in `static_inits`, non-literals get a `Unit` placeholder); the transpiler declares a non-literal
+  static without a PHP default and sets it in a generated `__phorge_init_statics()` called before
+  `main()`. The static-init type-check moved to a post-collection checker pass (`E-STATIC-INIT-TYPE`),
+  so an initializer may reference a function or another static; the literal-only `E-STATIC-INIT-CONST`
+  is retired.
+- **Deferred** (KNOWN_ISSUES): static-init mode is fixed (eager) — configurability is an M13 edition
+  flag (compile-time only); a static initializer reading a *later* static, and trait static fields with
+  non-literal initializers, are not guarded this slice.
+
 ### Added — expression field initializers (Feature B, instance)
 
 `examples/guide/field-init.phg`; byte-identical `run ≡ runvm ≡ real PHP 8.5`. No new `Op`/`Value`.

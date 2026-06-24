@@ -1105,37 +1105,19 @@ impl Checker {
                             },
                         );
                     } else if modifiers.contains(&Modifier::Static) {
-                        // A `static` field is class-level state (M-mut.7): it needs a literal-const
-                        // initializer (no constructor sets it) and is NOT an instance field.
-                        match init {
-                            None => {
-                                self.err_coded(
-                                    *span,
-                                    format!("static field `{name}` needs an initializer"),
-                                    "E-STATIC-NO-INIT",
-                                    Some("e.g. `static mutable int total = 0;`".into()),
-                                );
-                            }
-                            Some(e) => {
-                                if crate::value::const_literal(e).is_none() {
-                                    self.err_coded(
-                                        Self::expr_span(e),
-                                        format!("static field `{name}` initializer must be a literal constant"),
-                                        "E-STATIC-INIT-CONST",
-                                        Some("use an int/float/bool/string/null literal".into()),
-                                    );
-                                } else {
-                                    let ity = self.check_expr(e);
-                                    if !self.ty_assignable(&ity, &fty) {
-                                        self.err_coded(
-                                            Self::expr_span(e),
-                                            format!("static field `{name}: {fty}` initialized with `{ity}`"),
-                                            "E-STATIC-INIT-TYPE",
-                                            None,
-                                        );
-                                    }
-                                }
-                            }
+                        // A `static` field is class-level state (M-mut.7): it needs an initializer (no
+                        // constructor sets it) and is NOT an instance field. Feature B-static lifts the
+                        // old literal-only restriction — the initializer may be ANY expression, evaluated
+                        // once at program start in declaration order. Its TYPE is checked later
+                        // (`check_static_inits`, pass 2) where every function + static is collected, so
+                        // an initializer may call a function or read another (earlier) static.
+                        if init.is_none() {
+                            self.err_coded(
+                                *span,
+                                format!("static field `{name}` needs an initializer"),
+                                "E-STATIC-NO-INIT",
+                                Some("e.g. `static mutable int total = 0;`".into()),
+                            );
                         }
                         statics.insert(name.clone(), fty);
                         if modifiers.contains(&Modifier::Mutable) {

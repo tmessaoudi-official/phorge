@@ -2,6 +2,35 @@
 
 use super::*;
 
+/// Feature B-static: the program's **non-literal** static-field initializers, as `(class, field,
+/// init_expr)` in declaration order. These can't be PHP property defaults (PHP requires a constant
+/// expression), so they are set once by a generated `__phorge_init_statics()` called before `main()`.
+/// A literal static stays a plain PHP `static $x = <lit>;` default and is absent here.
+fn runtime_static_inits(program: &Program) -> Vec<(&str, &str, &Expr)> {
+    let mut out = Vec::new();
+    for it in &program.items {
+        if let Item::Class(c) = it {
+            for m in &c.members {
+                if let ClassMember::Field {
+                    modifiers,
+                    name,
+                    init: Some(e),
+                    ..
+                } = m
+                {
+                    if modifiers.contains(&Modifier::Static)
+                        && !modifiers.contains(&Modifier::Const)
+                        && crate::value::const_literal(e).is_none()
+                    {
+                        out.push((c.name.as_str(), name.as_str(), e));
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
 impl Transpiler {
     /// Pass 1 — index top-level names so call dispatch and match binding can resolve them.
     pub(super) fn collect(&mut self, program: &Program) {
@@ -83,10 +112,27 @@ impl Transpiler {
                 Item::TypeAlias { .. } => {}
             }
         }
+        // Feature B-static: runtime static initializers run once, before `main` (matching the Rust
+        // backends' eager-at-startup eval). PHP hoists the function, so emitting its body after the
+        // call is fine.
+        let rt_statics = runtime_static_inits(program);
         // The interpreter auto-invokes `main`; PHP does not. Emit the call so the output
         // is a runnable program, not just definitions.
         if self.funcs.contains("main") {
+            if !rt_statics.is_empty() {
+                self.line("__phorge_init_statics();");
+            }
             self.line("main();");
+        }
+        if !rt_statics.is_empty() {
+            self.line("function __phorge_init_statics() {");
+            self.indent += 1;
+            for (cls, field, e) in &rt_statics {
+                let v = self.emit_expr(e)?;
+                self.line(&format!("{cls}::${field} = {v};"));
+            }
+            self.indent -= 1;
+            self.line("}");
         }
         // The runtime helpers, each defined once when used. PHP hoists top-level function
         // declarations, so emitting them after `main();` is still callable from any body.
@@ -654,16 +700,26 @@ impl Transpiler {
                             self.emit_type(ty)
                         ));
                     } else if modifiers.contains(&Modifier::Static) {
-                        // A `static` field (M-mut.7) → PHP `public static <type> $name = <init>;`. The
-                        // initializer is a literal constant (checker-enforced), so it round-trips.
-                        let init_php = match init {
-                            Some(e) => self.emit_expr(e)?,
-                            None => "null".to_string(),
-                        };
-                        self.line(&format!(
-                            "{v} static {} ${name} = {init_php};",
-                            self.emit_type(ty)
-                        ));
+                        // A `static` field → PHP `public static <type> $name`. A **literal** initializer
+                        // round-trips as a PHP default (`= 0;`). A **non-literal** initializer (Feature
+                        // B-static) can't be a PHP property default (PHP requires a constant expression),
+                        // so the property is declared *without* a default and set once by
+                        // `__phorge_init_statics()` before `main()`.
+                        match init
+                            .as_ref()
+                            .filter(|e| crate::value::const_literal(e).is_some())
+                        {
+                            Some(e) => {
+                                let init_php = self.emit_expr(e)?;
+                                self.line(&format!(
+                                    "{v} static {} ${name} = {init_php};",
+                                    self.emit_type(ty)
+                                ));
+                            }
+                            None => {
+                                self.line(&format!("{v} static {} ${name};", self.emit_type(ty)));
+                            }
+                        }
                     } else if is_error && exception_reserved(name) {
                         // Collides with an inherited \Exception property → emit untyped.
                         self.line(&format!("{v} ${name};"));
