@@ -6,6 +6,14 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+## [0.5.0-alpha.1] - 2026-06-24
+
+First tagged pre-release. Rolls up all work since the internal 0.4.0 mark: M3 + the full M-RT
+rich-type system (instanceof, interfaces, Map/Set, generics-all, unions, intersections, overloading,
+inheritance, traits), the three-tier error model, M5 packages + git deps, M2.5 cross-OS `phg build`,
+M6 web (partial), the pattern cluster + primitives sweep, and the WASM playground. All backends remain
+byte-identical (`run ≡ runvm ≡ real PHP 8.4`). Pre-release: APIs and surface may still change before 1.0.
+
 ### Added — WASM playground (DX)
 
 A free, zero-backend browser playground (`playground/`), auto-deployed to GitHub Pages on every push

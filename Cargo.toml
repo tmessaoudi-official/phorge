@@ -1,10 +1,10 @@
 [package]
 name = "phorge"
-# M1 (interpreter + transpiler) + M2 (bytecode compiler + stack VM, P1–P5, closed) + M2.5 Phase 1
-# (`phorge build` → standalone x86_64-linux-gnu) + CLI UX (-v/-h, stdin/-e/--) + the in-progress
-# Phase 2 bundle refactor (object-format readers). Pre-1.0, unpublished single binary: the version
-# tracks milestone progress, not a release cadence.
-version = "0.4.0"
+# Pre-1.0; the version tracks milestone progress, not a release cadence. First tagged pre-release:
+# 0.5.0-alpha.1 rolls up everything since the 0.4.0 internal mark — M3 + M-RT (full rich-type system),
+# M5 (packages), M2.5 cross-OS `phg build`, M6 (web, partial), the pattern cluster, and the WASM
+# playground. `-v`/`--version` reads this value via CARGO_PKG_VERSION.
+version = "0.5.0-alpha.1"
 edition = "2021"
 # Cargo floor for the `[lints]` table below (stabilised in Cargo 1.74); older Cargo silently
 # ignores `[lints]`, which would drop the warnings=deny / clippy=deny quality gate. The crate is
