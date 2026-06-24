@@ -59,7 +59,29 @@ impl Checker {
                     }
                     _ => {
                         let declared = self.resolve_type(ty);
-                        if !self.ty_assignable(&actual, &declared) {
+                        // `[T; N] p = [e0, e1, …]`: a list literal carries a known length, so the
+                        // fixed-length is checked *here* (the literal is the one place the length is
+                        // statically known) — `List` itself is length-erased, so this is the only
+                        // path that introduces a `[T; N]` value (Phase 1 types slice).
+                        if let (Ty::FixedList(elem, n), crate::ast::Expr::List(elems, _)) =
+                            (&declared, init)
+                        {
+                            if elems.len() != *n {
+                                self.err_coded(
+                                    *span,
+                                    format!(
+                                        "expected `[{elem}; {n}]` (length {n}), found a list literal of length {}",
+                                        elems.len()
+                                    ),
+                                    "E-FIXEDLIST-LEN",
+                                    None,
+                                );
+                            }
+                            // Element-type compatibility (List is invariant, so this checks `elem`).
+                            if !self.ty_assignable(&actual, &Ty::List(elem.clone())) {
+                                self.err_assign(*span, &actual, &declared);
+                            }
+                        } else if !self.ty_assignable(&actual, &declared) {
                             self.err_assign(*span, &actual, &declared);
                         }
                         declared

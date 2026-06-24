@@ -1,0 +1,37 @@
+package Main;
+import Core.Console;
+
+// Fixed-length lists `[T; N]` (Phase 1 types slice). A `[T; N]` is a `List<T>` whose length is a
+// compile-time constant — distinct from `List<T>` only in the checker: the length is tracked, a
+// *literal* index is bounds-checked at compile time (`pair[5]` on `[int; 2]` would be a compile
+// error), and a `[T; N]` is assignable *to* a `List<T>` (a fixed list is a list) but not the reverse.
+// At runtime it *is* a list — it erases to a PHP array, with no new runtime machinery; the length is
+// a compile-time-only guarantee.
+
+// A function over plain `List<T>` — a `[T; N]` flows in (a fixed list is a list).
+function total(List<int> xs) -> int {
+    mutable var sum = 0;
+    for (int x in xs) {
+        sum = sum + x;
+    }
+    return sum;
+}
+
+function main() -> void {
+    // A fixed-length list literal. The literal's length must equal N (checked at compile time).
+    [int; 3] rgb = [255, 128, 0];
+    Console.println("r={rgb[0]} g={rgb[1]} b={rgb[2]}");
+
+    // A fixed-list element is a first-class operand — `rgb[0] / 2` specializes on the VM.
+    var half = rgb[0] / 2;
+    Console.println("half-red={half}");
+
+    // `[int; 3]` is assignable to `List<int>`: it flows into a list-typed parameter.
+    Console.println("sum={total(rgb)}");
+
+    // Element-set is length-preserving, so it is allowed on a `mutable` fixed list.
+    mutable [int; 2] pair = [1, 2];
+    pair[0] = 10;
+    pair[1] = 20;
+    Console.println("pair={pair[0]},{pair[1]}");
+}

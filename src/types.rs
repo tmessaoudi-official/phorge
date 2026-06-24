@@ -53,6 +53,11 @@ pub enum Ty {
     /// keeps its args but the backends ignore them — `resolve_cty`/`emit_type` key on the name only).
     Named(String, Vec<Ty>),
     List(Box<Ty>),
+    /// `[T; N]` — a fixed-length list (Phase 1 types slice): a `List<T>` carrying a compile-time
+    /// length `N`. Invariant in both `T` and `N` (`from == to`), assignable *to* `List<T>` (a fixed
+    /// list is a list) but not the reverse. Erased to `List` for the backends — runtime rep is a
+    /// plain list.
+    FixedList(Box<Ty>, usize),
     Map(Box<Ty>, Box<Ty>),
     Set(Box<Ty>),
     /// `T?` — an optional: holds a `T` or `null`. The non-null guarantee lives in
@@ -201,6 +206,11 @@ impl Ty {
             // and recurses each `t` into `(Intersection(fs), _)`, giving `ts.all(|t| fs.any(…))`.
             (_, Ty::Intersection(ts)) => ts.iter().all(|t| Ty::assignable_with(from, t, subtype)),
             (Ty::Intersection(fs), _) => fs.iter().any(|f| Ty::assignable_with(f, to, subtype)),
+            // `[T; N]` is assignable to `List<T>` — a fixed-length list *is* a list (Phase 1 types
+            // slice). Invariant in the element (matching `List`'s invariance: `[int; 2]` → `List<int>`
+            // only, not `List<float>`). The reverse (`List` → `[T; N]`) is *not* an edge: a list has
+            // unknown length. `[T; N]` → `[T; N]` and `List` → `List` are covered by `from == to`.
+            (Ty::FixedList(fe, _), Ty::List(te)) => fe == te,
             // Function types are exact-match only — no co/contra-variance (spec A6).
             (Ty::Function(fp, fr), Ty::Function(tp, tr)) => {
                 fp.len() == tp.len() && fp.iter().zip(tp.iter()).all(|(a, b)| a == b) && fr == tr
@@ -256,6 +266,7 @@ impl fmt::Display for Ty {
                 }
             }
             Ty::List(e) => write!(f, "List<{e}>"),
+            Ty::FixedList(e, n) => write!(f, "[{e}; {n}]"),
             Ty::Map(k, v) => write!(f, "Map<{k}, {v}>"),
             Ty::Set(e) => write!(f, "Set<{e}>"),
             Ty::Optional(e) => write!(f, "{e}?"),

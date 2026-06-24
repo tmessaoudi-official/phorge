@@ -19,6 +19,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/control-flow.phg` | `if`/`else`, `for…in`, recursion, mutual recursion |
 | `guide/functions.phg` | functions: typed params, return types, a no-return function, composition, a `List<int>`-returning function |
 | `guide/collections.phg` | `List<T>` literals, nested `List<List<int>>`, nested `for`, list of instances, `List.length` |
+| `guide/fixed-lists.phg` | **fixed-length lists `[T; N]`** (Phase 1 types slice) — a `List<T>` with a compile-time length: literal-length-checked init (`E-FIXEDLIST-LEN`), static literal-index bounds (`E-FIXEDLIST-BOUNDS`), assignable **to** `List<T>` (not the reverse), length-preserving element-set on a `mutable` one; no new `Op`/`Value` (erases to a PHP array, the length is compile-time-only) |
 | `guide/classes.phg` | constructor promotion, methods, `this`, composition, a method call on a field |
 | `guide/constants.phg` | `const` class constants — public/`private` visibility, class-name-only access (`ClassName.NAME`), a constant as an arithmetic operand, and inheritance via the subclass name; transpiles to a PHP typed class constant (Feature A) |
 | `guide/field-init.phg` | expression field initializers — a computed default via a call, and a default that reads `this` + an earlier sibling; evaluated per-instance at construction in declaration order, lowered to a PHP constructor prelude (lifts PHP's constant-expression-only property defaults) (Feature B-instance) |

@@ -121,6 +121,26 @@ fn parses_function_type_annotation() {
 }
 
 #[test]
+fn parses_fixed_length_list_type() {
+    match ty("[int; 3]") {
+        Type::FixedList { elem, len, .. } => {
+            assert_eq!(len, 3);
+            assert!(matches!(elem.as_ref(), Type::Named { name, .. } if name == "int"));
+        }
+        other => panic!("expected Type::FixedList, got {other:?}"),
+    }
+    // nests inside generic args and is itself optional-able
+    assert!(matches!(
+        ty("[List<int>; 2]"),
+        Type::FixedList { len: 2, .. }
+    ));
+    assert!(matches!(ty("[int; 2]?"), Type::Optional { .. }));
+    // a non-integer / negative length is a parse error
+    assert!(parser("[int; x]").parse_type().is_err());
+    assert!(parser("[int]").parse_type().is_err()); // missing `; N`
+}
+
+#[test]
 fn parses_parenthesized_return_position_function_type() {
     // spec #8: a parenthesized function type in return position. `() -> ((int) -> bool)` must parse
     // to the same type as the parens-free `() -> (int) -> bool` — a fn returning a fn.

@@ -151,6 +151,11 @@ impl Checker {
                 params.iter().map(|p| self.resolve_type(p)).collect(),
                 Box::new(self.resolve_type(ret)),
             ),
+            // `[T; N]` (Phase 1 types slice): a fixed-length list. The element resolves like a
+            // `List<T>` element; the length rides along for static bounds + length-checked init.
+            Type::FixedList { elem, len, .. } => {
+                Ty::FixedList(Box::new(self.resolve_type(elem)), *len)
+            }
             // `var` is intercepted in `check_stmt`; reaching here means it was written somewhere it
             // is not allowed (a parameter, field, or return type).
             Type::Infer(span) => self.err(

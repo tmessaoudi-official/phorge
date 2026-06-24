@@ -106,6 +106,22 @@ impl Checker {
                     );
                 }
             }
+            // `pair[i] = e` on a `[T; N]`: element-set is length-preserving, so it is allowed; the
+            // static literal-index bounds are checked here too (Phase 1 types slice).
+            Ty::FixedList(elem, n) => {
+                if !self.ty_assignable(&ity, &Ty::Int) {
+                    self.err(span, format!("list index must be `int`, found `{ity}`"));
+                }
+                self.fixedlist_static_bounds(index, n, &elem, span);
+                if !self.ty_assignable(vty, &elem) {
+                    self.err_coded(
+                        Self::expr_span(value),
+                        format!("cannot set a `{vty}` element into `{name}: [{elem}; {n}]`"),
+                        "E-ASSIGN-TYPE",
+                        None,
+                    );
+                }
+            }
             Ty::Map(k, v) => {
                 if !self.ty_assignable(&ity, &k) {
                     self.err(span, format!("map key must be `{k}`, found `{ity}`"));

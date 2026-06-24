@@ -97,6 +97,9 @@ impl Transpiler {
             }
             // A function-typed parameter/return erases to PHP `\Closure` (M3 S3).
             Type::Function { .. } => "\\Closure".into(),
+            // `[T; N]` is a list at runtime — erases to a PHP `array`, exactly like `List` (Phase 1
+            // types slice). The length is a compile-time-only guarantee, invisible to PHP.
+            Type::FixedList { .. } => "array".into(),
             // An erased generic type parameter (M-RT S7) → PHP `mixed` (the runtime is untyped; the
             // checker already proved the program well-typed before erasure).
             Type::Erased(_) => "mixed".into(),

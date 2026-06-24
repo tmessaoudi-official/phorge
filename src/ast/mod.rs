@@ -44,6 +44,16 @@ pub enum Type {
         ret: Box<Type>,
         span: Span,
     },
+    /// `[T; N]` — a **fixed-length list** (Phase 1 types slice): a `List<T>` whose length is a
+    /// compile-time constant `N`. Distinct from `List<T>` only in the checker (length tracking +
+    /// static literal-index bounds + assignability `[T; N] → List<T>`). At runtime it *is* a list
+    /// (`Value::List`, erases to a PHP array) — no new `Value`/`Op`; the length is a compile-time-only
+    /// guarantee. The backends treat it exactly as `List<T>` (compiler `CTy::List`, transpiler `array`).
+    FixedList {
+        elem: Box<Type>,
+        len: usize,
+        span: Span,
+    },
     /// An **erased** generic type parameter (M-RT S7). Produced *only* by `checker::erase_generics`,
     /// which rewrites every `Type::Named` that refers to an in-scope type parameter (`T`) into this
     /// after type-checking. No parser ever emits it and no checker pass before erasure sees it; the

@@ -313,6 +313,9 @@ fn resolve_cty(ty: &Type) -> CTy {
             params: params.iter().map(resolve_cty).collect(),
             ret: Box::new(resolve_cty(ret)),
         },
+        // `[T; N]` is a list at runtime (the length is compile-time only), so its operand type is the
+        // list's element type — `pair[i]` specializes exactly like `xs[i]` (Phase 1 types slice).
+        Type::FixedList { elem, .. } => CTy::List(Box::new(resolve_cty(elem))),
         // A union value is not a specialized arithmetic operand (M-RT S4); after `instanceof`/type-
         // pattern narrowing the *narrowed local* carries the concrete `CTy`, not the union local.
         Type::Union(..) => CTy::Other,

@@ -53,6 +53,12 @@ pub fn expand_aliases(program: &Program) -> Program {
             Type::Intersection(members, span) => {
                 Type::Intersection(members.iter().map(|m| rt(m, a, depth + 1)).collect(), *span)
             }
+            // `[T; N]`: dealias the element (`[MyAlias; 2]` expands its element here).
+            Type::FixedList { elem, len, span } => Type::FixedList {
+                elem: Box::new(rt(elem, a, depth + 1)),
+                len: *len,
+                span: *span,
+            },
             Type::Infer(s) => Type::Infer(*s),
             Type::Erased(s) => Type::Erased(*s),
         }

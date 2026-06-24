@@ -65,9 +65,15 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
      unambiguously, so ternary adds no expressive power. **Deferred (not rejected):** mechanism is
      scoped; revisit if real usage shows the missing `? :` chafes. **Slice 2 is COMPLETE** (`**` +
      or-patterns + the existing expr-if).
-3. **Types** — parenthesized return-position function types (`() -> ((int) -> bool)`); fixed-length
-   lists `[T; N]` (alongside `List<T>`; compile-time length + static bounds; length-immutable; erases
-   to PHP array). *(writable `void`/`Empty` already done in S0a.)*
+3. **Types — ✅ COMPLETE.**
+   - **Parenthesized return-position function types — ✅ DONE** (`1993847`). `() -> ((int) -> bool)`
+     parses (a `(` in type position is now disambiguated: param-list if `->` follows, else a grouped
+     type `(T)` ≡ `T`). Parser-only. `examples/guide/lambdas-pipe.phg`.
+   - **Fixed-length lists `[T; N]` — ✅ DONE** (`Ty::FixedList`/`Type::FixedList`; compile-time length +
+     static literal-index bounds + `[T;N]`→`List<T>` assignability + length-preserving element-set;
+     erases to a PHP array, no new `Op`/`Value`). Codes `E-FIXEDLIST-LEN`/`E-FIXEDLIST-BOUNDS`.
+     `examples/guide/fixed-lists.phg`. (writable `void`/`Empty` already done in S0a.) **Irrefutable
+     fixed-list destructuring payoff lands in slice 5.**
 4. **Closures** — `this`-capture (live, by-reference Rc handle; remove `E-LAMBDA-THIS`; PHP arrow-fn
    auto-captures `$this`). Same cycle-leak stance mutation already takes.
 5. **Destructuring** — `var Point { x, y } = p` (irrefutable) + `var [a, b] = xs else { … }` (refutable
@@ -102,6 +108,14 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
   re-verify of the deployed page (editor + 3-way badge + PHP tab no-redeclare).
 
 ## Decisions Log (2026-06-24)
+- **Fixed-length lists `[T; N]` — BUILD in slice 3, semantics locked (decided 2026-06-24).**
+  `[T; N]` is **assignable to `List<T>`** but not the reverse (a fixed list *is* a list; a list has
+  unknown length — like Rust arrays→slices / TS tuples→arrays). **Element-set `pair[i] = e` is allowed**
+  (length-preserving; no length-changing op exists in the surface). **Static bounds for literal indices
+  only** (`pair[5]` on `[int; 2]` is a compile error); a dynamic index falls back to the existing
+  runtime bounds check. **Erases to a PHP array / `Value::List`** — no new `Value`/`Op`; the length is a
+  compile-time-only guarantee. The **irrefutable-destructuring payoff is deferred to slice 5**
+  (let-destructuring); slice 3 ships the type + static bounds + a guide example.
 - **Ternary `? :` — DEFERRED, not rejected (decided 2026-06-24).** The `?` collides with the existing
   postfix-`?` propagation; backtracking would resolve it mechanically (low risk, lowers to `Expr::If`),
   but overloading `?` to a third meaning is a permanent reader-legibility cost, and the already-shipped

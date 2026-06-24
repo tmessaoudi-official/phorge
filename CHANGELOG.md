@@ -6,6 +6,21 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — fixed-length lists `[T; N]` (Phase 1 types slice)
+
+`[int; 3] rgb = [255, 128, 0];` — a `List<T>` whose length is a compile-time constant. Byte-identical
+`run ≡ runvm ≡ real PHP 8.5`; **no new `Op`/`Value`** — at runtime a `[T; N]` *is* a list (erases to a
+PHP array); the length is a compile-time-only guarantee.
+
+- **Checker-only distinction:** the length is tracked, a list-literal initializer must have exactly `N`
+  elements (`E-FIXEDLIST-LEN`), a *literal* index is bounds-checked at compile time (`pair[5]` on
+  `[int; 2]` is `E-FIXEDLIST-BOUNDS`; a dynamic index falls back to the runtime check), and `[T; N]` is
+  assignable **to** `List<T>` (a fixed list is a list) but not the reverse (a list has unknown length).
+- **Element-set** `pair[i] = e` is allowed on a `mutable` fixed list (length-preserving). Erases to a
+  PHP array everywhere (`emit_type` → `array`, `CTy::List` so `pair[i]` specializes as an operand).
+  `examples/guide/fixed-lists.phg`. The irrefutable-destructuring payoff (`var [a, b] = pair`) arrives
+  with let-destructuring (slice 5).
+
 ### Fixed — parenthesized function type in return position (Phase 1 types slice)
 
 `function f() -> ((int) -> bool) { … }` now parses. Previously a `(` in type position was always read

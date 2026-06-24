@@ -62,6 +62,13 @@ pub fn erase_generics(program: Program) -> Program {
             Type::Intersection(members, span) => {
                 Type::Intersection(members.iter().map(|m| rty(m, params)).collect(), *span)
             }
+            // `[T; N]`: erase a type-param element (`[T; 2]` → `[<erased>; 2]`); the fixed-list head
+            // survives to the backend, which treats it as a list either way (Phase 1 types slice).
+            Type::FixedList { elem, len, span } => Type::FixedList {
+                elem: Box::new(rty(elem, params)),
+                len: *len,
+                span: *span,
+            },
             Type::Infer(s) => Type::Infer(*s),
             Type::Erased(s) => Type::Erased(*s),
         }

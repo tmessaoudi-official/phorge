@@ -585,6 +585,28 @@ impl Checker {
         Ty::Map(Box::new(key_ty), Box::new(val_ty))
     }
 
+    /// Static bounds check for a fixed-length list `[T; N]` (Phase 1 types slice). Only a *literal*
+    /// index is known at compile time: a constant `< 0` or `>= len` is `E-FIXEDLIST-BOUNDS`. A
+    /// non-literal index is left to the runtime bounds check (the same `Op::Index` as a list).
+    pub(super) fn fixedlist_static_bounds(
+        &mut self,
+        index: &crate::ast::Expr,
+        len: usize,
+        elem: &Ty,
+        span: Span,
+    ) {
+        if let crate::ast::Expr::Int(k, _) = index {
+            if *k < 0 || (*k as usize) >= len {
+                self.err_coded(
+                    span,
+                    format!("index {k} is out of bounds for `[{elem}; {len}]`"),
+                    "E-FIXEDLIST-BOUNDS",
+                    Some(format!("valid indices are 0..{len}")),
+                );
+            }
+        }
+    }
+
     pub(super) fn check_index(
         &mut self,
         object: &crate::ast::Expr,
@@ -598,6 +620,16 @@ impl Checker {
                 if !self.ty_assignable(&idx, &Ty::Int) {
                     self.err(span, format!("list index must be `int`, found `{idx}`"));
                 }
+                *elem
+            }
+            // `pair[i]` on a `[T; N]`: like a list read, but a *literal* index is bounds-checked at
+            // compile time (`pair[5]` on `[int; 2]` is `E-FIXEDLIST-BOUNDS`); a dynamic index falls
+            // back to the runtime bounds check, same as a list (Phase 1 types slice).
+            Ty::FixedList(elem, n) => {
+                if !self.ty_assignable(&idx, &Ty::Int) {
+                    self.err(span, format!("list index must be `int`, found `{idx}`"));
+                }
+                self.fixedlist_static_bounds(index, n, &elem, span);
                 *elem
             }
             // `m[k]` (M-RT S3): the index must match the key type; the result is the value type. A

@@ -131,6 +131,14 @@ not a panic:
   fallback) — the checker doesn't prove payload-subtype totality. (3) Struct patterns on **generic
   classes** bind fields at their declared (un-substituted) type. (4) Flow-narrowing (negative/else,
   early-return, post-match, equality) is the remaining **S5.3** sub-slice.
+- **Fixed-length lists `[T; N]` ship** (Phase 1 types slice: compile-time length, static literal-index
+  bounds, `[T; N]` → `List<T>` assignability, length-preserving element-set; erases to a PHP array).
+  Deferred: (1) the **irrefutable-destructuring payoff** (`var [a, b] = pair`) lands with
+  let-destructuring (slice 5); (2) a **zero-length `[T; 0]`** can't be initialized from a literal (the
+  empty `[]` has no inferable element type — "cannot infer element type of empty list literal"); (3)
+  static bounds cover only **literal** indices — a constant-folded expression index (`p[1 + 1]`) is left
+  to the runtime check; (4) the length is invariant and not assignable from a `List<T>` (a list has
+  unknown length) — round-trip through a typed local if you need to narrow.
 - **Or-patterns ship** (Phase 1 operators slice: `1 | 2 | 3 => …`, `Red() | Yellow() => …`, parser-
   desugared to one arm per alternative, no backend change). Deferred: alternatives must be
   **binding-free** (`E-OR-PATTERN-BIND`) — `Some(_) | None()` is fine but `Some(n) | None()` is

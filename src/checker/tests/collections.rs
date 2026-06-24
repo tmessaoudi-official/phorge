@@ -43,6 +43,45 @@ fn list_literal_mixed_elements_error() {
 }
 
 #[test]
+fn fixed_length_list_typing() {
+    // a literal of matching length, indexing (operand), and assignability to List<T>.
+    assert!(errors_of(
+        "function f(List<int> xs) -> int { return 0; } \
+         function main() -> void { [int; 3] p = [1, 2, 3]; var a = p[0] + 1; List<int> xs = p; var s = f(p); }"
+    )
+    .is_empty());
+    // length mismatch on the literal initializer
+    assert!(
+        errors_of("function main() -> void { [int; 2] p = [1, 2, 3]; }")
+            .iter()
+            .any(|e| e.code == Some("E-FIXEDLIST-LEN"))
+    );
+    // static out-of-bounds on a literal index
+    assert!(
+        errors_of("function main() -> void { [int; 2] p = [1, 2]; var x = p[5]; }")
+            .iter()
+            .any(|e| e.code == Some("E-FIXEDLIST-BOUNDS"))
+    );
+    // an in-bounds literal index and a dynamic index are both fine (no static bound error)
+    assert!(errors_of(
+        "function main() -> void { [int; 2] p = [1, 2]; var a = p[1]; int i = 0; var b = p[i]; }"
+    )
+    .iter()
+    .all(|e| e.code != Some("E-FIXEDLIST-BOUNDS")));
+    // List<T> is NOT assignable to [T; N] (unknown length)
+    assert!(!errors_of("function f(List<int> xs) -> void { [int; 2] p = xs; }").is_empty());
+    // element-set is length-preserving → allowed on a mutable fixed list; rejected when immutable
+    assert!(
+        errors_of("function main() -> void { mutable [int; 2] p = [1, 2]; p[0] = 9; }").is_empty()
+    );
+    assert!(
+        errors_of("function main() -> void { [int; 2] p = [1, 2]; p[0] = 9; }")
+            .iter()
+            .any(|e| e.code == Some("E-ASSIGN-IMMUTABLE"))
+    );
+}
+
+#[test]
 fn for_in_binds_element_type() {
     let src = format!(
             "{SHAPE} function area(Shape s) -> float {{ return 0.0; }} \

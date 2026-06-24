@@ -41,6 +41,39 @@ impl Parser {
     /// (`List<A | B>`, `(A | B) -> C`).
     pub(super) fn parse_type_atom(&mut self) -> Result<Type, Diagnostic> {
         let sp = self.peek_span();
+        // `[T; N]` — a fixed-length list type (Phase 1 types slice). `[` is unambiguous in type
+        // position (lists are `List<T>`, maps `Map<K, V>`), so a leading `[` always opens this form.
+        // The length `N` is a non-negative integer literal.
+        if self.eat(&TokenKind::LBracket) {
+            let elem = Box::new(self.parse_type()?);
+            self.expect(
+                &TokenKind::Semicolon,
+                "';' between the element type and length in `[T; N]`",
+            )?;
+            let len = match self.peek().clone() {
+                TokenKind::Int(n) if n >= 0 => {
+                    self.advance();
+                    n as usize
+                }
+                _ => return Err(self.error("a non-negative integer length `N` in `[T; N]`")),
+            };
+            self.expect(
+                &TokenKind::RBracket,
+                "']' to close a fixed-length list type `[T; N]`",
+            )?;
+            let mut t = Type::FixedList {
+                elem,
+                len,
+                span: sp,
+            };
+            while self.eat(&TokenKind::Question) {
+                t = Type::Optional {
+                    inner: Box::new(t),
+                    span: sp,
+                };
+            }
+            return Ok(t);
+        }
         // A leading `(` is either a function-type parameter list (`(int, string) -> bool`) or a
         // **grouped** type (`(T)` ≡ `T`) — disambiguated by whether a `->` follows the `)`. The
         // grouped form is what lets a function type appear, parenthesized, in return position:
