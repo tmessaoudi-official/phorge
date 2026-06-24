@@ -125,6 +125,32 @@ function greet(int id) -> string {
     }
 }
 
+enum Light {
+    Red,
+    Yellow,
+    Green
+}
+
+// Or-patterns (Phase 1 operators slice): group alternatives that share one arm body with `|`.
+// No fall-through, still exhaustive; alternatives must be binding-free (concrete patterns only).
+// Desugars to one arm per alternative — every backend sees ordinary arms.
+function band(int n) -> string {
+    return match n {
+        0 => "zero",
+        1 | 2 | 3 => "low",
+        7 | 8 | 9 => "high",
+        _ => "mid",
+    };
+}
+
+// Or-patterns over enum variants (zero-payload variants use the `V()` call form).
+function action(Light l) -> string {
+    return match l {
+        Red() | Yellow() => "stop",
+        Green() => "go",
+    };
+}
+
 function main() -> void {
     Console.println(classify(new Code(503)));
     Console.println(classify(new Code(404)));
@@ -153,4 +179,8 @@ function main() -> void {
     float r = radiusOrZero(new Circle(3.0));
     float z = radiusOrZero(new Square(5.0));
     Console.println("r={r} z={z}");
+
+    // or-patterns: grouped literal cases + grouped enum variants
+    Console.println("band: {band(0)} {band(2)} {band(8)} {band(5)}");
+    Console.println("action: {action(new Red())} {action(new Yellow())} {action(new Green())}");
 }

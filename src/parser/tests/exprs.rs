@@ -267,6 +267,40 @@ fn parses_match_with_trailing_comma_and_exprs() {
 }
 
 #[test]
+fn or_pattern_desugars_to_one_arm_per_alternative() {
+    // `1 | 2 | 3 => "low"` expands to three arms each carrying the (cloned) body — every backend
+    // sees ordinary arms, so exhaustiveness / dedup / narrowing are unchanged.
+    let e = expr(r#"match n { 1 | 2 | 3 => "low", _ => "hi" }"#);
+    match e {
+        Expr::Match { arms, .. } => {
+            assert_eq!(arms.len(), 4); // 3 expanded + the wildcard
+            assert!(matches!(arms[0].pattern, Pattern::Int(1, _)));
+            assert!(matches!(arms[1].pattern, Pattern::Int(2, _)));
+            assert!(matches!(arms[2].pattern, Pattern::Int(3, _)));
+            assert!(matches!(arms[3].pattern, Pattern::Wildcard(_)));
+        }
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn or_pattern_rejects_binding_alternatives() {
+    // a bare-name alternative, a `_` alternative, and a variant binder are all rejected.
+    for src in [
+        "match n { 1 | x => 0, _ => 1 }",
+        "match n { _ | 1 => 0 }",
+        "match e { A(v) | B() => 0 }",
+    ] {
+        let d = parser(src).parse_expr().unwrap_err();
+        assert_eq!(d.code, Some("E-OR-PATTERN-BIND"), "{src}");
+    }
+    // a binding-free variant alternative IS allowed (`Some(_) | None()`).
+    assert!(parser("match o { Some(_) | None() => 0 }")
+        .parse_expr()
+        .is_ok());
+}
+
+#[test]
 fn parses_ranges() {
     match expr("0..3") {
         Expr::Range { inclusive, .. } => assert!(!inclusive),

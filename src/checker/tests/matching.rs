@@ -26,6 +26,36 @@ fn match_over_optional() {
 }
 
 #[test]
+fn or_pattern_arms_are_exhaustive_and_dedup_aware() {
+    // Grouped literals: `0 | 1 | 2` + a catch-all is exhaustive (each alternative is a real arm).
+    assert!(errors_of(
+        r#"function band(int n) -> string { return match n { 0 | 1 | 2 => "low", _ => "hi" }; }"#
+    )
+    .is_empty());
+    // Grouped enum variants discharge each variant's shape → exhaustive with no catch-all.
+    let ok =
+        "enum E { A, B, C } function f(E e) -> int { return match e { A() | B() => 0, C() => 1 }; }";
+    assert!(errors_of(ok).is_empty(), "{:?}", errors_of(ok));
+    // A missing variant is still caught after expansion.
+    let miss = "enum E { A, B, C } function f(E e) -> int { return match e { A() | B() => 0 }; }";
+    assert!(
+        errors_of(miss)
+            .iter()
+            .any(|d| d.message.contains("non-exhaustive")),
+        "{:?}",
+        errors_of(miss)
+    );
+    // A duplicated alternative is a redundant arm → `W-MATCH-UNREACHABLE`.
+    let w = warnings_of(
+        r#"function f(int n) -> string { return match n { 1 | 1 => "x", _ => "y" }; }"#,
+    );
+    assert!(
+        w.iter().any(|d| d.code == Some("W-MATCH-UNREACHABLE")),
+        "{w:?}"
+    );
+}
+
+#[test]
 fn match_over_enum_is_typed_and_exhaustive() {
     let src = format!(
         "{SHAPE} function area(Shape s) -> float {{ \

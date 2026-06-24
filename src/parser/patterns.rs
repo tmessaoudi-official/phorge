@@ -129,4 +129,28 @@ impl Parser {
             _ => Err(self.error("a pattern")),
         }
     }
+
+    /// Is `p` an invalid alternative of an or-pattern (`a | b`)? An alternative may not be a
+    /// top-level catch-all (`_` / a bare binding) nor introduce any named binding (a `Some(n)`
+    /// payload binder, a `Circle c` type binder, a struct-field binder), because the shared arm
+    /// body cannot know which alternative matched. Concrete patterns and `_` *sub*-patterns are
+    /// fine (`Some(_) | None()`). Drives the `E-OR-PATTERN-BIND` parse error.
+    pub(super) fn or_alt_invalid(p: &Pattern) -> bool {
+        matches!(p, Pattern::Wildcard(_) | Pattern::Binding { .. })
+            || Self::pattern_names_binding(p)
+    }
+
+    /// Does `p` (or any sub-pattern) introduce a *named* binding? A `_` wildcard binds nothing, so
+    /// a wildcard sub-pattern is not a binding.
+    fn pattern_names_binding(p: &Pattern) -> bool {
+        match p {
+            Pattern::Binding { .. } => true,
+            Pattern::Type { binding, .. } => binding.is_some(),
+            Pattern::Variant { fields, .. } => fields.iter().any(Self::pattern_names_binding),
+            Pattern::Struct { fields, .. } => {
+                fields.iter().any(|f| Self::pattern_names_binding(&f.pat))
+            }
+            _ => false,
+        }
+    }
 }

@@ -131,6 +131,13 @@ not a panic:
   fallback) — the checker doesn't prove payload-subtype totality. (3) Struct patterns on **generic
   classes** bind fields at their declared (un-substituted) type. (4) Flow-narrowing (negative/else,
   early-return, post-match, equality) is the remaining **S5.3** sub-slice.
+- **Or-patterns ship** (Phase 1 operators slice: `1 | 2 | 3 => …`, `Red() | Yellow() => …`, parser-
+  desugared to one arm per alternative, no backend change). Deferred: alternatives must be
+  **binding-free** (`E-OR-PATTERN-BIND`) — `Some(_) | None()` is fine but `Some(n) | None()` is
+  rejected, since the shared body cannot know which alternative matched. Same-binding-across-
+  alternatives (Rust's `Some(n) | Other(n)`) would need a binding-consistency check; split into
+  separate arms for now. Or-patterns are also only available at the **arm top level** (not as a
+  nested sub-pattern inside a variant/struct payload).
 
 ## Mutation milestone — deferred corners
 

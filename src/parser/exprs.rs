@@ -556,7 +556,13 @@ impl Parser {
         let mut arms = Vec::new();
         while !self.check(&TokenKind::RBrace) {
             let arm_sp = self.peek_span();
-            let pattern = self.parse_pattern()?;
+            // Or-pattern `p1 | p2 | … => body` (Phase 1 operators slice): collect `|`-separated
+            // alternatives. A single pattern (no `|`) is the common case and behaves exactly as
+            // before. `|` is unambiguous here — a pattern is followed only by `|`, `when`, or `=>`.
+            let mut alts = vec![self.parse_pattern()?];
+            while self.eat(&TokenKind::Bar) {
+                alts.push(self.parse_pattern()?);
+            }
             // Optional arm guard: a contextual `when <cond>` between the pattern and `=>`.
             // `when` is recognized only here (and in if/while-let) — a normal identifier elsewhere.
             let guard = if matches!(self.peek(), TokenKind::Ident(k) if k.as_str() == "when") {
@@ -567,12 +573,41 @@ impl Parser {
             };
             self.expect(&TokenKind::FatArrow, "'=>' after match pattern")?;
             let body = self.parse_expr()?;
-            arms.push(MatchArm {
-                pattern,
-                guard,
-                body,
-                span: arm_sp,
-            });
+            if alts.len() == 1 {
+                arms.push(MatchArm {
+                    pattern: alts.pop().expect("one alternative"),
+                    guard,
+                    body,
+                    span: arm_sp,
+                });
+            } else {
+                // Desugar the or-pattern to one arm per alternative, each sharing the (cloned)
+                // body + guard. Every backend then sees ordinary arms — zero backend change, and
+                // exhaustiveness / duplicate-arm (`W-MATCH-UNREACHABLE`) / flow-narrowing all work
+                // unchanged. Alternatives must be binding-free: a bare binding, `_`, or any
+                // variable-binding sub-pattern is rejected, since the shared body cannot depend on
+                // which alternative matched (`Some(_) | None()` is fine; `Some(n) | None()` is not).
+                for pat in &alts {
+                    if Self::or_alt_invalid(pat) {
+                        return Err(Diagnostic::new(
+                            Stage::Parse,
+                            "an or-pattern `a | b` alternative must be a concrete pattern with no bindings (no `_`, no bare name, no variable-binding sub-pattern)",
+                            arm_sp.line,
+                            arm_sp.col,
+                        )
+                        .with_code("E-OR-PATTERN-BIND")
+                        .with_hint("use literals/variants without binders, or split into separate arms if you need to bind"));
+                    }
+                }
+                for pat in alts {
+                    arms.push(MatchArm {
+                        pattern: pat,
+                        guard: guard.clone(),
+                        body: body.clone(),
+                        span: arm_sp,
+                    });
+                }
+            }
             if !self.eat(&TokenKind::Comma) {
                 break;
             }

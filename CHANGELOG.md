@@ -6,6 +6,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — or-patterns in `match` (Phase 1 operators slice)
+
+`match n { 1 | 2 | 3 => "low", _ => "hi" }` — group alternatives that share one arm body with `|`.
+No fall-through, still exhaustive (each alternative discharges its own shape). Works for literals and
+enum variants. Byte-identical `run ≡ runvm ≡ real PHP 8.5`; **no new `Op`/`Value`, no backend change**.
+
+- **Front-end only:** the parser collects `|`-separated alternatives and **desugars** them to one arm
+  per alternative (sharing the cloned body + guard), so every backend sees ordinary arms —
+  exhaustiveness, duplicate-arm (`W-MATCH-UNREACHABLE`), and flow-narrowing all work unchanged.
+- **Restriction:** alternatives must be **binding-free** — no `_`, no bare name, no variable-binding
+  sub-pattern (`Some(_) | None()` is fine; `Some(n) | None()` is `E-OR-PATTERN-BIND`), since the shared
+  body cannot know which alternative matched. Split into separate arms if you need to bind.
+  `examples/guide/pattern-matching.phg`.
+
 ### Added — `**` power operator + `Math.ipow` (Phase 1 operators slice)
 
 `2 ** 10`, `2.0 ** 3.0`, `Math.ipow(5, 2)`. The `**` operator is **type-directed** (`int ** int → int`,
