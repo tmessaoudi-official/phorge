@@ -10,6 +10,13 @@ class Box {
     function get() -> int { return v; }
 }
 
+// A self-optional field (`Node? next`) — the building block of a linked list. Exercises chained
+// `opt!` through *object* optionals (`a.next!.next!.v`), the regression guard for a once-suspected
+// `opt!`-then-field-access bug: the chain is byte-identical on both backends and real PHP.
+class Node {
+    constructor(public int v, public Node? next) {}
+}
+
 // `match` over an optional: the `null` arm handles absence; the binding arm narrows `v` to `int`.
 function describe(int? o) -> string {
     return match o {
@@ -50,4 +57,12 @@ function main() -> void {
 
     // `match` over `T?` with null-arm narrowing.
     Console.println("match: {describe(some)} / {describe(none)}");
+
+    // Chained `opt!` through object optionals: a 3-node list, force-unwrapping `next` twice to reach
+    // the third node's `v`. The two-`opt!`-in-one-interpolation case (`{a.next!.v} / {…next!.next!.v}`)
+    // is the precise shape a past scratch-slot bug touched — guarded here on both backends + PHP.
+    var third = new Node(30, null);
+    var second = new Node(20, third);
+    var first = new Node(10, second);
+    Console.println("chain: {first.next!.v} / {first.next!.next!.v}");
 }

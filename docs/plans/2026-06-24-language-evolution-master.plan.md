@@ -109,8 +109,14 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
   PHP `.` concat (`.` is member access; concat is `+`); `switch` (match + or-patterns).
 
 ## Loose ends (track; not part of the slices)
-- **Side-bug:** chained force-unwrap field read `a.next!.next!.v` → "no field v on Node" — likely a real
-  `opt!`-then-field-access bug on object optionals. Confirm with a clean repro + fix early (correctness).
+- **Side-bug: ✅ CONFIRMED NON-REPRODUCIBLE (2026-06-25).** Chained force-unwrap field read
+  `a.next!.next!.v` works correctly — byte-identical `run≡runvm≡real PHP 8.5` across 7 shapes
+  (read-in-interpolation, assignment, swapped field order, set-through-`opt!`, two-`opt!`-in-one-
+  interpolation, in-a-method, 3-deep chain). The entry was logged *unconfirmed*; this was the
+  confirmation step. Most plausibly incidentally fixed by the S2 null-op scratch-slot fix
+  ([[null-op-scratch-slot]]) or Feature C's mandatory-`new` construction rework. **Regression guard
+  added** to `examples/guide/null-safety.phg` (a `Node` linked-list + chained `opt!`, byte-identity-
+  gated). No fix needed — closed.
 - **Playground:** `f66592d` (php-wasm fresh-instance fix) — pending the developer's `git push` + a live
   re-verify of the deployed page (editor + 3-way badge + PHP tab no-redeclare).
 
