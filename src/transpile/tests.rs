@@ -30,7 +30,9 @@ fn empty_program_emits_php_open_tag() {
 fn free_function_with_params_and_arithmetic() {
     let out = php("function add(int a, int b) -> int { int c = a + b; return c; }");
     assert!(out.contains("function add(int $a, int $b): int {"), "{out}");
-    assert!(out.contains("$c = $a + $b;"), "{out}");
+    // `+` is string-concat-overloaded, so it routes through the `__phorge_add` runtime helper
+    // (`is_string ? . : +`) — the transpiler has no static operand types (Phase 1 string slice).
+    assert!(out.contains("$c = __phorge_add($a, $b);"), "{out}");
     assert!(out.contains("return $c;"), "{out}");
 }
 

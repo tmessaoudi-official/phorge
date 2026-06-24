@@ -201,6 +201,16 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_add {
+            // Phorge `+` is overloaded: `string + string` concatenates, numbers add. The checker
+            // guarantees both operands share a type, so `is_string($a)` selects the branch exactly
+            // (PHP's `+` would TypeError on strings; `.` is its concat operator).
+            self.line("function __phorge_add($a, $b) {");
+            self.indent += 1;
+            self.line("return is_string($a) ? $a . $b : $a + $b;");
+            self.indent -= 1;
+            self.line("}");
+        }
         if self.uses_str {
             // Mirror Value::as_display: bool ⇒ "true"/"false"; float ⇒ Rust `{}` formatting (via
             // __phorge_float); everything else PHP string cast. A naked `(string)$float` uses PHP's

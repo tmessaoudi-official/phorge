@@ -192,9 +192,16 @@ impl Checker {
             };
         }
         match op {
+            // `+` is overloaded for string concatenation (Phase 1 string slice): `string + string`
+            // → `string`. It is type-directed with **no coercion** — `string + int` stays an error
+            // (the typed system kills JS's `"1" + 1` footgun). Only `+` concatenates; `-`/`*`/`/`/`%`
+            // remain numeric-only.
+            BinaryOp::Add if l == Ty::String && r == Ty::String => Ty::String,
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Rem => {
                 if (l == Ty::Int && r == Ty::Int) || (l == Ty::Float && r == Ty::Float) {
                     l
+                } else if op == BinaryOp::Add && (l == Ty::String || r == Ty::String) {
+                    self.err(span, format!("`+` concatenates two `string`s or adds two numbers — no coercion; found `{l}` and `{r}`"))
                 } else {
                     self.err(span, format!("arithmetic requires matching int or float operands, found `{l}` and `{r}`"))
                 }

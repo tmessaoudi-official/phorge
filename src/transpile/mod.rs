@@ -76,6 +76,8 @@ struct Transpiler {
     /// (bool ⇒ `"true"/"false"`), `__phorge_range` (empty/reversed ⇒ `[]`, never descending).
     uses_div: bool,
     uses_rem: bool,
+    /// `__phorge_add` — `+` overloaded for string concat (`is_string` ⇒ `.`, else `+`).
+    uses_add: bool,
     uses_str: bool,
     uses_range: bool,
     /// Set when `obj with { f = e }` is emitted. PHP's native two-argument `clone($o, [...])` is a
@@ -219,6 +221,7 @@ impl Transpiler {
             uses_force: false,
             uses_div: false,
             uses_rem: false,
+            uses_add: false,
             uses_str: false,
             uses_range: false,
             uses_clone_with: false,

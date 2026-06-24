@@ -1308,7 +1308,7 @@ fn statement_body_lambda_needs_return_type() {
 fn transpiles_statement_lambda_with_use_clause() {
     let php = transpile_ok("package Main; import Core.Console; function main()-> void { var base=100; var f = fn(int x) -> int { return x + base; }; Console.println(\"{f(3)}\"); }");
     assert!(
-        php.contains("function($x) use ($base)") && php.contains("return $x + $base"),
+        php.contains("function($x) use ($base)") && php.contains("return __phorge_add($x, $base)"),
         "{php}"
     );
 }
@@ -1487,7 +1487,10 @@ fn named_fn_ref_as_value_agrees() {
 #[test]
 fn transpiles_lambda_literal_call_target() {
     let php = transpile_ok("package Main; import Core.Console; function main()-> void { Console.println(\"{3 |> fn(int v) => v + 100}\"); }");
-    assert!(php.contains("(fn($v) => $v + 100)(3)"), "{php}");
+    assert!(
+        php.contains("(fn($v) => __phorge_add($v, 100))(3)"),
+        "{php}"
+    );
 }
 
 #[test]

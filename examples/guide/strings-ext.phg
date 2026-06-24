@@ -1,0 +1,34 @@
+// Extended string ergonomics (Language Evolution Phase 1, string slice).
+//
+// Two additions over basic interpolation (see `strings.phg`):
+//   * `+` concatenation — `string + string` → `string`. Type-directed with NO coercion: `"x" + 1`
+//     is a compile error (the typed system kills JS's `"1" + 1` footgun). Only `+` concatenates;
+//     `-`/`*` stay numeric. Transpiles via a runtime helper (PHP's `+` is numeric-only; `.` concats).
+//   * `\u{HEX}` Unicode escapes — 1–6 hex digits naming a codepoint, expanded to UTF-8 at lex time.
+//
+// Both are byte-identical on `run`, `runvm`, and real PHP.
+package Main;
+
+import Core.Console;
+
+// `+` composes naturally and chains left-to-right, like any binary operator.
+function fullName(string first, string last) -> string {
+    return first + " " + last;
+}
+
+function main() -> void {
+    // Concatenation — literals, a call result, and a bound variable all compose.
+    string who = fullName("Ada", "Lovelace");
+    Console.println("Hello, " + who + "!");
+
+    // `+` is just an operator: nest it, mix with interpolation.
+    string tag = "[" + who + "]";
+    Console.println(tag);
+
+    // Unicode escapes: an emoji (5 hex digits) and a named-codepoint-style sequence.
+    Console.println("punch \u{1F44A} and star \u{2B50}");
+
+    // `\u{}` works mid-string and alongside the other escapes.
+    string mixed = "tab\u{9}then\u{2192}arrow";
+    Console.println(mixed);
+}

@@ -47,6 +47,11 @@ enum NumTy {
 enum CTy {
     Int,
     Float,
+    /// A `string` — not a numeric operand, but tracked distinctly so the compiler can lower
+    /// `string + string` to `Op::Concat(2)` (Phase 1 string slice) instead of an `AddI`/`AddF`. A
+    /// string operand that collapsed to `Other` would make the VM reject what the interpreter
+    /// accepts (the CTy-operand trap), so every string-producing operand must resolve here.
+    Str,
     /// A class instance, carrying its class name so `ctype` can resolve `obj.field` / `obj.m()`.
     Class(String),
     /// A `List<elem>`, carrying its element type so `ctype(Index)` (`xs[i]`) resolves to the element
@@ -281,7 +286,10 @@ fn resolve_cty(ty: &Type) -> CTy {
                 Box::new(args.first().map_or(CTy::Other, resolve_cty)),
                 Box::new(args.get(1).map_or(CTy::Other, resolve_cty)),
             ),
-            "bool" | "string" | "void" | "Set" => CTy::Other,
+            // `string` is tracked distinctly so `string + string` lowers to `Op::Concat` (the
+            // string slice).
+            "string" => CTy::Str,
+            "bool" | "void" | "Set" => CTy::Other,
             other => CTy::Class(other.to_string()),
         },
         // An optional carries its inner's `CTy` (not `Other`): once narrowed (if-let, `??`, `?.`,
@@ -515,7 +523,10 @@ impl<'a> Compiler<'a> {
         match e {
             Expr::Int(..) => Ok(CTy::Int),
             Expr::Float(..) => Ok(CTy::Float),
-            Expr::Bool(..) | Expr::Str(..) | Expr::Bytes(..) => Ok(CTy::Other),
+            // A string literal (incl. an interpolated one — both are `Expr::Str`) is `CTy::Str` so a
+            // `"a" + s` concat lowers to `Op::Concat`; `bool`/`bytes` literals are non-operands.
+            Expr::Str(..) => Ok(CTy::Str),
+            Expr::Bool(..) | Expr::Bytes(..) => Ok(CTy::Other),
             // A list literal's element type comes from its first element (empty → `Other`), so an
             // index into it (`[1, 2, 3][0] + 1`) resolves as an operand (M3 S1.1).
             Expr::List(elems, _) => Ok(CTy::List(Box::new(
@@ -659,7 +670,12 @@ impl<'a> Compiler<'a> {
         match ty {
             CTy::Int => Some(NumTy::Int),
             CTy::Float => Some(NumTy::Float),
-            CTy::Class(_) | CTy::Other | CTy::List(_) | CTy::Map(..) | CTy::Fn { .. } => None,
+            CTy::Str
+            | CTy::Class(_)
+            | CTy::Other
+            | CTy::List(_)
+            | CTy::Map(..)
+            | CTy::Fn { .. } => None,
         }
     }
 

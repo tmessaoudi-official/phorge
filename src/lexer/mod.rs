@@ -229,6 +229,10 @@ impl<'a> Lexer<'a> {
                     Some(b'r') => bytes.push(b'\r'),
                     Some(b'\\') => bytes.push(b'\\'),
                     Some(b'"') => bytes.push(b'"'),
+                    // `\u{HEX}` — a Unicode escape (Phase 1 string slice): 1–6 hex digits naming a
+                    // codepoint, expanded to its UTF-8 bytes at lex time. Independent of the i18n
+                    // string-indexing work — this is just byte production.
+                    Some(b'u') => self.scan_unicode_escape(&mut bytes, el, ec)?,
                     Some(other) => {
                         return Err(Diagnostic::new(
                             Stage::Lex,
@@ -259,6 +263,70 @@ impl<'a> Lexer<'a> {
                 col,
             },
         })
+    }
+
+    /// Expand a `\u{HEX}` escape (the `\u` is already consumed): `{`, then 1–6 hex digits, then `}`,
+    /// naming a Unicode codepoint whose UTF-8 bytes are appended to `bytes`. `(el, ec)` is the
+    /// position of the opening backslash, for error reporting (Phase 1 string slice).
+    fn scan_unicode_escape(
+        &mut self,
+        bytes: &mut Vec<u8>,
+        el: u32,
+        ec: u32,
+    ) -> Result<(), Diagnostic> {
+        if self.bump() != Some(b'{') {
+            return Err(Diagnostic::new(
+                Stage::Lex,
+                "expected `{` after `\\u` (e.g. `\\u{1F600}`)",
+                el,
+                ec,
+            ));
+        }
+        let mut hex = String::new();
+        loop {
+            match self.bump() {
+                Some(b'}') => break,
+                Some(c) if c.is_ascii_hexdigit() => hex.push(c as char),
+                Some(c) => {
+                    return Err(Diagnostic::new(
+                        Stage::Lex,
+                        format!("invalid hex digit `{}` in `\\u{{…}}`", c as char),
+                        el,
+                        ec,
+                    ))
+                }
+                None => {
+                    return Err(Diagnostic::new(
+                        Stage::Lex,
+                        "unterminated `\\u{…}` escape",
+                        el,
+                        ec,
+                    ))
+                }
+            }
+        }
+        if hex.is_empty() || hex.len() > 6 {
+            return Err(Diagnostic::new(
+                Stage::Lex,
+                "`\\u{…}` takes 1–6 hex digits",
+                el,
+                ec,
+            ));
+        }
+        let cp = u32::from_str_radix(&hex, 16).expect("digits validated as hex above");
+        match char::from_u32(cp) {
+            Some(ch) => {
+                let mut buf = [0u8; 4];
+                bytes.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
+                Ok(())
+            }
+            None => Err(Diagnostic::new(
+                Stage::Lex,
+                format!("`\\u{{{hex}}}` is not a valid Unicode codepoint"),
+                el,
+                ec,
+            )),
+        }
     }
 
     /// Scan an `html"…"` literal (the `html` prefix is already consumed). The body is captured

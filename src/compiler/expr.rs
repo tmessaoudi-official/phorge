@@ -266,6 +266,15 @@ impl Compiler<'_> {
         }
         // Strict ops: evaluate both, then emit.
         match op {
+            // `string + string` → concatenation: reuse `Op::Concat(2)` (no new Op). The checker
+            // guarantees both operands are `string`, and `ctype` resolves every string-producing
+            // operand to `CTy::Str`, so this lowers byte-identically to the interpreter's `Str + Str`
+            // (Phase 1 string slice).
+            Add if matches!(self.ctype(lhs), Ok(CTy::Str)) => {
+                self.expr(lhs)?;
+                self.expr(rhs)?;
+                self.emit(Op::Concat(2), line);
+            }
             Add | Sub | Mul | Div | Rem => {
                 let nt = self.num_ty(lhs)?;
                 self.expr(lhs)?;

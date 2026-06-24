@@ -37,6 +37,15 @@ impl Transpiler {
                     self.uses_rem = true;
                     return Ok(format!("{bs}__phorge_rem({l}, {r})"));
                 }
+                // `+` is overloaded for string concatenation in Phorge, but PHP's `+` errors on
+                // strings (it is numeric-only) and uses `.` for concat. The transpiler has no static
+                // operand types, so route `+` through a runtime helper that branches on `is_string`
+                // — the checker guarantees both operands share a type, so the branch is exact
+                // (mirrors `__phorge_div`/`__phorge_rem`; Phase 1 string slice).
+                if matches!(op, BinaryOp::Add) {
+                    self.uses_add = true;
+                    return Ok(format!("{bs}__phorge_add({l}, {r})"));
+                }
                 if matches!(op, BinaryOp::Coalesce) {
                     // `??` binds loosely in PHP; parenthesize to preserve grouping.
                     return Ok(format!("({l} ?? {r})"));
@@ -335,10 +344,11 @@ impl Transpiler {
     pub(super) fn binop(op: &BinaryOp) -> &'static str {
         use BinaryOp::*;
         match op {
-            Add => "+",
             Sub => "-",
             Mul => "*",
-            // `/` and `%` are routed through `__phorge_div`/`__phorge_rem` before binop() (P0-1/P0-4).
+            // `+`, `/`, `%` are routed through `__phorge_add`/`__phorge_div`/`__phorge_rem` before
+            // binop() (`+` is string-concat-overloaded, P0-1/P0-4 for the others).
+            Add => unreachable!("Add handled via __phorge_add before binop()"),
             Div => unreachable!("Div handled via __phorge_div before binop()"),
             Rem => unreachable!("Rem handled via __phorge_rem before binop()"),
             Eq => "==",

@@ -125,3 +125,26 @@ fn expression_if_condition_must_be_bool() {
         "{errs:?}"
     );
 }
+
+// --- Phase 1 string slice: `+` concatenation ---
+
+#[test]
+fn string_plus_string_is_string() {
+    assert!(errors_of(r#"function main() -> void { string s = "a" + "b"; }"#).is_empty());
+}
+
+#[test]
+fn string_plus_int_is_a_type_error_no_coercion() {
+    let errs = errors_of(r#"function main() -> void { string s = "a" + 1; }"#);
+    assert!(
+        errs.iter().any(|e| e.message.contains("no coercion")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn string_minus_string_is_still_rejected() {
+    // Only `+` concatenates; other arithmetic ops stay numeric-only.
+    let errs = errors_of(r#"function main() -> void { string s = "a" - "b"; }"#);
+    assert!(!errs.is_empty(), "{errs:?}");
+}

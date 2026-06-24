@@ -357,6 +357,36 @@ fn html_literal_errors() {
 }
 
 #[test]
+fn unicode_escape_expands_to_utf8() {
+    use TokenKind::*;
+    // `\u{1F600}` (😀) is the 4-byte UTF-8 sequence; `\u{41}` is `A`.
+    assert_eq!(kinds(r#""\u{41}""#), vec![Str("A".into()), Eof]);
+    assert_eq!(kinds(r#""x\u{1F600}y""#), vec![Str("x😀y".into()), Eof]);
+    // `\u{9}` is a tab; composes with the other escapes.
+    assert_eq!(kinds(r#""a\u{9}b""#), vec![Str("a\tb".into()), Eof]);
+}
+
+#[test]
+fn unicode_escape_errors() {
+    assert!(lex(r#""\u41""#)
+        .unwrap_err()
+        .message
+        .contains("expected `{` after `\\u`"));
+    assert!(lex(r#""\u{ZZ}""#)
+        .unwrap_err()
+        .message
+        .contains("invalid hex digit"));
+    assert!(lex(r#""\u{}""#)
+        .unwrap_err()
+        .message
+        .contains("1–6 hex digits"));
+    assert!(lex(r#""\u{110000}""#)
+        .unwrap_err()
+        .message
+        .contains("not a valid Unicode codepoint"));
+}
+
+#[test]
 fn byte_string_errors() {
     assert!(lex("b\"oops")
         .unwrap_err()

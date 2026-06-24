@@ -6,6 +6,17 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — Language Evolution Phase 1 (string slice, part 1): `+` concat + `\u{}`
+
+- **String concatenation with `+`** — `string + string` → `string`, type-directed with **no
+  coercion** (`"x" + 1` is a compile error, killing JS's `"1" + 1` footgun). Only `+` concatenates;
+  `-`/`*`/`/`/`%` stay numeric. Reuses `Op::Concat(2)` on the VM (new `CTy::Str` so a string operand
+  is recognized — no new `Op`); transpiles via a new `__phorge_add` runtime helper (`is_string ? . :
+  +`, since PHP's `+` is numeric-only).
+- **`\u{HEX}` Unicode escapes** — 1–6 hex digits naming a codepoint, expanded to UTF-8 bytes at lex
+  time (independent of i18n string indexing). `examples/guide/strings-ext.phg`. Byte-identical
+  `run ≡ runvm ≡ real PHP 8.5`.
+
 ### Added — Language Evolution Phase 0: `void`/`Empty` + mandatory return types
 
 The foundation slice for the language-evolution roadmap

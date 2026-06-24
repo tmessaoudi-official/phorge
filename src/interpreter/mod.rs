@@ -526,6 +526,10 @@ fn arith(op: BinaryOp, l: Value, r: Value) -> R<Value> {
             };
             Ok(Value::Float(v))
         }
+        // `string + string` → concatenation (Phase 1 string slice). The checker guarantees `+` is
+        // the only op and both sides are `string`; the VM lowers this to `Op::Concat(2)`, whose
+        // two-`Str` result is exactly `a + b`, so the backends stay byte-identical.
+        (Value::Str(a), Value::Str(b)) if matches!(op, Add) => Ok(Value::Str(a + &b)),
         (l, r) => rt(format!(
             "cannot apply {op:?} to {} and {}",
             l.type_name(),
