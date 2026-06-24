@@ -79,7 +79,14 @@ lowering), then static (one-time guarded init — the riskier PHP-timing piece).
   closure default, a `this`/earlier-sibling read in order). Checker tests for the forward-ref +
   this-capture guards. Full gate; commit.
 
-### B-static
+### B-static ✅ DONE (`af3ad03`)
+
+> Landed eager (decided): checker static-init type-check moved to post-collection pass
+> (`check_static_inits`, no `this`; `E-STATIC-INIT-CONST` retired); interpreter `eval_static_inits`
+> before `main`; compiler `SetStatic` prelude at start of `main` (literals seeded, non-literals
+> placeholder); transpiler `__phorge_init_statics()` before `main()`. `examples/guide/static-init.phg`
+> byte-identical run≡runvm≡PHP 8.5; 723 lib + 108 differential green. **Feature B COMPLETE.**
+
 - **B5 — static expression initializers:** checker — allow an arbitrary expression (not just a literal)
   for a `static` field. Interpreter/VM — evaluate **once** at program start in declaration order
   (extend the existing `static_inits` path, which today only handles literals). Transpiler — emit a
