@@ -87,6 +87,22 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
   re-verify of the deployed page (editor + 3-way badge + PHP tab no-redeclare).
 
 ## Decisions Log (2026-06-24)
+- **Static field initializers — EAGER, no config (decided 2026-06-24).** Feature B-static evaluates
+  static expression initializers **once at program start, in declaration order, before `main`** —
+  matching the existing Rust static-init model (interpreter/VM already seed statics eagerly at startup;
+  PHP via a generated `__phorge_init_statics()` called before `main()`). **Lazy `??=`-on-first-access
+  was rejected** (re-architects every `GetStatic`, leans harder on eval-order parity). **Runtime
+  env/`.ini` configuration was rejected as architecturally unsound**: the transpiled PHP runs with no
+  Phorge runtime, so a runtime knob can't reach it → byte-identity would break in production,
+  undetectable by the local gate; it also imports PHP's most-criticized misfeature (server-`.ini`-
+  dependent semantics) against Phorge's "remove surprises" thesis. **The legitimate form of
+  configurability is COMPILE-TIME** — a `phorge.toml [language]` table / editions, resolved once and
+  baked identically into all three backends *and* the emitted PHP (the Rust-editions / `tsconfig`
+  model). Deferred to **M13 (editions, post-1.0)**, where static-init mode can become one documented
+  edition flag. **General principle for all future feature-flagging:** a language flag may be
+  compile-time (baked into all 3 backends) — never a runtime knob each backend reads independently, or
+  it breaks the byte-identity spine. Each such flag also doubles the differential test surface, so flags
+  are a deliberate gated investment, not a per-feature default.
 - **No-value types:** `void` (uncapturable keyword) + `Empty` (PascalCase holdable type), `void <: Empty`.
 - **UFCS:** general, method-first.
 - **Return-type mandate:** named fns + methods (incl. abstract/interface) + **statement-body** lambdas;
