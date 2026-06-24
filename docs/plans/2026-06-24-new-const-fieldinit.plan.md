@@ -13,7 +13,13 @@
 
 ---
 
-## Feature A — `const` class constants
+## Feature A — `const` class constants ✅ DONE (`c6b1ac2`)
+
+> Landed end-to-end: shared `ast::class_consts` (own + inherited + trait consts flattened), checker
+> collection + access + visibility enforcement (the one site Phorge enforces member visibility) +
+> SCREAMING_SNAKE casing, interpreter inline, compiler `Op::Const` + `CTy` operand, transpiler PHP
+> typed class const + `Class::NAME`. 8 `E-CONST-*` codes, all `phg explain`-documented.
+> `examples/guide/constants.phg` byte-identical run≡runvm≡PHP 8.5; 710 lib + 108 differential green.
 
 **Spec:** member-initializers §"Feature 1". No new `Op`/`Value`. `const` is already parsed as
 `Modifier::Const` on a field with an initializer (today the checker rejects it as an instance field) —

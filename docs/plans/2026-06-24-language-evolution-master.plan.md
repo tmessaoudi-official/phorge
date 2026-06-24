@@ -114,6 +114,10 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
   currently a reserved-but-unhandled token. Breaking codemod (`Name(...)` → `new Name(...)` for every
   class + enum-variant construction; needs the checker's type tables to tell construction from a plain
   call). Lists/maps/sets/closures/primitives are literals/native — unaffected. Own design+plan pass.
+- **`const` class constants — ✅ DONE (`c6b1ac2`, 2026-06-24).** Shipped exactly as designed (below):
+  shared `ast::class_consts` flatten (own+inherited+trait), checker collect/access/visibility +
+  SCREAMING_SNAKE casing, interpreter inline / compiler `Op::Const`+`CTy` / transpiler PHP typed const
+  `Class::NAME`; 8 `E-CONST-*` codes; `examples/guide/constants.phg` byte-identical run≡runvm≡PHP 8.5.
 - **`const` class constants — ACTIVATE with visibility (decided 2026-06-24).** Currently vestigial
   (reserved `Modifier::Const`, no semantics; parse-errors as a local, rejected as a class field). Make
   it a real PHP-style class constant: `[vis] const TYPE NAME = <literal>;`, class-name-only access
