@@ -41,7 +41,12 @@ impl Parser {
     /// (`List<A | B>`, `(A | B) -> C`).
     pub(super) fn parse_type_atom(&mut self) -> Result<Type, Diagnostic> {
         let sp = self.peek_span();
-        // Leading `(` introduces a function type: `(int, string) -> bool`.
+        // A leading `(` is either a function-type parameter list (`(int, string) -> bool`) or a
+        // **grouped** type (`(T)` ≡ `T`) — disambiguated by whether a `->` follows the `)`. The
+        // grouped form is what lets a function type appear, parenthesized, in return position:
+        // `() -> ((int) -> bool)` (slice 3 / spec #8) — without it the inner `(` was always read as a
+        // param list demanding its own `->`. The parens-free right-assoc form `() -> (int) -> bool`
+        // already worked and parses to the same type.
         if self.eat(&TokenKind::LParen) {
             let mut params = Vec::new();
             if !self.check(&TokenKind::RParen) {
@@ -50,13 +55,33 @@ impl Parser {
                     params.push(self.parse_type()?);
                 }
             }
-            self.expect(&TokenKind::RParen, "')' to close function-type parameters")?;
-            self.expect(&TokenKind::Arrow, "'->' in a function type")?;
-            let ret = Box::new(self.parse_type()?);
-            let mut t = Type::Function {
-                params,
-                ret,
-                span: sp,
+            self.expect(
+                &TokenKind::RParen,
+                "')' to close a function-type parameter list or a grouped type",
+            )?;
+            let mut t = if self.eat(&TokenKind::Arrow) {
+                // `( … ) -> R` — a function type with the parsed parameter list.
+                Type::Function {
+                    params,
+                    ret: Box::new(self.parse_type()?),
+                    span: sp,
+                }
+            } else {
+                // No `->`: the parens were grouping, not a parameter list. Exactly one inner type is
+                // `(T)` ≡ `T`; `()` / `(A, B)` without a `->` are invalid (Phorge has no unit-paren
+                // or tuple types — a multi-element list must be a function-type parameter list).
+                match params.len() {
+                    1 => params.pop().expect("one grouped type"),
+                    0 => {
+                        return Err(self
+                            .error("a `->` return type after `()` (an empty `()` is a function-type parameter list)"))
+                    }
+                    _ => {
+                        return Err(self.error(
+                            "a `->` return type (Phorge has no tuple types — `(A, B)` is a function-type parameter list and needs `-> R`)",
+                        ))
+                    }
+                }
             };
             while self.eat(&TokenKind::Question) {
                 t = Type::Optional {

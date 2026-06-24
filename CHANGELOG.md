@@ -6,6 +6,15 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — parenthesized function type in return position (Phase 1 types slice)
+
+`function f() -> ((int) -> bool) { … }` now parses. Previously a `(` in type position was always read
+as a function-type parameter list demanding a following `->`, so an explicitly parenthesized function
+type in return position failed (only the parens-free right-assoc `() -> (int) -> bool` worked — both now
+parse to the same type). A `(` is now disambiguated by whether a `->` follows the `)`: with `->` it's a
+parameter list, without it it's a **grouped** type `(T)` ≡ `T` (Phorge has no tuples — `()`/`(A, B)`
+without `->` are parse errors). Parser-only; byte-identical (`examples/guide/lambdas-pipe.phg`).
+
 ### Added — or-patterns in `match` (Phase 1 operators slice)
 
 `match n { 1 | 2 | 3 => "low", _ => "hi" }` — group alternatives that share one arm body with `|`.

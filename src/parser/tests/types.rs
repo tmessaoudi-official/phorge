@@ -119,3 +119,27 @@ fn parses_function_type_annotation() {
         other => panic!("expected Type::Function, got {other:?}"),
     }
 }
+
+#[test]
+fn parses_parenthesized_return_position_function_type() {
+    // spec #8: a parenthesized function type in return position. `() -> ((int) -> bool)` must parse
+    // to the same type as the parens-free `() -> (int) -> bool` — a fn returning a fn.
+    for src in ["() -> ((int) -> bool)", "() -> (int) -> bool"] {
+        match ty(src) {
+            Type::Function { params, ret, .. } => {
+                assert!(params.is_empty(), "{src}");
+                assert!(
+                    matches!(ret.as_ref(), Type::Function { params, .. } if params.len() == 1),
+                    "{src}: ret should be a 1-param fn, got {ret:?}"
+                );
+            }
+            other => panic!("{src}: expected Type::Function, got {other:?}"),
+        }
+    }
+    // A grouped type `(T)` ≡ `T` (parens used purely for grouping, no `->`).
+    assert!(matches!(ty("(int)"), Type::Named { name, .. } if name == "int"));
+    assert!(matches!(ty("(A | B)"), Type::Union { .. }));
+    // No tuples / unit-paren: `(A, B)` and `()` without a `->` are parse errors.
+    assert!(parser("(int, string)").parse_type().is_err());
+    assert!(parser("()").parse_type().is_err());
+}

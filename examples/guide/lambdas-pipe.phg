@@ -7,6 +7,11 @@ function inc(int x) -> int { return x + 1; }
 // higher-order: a lambda passed to a user function
 function twice(int x, (int) -> int f) -> int { return f(f(x)); }
 
+// A function returning a function — the return type is written in the *parenthesized* form
+// `((int) -> int)` (slice 3 / spec #8); the parens-free `(int) -> int` parses to the same type.
+// The returned lambda captures the local `n` by value.
+function adder(int n) -> ((int) -> int) { return fn(int x) => x + n; }
+
 function main() -> void {
     var add10 = fn(int x) => x + 10;          // expression-body lambda
     var scaled = fn(int x) -> int {           // statement-body lambda (captures none)
@@ -19,4 +24,6 @@ function main() -> void {
     Console.println("{5 |> dbl |> inc}");     // inc(dbl(5)) = 11
     Console.println("{3 |> fn(int v) => v + 100}"); // 103
     Console.println("{twice(2, dbl)}");       // dbl(dbl(2)) = 8  (named-fn ref)
+    var add5 = adder(5);                       // adder returns a closure capturing n=5
+    Console.println("{add5(10)}");             // 15
 }
