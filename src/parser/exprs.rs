@@ -457,8 +457,8 @@ impl Parser {
         for seg in segs {
             match seg {
                 StrSeg::Lit(s) => parts.push(StrPart::Literal(s)),
-                StrSeg::Interp(src) => {
-                    let sub_tokens = crate::lexer::lex(&src).map_err(|e| {
+                StrSeg::Interp(src, base) => {
+                    let mut sub_tokens = crate::lexer::lex(&src).map_err(|e| {
                         Diagnostic::new(
                             Stage::Parse,
                             format!("in interpolation: {}", e.message),
@@ -466,6 +466,13 @@ impl Parser {
                             sp.col,
                         )
                     })?;
+                    // The sub-lexer restarts spans at 0; shift every token's `start` to its absolute
+                    // position in the original source so interpolated expressions carry globally-unique
+                    // offsets (a span-keyed rewrite like UFCS keys on `start`). `line`/`col` keep the
+                    // sub-lexer's values, so interpolation diagnostics are unchanged.
+                    for t in &mut sub_tokens {
+                        t.span.start += base;
+                    }
                     let mut sub = Parser::new(sub_tokens);
                     let e = sub.parse_expr()?;
                     sub.expect(&TokenKind::Eof, "end of interpolation expression")?;

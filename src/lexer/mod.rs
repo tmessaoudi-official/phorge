@@ -217,6 +217,7 @@ impl<'a> Lexer<'a> {
         let mut segs: Vec<StrSeg> = Vec::new();
         let mut lit: Vec<u8> = Vec::new();
         let mut interp: Option<Vec<u8>> = None; // `Some` while inside `{…}`
+        let mut interp_start: usize = 0; // absolute byte offset of the active interpolation's content
         loop {
             // Snapshot before consuming, so an invalid escape reports the backslash's column.
             let (el, ec) = (self.line, self.col);
@@ -249,6 +250,8 @@ impl<'a> Lexer<'a> {
                         ));
                     }
                     interp = Some(Vec::new());
+                    // `self.pos` is now just past the opening `{` → the first byte of the inner source.
+                    interp_start = self.pos;
                 }
                 // The first unescaped `}` closes the interpolation; a `}` outside one is an error
                 // (write `\}` for a literal brace).
@@ -256,6 +259,7 @@ impl<'a> Lexer<'a> {
                     segs.push(StrSeg::Interp(
                         String::from_utf8(interp.take().expect("inside interp"))
                             .expect("valid UTF-8"),
+                        interp_start,
                     ));
                 }
                 Some(b'}') => return Err(Diagnostic::new(

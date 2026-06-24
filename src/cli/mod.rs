@@ -254,18 +254,23 @@ pub fn parse_program(src: &str) -> Result<Program, String> {
 /// print message + position without a source line).
 pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, String> {
     match crate::checker::check_resolutions(prog) {
-        Ok((warnings, html)) => {
+        Ok((warnings, html, ufcs)) => {
             for w in &warnings {
                 eprintln!("warning: {}", w.render(diag_src));
             }
             // De-alias types, erase `html"…"` literals into their `Html.concat([…])` kernel calls
             // (built by the checker, keyed by span), then erase generic type parameters — all three
             // are front-end sugar removed before any backend runs (M-RT S7 adds the last).
-            // Feature C: `unwrap_new` strips the `Expr::New` construction wrapper last (after the
-            // type sugar is gone), so every backend sees the plain construction `Call`.
-            Ok(crate::checker::unwrap_new(crate::checker::erase_generics(
-                crate::checker::resolve_html(crate::checker::expand_aliases(prog), &html),
-            )))
+            // Feature C: `unwrap_new` strips the `Expr::New` construction wrapper after the type sugar
+            // is gone, so every backend sees the plain construction `Call`. Slice 6: `rewrite_ufcs`
+            // runs last, rewriting each resolved `x.f(a)` member call into the ordinary free/native
+            // call `f(x, a)` the checker chose — by then the receiver/args are fully de-sugared.
+            Ok(crate::checker::rewrite_ufcs(
+                crate::checker::unwrap_new(crate::checker::erase_generics(
+                    crate::checker::resolve_html(crate::checker::expand_aliases(prog), &html),
+                )),
+                &ufcs,
+            ))
         }
         Err(errs) => {
             let lines: Vec<String> = errs.iter().map(|e| e.render(diag_src)).collect();
@@ -361,7 +366,9 @@ pub fn check_program(prog: &Program, diag_src: &str) -> Result<String, String> {
 /// diagnostic, so no `diag_src` is needed.
 pub fn check_json_program(prog: &Program) -> (String, bool) {
     on_deep_stack(|| match crate::checker::check_resolutions(prog) {
-        Ok((warnings, _html)) => (crate::diagnostic::diagnostics_json(&[], &warnings), false),
+        Ok((warnings, _html, _ufcs)) => {
+            (crate::diagnostic::diagnostics_json(&[], &warnings), false)
+        }
         Err(errs) => (crate::diagnostic::diagnostics_json(&errs, &[]), true),
     })
 }

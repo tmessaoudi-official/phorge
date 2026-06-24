@@ -248,7 +248,7 @@ fn throws_mode_propagate_is_recorded_for_erasure() {
         "{ERRDEF} function f() -> void throws BadInput {{ throw new BadInput(\"x\"); }} \
              function g() -> void throws BadInput {{ f()?; }} function main() -> void {{}}"
     ));
-    let (_warns, subst) = check_resolutions(&p).expect("checks clean");
+    let (_warns, subst, _ufcs) = check_resolutions(&p).expect("checks clean");
     assert_eq!(
         subst.len(),
         1,

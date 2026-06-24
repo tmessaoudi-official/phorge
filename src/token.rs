@@ -20,8 +20,14 @@ pub struct Span {
 pub enum StrSeg {
     /// An escape-expanded literal run.
     Lit(String),
-    /// The raw source between `{` and `}` — a Phorge expression the parser re-lexes and parses.
-    Interp(String),
+    /// The raw source between `{` and `}` — a Phorge expression the parser re-lexes and parses — plus
+    /// the **absolute byte offset** of that inner source in the original file. The parser adds this
+    /// offset to every re-lexed token's `Span.start`, so an interpolated expression's nodes carry
+    /// globally-unique source positions (a fresh sub-lexer would otherwise restart spans at 0, making
+    /// two interpolations' nodes collide — fatal for any span-keyed rewrite, e.g. UFCS Slice 6). Only
+    /// `start` is offset; `line`/`col` keep the sub-lexer's values (diagnostics inside interpolation
+    /// are unchanged). With an escaped char before a token the offset is approximate but still unique.
+    Interp(String, usize),
 }
 
 #[derive(Debug, Clone, PartialEq)]

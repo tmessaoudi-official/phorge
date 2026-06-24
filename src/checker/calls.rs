@@ -623,6 +623,19 @@ impl Checker {
                         self.check_method_sigs(name, &applied, args, span)
                     }
                     None => {
+                        // UFCS fallback (Slice 6): `inst.f(args)` with no method `f` may be the free
+                        // function / imported native `f(inst, args)`. Plain `.` only (`?.` deferred).
+                        if !safe {
+                            if let Some(ret) = self.try_ufcs(
+                                object,
+                                &Ty::Named(cls.clone(), cargs.clone()),
+                                name,
+                                args,
+                                span,
+                            ) {
+                                return ret;
+                            }
+                        }
                         for a in args {
                             self.check_expr(a);
                         }
@@ -677,6 +690,17 @@ impl Checker {
                 match found {
                     Some(applied) => self.check_method_sigs(name, &applied, args, span),
                     None => {
+                        if !safe {
+                            if let Some(ret) = self.try_ufcs(
+                                object,
+                                &Ty::Intersection(members.clone()),
+                                name,
+                                args,
+                                span,
+                            ) {
+                                return ret;
+                            }
+                        }
                         for a in args {
                             self.check_expr(a);
                         }
@@ -694,6 +718,14 @@ impl Checker {
             }
             Ty::Error => Ty::Error,
             other => {
+                // UFCS fallback (Slice 6): a member call on a primitive/container receiver (`xs.map(g)`,
+                // `s.upper()`) is `f(receiver, args)` — a free function or imported native. Plain `.`
+                // only; `?.` UFCS is deferred (F-002).
+                if !safe {
+                    if let Some(ret) = self.try_ufcs(object, &other, name, args, span) {
+                        return ret;
+                    }
+                }
                 for a in args {
                     self.check_expr(a);
                 }
@@ -895,5 +927,173 @@ impl Checker {
                 .collect(),
             None => HashMap::new(),
         }
+    }
+
+    /// UFCS fallback (Slice 6, `docs/plans/2026-06-25-overnight-design-forks-review.plan.md` F-001):
+    /// a member call `object.name(args)` that did **not** resolve to a method is re-resolved as the
+    /// free/native call `name(object, args)`, **method-first** having already failed. A candidate is,
+    /// in priority order: (1) a user free function `name`, or (2) any *imported* `Core.*` native
+    /// `name`, whose **first parameter accepts the receiver type** (`unify`, so a generic native like
+    /// `map: (List<T>,(T)->U)` matches a `List<int>` receiver). Returns `Some(ret)` once a candidate is
+    /// chosen (recording the desugared call in `ufcs_resolutions` for [`rewrite_ufcs`], which the
+    /// backends consume verbatim — no new `Op`), or `None` when no callable named `name` fits at all
+    /// (the caller then emits the original "no method" error). The receiver `recv_ty` is the
+    /// already-checked, optional-peeled type — the receiver expression is *not* re-checked here, so a
+    /// throwing-call receiver discharges exactly once.
+    pub(super) fn try_ufcs(
+        &mut self,
+        object: &crate::ast::Expr,
+        recv_ty: &Ty,
+        name: &str,
+        args: &[crate::ast::Expr],
+        call_span: Span,
+    ) -> Option<Ty> {
+        // (1) A user free function wins over any stdlib native of the same name. Single-overload only
+        // this slice (overload-set + multi-package UFCS deferred — F-004); a non-fitting arity/first
+        // param falls through to the native search rather than committing to an error.
+        if let Some(sigs) = self.funcs.get(name).cloned() {
+            if sigs.len() == 1
+                && sigs[0].params.len() == args.len() + 1
+                && self.ufcs_first_accepts(&sigs[0].params[0], recv_ty)
+            {
+                let sig = &sigs[0];
+                let ret =
+                    self.check_ufcs_call(name, &sig.params, &sig.ret, recv_ty, args, call_span);
+                self.record_ufcs_call(call_span, None, name, object, args);
+                return Some(ret);
+            }
+        }
+        // (2) An imported native `name` whose first parameter accepts the receiver. A native is
+        // eligible only when its module's *leaf* is the imported qualifier (`import Core.List` ⇒
+        // `imports["List"] == "Core.List"`), so the leaf we emit resolves identically on every backend
+        // (`index_of_by_leaf` on the interpreter/compiler, the import map on the transpiler). An
+        // aliased-only core import is skipped (call it explicitly). Two distinct matches ⇒ ambiguous.
+        let mut matched: Option<(usize, &'static str)> = None;
+        let mut ambiguous = false;
+        for (i, n) in crate::native::registry().iter().enumerate() {
+            if n.name != name || n.params.len() != args.len() + 1 {
+                continue;
+            }
+            let leaf = n.module.rsplit('.').next().unwrap_or(n.module);
+            if self.imports.get(leaf).map(String::as_str) == Some(n.module)
+                && self.ufcs_first_accepts(&n.params[0], recv_ty)
+            {
+                if matched.is_some() {
+                    ambiguous = true;
+                } else {
+                    matched = Some((i, leaf));
+                }
+            }
+        }
+        if ambiguous {
+            self.err_coded(
+                call_span,
+                format!(
+                    "UFCS call `.{name}(…)` is ambiguous — more than one imported native matches"
+                ),
+                "E-UFCS-AMBIGUOUS",
+                Some(format!(
+                    "call it explicitly, e.g. `Module.{name}(receiver, …)`"
+                )),
+            );
+            return Some(Ty::Error);
+        }
+        if let Some((idx, leaf)) = matched {
+            let n = &crate::native::registry()[idx];
+            let label = format!("{leaf}.{name}");
+            let ret = self.check_ufcs_call(&label, &n.params, &n.ret, recv_ty, args, call_span);
+            self.record_ufcs_call(call_span, Some(leaf), name, object, args);
+            return Some(ret);
+        }
+        None
+    }
+
+    /// Does a candidate's first parameter type accept the UFCS receiver? Uses [`Self::unify`] against a
+    /// throwaway substitution so a generic first parameter (`List<T>`) matches a concrete receiver
+    /// (`List<int>`); for a non-generic parameter this reduces to ordinary assignability (receiver →
+    /// parameter), so subtyping is honored.
+    fn ufcs_first_accepts(&self, param0: &Ty, recv_ty: &Ty) -> bool {
+        let mut theta: HashMap<String, Ty> = HashMap::new();
+        self.unify(param0, recv_ty, &mut theta)
+    }
+
+    /// Type-check a chosen UFCS candidate as `name(receiver, args)`: the receiver fills the first
+    /// parameter (already shown to fit by [`Self::ufcs_first_accepts`]), the call's `args` fill the
+    /// rest. A generic candidate (its signature mentions `Ty::Param`) infers the substitution from the
+    /// receiver *and* the arguments and applies it to the return type — exactly [`Self::check_generic_call`]
+    /// with a prepended receiver; a monomorphic candidate validates each argument by assignability.
+    /// The caller guarantees `params.len() == args.len() + 1`.
+    fn check_ufcs_call(
+        &mut self,
+        label: &str,
+        params: &[Ty],
+        ret: &Ty,
+        recv_ty: &Ty,
+        args: &[crate::ast::Expr],
+        span: Span,
+    ) -> Ty {
+        if params.iter().any(ty_has_param) || ty_has_param(ret) {
+            let mut theta: HashMap<String, Ty> = HashMap::new();
+            // Seed θ from the receiver (the first parameter), then each remaining argument.
+            self.unify(&params[0], recv_ty, &mut theta);
+            for (param, arg) in params[1..].iter().zip(args) {
+                let at = self.check_arg(arg, param);
+                if !self.unify(param, &at, &mut theta) {
+                    let want = apply_subst(param, &theta);
+                    self.err(
+                        span,
+                        format!("`{label}` argument expects `{want}`, found `{at}`"),
+                    );
+                }
+            }
+            apply_subst(ret, &theta)
+        } else {
+            for (param, arg) in params[1..].iter().zip(args) {
+                let at = self.check_arg(arg, param);
+                if !self.ty_assignable(&at, param) {
+                    self.err(
+                        span,
+                        format!("`{label}` argument expects `{param}`, found `{at}`"),
+                    );
+                }
+            }
+            ret.clone()
+        }
+    }
+
+    /// Record the desugared UFCS call for [`rewrite_ufcs`], keyed by the enclosing `Call` node's
+    /// `Span.start` (each call site's `(` is at a unique byte offset). `leaf = None` ⇒ a free-function
+    /// call `name(object, args)`; `leaf = Some(q)` ⇒ a native module call `q.name(object, args)` (the
+    /// same AST shape the user would hand-write). The receiver and arguments are carried verbatim so
+    /// `rewrite_ufcs` re-walks them for nested UFCS (`xs.filter(p).map(g)`).
+    fn record_ufcs_call(
+        &mut self,
+        call_span: Span,
+        leaf: Option<&str>,
+        name: &str,
+        object: &crate::ast::Expr,
+        args: &[crate::ast::Expr],
+    ) {
+        use crate::ast::Expr;
+        let mut new_args = Vec::with_capacity(args.len() + 1);
+        new_args.push(object.clone());
+        new_args.extend(args.iter().cloned());
+        let callee = match leaf {
+            None => Expr::Ident(name.to_string(), call_span),
+            Some(q) => Expr::Member {
+                object: Box::new(Expr::Ident(q.to_string(), call_span)),
+                name: name.to_string(),
+                safe: false,
+                span: call_span,
+            },
+        };
+        self.ufcs_resolutions.insert(
+            call_span.start,
+            Expr::Call {
+                callee: Box::new(callee),
+                args: new_args,
+                span: call_span,
+            },
+        );
     }
 }

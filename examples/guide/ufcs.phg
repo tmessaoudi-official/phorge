@@ -1,0 +1,51 @@
+// UFCS — Uniform Function Call Syntax (Phase 1, Slice 6). `x.f(a)` is sugar for `f(x, a)`, resolved
+// **method-first**: if the receiver's type has a real method `f`, that wins; otherwise `f` falls back
+// to a free function — a user `function f(...)`, or any *imported* `Core.*` native whose first
+// parameter accepts the receiver. This is what lets stdlib calls chain fluently:
+// `xs.filter(p).map(g)` ≡ `List.map(List.filter(xs, p), g)`. UFCS is a type-directed front-end rewrite
+// (erased before any backend, like `type` aliases / generics / `html"…"`), so it adds no new `Op` and
+// stays byte-identical on run / runvm / real PHP.
+//
+// Integer arithmetic only (PHP's float `/` never enters); results are shown via `sum` / `length` /
+// indexing since PHP cannot `echo` a whole array.
+package Main;
+
+import Core.Console;
+import Core.List;
+import Core.Text;
+
+// A user free function — UFCS lets it be called method-style on its first argument (`n.triple()`).
+function triple(int x) -> int {
+    return x * 3;
+}
+
+// A class with a real method: `b.describe()` resolves as a method (method-first), never as UFCS.
+class Boxed {
+    constructor(public int v) {}
+
+    function describe() -> string {
+        return "boxed {this.v}";
+    }
+}
+
+function main() -> void {
+    var nums = [1, 2, 3, 4, 5];
+
+    // Native UFCS + chaining: keep the elements > 2, square them, then sum / count.
+    var pipeline = nums.filter(fn(int x) => x > 2).map(fn(int x) => x * x);
+    Console.println("chain sum  = {pipeline.sum()}"); // 3²+4²+5² = 50
+    Console.println("chain len  = {pipeline.length()}"); // 3
+
+    // User free-function UFCS: `n.triple()` ≡ `triple(n)`.
+    var seven = 7;
+    Console.println("triple     = {seven.triple()}"); // 21
+
+    // String native UFCS: `s.upper()` ≡ `Text.upper(s)`, `s.repeat(n)` ≡ `Text.repeat(s, n)`.
+    var name = "phorge";
+    Console.println("upper      = {name.upper()}"); // PHORGE
+    Console.println("repeat     = {name.repeat(2)}"); // phorgephorge
+
+    // Method-first: `Boxed` declares `describe`, so this is a method call, not a UFCS rewrite.
+    var b = new Boxed(9);
+    Console.println("method     = {b.describe()}"); // boxed 9
+}

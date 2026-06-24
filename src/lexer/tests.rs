@@ -278,7 +278,7 @@ fn string_literals() {
         vec![
             Str(vec![
                 StrSeg::Lit("Hello ".into()),
-                StrSeg::Interp("name".into())
+                StrSeg::Interp("name".into(), 8)
             ]),
             Eof
         ]
@@ -296,7 +296,7 @@ fn literal_braces_via_backslash() {
         vec![
             Str(vec![
                 StrSeg::Lit("{".into()),
-                StrSeg::Interp("n".into()),
+                StrSeg::Interp("n".into(), 4),
                 StrSeg::Lit("}".into())
             ]),
             Eof

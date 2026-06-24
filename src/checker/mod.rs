@@ -16,10 +16,12 @@ mod rewrite_alias;
 mod rewrite_generics;
 mod rewrite_html;
 mod rewrite_new;
+mod rewrite_ufcs;
 pub use rewrite_alias::expand_aliases;
 pub use rewrite_generics::erase_generics;
 pub use rewrite_html::resolve_html;
 pub use rewrite_new::unwrap_new;
+pub use rewrite_ufcs::rewrite_ufcs;
 
 // impl-cluster cohesion split (M-Decomp W2): one `impl Checker` block per cluster
 // file; all share the private struct via `use super::*`.
@@ -244,6 +246,15 @@ pub struct Checker {
     ///     call's own throw already unwinds; M-faults 2b). Result-mode `?` is *not* recorded here —
     ///     it carries real lowering and is left for the backends.
     html_resolutions: HashMap<usize, crate::ast::Expr>,
+    /// Span-keyed `Call`-node substitutions applied by [`rewrite_ufcs`] after a successful check
+    /// (Slice 6, UFCS). When a member call `x.f(args)` does not resolve to a method but `f` resolves
+    /// as a free function or imported native, the checker records the desugared free/native call here,
+    /// keyed by the *enclosing `Call`* node's `Span.start` (each call site's `(` token is at a unique
+    /// byte offset, so chained UFCS — `xs.filter(p).map(g)` — never collides). The backends never see
+    /// the original `Member`-call: it is rewritten to an ordinary call they already handle, so UFCS
+    /// adds no new `Op`/`Value` and is byte-identical by construction (the "erase front-end sugar
+    /// before any backend" discipline shared with `type` aliases / generics / `html"…"`).
+    ufcs_resolutions: HashMap<usize, crate::ast::Expr>,
     /// Type parameters in scope while resolving the signature/body of the generic function currently
     /// being checked (`["T", "U"]`). A bare type name in this set resolves to `Ty::Param` rather than
     /// being looked up as an alias/enum/class. Set around each generic function and cleared after;
@@ -295,6 +306,7 @@ impl Checker {
             alias_stack: Vec::new(),
             imports: HashMap::new(),
             html_resolutions: HashMap::new(),
+            ufcs_resolutions: HashMap::new(),
             active_type_params: Vec::new(),
             cur_class_type_params: Vec::new(),
         }
@@ -496,10 +508,17 @@ pub fn check(program: &Program) -> Result<Vec<Diagnostic>, Vec<Diagnostic>> {
 #[allow(clippy::type_complexity)]
 pub fn check_resolutions(
     program: &Program,
-) -> Result<(Vec<Diagnostic>, HashMap<usize, crate::ast::Expr>), Vec<Diagnostic>> {
+) -> Result<
+    (
+        Vec<Diagnostic>,
+        HashMap<usize, crate::ast::Expr>,
+        HashMap<usize, crate::ast::Expr>,
+    ),
+    Vec<Diagnostic>,
+> {
     let c = run_checker(program);
     if c.errors.is_empty() {
-        Ok((c.warnings, c.html_resolutions))
+        Ok((c.warnings, c.html_resolutions, c.ufcs_resolutions))
     } else {
         Err(c.errors)
     }

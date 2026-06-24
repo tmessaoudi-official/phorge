@@ -269,3 +269,90 @@ fn function_typed_binding_rejects_non_function() {
         "{errs:?}"
     );
 }
+
+// ---- UFCS (Slice 6): `x.f(a)` ≡ `f(x, a)`, method-first --------------------------------------
+
+#[test]
+fn ufcs_free_function_fallback() {
+    // `n.triple()` with no `int` method resolves to the free function `triple(int)`.
+    assert!(errors_of(
+        "function triple(int x) -> int { return x * 3; } \
+         function main() -> void { var n = 7; int t = n.triple(); }"
+    )
+    .is_empty());
+}
+
+#[test]
+fn ufcs_native_fallback_requires_import() {
+    // `xs.length()` ≡ `List.length(xs)` once `Core.List` is imported.
+    assert!(errors_of(
+        "import Core.List; function main() -> void { var xs = [1, 2, 3]; int n = xs.length(); }"
+    )
+    .is_empty());
+    // Without the import there is no candidate, so it stays the original "no method" error.
+    let errs = errors_of("function main() -> void { var xs = [1, 2, 3]; int n = xs.length(); }");
+    assert!(
+        errs.iter()
+            .any(|e| e.message.contains("no method `length`")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn ufcs_method_first_beats_free_function() {
+    // A real method wins over a same-named free function. The method returns `int`, the free
+    // function `string`; assigning the call to an `int` succeeds ONLY if the method was chosen.
+    assert!(errors_of(
+        "class Box { constructor(public int v) {} function tag() -> int { return 1; } } \
+         function tag(Box b) -> string { return \"x\"; } \
+         function main() -> void { var b = new Box(5); int t = b.tag(); }"
+    )
+    .is_empty());
+}
+
+#[test]
+fn ufcs_chaining_native_pipeline() {
+    // `xs.filter(p).map(g)` chains: each step is a native UFCS over the previous result.
+    assert!(errors_of(
+        "import Core.List; \
+         function main() -> void { \
+            var xs = [1, 2, 3, 4]; \
+            var ys = xs.filter(fn(int x) => x > 1).map(fn(int x) => x * x); \
+            int n = ys.length(); }"
+    )
+    .is_empty());
+}
+
+#[test]
+fn ufcs_unresolved_still_errors() {
+    // No method, no free function, no imported native named `frobnicate` → original error stands.
+    let errs = errors_of("function main() -> void { var n = 7; n.frobnicate(); }");
+    assert!(
+        errs.iter()
+            .any(|e| e.message.contains("no method `frobnicate`")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn ufcs_string_native() {
+    // `s.upper()` ≡ `Text.upper(s)`; `s.repeat(n)` ≡ `Text.repeat(s, n)`.
+    assert!(errors_of(
+        "import Core.Text; \
+         function main() -> void { var s = \"hi\"; string u = s.upper(); string r = s.repeat(2); }"
+    )
+    .is_empty());
+}
+
+#[test]
+fn ufcs_arg_type_still_checked() {
+    // A resolved UFCS still type-checks the remaining arguments: `repeat` wants an `int` count.
+    let errs = errors_of(
+        "import Core.Text; \
+         function main() -> void { var s = \"hi\"; string r = s.repeat(\"no\"); }",
+    );
+    assert!(
+        errs.iter().any(|e| e.message.contains("Text.repeat")),
+        "{errs:?}"
+    );
+}
