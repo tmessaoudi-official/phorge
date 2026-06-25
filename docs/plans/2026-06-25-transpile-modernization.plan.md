@@ -87,3 +87,11 @@ remains regardless wherever a float is displayed.
   M-Lift. Developer pushes manually. T6d sub-pieces by census frequency: native-call return kinds
   (count/array_sum/strtoupper/implode…, biggest), list/map index element kinds, const/static read
   kinds, catch-var field reads. __phorge_float stays (irreducible floor).
+
+## T6d — COMPLETE (2026-06-25, commit e3d4392)
+Index element kinds (`OpKind::List/Map`), native-call return kinds (registry `Ty`→`OpKind`),
+const/static reads (bare class-name ident → `Class`), catch-var typing. Final census across all
+examples: `__phorge_float` 24 (irreducible floor — now the largest), `__phorge_str` 18,
+`__phorge_range` 5, `__phorge_add` 3, reflection/init 1 each. Remaining `_str`/`_add` are genuinely
+dynamic (closure-call results, `Reflect.className`, expr-position match/getenv) — the helper-as-safe-
+fallback path. **Track 1 + T6/T6b/T6c/T6d fully COMPLETE.**
