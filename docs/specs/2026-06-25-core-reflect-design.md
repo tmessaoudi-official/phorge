@@ -20,6 +20,24 @@
 >   class name; Q3 sidestepped (literals); Q4 `fieldNames` via a transpiler-emitted per-class static list.
 >
 > Status: **APPROVED — implementing.** Original open-questions section retained below for context.
+>
+> ### Build notes (verified during implementation prep, 2026-06-25)
+> - **Q3 enum erasure — VERIFIED:** an enum transpiles to a PHP **class hierarchy** —
+>   `abstract class <Enum> {}` + `final class <Variant> extends <Enum> {}`. So a variant value is a PHP
+>   object whose `get_class` is the **variant** name (`"Red"`), not the enum name. Consequences, all
+>   byte-identical: (a) `kind(enumVal)` = `"object"` (Rust `Value::Enum` → `"object"`, PHP `is_object`
+>   → `"object"`); (b) `typeName`/`className` on an enum emit a **compile-time literal of the *enum*
+>   name** (the static type is the enum — variants aren't types — and we never call `get_class`, so the
+>   variant-vs-enum mismatch is moot). **No runtime enum inspection anywhere.**
+> - **`kind` PHP emission needs a gated helper:** native `php` closures emit inline PHP and can't set a
+>   transpiler `uses_*` flag, so `Reflect.kind` is special-cased in `emit_member_call` (set
+>   `uses_reflect_kind`, emit `__phorge_kind($x)`), with `__phorge_kind` defined once in
+>   `emit_runtime_helpers` — the established gated-helper pattern (`__phorge_str`/`_div`/…). `__phorge_kind`
+>   checks `is_callable` **before** `is_object` (a PHP closure is both; Phorge closures must map to
+>   `"callable"`, instances/enums to `"object"`).
+> - **`typeName`/`className` resolution** is a checker pass (type-directed, span-keyed substitution like
+>   UFCS): value type → string literal; object type → a `Reflect.__classOf` native (`get_class`,
+>   byte-identical for classes); enum → enum-name literal; optional → null-branch; erased → `kind`.
 > Origin: Phase 2 Slice 1 of `docs/specs/2026-06-24-introspection-strings-process-design.md`, parked
 > autonomously on 2026-06-25 as fork **F-006** (`docs/plans/2026-06-25-overnight-design-forks-review.plan.md`)
 > because the original spec's "byte-identical with PHP" claim is unachievable as written.
