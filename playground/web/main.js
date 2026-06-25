@@ -154,6 +154,28 @@ async function share() {
   }
 }
 
+// --- lift (PHP -> Phorge draft) ----------------------------------------------------------------
+// Treat the editor contents as PHP and run the `lift` engine (the inverse of transpile). On success
+// the lifted Phorge draft REPLACES the editor (then runs through the 3-way pipeline). On failure the
+// editor is left untouched and the badge carries the lift error — never a guess, never a silent blank.
+// The lift carries no byte-identity guarantee (it's a best-effort scaffold), so — exactly like the
+// `phg lift` CLI — we prepend a `// lifted (verify)` banner here at the entrypoint (the engine's
+// `lift_source` returns the bare draft) so the review-required contract is visible in the editor.
+const LIFT_BANNER = "// lifted (verify) — a best-effort PHP->Phorge draft; review before trusting it.\n";
+async function liftPhp() {
+  if (running) return;
+  flashBadge("neutral", "Lifting PHP → Phorge…");
+  const res = await callJson("lift", source());
+  if (res.ok && res.phorge != null) {
+    setSource(LIFT_BANNER + res.phorge);
+    runAll(); // run the lifted draft so the user immediately sees it behave
+  } else {
+    // The engine's errors are already self-describing (they start with `lift …`); only the fallback
+    // needs a prefix, so we avoid a double "lift: lift:".
+    flashBadge("err", res.error || "lift: could not lift this PHP (outside the Tier-1 subset)");
+  }
+}
+
 // --- tabs --------------------------------------------------------------------------------------
 function showTab(name) {
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.pane === name));
@@ -391,6 +413,7 @@ async function boot() {
 
   $("run").onclick = runAll;
   $("share").onclick = share;
+  $("lift").onclick = liftPhp;
   $("php-toggle").onchange = runAll;
   $("explain-close").onclick = () => $("explain").classList.add("hidden");
   document.querySelectorAll(".tab").forEach((t) => (t.onclick = () => showTab(t.dataset.pane)));

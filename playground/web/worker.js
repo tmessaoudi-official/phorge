@@ -8,6 +8,7 @@ import init, {
   pg_runvm,
   pg_transpile,
   pg_explain,
+  pg_lift,
 } from "./pkg/phorge_playground.js";
 
 const ready = init(); // resolves once the wasm module is instantiated
@@ -18,6 +19,7 @@ const OPS = {
   runvm: pg_runvm,
   transpile: pg_transpile,
   explain: pg_explain,
+  lift: pg_lift, // PHP source -> Phorge draft (the inverse of transpile)
 };
 
 self.onmessage = async (e) => {
