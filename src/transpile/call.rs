@@ -102,7 +102,14 @@ impl Transpiler {
                             .iter()
                             .map(|a| self.emit_expr(a))
                             .collect::<Result<_, _>>()?;
-                        let php = (crate::native::registry()[idx].php)(&argv);
+                        // `Reflect.kind` emits the gated `__phorge_kind` helper; a native's `php`
+                        // closure has no `&mut self` to set the flag, so set it here (the established
+                        // gated-helper pattern — see `emit_runtime_helpers`).
+                        let nat = &crate::native::registry()[idx];
+                        if nat.module == "Core.Reflect" && nat.name == "kind" {
+                            self.uses_reflect_kind = true;
+                        }
+                        let php = (nat.php)(&argv);
                         // Inside a namespace block a bare `strlen(...)` would resolve to
                         // `CurrentNs\strlen`; emit `\strlen(...)` for global-function natives (M5-8).
                         return Ok(if self.namespaced && looks_like_global_call(&php) {

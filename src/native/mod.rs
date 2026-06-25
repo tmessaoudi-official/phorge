@@ -26,6 +26,7 @@ mod html;
 mod list;
 mod map;
 mod math;
+mod reflect;
 mod set;
 mod text;
 
@@ -157,6 +158,7 @@ fn build() -> Vec<NativeFn> {
     registry.extend(list::list_natives());
     registry.extend(map::map_natives());
     registry.extend(set::set_natives());
+    registry.extend(reflect::reflect_natives());
     // Pinned-slot invariant: the constant the compiler bakes into `Op::CallNative` must address the
     // entry it names. Cheap one-time check at first `registry()` access.
     assert_eq!(

@@ -1,0 +1,50 @@
+// Core.Reflect (foundation slice) — read-only, name-level runtime reflection.
+//
+// `Reflect.kind(x) -> string` is the COARSE, erasure-stable type tag: exactly what the PHP backend
+// can still see after the Phorge→PHP transpiler erases the finer type distinctions. So it is
+// byte-identical across run / runvm / real PHP for every input:
+//   * List / Map / Set all collapse to "array"   (PHP has one array type)
+//   * bytes collapses to "string"                 (bytes erases to a PHP string)
+//   * a class instance and an enum variant → "object"
+//   * a closure → "callable"                      (a PHP closure is is_callable)
+//
+// The FINER Phorge distinctions (Map-vs-Set, the exact class/enum name) are the job of
+// typeName / className, which are resolved from the STATIC type — added in a later slice.
+package Main;
+
+import Core.Console;
+import Core.Reflect;
+import Core.Set;
+
+class Point {
+    constructor(public int x, public int y) {}
+}
+
+enum Color {
+    Red(),
+    Green(),
+}
+
+function dbl(int n) -> int {
+    return n * 2;
+}
+
+function main() -> void {
+    // Scalars report their PHP-visible kind.
+    Console.println("int    -> {Reflect.kind(42)}");
+    Console.println("float  -> {Reflect.kind(3.14)}");
+    Console.println("bool   -> {Reflect.kind(true)}");
+    Console.println("string -> {Reflect.kind(\"hi\")}");
+
+    // Every collection erases to a PHP array, so all three report "array".
+    Console.println("list   -> {Reflect.kind([1, 2, 3])}");
+    Console.println("map    -> {Reflect.kind([\"a\" => 1])}");
+    Console.println("set    -> {Reflect.kind(Set.of([1, 2, 2]))}");
+
+    // An instance and an enum variant are both plain objects after erasure.
+    Console.println("object -> {Reflect.kind(new Point(1, 2))}");
+    Console.println("enum   -> {Reflect.kind(new Red())}");
+
+    // A first-class function value is callable.
+    Console.println("fn     -> {Reflect.kind(dbl)}");
+}

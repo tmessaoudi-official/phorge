@@ -320,6 +320,24 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_reflect_kind {
+            // `Reflect.kind` — the coarse, erasure-stable type tag, mirroring the Rust `reflect_kind`
+            // arm exactly. Order is load-bearing: a PHP closure is BOTH `is_callable` and
+            // `is_object`, so `is_callable` is tested first (Phorge closures ⇒ "callable", instances
+            // and enum variants ⇒ "object"). Only tier-1 functions, so it is correct under `php -n`.
+            self.line("function __phorge_kind($v) {");
+            self.indent += 1;
+            self.line("if (is_callable($v)) { return \"callable\"; }");
+            self.line("if (is_object($v)) { return \"object\"; }");
+            self.line("if (is_array($v)) { return \"array\"; }");
+            self.line("if (is_int($v)) { return \"int\"; }");
+            self.line("if (is_float($v)) { return \"float\"; }");
+            self.line("if (is_bool($v)) { return \"bool\"; }");
+            self.line("if (is_string($v)) { return \"string\"; }");
+            self.line("return \"null\";");
+            self.indent -= 1;
+            self.line("}");
+        }
     }
 
     pub(super) fn emit_function(
