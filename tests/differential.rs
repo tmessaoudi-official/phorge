@@ -1934,14 +1934,15 @@ fn m7_emitter_uses_correctness_helpers() {
     );
     assert!(fl.contains("fmod($a, $b)"), "{fl}");
     assert!(fl.contains("$a / $b"), "{fl}");
-    // Helper fallback: when NEITHER operand's kind is statically known (two call results), the div
-    // helper is emitted and used — never a bare `/`. (A single typed/literal operand would pin the
-    // type and specialize, since the checker guarantees both operands share it.)
+    // Helper fallback: when NEITHER operand's kind is statically known (here, list-index results —
+    // element types aren't resolved), the div helper is emitted and used — never a bare `/`. (A
+    // literal/typed operand would pin the type and specialize, since the checker guarantees both
+    // operands share it.)
     let fb = transpile_ok(
-        "package Main; import Core.Console; function g() -> int { return 9; } function h() -> int { return 2; } function main()-> void { Console.println(\"{g() / h()}\"); }",
+        "package Main; import Core.Console; function f(List<int> xs, List<int> ys) -> int { return xs[0] / ys[0]; } function main()-> void { Console.println(\"{f([4], [2])}\"); }",
     );
     assert!(
-        fb.contains("__phorge_div(g(), h())")
+        fb.contains("__phorge_div($xs[0], $ys[0])")
             && fb.contains("function __phorge_div")
             && fb.contains("intdiv"),
         "{fb}"

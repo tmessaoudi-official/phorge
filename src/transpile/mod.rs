@@ -124,6 +124,12 @@ struct Transpiler {
     /// `variant → payload field OpKinds` (positional), so a variant-payload match binding (`Pass(s)`)
     /// resolves `s`'s kind for native operand specialization (T6b).
     variant_field_kinds: HashMap<String, Vec<OpKind>>,
+    /// `free-function name → return OpKind` (T6c), so a call result (`bulk(x)`, `"{f(x)}"`) resolves
+    /// to a native operand. Overloads with differing return kinds collapse to `Other` (the fallback).
+    fn_ret_kinds: HashMap<String, OpKind>,
+    /// `(class, method) → return OpKind` (T6c), with `extends`-chain lookup, so a method-call result
+    /// (`p.price()`, `c.get() + 1`) resolves. Differing overloads collapse to `Other`.
+    method_ret_kinds: HashMap<(String, String), OpKind>,
     /// Active import map (leaf qualifier → full dotted module path) — how a namespaced native call
     /// `console.println(x)` is distinguished from a method call on a value (M3 Wave 1). The
     /// transpiler tracks no variable scope, so unlike the interpreter/compiler it cannot use a
@@ -301,6 +307,8 @@ impl Transpiler {
             class_field_kinds: HashMap::new(),
             class_parents: HashMap::new(),
             variant_field_kinds: HashMap::new(),
+            fn_ret_kinds: HashMap::new(),
+            method_ret_kinds: HashMap::new(),
             cur_class_fields: None,
             imports: HashMap::new(),
             uses_div: false,
@@ -361,6 +369,25 @@ impl Transpiler {
             .rev()
             .find_map(|s| s.get(name).cloned())
             .unwrap_or(OpKind::Other)
+    }
+
+    /// The return [`OpKind`] of `class.method` — own method else walk `extends` parents (T6c).
+    fn lookup_method_ret_kind(&self, class: &str, method: &str) -> OpKind {
+        if let Some(k) = self
+            .method_ret_kinds
+            .get(&(class.to_string(), method.to_string()))
+        {
+            return k.clone();
+        }
+        if let Some(parents) = self.class_parents.get(class) {
+            for p in parents {
+                let k = self.lookup_method_ret_kind(p, method);
+                if k != OpKind::Other {
+                    return k;
+                }
+            }
+        }
+        OpKind::Other
     }
 
     /// The [`OpKind`] of `class.field` — the field's own kind, else walk `extends` parents (T6b).
@@ -447,11 +474,26 @@ impl Transpiler {
                 OpKind::Class(c) => self.lookup_field_kind(&c, name),
                 _ => OpKind::Other,
             },
-            // A constructor call `ClassName(...)` (Phorge `new` is unwrapped to a `Call`) yields an
-            // instance of that class — so `mk().x` resolves. A free-function/method call result is
-            // `Other` (resolving it would need the compiler's return-type maps).
+            // A call result (T6c): a constructor `ClassName(...)` (Phorge `new` is unwrapped to a
+            // `Call`) yields an instance of that class (so `mk().x` resolves); a free-function call
+            // resolves to its declared return kind; a method call `obj.m(...)` resolves to the
+            // method's return kind on `obj`'s class (+ inherited).
             Expr::Call { callee, .. } => match &**callee {
                 Expr::Ident(name, _) if self.classes.contains(name) => OpKind::Class(name.clone()),
+                Expr::Ident(name, _) => self
+                    .fn_ret_kinds
+                    .get(name)
+                    .cloned()
+                    .unwrap_or(OpKind::Other),
+                Expr::Member {
+                    object,
+                    name,
+                    safe: false,
+                    ..
+                } => match self.expr_kind(object) {
+                    OpKind::Class(c) => self.lookup_method_ret_kind(&c, name),
+                    _ => OpKind::Other,
+                },
                 _ => OpKind::Other,
             },
             _ => OpKind::Other,

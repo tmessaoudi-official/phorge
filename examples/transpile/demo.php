@@ -19,14 +19,9 @@ function area(Shape $s): float {
 }
 function main(): void {
     $n = new Named("demo");
-    echo __phorge_str($n->labelOf()) . ": circle area = " . __phorge_str(area(new Circle(2.0))) . "\n";
+    echo $n->labelOf() . ": circle area = " . __phorge_float(area(new Circle(2.0))) . "\n";
 }
 main();
-function __phorge_str($v) {
-    if (is_bool($v)) { return $v ? "true" : "false"; }
-    if (is_float($v)) { return __phorge_float($v); }
-    return (string)$v;
-}
 function __phorge_float($v) {
     if (is_nan($v)) { return "NaN"; }
     if (is_infinite($v)) { return $v < 0 ? "-inf" : "inf"; }

@@ -38,6 +38,18 @@ impl Transpiler {
             match item {
                 Item::Function(f) => {
                     self.funcs.insert(f.name.clone());
+                    // T6c: a free function's return kind — overloads with differing kinds collapse
+                    // to `Other` (the safe fallback), since the call site can't pick statically.
+                    let rk = f.ret.as_ref().map_or(OpKind::Other, kind_of_type);
+                    match self.fn_ret_kinds.get(&f.name) {
+                        Some(existing) if *existing != rk => {
+                            self.fn_ret_kinds.insert(f.name.clone(), OpKind::Other);
+                        }
+                        None => {
+                            self.fn_ret_kinds.insert(f.name.clone(), rk);
+                        }
+                        _ => {}
+                    }
                 }
                 Item::Class(c) => {
                     self.classes.insert(c.name.clone());
@@ -59,7 +71,20 @@ impl Transpiler {
                                     fields.insert(p.name.clone(), kind_of_type(&p.ty));
                                 }
                             }
-                            _ => {}
+                            // T6c: method return kinds — differing overloads collapse to `Other`.
+                            ClassMember::Method(f) => {
+                                let key = (c.name.clone(), f.name.clone());
+                                let rk = f.ret.as_ref().map_or(OpKind::Other, kind_of_type);
+                                match self.method_ret_kinds.get(&key) {
+                                    Some(existing) if *existing != rk => {
+                                        self.method_ret_kinds.insert(key, OpKind::Other);
+                                    }
+                                    None => {
+                                        self.method_ret_kinds.insert(key, rk);
+                                    }
+                                    _ => {}
+                                }
+                            }
                         }
                     }
                     self.class_field_kinds.insert(c.name.clone(), fields);
