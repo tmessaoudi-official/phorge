@@ -103,3 +103,45 @@ fn rejects_unterminated_string() {
     let err = lex_php("<?php $s = \"oops;").unwrap_err();
     assert!(err.contains("unterminated string"), "{err}");
 }
+
+#[test]
+fn flags_interpolated_double_quoted_string() {
+    // `$name` and `{$x}` interpolate → InterpStr (raw, undecoded).
+    let t = toks(r#"<?php $a = "hi $name"; $b = "v={$x}";"#);
+    assert!(
+        t.iter()
+            .any(|x| matches!(x, PTok::InterpStr(s) if s == "hi $name")),
+        "expected InterpStr for \"hi $name\" in {t:?}"
+    );
+    assert!(t.iter().any(|x| matches!(x, PTok::InterpStr(_) if true)));
+    assert!(
+        !t.iter().any(|x| matches!(x, PTok::Str(_))),
+        "no plain Str expected in {t:?}"
+    );
+}
+
+#[test]
+fn does_not_flag_non_interpolating_strings() {
+    // Single-quote never interpolates; double-quote with `$5`/no var-start is literal.
+    let t = toks(r#"<?php $a = 'has $name'; $b = "cost $5"; $c = "plain";"#);
+    use PTok::*;
+    assert!(
+        t.contains(&Str("has $name".into())),
+        "single-quote literal: {t:?}"
+    );
+    assert!(t.contains(&Str("cost $5".into())), "$5 is literal: {t:?}");
+    assert!(t.contains(&Str("plain".into())));
+    assert!(
+        !t.iter().any(|x| matches!(x, InterpStr(_))),
+        "no InterpStr expected in {t:?}"
+    );
+}
+
+#[test]
+fn lexes_increment_and_compound_assign() {
+    let t = toks("<?php $i++; --$j; $n += 1; $s .= \"x\"; $m ??= 0;");
+    use PTok::*;
+    for want in [Inc, Dec, PlusEq, DotEq, CoalesceEq] {
+        assert!(t.contains(&want), "missing {want:?} in {t:?}");
+    }
+}

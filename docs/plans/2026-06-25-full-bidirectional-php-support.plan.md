@@ -108,3 +108,28 @@ Continues [`2026-06-25-m-lift-php-to-phorge.plan.md`](2026-06-25-m-lift-php-to-p
   features; *fix* what violates best practice / craftsmanship — both directions. In transpile, hide
   PHP's awkward mechanics behind a cleaner Phorge surface (e.g. `use P.m` → PHP `insteadof`); in lift,
   emit idiomatic best-practice Phorge, never mirror PHP warts. Applies to Wave 2 (new features) + M-Lift.
+- [2026-06-26] AGREED (developer, post-compact): **next = M-Lift L2** (↑ direction) over Wave 2 — it's
+  the missing half of the bidirectional goal and L1 already waits for it. 3C convergence params = **Full
+  30/8** (developer choice); converged 8/8.
+- [2026-06-26] L2 DESIGN (locked at 3C convergence):
+  - L2 produces a dedicated **PHP AST** (`src/lift/ast.rs`, `Php*` types) kept close to PHP semantics —
+    `array` stays `array`, `?T` stays nullable; the lossy List/Map/Set + `T?` inference is **L4's** job.
+  - Parser (`src/lift/parser.rs`) mirrors the house style: precedence-climbing with the **PHP 8** table
+    (concat `.` BELOW `+`/`-` but ABOVE comparison — pinned by tests); `Result<_, String>` line-numbered
+    `lift parse error:` like L1; a `depth` guard reusing `MAX_NEST_DEPTH` (untrusted-PHP robustness).
+  - Tier boundary = **loud rejection, never guess** (mirrors L1): unknown leading keyword
+    (`try`/`switch`/`namespace`/`trait`/closures/arrow-fns) → `lift parse error: '<kw>' not supported in
+    Tier-1`.
+  - **String-interpolation fix (L1 amendment):** add `PTok::InterpStr(String)` (raw, undecoded) emitted
+    only for a double-quoted string with an UNESCAPED `$`; parser rejects it loudly as Tier-2. `Str`
+    semantics unchanged ⇒ existing L1 tests stay green. Closes a silent-misparse hole (`"hi $name"`).
+  - Grammar corners locked: `true`/`false`/`null` literals in primary; `array(...)` parses as a Call
+    (no special-case); `::` splits class-const / static-prop / static-call; `->`/`?->` member vs method;
+    empty `for(;;)`; trailing commas; `elseif` AND `else if`; `match` multi-cond + `default`.
+  - **Sub-slices:** **L2a** = PHP AST + parser spine (exprs + statements + top-level typed functions +
+    rejection tests + InterpStr); **L2b** = classes (typed props/visibility/ctor-promotion/methods/
+    abstract/final/extends/implements) + enums (backed + cases + methods). Each independently green.
+  - **Scope/gate:** L2 is internal infra (like L1) — no runnable example, no PHP oracle; gate =
+    `cargo test --lib` + `cargo clippy --all-targets` + `cargo fmt --check`. User-facing example at L6.
+  - **Blast radius: zero on the spine** — purely additive `src/lift/` files + `mod` lines; no `Op`,
+    `Value`, checker/interpreter/VM/transpiler change.

@@ -21,9 +21,13 @@ pub enum PTok {
     Var(String),
     Int(i64),
     Float(f64),
-    /// A string literal's **decoded** contents (escapes resolved). Single- and double-quoted both
-    /// land here; interpolation inside double quotes is Tier-2 (rejected for now by the parser).
+    /// A string literal's **decoded** contents (escapes resolved). Emitted for single-quoted strings
+    /// and for double-quoted strings that contain **no** interpolation — i.e. a safe literal.
     Str(String),
+    /// A double-quoted string that DOES interpolate (`"hi $name"`, `"{$x}"`). Carries the **raw,
+    /// undecoded** inner text. The L2 parser rejects it loudly as Tier-2 rather than silently lifting
+    /// `$name` as literal text — honoring the never-guess contract. (Tier-2 will parse the raw form.)
+    InterpStr(String),
     // ── punctuation ──
     LParen,
     RParen,
@@ -52,6 +56,19 @@ pub enum PTok {
     Slash,
     Percent,
     Dot,
+    /// `++` increment.
+    Inc,
+    /// `--` decrement.
+    Dec,
+    /// Compound assignments `+= -= *= /= %= .= ??=` (Tier-1: Phorge supports these natively, so they
+    /// round-trip). The variant names mirror the operator.
+    PlusEq,
+    MinusEq,
+    StarEq,
+    SlashEq,
+    PercentEq,
+    DotEq,
+    CoalesceEq,
     Assign,
     EqEq,
     EqEqEq,
@@ -203,7 +220,12 @@ pub fn lex_php(src: &str) -> Result<Vec<PTokenSpanned>, String> {
         if c == '"' || c == '\'' {
             let quote = c;
             i += 1;
+            let raw_start = i;
             let mut s = String::new();
+            // Interpolation flag: only a double-quoted string interpolates, and only when a `$` is
+            // followed by a variable-name start (`[A-Za-z_]`) or a complex form (`{$…}`/`${…}`). A
+            // lone `$5`/`$ ` is literal in PHP, so it does NOT flag (avoids false-positive rejection).
+            let mut interpolated = false;
             while i < chars.len() && chars[i] != quote {
                 if chars[i] == '\\' && i + 1 < chars.len() {
                     let e = chars[i + 1];
@@ -227,6 +249,15 @@ pub fn lex_php(src: &str) -> Result<Vec<PTokenSpanned>, String> {
                     i += 2;
                     continue;
                 }
+                if quote == '"' {
+                    let next = chars.get(i + 1).copied();
+                    let dollar_var = chars[i] == '$'
+                        && next.is_some_and(|n| n.is_alphabetic() || n == '_' || n == '{');
+                    let complex = chars[i] == '{' && next == Some('$');
+                    if dollar_var || complex {
+                        interpolated = true;
+                    }
+                }
                 if chars[i] == '\n' {
                     line += 1;
                 }
@@ -236,8 +267,13 @@ pub fn lex_php(src: &str) -> Result<Vec<PTokenSpanned>, String> {
             if i >= chars.len() {
                 return Err(format!("lift lex error: unterminated string (line {line})"));
             }
+            let raw: String = chars[raw_start..i].iter().collect();
             i += 1; // consume closing quote
-            push(&mut out, PTok::Str(s), line);
+            if interpolated {
+                push(&mut out, PTok::InterpStr(raw), line);
+            } else {
+                push(&mut out, PTok::Str(s), line);
+            }
             continue;
         }
         // Multi-char then single-char operators/punctuation. Longest match first.
@@ -258,6 +294,11 @@ pub fn lex_php(src: &str) -> Result<Vec<PTokenSpanned>, String> {
             i += 3;
             continue;
         }
+        if three == "??=" {
+            push(&mut out, PTok::CoalesceEq, line);
+            i += 3;
+            continue;
+        }
         let two_tok = match two.as_str() {
             "==" => Some(PTok::EqEq),
             "!=" => Some(PTok::NotEq),
@@ -269,6 +310,14 @@ pub fn lex_php(src: &str) -> Result<Vec<PTokenSpanned>, String> {
             "=>" => Some(PTok::FatArrow),
             "::" => Some(PTok::DoubleColon),
             "??" => Some(PTok::Coalesce),
+            "++" => Some(PTok::Inc),
+            "--" => Some(PTok::Dec),
+            "+=" => Some(PTok::PlusEq),
+            "-=" => Some(PTok::MinusEq),
+            "*=" => Some(PTok::StarEq),
+            "/=" => Some(PTok::SlashEq),
+            "%=" => Some(PTok::PercentEq),
+            ".=" => Some(PTok::DotEq),
             _ => None,
         };
         if let Some(t) = two_tok {

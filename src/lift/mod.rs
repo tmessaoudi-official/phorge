@@ -10,7 +10,12 @@
 //! L4 lifter → L6 `phg lift` CLI + playground "paste PHP → see Phorge". This file is the module root;
 //! L1 lives in [`lexer`].
 
+pub mod ast;
 pub mod lexer;
+pub mod parser;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod parser_tests;
