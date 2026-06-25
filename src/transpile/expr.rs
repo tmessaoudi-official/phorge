@@ -367,7 +367,9 @@ impl Transpiler {
                             self.uses_float = true;
                             format!("{bs}__phorge_float({code})")
                         }
-                        OpKind::Class(_) | OpKind::Other => {
+                        // A class/list/map value interpolated directly → the `__phorge_str` dispatch
+                        // (the same fallback as before; not a scalar display operand).
+                        OpKind::Class(_) | OpKind::List(_) | OpKind::Map(..) | OpKind::Other => {
                             self.uses_str = true;
                             format!("{bs}__phorge_str({code})")
                         }

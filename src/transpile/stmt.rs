@@ -255,6 +255,9 @@ impl Transpiler {
                     self.indent += 1;
                     self.push_scope();
                     self.declare(&clause.name);
+                    // T6d: the caught value's type is its exception class — so `e.message` field
+                    // reads in the handler resolve.
+                    self.declare_kind(&clause.name, kind_of_type(&clause.ty));
                     for st in &clause.body {
                         self.emit_stmt(st)?;
                     }

@@ -1934,15 +1934,15 @@ fn m7_emitter_uses_correctness_helpers() {
     );
     assert!(fl.contains("fmod($a, $b)"), "{fl}");
     assert!(fl.contains("$a / $b"), "{fl}");
-    // Helper fallback: when NEITHER operand's kind is statically known (here, list-index results —
-    // element types aren't resolved), the div helper is emitted and used — never a bare `/`. (A
-    // literal/typed operand would pin the type and specialize, since the checker guarantees both
-    // operands share it.)
+    // Helper fallback: when an operand's kind genuinely can't be resolved — here an *erased generic*
+    // result, which is permanently `mixed` by design — the div helper is emitted and used, never a
+    // bare `/`. The helper branches on operand types at PHP-runtime, so it stays correct (intdiv for
+    // ints). This guards that the safe fallback survives all the T6 specialization layers.
     let fb = transpile_ok(
-        "package Main; import Core.Console; function f(List<int> xs, List<int> ys) -> int { return xs[0] / ys[0]; } function main()-> void { Console.println(\"{f([4], [2])}\"); }",
+        "package Main; import Core.Console; function id<T>(T x) -> T { return x; } function main()-> void { Console.println(\"{id(7) / id(2)}\"); }",
     );
     assert!(
-        fb.contains("__phorge_div($xs[0], $ys[0])")
+        fb.contains("__phorge_div(id(7), id(2))")
             && fb.contains("function __phorge_div")
             && fb.contains("intdiv"),
         "{fb}"

@@ -38,6 +38,29 @@ fn free_function_with_params_and_arithmetic() {
 }
 
 #[test]
+fn t6d_index_native_call_and_const_reads_specialize() {
+    // T6d: a list-index result is an `int` operand → native `intdiv`, no `__phorge_div`.
+    let idx = php("function f(List<int> xs, int i) -> int { return xs[i] / 2; }");
+    assert!(idx.contains("intdiv($xs[$i], 2)"), "{idx}");
+    assert!(!idx.contains("__phorge_div"), "{idx}");
+
+    // T6d: a native-call result carries its declared return type — `Text.upper` → string, so the
+    // interpolation hole concatenates directly (no `__phorge_str`).
+    let nat = php(
+        "import Core.Console; import Core.Text; function main() -> void { Console.println(\"got {Text.upper(\\\"hi\\\")}\"); }",
+    );
+    assert!(nat.contains("strtoupper(\"hi\")"), "{nat}");
+    assert!(!nat.contains("__phorge_str(strtoupper"), "{nat}");
+
+    // T6d: a const read `Limits.MAX` is an `int` → `(string)` cast in interpolation, no `__phorge_str`.
+    let c = php(
+        "import Core.Console; class Limits { const int MAX = 9; } function main() -> void { Console.println(\"max={Limits.MAX}\"); }",
+    );
+    assert!(c.contains("(string)Limits::MAX"), "{c}");
+    assert!(!c.contains("__phorge_str(Limits::MAX)"), "{c}");
+}
+
+#[test]
 fn force_unwrap_uses_native_throw_expression_not_helper() {
     // `opt!` lowers to PHP 8.0's null-coalescing throw expression `($v ?? throw new …)` — `??`
     // throws iff the value is null and evaluates the receiver once, exactly the old `__phorge_unwrap`

@@ -31,21 +31,48 @@ enum OpKind {
     /// A value of a user-defined class/enum/interface, carrying its name so a field read resolves
     /// through `class_field_kinds` (T6b). Never an arithmetic/display operand itself.
     Class(String),
+    /// `List<E>` carrying its element kind, so `xs[i]` resolves to `E` (T6d) — `xs[i] + 1` / `"{xs[i]}"`.
+    List(Box<OpKind>),
+    /// `Map<K, V>` carrying key+value kinds, so `m[k]` resolves to `V` (T6d).
+    Map(Box<OpKind>, Box<OpKind>),
     Other,
 }
 
-/// Map a (post-checker, resolved) type annotation to its scalar [`OpKind`]. Non-scalars (`List`,
-/// `Map`, classes, `void`, optionals, …) are `Other` — their values aren't the arithmetic/display
-/// operands T6 specializes, and the helper fallback covers any that slip through.
+/// Map a checker [`Ty`] (a native's declared return type) to its [`OpKind`] (T6d), so a native-call
+/// result (`Text.upper(s)`, `List.length(xs)`) resolves as an operand. Mirrors [`kind_of_type`] over
+/// the `Ty` representation; anything non-scalar/non-container is `Other` (→ helper fallback).
+fn opkind_of_ty(ty: &crate::types::Ty) -> OpKind {
+    use crate::types::Ty;
+    match ty {
+        Ty::Int => OpKind::Int,
+        Ty::Float => OpKind::Float,
+        Ty::String => OpKind::Str,
+        Ty::Bool => OpKind::Bool,
+        Ty::List(e) => OpKind::List(Box::new(opkind_of_ty(e))),
+        Ty::Map(k, v) => OpKind::Map(Box::new(opkind_of_ty(k)), Box::new(opkind_of_ty(v))),
+        Ty::Named(name, _) => OpKind::Class(name.clone()),
+        _ => OpKind::Other,
+    }
+}
+
+/// Map a (post-checker, resolved) type annotation to its scalar [`OpKind`]. Non-scalars (classes,
+/// `void`, optionals, …) are `Other` — their values aren't the arithmetic/display operands T6
+/// specializes, and the helper fallback covers any that slip through.
 fn kind_of_type(ty: &Type) -> OpKind {
     match ty {
-        Type::Named { name, .. } => match name.as_str() {
+        Type::Named { name, args, .. } => match name.as_str() {
             "int" => OpKind::Int,
             "float" => OpKind::Float,
             "string" => OpKind::Str,
             "bool" => OpKind::Bool,
-            // Non-arithmetic primitives / containers — no native operand specialization.
-            "void" | "never" | "Empty" | "bytes" | "List" | "Map" | "Set" => OpKind::Other,
+            // Containers carry their element kinds so an index read resolves as an operand (T6d).
+            "List" => OpKind::List(Box::new(args.first().map_or(OpKind::Other, kind_of_type))),
+            "Map" => OpKind::Map(
+                Box::new(args.first().map_or(OpKind::Other, kind_of_type)),
+                Box::new(args.get(1).map_or(OpKind::Other, kind_of_type)),
+            ),
+            // Non-arithmetic primitives — no native operand specialization.
+            "void" | "never" | "Empty" | "bytes" | "Set" => OpKind::Other,
             // A user-defined class/enum/interface name → `Class`, so field reads on a value of this
             // type resolve through `class_field_kinds` (T6b).
             other => OpKind::Class(other.to_string()),
@@ -418,7 +445,17 @@ impl Transpiler {
             Expr::Float(..) => OpKind::Float,
             Expr::Str(..) => OpKind::Str,
             Expr::Bool(..) => OpKind::Bool,
-            Expr::Ident(name, _) => self.local_kind(name),
+            Expr::Ident(name, _) => {
+                // T6d: a bare class-name ident (only ever the object of a static/const access
+                // `ClassName::FIELD`) resolves to that class, so the enclosing `Member` arm can look
+                // up the const/static field's kind. A real local shadows (checked first).
+                let k = self.local_kind(name);
+                if k == OpKind::Other && self.classes.contains(name) {
+                    OpKind::Class(name.clone())
+                } else {
+                    k
+                }
+            }
             Expr::Unary { op, expr, .. } => match op {
                 UnaryOp::Neg => self.expr_kind(expr),
                 UnaryOp::Not => OpKind::Bool,
@@ -458,6 +495,29 @@ impl Transpiler {
             },
             Expr::InstanceOf { .. } => OpKind::Bool,
             Expr::Force { inner, .. } => self.expr_kind(inner),
+            // T6d: `xs[i]` → element kind; `m[k]` → value kind.
+            Expr::Index { object, .. } => match self.expr_kind(object) {
+                OpKind::List(elem) => *elem,
+                OpKind::Map(_, val) => *val,
+                _ => OpKind::Other,
+            },
+            // A list/map literal carries its element kind from the first item, so `[1,2,3][0]`
+            // resolves (M3 S1.1 analog).
+            Expr::List(items, _) => OpKind::List(Box::new(
+                items.first().map_or(OpKind::Other, |e| self.expr_kind(e)),
+            )),
+            Expr::Map(pairs, _) => OpKind::Map(
+                Box::new(
+                    pairs
+                        .first()
+                        .map_or(OpKind::Other, |(k, _)| self.expr_kind(k)),
+                ),
+                Box::new(
+                    pairs
+                        .first()
+                        .map_or(OpKind::Other, |(_, v)| self.expr_kind(v)),
+                ),
+            ),
             // T6b: `this` is the enclosing class; a field read resolves through the class tables.
             Expr::This(_) => self
                 .cur_class
@@ -490,10 +550,23 @@ impl Transpiler {
                     name,
                     safe: false,
                     ..
-                } => match self.expr_kind(object) {
-                    OpKind::Class(c) => self.lookup_method_ret_kind(&c, name),
-                    _ => OpKind::Other,
-                },
+                } => {
+                    // T6d: a native call `Leaf.fn(...)` (Leaf an imported module qualifier, e.g.
+                    // `Text.upper`) resolves to the native's declared return kind (mirrors the
+                    // import-driven native resolution in `emit_call`).
+                    if let Expr::Ident(leaf, _) = &**object {
+                        if let Some(module) = self.imports.get(leaf) {
+                            if let Some(idx) = crate::native::index_of(module, name) {
+                                return opkind_of_ty(&crate::native::registry()[idx].ret);
+                            }
+                        }
+                    }
+                    // Otherwise a method call on a value — resolve its receiver's class.
+                    match self.expr_kind(object) {
+                        OpKind::Class(c) => self.lookup_method_ret_kind(&c, name),
+                        _ => OpKind::Other,
+                    }
+                }
                 _ => OpKind::Other,
             },
             _ => OpKind::Other,

@@ -81,3 +81,9 @@ Resolve the last `__phorge_str`/`__phorge_add` fallbacks by adding: list/map ele
 (`OpKind::List/Map`, mirroring the compiler's `CTy`), const/static read kinds, and native-call
 return kinds (from the native registry's ret sig). Each is a smaller niche; `__phorge_float`
 remains regardless wherever a float is displayed.
+
+## T6d — finish helper niches (developer-approved 2026-06-25, then M-Lift)
+- [2026-06-25] AGREED: do T6d (resolve the remaining __phorge_str/_add fallbacks) THEN start
+  M-Lift. Developer pushes manually. T6d sub-pieces by census frequency: native-call return kinds
+  (count/array_sum/strtoupper/implode…, biggest), list/map index element kinds, const/static read
+  kinds, catch-var field reads. __phorge_float stays (irreducible floor).
