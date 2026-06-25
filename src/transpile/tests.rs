@@ -376,24 +376,32 @@ fn wildcard_arm_has_no_trailing_throw() {
 }
 
 #[test]
-fn match_as_call_argument_emits_iife() {
-    // `match` as a call argument is expression position (M11): it lowers to an immediately-invoked
-    // closure wrapping the same variant if-chain, with payload bindings declared inside the closure.
+fn match_as_call_argument_emits_match_true() {
+    // T2: a variant `match` in expression position (here a call argument) lowers to a native PHP
+    // `match (true) { <cond> => <body>, … }` expression, NOT an IIFE. PHP `if` is a statement and
+    // `match` is an expression, so the if-chain stays for statement-position matches while
+    // expression position uses `match` — mapping Phorge's match onto PHP's own statement/expression
+    // duality. Payload bindings ride into the condition as `(($x = access) || true)` conjuncts (the
+    // same proven technique the guarded if-chain uses), so no preceding statement is needed.
     let prog = parse_only(&format!(
         "{SHAPE} function f(Shape s) -> float {{ \
                float a = id(match s {{ Circle(r) => r, Rect(w, h) => w, }}); return a; }}"
     ));
     let out = emit(&prog).expect("expression-position match transpiles");
-    assert!(out.contains("id((function() use ($s) {"), "{out}");
+    assert!(out.contains("id((match (true) {"), "{out}");
     assert!(
-        out.contains("if ($s instanceof Circle) { $r = $s->radius; return $r; }"),
+        out.contains("$s instanceof Circle && (($r = $s->radius) || true) => $r,"),
         "{out}"
     );
     assert!(
-        out.contains("elseif ($s instanceof Rect) { $w = $s->w; $h = $s->h; return $w; }"),
+        out.contains(
+            "$s instanceof Rect && (($w = $s->w) || true) && (($h = $s->h) || true) => $w,"
+        ),
         "{out}"
     );
-    assert!(out.contains("})())"), "{out}");
+    // No IIFE.
+    assert!(!out.contains("function () use"), "{out}");
+    assert!(!out.contains("function() use"), "{out}");
 }
 
 // ── M3 S3 Task 5: expression lambdas + named-fn references ──────────────

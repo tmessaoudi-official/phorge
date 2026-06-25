@@ -2,22 +2,31 @@ package Main;
 import Core.Console;
 
 // `match` in EXPRESSION position (M11) — usable as a sub-expression, not only as a whole
-// `return`/`var =` statement. It transpiles to an immediately-invoked PHP closure wrapping the same
-// if-chain the statement form uses (so both positions share one lowering and stay byte-identical on
-// run/runvm/PHP). Literal patterns (`0 => …`) and a binding catch-all are exercised alongside.
+// `return`/`var =` statement. Transpile (Track 1): a *literal* match lowers to a native PHP
+// `match ($subj) { … }`; a *variant/type* match in expression position lowers to a native
+// `match (true) { <cond> => <body>, … }`. Statement-position matches keep the `if/elseif` chain —
+// PHP `if` is a statement and `match` is an expression, so each position uses PHP's natural
+// construct. All forms stay byte-identical on run/runvm/PHP.
 
 enum Color { Red, Green, Blue }
+enum Box { Small(int n), Big(int n) }
 
 function name(Color c) -> string {
-    // statement-position match (var-decl-init) over variant patterns
+    // statement-position match (var-decl-init) over variant patterns → `if/elseif` chain
     string n = match c { Red() => "red", Green() => "green", Blue() => "blue" };
     return n;
+}
+
+function weight(Box b) -> int {
+    // expression position: a variant match (with a payload binding) used as an operand → PHP
+    // `match (true) { $b instanceof Small && (($n = $b->n) || true) => $n, … }` (no IIFE)
+    return 1 + (match b { Small(n) => n, Big(n) => n * 10 });
 }
 
 function main() -> void {
     int base = 100;
 
-    // expression position: a match used as the left operand of `+`
+    // expression position: a literal match used as the left operand of `+` → native `match ($subj)`
     int code = (match 2 { 1 => 10, 2 => 20, other => other }) + base;
 
     // expression position: a match used as a call argument (its arms produce enum values)
@@ -25,6 +34,8 @@ function main() -> void {
 
     // literal-pattern match in return position, via a helper
     Console.println("code={code} picked={picked} sign={sign(0)} sign2={sign(7)}");
+    // expression-position variant match (→ PHP `match (true)`)
+    Console.println("weights={weight(new Small(5))} {weight(new Big(5))}");
 }
 
 function sign(int n) -> string {

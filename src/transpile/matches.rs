@@ -88,6 +88,63 @@ impl Transpiler {
         Ok(Some(out))
     }
 
+    /// T2: lower any `match` to a native PHP `match (true) { <cond> => <body>, … }` expression, for
+    /// use in *expression* position (replacing the IIFE). Each arm's pattern is classified into the
+    /// same boolean `tests` + `(var, access)` bindings the if-chain uses; the bindings ride into the
+    /// condition as `(($x = access) || true)` conjuncts (the proven guarded-arm technique), so the
+    /// arm body — a PHP expression — can reference them without a preceding statement. A `when` guard
+    /// appends `&& (guard)`. An unguarded wildcard catch-all has an empty condition → `default`; an
+    /// unguarded bare-binding catch-all becomes `(($x = subj) || true)` (always true, and binds).
+    ///
+    /// Statement-position matches keep the `if/elseif` chain (`emit_match`): PHP `if` is a statement
+    /// and `match` is an expression, so each position uses PHP's natural construct. Returns `None`
+    /// only when an unguarded catch-all isn't the last arm — PHP's `default` is position-independent,
+    /// so a non-terminal catch-all would diverge from Phorge's first-match-wins (caller keeps the IIFE).
+    pub(super) fn try_match_true(
+        &mut self,
+        scrutinee: &Expr,
+        arms: &[MatchArm],
+    ) -> Result<Option<String>, String> {
+        for (i, arm) in arms.iter().enumerate() {
+            let is_catch_all =
+                matches!(arm.pattern, Pattern::Wildcard(_) | Pattern::Binding { .. })
+                    && arm.guard.is_none();
+            if is_catch_all && i != arms.len() - 1 {
+                return Ok(None);
+            }
+        }
+        let subj = self.emit_expr(scrutinee)?;
+        let mut out = String::from("match (true) {");
+        for arm in arms {
+            self.push_scope();
+            let (tests, binds) = self.classify_pattern(&arm.pattern, &subj)?;
+            for (name, _) in &binds {
+                self.declare(name);
+            }
+            let guard = match &arm.guard {
+                Some(g) => Some(self.emit_expr(g)?),
+                None => None,
+            };
+            let body = self.emit_expr(&arm.body)?;
+            let mut parts: Vec<String> = tests.clone();
+            for (name, access) in &binds {
+                parts.push(format!("((${name} = {access}) || true)"));
+            }
+            if let Some(g) = &guard {
+                parts.push(format!("({g})"));
+            }
+            let label = if parts.is_empty() {
+                "default".to_string()
+            } else {
+                parts.join(" && ")
+            };
+            out.push_str(&format!(" {label} => {body},"));
+            self.pop_scope();
+        }
+        out.push_str(" }");
+        Ok(Some(out))
+    }
+
     /// Emit a `match` as an ordered `instanceof` chain. Each arm yields its body either as
     /// `return …;` or `$target = …;` depending on `target`. Payload vars bind positionally
     /// from the subclass's promoted props. A non-exhaustive chain ends with a defensive

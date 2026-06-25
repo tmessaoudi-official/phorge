@@ -160,6 +160,12 @@ impl Transpiler {
                 if let Some(m) = self.try_native_match(scrutinee, arms)? {
                     return Ok(format!("({m})"));
                 }
+                // T2: variant/type/struct/guarded matches → native `match (true) { … }` (parenthesized
+                // to compose). Retires the IIFE in expression position. Only a non-terminal catch-all
+                // falls through to the IIFE below (`try_match_true` returns `None`).
+                if let Some(m) = self.try_match_true(scrutinee, arms)? {
+                    return Ok(format!("({m})"));
+                }
                 let captures: BTreeSet<String> = self.locals.iter().flatten().cloned().collect();
                 let use_clause = if captures.is_empty() {
                     String::new()

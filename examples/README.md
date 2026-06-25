@@ -25,7 +25,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/field-init.phg` | expression field initializers — a computed default via a call, and a default that reads `this` + an earlier sibling; evaluated per-instance at construction in declaration order, lowered to a PHP constructor prelude (lifts PHP's constant-expression-only property defaults) (Feature B-instance) |
 | `guide/static-init.phg` | runtime `static` field initializers — a computed static via a call, a static reading an earlier static, and a literal mutable static; evaluated once at program start in declaration order, lowered to a PHP `__phorge_init_statics()` run before `main()` (Feature B-static) |
 | `guide/enums-match.phg` | payload + zero-payload variants; literal, binding, and variant patterns |
-| `guide/match-expr.phg` | `match` in expression position (operand / call argument) + literal patterns; transpiles to an IIFE (M11) |
+| `guide/match-expr.phg` | `match` in expression position (operand / call argument) + literal & variant patterns; transpiles to native PHP `match ($subj)` (literal) / `match (true)` (variant) — no IIFE |
 | `guide/strings.phg` | string interpolation |
 | `guide/strings-ext.phg` | extended string ergonomics — `+` concatenation (`string + string`, type-directed, no coercion; transpiles via a runtime helper since PHP's `+` is numeric-only), `\u{HEX}` Unicode escapes (1–6 hex digits → UTF-8 at lex time), `\{`/`\}` literal braces (the lexer owns the interpolation split, so a literal brace is unambiguous), and raw strings `r"…"`/`r#"…"#` (no escapes, no interpolation; `#`-run delimiter for embedded `"`) (Language Evolution Phase 1, string slice) |
 | `guide/inference.phg` | `var` local type inference + `type` aliases (M3 S0) |
