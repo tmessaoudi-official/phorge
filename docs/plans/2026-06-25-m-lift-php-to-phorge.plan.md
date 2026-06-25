@@ -102,6 +102,14 @@ Start at L1–L3 + a thin Tier-1 lifter behind the playground demo; grow the par
   concrete element type — `var` is VarDecl-only], default params, untyped params, elvis, assign-as-subexpr,
   non-literal match arms, main/top-level collision). End-to-end test asserts the lifted `.phg` re-parses
   as valid Phorge. 13 tests. 864 lib green, isolated.
+- [2026-06-26] **L6 COMPLETE** (`8a89e8a`): the ↑ direction is **user-facing**. `phg lift <file.php>`
+  CLI (string-source path; `cmd_lift` prepends a `// lifted (verify)` banner; wired across USAGE/
+  help_text/help_for/main.rs match+dispatch). `examples/lift/` = README walkthrough + `sample.php` +
+  GENERATED `sample.phg` — the lifted output is in the example suite, so it's byte-identity-gated on
+  run/runvm/**real PHP** (all print `Hello, Phorge`). Playground `lift_json` + `pg_lift` wasm wrapper
+  (lift_source uses no `on_deep_stack` → browser-safe). 975 lib+differential green + 11 playground.
+  **Web-UI button deferred** (needs a PHP-input "paste PHP → see Phorge" mode in `main.js`).
 - **NEXT = L5** — round-trip differential gate (lift PHP→Phorge, transpile back→PHP, run both under real
-  PHP, compare stdout) — the behavior-preservation proof. Then L6 (`phg lift` CLI + playground "paste PHP
-  → see Phorge"), then the Tier-2 build-out (`array`/foreach inference, default params, backed enums).
+  PHP, compare stdout): upgrades "the draft re-parses/runs" to "provably preserves the original PHP's
+  behavior". Then the **Tier-2 build-out** — the lift-error frontier in `lifter.rs`: `array`→List/Map/Set
+  inference, foreach element-type inference, default params, backed enums. Then the playground web-UI button.
