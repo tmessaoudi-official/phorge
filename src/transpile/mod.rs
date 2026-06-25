@@ -96,6 +96,10 @@ struct Transpiler {
     /// `emit_member_call` special-cases this one native to set the flag before emitting (the
     /// established gated-helper pattern). The helper reproduces the coarse, erasure-stable type tag.
     uses_reflect_kind: bool,
+    /// Set when `Reflect.className(x)` is emitted — defines the `__phorge_class_name` helper once per
+    /// file (single-evaluates its argument; excludes closures). Same gated-helper rationale as
+    /// `uses_reflect_kind`.
+    uses_reflect_class_name: bool,
     /// True when the program carries mangled (`\`-bearing) names — a multi-package project (M5 S2c).
     /// Switches emission from the flat single-package form to one `namespace …{}` brace-block per
     /// package + a nameless bootstrap block, and forces fully-qualified (leading-`\`) call emission.
@@ -243,6 +247,7 @@ impl Transpiler {
             uses_range: false,
             uses_clone_with: false,
             uses_reflect_kind: false,
+            uses_reflect_class_name: false,
             namespaced: false,
             class_implements: std::collections::BTreeMap::new(),
             decomposed: BTreeSet::new(),

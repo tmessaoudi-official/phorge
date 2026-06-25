@@ -106,8 +106,12 @@ impl Transpiler {
                         // closure has no `&mut self` to set the flag, so set it here (the established
                         // gated-helper pattern — see `emit_runtime_helpers`).
                         let nat = &crate::native::registry()[idx];
-                        if nat.module == "Core.Reflect" && nat.name == "kind" {
-                            self.uses_reflect_kind = true;
+                        if nat.module == "Core.Reflect" {
+                            match nat.name {
+                                "kind" => self.uses_reflect_kind = true,
+                                "className" => self.uses_reflect_class_name = true,
+                                _ => {}
+                            }
                         }
                         let php = (nat.php)(&argv);
                         // Inside a namespace block a bare `strlen(...)` would resolve to

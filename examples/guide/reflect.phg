@@ -47,4 +47,12 @@ function main() -> void {
 
     // A first-class function value is callable.
     Console.println("fn     -> {Reflect.kind(dbl)}");
+
+    // `Reflect.className(x) -> string?` is the RUNTIME class name (≡ PHP get_class), or null for a
+    // non-object. An enum variant reports the variant name (PHP transpiles it to a subclass).
+    var p = new Point(3, 4);
+    Console.println("class(point) = {Reflect.className(p) ?? \"<none>\"}");
+    Console.println("class(enum)  = {Reflect.className(new Green()) ?? \"<none>\"}");
+    // A scalar is not a class instance → null (shown via the ?? fallback).
+    Console.println("class(int)   = {Reflect.className(7) ?? \"<none>\"}");
 }
