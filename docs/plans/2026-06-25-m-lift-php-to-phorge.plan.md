@@ -1,0 +1,56 @@
+# M-Lift — PHP → Phorge (`phg lift`) Plan
+
+> The reverse of `transpile`: read PHP, emit a Phorge **draft**. A new front-end subsystem. Scoped as
+> a **best-effort, review-required** tool — NOT a verified-equivalent transform (see the verdict below).
+
+## Verdict / Decisions Log
+- [2026-06-25] AGREED: **Pursue it** — but framed correctly. Build a bounded best-effort tool, not a
+  100%-confidence transpiler.
+- [2026-06-25] AGREED: **Name = `lift`** (`phg lift foo.php` → `foo.phg`). NOT "transpile" — that name
+  carries the byte-identity guarantee the reverse direction cannot have (false promise, like the
+  rejected `composer.json`). Asymmetry of names mirrors asymmetry of guarantees: transpile *down*
+  (total, verified) vs lift *up* (partial, review-required). Alternatives considered: `port`/`import`.
+- [2026-06-25] AGREED: **100% confidence is impossible in general** (fundamental, not an engineering
+  gap): the languages aren't bijective (Phorge = strict/typed/smaller; PHP = dynamic/larger), type
+  inference from untyped PHP is undecidable + lossy (`array` ⇒ List|Map|Set), and no spine runs
+  backward. Same reason no 100% JS→TS converter exists. So: best-effort + human-in-the-loop, honest
+  boundaries.
+- [2026-06-25] AGREED: **Tier-1 first, demo-angle first.** Highest value-per-effort + the "show what
+  PHP becomes in Phorge" use case (playground "paste PHP → see Phorge").
+- [2026-06-25] OPEN (ask before build): demo angle (smaller, playground-first) vs migration angle
+  (bigger, needs the round-trip gate) as the primary driver — they share the parser but differ in depth.
+
+## Feasibility tiers (what `lift` handles)
+| Tier | PHP shape | Confidence |
+|---|---|---|
+| **1** | Already Phorge-shaped: typed signatures (PHP 7/8 hints), typed class props, `enum` (8.1), `match`, plain control flow, arrays | High (near 1:1 backward) |
+| **2** | Untyped-but-inferrable; `array` whose List/Map role is clear from use | Medium (heuristic + checker validation) |
+| **3** | Dynamic PHP (`$$x`, `eval`, magic methods, reflection, true `mixed`) | **Refuse + flag** `// CANNOT LIFT: <reason>`, never guess |
+
+## Phases (slices)
+| Phase | Work | Size |
+|---|---|---|
+| **L1** | PHP lexer (std-only) for the Tier-1 token set | S–M |
+| **L2** | **PHP parser, Tier-1 subset** (typed fn sigs, classes + typed props + promotion, `enum`, `match`, `if`/`for`/`foreach`/`while`, exprs, array literals) | **L — dominant cost; rivals Phorge's own parser** |
+| **L3** | Phorge AST → `.phg` **pretty-printer** (does not exist yet; the transpiler prints PHP, not Phorge) | M |
+| **L4** | **Lifter**: PHP-AST → Phorge-AST. Map typed PHP 1:1; infer `List`/`Map`/`Set` from `array` usage; map `?T`→`T?`, `??`/`?->`; flag dynamic features as `// CANNOT LIFT`. | M–L |
+| **L5** | **Round-trip differential gate** + confidence annotations: `lift` PHP→Phorge, `transpile` back→PHP, run BOTH PHPs on sample inputs, compare stdout. Match = evidence the lift preserved behavior. Annotate output `// lifted (verify)`. | M |
+| **L6** | `phg lift` CLI + **playground "paste PHP → see Phorge" demo** | S–M |
+
+## Contract (lock before build)
+- **Review-required**: output is a draft/scaffold, never a verified equivalent.
+- **Annotates confidence**: `// lifted (verify)` on lifted code; `// CANNOT LIFT: <reason>` on Tier-3.
+- **Refuses Tier-3 loudly** rather than guessing.
+- **Round-trip-gated** (L5) as the quality signal — confidence is *earned and visible*, like the rest
+  of Phorge, not claimed.
+- The Phorge type-checker validates the lifted draft: if it type-checks, it's structurally sound
+  (behavior still needs review).
+
+## Effort
+~15–25 gated slices ≈ a major milestone. The PHP parser (L2) dominates. Roughly **3–4× Track 1**.
+Start at L1–L3 + a thin Tier-1 lifter behind the playground demo; grow the parser incrementally.
+
+## Dependencies / sequencing
+- **After Track 1** (transpile modernization): a clean native-PHP printer makes the L5 round-trip
+  comparison far easier to validate.
+- L3 (Phorge printer) is independently useful (e.g. `phg fmt` could reuse it later).

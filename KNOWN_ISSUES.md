@@ -526,6 +526,14 @@ closure-from-native mechanism — `NativeEval::HigherOrder` + a re-entrant VM cl
   byte-identity-with-PHP convention used by the examples is: `public` for externally-read fields, or an
   accessor method (`obj.field_of()`), which is always public.
 
+- **`Core.Reflect.traits` is not provided.** `Reflect.interfaces`/`parents`/`methods`/`fields` are
+  available, but there is no `traits` enumeration native. A Phorge `trait`'s members are *folded into*
+  the using class before any backend runs (a trait is reuse, not a runtime type — unlike an
+  interface), so there is no runtime trait identity to report, and PHP's `class_uses` is direct-only,
+  which would not match the folded model. Use `Reflect.methods`/`fields` to inspect what a trait
+  contributed. Also unprovided: reflection over enum variants (`interfaces(variant)` etc. return `[]`)
+  and `Reflect.*` across packages with namespaced (FQN) class names.
+
 ## Reporting
 
 Found something not listed here — especially a panic, hang, or crash on any input? That's a bug.
