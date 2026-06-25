@@ -110,6 +110,9 @@ impl Transpiler {
                             match nat.name {
                                 "kind" => self.uses_reflect_kind = true,
                                 "className" => self.uses_reflect_class_name = true,
+                                "interfaces" | "parents" | "methods" | "fields" => {
+                                    self.uses_reflect_tables = true;
+                                }
                                 _ => {}
                             }
                         }

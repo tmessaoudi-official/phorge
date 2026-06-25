@@ -151,6 +151,10 @@ pub struct Interp {
     /// runtime test never diverges (M-RT S2). Interfaces themselves are erased: there are no
     /// interface values, only this lookup.
     class_implements: std::collections::BTreeMap<String, Vec<String>>,
+    /// Static class hierarchy for the reflection enumeration natives (`Core.Reflect.interfaces`/…),
+    /// built once from the program and shared verbatim with the VM + transpiler so reflection is
+    /// byte-identical (M-Reflect Tier-2).
+    class_tables: crate::native::ClassTables,
     /// The fully-resolved method-dispatch table — `(class, name) -> (declaring_class, method)` — built
     /// once via [`crate::ast::class_method_origins`] and shared with the compiler's pre-flatten so a
     /// multi-parent / resolution-clause / renamed call resolves to the *same* body the VM dispatches
@@ -200,6 +204,7 @@ pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
         funcs: HashMap::new(),
         classes: HashMap::new(),
         class_implements: std::collections::BTreeMap::new(),
+        class_tables: crate::native::ClassTables::default(),
         method_origins: std::collections::BTreeMap::new(),
         variants: HashMap::new(),
         statics: HashMap::new(),
@@ -285,6 +290,7 @@ pub fn call_named(
         funcs: HashMap::new(),
         classes: HashMap::new(),
         class_implements: std::collections::BTreeMap::new(),
+        class_tables: crate::native::ClassTables::default(),
         method_origins: std::collections::BTreeMap::new(),
         variants: HashMap::new(),
         statics: HashMap::new(),
@@ -444,6 +450,7 @@ impl Interp {
         // `instanceof`/match-patterns/overload-subtyping see a class ancestor too. Same algorithm as the
         // VM (the BytecodeProgram builds the identical table), no divergence.
         self.class_implements = crate::ast::instanceof_table(program);
+        self.class_tables = crate::native::ClassTables::from_program(program);
         // The single shared method-dispatch table (M-RT S6b): `call_method` resolves `(class, name)`
         // to its `(declaring_class, method)` — the same table the compiler pre-flattens into the VM's
         // method table, so multi-parent / resolution-clause / renamed dispatch can never diverge. The

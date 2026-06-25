@@ -81,6 +81,50 @@ fn reflect_class_name_returns_runtime_class_for_objects_null_otherwise() {
 }
 
 #[test]
+fn reflect_enumeration_natives_read_class_tables() {
+    use crate::value::Instance;
+    use std::cell::RefCell;
+    use std::collections::{BTreeMap, HashMap};
+    let mut interfaces = BTreeMap::new();
+    interfaces.insert(
+        "Widget".to_string(),
+        vec!["Drawable".into(), "Shape".into()],
+    );
+    let mut parents = BTreeMap::new();
+    parents.insert("Widget".to_string(), vec!["Base".into()]);
+    let tables = ClassTables {
+        interfaces,
+        parents,
+        methods: BTreeMap::new(),
+        fields: BTreeMap::new(),
+    };
+    let widget = Value::Instance(Rc::new(Instance {
+        class: "Widget".into(),
+        fields: RefCell::new(HashMap::new()),
+    }));
+    let strs = |v: Value| match v {
+        Value::List(items) => items
+            .iter()
+            .map(|e| match e {
+                Value::Str(s) => s.clone(),
+                other => panic!("non-string {other:?}"),
+            })
+            .collect::<Vec<_>>(),
+        other => panic!("not a list: {other:?}"),
+    };
+    let i = index_of("Core.Reflect", "interfaces").expect("interfaces registered");
+    let p = index_of("Core.Reflect", "parents").expect("parents registered");
+    let call = |idx: usize, v: Value| match registry()[idx].eval {
+        NativeEval::Reflective(f) => f(&[v], &tables).unwrap(),
+        _ => panic!("expected a Reflective native"),
+    };
+    assert_eq!(strs(call(i, widget.clone())), vec!["Drawable", "Shape"]);
+    assert_eq!(strs(call(p, widget)), vec!["Base"]);
+    // A non-class value → empty list (matches the PHP `__phorge_reflect_of` non-object branch).
+    assert!(strs(call(i, Value::Int(1))).is_empty());
+}
+
+#[test]
 fn reflect_class_name_is_registered_and_php_emits_the_gated_helper() {
     let i = index_of("Core.Reflect", "className").expect("Reflect.className registered");
     assert_eq!(index_of_by_leaf("Reflect", "className"), Some(i));

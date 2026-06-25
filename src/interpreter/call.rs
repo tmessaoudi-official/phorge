@@ -49,6 +49,10 @@ impl Interp {
                                     };
                                     f(&argv, &mut invoke)
                                 }
+                                // Reflection natives read the precomputed class hierarchy.
+                                crate::native::NativeEval::Reflective(f) => {
+                                    f(&argv, &self.class_tables)
+                                }
                             };
                             return match result {
                                 Ok(v) => Ok(v),

@@ -15,6 +15,7 @@ package Main;
 import Core.Console;
 import Core.Reflect;
 import Core.Set;
+import Core.Text;
 
 class Point {
     constructor(public int x, public int y) {}
@@ -23,6 +24,16 @@ class Point {
 enum Color {
     Red(),
     Green(),
+}
+
+// A small hierarchy for the enumeration natives.
+interface Shape {}
+interface Drawable {}
+open class Base {
+    constructor() {}
+}
+class Widget extends Base implements Shape, Drawable {
+    constructor() {}
 }
 
 function dbl(int n) -> int {
@@ -73,4 +84,11 @@ function main() -> void {
     int? absent = null;
     Console.println("typeName(int?) present = {Reflect.typeName(present)}");
     Console.println("typeName(int?) absent  = {Reflect.typeName(absent)}");
+
+    // Enumeration natives (Tier 2): the sorted interface / parent names of an instance's class.
+    var w = new Widget();
+    Console.println("interfaces = {Text.join(Reflect.interfaces(w), \", \")}");
+    Console.println("parents    = {Text.join(Reflect.parents(w), \", \")}");
+    // A non-class value has no interfaces/parents → empty lists.
+    Console.println("int ifaces = [{Text.join(Reflect.interfaces(7), \", \")}]");
 }

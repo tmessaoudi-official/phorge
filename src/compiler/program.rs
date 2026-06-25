@@ -573,6 +573,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
         // same algorithm as the interpreter, so the VM's `Op::IsInstance`/match/overload-dispatch
         // against a class ancestor (not just an interface) is byte-identical.
         class_implements: crate::ast::instanceof_table(program),
+        class_tables: crate::native::ClassTables::from_program(program),
         static_inits,
         overloads,
         method_overloads,

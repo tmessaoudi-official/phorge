@@ -9,6 +9,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 pub fn emit(program: &Program) -> Result<String, String> {
     let mut t = Transpiler::new();
     t.class_implements = crate::ast::class_implements(program);
+    t.class_tables = crate::native::ClassTables::from_program(program);
     t.consts = crate::ast::class_consts(program).into_keys().collect();
     t.decomposed = decomposed_classes(program);
     t.collect(program);
@@ -108,6 +109,13 @@ struct Transpiler {
     /// PHP dispatch branches most-specific-first (subtypes before supertypes), so the emitted
     /// `if`-chain selects the same body the backends' `select_overload` does. Built once in `emit`.
     class_implements: std::collections::BTreeMap<String, Vec<String>>,
+    /// Static class hierarchy for the reflection enumeration natives — emitted as the PHP
+    /// `__phorge_reflect_of` static table when `uses_reflect_tables` is set, byte-identical to the
+    /// `ClassTables` the Rust backends read (M-Reflect Tier-2).
+    class_tables: crate::native::ClassTables,
+    /// Set when a `Core.Reflect.interfaces`/`parents`/… call is emitted — defines the
+    /// `__phorge_reflect_of($v, $kind)` helper + its static table once per file.
+    uses_reflect_tables: bool,
     /// Classes that must lower to the **interface + trait** decomposition (M-RT S6b): every transitive
     /// ancestor of a multi-parent (`extends A, B`) class. PHP has no multiple inheritance, so a
     /// multi-parent class `implements` its parents' interfaces and `use`s their traits; each ancestor
@@ -250,6 +258,8 @@ impl Transpiler {
             uses_reflect_class_name: false,
             namespaced: false,
             class_implements: std::collections::BTreeMap::new(),
+            class_tables: crate::native::ClassTables::default(),
+            uses_reflect_tables: false,
             decomposed: BTreeSet::new(),
             tmp: 0,
         }

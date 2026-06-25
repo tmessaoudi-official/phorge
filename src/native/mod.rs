@@ -82,6 +82,44 @@ pub enum NativeEval {
     /// on the calling backend and returns its value. The native never touches the output buffer
     /// directly — any side effect happens inside the invoked closure.
     HigherOrder(fn(&[Value], &mut ClosureInvoker) -> Result<Value, String>),
+    /// `(args, tables) -> result` (M-Reflect Tier-2): a native that needs the program's static class
+    /// hierarchy, which a runtime `Value` doesn't carry (`Core.Reflect.interfaces`/`parents`/…). The
+    /// backend supplies a [`ClassTables`] built once from the program. The transpiler emits the same
+    /// table as a PHP static map, so the result is byte-identical by construction (both sides read the
+    /// one `ClassTables`, never PHP's `class_*`/`get_class_methods` builtins with their own semantics).
+    Reflective(fn(&[Value], &ClassTables) -> Result<Value, String>),
+}
+
+/// The program's static class hierarchy, precomputed once and shared by the interpreter, the VM
+/// (a field on `BytecodeProgram`), and the transpiler (which emits it as a PHP static table). Each
+/// list is **sorted** (the deterministic-order invariant), so a [`NativeEval::Reflective`] native and
+/// its PHP erasure return identical bytes. Keyed by class name. (M-Reflect Tier-2,
+/// `docs/specs/2026-06-25-core-reflect-design.md`.)
+#[derive(Debug, Clone, Default)]
+pub struct ClassTables {
+    /// class → sorted transitive interface names ([`crate::ast::class_implements`]).
+    pub interfaces: std::collections::BTreeMap<String, Vec<String>>,
+    /// class → sorted transitive ancestor class names ([`crate::ast::class_supertypes`]).
+    pub parents: std::collections::BTreeMap<String, Vec<String>>,
+    /// class → sorted method names (own + inherited).
+    pub methods: std::collections::BTreeMap<String, Vec<String>>,
+    /// class → sorted declared field names (own + inherited).
+    pub fields: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+impl ClassTables {
+    /// Build the tables once from a (fully expanded, post-loader) program. `interfaces`/`parents`
+    /// reuse the shared `class_implements`/`class_supertypes` queries (already sorted + cycle-safe),
+    /// so reflection can never disagree with `instanceof`. `methods`/`fields` are populated by their
+    /// own slice.
+    pub fn from_program(program: &crate::ast::Program) -> ClassTables {
+        ClassTables {
+            interfaces: crate::ast::class_implements(program),
+            parents: crate::ast::class_supertypes(program),
+            methods: std::collections::BTreeMap::new(),
+            fields: std::collections::BTreeMap::new(),
+        }
+    }
 }
 
 /// Pinned registry slot for `Core.Console.println` — the migrated former `Op::Print`. The compiler

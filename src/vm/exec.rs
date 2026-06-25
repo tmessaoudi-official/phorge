@@ -236,6 +236,11 @@ impl<'a> Vm<'a> {
                 let eval = crate::native::registry()[idx].eval;
                 let result = match eval {
                     crate::native::NativeEval::Pure(f) => f(&args, &mut self.out)?,
+                    // Reflection natives read the precomputed class hierarchy (same `ClassTables` the
+                    // interpreter holds + the transpiler emits, so the result is byte-identical).
+                    crate::native::NativeEval::Reflective(f) => {
+                        f(&args, &self.program.class_tables)?
+                    }
                     crate::native::NativeEval::HigherOrder(f) => {
                         // A closure argument is run re-entrantly on *this* VM via
                         // `call_closure_value` — the same `exec_op` core the main loop drives, so a

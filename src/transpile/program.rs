@@ -349,6 +349,62 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_reflect_tables {
+            self.emit_reflect_table();
+        }
+    }
+
+    /// Emit `__phorge_reflect_of($v, $kind)` + its static table, built from the SAME `ClassTables` the
+    /// Rust backends read — so `Reflect.interfaces`/`parents`/… are byte-identical by construction
+    /// (no reliance on PHP's `class_implements`/`get_class_methods` with their own semantics). A
+    /// non-object → `[]`; an unknown class / kind → `[]` (matching the Rust `unwrap_or_default`).
+    fn emit_reflect_table(&mut self) {
+        // The union of every class that appears in any table, in sorted (BTreeMap) order.
+        let mut classes: std::collections::BTreeSet<&String> = std::collections::BTreeSet::new();
+        for m in [
+            &self.class_tables.interfaces,
+            &self.class_tables.parents,
+            &self.class_tables.methods,
+            &self.class_tables.fields,
+        ] {
+            classes.extend(m.keys());
+        }
+        let php_list = |names: &[String]| -> String {
+            let items: Vec<String> = names
+                .iter()
+                .map(|n| format!("'{}'", php_escape(n)))
+                .collect();
+            format!("[{}]", items.join(", "))
+        };
+        // Build every entry string up front (immutable borrow of `class_tables`), then emit (which
+        // borrows `self` mutably via `line`) — avoids a borrow conflict.
+        let empty = Vec::new();
+        let entries: Vec<String> = classes
+            .iter()
+            .map(|c| {
+                format!(
+                    "'{}' => ['interfaces' => {}, 'parents' => {}, 'methods' => {}, 'fields' => {}],",
+                    php_escape(c),
+                    php_list(self.class_tables.interfaces.get(*c).unwrap_or(&empty)),
+                    php_list(self.class_tables.parents.get(*c).unwrap_or(&empty)),
+                    php_list(self.class_tables.methods.get(*c).unwrap_or(&empty)),
+                    php_list(self.class_tables.fields.get(*c).unwrap_or(&empty)),
+                )
+            })
+            .collect();
+        self.line("function __phorge_reflect_of($v, $kind) {");
+        self.indent += 1;
+        self.line("if (!is_object($v)) { return []; }");
+        self.line("static $t = [");
+        self.indent += 1;
+        for e in entries {
+            self.line(&e);
+        }
+        self.indent -= 1;
+        self.line("];");
+        self.line("return $t[get_class($v)][$kind] ?? [];");
+        self.indent -= 1;
+        self.line("}");
     }
 
     pub(super) fn emit_function(

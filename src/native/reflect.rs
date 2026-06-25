@@ -22,6 +22,31 @@
 use super::*;
 use crate::types::Ty;
 use crate::value::Value;
+use std::collections::BTreeMap;
+use std::rc::Rc;
+
+/// Look up the sorted name list for `args[0]`'s class in a [`ClassTables`] map, as a `List<string>`.
+/// A non-class value (scalar, collection, enum variant, closure) has no entry → the empty list (PHP
+/// agrees: `__phorge_reflect_of` returns `[]` for a non-object / unknown class).
+fn reflect_class_list(args: &[Value], table: &BTreeMap<String, Vec<String>>) -> Value {
+    let names = match args {
+        [Value::Instance(i)] => table.get(&i.class).cloned().unwrap_or_default(),
+        _ => Vec::new(),
+    };
+    Value::List(Rc::new(names.into_iter().map(Value::Str).collect()))
+}
+
+/// `Reflect.interfaces(x) -> List<string>` — the (sorted, transitive) interfaces `x`'s class
+/// implements, or `[]` for a non-class value.
+fn reflect_interfaces(args: &[Value], t: &ClassTables) -> Result<Value, String> {
+    Ok(reflect_class_list(args, &t.interfaces))
+}
+
+/// `Reflect.parents(x) -> List<string>` — the (sorted, transitive) ancestor class names of `x`'s
+/// class, or `[]` for a non-class value.
+fn reflect_parents(args: &[Value], t: &ClassTables) -> Result<Value, String> {
+    Ok(reflect_class_list(args, &t.parents))
+}
 
 /// `Reflect.kind(x) -> string` — the coarse, erasure-stable type tag. Mirrors the `__phorge_kind`
 /// PHP helper exactly (which checks `is_callable` before `is_object`, since a PHP closure is both).
@@ -131,6 +156,26 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(reflect_type_name),
             php: |a| format!("__phorge_kind({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Reflect",
+            name: "interfaces",
+            params: vec![Ty::Param("T".into())],
+            ret: Ty::List(Box::new(Ty::String)),
+            pure: true,
+            // Needs the static class hierarchy (Reflective). `emit_member_call` sets
+            // `uses_reflect_tables`; the `__phorge_reflect_of` helper + table are emitted once.
+            eval: NativeEval::Reflective(reflect_interfaces),
+            php: |a| format!("__phorge_reflect_of({}, \"interfaces\")", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Reflect",
+            name: "parents",
+            params: vec![Ty::Param("T".into())],
+            ret: Ty::List(Box::new(Ty::String)),
+            pure: true,
+            eval: NativeEval::Reflective(reflect_parents),
+            php: |a| format!("__phorge_reflect_of({}, \"parents\")", parg(a, 0)),
         },
     ]
 }
