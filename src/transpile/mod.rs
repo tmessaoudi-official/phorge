@@ -22,12 +22,15 @@ pub fn emit(program: &Program) -> Result<String, String> {
 /// semantics diverge from Phorge's (`+` concat-vs-add, `/` int-vs-float, interpolation display).
 /// Anything the resolver cannot pin down is [`OpKind::Other`], which routes to the existing helper
 /// (the safe fallback), so a wrong guess can never happen — only "known" or "fall back".
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 enum OpKind {
     Str,
     Int,
     Float,
     Bool,
+    /// A value of a user-defined class/enum/interface, carrying its name so a field read resolves
+    /// through `class_field_kinds` (T6b). Never an arithmetic/display operand itself.
+    Class(String),
     Other,
 }
 
@@ -41,7 +44,11 @@ fn kind_of_type(ty: &Type) -> OpKind {
             "float" => OpKind::Float,
             "string" => OpKind::Str,
             "bool" => OpKind::Bool,
-            _ => OpKind::Other,
+            // Non-arithmetic primitives / containers — no native operand specialization.
+            "void" | "never" | "Empty" | "bytes" | "List" | "Map" | "Set" => OpKind::Other,
+            // A user-defined class/enum/interface name → `Class`, so field reads on a value of this
+            // type resolve through `class_field_kinds` (T6b).
+            other => OpKind::Class(other.to_string()),
         },
         _ => OpKind::Other,
     }
@@ -105,6 +112,18 @@ struct Transpiler {
     /// to [`OpKind::Other`] → the helper is emitted as a safe fallback (never a byte-identity risk).
     local_kinds: Vec<HashMap<String, OpKind>>,
     cur_class_fields: Option<HashSet<String>>,
+    /// The class whose members are being emitted, for `this` operand-kind resolution (T6b). Set
+    /// around `emit_class_members`, restored after.
+    cur_class: Option<String>,
+    /// `class → (field/hook/promoted-ctor-param name → OpKind)` — operand kinds of a class's *own*
+    /// members (T6b). Field reads (`p.x`, `this.x`) resolve through here + the parent chain
+    /// (`class_parents`), so `p.x + 1` / `"{p.x}"` emit native PHP instead of a runtime helper.
+    class_field_kinds: HashMap<String, HashMap<String, OpKind>>,
+    /// `class → direct parents` (`extends`), for inherited-field kind lookup (T6b).
+    class_parents: HashMap<String, Vec<String>>,
+    /// `variant → payload field OpKinds` (positional), so a variant-payload match binding (`Pass(s)`)
+    /// resolves `s`'s kind for native operand specialization (T6b).
+    variant_field_kinds: HashMap<String, Vec<OpKind>>,
     /// Active import map (leaf qualifier → full dotted module path) — how a namespaced native call
     /// `console.println(x)` is distinguished from a method call on a value (M3 Wave 1). The
     /// transpiler tracks no variable scope, so unlike the interpreter/compiler it cannot use a
@@ -278,6 +297,10 @@ impl Transpiler {
             indent: 0,
             locals: Vec::new(),
             local_kinds: Vec::new(),
+            cur_class: None,
+            class_field_kinds: HashMap::new(),
+            class_parents: HashMap::new(),
+            variant_field_kinds: HashMap::new(),
             cur_class_fields: None,
             imports: HashMap::new(),
             uses_div: false,
@@ -331,13 +354,30 @@ impl Transpiler {
             }
         }
     }
-    /// Resolve a name's scalar [`OpKind`] from the innermost scope outward; `Other` if unknown.
+    /// Resolve a name's [`OpKind`] from the innermost scope outward; `Other` if unknown.
     fn local_kind(&self, name: &str) -> OpKind {
         self.local_kinds
             .iter()
             .rev()
-            .find_map(|s| s.get(name).copied())
+            .find_map(|s| s.get(name).cloned())
             .unwrap_or(OpKind::Other)
+    }
+
+    /// The [`OpKind`] of `class.field` — the field's own kind, else walk `extends` parents (T6b).
+    /// `Other` if the class/field is unknown (→ helper fallback).
+    fn lookup_field_kind(&self, class: &str, field: &str) -> OpKind {
+        if let Some(k) = self.class_field_kinds.get(class).and_then(|m| m.get(field)) {
+            return k.clone();
+        }
+        if let Some(parents) = self.class_parents.get(class) {
+            for p in parents {
+                let k = self.lookup_field_kind(p, field);
+                if k != OpKind::Other {
+                    return k;
+                }
+            }
+        }
+        OpKind::Other
     }
 
     /// Statically resolve an expression's operand [`OpKind`] for native-operator selection (T6).
@@ -391,6 +431,29 @@ impl Transpiler {
             },
             Expr::InstanceOf { .. } => OpKind::Bool,
             Expr::Force { inner, .. } => self.expr_kind(inner),
+            // T6b: `this` is the enclosing class; a field read resolves through the class tables.
+            Expr::This(_) => self
+                .cur_class
+                .as_ref()
+                .map_or(OpKind::Other, |c| OpKind::Class(c.clone())),
+            // A field read `obj.f` (instance or `this`): resolve `obj`'s class, then look up `f`.
+            // A safe read `obj?.f` is `T?` (an optional) → not a scalar operand → `Other`.
+            Expr::Member {
+                object,
+                name,
+                safe: false,
+                ..
+            } => match self.expr_kind(object) {
+                OpKind::Class(c) => self.lookup_field_kind(&c, name),
+                _ => OpKind::Other,
+            },
+            // A constructor call `ClassName(...)` (Phorge `new` is unwrapped to a `Call`) yields an
+            // instance of that class — so `mk().x` resolves. A free-function/method call result is
+            // `Other` (resolving it would need the compiler's return-type maps).
+            Expr::Call { callee, .. } => match &**callee {
+                Expr::Ident(name, _) if self.classes.contains(name) => OpKind::Class(name.clone()),
+                _ => OpKind::Other,
+            },
             _ => OpKind::Other,
         }
     }

@@ -367,7 +367,7 @@ impl Transpiler {
                             self.uses_float = true;
                             format!("{bs}__phorge_float({code})")
                         }
-                        OpKind::Other => {
+                        OpKind::Class(_) | OpKind::Other => {
                             self.uses_str = true;
                             format!("{bs}__phorge_str({code})")
                         }

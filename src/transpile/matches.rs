@@ -64,6 +64,10 @@ impl Transpiler {
         let subject = match catch_all_binding {
             Some(name) => {
                 self.declare(name);
+                // T6b: the catch-all binds the scrutinee value, so it shares its operand kind
+                // (`match n { 0 => …, x => x + 1 }` — `x` is `n`'s kind).
+                let k = self.expr_kind(scrutinee);
+                self.declare_kind(name, k);
                 format!("${name} = {subj}")
             }
             None => subj,
@@ -120,6 +124,11 @@ impl Transpiler {
             let (tests, binds) = self.classify_pattern(&arm.pattern, &subj)?;
             for (name, _) in &binds {
                 self.declare(name);
+            }
+            // T6b: top-level catch-all binding takes the scrutinee's operand kind.
+            if let Pattern::Binding { name, .. } = &arm.pattern {
+                let k = self.expr_kind(scrutinee);
+                self.declare_kind(name, k);
             }
             let guard = match &arm.guard {
                 Some(g) => Some(self.emit_expr(g)?),
@@ -192,6 +201,12 @@ impl Transpiler {
             // Declare the bindings so the guard and body can reference them.
             for (name, _) in &binds {
                 self.declare(name);
+            }
+            // T6b: a top-level catch-all binding takes the scrutinee's operand kind (nested
+            // variant/struct/type bindings are kinded inside `classify_pattern`).
+            if let Pattern::Binding { name, .. } = &arm.pattern {
+                let k = self.expr_kind(scrutinee);
+                self.declare_kind(name, k);
             }
             let guard = match &arm.guard {
                 Some(g) => Some(self.emit_expr(g)?),
@@ -278,7 +293,12 @@ impl Transpiler {
             } => {
                 let tref = self.type_pos_ref(type_name);
                 let binds = match binding {
-                    Some(name) => vec![(name.clone(), subj.to_string())],
+                    Some(name) => {
+                        // T6b: the narrowed binding is an instance of the tested type → field reads
+                        // on it resolve.
+                        self.declare_kind(name, OpKind::Class(type_name.clone()));
+                        vec![(name.clone(), subj.to_string())]
+                    }
                     None => Vec::new(),
                 };
                 (vec![format!("{subj} instanceof {tref}")], binds)
@@ -289,12 +309,23 @@ impl Transpiler {
                 ..
             } => {
                 let props = self.variant_fields.get(vname).cloned().unwrap_or_default();
+                let kinds = self
+                    .variant_field_kinds
+                    .get(vname)
+                    .cloned()
+                    .unwrap_or_default();
                 let mut tests = vec![format!("{subj} instanceof {}", self.variant_ref(vname))];
                 let mut binds = Vec::new();
                 for (i, fp) in pats.iter().enumerate() {
                     let prop = props
                         .get(i)
                         .ok_or("transpile error: variant pattern arity mismatch")?;
+                    // T6b: a direct payload binding takes the variant field's declared kind.
+                    if let Pattern::Binding { name, .. } = fp {
+                        if let Some(k) = kinds.get(i) {
+                            self.declare_kind(name, k.clone());
+                        }
+                    }
                     let (t, b) = self.classify_pattern(fp, &format!("{subj}->{prop}"))?;
                     tests.extend(t);
                     binds.extend(b);
@@ -310,6 +341,11 @@ impl Transpiler {
                 let mut tests = vec![format!("{subj} instanceof {tref}")];
                 let mut binds = Vec::new();
                 for fp in fields {
+                    // T6b: a direct field binding takes that class field's declared kind.
+                    if let Pattern::Binding { name, .. } = &fp.pat {
+                        let k = self.lookup_field_kind(type_name, &fp.field);
+                        self.declare_kind(name, k);
+                    }
                     let (t, b) =
                         self.classify_pattern(&fp.pat, &format!("{subj}->{}", fp.field))?;
                     tests.extend(t);

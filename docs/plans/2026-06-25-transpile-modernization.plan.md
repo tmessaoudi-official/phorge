@@ -59,3 +59,10 @@ Already idiomatic (no work): higher-order natives → `array_map`/`array_filter`
   never at risk (the helper is the safety net; the native operator is the optimization). Fully
   gated by `run≡runvm≡real PHP 8.5`. Irreducible helpers (float Ryū, range, reflection,
   init_statics) stay.
+
+## T6b — field / variant-payload type resolution (added 2026-06-25, developer-approved)
+- [2026-06-25] AGREED: extend the T6 resolver to eliminate the remaining `__phorge_add`/`_str`
+  fallbacks. Add `OpKind::Class(name)`; track class-typed locals/params/`this`; build
+  class-field + variant-payload type maps; resolve `p.x`/`this.x` field reads, constructor
+  results, and `Pass(s)` variant-payload match bindings → native operators. `__phorge_float`
+  stays (irreducible Ryū). Oracle-gated.

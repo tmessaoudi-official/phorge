@@ -41,6 +41,28 @@ impl Transpiler {
                 }
                 Item::Class(c) => {
                     self.classes.insert(c.name.clone());
+                    // T6b: record this class's own field/hook/promoted-ctor-param operand kinds and
+                    // its parents, so field reads (`p.x`, `this.x`) resolve to a native operand.
+                    self.class_parents.insert(c.name.clone(), c.extends.clone());
+                    let mut fields: HashMap<String, OpKind> = HashMap::new();
+                    for m in &c.members {
+                        match m {
+                            ClassMember::Field { ty, name, .. }
+                            | ClassMember::Hook { ty, name, .. } => {
+                                fields.insert(name.clone(), kind_of_type(ty));
+                            }
+                            ClassMember::Constructor { params, .. } => {
+                                // Promoted params (those with a visibility modifier) become fields;
+                                // a non-promoted param is ctor-local and never read as `o.x`, so
+                                // recording it is harmless.
+                                for p in params {
+                                    fields.insert(p.name.clone(), kind_of_type(&p.ty));
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    self.class_field_kinds.insert(c.name.clone(), fields);
                 }
                 // Interfaces are not callable/constructible, so they need no resolution index;
                 // they are emitted as PHP `interface` blocks in pass 2.
@@ -53,6 +75,11 @@ impl Transpiler {
                         self.variant_fields.insert(
                             v.name.clone(),
                             v.fields.iter().map(|p| p.name.clone()).collect(),
+                        );
+                        // T6b: payload kinds (positional) for variant-payload match bindings.
+                        self.variant_field_kinds.insert(
+                            v.name.clone(),
+                            v.fields.iter().map(|p| kind_of_type(&p.ty)).collect(),
                         );
                     }
                 }
@@ -729,6 +756,20 @@ impl Transpiler {
     /// explicit-assignment `__construct` on the concrete class / multi-parent subclass
     /// (`emit_synth_construct`).
     pub(super) fn emit_class_members(
+        &mut self,
+        c: &ClassDecl,
+        promoted_names: &HashSet<String>,
+        is_error: bool,
+        as_trait: bool,
+    ) -> Result<(), String> {
+        // T6b: `this` inside these method bodies resolves to `c`'s class for field-read kinds.
+        let prev_class = self.cur_class.replace(c.name.clone());
+        let result = self.emit_class_members_inner(c, promoted_names, is_error, as_trait);
+        self.cur_class = prev_class;
+        result
+    }
+
+    fn emit_class_members_inner(
         &mut self,
         c: &ClassDecl,
         promoted_names: &HashSet<String>,
