@@ -65,12 +65,13 @@ impl Transpiler {
         if let Expr::Member { .. } = callee {
             return self.emit_member_call(callee, args);
         }
-        if let Expr::Lambda { .. } = callee {
-            let f = self.emit_expr(callee)?;
-            let argv = self.emit_args(args)?;
-            return Ok(format!("({f})({argv})"));
-        }
-        Err("transpile error: unsupported call target".into())
+        // A lambda literal OR any general expression that evaluates to a function value — `adder()(x)`
+        // (call a returned closure), `fns[i](x)`, `(c ? f : g)(x)`. PHP invokes a callable value with
+        // `(<expr>)(args)`. The checker has verified the callee is function-typed; mirrors the VM's
+        // `CallValue` path and the interpreter, so all three backends agree.
+        let f = self.emit_expr(callee)?;
+        let argv = self.emit_args(args)?;
+        Ok(format!("({f})({argv})"))
     }
 
     pub(super) fn emit_args(&mut self, args: &[Expr]) -> Result<String, String> {

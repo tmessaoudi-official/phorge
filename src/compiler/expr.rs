@@ -504,7 +504,16 @@ impl Compiler<'_> {
             self.emit(Op::CallValue(args.len()), line);
             return Ok(());
         }
-        Err("unsupported call target".into())
+        // A general expression that evaluates to a function value — `adder()(x)` (call a returned
+        // closure), `fns[i](x)`, `(c ? f : g)(x)`. The checker has verified the callee is
+        // function-typed, so compile it (pushes the closure), then the args, then dispatch via
+        // `CallValue` — the same path a lambda local takes. Mirrors `interpreter::eval_call`.
+        self.expr(callee)?;
+        for a in args {
+            self.expr(a)?;
+        }
+        self.emit(Op::CallValue(args.len()), line);
+        Ok(())
     }
 
     /// Lower a `?.` access (field read or method call): evaluate `object`; if it is `null`, the

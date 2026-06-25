@@ -1518,6 +1518,20 @@ fn transpiles_lambda_literal_call_target() {
 }
 
 #[test]
+fn call_of_general_expression_callee_agrees_and_transpiles() {
+    // Calling the result of a call — `adder()(41)` — a function-valued callee that is neither an
+    // identifier, member, nor lambda literal. The checker accepts it and the interpreter ran it;
+    // this guards the VM compiler + transpiler, which previously rejected it ("unsupported call
+    // target") — a three-backend inconsistency on the byte-identity spine (Wave 1.4 audit).
+    let src =
+        "import Core.Console; function adder() -> (int) -> int { return fn(int x) => x + 1; } \
+               function main()-> void { Console.println(\"{adder()(41)}\"); }";
+    agree(src); // run ≡ runvm  → 42
+    let php = transpile_ok(&with_pkg(src));
+    assert!(php.contains("(adder())(41)"), "{php}");
+}
+
+#[test]
 fn higher_order_natives_agree() {
     // map / filter / reduce with inline lambdas (results shown via List.sum — PHP can't echo arrays).
     agree("import Core.Console; import Core.List; function main()-> void { var d=List.map([1,2,3], fn(int x)=>x*2); Console.println(\"{List.sum(d)}\"); }"); // 12
