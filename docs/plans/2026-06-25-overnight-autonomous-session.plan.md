@@ -56,6 +56,20 @@
 **Now gated on:** developer answers to the two specs' open questions (Q1–Q5 each) before Reflect /
 Process I/O can be built.
 
+### Spec questions ANSWERED + design LOCKED (2026-06-25)
+- **F-006 Core.Reflect:** typeName precise (compile-time literal for value types + `get_class` for
+  objects, optional null-branch, erased→coarse) + a coarse `Reflect.kind` + full set incl. sorted
+  enumeration natives via `NativeEval::Reflective` + `ClassTables`. **Q3 enum erasure verified** (enum →
+  PHP class hierarchy; enums use literals/`"object"`, never inspected). Build mechanics noted in the spec
+  (gated `__phorge_kind` helper special-cased in `emit_member_call`; type-directed checker pass for
+  typeName/className).
+- **F-007 Process I/O:** `pure: bool` marker; differential skips impure programs entirely + a dedicated
+  `tests/process.rs`; argv via process-global, sorted `Env.all`, careful `--` grammar.
+- **STATUS: design 100% locked + verified; IMPLEMENTATION QUEUED.** Both are milestone-scale builds
+  (Reflect: checker pass + `NativeEval::Reflective`/`ClassTables` in both backends + 8 natives; Process
+  I/O: impure seam + `differential.rs` change + CLI argv). Recommended to build in a full-context session
+  so the checker rewrite + harness change are done at quality, not rushed. Start points are the two specs.
+
 ## Night outcome (checkpoint)
 **Shipped:** Slice 6 **UFCS** (`0dc071c`, green, byte-identical run≡runvm≡PHP 8.5) + the interpolation
 absolute-span root-cause fix + session docs (`88f8af1`). Phase 1 ergonomics perimeter **closed**.
