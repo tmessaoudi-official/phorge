@@ -62,6 +62,37 @@ fn reflect_class_name(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
+/// `Reflect.typeName(x) -> string` — the PRECISE Phorge type name. **Resolved at compile time by
+/// `x`'s static type** (a checker pass, `checker::reflect`), so all three backends emit the *same*
+/// answer and PHP's erasure is never consulted: a value type → a baked string literal
+/// (`"int"`/`"List"`/`"Map"`/`"bytes"`/enum name/…), an object → the runtime `className`, an optional
+/// → a null-branch, an erased generic → the coarse `kind`. By the time any backend runs, the call has
+/// been rewritten away — so this `eval`/`php` is **dead** (defensive only). `eval` mirrors the static
+/// rule from the runtime `Value` (keeps run/runvm correct under a hypothetical un-erased leak); `php`
+/// can only be coarse (it falls back to `kind`), so a leak would diverge and the differential gate
+/// would catch it. `typeName` is also excluded from UFCS (`checker::calls`) for the same reason.
+fn reflect_type_name(args: &[Value], _: &mut String) -> Result<Value, String> {
+    let name = match args {
+        [v] => match v {
+            Value::Int(_) => "int",
+            Value::Float(_) => "float",
+            Value::Bool(_) => "bool",
+            Value::Str(_) => "string",
+            Value::Bytes(_) => "bytes",
+            Value::List(_) => "List",
+            Value::Map(_) => "Map",
+            Value::Set(_) => "Set",
+            Value::Instance(i) => &i.class,
+            // The static type is the *enum*, so the precise name is the enum's name (not the variant).
+            Value::Enum(e) => &e.ty,
+            Value::Closure(_) => "function",
+            Value::Null | Value::Unit => "null",
+        },
+        _ => return Err("Reflect.typeName expects (T)".into()),
+    };
+    Ok(Value::Str(name.to_string()))
+}
+
 pub(crate) fn reflect_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
@@ -87,6 +118,16 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             // argument (an inline `is_object($x) ? get_class($x) : null` would double-evaluate a
             // side-effecting argument) and excludes closures, matching the Rust arm.
             php: |a| format!("__phorge_class_name({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Reflect",
+            name: "typeName",
+            params: vec![Ty::Param("T".into())],
+            ret: Ty::String,
+            // Always erased before any backend by the `checker::reflect` static-type pass; this
+            // eval/php is dead/defensive (see `reflect_type_name`). `php` can only be coarse.
+            eval: NativeEval::Pure(reflect_type_name),
+            php: |a| format!("__phorge_kind({})", parg(a, 0)),
         },
     ]
 }

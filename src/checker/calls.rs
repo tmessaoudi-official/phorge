@@ -63,6 +63,13 @@ impl Checker {
                             .get(q)
                             .and_then(|m| crate::native::index_of(m, name))
                         {
+                            // `Reflect.typeName(x)` is resolved from `x`'s STATIC type and erased
+                            // before any backend (Core.Reflect, Tier 3) — never the generic-native
+                            // path. `q` is reused for the synthesized `className`/`kind` calls.
+                            let n = &crate::native::registry()[idx];
+                            if n.module == "Core.Reflect" && n.name == "typeName" {
+                                return self.check_reflect_type_name(q, args, span);
+                            }
                             return self.check_native_call(idx, args, span);
                         }
                     }
@@ -1010,6 +1017,13 @@ impl Checker {
         let mut ambiguous = false;
         for (i, n) in crate::native::registry().iter().enumerate() {
             if n.name != name || n.params.len() != args.len() + 1 {
+                continue;
+            }
+            // `Reflect.typeName` is resolved from its argument's static type and erased before any
+            // backend; a UFCS-produced raw `typeName(x)` call would instead reach the backend (where
+            // its PHP erasure is only coarse) and diverge. Exclude it — call it qualified. `kind` /
+            // `className` are plain natives (byte-identical), so they stay UFCS-eligible.
+            if n.module == "Core.Reflect" && n.name == "typeName" {
                 continue;
             }
             let leaf = n.module.rsplit('.').next().unwrap_or(n.module);

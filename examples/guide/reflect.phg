@@ -55,4 +55,22 @@ function main() -> void {
     Console.println("class(enum)  = {Reflect.className(new Green()) ?? \"<none>\"}");
     // A scalar is not a class instance → null (shown via the ?? fallback).
     Console.println("class(int)   = {Reflect.className(7) ?? \"<none>\"}");
+
+    // `Reflect.typeName(x) -> string` is the PRECISE Phorge type name, resolved from x's STATIC type
+    // — so List / Map / Set / bytes / enum keep the identity that PHP erasure would collapse. Note
+    // `typeName(list)` is "List" where `kind(list)` above was the coarse "array".
+    List<int> nums = [1, 2, 3];
+    Console.println("typeName(list) = {Reflect.typeName(nums)}");
+    Console.println("typeName(map)  = {Reflect.typeName([\"a\" => 1])}");
+    Console.println("typeName(int)  = {Reflect.typeName(42)}");
+    // An enum reports the ENUM name (the static type — variants aren't types); className gave "Green".
+    Console.println("typeName(enum) = {Reflect.typeName(new Green())}");
+    // An object reports its runtime class.
+    Console.println("typeName(obj)  = {Reflect.typeName(p)}");
+
+    // An optional resolves through a single-eval null-branch: null → "null", else the inner rule.
+    int? present = 7;
+    int? absent = null;
+    Console.println("typeName(int?) present = {Reflect.typeName(present)}");
+    Console.println("typeName(int?) absent  = {Reflect.typeName(absent)}");
 }

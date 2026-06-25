@@ -33,6 +33,7 @@ mod common;
 mod expr;
 mod matches;
 mod program;
+mod reflect;
 mod resolve;
 mod stmt;
 mod throws;
@@ -255,6 +256,15 @@ pub struct Checker {
     /// adds no new `Op`/`Value` and is byte-identical by construction (the "erase front-end sugar
     /// before any backend" discipline shared with `type` aliases / generics / `html"…"`).
     ufcs_resolutions: HashMap<usize, crate::ast::Expr>,
+    /// Span-keyed `Call`-node substitutions for `Reflect.typeName(x)` (Core.Reflect, the precise
+    /// static-type pass). Built by [`reflect::check_reflect_type_name`] from `x`'s static type — a
+    /// value type → a string-literal `Expr`, an object → a `Reflect.className(x)` call, an optional →
+    /// a single-eval `match` null-branch, an erased generic → `Reflect.kind(x)`. Merged into the
+    /// combined call-rewrite map alongside [`ufcs_resolutions`] (keys are disjoint — a `typeName`
+    /// call site is a native member call, never a UFCS site) and applied by [`rewrite_ufcs`], so the
+    /// backends see only ordinary calls/literals — the same "erase front-end sugar before any backend"
+    /// discipline. No new `Op`/`Value`; byte-identical by construction.
+    reflect_resolutions: HashMap<usize, crate::ast::Expr>,
     /// Type parameters in scope while resolving the signature/body of the generic function currently
     /// being checked (`["T", "U"]`). A bare type name in this set resolves to `Ty::Param` rather than
     /// being looked up as an alias/enum/class. Set around each generic function and cleared after;
@@ -307,6 +317,7 @@ impl Checker {
             imports: HashMap::new(),
             html_resolutions: HashMap::new(),
             ufcs_resolutions: HashMap::new(),
+            reflect_resolutions: HashMap::new(),
             active_type_params: Vec::new(),
             cur_class_type_params: Vec::new(),
         }
@@ -518,7 +529,15 @@ pub fn check_resolutions(
 > {
     let c = run_checker(program);
     if c.errors.is_empty() {
-        Ok((c.warnings, c.html_resolutions, c.ufcs_resolutions))
+        // Merge the Reflect `typeName` substitutions into the call-rewrite map applied by
+        // `rewrite_ufcs`. Keys are disjoint (a `typeName` call site is a native member call, never a
+        // UFCS site), and a single combined pass — rather than two ordered passes — is what makes the
+        // two kinds of sugar compose correctly when nested (UFCS inside a `typeName` argument, or
+        // `typeName` inside a UFCS argument): one walker that knows every replacement re-resolves
+        // embedded original subtrees regardless of nesting direction.
+        let mut calls = c.ufcs_resolutions;
+        calls.extend(c.reflect_resolutions);
+        Ok((c.warnings, c.html_resolutions, calls))
     } else {
         Err(c.errors)
     }

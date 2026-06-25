@@ -17,23 +17,55 @@ pub fn rewrite_ufcs(program: Program, ufcs: &HashMap<usize, crate::ast::Expr>) -
     }
     type Map = HashMap<usize, Expr>;
 
+    // Apply a recorded replacement, re-walking its children for nested sugar but reconstructing the
+    // root directly (its span is the original key / synthetic, so it is never re-matched → no loop).
+    // `#[inline(never)]` + a separate function keep these (relatively large) arms off `rexpr`'s
+    // frame: `rexpr` recurses once per expression-tree level, so bloating its frame overflows the
+    // stack on a deeply-nested program (a regression the differential's example sweep catches).
+    #[inline(never)]
+    fn apply_repl(repl: &Expr, u: &Map) -> Expr {
+        match repl {
+            // A resolved UFCS call, or a `Reflect.typeName` object-case `className` / erased-case
+            // `kind` call: re-walk the children. The call's own span is the original key or synthetic
+            // (never re-matched — the root is reconstructed directly), and its args carry their own
+            // distinct spans, so nested sugar in them resolves without looping.
+            Expr::Call { callee, args, span } => Expr::Call {
+                callee: Box::new(rexpr((**callee).clone(), u)),
+                args: args.iter().cloned().map(|a| rexpr(a, u)).collect(),
+                span: *span,
+            },
+            // A `match` replacement: the `?.` UFCS null-safe desugar (`x?.f(a)`) AND `typeName`'s
+            // optional null-branch. Re-walk ONLY the scrutinee (the embedded original receiver /
+            // argument — its span differs from this call's key, so nested sugar in it resolves
+            // safely); CLONE the arms. The arms must not be walked: the `?.` desugar reuses this
+            // call's own span for its arm-body call, so walking it would re-match this very key and
+            // recurse forever. Reflect's optional arms hold only a literal or `className(<fresh
+            // binding>)` (no user sugar), so cloning them is complete; the `?.` arm body was never
+            // walked in the original either, so this is no regression.
+            Expr::Match {
+                scrutinee,
+                arms,
+                span,
+            } => Expr::Match {
+                scrutinee: Box::new(rexpr((**scrutinee).clone(), u)),
+                arms: arms.clone(),
+                span: *span,
+            },
+            // Any other replacement shape (e.g. `typeName`'s value-type baked string literal) carries
+            // no embedded original subtree — clone it without walking.
+            other => other.clone(),
+        }
+    }
+
     fn rexpr(e: Expr, u: &Map) -> Expr {
         match e {
-            // A resolved UFCS call: emit the recorded free/native call, re-walking its children for
-            // nested UFCS but NOT re-matching this span (the recorded node carries the key span).
+            // A recorded call site (UFCS rewrite, or a `Reflect.typeName` substitution): apply the
+            // replacement via the out-of-line `apply_repl` — kept a SEPARATE function on purpose, so
+            // its (larger) match over replacement shapes does not inflate `rexpr`'s own stack frame.
+            // `rexpr` is the deeply-recursive walker (a nested expression recurses one `rexpr` frame
+            // per level), so its frame size is stack-critical; a recorded match is rare and shallow.
             Expr::Call { callee, args, span } => match u.get(&span.start) {
-                Some(Expr::Call {
-                    callee: rc,
-                    args: ra,
-                    span: rs,
-                }) => Expr::Call {
-                    callee: Box::new(rexpr((**rc).clone(), u)),
-                    args: ra.iter().cloned().map(|a| rexpr(a, u)).collect(),
-                    span: *rs,
-                },
-                // Defensive: only `Call` replacements are ever recorded. Clone without walking the
-                // root (cannot recurse into a UFCS site, so no loop) for any other shape.
-                Some(other) => other.clone(),
+                Some(repl) => apply_repl(repl, u),
                 None => Expr::Call {
                     callee: Box::new(rexpr(*callee, u)),
                     args: args.into_iter().map(|a| rexpr(a, u)).collect(),
