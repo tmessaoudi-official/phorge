@@ -60,6 +60,13 @@ Start at L1–L3 + a thin Tier-1 lifter behind the playground demo; grow the par
   subset, thin lifter, `// lifted (verify)` annotations; L5 round-trip optional this phase. Build
   L1 (PHP lexer) → L2 (Tier-1 parser) → L3 (Phorge pretty-printer) → L4 (thin lifter) → L6 (CLI +
   playground demo). Module lives at `src/lift/`.
+- [2026-06-25] AGREED (reach EXPANDED, developer): **Tier-1 + Tier-2 AND attempt Tier-3** — no longer
+  demo-only. Tier-2 (`array`→`List`/`Map`/`Set` inference, `?T`→`T?`, `??`/`?->`) is in scope and
+  **round-trip-gated (L5)**. Tier-3 is **best-effort + loud `// LIFTED TIER-3 (unsafe — verify)`**,
+  with L5 as the confidence proof; the **hard-untranslatable** core (`eval`, `$$x`, runtime magic,
+  dynamic class names) still emits `// CANNOT LIFT` and never guesses. This supersedes the tier table's
+  "Tier-3 → refuse" for the *attemptable* subset; the refusal stands only for the untranslatable core.
+  Coordinated by [`2026-06-25-full-bidirectional-php-support.plan.md`](2026-06-25-full-bidirectional-php-support.plan.md).
 
 ## Progress
 - [2026-06-25] **L1 COMPLETE** (`2f4ee27`): `src/lift/` module + std-only Tier-1 PHP lexer
