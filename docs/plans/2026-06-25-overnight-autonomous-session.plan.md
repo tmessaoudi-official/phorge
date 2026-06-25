@@ -47,6 +47,15 @@
 - [ ] Next roadmap milestone — re-read `ROADMAP.md` / `docs/MILESTONES.md` at that point, pick the
   highest needle-mover that's autonomous-safe (design largely resolved), log the choice here.
 
+## Post-resolution progress (developer resolved F-001..F-007 one-by-one)
+- **F-002 `?.` UFCS — ✅ BUILT** (`6286004`): `x?.f(a)` → `match x { null => null, r => f(r,a) }`, no new
+  `Op`, byte-identical run≡runvm≡PHP 8.5 (761 lib tests, full oracle green).
+- **F-006 Core.Reflect — ✅ SPEC** (`9a50e13`): `docs/specs/2026-06-25-core-reflect-design.md` — Q1–Q5 await answers.
+- **F-007 Process I/O — ✅ SPEC** (`9a50e13`): `docs/specs/2026-06-25-process-io-quarantine-seam-design.md` — Q1–Q5 await answers.
+- F-001/003/004/005 confirmed as shipped/deferred (no code change needed).
+**Now gated on:** developer answers to the two specs' open questions (Q1–Q5 each) before Reflect /
+Process I/O can be built.
+
 ## Night outcome (checkpoint)
 **Shipped:** Slice 6 **UFCS** (`0dc071c`, green, byte-identical run≡runvm≡PHP 8.5) + the interpolation
 absolute-span root-cause fix + session docs (`88f8af1`). Phase 1 ergonomics perimeter **closed**.
