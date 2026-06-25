@@ -37,6 +37,20 @@ fn free_function_with_params_and_arithmetic() {
 }
 
 #[test]
+fn force_unwrap_uses_native_throw_expression_not_helper() {
+    // `opt!` lowers to PHP 8.0's null-coalescing throw expression `($v ?? throw new …)` — `??`
+    // throws iff the value is null and evaluates the receiver once, exactly the old `__phorge_unwrap`
+    // helper. No runtime helper function is emitted.
+    let out =
+        php("function f(int? o) -> int { return o!; } function main() -> void { int x = f(5); }");
+    assert!(
+        out.contains("($o ?? throw new \\RuntimeException(\"force-unwrap of null\"))"),
+        "{out}"
+    );
+    assert!(!out.contains("__phorge_unwrap"), "{out}");
+}
+
+#[test]
 fn clone_with_lowers_to_native_php85_two_arg_clone() {
     // T4: the transpile floor is PHP 8.5, where `clone($o, [...])` is native (clone + property
     // overrides, constructor bypassed, `__clone` honored) — exactly what `obj with { f = e }` means.

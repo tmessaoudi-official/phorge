@@ -74,9 +74,6 @@ struct Transpiler {
     /// transpiler tracks no variable scope, so unlike the interpreter/compiler it cannot use a
     /// locals-first heuristic; the import map is the authority.
     imports: HashMap<String, String>,
-    /// Set when an `opt!` force-unwrap is emitted, so the `__phorge_unwrap` helper is defined once
-    /// per file (PHP hoists top-level function declarations, so its position is immaterial).
-    uses_force: bool,
     /// Set when `/`, `%`, an interpolation, or a range is emitted — each defines a once-per-file
     /// runtime helper (M7) that reproduces Phorge's type-driven semantics under PHP's looser rules:
     /// `__phorge_div` (int `/` ⇒ `intdiv`), `__phorge_rem` (float `%` ⇒ `fmod`), `__phorge_str`
@@ -242,7 +239,6 @@ impl Transpiler {
             locals: Vec::new(),
             cur_class_fields: None,
             imports: HashMap::new(),
-            uses_force: false,
             uses_div: false,
             uses_rem: false,
             uses_add: false,

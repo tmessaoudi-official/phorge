@@ -108,15 +108,17 @@ impl Transpiler {
                 let arrow = if *safe { "?->" } else { "->" };
                 Ok(format!("{o}{arrow}{name}"))
             }
-            // `inner!` → a once-per-file helper that throws on null, else returns the value (M3
-            // S2.5). The null-fault message differs from the Phorge backends' (no name/line) — a
-            // documented transpile-only divergence (KNOWN_ISSUES); the present-value case is exact.
+            // `inner!` → PHP 8.0's null-coalescing throw expression: `($v ?? throw new …)`. `??`
+            // evaluates the receiver once and throws iff it is null — exactly the old
+            // `__phorge_unwrap` helper, now inline with no runtime function (M3 S2.5). The null-fault
+            // message differs from the Phorge backends' (no name/line) — a documented transpile-only
+            // divergence (KNOWN_ISSUES); the present-value case is exact. `\RuntimeException` is
+            // already fully qualified, so this is identical in flat and namespaced mode.
             Expr::Force { inner, .. } => {
                 let v = self.emit_expr(inner)?;
-                self.uses_force = true;
-                // Namespaced mode puts the helper in the nameless global block → call it `\…`.
-                let bs = if self.namespaced { "\\" } else { "" };
-                Ok(format!("{bs}__phorge_unwrap({v})"))
+                Ok(format!(
+                    "({v} ?? throw new \\RuntimeException(\"force-unwrap of null\"))"
+                ))
             }
             // `?` propagation is hoisted at the `VarDecl` statement level (the only position the checker
             // permits, M-faults 2a), so it never reaches expression emission in a valid program.

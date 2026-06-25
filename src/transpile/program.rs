@@ -209,16 +209,6 @@ impl Transpiler {
     /// fully-qualified names are `\__phorge_*` (which the call sites emit via the `bs` prefix). Each
     /// mirrors a Phorge value kernel / `as_display` so the PHP leg matches `run`/`runvm` byte-for-byte.
     pub(super) fn emit_runtime_helpers(&mut self) {
-        if self.uses_force {
-            self.line("function __phorge_unwrap($v) {");
-            self.indent += 1;
-            self.line(
-                "if ($v === null) { throw new \\RuntimeException(\"force-unwrap of null\"); }",
-            );
-            self.line("return $v;");
-            self.indent -= 1;
-            self.line("}");
-        }
         if self.uses_div {
             // Phorge `/`: int/int truncates toward zero (`intdiv`); float/float is real division.
             self.line("function __phorge_div($a, $b) {");
