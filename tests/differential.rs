@@ -905,6 +905,24 @@ fn p4c_programs_match_between_backends() {
     }
 }
 
+/// True if `src` imports an **impure** stdlib module — one whose natives read the ambient environment
+/// (`Core.Process` / `Core.Env`). Such a program is QUARANTINED from the byte-identity differential:
+/// the PHP leg runs in a separate process whose argv/env need not match the Rust process, so the
+/// output is not a fixed golden. These are tested separately under a controlled environment in
+/// `tests/process.rs` (their `examples/process/` files are walkthroughs, not gated examples — Q2-A of
+/// `docs/specs/2026-06-25-process-io-quarantine-seam-design.md`). The impure-module set is **derived
+/// from the `NativeFn::pure` flag**, not hardcoded here, so a future impure module is covered with no
+/// harness edit (the seam the `pure` marker exists for).
+fn uses_impure_native(src: &str) -> bool {
+    use std::collections::HashSet;
+    let impure: HashSet<&str> = phorge::native::registry()
+        .iter()
+        .filter(|n| !n.pure)
+        .map(|n| n.module)
+        .collect();
+    impure.iter().any(|m| src.contains(&format!("import {m}")))
+}
+
 /// Recursively collect every single-file `*.phg` under `dir`, **skipping project roots**. A
 /// directory containing a `phorge.toml` is a multi-file project (M5): its files import each other
 /// and only run when assembled through `loader::load`, so running them standalone here would fail.
@@ -980,12 +998,17 @@ fn all_examples_match_between_backends() {
         files.len()
     );
     for path in &files {
-        eprintln!("differential: {}", path.display()); // names the file if agree() panics
         let src = std::fs::read_to_string(path)
             .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
-        // Every example must *run* (produce identical Ok output) — not merely agree. `agree` alone
-        // is vacuously green when both backends fail identically (e.g. a broken import), which would
-        // hide a malformed example; assert success explicitly so a regression surfaces loudly.
+        // Quarantined (ambient-environment) examples are tested in tests/process.rs, not here.
+        if uses_impure_native(&src) {
+            eprintln!("differential: SKIP (impure/quarantined) {}", path.display());
+            continue;
+        }
+        eprintln!("differential: {}", path.display()); // names the file if agree() panics
+                                                       // Every example must *run* (produce identical Ok output) — not merely agree. `agree` alone
+                                                       // is vacuously green when both backends fail identically (e.g. a broken import), which would
+                                                       // hide a malformed example; assert success explicitly so a regression surfaces loudly.
         assert!(
             cmd_run(&src).is_ok(),
             "example {} must run successfully, got {:?}",
@@ -1827,6 +1850,11 @@ fn all_examples_transpile_and_match_php() {
     for path in &files {
         let label = path.display().to_string();
         let src = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {label}: {e}"));
+        // Quarantined (ambient-environment) example — not byte-identity-gated against PHP (see
+        // `uses_impure_native`); covered by tests/process.rs under a controlled environment.
+        if uses_impure_native(&src) {
+            continue;
+        }
         let expected = match cmd_run(&src) {
             Ok(o) => o,
             Err(_) => continue, // non-runnable example — gated by the run≡runvm glob, not here

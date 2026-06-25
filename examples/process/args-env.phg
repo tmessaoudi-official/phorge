@@ -1,0 +1,32 @@
+// Core.Process / Core.Env — the ambient-environment natives.
+//
+// This is a WALKTHROUGH, not a byte-identity-gated example: its output depends on the process
+// (its arguments and environment), which the PHP leg of the differential runs in a separate
+// process that need not match. So programs importing Core.Process / Core.Env are QUARANTINED from
+// the oracle and tested separately under a controlled environment (tests/process.rs).
+//
+// Run it:   phg run examples/process/args-env.phg -- alpha beta
+package Main;
+
+import Core.Console;
+import Core.Process;
+import Core.Env;
+import Core.List;
+import Core.Map;
+
+function main() -> void {
+    // Program arguments — everything after the `--` terminator.
+    var args = Process.args();
+    Console.println("argc = {List.length(args)}");
+    for (string a in args) {
+        Console.println("arg: {a}");
+    }
+
+    // A single environment variable, or null if unset — composes with `??` like any optional.
+    Console.println("HOME = {Env.get(\"HOME\") ?? \"<unset>\"}");
+    Console.println("PHORGE_DEMO = {Env.get(\"PHORGE_DEMO\") ?? \"<unset>\"}");
+
+    // Every environment variable, sorted by key (a stable order; OS iteration order is not).
+    var env = Env.all();
+    Console.println("env count = {Map.size(env)}");
+}

@@ -14,6 +14,9 @@ fn main() {
     // Self-executing artifact: if this binary carries an embedded program, run it on the VM and
     // exit before any CLI parsing. No payload -> fall through to the normal dispatcher.
     if let Some(src) = phorge::bundle::embedded_source() {
+        // A standalone built binary runs as a normal executable, so `Core.Process.args()` reads the
+        // real process arguments (everything after the program name).
+        phorge::native::set_process_args(std::env::args().skip(1).collect());
         match cli::cmd_runvm(&src) {
             Ok(text) => {
                 print!("{text}");
@@ -269,14 +272,22 @@ fn main() {
     // otherwise loose mode (single file, `package Main` only). `-e`/stdin are always loose. parse,
     // lex, disasm, and bench keep the single-file string path (they dump/measure one source).
     let result = if matches!(cmd, "run" | "runvm" | "check" | "transpile") {
-        let unit = match cli::resolve_source(&rest) {
-            Some(cli::SourceSpec::File(path)) => loader::load(std::path::Path::new(&path)),
-            Some(cli::SourceSpec::Stdin) => loader::load_loose_src(&read_stdin()),
-            Some(cli::SourceSpec::Inline(code)) => loader::load_loose_src(&code),
+        // Resolve the source AND the program argv (`-- a b c`); the argv feeds `Core.Process.args()`
+        // and is only meaningful for run/runvm (check/transpile ignore it).
+        let (spec, prog_args) = match cli::resolve_source_and_args(&rest) {
+            Some(pair) => pair,
             None => {
                 eprintln!("{USAGE}");
                 exit(2);
             }
+        };
+        if matches!(cmd, "run" | "runvm") {
+            phorge::native::set_process_args(prog_args);
+        }
+        let unit = match spec {
+            cli::SourceSpec::File(path) => loader::load(std::path::Path::new(&path)),
+            cli::SourceSpec::Stdin => loader::load_loose_src(&read_stdin()),
+            cli::SourceSpec::Inline(code) => loader::load_loose_src(&code),
         };
         let unit = match unit {
             Ok(u) => u,

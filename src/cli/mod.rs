@@ -201,13 +201,39 @@ pub enum SourceSpec {
 /// error (missing source, dangling `-e`, an unknown leading-`-` arg, or extra positionals) — the
 /// caller prints usage and exits 2.
 pub fn resolve_source(rest: &[String]) -> Option<SourceSpec> {
-    match rest {
-        [flag, code] if flag == "-e" || flag == "--eval" => Some(SourceSpec::Inline(code.clone())),
-        [sep, path] if sep == "--" => Some(SourceSpec::File(path.clone())),
-        [one] if one == "-" => Some(SourceSpec::Stdin),
-        [one] if !one.starts_with('-') => Some(SourceSpec::File(one.clone())),
-        _ => None,
+    resolve_source_and_args(rest).map(|(spec, _)| spec)
+}
+
+/// Like [`resolve_source`], but also returns the program's arguments (`Core.Process.args()`), taken
+/// from a `--` terminator (Q5 of the Process-I/O design). Grammar:
+/// `<file> [-- arg…]` | `- [-- arg…]` | `-e <code> [-- arg…]` | `-- <file> [-- arg…]`.
+/// The **leading** `--` is the existing literal-path escape (`-- <file>`, for a path beginning with
+/// `-`); a *non-leading* `--` separates phg's source-spec from the program's argv. So
+/// `phg run app.phg -- a b` → `File(app.phg)` + `["a","b"]`, while `phg run -- -weird.phg -- a` →
+/// `File(-weird.phg)` + `["a"]`. Returns `None` on a usage error (the caller prints usage, exits 2).
+pub fn resolve_source_and_args(rest: &[String]) -> Option<(SourceSpec, Vec<String>)> {
+    // Leading `--`: literal-path escape. `-- <file>` (no argv) | `-- <file> -- <argv…>`.
+    if rest.first().map(String::as_str) == Some("--") {
+        return match &rest[1..] {
+            [path] => Some((SourceSpec::File(path.clone()), Vec::new())),
+            [path, sep, args @ ..] if sep == "--" => {
+                Some((SourceSpec::File(path.clone()), args.to_vec()))
+            }
+            _ => None,
+        };
     }
+    // Otherwise split the source-spec (before the first `--`) from the program argv (after it).
+    let (head, args) = match rest.iter().position(|a| a == "--") {
+        Some(i) => (&rest[..i], rest[i + 1..].to_vec()),
+        None => (rest, Vec::new()),
+    };
+    let spec = match head {
+        [flag, code] if flag == "-e" || flag == "--eval" => SourceSpec::Inline(code.clone()),
+        [one] if one == "-" => SourceSpec::Stdin,
+        [one] if !one.starts_with('-') => SourceSpec::File(one.clone()),
+        _ => return None,
+    };
+    Some((spec, args))
 }
 
 /// Run a pipeline closure on a worker thread with a large (256 MB) stack. The lexer is iterative,
