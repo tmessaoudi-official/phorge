@@ -7,6 +7,87 @@ use super::*;
 type Classified = (Vec<String>, Vec<(String, String)>);
 
 impl Transpiler {
+    /// T1: a *value* `match` whose arms are all literals (`int`/`float`/`string`/`bool`/`null`),
+    /// plus at most one trailing catch-all (a wildcard `_` or a bare binding) and no `when` guards,
+    /// lowers to a native PHP `match` expression — the idiomatic, modern form, replacing the verbose
+    /// `if/elseif` chain (and, in expression position, the IIFE). Returns the full
+    /// `match (subject) { … }` string, or `None` if any arm is a variant/type/struct pattern, carries
+    /// a guard, or a catch-all isn't the last arm — those keep the `instanceof` `emit_match` path.
+    ///
+    /// Strict equality: PHP `match` compares arm values with `===`, exactly mirroring Phorge's literal
+    /// patterns (`classify_pattern` already emits `=== <lit>`), so the branch taken is byte-identical.
+    /// A bare-binding catch-all is assigned *inside the subject* (`match ($x = E)`), so the `default`
+    /// arm body can reference it while `E` is evaluated once — and this works in both statement and
+    /// expression position (no preceding statement needed). An exhaustive literal set (no catch-all)
+    /// emits no `default`; PHP then throws `\UnhandledMatchError` on the unreachable no-match, the same
+    /// defensive behavior as the if-chain's terminal `throw`.
+    pub(super) fn try_native_match(
+        &mut self,
+        scrutinee: &Expr,
+        arms: &[MatchArm],
+    ) -> Result<Option<String>, String> {
+        // Eligibility scan (no emission): every arm is a literal, except at most one *trailing*
+        // catch-all. A guard, or a catch-all that isn't last (which would let later arms run under
+        // PHP's position-independent `default` — diverging from Phorge's first-match-wins), bails out.
+        let mut catch_all_binding: Option<&str> = None;
+        for (i, arm) in arms.iter().enumerate() {
+            if arm.guard.is_some() {
+                return Ok(None);
+            }
+            match &arm.pattern {
+                Pattern::Int(..)
+                | Pattern::Float(..)
+                | Pattern::Str(..)
+                | Pattern::Bool(..)
+                | Pattern::Null(_) => {}
+                Pattern::Wildcard(_) => {
+                    if i != arms.len() - 1 {
+                        return Ok(None);
+                    }
+                }
+                Pattern::Binding { name, .. } => {
+                    if i != arms.len() - 1 {
+                        return Ok(None);
+                    }
+                    catch_all_binding = Some(name);
+                }
+                // Variant/type/struct → `instanceof` path (T2/the if-chain).
+                Pattern::Variant { .. } | Pattern::Type { .. } | Pattern::Struct { .. } => {
+                    return Ok(None);
+                }
+            }
+        }
+        // Eligible: emit. A fresh scope holds the optional catch-all binding (so the body resolves it
+        // to `$name`); the binding is assigned in the subject so it's live in the `default` arm.
+        let subj = self.emit_expr(scrutinee)?;
+        self.push_scope();
+        let subject = match catch_all_binding {
+            Some(name) => {
+                self.declare(name);
+                format!("${name} = {subj}")
+            }
+            None => subj,
+        };
+        let mut out = format!("match ({subject}) {{");
+        for arm in arms {
+            let label = match &arm.pattern {
+                Pattern::Int(n, _) => format!("{n}"),
+                Pattern::Float(x, _) => format!("{x:?}"),
+                Pattern::Str(s, _) => format!("\"{}\"", php_escape(s)),
+                Pattern::Bool(b, _) => format!("{b}"),
+                Pattern::Null(_) => "null".to_string(),
+                Pattern::Wildcard(_) | Pattern::Binding { .. } => "default".to_string(),
+                // Eligibility scan already excluded these.
+                _ => unreachable!("non-literal arm survived the native-match eligibility scan"),
+            };
+            let body = self.emit_expr(&arm.body)?;
+            out.push_str(&format!(" {label} => {body},"));
+        }
+        out.push_str(" }");
+        self.pop_scope();
+        Ok(Some(out))
+    }
+
     /// Emit a `match` as an ordered `instanceof` chain. Each arm yields its body either as
     /// `return …;` or `$target = …;` depending on `target`. Payload vars bind positionally
     /// from the subclass's promoted props. A non-exhaustive chain ends with a defensive
@@ -17,6 +98,17 @@ impl Transpiler {
         arms: &[MatchArm],
         target: MatchTarget,
     ) -> Result<(), String> {
+        // T1: a literal value `match` becomes a native PHP `match` expression in `return`/assign
+        // position. Falls through to the `instanceof` if-chain below for variant/type/struct/guarded
+        // matches (`try_native_match` returns `None` without emitting the scrutinee in that case).
+        if let Some(m) = self.try_native_match(scrutinee, arms)? {
+            let stmt = match &target {
+                MatchTarget::Return => format!("return {m};"),
+                MatchTarget::Assign(v) => format!("${v} = {m};"),
+            };
+            self.line(&stmt);
+            return Ok(());
+        }
         let subj = self.emit_expr(scrutinee)?;
         let yield_stmt = |t: &MatchTarget, body: &str| match t {
             MatchTarget::Return => format!("return {body};"),

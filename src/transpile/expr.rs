@@ -154,6 +154,12 @@ impl Transpiler {
             Expr::Match {
                 scrutinee, arms, ..
             } => {
+                // T1: a literal value `match` is a native PHP `match` expression (parenthesized so it
+                // composes inside any larger expression) — no IIFE. The if-chain/IIFE below remains
+                // for variant/type/struct/guarded matches (`try_native_match` returns `None`).
+                if let Some(m) = self.try_native_match(scrutinee, arms)? {
+                    return Ok(format!("({m})"));
+                }
                 let captures: BTreeSet<String> = self.locals.iter().flatten().cloned().collect();
                 let use_clause = if captures.is_empty() {
                     String::new()

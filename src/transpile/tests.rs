@@ -193,31 +193,47 @@ fn pure_string_literal_no_concat() {
 }
 
 #[test]
-fn literal_match_emits_strict_eq_elseif_chain() {
-    // Literal patterns → `=== <lit>` guards. The arms must be `if/elseif/else`-chained (not
-    // independent `if`s) so an assign-position match doesn't fall through to the defensive throw.
+fn literal_match_with_binding_emits_native_match() {
+    // T1: a value `match` of literals + a bare-binding catch-all lowers to a native PHP `match`
+    // expression (PHP `match` is strict `===`, agreeing with Phorge literal patterns). The binding
+    // is assigned *inside* the subject (`match ($x = $n)`) so the `default` arm can reference it —
+    // single evaluation, no `if/elseif` chain, no IIFE.
     let out = php(
             "function sign(int n) -> string { string s = match n { 0 => \"z\", 1 => \"one\", x => \"other\" }; return s; }",
         );
-    assert!(out.contains("if ($n === 0) { $s = \"z\"; }"), "{out}");
-    assert!(out.contains("elseif ($n === 1) { $s = \"one\"; }"), "{out}");
-    assert!(out.contains("else { $x = $n; $s = \"other\"; }"), "{out}");
-    // No unconditional throw stranded after the assign chain.
-    assert!(!out.contains("$s = \"other\"; }\n    throw"), "{out}");
+    assert!(out.contains("$s = match ($x = $n) {"), "{out}");
+    assert!(out.contains("0 => \"z\","), "{out}");
+    assert!(out.contains("1 => \"one\","), "{out}");
+    assert!(out.contains("default => \"other\","), "{out}");
+    // No legacy if-chain or stranded defensive throw.
+    assert!(!out.contains("elseif ($n === 1)"), "{out}");
 }
 
 #[test]
-fn expression_position_match_emits_iife() {
-    // A `match` used as a sub-expression wraps the shared if-chain in an immediately-invoked
-    // closure, capturing enclosing locals by value via `use(...)`.
+fn literal_match_with_wildcard_emits_native_match() {
+    // A wildcard `_` catch-all needs no binding, so the subject is the bare scrutinee.
+    let out = php(
+            "function classify(int code) -> string { return match code { 0 => \"zero\", 1 => \"one\", _ => \"other\" }; }",
+        );
+    assert!(out.contains("return match ($code) {"), "{out}");
+    assert!(out.contains("0 => \"zero\","), "{out}");
+    assert!(out.contains("default => \"other\","), "{out}");
+    assert!(!out.contains("if ($code === 0)"), "{out}");
+}
+
+#[test]
+fn expression_position_literal_match_emits_native_match() {
+    // T1: a literal value `match` in expression position is a native PHP `match` expression
+    // (parenthesized so it composes), NOT an IIFE. The binding catch-all still works in expression
+    // position via the assignment-as-subject trick (`match ($x = $n)`).
     let out = php(
             "function f(int n) -> int { int base = 5; int r = (match n { 0 => 10, x => x }) + base; return r; }",
         );
-    // Over-captures every enclosing local by value (both `$base` and the param `$n`).
-    assert!(out.contains("(function() use ($base, $n) {"), "{out}");
-    assert!(out.contains("if ($n === 0) { return 10; }"), "{out}");
-    assert!(out.contains("else { $x = $n; return $x; }"), "{out}");
-    assert!(out.contains("})()"), "{out}");
+    assert!(out.contains("(match ($x = $n) {"), "{out}");
+    assert!(out.contains("0 => 10,"), "{out}");
+    assert!(out.contains("default => $x,"), "{out}");
+    // No IIFE wrapper for a pure literal match.
+    assert!(!out.contains("function() use"), "{out}");
 }
 
 #[test]
