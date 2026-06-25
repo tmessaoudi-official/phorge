@@ -73,6 +73,21 @@ Start at L1–L3 + a thin Tier-1 lifter behind the playground demo; grow the par
   (`src/lift/lexer.rs` — `PTok` enum, `lex_php`, `PTokenSpanned` with line tracking), 7 tests green.
   Out-of-tier input (backtick, unterminated string/comment, bare `$`) → loud `lift lex error`,
   never a guess. No backend touched.
-- **NEXT = L2** — Tier-1 PHP parser (`src/lift/parser.rs`): typed fn sigs, classes + typed props +
-  ctor promotion, `enum`, `match`, `if`/`for`/`foreach`/`while`, exprs, array literals → a PHP AST.
-  The dominant M-Lift slice.
+- [2026-06-26] **L2 COMPLETE** (`f5e9c73` L2a + `fb3cb06` L2b): the dominant M-Lift slice — a Tier-1
+  PHP parser (`src/lift/parser.rs`) + a dedicated PHP AST (`src/lift/ast.rs`).
+  - **L2a** — parser spine: typed top-level functions; full expression grammar with the **PHP-8**
+    precedence table (concat `.` below `+`/`-` but above comparison — pinned by tests); postfix
+    `() [] -> ?-> ::` (method vs member; static call/const/prop); primary incl. array literals, `new`,
+    `match`, `true`/`false`/`null`; statements `return`/`if`-`elseif`-`else`(+`else if`)/`while`/`for`/
+    `foreach`/`echo`/`break`/`continue`/block. A `depth` guard (`MAX_NEST_DEPTH`) bounds recursion on
+    untrusted input. **L1 amendment:** `PTok::InterpStr` (raw) for double-quoted strings with an
+    unescaped `$` (escaped `\$` excluded) → parser rejects interpolation as Tier-2 instead of silently
+    lifting `"hi $name"` as literal; plus `++ -- += -= *= /= %= .= ??=` tokens (realistic for-loops).
+  - **L2b** — classes (typed props + visibility + static/readonly/const + methods + abstract/final +
+    `extends`/`implements` + **constructor promotion**) and PHP-8.1 enums (pure + backed cases + methods).
+  - **Tier boundary = loud rejection, never a guess:** interpolated strings, casts, closures/arrow-fns,
+    dynamic `new $x`/`$obj::`, array-append `[]`, `interface`/`trait`/`try`/`switch`/`namespace`/…
+  - Wholly isolated — no `Op`/`Value`/checker/interpreter/VM/transpiler change; nothing outside
+    `src/lift/` consumes it. 840 lib tests green (43 in the lift module), clippy + fmt clean.
+- **NEXT = L3** — Phorge AST → `.phg` pretty-printer (new; the transpiler prints PHP, not Phorge),
+  then L4 (lifter PHP-AST → Phorge-AST).

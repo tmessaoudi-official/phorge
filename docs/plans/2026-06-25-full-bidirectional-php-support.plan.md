@@ -133,3 +133,7 @@ Continues [`2026-06-25-m-lift-php-to-phorge.plan.md`](2026-06-25-m-lift-php-to-p
     `cargo test --lib` + `cargo clippy --all-targets` + `cargo fmt --check`. User-facing example at L6.
   - **Blast radius: zero on the spine** — purely additive `src/lift/` files + `mod` lines; no `Op`,
     `Value`, checker/interpreter/VM/transpiler change.
+- [2026-06-26] **M-Lift L2 COMPLETE** (`f5e9c73` L2a spine + `fb3cb06` L2b classes/enums): the Tier-1
+  PHP parser + PHP AST is up. Full detail in `2026-06-25-m-lift-php-to-phorge.plan.md` Progress.
+  840 lib tests green, clippy + fmt clean, isolated. **NEXT = L3** (Phorge `.phg` pretty-printer) → L4
+  (lifter PHP-AST → Phorge-AST) → L5 (round-trip gate) → L6 (`phg lift` CLI + playground).
