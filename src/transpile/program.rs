@@ -154,7 +154,7 @@ impl Transpiler {
                     } else if self.decomposed.contains(&c.name) {
                         self.emit_decomposed_class(c, program)?;
                     } else {
-                        self.emit_class(c)?;
+                        self.emit_class(c, program)?;
                     }
                 }
                 Item::Interface(i) => self.emit_interface(i)?,
@@ -237,7 +237,7 @@ impl Transpiler {
                         }
                     }
                     Item::Enum(e) => self.emit_enum(e)?,
-                    Item::Class(c) => self.emit_class(c)?,
+                    Item::Class(c) => self.emit_class(c, program)?,
                     Item::Interface(i) => self.emit_interface(i)?,
                     _ => {}
                 }
@@ -640,7 +640,7 @@ impl Transpiler {
         Ok(())
     }
 
-    pub(super) fn emit_class(&mut self, c: &ClassDecl) -> Result<(), String> {
+    pub(super) fn emit_class(&mut self, c: &ClassDecl, program: &Program) -> Result<(), String> {
         // Names of ctor params that PHP will promote to properties.
         let mut promoted_names: HashSet<String> = HashSet::new();
         for m in &c.members {
@@ -701,11 +701,29 @@ impl Transpiler {
             "{final_kw}class {disp}{extends_clause}{implements} {{"
         ));
         self.indent += 1;
-        // M-RT S8: compose each `use`d trait. A non-conflicting `use Trait;` is emitted per trait
-        // (trait-vs-trait conflict resolution emission — PHP `insteadof`/`as` — is a follow-up; the
-        // checker rejects an *unresolved* collision, and the PHP oracle would catch a resolved one).
-        for u in &c.uses {
-            self.line(&format!("use {};", self.type_pos_ref(&u.name)));
+        // M-RT S8 + Wave 1.3: compose each `use`d trait. A collision-free composition emits a plain
+        // `use Trait;` per trait. When two composed traits supply the same method name (resolved on the
+        // Phorge side by `use P.m`/`rename`/`exclude`), emit a single combined `use P, Q { … }` block
+        // with the PHP `insteadof`/`as` clauses — otherwise PHP rejects the composition with a trait
+        // method collision. Mirrors `build_trait_clauses` (the MI-decomposition analogue) for the
+        // explicit trait-composition path. Trait names are used directly (no `T` prefix, unlike MI).
+        if !c.uses.is_empty() {
+            let clauses = self.build_use_trait_clauses(c, program);
+            if clauses.is_empty() {
+                for u in &c.uses {
+                    self.line(&format!("use {};", self.type_pos_ref(&u.name)));
+                }
+            } else {
+                let names: Vec<String> =
+                    c.uses.iter().map(|u| self.type_pos_ref(&u.name)).collect();
+                self.line(&format!("use {} {{", names.join(", ")));
+                self.indent += 1;
+                for cl in &clauses {
+                    self.line(cl);
+                }
+                self.indent -= 1;
+                self.line("}");
+            }
         }
         let prev = self.cur_class_fields.replace(fields);
         self.emit_class_members(c, &promoted_names, is_error, false)?;
@@ -1275,6 +1293,96 @@ impl Transpiler {
             } = r
             {
                 clauses.push(format!("T{parent}::{method} as {as_name};"));
+            }
+        }
+        clauses
+    }
+
+    /// The `insteadof`/`as` clauses for an explicit trait-composition (`use P; use Q;`) block when two
+    /// composed traits supply the same method name (Wave 1.3). The Phorge-side resolution
+    /// (`use P.m`/`rename`/`exclude`) is already validated by the checker; this lowers it to PHP. The
+    /// trait-composition analogue of [`build_trait_clauses`] (which handles MI-decomposed parents and
+    /// uses `T<parent>` names): here the providing sources are the directly-declared methods of each
+    /// `use`d trait, named directly. A method the class overrides itself, or supplied by only one trait,
+    /// needs no clause. (A collision via a trait's *own* nested `use` is not detected here — only direct
+    /// declarations; that narrower case is caught by the PHP oracle if it ever arises.)
+    pub(super) fn build_use_trait_clauses(&self, c: &ClassDecl, program: &Program) -> Vec<String> {
+        use crate::ast::{Item, Resolution};
+        // Directly-declared method names of a `use`d trait.
+        let trait_methods = |name: &str| -> std::collections::BTreeSet<String> {
+            program
+                .items
+                .iter()
+                .find_map(|it| match it {
+                    Item::Trait(t) if t.name == name => Some(
+                        t.members
+                            .iter()
+                            .filter_map(|m| match m {
+                                ClassMember::Method(f) => Some(f.name.clone()),
+                                _ => None,
+                            })
+                            .collect(),
+                    ),
+                    _ => None,
+                })
+                .unwrap_or_default()
+        };
+        // method name -> set of composed traits supplying it directly.
+        let mut provides: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
+            std::collections::BTreeMap::new();
+        for u in &c.uses {
+            for m in trait_methods(&u.name) {
+                provides.entry(m).or_default().insert(u.name.clone());
+            }
+        }
+        let own: std::collections::BTreeSet<&str> = c
+            .members
+            .iter()
+            .filter_map(|m| match m {
+                ClassMember::Method(f) => Some(f.name.as_str()),
+                _ => None,
+            })
+            .collect();
+        let mut clauses = Vec::new();
+        for (m, traits) in &provides {
+            if traits.len() < 2 || own.contains(m.as_str()) {
+                continue; // single source, or the class overrides it (the class method wins)
+            }
+            // The winner: `use P.m` names it; else the one trait left after `rename`/`exclude`.
+            let used = c.resolutions.iter().find_map(|r| match r {
+                Resolution::Use { parent, method, .. } if method == m => Some(parent.clone()),
+                _ => None,
+            });
+            let removed: std::collections::BTreeSet<String> = c
+                .resolutions
+                .iter()
+                .filter_map(|r| match r {
+                    Resolution::Rename { parent, method, .. } if method == m => {
+                        Some(parent.clone())
+                    }
+                    Resolution::Exclude { parent, method, .. } if method == m => {
+                        Some(parent.clone())
+                    }
+                    _ => None,
+                })
+                .collect();
+            let winner = used.or_else(|| traits.iter().find(|p| !removed.contains(*p)).cloned());
+            if let Some(w) = winner {
+                let losers: Vec<String> = traits.iter().filter(|p| **p != w).cloned().collect();
+                if !losers.is_empty() {
+                    clauses.push(format!("{w}::{m} insteadof {};", losers.join(", ")));
+                }
+            }
+        }
+        for r in &c.resolutions {
+            if let Resolution::Rename {
+                parent,
+                method,
+                as_name,
+                ..
+            } = r
+            {
+                clauses.push(format!("{parent}::{method} as {as_name};"));
             }
         }
         clauses

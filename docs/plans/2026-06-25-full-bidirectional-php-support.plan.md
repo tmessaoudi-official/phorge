@@ -41,8 +41,8 @@ clippy+fmt clean, no new `Op`/`Value` unless noted, one guide example.
 | Slice | Work | Notes |
 |---|---|---|
 | **W1.1 ✅** | **Member visibility enforcement** in the checker — **COMPLETE.** `ClassInfo` gains `field_vis`/`method_vis` (name → (vis, owner)), populated at collection (fields, promoted ctor params, methods), merged through inheritance (owner preserved for `extends`, re-owned to the using class for trait `use`). A shared `enforce_member_vis` helper (Private→owner, Protected→owner+subtypes) is wired into **six** external-access sites: instance-field read (`check_member`), field write (`check_field_assign`), **clone-with `obj with {…}`**, **let-destructuring** (`stmt.rs`), **match struct-patterns** (`matches.rs`), and method call (`check_method_call`). Codes `E-FIELD-VISIBILITY`/`E-METHOD-VISIBILITY` (+ `phg explain`). Example `examples/guide/member-visibility.phg` (legal accesses; rejected cases in README). 15 visibility tests + 933 gate green, byte-identical run≡runvm≡PHP 8.5. | Front-end-only, no new `Op`/`Value`. Phase-0 scan found NO example reads a private member externally (they use accessors); fixed two test fixtures that relied on the hole. **Verified (PHP 8.5):** `clone($o,[…])` AND `$obj->field` destructuring both throw on a private field — hence the clone-with + destructuring siblings. **Remaining narrow corners (documented in KNOWN_ISSUES, not yet enforced):** `private` *static* fields (`ClassName.field`) and intersection-typed-receiver members. |
-| **W1.2** | **MI-ancestor type references** (S6c): when a multi-parent class lowers to interface+trait, rewrite a Phorge type binding / `instanceof` for that ancestor to the interface form (`ISwimmer` not `Swimmer`). | KNOWN_ISSUES.md:24-44. Loader/transpiler rewrite, mirrors existing decomposition. |
-| **W1.3** | **Trait conflict resolution emission**: the checker already resolves `use P.m`/rename/exclude; emit PHP `insteadof`/`as` in the transpiled `use` block instead of a plain `use T;`. | KNOWN_ISSUES.md:46-59. Transpile-only. |
+| **W1.2 ✅** | **MI-ancestor type references** — **ALREADY SHIPPED (S6c.3), no work needed.** Phase-0 empirical check found `class C extends A, B` already transpiles `c instanceof A` → `$c instanceof IA` and ancestor-typed bindings, byte-identical 3-way (`guide/inheritance-lattice.phg`). The KNOWN_ISSUES "deferral (1)" was **stale** (written at S6b, not updated when S6c.3 landed) — corrected. *(Lesson: verify state against code, not docs — Rule 11.)* |
+| **W1.3 ✅** | **Trait conflict resolution emission** — **COMPLETE.** A trait-vs-trait collision resolved by `use P.m`/`rename`/`exclude` now lowers to a combined PHP `use P, Q { P::m insteadof Q; P::m as n; }` block (new `build_use_trait_clauses`, the trait-composition analogue of the proven MI `build_trait_clauses`; `emit_class` threads `program`). Was a real gap (verified: PHP Fatal `Trait method ... not applied ... collision` without `insteadof`). Example `guide/trait-conflicts.phg`; all three forms (use/rename/exclude) byte-identical run≡runvm≡PHP 8.5. Transpile-only, no new `Op`. | KNOWN_ISSUES trait-deferral (4) closed. Narrow remaining edge (collision via a trait's own nested `use`) documented + oracle-guarded. |
 | **W1.4** | **Coverage audit + triage** of the 24 documented transpile limitations: fix the fixable (above), and for the *inherent* fault-domain ones (float ÷0, `opt!` location) confirm they stay documented (the differential excludes faults by design). Produce a final "every shipped feature → transpile path" matrix. | Closes the ↓ direction. |
 
 ## WAVE 2 — New PHP-parity language features (bidirectional per feature)
@@ -86,4 +86,13 @@ Continues [`2026-06-25-m-lift-php-to-phorge.plan.md`](2026-06-25-m-lift-php-to-p
   recommendation: the one real byte-identity hole, cheap, de-risks the rest).
 - [2026-06-25] **W1.1 COMPLETE** — member visibility enforced across all six external-access sites;
   three sibling holes (clone-with, let-destructuring, match struct-patterns) found by the blast-radius
-  convergence pass and closed. 933 gate green, clippy+fmt clean. **NEXT = W1.2** (MI-ancestor type refs).
+  convergence pass and closed. 933 gate green, clippy+fmt clean.
+- [2026-06-25] **W1.2 = no-op** — MI-ancestor type refs were already shipped (S6c.3); only the stale
+  KNOWN_ISSUES doc needed correcting. (Phase-0 empirical verification, not doc-trust.)
+- [2026-06-25] **W1.3 COMPLETE** — trait-vs-trait conflict resolution now transpiles to PHP
+  `insteadof`/`as`; `guide/trait-conflicts.phg` byte-identical 3-way. **NEXT = W1.4** (coverage audit /
+  matrix — the last ↓-direction slice).
+- [2026-06-25] PRINCIPLE (developer): **PHP is the floor, not the ceiling.** Adopt PHP's well-thought
+  features; *fix* what violates best practice / craftsmanship — both directions. In transpile, hide
+  PHP's awkward mechanics behind a cleaner Phorge surface (e.g. `use P.m` → PHP `insteadof`); in lift,
+  emit idiomatic best-practice Phorge, never mirror PHP warts. Applies to Wave 2 (new features) + M-Lift.

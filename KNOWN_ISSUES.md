@@ -21,13 +21,13 @@ not a panic:
   PHP's native `$previous`), but the Phorge fault renderer does not walk it; folding the cause chain into
   the trace output is a later refinement.
 
-- **Multiple inheritance — S6b shipped; deferrals (→ S6c):** `class C extends A, B` with `use`/`rename`/
-  `exclude` resolution, diamond auto-merge, and `abstract` classes/methods are in. Still deferred: (1) a
-  **type or `instanceof` reference to a *decomposed ancestor* rewriting to its interface form** — the
-  multi-parent class lowers to `implements I…/use T…`, so a Phorge subtype satisfies the parent's
-  *interface*, not the parent *class*; a `Swimmer s = duck;` binding or `duck instanceof Swimmer` therefore
-  needs the type emitted as `ISwimmer` (full subtyping across the lattice = S6c — the S6b guide example
-  uses no parent-typed binding/`instanceof`). (2) **Field-collision detection shipped (S6c.1):** a
+- **Multiple inheritance — S6b/S6c shipped; deferrals:** `class C extends A, B` with `use`/`rename`/
+  `exclude` resolution, diamond auto-merge, and `abstract` classes/methods are in. (1) **Decomposed-ancestor
+  type/`instanceof` references — SHIPPED (S6c.3).** A multi-parent class lowers to `implements I…/use T…`,
+  so the transpiler emits an ancestor type reference (a `Swimmer s = duck;` binding, an ancestor-typed
+  parameter, or `duck instanceof Swimmer`) in its **interface form** (`ISwimmer`); full subtyping across the
+  lattice is observable on all three backends byte-identically (`guide/inheritance-lattice.phg`).
+  (2) **Field-collision detection shipped (S6c.1):** a
   same-named instance field inherited from ≥2 distinct parents is `E-MI-FIELD-CONFLICT` (no `insteadof`
   for PHP properties; resolve by redeclaring in the child). (3) **Constructor inheritance shipped (S6c.2a + S6c.2b):** a class with **no own
   constructor** inherits its parents' — single-parent runs the (transitively chained) ancestor's ctor;
@@ -50,10 +50,12 @@ not a panic:
   interface for the type side. (2) **generic traits** (`trait T<X>`) — mirror the generic-method gate;
   not yet parsed. (3) **cross-package traits** — this slice is `package Main`-only (like every M-RT
   slice); a library-package trait + cross-package `use` is a follow-up. (4) **trait-vs-trait
-  conflict-resolution *transpilation*** — the checker resolves a collision via `use P.m`/`rename`/
-  `exclude` clauses, but the transpiler emits only a plain per-trait `use T;` (no `insteadof`/`as` for
-  *trait* collisions yet); an unresolved collision is rejected by the checker, and a *resolved* one would
-  be caught by the PHP oracle — so no silent wrong output, just a gap. (5) **immutable trait instance
+  conflict-resolution transpilation — SHIPPED (Wave 1.3).** A collision resolved by `use P.m`/`rename`/
+  `exclude` now lowers to a combined PHP `use P, Q { P::m insteadof Q; P::m as n; }` block (mirroring the
+  MI-decomposition path), byte-identical run≡runvm≡real PHP (`guide/trait-conflicts.phg`). Narrower
+  remaining edge: a collision where one trait supplies the method only via its *own* nested `use`
+  (not a direct declaration) isn't detected by the clause builder — caught by the PHP oracle if it
+  arises. (5) **immutable trait instance
   fields need a trait constructor** to initialize (promotion) — the same M-mut rule as a plain class
   (an immutable field can't be assigned via `this.f = …`, even in the using class's ctor). (6) `const`
   *class/trait* members are a pre-existing non-feature (`E-FIELD-INIT`), unrelated to traits.

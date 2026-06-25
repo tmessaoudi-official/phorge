@@ -1,0 +1,39 @@
+// Trait conflict resolution — when two composed traits supply the same method (M-RT S8 + Wave 1.3).
+//
+// Composing two traits that both declare a method `m` is a collision. Phorge resolves it with clean,
+// explicit clauses in the class body:
+//   • use P.m          — pick trait P's `m` as the winner for the name `m`
+//   • rename P.m as n  — keep P's `m` under a NEW name `n` (and let the other trait win `m`)
+//   • exclude P.m      — drop P's contribution to `m`
+// These lower to PHP `use P, Q { P::m insteadof Q; P::m as n; }` — the awkward `insteadof`/`as`
+// mechanics that Phorge hides behind a clearer surface. PHP is the floor: the resolution is verified
+// by the checker (an UNresolved collision is `E-MI-CONFLICT`), then emitted as valid PHP. Byte-identical
+// on run / runvm / real PHP.
+package Main;
+
+import Core.Console;
+
+trait English {
+    function hello() -> string { return "hello"; }
+    function bye() -> string { return "bye"; }
+}
+
+trait French {
+    function hello() -> string { return "bonjour"; }
+    function bye() -> string { return "au revoir"; }
+}
+
+// Compose both languages; resolve each collided method explicitly.
+class Greeter {
+    use English;
+    use French;
+    use English.hello      // `hello` resolves to English's
+    rename French.bye as goodbyeFr // keep French's `bye` as `goodbyeFr`; `bye` then falls to English
+}
+
+function main() -> void {
+    Greeter g = new Greeter();
+    Console.println(g.hello()); // English wins  -> hello
+    Console.println(g.bye()); // English (French.bye renamed away) -> bye
+    Console.println(g.goodbyeFr()); // French's bye under its new name -> au revoir
+}
