@@ -109,7 +109,14 @@ Start at L1–L3 + a thin Tier-1 lifter behind the playground demo; grow the par
   run/runvm/**real PHP** (all print `Hello, Phorge`). Playground `lift_json` + `pg_lift` wasm wrapper
   (lift_source uses no `on_deep_stack` → browser-safe). 975 lib+differential green + 11 playground.
   **Web-UI button deferred** (needs a PHP-input "paste PHP → see Phorge" mode in `main.js`).
-- **NEXT = L5** — round-trip differential gate (lift PHP→Phorge, transpile back→PHP, run both under real
-  PHP, compare stdout): upgrades "the draft re-parses/runs" to "provably preserves the original PHP's
-  behavior". Then the **Tier-2 build-out** — the lift-error frontier in `lifter.rs`: `array`→List/Map/Set
-  inference, foreach element-type inference, default params, backed enums. Then the playground web-UI button.
+- [2026-06-26] **L5 COMPLETE** — round-trip differential gate (`tests/lift_roundtrip.rs`). For each
+  Tier-1 PHP sample: lift→Phorge, then assert the lifted Phorge run **three ways** (interpreter, VM,
+  transpiled-back PHP) all equal the **original PHP's** stdout — the original is the source of truth, so
+  a full match is evidence the lift *preserved behavior*, not just produced valid Phorge. 5 samples
+  (concat, if/elseif/else, for-loop string-build, class+ctor+method, match). PHP-gated like the oracle
+  (`PHORGE_REQUIRE_PHP=1`). Samples echo strings only (int-echo would lift to a `Console.print(int)` type
+  error; floats have a known formatting divergence). **The ↑ direction is now behavior-verified.**
+- **NEXT = Tier-2 build-out** — the lift-error frontier in `lifter.rs`: `array`→List/Map/Set inference,
+  foreach element-type inference, default params, backed enums. Then the playground web-UI button
+  (`pg_lift` exists; needs a PHP-input mode in `main.js`). **M-Lift core (L1–L6) is complete** — the
+  ↑ PHP→Phorge bridge is end-to-end, user-facing, and behavior-gated for Tier-1.
