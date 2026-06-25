@@ -37,23 +37,20 @@ fn free_function_with_params_and_arithmetic() {
 }
 
 #[test]
-fn clone_with_lowers_to_php84_helper_not_85_native() {
-    // `obj with { f = e }` must NOT emit PHP 8.5's two-argument `clone($o, [...])` — that is a
-    // parse error on the 8.4 transpile floor (the CI php). It lowers to the `__phorge_clone_with`
-    // runtime helper instead (clone + per-field set). Regression guard for the CI floor fix.
+fn clone_with_lowers_to_native_php85_two_arg_clone() {
+    // T4: the transpile floor is PHP 8.5, where `clone($o, [...])` is native (clone + property
+    // overrides, constructor bypassed, `__clone` honored) — exactly what `obj with { f = e }` means.
+    // It replaces the old `__phorge_clone_with` runtime helper (which existed only for the prior 8.4
+    // floor). An empty override list is still a one-arg `clone($o)`.
     let out = php("class P { constructor(public int x, public int y) {} } \
              function main() -> void { P a = P(1, 2); P b = a with { x = 9 }; }");
     assert!(
-        out.contains("__phorge_clone_with("),
-        "clone-with call uses the 8.4 helper:\n{out}"
+        out.contains("clone($a, ['x' => 9])"),
+        "clone-with uses native two-arg clone:\n{out}"
     );
     assert!(
-        out.contains("function __phorge_clone_with("),
-        "the helper is defined once:\n{out}"
-    );
-    assert!(
-        !out.contains("clone($"),
-        "no native two-arg `clone($o, …)` (PHP 8.5+ only):\n{out}"
+        !out.contains("__phorge_clone_with"),
+        "the 8.4 helper is gone (call site and definition):\n{out}"
     );
 }
 

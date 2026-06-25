@@ -87,11 +87,6 @@ struct Transpiler {
     uses_add: bool,
     uses_str: bool,
     uses_range: bool,
-    /// Set when `obj with { f = e }` is emitted. PHP's native two-argument `clone($o, [...])` is a
-    /// **8.5+** feature, but Phorge's transpile floor is **8.4** (the extension-policy reference is
-    /// `php:8.4-cli-alpine`), so a non-empty override list lowers to the `__phorge_clone_with`
-    /// runtime helper (clone + per-field set) instead — 8.4-compatible, same semantics (M-mut.4a).
-    uses_clone_with: bool,
     /// Set when `Reflect.kind(x)` is emitted — defines the `__phorge_kind` runtime helper once per
     /// file. A native's `php` closure can't set a `uses_*` flag (it has no `&mut self`), so
     /// `emit_member_call` special-cases this one native to set the flag before emitting (the
@@ -253,7 +248,6 @@ impl Transpiler {
             uses_add: false,
             uses_str: false,
             uses_range: false,
-            uses_clone_with: false,
             uses_reflect_kind: false,
             uses_reflect_class_name: false,
             namespaced: false,

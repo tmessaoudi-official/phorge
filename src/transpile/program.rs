@@ -219,18 +219,6 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
-        if self.uses_clone_with {
-            // `obj with { f = e }` on PHP 8.4 (native two-arg `clone` is 8.5+): clone, then set each
-            // overridden field. Phorge fields emit as plain public PHP properties, so the writes are
-            // valid; the constructor is bypassed (matches the backends' shallow clone-then-override).
-            self.line("function __phorge_clone_with($o, $changes) {");
-            self.indent += 1;
-            self.line("$c = clone $o;");
-            self.line("foreach ($changes as $k => $v) { $c->$k = $v; }");
-            self.line("return $c;");
-            self.indent -= 1;
-            self.line("}");
-        }
         if self.uses_div {
             // Phorge `/`: int/int truncates toward zero (`intdiv`); float/float is real division.
             self.line("function __phorge_div($a, $b) {");

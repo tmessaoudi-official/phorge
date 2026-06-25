@@ -126,9 +126,10 @@ impl Transpiler {
             ),
             // `obj with { f = e }` → a fresh instance with the named fields overridden and the
             // constructor bypassed — byte-identical to the backends (M-mut.4a). An empty override list
-            // is just `clone($obj)` (valid since PHP 5). A non-empty list lowers to the
-            // `__phorge_clone_with` helper rather than PHP 8.5's native two-arg `clone($o, [...])`,
-            // because the transpile floor is PHP 8.4 (where two-arg `clone` is a parse error).
+            // is `clone($obj)` (valid since PHP 5). A non-empty list emits PHP 8.5's native two-arg
+            // `clone($o, ['f' => e, …])` (the transpile floor is 8.5): it clones, applies the property
+            // overrides, bypasses the constructor and honors `__clone` — exactly the backends'
+            // shallow clone-then-override. (Pre-8.5 this needed the `__phorge_clone_with` helper.)
             Expr::CloneWith { object, fields, .. } => {
                 let o = self.emit_expr(object)?;
                 if fields.is_empty() {
@@ -139,11 +140,7 @@ impl Transpiler {
                     let v = self.emit_expr(e)?;
                     pairs.push(format!("'{name}' => {v}"));
                 }
-                self.uses_clone_with = true;
-                // In multi-package (namespaced) mode the helper lives in the global namespace, so the
-                // call is fully qualified (`\__phorge_clone_with`), mirroring `__phorge_div`/`_str`.
-                let bs = if self.namespaced { "\\" } else { "" };
-                Ok(format!("{bs}__phorge_clone_with({o}, [{}])", pairs.join(", ")))
+                Ok(format!("clone({o}, [{}])", pairs.join(", ")))
             }
             // Expression-position `match` (M11): wrap the SAME if-chain `emit_match` produces in
             // statement position inside an immediately-invoked closure, so both positions share one
