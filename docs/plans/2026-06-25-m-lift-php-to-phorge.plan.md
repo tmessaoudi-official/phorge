@@ -89,5 +89,19 @@ Start at L1–L3 + a thin Tier-1 lifter behind the playground demo; grow the par
     dynamic `new $x`/`$obj::`, array-append `[]`, `interface`/`trait`/`try`/`switch`/`namespace`/…
   - Wholly isolated — no `Op`/`Value`/checker/interpreter/VM/transpiler change; nothing outside
     `src/lift/` consumes it. 840 lib tests green (43 in the lift module), clippy + fmt clean.
-- **NEXT = L3** — Phorge AST → `.phg` pretty-printer (new; the transpiler prints PHP, not Phorge),
-  then L4 (lifter PHP-AST → Phorge-AST).
+- [2026-06-26] **L3 COMPLETE** (`d1a074b`): `src/lift/printer.rs` — Phorge AST → `.phg` pretty-printer
+  (inverse of the PHP transpiler). Scoped to the lifter-output subset (out-of-subset node → clear
+  `Err`); strings escaped (incl. `{`/`}`→`\{`/`\}`), binaries fully-parenthesized — both re-parse-safe.
+  Verified by exact-output + round-trip-idempotency tests. Reusable later as `phg fmt`. 11 tests.
+- [2026-06-26] **L4 COMPLETE** (`bf08b1d`): `src/lift/lifter.rs` — PHP-AST → Phorge-AST + `lift_source`
+  (lex→parse→lift→print). **The ↑ PHP→Phorge direction is now end-to-end for the Tier-1 core.** Idiomatic
+  mapping (top-level code → `main()`; `$x=e`→`mutable var`; `.`→`+`; `===`→`==`; `echo`→`Console.print`
+  +auto-import; `__construct`→`constructor`; PHP fields→`mutable`, non-final class→`open`; array→List/Map;
+  ternary→expr-`if`; match→`Expr::Match`). Loud lift-errors for the Tier-2/no-equivalent frontier
+  (`array` type, instance-field default, backed enums + enum methods, **foreach** [Phorge for-in needs a
+  concrete element type — `var` is VarDecl-only], default params, untyped params, elvis, assign-as-subexpr,
+  non-literal match arms, main/top-level collision). End-to-end test asserts the lifted `.phg` re-parses
+  as valid Phorge. 13 tests. 864 lib green, isolated.
+- **NEXT = L5** — round-trip differential gate (lift PHP→Phorge, transpile back→PHP, run both under real
+  PHP, compare stdout) — the behavior-preservation proof. Then L6 (`phg lift` CLI + playground "paste PHP
+  → see Phorge"), then the Tier-2 build-out (`array`/foreach inference, default params, backed enums).
