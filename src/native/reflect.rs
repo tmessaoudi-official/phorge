@@ -102,6 +102,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             // backend; the compiler types the call by expression shape, the transpiler via `php`).
             params: vec![Ty::Param("T".into())],
             ret: Ty::String,
+            pure: true,
             eval: NativeEval::Pure(reflect_kind),
             // `emit_member_call` sets `uses_reflect_kind` before calling this (the gated-helper pattern);
             // the helper is defined once in `emit_runtime_helpers`. `looks_like_global_call` adds the
@@ -113,6 +114,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             name: "className",
             params: vec![Ty::Param("T".into())],
             ret: Ty::Optional(Box::new(Ty::String)),
+            pure: true,
             eval: NativeEval::Pure(reflect_class_name),
             // Gated `__phorge_class_name` helper (set in `emit_member_call`): single-evaluates its
             // argument (an inline `is_object($x) ? get_class($x) : null` would double-evaluate a
@@ -126,6 +128,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             // Always erased before any backend by the `checker::reflect` static-type pass; this
             // eval/php is dead/defensive (see `reflect_type_name`). `php` can only be coarse.
+            pure: true,
             eval: NativeEval::Pure(reflect_type_name),
             php: |a| format!("__phorge_kind({})", parg(a, 0)),
         },

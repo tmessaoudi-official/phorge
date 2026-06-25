@@ -36,6 +36,7 @@ pub(crate) fn file_natives() -> Vec<NativeFn> {
             name: "read",
             params: vec![Ty::String],
             ret: Ty::Optional(Box::new(Ty::String)),
+            pure: true,
             eval: NativeEval::Pure(file_read),
             // `@` suppresses the missing-file warning; the assign-and-compare distinguishes a missing
             // file (`false` → null) from a legitimately empty one (`""`), which a bare `?:` would not.
@@ -51,6 +52,7 @@ pub(crate) fn file_natives() -> Vec<NativeFn> {
             name: "exists",
             params: vec![Ty::String],
             ret: Ty::Bool,
+            pure: true,
             eval: NativeEval::Pure(file_exists),
             php: |a| format!("file_exists({})", parg(a, 0)),
         },
@@ -59,6 +61,7 @@ pub(crate) fn file_natives() -> Vec<NativeFn> {
             name: "write",
             params: vec![Ty::String, Ty::String],
             ret: Ty::Void,
+            pure: true,
             eval: NativeEval::Pure(file_write),
             php: |a| format!("file_put_contents({}, {})", parg(a, 0), parg(a, 1)),
         },

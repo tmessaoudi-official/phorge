@@ -37,6 +37,7 @@ pub(crate) fn set_natives() -> Vec<NativeFn> {
             name: "of",
             params: vec![Ty::List(Box::new(t()))],
             ret: Ty::Set(Box::new(t())),
+            pure: true,
             eval: NativeEval::Pure(set_of),
             // Dedup preserving first-occurrence order; SORT_STRING matches HKey string-distinctness.
             php: |a| format!("array_values(array_unique({}, SORT_STRING))", parg(a, 0)),
@@ -46,6 +47,7 @@ pub(crate) fn set_natives() -> Vec<NativeFn> {
             name: "contains",
             params: vec![Ty::Set(Box::new(t())), t()],
             ret: Ty::Bool,
+            pure: true,
             eval: NativeEval::Pure(set_contains),
             // Strict in_array(needle, haystack) — needle first.
             php: |a| format!("in_array({}, {}, true)", parg(a, 1), parg(a, 0)),
@@ -55,6 +57,7 @@ pub(crate) fn set_natives() -> Vec<NativeFn> {
             name: "size",
             params: vec![Ty::Set(Box::new(t()))],
             ret: Ty::Int,
+            pure: true,
             eval: NativeEval::Pure(set_size),
             php: |a| format!("count({})", parg(a, 0)),
         },

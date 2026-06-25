@@ -26,9 +26,12 @@ mod html;
 mod list;
 mod map;
 mod math;
+mod process;
 mod reflect;
 mod set;
 mod text;
+
+pub use process::set_process_args;
 
 /// One built-in function, addressed by `(module, name)`. See the module docs for the four facets.
 pub struct NativeFn {
@@ -46,6 +49,14 @@ pub struct NativeFn {
     /// PHP emission: given the already-emitted PHP for each argument, return the PHP snippet this
     /// native erases to (decision N-2). For `Console.println`: `echo {a} . "\n"`.
     pub php: fn(&[String]) -> String,
+    /// Whether this native is **deterministic** w.r.t. the program text (`true` for all but the
+    /// ambient-environment natives — `Core.Process`/`Core.Env`, whose result depends on the process,
+    /// not the source). A program that calls an impure native is *quarantined* from the byte-identity
+    /// differential (the PHP leg runs in a separate process whose argv/env need not match) and tested
+    /// separately under a controlled environment — see `tests/process.rs`. Declared per-native here
+    /// (not hardcoded in the harness) so the differential stays generic: it reads this flag via
+    /// `program_uses_impure_native` (`docs/specs/2026-06-25-process-io-quarantine-seam-design.md`, Q1).
+    pub pure: bool,
 }
 
 /// A backend's re-entrant closure invoker, handed to a [`NativeEval::HigherOrder`] body: given a
@@ -128,6 +139,7 @@ fn build() -> Vec<NativeFn> {
         name: "println",
         params: vec![Ty::String],
         ret: Ty::Void,
+        pure: true,
         eval: NativeEval::Pure(console_println),
         php: |args| {
             let a = args
@@ -142,6 +154,7 @@ fn build() -> Vec<NativeFn> {
         name: "print",
         params: vec![Ty::String],
         ret: Ty::Void,
+        pure: true,
         eval: NativeEval::Pure(console_print),
         php: |args| {
             let a = args
@@ -159,6 +172,7 @@ fn build() -> Vec<NativeFn> {
     registry.extend(map::map_natives());
     registry.extend(set::set_natives());
     registry.extend(reflect::reflect_natives());
+    registry.extend(process::process_natives());
     // Pinned-slot invariant: the constant the compiler bakes into `Op::CallNative` must address the
     // entry it names. Cheap one-time check at first `registry()` access.
     assert_eq!(

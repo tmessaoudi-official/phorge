@@ -77,6 +77,7 @@ pub(crate) fn bytes_natives() -> Vec<NativeFn> {
             name: "fromString",
             params: vec![Ty::String],
             ret: Ty::Bytes,
+            pure: true,
             eval: NativeEval::Pure(bytes_from_string),
             // PHP strings are byte arrays → identity.
             php: |a| parg(a, 0).to_string(),
@@ -86,6 +87,7 @@ pub(crate) fn bytes_natives() -> Vec<NativeFn> {
             name: "toString",
             params: vec![Ty::Bytes],
             ret: Ty::Optional(Box::new(Ty::String)),
+            pure: true,
             eval: NativeEval::Pure(bytes_to_string),
             // UTF-8 validity via PCRE (always compiled in), NOT mbstring's mb_check_encoding:
             // the oracle runs `php -n` and minimal/Alpine PHP drop ini-loaded mbstring, so a core
@@ -98,6 +100,7 @@ pub(crate) fn bytes_natives() -> Vec<NativeFn> {
             name: "len",
             params: vec![Ty::Bytes],
             ret: Ty::Int,
+            pure: true,
             eval: NativeEval::Pure(bytes_len),
             // BYTE count (strlen), not character count (mb_strlen).
             php: |a| format!("strlen({})", parg(a, 0)),
@@ -107,6 +110,7 @@ pub(crate) fn bytes_natives() -> Vec<NativeFn> {
             name: "find",
             params: vec![Ty::Bytes, Ty::Bytes],
             ret: Ty::Optional(Box::new(Ty::Int)),
+            pure: true,
             eval: NativeEval::Pure(bytes_find),
             // strpos returns int|false; map false → null (the `int?` absent case). Empty needle → 0.
             php: |a| {
@@ -122,6 +126,7 @@ pub(crate) fn bytes_natives() -> Vec<NativeFn> {
             name: "concat",
             params: vec![Ty::Bytes, Ty::Bytes],
             ret: Ty::Bytes,
+            pure: true,
             eval: NativeEval::Pure(bytes_concat),
             php: |a| format!("({} . {})", parg(a, 0), parg(a, 1)),
         },
@@ -130,6 +135,7 @@ pub(crate) fn bytes_natives() -> Vec<NativeFn> {
             name: "slice",
             params: vec![Ty::Bytes, Ty::Int, Ty::Int],
             ret: Ty::Bytes,
+            pure: true,
             eval: NativeEval::Pure(bytes_slice),
             // Total, bounds-clamped half-open slice via an IIFE — matches the Rust clamp exactly.
             php: |a| {

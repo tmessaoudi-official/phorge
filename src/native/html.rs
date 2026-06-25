@@ -152,6 +152,7 @@ macro_rules! tag_el {
             name: $tag,
             params: vec![Ty::List(Box::new(Ty::Attr)), Ty::List(Box::new(Ty::Html))],
             ret: Ty::Html,
+            pure: true,
             eval: NativeEval::Pure(ev),
             php,
         }
@@ -186,6 +187,7 @@ macro_rules! tag_void {
             name: $tag,
             params: vec![Ty::List(Box::new(Ty::Attr))],
             ret: Ty::Html,
+            pure: true,
             eval: NativeEval::Pure(ev),
             php,
         }
@@ -199,6 +201,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
             name: "text",
             params: vec![Ty::String],
             ret: Ty::Html,
+            pure: true,
             eval: NativeEval::Pure(html_text),
             // Flags PINNED (not PHP's version-varying default) so the output is stable and `php -n`
             // safe; htmlspecialchars is tier-1 (ext/standard, always compiled).
@@ -209,6 +212,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
             name: "raw",
             params: vec![Ty::String],
             ret: Ty::Html,
+            pure: true,
             eval: NativeEval::Pure(html_identity),
             php: |a| format!("({})", parg(a, 0)),
         },
@@ -217,6 +221,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
             name: "render",
             params: vec![Ty::Html],
             ret: Ty::String,
+            pure: true,
             eval: NativeEval::Pure(html_identity),
             php: |a| format!("({})", parg(a, 0)),
         },
@@ -226,6 +231,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
             name: "attr",
             params: vec![Ty::String, Ty::String],
             ret: Ty::Attr,
+            pure: true,
             eval: NativeEval::Pure(html_attr),
             // ` name="ESC(value)"` — name trusted (author literal), value escaped (same boundary as
             // `text`). Single-quoted PHP literals carry the leading space + `="` + closing `"`.
@@ -242,6 +248,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
             name: "boolAttr",
             params: vec![Ty::String],
             ret: Ty::Attr,
+            pure: true,
             eval: NativeEval::Pure(html_bool_attr),
             php: |a| format!("' ' . {}", parg(a, 0)),
         },
@@ -254,6 +261,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
                 Ty::List(Box::new(Ty::Html)),
             ],
             ret: Ty::Html,
+            pure: true,
             eval: NativeEval::Pure(html_el),
             // IIFE so the tag expr is evaluated once (no double-eval) — byte-identical to the single
             // Rust evaluation: `<` . tag . implode(attrs) . `>` . implode(children) . `</` . tag . `>`.
@@ -271,6 +279,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
             name: "voidEl",
             params: vec![Ty::String, Ty::List(Box::new(Ty::Attr))],
             ret: Ty::Html,
+            pure: true,
             eval: NativeEval::Pure(html_void_el),
             php: |a| {
                 format!(
@@ -285,6 +294,7 @@ pub(crate) fn html_natives() -> Vec<NativeFn> {
             name: "concat",
             params: vec![Ty::List(Box::new(Ty::Html))],
             ret: Ty::Html,
+            pure: true,
             eval: NativeEval::Pure(html_concat),
             php: |a| format!("implode('', {})", parg(a, 0)),
         },

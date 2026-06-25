@@ -115,6 +115,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             name: "reverse",
             params: vec![Ty::List(Box::new(t()))],
             ret: Ty::List(Box::new(t())),
+            pure: true,
             eval: NativeEval::Pure(list_reverse),
             // array_reverse re-indexes a list (sequential keys) — byte-identical to the Rust Vec.
             php: |a| format!("array_reverse({})", parg(a, 0)),
@@ -124,6 +125,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             name: "length",
             params: vec![Ty::List(Box::new(t()))],
             ret: Ty::Int,
+            pure: true,
             eval: NativeEval::Pure(list_length),
             php: |a| format!("count({})", parg(a, 0)),
         },
@@ -132,6 +134,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             name: "sum",
             params: vec![Ty::List(Box::new(Ty::Int))],
             ret: Ty::Int,
+            pure: true,
             eval: NativeEval::Pure(list_sum),
             php: |a| format!("array_sum({})", parg(a, 0)),
         },
@@ -140,6 +143,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             name: "map",
             params: vec![list(t()), Ty::Function(vec![t()], Box::new(u()))],
             ret: list(u()),
+            pure: true,
             eval: NativeEval::HigherOrder(list_map),
             // array_map(callable, array) — note the order is swapped vs Phorge's map(list, f).
             php: |a| format!("array_map({}, {})", parg(a, 1), parg(a, 0)),
@@ -149,6 +153,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             name: "filter",
             params: vec![list(t()), Ty::Function(vec![t()], Box::new(Ty::Bool))],
             ret: list(t()),
+            pure: true,
             eval: NativeEval::HigherOrder(list_filter),
             // array_filter preserves original keys; array_values re-indexes to a sequential list.
             php: |a| format!("array_values(array_filter({}, {}))", parg(a, 0), parg(a, 1)),
@@ -158,6 +163,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             name: "reduce",
             params: vec![list(t()), u(), Ty::Function(vec![u(), t()], Box::new(u()))],
             ret: u(),
+            pure: true,
             eval: NativeEval::HigherOrder(list_reduce),
             // array_reduce(array, callback, initial) — initial is Phorge's 2nd arg, fn its 3rd.
             php: |a| {
