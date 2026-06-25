@@ -66,3 +66,18 @@ Already idiomatic (no work): higher-order natives → `array_map`/`array_filter`
   class-field + variant-payload type maps; resolve `p.x`/`this.x` field reads, constructor
   results, and `Pass(s)` variant-payload match bindings → native operators. `__phorge_float`
   stays (irreducible Ryū). Oracle-gated.
+
+## Status — COMPLETE (2026-06-25)
+T1/T2/T3/T4/T5/T6/T6b/T6c all shipped (commits d158e6d, 06463fb, 4fe98e5, 1411883, 3b0560f,
+c3a591e, 61d17be). Helpers **fully eliminated**: `__phorge_clone_with`, `__phorge_unwrap`,
+`__phorge_div`, `__phorge_rem`. **Reduced to niche fallbacks**: `__phorge_add` (→3),
+`__phorge_str` (→ list/map-index results, const/static reads, native-call results, catch-var
+field reads). **Irreducible** (kept by design): `__phorge_float` (Ryū shortest-round-trip — the
+hard floor), `__phorge_range`, reflection (`__phorge_kind`/`_class_name`/`_reflect_of`),
+`__phorge_init_statics`. All gated `run≡runvm≡real PHP 8.5` byte-identical.
+
+### Optional follow-up (T6d, not scheduled) — diminishing returns vs the `__phorge_float` floor
+Resolve the last `__phorge_str`/`__phorge_add` fallbacks by adding: list/map element kinds
+(`OpKind::List/Map`, mirroring the compiler's `CTy`), const/static read kinds, and native-call
+return kinds (from the native registry's ret sig). Each is a smaller niche; `__phorge_float`
+remains regardless wherever a float is displayed.
