@@ -36,7 +36,7 @@ fn console_println_rejects_composite() {
 #[test]
 fn php_emission_is_echo_with_newline() {
     let php = (registry()[CONSOLE_PRINTLN].php)(&["$x".to_string()]);
-    assert_eq!(php, r#"echo $x . "\n""#);
+    assert_eq!(php, r#"echo $x, "\n""#);
 }
 
 #[test]

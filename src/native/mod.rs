@@ -47,7 +47,7 @@ pub struct NativeFn {
     /// one body, two callers). See [`NativeEval`].
     pub eval: NativeEval,
     /// PHP emission: given the already-emitted PHP for each argument, return the PHP snippet this
-    /// native erases to (decision N-2). For `Console.println`: `echo {a} . "\n"`.
+    /// native erases to (decision N-2). For `Console.println`: `echo {a}, "\n"`.
     pub php: fn(&[String]) -> String,
     /// Whether this native is **deterministic** w.r.t. the program text (`true` for all but the
     /// ambient-environment natives — `Core.Process`/`Core.Env`, whose result depends on the process,
@@ -255,7 +255,9 @@ fn build() -> Vec<NativeFn> {
             let a = args
                 .first()
                 .map_or_else(|| "\"\"".to_string(), String::clone);
-            format!(r#"echo {a} . "\n""#)
+            // B-2: echo's comma list, not concatenation — one universal rule for any arg type,
+            // byte-identical output, and no forced interpolation-wrapping of a non-string value.
+            format!(r#"echo {a}, "\n""#)
         },
     }];
     // `Console.print` — no trailing newline (primitives P3). Not slot-pinned; resolved by (module,name).

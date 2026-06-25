@@ -184,12 +184,71 @@ fn expression_if_emits_ternary() {
 }
 
 #[test]
-fn interpolation_emits_concatenation() {
-    // T6: a statically-`string` interpolation hole concatenates directly — no `__phorge_str` coercion
-    // (which remains only for operands of unknown kind).
+fn interpolation_string_hole_emits_native_php_interpolation() {
+    // B-1: a variable-rooted `string`/`int` hole embeds as PHP `{$…}` interpolation (not concat).
     let out = php("function greet(string name) -> string { return \"Hello {name}\"; }");
-    assert!(out.contains(r#"return "Hello " . $name;"#), "{out}");
+    assert!(out.contains(r#"return "Hello {$name}";"#), "{out}");
+    assert!(
+        !out.contains(". $name"),
+        "no concat for a simple hole: {out}"
+    );
     assert!(!out.contains("__phorge_str"), "{out}");
+}
+
+#[test]
+fn interpolation_int_hole_embeds() {
+    // B-1: an `int` hole interpolates byte-identically (PHP stringifies int like `(string)`).
+    let out = php("function f(int n) -> string { return \"n={n}!\"; }");
+    assert!(out.contains(r#"return "n={$n}!";"#), "{out}");
+    assert!(
+        !out.contains("(string)"),
+        "no cast needed inside interpolation: {out}"
+    );
+}
+
+#[test]
+fn interpolation_member_and_method_embed() {
+    // B-1: `$`-rooted access chains (member, method-call) embed as `{$o->p}` / `{$o->m()}`.
+    let out = php(
+        "class C { public int x; function get() -> int { return this.x; } } \
+         function f(C c) -> string { return \"{c.x} {c.get()}\"; }",
+    );
+    assert!(out.contains(r#"{$c->x}"#), "member embeds: {out}");
+    assert!(out.contains(r#"{$c->get()}"#), "method-call embeds: {out}");
+}
+
+#[test]
+fn interpolation_operator_hole_falls_back_to_concat() {
+    // B-1: a top-level operator hole is NOT PHP-interpolatable (`{$a + $b}` is a parse error) → concat.
+    let out = php("function f(int a, int b) -> string { return \"sum={a + b}\"; }");
+    assert!(
+        out.contains("($a + $b)"),
+        "operator hole concatenates: {out}"
+    );
+    assert!(!out.contains("{$"), "operator hole is NOT embedded: {out}");
+}
+
+#[test]
+fn println_newline_uses_echo_comma() {
+    // B-2: `Console.println` lowers to `echo X, "\n"` (comma list), not `echo X . "\n"`.
+    let out = php("import Core.Console; function main() -> void { Console.println(\"hi\"); }");
+    assert!(out.contains(r#"echo "hi", "\n""#), "comma list: {out}");
+    assert!(!out.contains(r#". "\n""#), "no concat newline: {out}");
+}
+
+#[test]
+fn string_literal_dollar_minimal_escape() {
+    // B-9: escape `$` in a literal only when it would interpolate. `$5` stays bare; `$xyz` is escaped.
+    let bare = php("function f() -> string { return \"cost $5 each\"; }");
+    assert!(
+        bare.contains(r#"return "cost $5 each";"#),
+        "digit-after-$ not escaped: {bare}"
+    );
+    let esc = php("function f() -> string { return \"$xyz var\"; }");
+    assert!(
+        esc.contains(r#"return "\$xyz var";"#),
+        "ident-after-$ escaped: {esc}"
+    );
 }
 
 #[test]
@@ -273,7 +332,7 @@ fn expression_position_literal_match_emits_native_match() {
 #[test]
 fn println_becomes_echo() {
     let out = php("import Core.Console; function main() -> void { Console.println(\"hi\"); }");
-    assert!(out.contains(r#"echo "hi" . "\n";"#), "{out}");
+    assert!(out.contains(r#"echo "hi", "\n";"#), "{out}");
 }
 
 #[test]

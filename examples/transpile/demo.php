@@ -19,7 +19,7 @@ function area(Shape $s): float {
 }
 function main(): void {
     $n = new Named("demo");
-    echo $n->labelOf() . ": circle area = " . __phorge_float(area(new Circle(2.0))) . "\n";
+    echo "{$n->labelOf()}: circle area = " . __phorge_float(area(new Circle(2.0))), "\n";
 }
 main();
 function __phorge_float($v) {

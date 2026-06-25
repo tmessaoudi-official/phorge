@@ -341,44 +341,93 @@ impl Transpiler {
         if parts.is_empty() {
             return Ok("\"\"".into());
         }
+        // B-1: build native PHP interpolation. Literals and *embeddable* holes accumulate into one
+        // open `"…"` chunk (holes as `{$…}`); a non-embeddable hole flushes the chunk and concatenates
+        // its type-directed coercion (the pre-B-1 path), so mixed strings stay maximally idiomatic.
         let mut chunks: Vec<String> = Vec::new();
+        let mut buf = String::new();
+        let mut buf_open = false;
         for p in parts {
             match p {
-                StrPart::Literal(s) => chunks.push(format!("\"{}\"", php_escape(s))),
+                StrPart::Literal(s) => {
+                    buf.push_str(&php_escape_interp(s));
+                    buf_open = true;
+                }
                 StrPart::Expr(e) => {
                     let code = self.emit_expr(e)?;
-                    let bs = if self.namespaced { "\\" } else { "" };
-                    // T6: coerce each interpolation hole to its Rust `Value::as_display` form using the
-                    // operand's statically-known kind (`expr_kind`) — native PHP, no helper:
-                    //   string → as-is · int → `(string)` cast · bool → ternary `"true"/"false"`
-                    //   (PHP's `(string)bool` gives `1`/``) · float → `__phorge_float` (shortest
-                    //   round-trip; PHP's float cast diverges). An unknown kind falls back to the
-                    //   `__phorge_str` helper (the safe dispatch), as before.
-                    let chunk = match self.expr_kind(e) {
-                        OpKind::Str => Self::paren_if_compound(e, code),
-                        OpKind::Int => format!("(string){}", Self::paren_if_compound(e, code)),
-                        OpKind::Bool => {
-                            format!(
-                                "({} ? \"true\" : \"false\")",
-                                Self::paren_if_compound(e, code)
-                            )
+                    if self.interp_embeddable(e, &code) {
+                        buf.push('{');
+                        buf.push_str(&code);
+                        buf.push('}');
+                        buf_open = true;
+                    } else {
+                        if buf_open {
+                            chunks.push(format!("\"{buf}\""));
+                            buf.clear();
+                            buf_open = false;
                         }
-                        OpKind::Float => {
-                            self.uses_float = true;
-                            format!("{bs}__phorge_float({code})")
-                        }
-                        // A class/list/map value interpolated directly → the `__phorge_str` dispatch
-                        // (the same fallback as before; not a scalar display operand).
-                        OpKind::Class(_) | OpKind::List(_) | OpKind::Map(..) | OpKind::Other => {
-                            self.uses_str = true;
-                            format!("{bs}__phorge_str({code})")
-                        }
-                    };
-                    chunks.push(chunk);
+                        chunks.push(self.coerce_hole_concat(e, code));
+                    }
                 }
             }
         }
+        if buf_open {
+            chunks.push(format!("\"{buf}\""));
+        }
         Ok(chunks.join(" . "))
+    }
+
+    /// Can interpolation hole `e` (already emitted as `code`) embed as a native PHP `{$…}` segment?
+    /// True iff (1) its kind is `Str`/`Int` — the only kinds whose PHP interpolation byte-matches our
+    /// coercion (`bool`→`1`/``, `float`→precision-14, objects→error all diverge); (2) it is a
+    /// `$`-rooted access chain (PHP forbids a top-level operator inside `{$…}` — verified: parse
+    /// error); (3) the emitted code is actually `$`-rooted (excludes module/class-rooted members like
+    /// `\Foo\bar()`); and (4) it carries no brace that could prematurely close the `{…}`.
+    fn interp_embeddable(&mut self, e: &Expr, code: &str) -> bool {
+        matches!(self.expr_kind(e), OpKind::Str | OpKind::Int)
+            && Self::is_php_interp_chain(e)
+            && code.starts_with('$')
+            && !code.contains('{')
+            && !code.contains('}')
+    }
+
+    /// A `$`-rooted PHP access chain: an identifier/`this`, member/index access over such, or a
+    /// *method* call (a `Call` whose callee is a member chain — a free-function call is `f(…)`, not
+    /// `$`-rooted). Everything else (operators, literals, `new`, ranges, lambdas, …) is not.
+    fn is_php_interp_chain(e: &Expr) -> bool {
+        match e {
+            Expr::Ident(..) | Expr::This(..) => true,
+            Expr::Member { object, .. } | Expr::Index { object, .. } => {
+                Self::is_php_interp_chain(object)
+            }
+            Expr::Call { callee, .. } => {
+                matches!(callee.as_ref(), Expr::Member { .. }) && Self::is_php_interp_chain(callee)
+            }
+            _ => false,
+        }
+    }
+
+    /// Coerce a non-embeddable interpolation hole to a string for concatenation — the pre-B-1
+    /// type-directed path: `string` as-is · `int` → `(string)` · `bool` → ternary · `float` →
+    /// `__phorge_float` (Ryū, irreducible) · class/list/map/unknown → the `__phorge_str` dispatch.
+    fn coerce_hole_concat(&mut self, e: &Expr, code: String) -> String {
+        let bs = if self.namespaced { "\\" } else { "" };
+        match self.expr_kind(e) {
+            OpKind::Str => Self::paren_if_compound(e, code),
+            OpKind::Int => format!("(string){}", Self::paren_if_compound(e, code)),
+            OpKind::Bool => format!(
+                "({} ? \"true\" : \"false\")",
+                Self::paren_if_compound(e, code)
+            ),
+            OpKind::Float => {
+                self.uses_float = true;
+                format!("{bs}__phorge_float({code})")
+            }
+            OpKind::Class(_) | OpKind::List(_) | OpKind::Map(..) | OpKind::Other => {
+                self.uses_str = true;
+                format!("{bs}__phorge_str({code})")
+            }
+        }
     }
 
     /// A PHP reference to an enum variant subclass: fully-qualified when its enum lives in a package
