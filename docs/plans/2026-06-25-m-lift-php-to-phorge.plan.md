@@ -54,3 +54,9 @@ Start at L1–L3 + a thin Tier-1 lifter behind the playground demo; grow the par
 - **After Track 1** (transpile modernization): a clean native-PHP printer makes the L5 round-trip
   comparison far easier to validate.
 - L3 (Phorge printer) is independently useful (e.g. `phg fmt` could reuse it later).
+
+## Decisions Log (build)
+- [2026-06-25] AGREED: **demo angle first** (playground "paste PHP → see Phorge"). Tier-1 PHP
+  subset, thin lifter, `// lifted (verify)` annotations; L5 round-trip optional this phase. Build
+  L1 (PHP lexer) → L2 (Tier-1 parser) → L3 (Phorge pretty-printer) → L4 (thin lifter) → L6 (CLI +
+  playground demo). Module lives at `src/lift/`.

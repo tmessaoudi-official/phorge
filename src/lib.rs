@@ -12,6 +12,7 @@ pub mod diagnostic;
 pub mod dispatch;
 pub mod interpreter;
 pub mod lexer;
+pub mod lift;
 pub mod limits;
 pub mod loader;
 pub mod lock;
