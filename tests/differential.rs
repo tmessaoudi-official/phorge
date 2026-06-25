@@ -1330,8 +1330,9 @@ fn statement_body_lambda_needs_return_type() {
 #[test]
 fn transpiles_statement_lambda_with_use_clause() {
     let php = transpile_ok("package Main; import Core.Console; function main()-> void { var base=100; var f = fn(int x) -> int { return x + base; }; Console.println(\"{f(3)}\"); }");
+    // T6: `x` (int param) + `base` (int local) → native `+`, no `__phorge_add` helper.
     assert!(
-        php.contains("function($x) use ($base)") && php.contains("return __phorge_add($x, $base)"),
+        php.contains("function($x) use ($base)") && php.contains("return $x + $base"),
         "{php}"
     );
 }
@@ -1510,10 +1511,8 @@ fn named_fn_ref_as_value_agrees() {
 #[test]
 fn transpiles_lambda_literal_call_target() {
     let php = transpile_ok("package Main; import Core.Console; function main()-> void { Console.println(\"{3 |> fn(int v) => v + 100}\"); }");
-    assert!(
-        php.contains("(fn($v) => __phorge_add($v, 100))(3)"),
-        "{php}"
-    );
+    // T6: `v` (int param) + `100` (int literal) → native `+`.
+    assert!(php.contains("(fn($v) => $v + 100)(3)"), "{php}");
 }
 
 #[test]
@@ -1911,34 +1910,47 @@ fn all_example_projects_transpile_and_match_php() {
 
 // ── M7: divergence-class regression guards ───────────────────────────────────────────────────────
 
-/// P0-1/P0-2/P0-4/QW-13: the emitter routes `/`, `%`, interpolation, compound operands, and ranges
-/// through the correctness machinery. This pins the *emitted PHP shape* directly (the oracle above
-/// pins the *runtime behavior* over the examples); together they make a P0 regression impossible to
-/// ship silently. `run ≡ runvm` for these was always correct — the bug class was php-leg-only.
+/// P0-1/P0-2/P0-4/QW-13: the emitter handles `/`, `%`, interpolation, compound operands, and ranges
+/// without diverging from the Rust backends. Since T6, statically-typed operands emit the *native*
+/// PHP construct (the divergence-safe choice — `intdiv`/`fmod`/inline-ternary), with the runtime
+/// helper kept only as the fallback for operands of unknown kind. This pins the *emitted PHP shape*
+/// (the oracle above pins the *runtime behavior* over the examples); together they make a P0
+/// regression impossible to ship silently. `run ≡ runvm` for these was always correct — php-leg-only.
 #[test]
 fn m7_emitter_uses_correctness_helpers() {
-    // P0-1 (int `/` ⇒ intdiv) + P0-4 (`%` ⇒ type-driven) route through runtime helpers, not bare ops.
+    // P0-1 (int `/` ⇒ `intdiv`, never bare `/`) + P0-4 (int `%` ⇒ native `%`) — both literal-int.
     let div = transpile_ok(
         "package Main; import Core.Console; function main()-> void { Console.println(\"{7 / 2}\"); Console.println(\"{5 % 2}\"); }",
     );
-    assert!(div.contains("__phorge_div(7, 2)"), "{div}");
-    assert!(div.contains("__phorge_rem(5, 2)"), "{div}");
+    assert!(div.contains("intdiv(7, 2)"), "{div}");
+    assert!(div.contains("5 % 2"), "{div}");
     assert!(
-        div.contains("function __phorge_div") && div.contains("intdiv"),
+        !div.contains("__phorge_div") && !div.contains("__phorge_rem"),
         "{div}"
     );
-    assert!(
-        div.contains("function __phorge_rem") && div.contains("fmod"),
-        "{div}"
+    // P0-4 float path: float `%` ⇒ `fmod` (PHP's `%` int-casts — the divergence); float `/` ⇒ native.
+    let fl = transpile_ok(
+        "package Main; import Core.Console; function main()-> void { float a=5.5; float b=2.0; Console.println(\"{a % b}\"); Console.println(\"{a / b}\"); }",
     );
-    // P0-3: an interpolated value is coerced via __phorge_str (bool ⇒ "true"/"false").
+    assert!(fl.contains("fmod($a, $b)"), "{fl}");
+    assert!(fl.contains("$a / $b"), "{fl}");
+    // Helper fallback: when NEITHER operand's kind is statically known (two call results), the div
+    // helper is emitted and used — never a bare `/`. (A single typed/literal operand would pin the
+    // type and specialize, since the checker guarantees both operands share it.)
+    let fb = transpile_ok(
+        "package Main; import Core.Console; function g() -> int { return 9; } function h() -> int { return 2; } function main()-> void { Console.println(\"{g() / h()}\"); }",
+    );
+    assert!(
+        fb.contains("__phorge_div(g(), h())")
+            && fb.contains("function __phorge_div")
+            && fb.contains("intdiv"),
+        "{fb}"
+    );
+    // P0-3: a bool interpolation hole renders `"true"/"false"` inline (PHP's `(string)bool` ⇒ `1`/``).
     let b = transpile_ok(
         "package Main; import Core.Console; function main()-> void { Console.println(\"{1 < 2}\"); }",
     );
-    assert!(
-        b.contains("__phorge_str(") && b.contains("\"true\" : \"false\""),
-        "{b}"
-    );
+    assert!(b.contains("\"true\" : \"false\""), "{b}");
     // P0-2: a compound operand keeps its grouping parens (no PHP re-association).
     let p = transpile_ok(
         "package Main; import Core.Console; function main()-> void { int a=1; int b=2; int c=3; Console.println(\"{a - (b - c)}\"); Console.println(\"{!(a < b)}\"); }",

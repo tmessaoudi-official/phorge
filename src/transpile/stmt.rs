@@ -49,9 +49,16 @@ impl Transpiler {
                 ));
                 self.line(&format!("${name} = ${name}->{ok_field};"));
             }
-            Stmt::VarDecl { name, init, .. } => {
+            Stmt::VarDecl { ty, name, init, .. } => {
                 let e = self.emit_expr(init)?;
                 self.declare(name);
+                // T6: record the local's operand kind — prefer the explicit annotation; for `var`
+                // (`Type::Infer`) fall back to the initializer's resolved kind.
+                let kind = match kind_of_type(ty) {
+                    OpKind::Other => self.expr_kind(init),
+                    k => k,
+                };
+                self.declare_kind(name, kind);
                 self.line(&format!("${name} = {e};"));
             }
             Stmt::Assign { target, value, .. } => {
@@ -114,13 +121,20 @@ impl Transpiler {
                 self.line("}");
             }
             Stmt::For {
-                name, iter, body, ..
+                ty,
+                name,
+                iter,
+                body,
+                ..
             } => {
                 let it = self.emit_expr(iter)?;
                 self.line(&format!("foreach ({it} as ${name}) {{"));
                 self.indent += 1;
                 self.push_scope();
                 self.declare(name);
+                // T6: the loop variable's element type drives operand specialization in the body
+                // (`for (int i in 0..n) { … i / 2 … }` → native `intdiv`).
+                self.declare_kind(name, kind_of_type(ty));
                 for st in body {
                     self.emit_stmt(st)?;
                 }

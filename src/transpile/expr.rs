@@ -25,26 +25,61 @@ impl Transpiler {
                 let l = self.emit_expr(lhs)?;
                 let r = self.emit_expr(rhs)?;
                 let bs = if self.namespaced { "\\" } else { "" };
-                // `/` and `%` are type-driven in Phorge (int vs float) but PHP's `/` is always float
-                // and `%` always integer. Route through a runtime helper that branches on operand
-                // types at PHP-runtime, mirroring the value kernels (P0-1, P0-4). Helper args are
-                // comma-delimited, so the raw operand code needs no precedence parens.
+                // T6: `/`, `%`, `+` are type-driven in Phorge (PHP's `/` is always float, `%` always
+                // integer, `+` numeric-only with `.` for concat). When the operand kind is statically
+                // known (`expr_kind`), emit the native PHP operator directly; otherwise fall back to
+                // the runtime helper that branches at PHP-runtime (the checker guarantees both
+                // operands share a type, so the helper's single-operand test is exact). The helper is
+                // the safe fallback — a kind that can't be pinned down never produces a wrong operator.
                 if matches!(op, BinaryOp::Div) {
-                    self.uses_div = true;
-                    return Ok(format!("{bs}__phorge_div({l}, {r})"));
+                    // Compound operands need grouping parens; `intdiv(…)`'s args do not.
+                    return Ok(match self.arith_kind(lhs, rhs) {
+                        OpKind::Int => format!("intdiv({l}, {r})"),
+                        OpKind::Float => {
+                            let (l, r) = (Self::paren_if_compound(lhs, l), Self::paren_if_compound(rhs, r));
+                            format!("{l} / {r}")
+                        }
+                        _ => {
+                            self.uses_div = true;
+                            format!("{bs}__phorge_div({l}, {r})")
+                        }
+                    });
                 }
                 if matches!(op, BinaryOp::Rem) {
-                    self.uses_rem = true;
-                    return Ok(format!("{bs}__phorge_rem({l}, {r})"));
+                    return Ok(match self.arith_kind(lhs, rhs) {
+                        OpKind::Int => {
+                            let (l, r) = (Self::paren_if_compound(lhs, l), Self::paren_if_compound(rhs, r));
+                            format!("{l} % {r}")
+                        }
+                        OpKind::Float => format!("fmod({l}, {r})"),
+                        _ => {
+                            self.uses_rem = true;
+                            format!("{bs}__phorge_rem({l}, {r})")
+                        }
+                    });
                 }
-                // `+` is overloaded for string concatenation in Phorge, but PHP's `+` errors on
-                // strings (it is numeric-only) and uses `.` for concat. The transpiler has no static
-                // operand types, so route `+` through a runtime helper that branches on `is_string`
-                // — the checker guarantees both operands share a type, so the branch is exact
-                // (mirrors `__phorge_div`/`__phorge_rem`; Phase 1 string slice).
                 if matches!(op, BinaryOp::Add) {
-                    self.uses_add = true;
-                    return Ok(format!("{bs}__phorge_add({l}, {r})"));
+                    let (lk, rk) = (self.expr_kind(lhs), self.expr_kind(rhs));
+                    // `string + string` → `.`; numeric → `+`; unknown → the `is_string`-branching helper.
+                    let native = if lk == OpKind::Str || rk == OpKind::Str {
+                        Some(".")
+                    } else if matches!(lk, OpKind::Int | OpKind::Float)
+                        || matches!(rk, OpKind::Int | OpKind::Float)
+                    {
+                        Some("+")
+                    } else {
+                        None
+                    };
+                    return Ok(match native {
+                        Some(sym) => {
+                            let (l, r) = (Self::paren_if_compound(lhs, l), Self::paren_if_compound(rhs, r));
+                            format!("{l} {sym} {r}")
+                        }
+                        None => {
+                            self.uses_add = true;
+                            format!("{bs}__phorge_add({l}, {r})")
+                        }
+                    });
                 }
                 if matches!(op, BinaryOp::Coalesce) {
                     // `??` binds loosely in PHP; parenthesize to preserve grouping.
@@ -226,7 +261,18 @@ impl Transpiler {
                     .collect::<Vec<_>>()
                     .join(", ");
                 match body {
-                    LambdaBody::Expr(e) => Ok(format!("fn({ps}) => {}", self.emit_expr(e)?)),
+                    LambdaBody::Expr(e) => {
+                        // T6: type the params in a fresh scope so arithmetic in the arrow body
+                        // specializes (`fn(int a, int b) => a + b` → `$a + $b`).
+                        self.push_scope();
+                        for p in params {
+                            self.declare(&p.name);
+                            self.declare_kind(&p.name, kind_of_type(&p.ty));
+                        }
+                        let body_php = self.emit_expr(e)?;
+                        self.pop_scope();
+                        Ok(format!("fn({ps}) => {body_php}"))
+                    }
                     LambdaBody::Block(stmts) => {
                         // Compute captures: free variables that are enclosing locals, not
                         // top-level function names, variants, or classes.
@@ -260,6 +306,7 @@ impl Transpiler {
                         }
                         for p in params {
                             self.declare(&p.name);
+                            self.declare_kind(&p.name, kind_of_type(&p.ty));
                         }
                         for s in stmts {
                             self.emit_stmt(s)?;
@@ -300,12 +347,32 @@ impl Transpiler {
                 StrPart::Literal(s) => chunks.push(format!("\"{}\"", php_escape(s))),
                 StrPart::Expr(e) => {
                     let code = self.emit_expr(e)?;
-                    // Coerce via `__phorge_str` so a `bool` renders `true`/`false` (not PHP's `1`/``)
-                    // — mirrors Value::as_display (P0-3). A no-op for int/float/string. The helper
-                    // call is itself a primary, so it replaces the old grouping parens.
-                    self.uses_str = true;
                     let bs = if self.namespaced { "\\" } else { "" };
-                    chunks.push(format!("{bs}__phorge_str({code})"));
+                    // T6: coerce each interpolation hole to its Rust `Value::as_display` form using the
+                    // operand's statically-known kind (`expr_kind`) — native PHP, no helper:
+                    //   string → as-is · int → `(string)` cast · bool → ternary `"true"/"false"`
+                    //   (PHP's `(string)bool` gives `1`/``) · float → `__phorge_float` (shortest
+                    //   round-trip; PHP's float cast diverges). An unknown kind falls back to the
+                    //   `__phorge_str` helper (the safe dispatch), as before.
+                    let chunk = match self.expr_kind(e) {
+                        OpKind::Str => Self::paren_if_compound(e, code),
+                        OpKind::Int => format!("(string){}", Self::paren_if_compound(e, code)),
+                        OpKind::Bool => {
+                            format!(
+                                "({} ? \"true\" : \"false\")",
+                                Self::paren_if_compound(e, code)
+                            )
+                        }
+                        OpKind::Float => {
+                            self.uses_float = true;
+                            format!("{bs}__phorge_float({code})")
+                        }
+                        OpKind::Other => {
+                            self.uses_str = true;
+                            format!("{bs}__phorge_str({code})")
+                        }
+                    };
+                    chunks.push(chunk);
                 }
             }
         }

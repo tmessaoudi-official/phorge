@@ -247,6 +247,11 @@ impl Transpiler {
             self.line("return (string)$v;");
             self.indent -= 1;
             self.line("}");
+        }
+        // `__phorge_float` is needed by `__phorge_str` AND directly by a statically-float interpolation
+        // hole (T6) — so it is emitted whenever either is in play, independent of the `__phorge_str`
+        // dispatch helper above.
+        if self.uses_str || self.uses_float {
             // Reproduce Rust's `f64` Display exactly (EV-6): the shortest decimal that round-trips to
             // the same double, in positional notation (never scientific, for any magnitude), with an
             // integer-valued float rendered without a trailing `.0`. The `%.{p}e` loop finds the
@@ -423,6 +428,8 @@ impl Transpiler {
         self.push_scope();
         for p in &f.params {
             self.declare(&p.name);
+            // T6: a typed param is a known operand kind for native-operator specialization.
+            self.declare_kind(&p.name, kind_of_type(&p.ty));
         }
         for s in &f.body {
             self.emit_stmt(s)?;

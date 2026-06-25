@@ -30,9 +30,10 @@ fn empty_program_emits_php_open_tag() {
 fn free_function_with_params_and_arithmetic() {
     let out = php("function add(int a, int b) -> int { int c = a + b; return c; }");
     assert!(out.contains("function add(int $a, int $b): int {"), "{out}");
-    // `+` is string-concat-overloaded, so it routes through the `__phorge_add` runtime helper
-    // (`is_string ? . : +`) — the transpiler has no static operand types (Phase 1 string slice).
-    assert!(out.contains("$c = __phorge_add($a, $b);"), "{out}");
+    // T6: both operands are statically `int`, so `+` emits the native PHP operator — no
+    // `__phorge_add` helper (which remains only as a fallback for operands of unknown kind).
+    assert!(out.contains("$c = $a + $b;"), "{out}");
+    assert!(!out.contains("__phorge_add"), "{out}");
     assert!(out.contains("return $c;"), "{out}");
 }
 
@@ -161,27 +162,26 @@ fn expression_if_emits_ternary() {
 
 #[test]
 fn interpolation_emits_concatenation() {
-    // Each interpolated value is coerced via `__phorge_str` (P0-3: bool ⇒ "true"/"false").
+    // T6: a statically-`string` interpolation hole concatenates directly — no `__phorge_str` coercion
+    // (which remains only for operands of unknown kind).
     let out = php("function greet(string name) -> string { return \"Hello {name}\"; }");
-    assert!(
-        out.contains(r#"return "Hello " . __phorge_str($name);"#),
-        "{out}"
-    );
+    assert!(out.contains(r#"return "Hello " . $name;"#), "{out}");
+    assert!(!out.contains("__phorge_str"), "{out}");
 }
 
 #[test]
 fn float_interpolation_emits_phorge_float_helper() {
-    // A float reaches PHP only through interpolation (`Console.println` takes `string`), so the
-    // `__phorge_str` chokepoint routes floats through `__phorge_float`, which reproduces Rust's
-    // shortest-round-trip positional `f64` Display (no PHP precision-14 / scientific divergence).
+    // T6: a statically-`float` interpolation hole emits `__phorge_float` directly (bypassing the
+    // `__phorge_str` dispatch). `__phorge_float` reproduces Rust's shortest-round-trip positional
+    // `f64` Display (no PHP precision-14 / scientific divergence) and is irreducible.
     let out = php("function f(float x) -> string { return \"v={x}\"; }");
     assert!(
-        out.contains(r#"return "v=" . __phorge_str($x);"#),
-        "call site routes through __phorge_str: {out}"
+        out.contains(r#"return "v=" . __phorge_float($x);"#),
+        "float hole emits __phorge_float directly: {out}"
     );
     assert!(
-        out.contains("if (is_float($v)) { return __phorge_float($v); }"),
-        "__phorge_str delegates floats to __phorge_float: {out}"
+        !out.contains("__phorge_str"),
+        "no str dispatch needed: {out}"
     );
     assert!(
         out.contains("function __phorge_float($v) {")

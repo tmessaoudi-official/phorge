@@ -47,3 +47,15 @@ Already idiomatic (no work): higher-order natives → `array_map`/`array_filter`
 
 ## Effort
 ~5–7 gated slices ≈ one focused modernization milestone. The match-lowering (T1/T2) is the bulk.
+
+## T6 — operand-type specialization (added 2026-06-25, developer-approved)
+- [2026-06-25] AGREED: build T6 now — eliminate `__phorge_add`/`_div`/`_rem` and shrink
+  `__phorge_str` (float-only) by resolving operand *types* in the transpiler (mirroring the
+  bytecode compiler's proven `ctype`/`CTy`). Native emission: `string + string` → `.`,
+  numeric `+` → `+`, int `/` → `intdiv`, float `/` → `/`, int `%` → `%`, float `%` → `fmod`;
+  interpolation of a statically-typed string/int → direct, bool → inline ternary, float →
+  `__phorge_float`. **Design: the runtime helper stays as a FALLBACK** for any operand whose
+  type the resolver can't determine (`uses_*` flag set only on fallback) — so byte-identity is
+  never at risk (the helper is the safety net; the native operator is the optimization). Fully
+  gated by `run≡runvm≡real PHP 8.5`. Irreducible helpers (float Ryū, range, reflection,
+  init_statics) stay.

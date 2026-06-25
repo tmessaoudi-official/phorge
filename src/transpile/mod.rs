@@ -17,6 +17,36 @@ pub fn emit(program: &Program) -> Result<String, String> {
     Ok(t.out)
 }
 
+/// A statically-resolved operand "kind" used by the transpiler's T6 specialization to pick a native
+/// PHP operator over a runtime helper. Deliberately scalar-only — the cases where PHP's loose
+/// semantics diverge from Phorge's (`+` concat-vs-add, `/` int-vs-float, interpolation display).
+/// Anything the resolver cannot pin down is [`OpKind::Other`], which routes to the existing helper
+/// (the safe fallback), so a wrong guess can never happen — only "known" or "fall back".
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum OpKind {
+    Str,
+    Int,
+    Float,
+    Bool,
+    Other,
+}
+
+/// Map a (post-checker, resolved) type annotation to its scalar [`OpKind`]. Non-scalars (`List`,
+/// `Map`, classes, `void`, optionals, …) are `Other` — their values aren't the arithmetic/display
+/// operands T6 specializes, and the helper fallback covers any that slip through.
+fn kind_of_type(ty: &Type) -> OpKind {
+    match ty {
+        Type::Named { name, .. } => match name.as_str() {
+            "int" => OpKind::Int,
+            "float" => OpKind::Float,
+            "string" => OpKind::Str,
+            "bool" => OpKind::Bool,
+            _ => OpKind::Other,
+        },
+        _ => OpKind::Other,
+    }
+}
+
 /// The set of classes that must lower to the interface+trait decomposition (M-RT S6b): every
 /// transitive ancestor of any multi-parent (`extends A, B`) class. A multi-parent class itself is
 /// emitted as a class that `implements`+`use`s (see [`Transpiler::emit_multi_class`]) and is *not*
@@ -68,6 +98,12 @@ struct Transpiler {
     out: String,
     indent: usize,
     locals: Vec<HashSet<String>>,
+    /// Scoped operand-type environment (T6), parallel to `locals` (pushed/popped together). Maps a
+    /// local/param/loop-var name to its scalar [`OpKind`] **where statically known** — so `+`, `/`,
+    /// `%`, and interpolation can emit native PHP operators (`.`/`+`/`intdiv`/`fmod`/direct casts)
+    /// instead of the `__phorge_add`/`_div`/`_rem`/`_str` runtime helpers. A name absent here resolves
+    /// to [`OpKind::Other`] → the helper is emitted as a safe fallback (never a byte-identity risk).
+    local_kinds: Vec<HashMap<String, OpKind>>,
     cur_class_fields: Option<HashSet<String>>,
     /// Active import map (leaf qualifier → full dotted module path) — how a namespaced native call
     /// `console.println(x)` is distinguished from a method call on a value (M3 Wave 1). The
@@ -83,6 +119,10 @@ struct Transpiler {
     /// `__phorge_add` — `+` overloaded for string concat (`is_string` ⇒ `.`, else `+`).
     uses_add: bool,
     uses_str: bool,
+    /// Set when an interpolation hole is statically a `float` and emits `__phorge_float` directly
+    /// (T6) — so the shortest-round-trip float formatter is defined even when `__phorge_str` (its
+    /// usual host) is never emitted because every other hole's kind was resolved natively.
+    uses_float: bool,
     uses_range: bool,
     /// Set when `Reflect.kind(x)` is emitted — defines the `__phorge_kind` runtime helper once per
     /// file. A native's `php` closure can't set a `uses_*` flag (it has no `&mut self`), so
@@ -237,12 +277,14 @@ impl Transpiler {
             out: String::new(),
             indent: 0,
             locals: Vec::new(),
+            local_kinds: Vec::new(),
             cur_class_fields: None,
             imports: HashMap::new(),
             uses_div: false,
             uses_rem: false,
             uses_add: false,
             uses_str: false,
+            uses_float: false,
             uses_range: false,
             uses_reflect_kind: false,
             uses_reflect_class_name: false,
@@ -266,9 +308,11 @@ impl Transpiler {
 
     fn push_scope(&mut self) {
         self.locals.push(HashSet::new());
+        self.local_kinds.push(HashMap::new());
     }
     fn pop_scope(&mut self) {
         self.locals.pop();
+        self.local_kinds.pop();
     }
     fn declare(&mut self, name: &str) {
         if let Some(s) = self.locals.last_mut() {
@@ -277,6 +321,89 @@ impl Transpiler {
     }
     fn is_local(&self, name: &str) -> bool {
         self.locals.iter().any(|s| s.contains(name))
+    }
+    /// Record a local/param/loop-var's scalar [`OpKind`] in the current scope (T6). Only called where
+    /// the declared type is statically known; names without a kind resolve to `Other` (helper path).
+    fn declare_kind(&mut self, name: &str, kind: OpKind) {
+        if kind != OpKind::Other {
+            if let Some(s) = self.local_kinds.last_mut() {
+                s.insert(name.to_string(), kind);
+            }
+        }
+    }
+    /// Resolve a name's scalar [`OpKind`] from the innermost scope outward; `Other` if unknown.
+    fn local_kind(&self, name: &str) -> OpKind {
+        self.local_kinds
+            .iter()
+            .rev()
+            .find_map(|s| s.get(name).copied())
+            .unwrap_or(OpKind::Other)
+    }
+
+    /// Statically resolve an expression's operand [`OpKind`] for native-operator selection (T6).
+    /// Covers the scalar surface — literals, typed locals/params/loop-vars, nested arithmetic/unary,
+    /// `instanceof` (bool), and `inner!` (the inner's kind). Field reads, indexing, method/function
+    /// calls and `this` are deliberately `Other` (→ runtime helper), since pinning their types down
+    /// would mean rebuilding the compiler's full type maps; the helper fallback keeps those correct.
+    fn expr_kind(&self, e: &Expr) -> OpKind {
+        match e {
+            Expr::Int(..) => OpKind::Int,
+            Expr::Float(..) => OpKind::Float,
+            Expr::Str(..) => OpKind::Str,
+            Expr::Bool(..) => OpKind::Bool,
+            Expr::Ident(name, _) => self.local_kind(name),
+            Expr::Unary { op, expr, .. } => match op {
+                UnaryOp::Neg => self.expr_kind(expr),
+                UnaryOp::Not => OpKind::Bool,
+                UnaryOp::BitNot => OpKind::Int,
+            },
+            Expr::Binary { op, lhs, rhs, .. } => match op {
+                // Arithmetic: result kind follows the operands (the checker guarantees they agree).
+                // `+` over strings is concatenation → `Str`; otherwise numeric (Float dominates Int).
+                BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Rem => {
+                    let (l, r) = (self.expr_kind(lhs), self.expr_kind(rhs));
+                    if matches!(op, BinaryOp::Add) && (l == OpKind::Str || r == OpKind::Str) {
+                        OpKind::Str
+                    } else if l == OpKind::Float || r == OpKind::Float {
+                        OpKind::Float
+                    } else if l == OpKind::Int || r == OpKind::Int {
+                        OpKind::Int
+                    } else {
+                        OpKind::Other
+                    }
+                }
+                // Comparisons / logical / bitwise-on-bool produce a bool.
+                BinaryOp::Eq
+                | BinaryOp::NotEq
+                | BinaryOp::Lt
+                | BinaryOp::Le
+                | BinaryOp::Gt
+                | BinaryOp::Ge
+                | BinaryOp::And
+                | BinaryOp::Or => OpKind::Bool,
+                // Bitwise ops are int-only (primitives P2) → an int operand for any enclosing `+`.
+                BinaryOp::BitAnd
+                | BinaryOp::BitOr
+                | BinaryOp::BitXor
+                | BinaryOp::Shl
+                | BinaryOp::Shr => OpKind::Int,
+                _ => OpKind::Other,
+            },
+            Expr::InstanceOf { .. } => OpKind::Bool,
+            Expr::Force { inner, .. } => self.expr_kind(inner),
+            _ => OpKind::Other,
+        }
+    }
+
+    /// The kind of an `/` or `%` result for native-operator selection (T6): `Float` if either operand
+    /// is float, `Int` if either is int, else `Other` (→ runtime helper). The checker guarantees both
+    /// operands share a numeric type, so resolving either suffices.
+    fn arith_kind(&self, lhs: &Expr, rhs: &Expr) -> OpKind {
+        match (self.expr_kind(lhs), self.expr_kind(rhs)) {
+            (OpKind::Float, _) | (_, OpKind::Float) => OpKind::Float,
+            (OpKind::Int, _) | (_, OpKind::Int) => OpKind::Int,
+            _ => OpKind::Other,
+        }
     }
 }
 
