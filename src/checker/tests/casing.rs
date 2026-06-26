@@ -27,6 +27,37 @@ fn package_is_mandatory_and_core_is_reserved() {
 }
 
 #[test]
+fn var_rejected_as_symbol_name_allowed_as_value() {
+    // `var` is a PHP reserved word in symbol positions: a Phorge decl named `var` would transpile to
+    // invalid PHP (`function var(){}`, `class var{}`). Reject it with E-RESERVED-NAME.
+    for src in [
+        "package Main; function var() -> int { return 1; }",
+        "package Main; class var {}",
+        "package Main; enum var { A() }",
+        "package Main; interface var {}",
+    ] {
+        let e = errors_of_raw(src);
+        assert!(
+            e.iter().any(|d| d.code == Some("E-RESERVED-NAME")),
+            "{src} → got {e:?}"
+        );
+    }
+    // But `var` is fine as a parameter / field / local / method name (legal PHP `$var` / `->var()`).
+    assert!(check(&prog_raw(
+        "package Main; import Core.Console; \
+         function inc(int var) -> int { return var + 1; } \
+         function main() -> void { Console.println(\"{inc(41)}\"); }"
+    ))
+    .is_ok());
+    let methods =
+        errors_of_raw("package Main; class C { open function var() -> int { return 7; } }");
+    assert!(
+        !methods.iter().any(|d| d.code == Some("E-RESERVED-NAME")),
+        "a method named `var` is legal PHP (->var()); got {methods:?}"
+    );
+}
+
+#[test]
 fn package_and_import_segments_must_be_pascalcase() {
     // Reshape slice 2b: a lowercase package segment is rejected (E-PKG-CASE).
     let e = errors_of_raw("package app.util; function main() -> void {}");

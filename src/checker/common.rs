@@ -264,3 +264,13 @@ pub(super) fn is_builtin_type_name(name: &str) -> bool {
             | "Error"
     )
 }
+
+/// Names that are reserved *in PHP* for a top-level symbol (free function / class / enum / interface /
+/// trait / type-alias) and would therefore transpile to invalid PHP. `var` is the case un-reserved as
+/// a Phorge value identifier (contextual keyword): legal as a variable / parameter / field / property /
+/// method name (→ PHP `$var` / `->var` / `->var()`), but a PHP parse error as `function var(){}` /
+/// `class var{}` (verified against PHP 8.5). The broader PHP-reserved set (`list`/`print`/`clone`/… —
+/// already usable Phorge identifiers) is a separate, pre-existing hardening item (KNOWN_ISSUES).
+pub(super) fn is_php_reserved_symbol_name(name: &str) -> bool {
+    name == "var"
+}

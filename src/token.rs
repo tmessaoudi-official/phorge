@@ -85,7 +85,8 @@ pub enum TokenKind {
     Interface,
     Implements,
     Extends,
-    Var,
+    // (`var` is a contextual keyword — it lexes as `Ident("var")`, not a dedicated token; see the
+    // lexer keyword table and `Parser::at_var_decl`.)
     Mutable,
     Static,
     With,

@@ -10,6 +10,17 @@ parse error, non-zero exit) — never a crash.
 These are designed but not in the current surface; using them produces a clean compile-time error,
 not a panic:
 
+- **PHP-reserved identifiers as symbol names — only `var` is guarded.** Phorge and PHP have different
+  keyword sets, so a Phorge identifier that is a *PHP* reserved word transpiles to invalid PHP when it
+  names a symbol (a free `function`/`class`/`enum`/`interface`/`trait`/`type`). `var` is now handled:
+  it is a contextual keyword usable as a value/parameter/field/method name but rejected as a symbol
+  name (`E-RESERVED-NAME`). The **general** set (`list`/`print`/`clone`/`array`/`unset`/`empty`/… —
+  none of which are Phorge keywords, so they are already usable identifiers today) is **not yet
+  guarded**: naming a function `list` would emit `function list(){}` and fail at the PHP oracle rather
+  than with a Phorge diagnostic. A single shared PHP-reserved-word guard (extending the `var` check) is
+  a planned hardening item. The byte-identity oracle still catches any such program — it just reports a
+  PHP parse error instead of a clean `E-RESERVED-NAME`.
+
 - **Stack traces — slice 1 (reporting) shipped; deferrals:** (1) catching/handling faults — a
   `try`/`catch` or `Result<T, E>` model — is a separate later slice; this slice only *reports* faults
   that abort. (2) Method/constructor/closure frames show `line`-only (no `file:line`) — their frame

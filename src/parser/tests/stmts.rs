@@ -475,6 +475,78 @@ fn plain_var_still_parses_after_destructure_dispatch() {
     assert!(matches!(stmt("var n = 5;"), Stmt::VarDecl { .. }));
 }
 
+// ── contextual `var` — a legal identifier wherever it denotes a value (the inference keyword only at
+//    a binding start: `var IDENT` / `var [` / `var IDENT {`). Bug: `var` was hard-reserved. ──
+
+#[test]
+fn var_keyword_still_introduces_declarations() {
+    // All the binding forms keep working unchanged (additive change).
+    assert!(matches!(
+        stmt("var x = 5;"),
+        Stmt::VarDecl {
+            ty: Type::Infer(_),
+            ..
+        }
+    ));
+    assert!(matches!(
+        stmt("mutable var y = 5;"),
+        Stmt::VarDecl {
+            mutable: true,
+            ty: Type::Infer(_),
+            ..
+        }
+    ));
+    assert!(matches!(stmt("var [a, b] = xs;"), Stmt::Destructure { .. }));
+    assert!(matches!(
+        stmt("var Point { x, y } = p;"),
+        Stmt::Destructure { .. }
+    ));
+}
+
+#[test]
+fn var_is_usable_as_a_value_identifier() {
+    // Expression position: `var` is just a name now.
+    match expr("var + 1") {
+        Expr::Binary { .. } => {}
+        other => panic!("`var + 1`: {other:?}"),
+    }
+    // Reassignment of a variable named `var`.
+    match stmt("var = 5;") {
+        Stmt::Assign {
+            target: Expr::Ident(n, _),
+            ..
+        } => assert_eq!(n, "var"),
+        other => panic!("`var = 5;`: {other:?}"),
+    }
+    // Member / call receiver named `var`.
+    match stmt("var.run();") {
+        Stmt::Expr(Expr::Call { .. }, _) => {}
+        other => panic!("`var.run();`: {other:?}"),
+    }
+    // Compound assignment + increment on a variable named `var`.
+    assert!(matches!(stmt("var += 1;"), Stmt::Assign { .. }));
+    assert!(matches!(stmt("var++;"), Stmt::Assign { .. }));
+    // Interpolation hole referencing `var`.
+    assert!(matches!(
+        stmt("Console.println(\"{var}\");"),
+        Stmt::Expr(..)
+    ));
+}
+
+#[test]
+fn var_is_usable_as_a_parameter_and_field_name() {
+    // Parameter named `var` (the original bug).
+    match item("function inc(int var): int { return var + 1; }") {
+        Item::Function(_) => {}
+        other => panic!("param named `var`: {other:?}"),
+    }
+    // Field named `var`.
+    match item("class C { mutable int var = 0; }") {
+        Item::Class(_) => {}
+        other => panic!("field named `var`: {other:?}"),
+    }
+}
+
 // ── A-6: PHP `foreach (xs as x)` — value form (inferred element type) + `with int i` counter ──
 
 #[test]

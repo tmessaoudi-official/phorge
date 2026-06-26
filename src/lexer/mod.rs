@@ -767,7 +767,10 @@ fn keyword(s: &str) -> Option<TokenKind> {
         "interface" => Interface,
         "implements" => Implements,
         "extends" => Extends,
-        "var" => Var,
+        // `var` is a CONTEXTUAL keyword (like `foreach`/`as`/`when`): it stays an ordinary identifier
+        // in the token stream and is recognized as the inference-binding keyword only at a
+        // declaration/binding start by the parser (`Parser::at_var_decl`). This frees `var` to be a
+        // value / parameter / field name (it maps to a legal PHP `$var` / `->var`).
         "mutable" => Mutable,
         "static" => Static,
         "with" => With,

@@ -11,6 +11,24 @@ impl Checker {
         use crate::ast::Item;
         self.imports = crate::native::import_map(&program.items);
         for item in &program.items {
+            // `var` is a PHP reserved word in symbol positions (a free function / class / enum /
+            // interface / trait / type-alias). It is a usable Phorge value identifier (param / field /
+            // local / property / method) but naming a *symbol* `var` would transpile to invalid PHP, so
+            // reject it here with a clear diagnostic rather than letting the PHP oracle fail. Methods
+            // are collected inside `collect_class` (a class body), so they are exempt.
+            if let Some((name, span, kind)) = reserved_symbol_decl(item) {
+                if is_php_reserved_symbol_name(name) {
+                    self.err_coded(
+                        span,
+                        format!("`{name}` is a reserved word in PHP and cannot name a {kind}"),
+                        "E-RESERVED-NAME",
+                        Some(format!(
+                            "`{name}` is fine as a variable, parameter, field, or method name — rename this {kind}"
+                        )),
+                    );
+                    continue;
+                }
+            }
             match item {
                 Item::Function(f) => self.collect_function(f),
                 Item::Enum(e) => self.collect_enum(e),
@@ -1312,5 +1330,21 @@ impl Checker {
             .iter()
             .any(|m| matches!(m, ClassMember::Constructor { .. }));
         info.ctor = ctor;
+    }
+}
+
+/// The name, span, and human label of a top-level item that defines a *symbol* in PHP's namespace
+/// (free function / class / enum / interface / trait / type-alias) — the positions where a
+/// PHP-reserved name (e.g. `var`) would transpile to invalid PHP. `None` for imports.
+fn reserved_symbol_decl(item: &crate::ast::Item) -> Option<(&str, Span, &'static str)> {
+    use crate::ast::Item;
+    match item {
+        Item::Function(f) => Some((&f.name, f.span, "function")),
+        Item::Class(c) => Some((&c.name, c.span, "class")),
+        Item::Enum(e) => Some((&e.name, e.span, "enum")),
+        Item::Interface(i) => Some((&i.name, i.span, "interface")),
+        Item::Trait(t) => Some((&t.name, t.span, "trait")),
+        Item::TypeAlias { name, span, .. } => Some((name, *span, "type alias")),
+        Item::Import { .. } => None,
     }
 }

@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — `var` is now a contextual keyword
+
+`var` was a hard-reserved keyword, so it could not be used as an identifier — naming a parameter,
+field, or variable `var` was a parse error, and lifting PHP `$var` produced invalid Phorge. `var` is
+now **contextual** (like `foreach`/`as`/`when`): it is the inference-binding keyword only at a
+declaration start (`var x = …`, `var [a, b] = …`, struct destructure, `if (var x = opt)`), and an
+ordinary identifier everywhere else. The change is **purely additive and backward-compatible** — every
+existing program parses identically; only previously-rejected positions are now accepted.
+
+- `var` is usable as a **variable / parameter / field / property / method** name (it maps to a legal
+  PHP `$var` / `->var` / `->var()`, verified against PHP 8.5). Mutability stays the orthogonal
+  `mutable` axis — `var` carries no mutability meaning.
+- Naming a **free function / class / enum / interface / trait / type** `var` is rejected with the new
+  **`E-RESERVED-NAME`** (PHP reserves `var` in those symbol positions — `function var(){}` / `class
+  var{}` are PHP parse errors; `phg explain E-RESERVED-NAME`).
+- Front-end-only (lexer keyword table + parser dispatch + one checker guard); **no new `Op`/`Value`**,
+  byte-identical `run ≡ runvm ≡ real PHP 8.5`. Unblocks lifting PHP `$var` → Phorge `var` verbatim.
+  `examples/guide/contextual-var.phg`.
+
 ### Added — `this`-capture in closures (Phase 1 closures slice)
 
 A method-body lambda may now reference `this`: `function reader() -> (() -> int) { return fn() =>

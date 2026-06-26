@@ -50,6 +50,15 @@ pub fn explain_text(code: &str) -> Option<String> {
              `Core.File`, …), like a built-in type name. Root your own packages elsewhere, e.g.\n\
              `package app;` or `package app.util;`.\n"
         }
+        "E-RESERVED-NAME" => {
+            "E-RESERVED-NAME — a function / class / enum / interface / trait / type was named `var`.\n\n\
+             `var` is a *contextual* keyword in Phorge: it is the inference-binding keyword only at a\n\
+             declaration start (`var x = …`), and an ordinary identifier everywhere else — so it is\n\
+             fine as a variable, parameter, field, property, or method name (it maps to a legal PHP\n\
+             `$var` / `->var` / `->var()`). But PHP reserves `var` for a *symbol* name: a free\n\
+             `function var()` or `class var {}` is a PHP parse error, so Phorge rejects `var` there.\n\
+             Rename the function/class/type (the value/parameter/field/method name can stay `var`).\n"
+        }
         "E-PKG-PATH" => {
             "E-PKG-PATH — a file's `package` does not match its location.\n\n\
              In a project, the directory under the source root IS the package (folder = path, Go's\n\

@@ -131,6 +131,32 @@ impl Parser {
             _ => Err(self.error(what)),
         }
     }
+
+    /// True if the current token is the contextual keyword `kw` (an identifier with that exact text).
+    /// Phorge's contextual keywords (`var`, `foreach`, `as`, `when`) live as ordinary identifiers in
+    /// the token stream and are recognized only in the positions where they are meaningful, so the
+    /// same word stays usable as a value / field / parameter name everywhere else.
+    fn at_kw(&self, kw: &str) -> bool {
+        matches!(self.peek(), TokenKind::Ident(s) if s == kw)
+    }
+
+    /// True when a leading `var` opens a declaration/binding rather than naming a value: `var IDENT`
+    /// (an inferred binding, or the head of a `var Type { … }` struct destructure) or `var [` (a list
+    /// destructure). `var` followed by anything else (`=`, `.`, `(`, an operator, `;`) is an ordinary
+    /// identifier — a reassignment or expression — so the same word is a usable value name.
+    fn at_var_decl(&self) -> bool {
+        self.at_kw("var") && matches!(self.peek2(), TokenKind::Ident(_) | TokenKind::LBracket)
+    }
+
+    /// Consume the contextual keyword `kw` (its presence already established by the caller) or error.
+    fn eat_kw(&mut self, kw: &str, what: &str) -> Result<(), Diagnostic> {
+        if self.at_kw(kw) {
+            self.advance();
+            Ok(())
+        } else {
+            Err(self.error(what))
+        }
+    }
 }
 
 /// Map a compound-assignment operator token to the `BinaryOp` it desugars to (M-mut.2).

@@ -28,10 +28,15 @@ impl Parser {
                 let body = self.parse_block()?;
                 Ok(Stmt::Block(body, sp))
             }
-            TokenKind::Var => self.parse_var_or_destructure(),
             TokenKind::Mutable => self.parse_mutable_var_decl(),
             TokenKind::Throw => self.parse_throw(),
             TokenKind::Try => self.parse_try(),
+            // `var` is a contextual keyword: it opens an inferred binding / destructure ONLY when it
+            // leads a declaration (`var IDENT` / `var [`). `var` used as a value (`var = e`, `var.f`,
+            // `var(…)`) falls through to the expression/assignment path below.
+            TokenKind::Ident(s) if s == "var" && self.at_var_decl() => {
+                self.parse_var_or_destructure()
+            }
             // A-6: `foreach` is a contextual keyword (like `as`/`when`) — only the `foreach (`
             // statement-leading form is the loop; a bare `foreach` ident elsewhere is unaffected.
             TokenKind::Ident(s) if s == "foreach" => self.parse_foreach(),
@@ -93,7 +98,7 @@ impl Parser {
     /// always a scalar binding, so `parse_mutable_var_decl` never routes here.
     pub(super) fn parse_var_or_destructure(&mut self) -> Result<Stmt, Diagnostic> {
         let sp = self.peek_span();
-        self.expect(&TokenKind::Var, "'var'")?;
+        self.eat_kw("var", "'var'")?;
         if self.check(&TokenKind::LBracket) {
             return self.parse_list_destructure(sp);
         }
@@ -196,7 +201,7 @@ impl Parser {
     /// `true` when this was reached via `mutable var name = …` (M-mut.1).
     pub(super) fn parse_var_inferred(&mut self, mutable: bool) -> Result<Stmt, Diagnostic> {
         let sp = self.peek_span();
-        self.expect(&TokenKind::Var, "'var'")?;
+        self.eat_kw("var", "'var'")?;
         let name = self.expect_ident("a variable name after 'var'")?;
         self.expect(&TokenKind::Eq, "'=' after 'var <name>'")?;
         let init = self.parse_expr()?;
@@ -215,7 +220,7 @@ impl Parser {
     pub(super) fn parse_mutable_var_decl(&mut self) -> Result<Stmt, Diagnostic> {
         let sp = self.peek_span();
         self.expect(&TokenKind::Mutable, "'mutable'")?;
-        if self.check(&TokenKind::Var) {
+        if self.at_kw("var") {
             return self.parse_var_inferred(true);
         }
         let ty = self.parse_type()?;
@@ -262,9 +267,11 @@ impl Parser {
         self.expect(&TokenKind::If, "'if'")?;
         self.expect(&TokenKind::LParen, "'(' after 'if'")?;
         // `if (var name = scrutinee)` binds the non-null inner of an optional scrutinee inside the
-        // then-block (M3 S2.4). `var` is a keyword that cannot begin a normal condition expression,
-        // so seeing it right after `(` unambiguously selects the if-let form.
-        let bind = if self.eat(&TokenKind::Var) {
+        // then-block (M3 S2.4). With `var` now contextual, a plain `var` value could open a normal
+        // condition, so the if-let form is selected only on `var IDENT` (a binding head); `if (var)`,
+        // `if (var == x)`, etc. parse `var` as an ordinary value.
+        let bind = if self.at_kw("var") && matches!(self.peek2(), TokenKind::Ident(_)) {
+            self.advance(); // contextual `var`
             let name = self.expect_ident("a binding name after 'var'")?;
             self.expect(&TokenKind::Eq, "'=' in 'if (var name = …)'")?;
             Some(name)
@@ -500,7 +507,9 @@ impl Parser {
     pub(super) fn parse_for_clause_stmt(&mut self) -> Result<Stmt, Diagnostic> {
         let sp = self.peek_span();
         if self.eat(&TokenKind::Mutable) {
-            let (ty, name) = if self.eat(&TokenKind::Var) {
+            // After `mutable` a binding is mandatory, so `var` here is always the inference keyword.
+            let (ty, name) = if self.at_kw("var") {
+                self.advance(); // contextual `var`
                 (
                     Type::Infer(sp),
                     self.expect_ident("a variable name after 'mutable var'")?,
@@ -522,7 +531,10 @@ impl Parser {
                 span: sp,
             });
         }
-        if self.eat(&TokenKind::Var) {
+        // `for (var i = 0; …)` — the inference keyword only on `var IDENT`; `for (var = 0; …)`
+        // reassigns a variable named `var` and falls through to the assignment/expression path.
+        if self.at_kw("var") && matches!(self.peek2(), TokenKind::Ident(_)) {
+            self.advance(); // contextual `var`
             let name = self.expect_ident("a variable name after 'var'")?;
             self.expect(&TokenKind::Eq, "'=' after 'var <name>'")?;
             let init = self.parse_expr()?;
@@ -555,7 +567,9 @@ impl Parser {
         let sp = self.peek_span();
         self.expect(&TokenKind::While, "'while'")?;
         self.expect(&TokenKind::LParen, "'(' after 'while'")?;
-        if self.eat(&TokenKind::Var) {
+        // while-let, selected only on `var IDENT` (a binding head) now that `var` is contextual.
+        if self.at_kw("var") && matches!(self.peek2(), TokenKind::Ident(_)) {
+            self.advance(); // contextual `var`
             let name = self.expect_ident("a binding name after 'var'")?;
             self.expect(&TokenKind::Eq, "'=' in 'while (var name = …)'")?;
             let cond = self.parse_expr()?;

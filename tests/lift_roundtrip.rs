@@ -170,6 +170,20 @@ function describe(string $who, Box $b): string {
 $b = new Box("crate");
 echo describe("Ada", $b);"#,
         ),
+        (
+            // Contextual `var`: a PHP variable/parameter literally named `$var` lifts to a Phorge
+            // value named `var` (not mangled) and round-trips — the original motivating bug. PHP
+            // allows `$var`; Phorge now does too (`var` is the inference keyword only at a binding
+            // start). Here `$var` is a parameter (read) and also a top-level local (a `var var = …`
+            // declaration), both kept verbatim.
+            "var_as_identifier",
+            r#"<?php
+function tag(string $var): string {
+    return "[" . $var . "]";
+}
+$var = tag("hi");
+echo $var;"#,
+        ),
     ];
 
     for (label, php_src) in cases {

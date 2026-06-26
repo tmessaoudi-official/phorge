@@ -1,0 +1,39 @@
+// `var` is a CONTEXTUAL keyword. It is the inference-binding keyword only at a declaration start
+// (`var x = …`, `var [a, b] = …`, `if (var x = opt)`); everywhere else it is an ordinary identifier,
+// so it is usable as a parameter, field, local, property, or method name. (Naming a *function*,
+// *class*, *enum*, *interface*, or *type* `var` is rejected with E-RESERVED-NAME — PHP reserves `var`
+// in those symbol positions. A value/param/field/method `var` maps to a legal PHP `$var` / `->var`.)
+//
+// Mutability is the separate, orthogonal `mutable` axis — `var` carries no mutability meaning.
+// Byte-identical on run / runvm / real PHP.
+package Main;
+
+import Core.Console;
+
+// `var` as a parameter name.
+function tagged(string var): string {
+    return "[{var}]";
+}
+
+// `var` as a (promoted, public) field name, read back through a method.
+class Holder {
+    constructor(public int var) {}
+    function bumped(): int {
+        return this.var + 1;
+    }
+}
+
+function main(): void {
+    // `var name = …` is still the inference keyword (here `label` is inferred `string`).
+    var label = tagged("phorge");
+    Console.println(label);
+
+    // `var` as a mutable local value name: declared with its type, then reassigned.
+    mutable int var = 10;
+    var = var + 5;
+    Console.println("var = {var}");
+
+    // `var` as a field name.
+    var h = new Holder(41);
+    Console.println("h.var = {h.var}, bumped = {h.bumped()}");
+}
