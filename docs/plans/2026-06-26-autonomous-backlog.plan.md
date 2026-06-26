@@ -70,4 +70,10 @@
 - [x] **4 F-m** — DONE (kind-aware `E-RESERVED-NAME`: function-illegal + class-extra PHP-reserved sets,
   empirically verified vs PHP 8.5; `function int()` stays legal, `class int{}` rejected; no over-reject,
   blast-radius clean).
-- [ ] 5 parseInt/sort
+- [~] **5 (stretch) parseInt/sort** — `Core.Text.parseInt` DONE (`examples/guide/parse-int.phg`,
+  byte-identical incl. overflow). **`sort` DEFERRED to M4** (ordering natives): a generic/comparator
+  sort's byte-identity vs PHP `sort`/`usort` (type-dependent ordering, stability) is a larger design,
+  already filed under M4 in KNOWN_ISSUES.
+
+## All backlog items resolved (2026-06-26)
+Items 1–4 complete; item 5's parseInt shipped, sort deferred to M4. All commits green + local (unpushed).

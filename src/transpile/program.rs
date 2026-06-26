@@ -388,6 +388,23 @@ impl Transpiler {
             self.emit_reflect_table();
         }
         self.emit_json_helpers();
+        if self.uses_text_parse_int {
+            // Mirror Rust's `i64::from_str`: `^[+-]?[0-9]+$`, in i64 range, no surrounding whitespace.
+            // PHP's `(int)` clamps on overflow (≠ Rust's None), so detect overflow by re-deriving the
+            // magnitude digits from the cast value and comparing to the input's (sign + leading zeros
+            // stripped) — a mismatch means it clamped. Tier-1 only (PCRE), correct under `php -n`.
+            self.line("function __phorge_parse_int($s) {");
+            self.indent += 1;
+            self.line("if (preg_match('/^[+-]?[0-9]+$/', $s) !== 1) { return null; }");
+            self.line("$n = (int)$s;");
+            self.line("$neg = ($s[0] === '-');");
+            self.line("$digits = ltrim(ltrim($s, '+-'), '0');");
+            self.line("if ($digits === '') { $digits = '0'; }");
+            self.line("if ((string)($neg ? -$n : $n) !== $digits) { return null; }");
+            self.line("return $n;");
+            self.indent -= 1;
+            self.line("}");
+        }
     }
 
     /// The `Core.Json` recursive helpers (each gated by its `uses_json_*` flag). They walk the injected

@@ -209,6 +209,11 @@ struct Transpiler {
     uses_json_encode: bool,
     uses_json_pretty: bool,
     uses_json_decode: bool,
+    /// Set when `Core.Text.parseInt` is emitted — defines `__phorge_parse_int` once per file. The
+    /// helper mirrors Rust's `i64::from_str` (optional sign, base-10 digits, i64 range, no surrounding
+    /// whitespace) and returns `null` (Phorge `None`) otherwise — including on i64 overflow, which
+    /// PHP's `(int)` cast would silently clamp.
+    uses_text_parse_int: bool,
     /// Classes that must lower to the **interface + trait** decomposition (M-RT S6b): every transitive
     /// ancestor of a multi-parent (`extends A, B`) class. PHP has no multiple inheritance, so a
     /// multi-parent class `implements` its parents' interfaces and `use`s their traits; each ancestor
@@ -383,6 +388,7 @@ impl Transpiler {
             uses_json_encode: false,
             uses_json_pretty: false,
             uses_json_decode: false,
+            uses_text_parse_int: false,
             decomposed: BTreeSet::new(),
             tmp: 0,
         }

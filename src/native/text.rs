@@ -237,7 +237,30 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(text_repeat),
             php: |a| format!("str_repeat({}, {})", parg(a, 0), parg(a, 1)),
         },
+        // `parseInt(string) -> int?` — None on a non-integer (the first optional-return native). PHP
+        // erases to the gated `__phorge_parse_int` helper (set in `transpile/call.rs`), which mirrors
+        // Rust's `i64::from_str` exactly: optional sign, base-10 digits (leading zeros OK), in i64
+        // range, no surrounding whitespace; anything else is `null` (Phorge `None`).
+        NativeFn {
+            module: "Core.Text",
+            name: "parseInt",
+            params: vec![s()],
+            ret: Ty::Optional(Box::new(Ty::Int)),
+            pure: true,
+            eval: NativeEval::Pure(text_parse_int),
+            php: |a| format!("__phorge_parse_int({})", parg(a, 0)),
+        },
     ]
+}
+
+/// `Text.parseInt` — parse a base-10 integer, or `None` (`Value::Null`) when the whole string is not
+/// a valid `i64`. Delegates to Rust's `i64::from_str` (the single source of truth; the PHP helper is
+/// written to match it byte-for-byte).
+fn text_parse_int(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => Ok(s.parse::<i64>().map_or(Value::Null, Value::Int)),
+        _ => Err("Text.parseInt expects (string)".into()),
+    }
 }
 
 // ---- Core.File ----------------------------------------------------------------------------------

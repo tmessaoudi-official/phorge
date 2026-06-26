@@ -1,0 +1,33 @@
+// `Core.Text.parseInt` — string → int, the safe way.
+//
+// `parseInt(string) -> int?` returns `None` when the whole string is not a valid base-10 integer,
+// rather than guessing (PHP's `(int)"12abc"` is `12`; here it is `None`). It mirrors the language's
+// own integer literals: an optional sign, base-10 digits (leading zeros allowed), within `int` range,
+// and no surrounding whitespace. Compose it with `??` for a default, or `if (var n = …)` to branch.
+package Main;
+import Core.Console;
+import Core.Text;
+
+function describe(string s): string {
+  if (var n = Text.parseInt(s)) {
+    return "{s} -> {n}";
+  }
+  return "{s} -> (not an int)";
+}
+
+function main(): void {
+  Console.println(describe("42"));    // 42 -> 42
+  Console.println(describe("-7"));     // -7 -> -7
+  Console.println(describe("+5"));     // +5 -> 5   (leading + is fine)
+  Console.println(describe("007"));    // 007 -> 7  (leading zeros are fine)
+  Console.println(describe("3.14"));   // not an int (a float is not an integer)
+  Console.println(describe("12abc"));  // not an int (no partial parse)
+  Console.println(describe("abc"));    // not an int
+  Console.println(describe("99999999999999999999")); // not an int (out of int range)
+
+  // Compose with `??` for a default.
+  int port = Text.parseInt("8080") ?? 0;
+  Console.println("port = {port}");       // port = 8080
+  int fallback = Text.parseInt("nope") ?? -1;
+  Console.println("fallback = {fallback}"); // fallback = -1
+}

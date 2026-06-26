@@ -6,6 +6,15 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `Core.Text.parseInt` (the first optional-return native)
+
+`Core.Text.parseInt(string) -> int?` — `None` when the whole string is not a valid base-10 integer
+(no partial parse, no overflow clamp), unlike PHP's lenient `(int)`. Mirrors Rust's `i64::from_str`
+(optional sign, base-10 digits incl. leading zeros, in `i64` range, no surrounding whitespace);
+composes with `??` / `if (var n = …)`. PHP erases to a gated `__phorge_parse_int` helper whose
+overflow detection matches Rust's `None` (PHP's `(int)` would silently clamp). Byte-identical
+run/runvm/real PHP (incl. `+5`/`007`/overflow). `examples/guide/parse-int.phg`.
+
 ### Added — `Core.Json` (JSON parse / stringify)
 
 A std-only, deterministic JSON module over a compiler-injected `Json` enum (`Null`/`Bool`/`Int`/

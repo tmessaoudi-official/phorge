@@ -1,6 +1,28 @@
 use super::*;
 
 #[test]
+fn text_parse_int_matches_rust_i64_fromstr() {
+    let p = |s: &str| {
+        let mut o = String::new();
+        text_parse_int(&[Value::Str(s.into())], &mut o).unwrap()
+    };
+    // Valid integers → Some (the value itself; an optional's present case is the bare value).
+    assert!(matches!(p("123"), Value::Int(123)));
+    assert!(matches!(p("-7"), Value::Int(-7)));
+    assert!(matches!(p("+5"), Value::Int(5))); // leading + accepted (Rust i64 FromStr)
+    assert!(matches!(p("007"), Value::Int(7))); // leading zeros accepted
+    assert!(matches!(p("0"), Value::Int(0)));
+    // Invalid → None (Value::Null).
+    assert!(matches!(p(""), Value::Null));
+    assert!(matches!(p("abc"), Value::Null));
+    assert!(matches!(p("12.5"), Value::Null));
+    assert!(matches!(p("12abc"), Value::Null));
+    assert!(matches!(p(" 5"), Value::Null)); // surrounding whitespace rejected
+    assert!(matches!(p("0x10"), Value::Null));
+    assert!(matches!(p("99999999999999999999"), Value::Null)); // i64 overflow → None
+}
+
+#[test]
 fn text_natives_eval_and_emit() {
     let mut o = String::new();
     assert!(matches!(

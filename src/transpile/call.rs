@@ -130,6 +130,9 @@ impl Transpiler {
                                 _ => {}
                             }
                         }
+                        if nat.module == "Core.Text" && nat.name == "parseInt" {
+                            self.uses_text_parse_int = true;
+                        }
                         let php = (nat.php)(&argv);
                         // Inside a namespace block a bare `strlen(...)` would resolve to
                         // `CurrentNs\strlen`; emit `\strlen(...)` for global-function natives (M5-8).
