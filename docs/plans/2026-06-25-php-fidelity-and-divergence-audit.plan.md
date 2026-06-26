@@ -285,7 +285,10 @@ A-61 (`instanceof` lowercase).
   lexer/parser/checker/interpreter/VM/transpiler/lift-printer + a global rewrite of every `.phg`,
   inline test program, doc, example, and the playground default. Highest risk; byte-identity-gated;
   needs its own design spec + codemod tooling. **Mandatory-return already exists** (totality cluster) —
-  not part of this.
+  not part of this. ✅ **DESIGN SPEC WRITTEN 2026-06-26**:
+  `docs/specs/2026-06-26-m3-stream1-syntax-reshape-design.md` (build order A-62 → A-46 → A-6 → A-1;
+  A-1 last so the codemod lands on a stable parser; two-phase dual-accept→codemod→retire `->`; `:`
+  verified free in signature position). Building now (autonomous overnight).
 - **Stream 2 — Transpile interpolation fidelity:** B-1 + B-2 + B-9 (coupled). ✅ **IMPLEMENTED
   2026-06-26.** `emit_string` rewritten to emit native PHP `{$…}` for `$`-rooted Str/Int holes
   (guards: `is_php_interp_chain` + emitted-`$`-rooted + brace-free), concat fallback otherwise;
@@ -303,6 +306,18 @@ A-61 (`instanceof` lowercase).
     BitXor,Shl,Shr}` + `PhpUnOp::BitNot` + lexer tokens (`Amp/Bar/Caret/Tilde/Shl/Shr`); `infix_op`
     renumbered to the full PHP-8 table (bitwise/shift levels inserted, prior ops keep relative order);
     1:1 lifter mapping. The lift printer already covered all of these.
-  - ⏳ Remaining: C-1 (interpolation), C-5/6 (printer minimal-parens).
+  - ✅ **C-1 IMPLEMENTED 2026-06-26** (`4ecb6c0`): lift PHP double-quoted interpolation → Phorge
+    `"{…}"` holes, restricted to PHP's actual grammar (a `$`-rooted access chain, verified against
+    8.5). `PhpExpr::Interp` + `parse_interp` (escape decode, quote-aware brace scan, simple/complex
+    forms) reusing `parse_postfix` + an access-chain validator; operators/`${…}`/bareword subscripts
+    rejected loudly. Round-trip gate proves lifted Phorge ≡ original PHP on run/runvm/real-PHP.
+  - ✅ **C-5/6 IMPLEMENTED 2026-06-26** (`423aab3`): lift printer is now precedence-aware (minimal
+    parens) — `prec_of`/`bin_prec` mirror `src/parser/exprs.rs`; `operand()` is associativity-aware;
+    `postfix_operand()` parenthesizes a non-atomic receiver; prefix unary is bare (`~a`), nested
+    unary kept parenthesized. Goldens updated, `sample.phg` regenerated.
 
-STATUS: Designed — not yet implemented. Say go to plan/build a stream.
+**Stream 3 is COMPLETE** (all of C-1/C-5/6/C-45/C-46/C-47 shipped). **Stream 2 COMPLETE.** Remaining:
+**Stream 1** (spec written, building autonomously).
+
+STATUS: Streams 2 & 3 COMPLETE. Stream 1 spec written (`…-m3-stream1-syntax-reshape-design.md`) —
+building A-62 → A-46 → A-6 → A-1 autonomously overnight.
