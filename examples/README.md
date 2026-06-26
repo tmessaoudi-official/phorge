@@ -88,7 +88,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `guide/result.phg` | error-as-value `Result<T, E>` + the **`?` propagation operator** (in a let-initializer: unwrap `Ok` or early-return `Err`); the unchecked-fault tier — `panic`/`todo`/`unreachable` (`never`-typed) and `assert(cond[, "msg"])` — shown via a passing `assert` (faults can't be runnable examples) (M-faults Slice 2a) |
 | `guide/errors.phg` | **checked exceptions** — `throws A \| B` declarations, `throw`, `try`/multiple `catch (X e)`/union `catch (A \| B e)`/`finally`, and `?`-throws propagation (a throwing call's exceptions flow to the enclosing `throws`); a thrown type implements the built-in `Error` marker → PHP class `extends \Exception`; native unwinding on both backends (3 new `Op`s: `Throw`/`PushHandler`/`PopHandler`), transpiles to PHP `try`/`catch`/`finally` (M-faults Slice 2b) |
 | `guide/cause-chain.phg` | **exception cause chains** — a conventional `cause` field of type `Error?` on an `Error` subtype preserves the lower-level error that triggered a higher-level one; it is routed into PHP's native exception chain (`parent::__construct($message, 0, $cause)` → `getPrevious()`), so the transpiled PHP reports an idiomatic "caused by" while the Phorge backends read it back as a plain field (M-faults Slice 2c) |
-| `guide/math.phg` | the `Core.Math` stdlib module — `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max`/`round` (M3 Track B Wave 2; `round` added P3.2) |
+| `guide/math.phg` | the `Core.Math` stdlib module — `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max`/`round` (M3 Track B Wave 2; `round` added P3.2), plus **M-NUM S4 breadth**: `sign`/`clamp`/`gcd` (int), `log`/`log10`/`exp`/`sin`/`cos`/`tan`/`pi`/`e` (float, exercised at exact points), and `numberFormat(float, int) -> string` (grouped, half-away — via a single-sourced `__phorge_number_format` helper) |
 | `guide/floats.phg` | `float` stringification — shortest-round-trip, always-positional, byte-identical across `run`/`runvm`/PHP for every finite magnitude (irrational, large, small) via the `__phorge_float` transpile helper |
 | `guide/text.phg` | the `Core.Text` stdlib module — `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace`/`startsWith`/`endsWith`/`repeat` (M3 Track B Wave 2; last three added P3.2) |
 | `guide/file.phg` | the `Core.File` stdlib module — `read` (→ `string?`), `exists`; reads a committed fixture, composes with S2 `??` / if-let (M3 Track B Wave 2) |
@@ -147,7 +147,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | error model: `Result<T,E>` + `?` propagation, fault intrinsics (`panic`/`todo`/`unreachable`/`assert`) | `guide/result` |
 | `var` local type inference, `type` aliases | `guide/inference` |
 | `Console.println(string)` (after `import Core.Console;`) | every example |
-| `Core.Math` stdlib: `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max`/`round` | `guide/math` |
+| `Core.Math` stdlib: `sqrt`/`pow`/`floor`/`ceil`/`abs`/`min`/`max`/`round` + S4 `sign`/`clamp`/`gcd`/`log`/`log10`/`exp`/`sin`/`cos`/`tan`/`pi`/`e`/`numberFormat` | `guide/math` |
 | `float` shortest-round-trip rendering, byte-identical across backends + PHP | `guide/floats` |
 | `Core.Text` stdlib: `len`/`upper`/`lower`/`trim`/`contains`/`split`/`join`/`replace`/`startsWith`/`endsWith`/`repeat` | `guide/text` |
 | `Core.File` stdlib: `read` (→ `string?`), `exists` (fixture-gated) | `guide/file` |

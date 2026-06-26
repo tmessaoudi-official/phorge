@@ -6,6 +6,29 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — math breadth + number formatting (M-NUM S4) — closes M-NUM
+
+The final M-NUM slice rounds out `Core.Math`. All additive stdlib natives — **no new `Op`, no new
+`Value`**:
+
+- **Integer helpers (byte-identical regardless of float display):** `sign(int) -> int` (→ PHP `<=>`),
+  `clamp(int, int, int) -> int` (→ `max(lo, min(v, hi))`, never panics when `lo > hi`),
+  `gcd(int, int) -> int`. `gcd` has no PHP-core builtin (gmp is absent under `php -n`), so it erases
+  to a single-sourced **`__phorge_gcd`** helper (Euclid over the magnitudes); the `i64::MIN` magnitude
+  edge faults cleanly (EV-7).
+- **Transcendentals:** `log`/`log10`/`exp`/`sin`/`cos`/`tan(float) -> float` (→ the same-named PHP
+  libm builtins) and the constants `pi()`/`e() -> float` (→ `M_PI`/`M_E`). A non-representable result
+  diverges between Rust's shortest-round-trip and PHP, so the guide exercises them at their *exact*
+  (IEEE-defined) values and prints real results through `numberFormat`.
+- **`numberFormat(float, int) -> string`** — non-locale `number_format`: rounded half-away-from-zero,
+  grouped by threes with `,`, `.` decimal point. Erases to a single-sourced **`__phorge_number_format`**
+  helper (identical string assembly to `value::number_format`), so the PHP leg never relies on PHP's
+  own `number_format` (its `-0`/locale quirks). A negative `decimals` clamps to `0` on both legs.
+
+`examples/guide/math.phg` extended; byte-identical `run ≡ runvm ≡ real PHP 8.5`. **M-NUM is now
+closed** (S1 decimal core → S2 division/rounding → S3 predicates/conversions → S4 math breadth);
+`BigInt` / arbitrary-precision decimal / `Money`+currency remain deferred to **M-NUM-2**.
+
 ### Added — float predicates + numeric conversions (M-NUM S3)
 
 Rounds out the numeric surface: detect float special values and convert **explicitly** between

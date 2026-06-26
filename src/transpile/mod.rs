@@ -265,6 +265,13 @@ struct Transpiler {
     /// truncating the carrier string toward zero (split before the dot) and range-checking i64, else
     /// `null`. Mirrors Rust `value::decimal_to_int`.
     uses_dec_to_int: bool,
+    /// Set when `Math.gcd(int, int)` is emitted (M-NUM S4) — defines `__phorge_gcd` (Euclid over the
+    /// magnitudes), since gmp is absent under `php -n`. Mirrors the Rust `math_gcd` native body.
+    uses_math_gcd: bool,
+    /// Set when `Math.numberFormat(float, int)` is emitted (M-NUM S4) — defines
+    /// `__phorge_number_format`, assembling the grouped string byte-for-byte like `value::number_format`
+    /// (so the PHP leg never relies on PHP's own `number_format` and its `-0`/locale quirks).
+    uses_math_number_format: bool,
     /// Classes that must lower to the **interface + trait** decomposition (M-RT S6b): every transitive
     /// ancestor of a multi-parent (`extends A, B`) class. PHP has no multiple inheritance, so a
     /// multi-parent class `implements` its parents' interfaces and `use`s their traits; each ancestor
@@ -472,6 +479,8 @@ impl Transpiler {
             uses_dec_round: false,
             uses_float_to_int: false,
             uses_dec_to_int: false,
+            uses_math_gcd: false,
+            uses_math_number_format: false,
             decomposed: BTreeSet::new(),
             tmp: 0,
         }

@@ -649,6 +649,51 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_math_gcd {
+            // `Math.gcd` — Euclid over the magnitudes (gmp is absent under `php -n`). Mirrors the Rust
+            // `math_gcd` native body for every in-range input (the `i64::MIN` magnitude edge faults in
+            // Phorge, never reached by a byte-identity example).
+            self.line("function __phorge_gcd($a, $b) {");
+            self.indent += 1;
+            self.line("if ($a < 0) { $a = -$a; }");
+            self.line("if ($b < 0) { $b = -$b; }");
+            self.line("while ($b != 0) { $t = $b; $b = $a % $b; $a = $t; }");
+            self.line("return $a;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_math_number_format {
+            // `Math.numberFormat($v, $d)` — assembles the grouped string exactly like Rust
+            // `value::number_format`: round half-away-from-zero to `$d` places, group the integer part
+            // by threes, join with `.`. Single-sourced here (NOT PHP's `number_format`) so the `-0`
+            // sign rule and grouping match the Rust kernel byte-for-byte. Tier-1 functions only.
+            self.line("function __phorge_number_format($v, $d) {");
+            self.indent += 1;
+            self.line("if ($d < 0) { $d = 0; }");
+            self.line("$scaled = round($v * pow(10, $d));");
+            self.line("$neg = $scaled < 0;");
+            self.line("$digits = sprintf(\"%.0f\", abs($scaled));");
+            self.line("if (strlen($digits) <= $d) {");
+            self.indent += 1;
+            self.line("$digits = str_repeat(\"0\", $d + 1 - strlen($digits)) . $digits;");
+            self.indent -= 1;
+            self.line("}");
+            self.line("$split = strlen($digits) - $d;");
+            self.line("$intpart = substr($digits, 0, $split);");
+            self.line("$frac = substr($digits, $split);");
+            self.line("$len = strlen($intpart);");
+            self.line("$out = $neg ? \"-\" : \"\";");
+            self.line("for ($i = 0; $i < $len; $i++) {");
+            self.indent += 1;
+            self.line("if ($i > 0 && ($len - $i) % 3 === 0) { $out .= \",\"; }");
+            self.line("$out .= $intpart[$i];");
+            self.indent -= 1;
+            self.line("}");
+            self.line("if ($d > 0) { $out .= \".\" . $frac; }");
+            self.line("return $out;");
+            self.indent -= 1;
+            self.line("}");
+        }
         if self.uses_list_sort {
             // Natural ascending over a COPY (Phorge lists are immutable). String by byte (`strcmp`,
             // ≡ Rust `String` Ord) — PHP's `<=>` would juggle numeric strings; ints/floats/bools via

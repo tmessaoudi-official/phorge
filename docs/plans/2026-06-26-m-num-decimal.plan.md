@@ -37,10 +37,32 @@ Deferred to **M-NUM-2**: `BigInt`, arbitrary-precision decimal, composite `Money
   byte-identical run≡runvm≡PHP 8.5. **CI fix (`63ba3f7`):** decimal transpile emits BCMath, which the
   `php -n` oracle disables (shared ext) → CI red on S1; harness now loads it via `-d extension=bcmath`
   (`php_n_args`, probe-gated) + `setup-php extensions: bcmath`. See [[transpile-no-ini-extensions]].
-- **S3 — float predicates + numeric conversions:** `isNan`/`isFinite`/`isInfinite`, `NaN`/`Infinity`,
-  `toFloat`/`toInt`/`Decimal.of`, `intdiv`; document `int`=i64.
-- **S4 — math breadth + number_format:** `Core.Math` round/sign/clamp/gcd/log/exp/trig/PI/E (float
-  abs/min/max already exist); non-locale `number_format`.
+- **S3 — float predicates + numeric conversions: ✅ COMPLETE (`ff9351f`).** `Core.Math`
+  `isNan`/`isFinite`/`isInfinite`/`nan`/`infinity`/`negInfinity`/`intdiv` (faults: div0, i64::MIN/-1);
+  `Core.Convert` `toInt(float)->int?` (null on NaN/±Inf/range), `intToDecimal`, `decimalToFloat`,
+  `decimalToInt->int?` (`toFloat` reused from M4). Single-sourced `value::int_intdiv`/`float_to_int`
+  (exact `[-2^63,2^63)` edge)/`decimal_to_int`; **no new Op/Value**; all PHP-core transpile (no ext).
+  `int`=i64 documented in `docs/INVARIANTS.md`. `examples/guide/numeric-convert.phg` byte-identical
+  run≡runvm≡PHP 8.5. **CI verified GREEN on origin `63ba3f7`** (BCMath fix confirmed in real CI).
+- **S4 — math breadth + number_format: ✅ COMPLETE (closes M-NUM).** `Core.Math` gains `sign`/`clamp`/
+  `gcd` (int), `log`/`log10`/`exp`/`sin`/`cos`/`tan`/`pi`/`e` (float), and `numberFormat(float, int) ->
+  string`. **No new `Op`, no new `Value`** — all `Op::CallNative`. `sign` → PHP `<=>`; `clamp` →
+  `max(lo, min(v, hi))` (never panics on lo>hi); `gcd` → single-sourced `__phorge_gcd` (Euclid; gmp is
+  absent under `php -n`; `i64::MIN` magnitude faults EV-7); transcendentals → libm builtins (exercised
+  at exact IEEE points + via `numberFormat`); `pi`/`e` → `M_PI`/`M_E`. `numberFormat` → single-sourced
+  `__phorge_number_format` helper mirroring `value::number_format` (round half-away, group by threes,
+  `-0`→`0`, negative `decimals` clamps to 0) — NOT PHP's `number_format` (dodges its locale/`-0` quirks);
+  only the `.5`-boundary rounding primitive is a divergence axis (examples keep off it). Kernel
+  single-sourced in `value::number_format`; unit-tested in `math_s4_breadth_eval_and_emit`.
+  `examples/guide/math.phg` extended, byte-identical run≡runvm≡real PHP 8.5; 1182 workspace tests green,
+  clippy + fmt clean.
+
+## M-NUM — CLOSED (2026-06-26)
+All four slices shipped (S1 decimal core `d5d161d` → S2 division/rounding `1a2774d` → S3
+predicates/conversions `ff9351f` → S4 math breadth). Every M-NUM scope item from the SSOT is delivered
+except the explicitly-deferred **M-NUM-2** set: `BigInt`, arbitrary-precision decimal, composite
+`Money`+currency. The decimal primitive is a first-class `Value`/`Ty`; the rest is additive natives with
+zero new `Op`s beyond S1's `AddD`/`SubD`/`MulD`.
 
 ## Formal Plan — S1 (decimal primitive core)
 Integration map (file:line) in the session; design in `docs/specs/2026-06-26-m-num-s1-decimal-core-design.md`.

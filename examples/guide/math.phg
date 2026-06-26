@@ -26,4 +26,47 @@ function main(): void {
     int near = Math.round(2.5);
     int far = Math.round(-2.5);
     Console.println("round(2.5) = {near}, round(-2.5) = {far}");
+
+    // --- M-NUM S4: integer helpers (sign / clamp / gcd) — all return `int`, byte-identical. ---
+    int s1 = Math.sign(-7);
+    int s2 = Math.sign(0);
+    int s3 = Math.sign(42);
+    Console.println("sign(-7) = {s1}, sign(0) = {s2}, sign(42) = {s3}");
+
+    // `clamp(v, lo, hi)` = max(lo, min(v, hi)) — never panics, even if lo > hi (mirrors PHP).
+    int c1 = Math.clamp(15, 0, 10);
+    int c2 = Math.clamp(-3, 0, 10);
+    int c3 = Math.clamp(5, 0, 10);
+    Console.println("clamp(15,0,10) = {c1}, clamp(-3,0,10) = {c2}, clamp(5,0,10) = {c3}");
+
+    // `gcd` has no PHP-core builtin, so it erases to a `__phorge_gcd` helper (Euclid) emitted on
+    // both legs — byte-identical by construction, exactly like `__phorge_div`/`__phorge_round_div`.
+    int g1 = Math.gcd(48, 36);
+    int g2 = Math.gcd(17, 5);
+    Console.println("gcd(48,36) = {g1}, gcd(17,5) = {g2}");
+
+    // --- Transcendentals (log / exp / trig) erase to the PHP libm builtins. A non-representable
+    // result would diverge between Rust's shortest-round-trip and PHP's libm, so we exercise them at
+    // their *exact* values (defined by IEEE) — see `numberFormat` below for printing real results. ---
+    float e0 = Math.exp(0.0);
+    float l1 = Math.log(1.0);
+    float lt = Math.log10(1.0);
+    float c0 = Math.cos(0.0);
+    float s0 = Math.sin(0.0);
+    float t0 = Math.tan(0.0);
+    Console.println("exp(0)={e0}, log(1)={l1}, log10(1)={lt}, cos(0)={c0}, sin(0)={s0}, tan(0)={t0}");
+
+    // --- `numberFormat(value, decimals)` → a grouped string, rounded half-away-from-zero. It erases
+    // to a `__phorge_number_format` helper (identical string-building on both legs), so it is the safe
+    // way to *print* a real transcendental: formatting to a few decimals collapses any last-ULP noise. ---
+    string n1 = Math.numberFormat(1234567.891, 2);
+    string n2 = Math.numberFormat(1234.5678, 2);
+    string n3 = Math.numberFormat(-1234.5, 1);
+    string n4 = Math.numberFormat(0.0, 2);
+    Console.println("{n1} | {n2} | {n3} | {n4}");
+
+    string pf = Math.numberFormat(Math.pi(), 4);
+    string ef = Math.numberFormat(Math.e(), 4);
+    string xf = Math.numberFormat(Math.exp(1.0), 4);
+    Console.println("pi~{pf}, e~{ef}, exp(1)~{xf}");
 }

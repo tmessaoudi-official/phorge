@@ -482,6 +482,46 @@ pub fn float_to_int(v: f64) -> Option<i64> {
     }
 }
 
+/// `Math.numberFormat(value, decimals)` (M-NUM S4): a non-locale `number_format` — `value` rounded
+/// half-away-from-zero to `decimals` places, grouped with `,` every three integer digits and a `.`
+/// decimal point. Single-sourced so the interpreter and VM agree; mirrored byte-for-byte by the
+/// `__phorge_number_format` PHP helper (same digit-string assembly), so the only divergence axis is
+/// the float→integer rounding at an exact `.5` boundary (Rust `f64::round` has no pre-rounding, PHP
+/// `round` does) — examples keep off those boundaries, exactly like the rest of the float surface.
+/// A negative `decimals` is clamped to `0` (both legs), so the result is always well-formed.
+pub fn number_format(value: f64, decimals: usize) -> String {
+    let factor = 10f64.powi(decimals as i32);
+    // Round half-away-from-zero to an integer-valued f64 (`-0.0 < 0.0` is false, so a value that
+    // rounds to zero prints "0", never "-0").
+    let scaled = (value * factor).round();
+    let neg = scaled < 0.0;
+    let mut digits = format!("{:.0}", scaled.abs());
+    // Guarantee at least one whole-part digit ahead of the fractional split.
+    if digits.len() <= decimals {
+        digits = format!("{}{}", "0".repeat(decimals + 1 - digits.len()), digits);
+    }
+    let (int_part, frac_part) = digits.split_at(digits.len() - decimals);
+    // Group the integer part into thousands (separator before every digit whose distance from the
+    // end is a positive multiple of three).
+    let bytes = int_part.as_bytes();
+    let n = bytes.len();
+    let mut out = String::new();
+    if neg {
+        out.push('-');
+    }
+    for (i, b) in bytes.iter().enumerate() {
+        if i > 0 && (n - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(*b as char);
+    }
+    if decimals > 0 {
+        out.push('.');
+        out.push_str(frac_part);
+    }
+    out
+}
+
 /// Bitwise AND / OR / XOR on `int` (never fault — total over `i64`). PHP-identical.
 pub fn int_bitand(a: i64, b: i64) -> i64 {
     a & b

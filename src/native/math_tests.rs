@@ -139,3 +139,107 @@ fn math_s3_predicates_special_and_intdiv() {
     assert_eq!(php("negInfinity", &[]), "-INF");
     assert_eq!(php("intdiv", &["$a", "$b"]), "intdiv($a, $b)");
 }
+
+#[test]
+fn math_s4_breadth_eval_and_emit() {
+    let mut out = String::new();
+
+    // sign — -1 / 0 / 1
+    assert!(matches!(
+        math_sign(&[Value::Int(-7)], &mut out),
+        Ok(Value::Int(-1))
+    ));
+    assert!(matches!(
+        math_sign(&[Value::Int(0)], &mut out),
+        Ok(Value::Int(0))
+    ));
+    assert!(matches!(
+        math_sign(&[Value::Int(42)], &mut out),
+        Ok(Value::Int(1))
+    ));
+
+    // clamp = max(lo, min(v, hi)); never panics even when lo > hi
+    assert!(matches!(
+        math_clamp(&[Value::Int(15), Value::Int(0), Value::Int(10)], &mut out),
+        Ok(Value::Int(10))
+    ));
+    assert!(matches!(
+        math_clamp(&[Value::Int(-3), Value::Int(0), Value::Int(10)], &mut out),
+        Ok(Value::Int(0))
+    ));
+    assert!(matches!(
+        math_clamp(&[Value::Int(5), Value::Int(10), Value::Int(0)], &mut out),
+        Ok(Value::Int(10))
+    ));
+
+    // gcd — Euclid over magnitudes; gcd(0,0)=0; i64::MIN magnitude overflow faults (EV-7)
+    assert!(matches!(
+        math_gcd(&[Value::Int(48), Value::Int(36)], &mut out),
+        Ok(Value::Int(12))
+    ));
+    assert!(matches!(
+        math_gcd(&[Value::Int(17), Value::Int(5)], &mut out),
+        Ok(Value::Int(1))
+    ));
+    assert!(matches!(
+        math_gcd(&[Value::Int(-12), Value::Int(8)], &mut out),
+        Ok(Value::Int(4))
+    ));
+    assert!(matches!(
+        math_gcd(&[Value::Int(0), Value::Int(0)], &mut out),
+        Ok(Value::Int(0))
+    ));
+    assert!(math_gcd(&[Value::Int(i64::MIN), Value::Int(i64::MIN)], &mut out).is_err());
+
+    // transcendentals at exact (IEEE-defined) points
+    assert!(matches!(math_exp(&[Value::Float(0.0)], &mut out), Ok(Value::Float(x)) if x == 1.0));
+    assert!(matches!(math_log(&[Value::Float(1.0)], &mut out), Ok(Value::Float(x)) if x == 0.0));
+    assert!(matches!(math_log10(&[Value::Float(1.0)], &mut out), Ok(Value::Float(x)) if x == 0.0));
+    assert!(matches!(math_cos(&[Value::Float(0.0)], &mut out), Ok(Value::Float(x)) if x == 1.0));
+    assert!(matches!(math_sin(&[Value::Float(0.0)], &mut out), Ok(Value::Float(x)) if x == 0.0));
+    assert!(matches!(math_tan(&[Value::Float(0.0)], &mut out), Ok(Value::Float(x)) if x == 0.0));
+    assert!(matches!(math_pi(&[], &mut out), Ok(Value::Float(x)) if x == std::f64::consts::PI));
+    assert!(matches!(math_e(&[], &mut out), Ok(Value::Float(x)) if x == std::f64::consts::E));
+
+    // numberFormat — grouped string; -0 prints as 0; negative `decimals` clamps to 0
+    let nf = |v: f64, d: i64| match math_number_format(
+        &[Value::Float(v), Value::Int(d)],
+        &mut String::new(),
+    ) {
+        Ok(Value::Str(s)) => s,
+        other => panic!("numberFormat returned {other:?}"),
+    };
+    assert_eq!(nf(1234567.891, 2), "1,234,567.89");
+    assert_eq!(nf(1234.5678, 2), "1,234.57");
+    assert_eq!(nf(-1234.5, 1), "-1,234.5");
+    assert_eq!(nf(0.0, 2), "0.00");
+    assert_eq!(nf(-0.4, 0), "0"); // rounds to zero → no sign
+    assert_eq!(nf(5.0, 0), "5");
+    assert_eq!(nf(1234.0, 0), "1,234");
+    assert_eq!(nf(12.5, -1), "13"); // negative decimals clamp to 0 (half-away)
+
+    // PHP erasure
+    let php = |name: &str, args: &[&str]| {
+        let i = index_of("Core.Math", name).unwrap();
+        let a: Vec<String> = args.iter().map(|s| (*s).to_string()).collect();
+        (registry()[i].php)(&a)
+    };
+    assert_eq!(php("sign", &["$x"]), "($x <=> 0)");
+    assert_eq!(
+        php("clamp", &["$v", "$lo", "$hi"]),
+        "max($lo, min($v, $hi))"
+    );
+    assert_eq!(php("gcd", &["$a", "$b"]), "__phorge_gcd($a, $b)");
+    assert_eq!(php("log", &["$x"]), "log($x)");
+    assert_eq!(php("log10", &["$x"]), "log10($x)");
+    assert_eq!(php("exp", &["$x"]), "exp($x)");
+    assert_eq!(php("sin", &["$x"]), "sin($x)");
+    assert_eq!(php("cos", &["$x"]), "cos($x)");
+    assert_eq!(php("tan", &["$x"]), "tan($x)");
+    assert_eq!(php("pi", &[]), "M_PI");
+    assert_eq!(php("e", &[]), "M_E");
+    assert_eq!(
+        php("numberFormat", &["$v", "$d"]),
+        "__phorge_number_format($v, $d)"
+    );
+}

@@ -94,6 +94,22 @@ not a panic:
   *rounded* decimal→int, compose `Decimal.round(d, 0, mode)` then `decimalToInt`. (5) **`decimalToFloat`
   is lossy by nature** — examples keep printed results to exactly-representable values (`12.5d`).
 
+- **Math breadth + number formatting (M-NUM S4) — shipped corners.** `Core.Math` gains `sign`/`clamp`/
+  `gcd` (int), `log`/`log10`/`exp`/`sin`/`cos`/`tan`/`pi`/`e` (float), and `numberFormat(float, int) ->
+  string`. Corners: (1) **transcendentals are not printed *raw*** — `log`/`exp`/`sin`/… erase to PHP's
+  libm, and a non-representable result would diverge between Rust's shortest-round-trip and PHP, so the
+  guide exercises them at their *exact* IEEE-defined points (`exp(0)`=1, `sin(0)`=0, `cos(0)`=1, …) and
+  prints real values through `numberFormat`, which collapses any last-ULP libm difference. The
+  `run ≡ runvm` spine is always identical (both Rust). (2) **`numberFormat` rounding at an exact `.5`
+  boundary may differ** — the Rust kernel uses `f64::round` (no pre-rounding) and the `__phorge_number_format`
+  helper uses PHP `round` (which pre-rounds), so a value sitting *exactly* on a half-way boundary at the
+  formatted precision can disagree; examples (like the rest of the float surface) keep off those
+  boundaries. The string assembly (grouping, sign, decimal point, `-0`→`0`) is single-sourced with
+  `value::number_format`, so only the rounding primitive is a divergence axis. (3) **`gcd` with the
+  `i64::MIN` magnitude faults** — `gcd(i64::MIN, i64::MIN)`/`gcd(i64::MIN, 0)` would be `2^63`, outside
+  i64, so it is a clean `"integer overflow"` fault (EV-7), exercised by the `math_gcd` unit test, not the
+  example set.
+
 - **`Core.Json` — shipped corners + deferrals.** (1) **Float magnitude divergence from native
   `json_encode`:** Phorge renders a float with the positional shortest-round-trip form (`__phorge_float`)
   for consistency with `run`/`runvm` everywhere, so an extreme magnitude (`1e20`) stringifies as

@@ -163,6 +163,17 @@ impl Transpiler {
                                 _ => {}
                             }
                         }
+                        // `Math.gcd`/`numberFormat` erase to gated `__phorge_*` helpers (M-NUM S4):
+                        // gmp is absent under `php -n`, and `number_format` is single-sourced with the
+                        // Rust kernel to dodge PHP's `-0`/locale quirks. The rest of `Core.Math` erases
+                        // to a same-named PHP builtin (no helper).
+                        if nat.module == "Core.Math" {
+                            match nat.name {
+                                "gcd" => self.uses_math_gcd = true,
+                                "numberFormat" => self.uses_math_number_format = true,
+                                _ => {}
+                            }
+                        }
                         // `Decimal.*` erases to gated `__phorge_dec_*` helpers (M-NUM S1/S2).
                         if nat.module == "Core.Decimal" {
                             match nat.name {
