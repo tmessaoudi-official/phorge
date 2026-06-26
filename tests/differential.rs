@@ -1790,6 +1790,40 @@ fn php_or_gate(test: &str) -> Option<String> {
     None
 }
 
+/// The `php` flags for a hermetic oracle run. `-n` ignores php.ini (so a machine's ini can't perturb
+/// output), but `-n` *also* disables ini-loaded **shared** extensions — and decimal transpile emits
+/// BCMath (`bcadd`/`bcmul`/…), which is a shared extension on most builds (notably CI's `setup-php`,
+/// where it lives in `conf.d/` that `-n` skips). `-n` still honors `-d` directives, so we load bcmath
+/// explicitly. Probe once: if bcmath is already present under bare `-n` (compiled-in, as on phpbrew
+/// builds) no `-d` is needed; otherwise add `-d extension=bcmath`, which loads the shared `.so` from
+/// the compiled-default extension_dir. This is the one deliberate exception to the "`-n` =
+/// extension-free" contract — decimal money math fundamentally needs arbitrary-precision integers, and
+/// BCMath is PHP's standard provider. (Fixes the CI oracle failure on `php -n` without bcmath.)
+fn php_n_args(php: &str) -> &'static [&'static str] {
+    static BUILTIN: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    let has_builtin = *BUILTIN.get_or_init(|| {
+        Command::new(php)
+            .args(["-n", "-r", "exit(extension_loaded('bcmath') ? 0 : 1);"])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    });
+    if has_builtin {
+        &["-n"]
+    } else {
+        // `display_errors=stderr` keeps stdout clean even if the `.so` can't be found on some build —
+        // a startup warning then goes to stderr (and an actually-missing bcmath still fatals loudly),
+        // never polluting the stdout the oracle compares.
+        &[
+            "-n",
+            "-d",
+            "display_errors=stderr",
+            "-d",
+            "extension=bcmath",
+        ]
+    }
+}
+
 /// Write `php_src` to a per-label temp file (no collision under parallel `cargo test`), run it with
 /// `php -n` (ignore php.ini → hermetic; notices go to stderr, we read stdout), return its stdout.
 fn run_php(php: &str, php_src: &str, label: &str) -> String {
@@ -1800,7 +1834,7 @@ fn run_php(php: &str, php_src: &str, label: &str) -> String {
     let path = std::env::temp_dir().join(format!("phorge_oracle_{safe}.php"));
     std::fs::write(&path, php_src).expect("write temp php");
     let out = Command::new(php)
-        .arg("-n")
+        .args(php_n_args(php))
         .arg(&path)
         .output()
         .expect("spawn php");

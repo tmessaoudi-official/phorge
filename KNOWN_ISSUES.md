@@ -51,6 +51,13 @@ not a panic:
   design (`E-DECIMAL-FLOAT-MIX`); the only operator-level widen is `decimal ⊕ int`. (4) **No
   arbitrary-precision decimal / `BigInt` / `Money`+currency** — those are M-NUM-2 (they share a
   hand-rolled bignum core); the i128 range (~10^36 at scale 2) covers all realistic money.
+  (5) **Transpiled decimal output requires the PHP BCMath extension** — `decimal` arithmetic emits
+  `bcadd`/`bcsub`/`bcmul`/`bcdiv`/`bcmod`, so the generated PHP must run under a `php` with BCMath
+  enabled (it ships in PHP's standard distribution and is on by default in most builds). The
+  byte-identity oracle runs `php -n` (hermetic, no ini); since BCMath is usually a *shared* extension
+  that `-n` disables, the test harness loads it explicitly via `-d extension=bcmath`
+  (`tests/differential.rs::php_n_args`) and CI installs it (`setup-php` `extensions: bcmath`). This is
+  the one deliberate exception to the "transpiled output uses only `-n`-available core" rule.
 
 - **Decimal division + rounding (M-NUM S2) — shipped corners + deferrals.** `Decimal.div`/`Decimal.round`
   ship with the full seven-mode `RoundingMode` enum (injected on `import Core.Decimal`), single-sourced

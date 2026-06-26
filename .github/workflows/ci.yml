@@ -41,12 +41,15 @@ jobs:
 
       # The PHP oracle needs a real `php`. 8.5 is the transpile floor — testing against the floor is
       # the strict gate (output valid on 8.5 also runs on 8.6+; testing only on a newer build would
-      # let an 8.5-incompatible construct slip through). Transpiled output uses only core functions
-      # (intdiv / fmod / range / strpos / explode / echo).
+      # let an 8.5-incompatible construct slip through). Transpiled output uses core functions
+      # (intdiv / fmod / range / strpos / explode / echo) plus BCMath for `decimal` (M-NUM). The oracle
+      # runs `php -n` (hermetic), which disables ini-loaded shared extensions, so the harness loads
+      # bcmath explicitly via `-d extension=bcmath` — `extensions: bcmath` here installs that `.so`.
       - name: Install PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.5'
+          extensions: bcmath
 
       - name: cargo fmt --check
         run: cargo fmt --check
@@ -79,6 +82,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.6'
+          extensions: bcmath
       - name: cargo test --test differential (PHP oracle, 8.6-dev)
         env:
           PHORGE_REQUIRE_PHP: '1'

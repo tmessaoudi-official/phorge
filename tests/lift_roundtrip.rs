@@ -40,6 +40,33 @@ fn php_or_gate(test: &str) -> Option<String> {
     None
 }
 
+/// The `php` flags for a hermetic run — `-n` (ignore php.ini), plus an explicit `-d extension=bcmath`
+/// when bcmath isn't compiled in (it's an ini-loaded shared extension on CI's `setup-php`, which `-n`
+/// would otherwise disable). Mirrors `differential.rs::php_n_args`; see its doc for the rationale.
+fn php_n_args(php: &str) -> &'static [&'static str] {
+    static BUILTIN: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    let has_builtin = *BUILTIN.get_or_init(|| {
+        Command::new(php)
+            .args(["-n", "-r", "exit(extension_loaded('bcmath') ? 0 : 1);"])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    });
+    if has_builtin {
+        &["-n"]
+    } else {
+        // `display_errors=stderr` keeps stdout clean if the `.so` can't be found; see the twin in
+        // `differential.rs::php_n_args`.
+        &[
+            "-n",
+            "-d",
+            "display_errors=stderr",
+            "-d",
+            "extension=bcmath",
+        ]
+    }
+}
+
 /// Write `php_src` to a per-label temp file, run it with `php -n` (no php.ini → hermetic), return
 /// stdout. Panics if php exits non-zero.
 fn run_php(php: &str, php_src: &str, label: &str) -> String {
@@ -50,7 +77,7 @@ fn run_php(php: &str, php_src: &str, label: &str) -> String {
     let path = std::env::temp_dir().join(format!("phorge_lift_rt_{safe}.php"));
     std::fs::write(&path, php_src).expect("write temp php");
     let out = Command::new(php)
-        .arg("-n")
+        .args(php_n_args(php))
         .arg(&path)
         .output()
         .expect("spawn php");
