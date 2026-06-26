@@ -42,5 +42,9 @@ total-or-optional conversions**, not a C-cast operator:
 ## Status
 - [x] **Slice 1 sort/sortWith** — DONE (`examples/guide/sort.phg`, byte-identical; gated
   `__phorge_sort`/`__phorge_sort_with`; no new Op/Value).
-- [ ] Slice 2 Casting — **NEXT: research + brainstorm spec** (mix of surfaces + TS-style `<X>`;
-  separate the assertion vs conversion axes; pin implicit-coercion policy).
+- [x] **Slice 2 design** — DONE: spec `docs/specs/2026-06-26-m4-casting-conversion-design.md`.
+  Locked (developer): **checked `as` → `T?`** (decline TS unchecked); **no implicit coercion**;
+  conversion via **`Core.Convert`** (UFCS makes it module+method in one); `to*` from typed values,
+  `parse*` (fallible, from string) stays in `Core.Text`.
+- [ ] **Slice 2a** — `Core.Convert` natives (`toString`/`toFloat`/`truncate`/`round`) + `Text.parseFloat` (additive, NEXT).
+- [ ] **Slice 2b** — the checked `as` operator (language change; reuse `Op::IsInstance`).
