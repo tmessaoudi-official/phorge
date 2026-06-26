@@ -19,6 +19,13 @@ fn list_length(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("List.length expects (List<T>)".into()),
     }
 }
+fn list_contains(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), needle] => Ok(Value::Bool(xs.iter().any(|x| x.eq_val(needle)))),
+        _ => Err("List.contains expects (List<T>, T)".into()),
+    }
+}
+
 fn list_sum(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::List(xs)] => {
@@ -137,6 +144,19 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(list_sum),
             php: |a| format!("array_sum({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "contains",
+            params: vec![list(t()), t()],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::Pure(list_contains),
+            // strict `in_array` (=== ) matches Phorge's value equality for scalars + nested
+            // lists/maps; arg order is (needle, haystack) — the reverse of `contains(list, value)`.
+            // (A list of class instances would differ: PHP `===` is identity, Phorge is structural —
+            // KNOWN_ISSUES; scalar/collection element lists are byte-identical.)
+            php: |a| format!("in_array({}, {}, true)", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
             module: "Core.List",

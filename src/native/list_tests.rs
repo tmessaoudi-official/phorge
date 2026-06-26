@@ -69,6 +69,29 @@ fn list_natives_eval_and_emit() {
 }
 
 #[test]
+fn list_contains_eval_and_emit() {
+    let mut o = String::new();
+    let nums = Value::List(std::rc::Rc::new(vec![
+        Value::Int(1),
+        Value::Int(2),
+        Value::Int(3),
+    ]));
+    assert!(matches!(
+        list_contains(&[nums.clone(), Value::Int(2)], &mut o).unwrap(),
+        Value::Bool(true)
+    ));
+    assert!(matches!(
+        list_contains(&[nums, Value::Int(9)], &mut o).unwrap(),
+        Value::Bool(false)
+    ));
+    // strict in_array, with (needle, haystack) — the reverse of contains(list, value).
+    assert_eq!(
+        (registry()[index_of("Core.List", "contains").unwrap()].php)(&["$xs".into(), "$v".into()]),
+        "in_array($v, $xs, true)"
+    );
+}
+
+#[test]
 fn list_higher_order_eval_and_emit() {
     // The HOF natives drive the closure via the backend-supplied invoker; here a stub invoker
     // stands in for a backend (the `f` Value is a placeholder the stub ignores). The end-to-end
