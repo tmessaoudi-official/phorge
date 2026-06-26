@@ -405,6 +405,28 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_list_sort {
+            // Natural ascending over a COPY (Phorge lists are immutable). String by byte (`strcmp`,
+            // ≡ Rust `String` Ord) — PHP's `<=>` would juggle numeric strings; ints/floats/bools via
+            // `<=>` (≡ Rust numeric). `usort` is stable on PHP 8.0+ (≡ Rust `sort_by`).
+            self.line("function __phorge_sort($xs) {");
+            self.indent += 1;
+            self.line("$ys = $xs;");
+            self.line("usort($ys, function($a, $b) { return is_string($a) ? strcmp($a, $b) : ($a <=> $b); });");
+            self.line("return $ys;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_list_sort_with {
+            // Comparator sort over a COPY; the user closure returns the `<=>`-style int directly.
+            self.line("function __phorge_sort_with($xs, $cmp) {");
+            self.indent += 1;
+            self.line("$ys = $xs;");
+            self.line("usort($ys, $cmp);");
+            self.line("return $ys;");
+            self.indent -= 1;
+            self.line("}");
+        }
     }
 
     /// The `Core.Json` recursive helpers (each gated by its `uses_json_*` flag). They walk the injected

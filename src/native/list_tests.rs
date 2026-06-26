@@ -1,4 +1,79 @@
 use super::*;
+use std::rc::Rc;
+
+#[test]
+fn list_sort_natural_ascending() {
+    let mut o = String::new();
+    let ints = Value::List(Rc::new(vec![
+        Value::Int(3),
+        Value::Int(1),
+        Value::Int(2),
+        Value::Int(1),
+    ]));
+    match list_sort(&[ints], &mut o).unwrap() {
+        Value::List(xs) => assert_eq!(
+            xs.iter()
+                .map(|v| match v {
+                    Value::Int(n) => *n,
+                    _ => -99,
+                })
+                .collect::<Vec<_>>(),
+            vec![1, 1, 2, 3]
+        ),
+        other => panic!("sort returned {other:?}"),
+    }
+    // Strings sort lexicographically (byte order) — "10" before "9" (NOT PHP's numeric-string <=>).
+    let strs = Value::List(Rc::new(vec![
+        Value::Str("9".into()),
+        Value::Str("10".into()),
+        Value::Str("apple".into()),
+    ]));
+    match list_sort(&[strs], &mut o).unwrap() {
+        Value::List(xs) => assert_eq!(
+            xs.iter()
+                .map(|v| match v {
+                    Value::Str(s) => s.clone(),
+                    _ => "?".into(),
+                })
+                .collect::<Vec<_>>(),
+            vec!["10".to_string(), "9".into(), "apple".into()]
+        ),
+        other => panic!("sort returned {other:?}"),
+    }
+    // Empty list sorts to empty.
+    assert!(
+        matches!(list_sort(&[Value::List(Rc::new(vec![]))], &mut o), Ok(Value::List(xs)) if xs.is_empty())
+    );
+}
+
+#[test]
+fn list_sort_with_comparator_and_fault_parity() {
+    let nums = Value::List(Rc::new(vec![Value::Int(3), Value::Int(1), Value::Int(2)]));
+    let placeholder = Value::Int(0); // stands in for the closure value (eval passes it to `call`)
+                                     // Descending comparator: cmp(a, b) = b - a.
+    let mut desc = |_f: &Value, a: Vec<Value>| match a.as_slice() {
+        [Value::Int(x), Value::Int(y)] => Ok(Value::Int(y - x)),
+        _ => Err("bad arity".to_string()),
+    };
+    match list_sort_with(&[nums.clone(), placeholder.clone()], &mut desc).unwrap() {
+        Value::List(xs) => assert_eq!(
+            xs.iter()
+                .map(|v| match v {
+                    Value::Int(n) => *n,
+                    _ => -99,
+                })
+                .collect::<Vec<_>>(),
+            vec![3, 2, 1]
+        ),
+        other => panic!("sortWith returned {other:?}"),
+    }
+    // A comparator fault propagates cleanly (never a panic).
+    let mut boom = |_f: &Value, _a: Vec<Value>| Err("kaboom".to_string());
+    assert!(list_sort_with(&[nums.clone(), placeholder.clone()], &mut boom).is_err());
+    // A non-int comparator result is a clean fault.
+    let mut bad = |_f: &Value, _a: Vec<Value>| Ok(Value::Bool(true));
+    assert!(list_sort_with(&[nums, placeholder], &mut bad).is_err());
+}
 
 #[test]
 fn list_natives_eval_and_emit() {

@@ -1,6 +1,67 @@
 use super::*;
 use crate::types::Ty;
 use crate::value::Value;
+use std::cmp::Ordering;
+
+/// Natural total order over the scalar element types, matching the PHP `__phorge_sort` comparator
+/// byte-for-byte: ints/floats/bools numerically (Rust `cmp`/`total_cmp` ≡ PHP `<=>`), strings
+/// lexicographically by byte (Rust `String` Ord ≡ PHP `strcmp` — NOT PHP's numeric-string-juggling
+/// `<=>`). A homogeneous typed list never mixes arms; a stray mix is treated as equal (total, no panic).
+fn natural_cmp(a: &Value, b: &Value) -> Ordering {
+    match (a, b) {
+        (Value::Int(x), Value::Int(y)) => x.cmp(y),
+        (Value::Float(x), Value::Float(y)) => x.total_cmp(y),
+        (Value::Str(x), Value::Str(y)) => x.cmp(y),
+        (Value::Bool(x), Value::Bool(y)) => x.cmp(y),
+        _ => Ordering::Equal,
+    }
+}
+
+/// `List.sort(List<T>) -> List<T>` — a new list in natural ascending order. Rust `sort_by` is stable
+/// (≡ PHP 8.0+ `usort`); returns a fresh list (Phorge lists are immutable).
+fn list_sort(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs)] => {
+            let mut ys = (**xs).clone();
+            ys.sort_by(natural_cmp);
+            Ok(Value::List(std::rc::Rc::new(ys)))
+        }
+        _ => Err("List.sort expects (List<T>)".into()),
+    }
+}
+
+/// `List.sortWith(List<T>, (T, T) -> int) -> List<T>` — a new list ordered by the comparator (negative
+/// ⇒ a before b, like PHP `usort`). The comparator runs on the calling backend via the re-entrant
+/// invoker; a fault (or a non-int result) is captured and propagated rather than panicking the sort.
+fn list_sort_with(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), f] => {
+            let mut ys = (**xs).clone();
+            let mut err: Option<String> = None;
+            ys.sort_by(|a, b| {
+                if err.is_some() {
+                    return Ordering::Equal;
+                }
+                match call(f, vec![a.clone(), b.clone()]) {
+                    Ok(Value::Int(n)) => n.cmp(&0),
+                    Ok(_) => {
+                        err = Some("List.sortWith comparator must return int".into());
+                        Ordering::Equal
+                    }
+                    Err(e) => {
+                        err = Some(e);
+                        Ordering::Equal
+                    }
+                }
+            });
+            match err {
+                Some(e) => Err(e),
+                None => Ok(Value::List(std::rc::Rc::new(ys))),
+            }
+        }
+        _ => Err("List.sortWith expects (List<T>, (T, T) -> int)".into()),
+    }
+}
 
 fn list_reverse(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
@@ -194,6 +255,27 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
                     parg(a, 1)
                 )
             },
+        },
+        // `sort(List<T>) -> List<T>` — natural ascending (PHP `sort`, but byte-stable + string-byte
+        // order). Gated `__phorge_sort` helper (a `<=>`/`strcmp` type-dispatched `usort` over a copy).
+        NativeFn {
+            module: "Core.List",
+            name: "sort",
+            params: vec![list(t())],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_sort),
+            php: |a| format!("__phorge_sort({})", parg(a, 0)),
+        },
+        // `sortWith(List<T>, (T, T) -> int) -> List<T>` — comparator (PHP `usort`), higher-order.
+        NativeFn {
+            module: "Core.List",
+            name: "sortWith",
+            params: vec![list(t()), Ty::Function(vec![t(), t()], Box::new(Ty::Int))],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::HigherOrder(list_sort_with),
+            php: |a| format!("__phorge_sort_with({}, {})", parg(a, 0), parg(a, 1)),
         },
     ]
 }

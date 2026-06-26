@@ -133,6 +133,13 @@ impl Transpiler {
                         if nat.module == "Core.Text" && nat.name == "parseInt" {
                             self.uses_text_parse_int = true;
                         }
+                        if nat.module == "Core.List" {
+                            match nat.name {
+                                "sort" => self.uses_list_sort = true,
+                                "sortWith" => self.uses_list_sort_with = true,
+                                _ => {}
+                            }
+                        }
                         let php = (nat.php)(&argv);
                         // Inside a namespace block a bare `strlen(...)` would resolve to
                         // `CurrentNs\strlen`; emit `\strlen(...)` for global-function natives (M5-8).

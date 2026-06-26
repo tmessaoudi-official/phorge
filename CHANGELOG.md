@@ -6,6 +6,17 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `Core.List.sort` / `sortWith` (M4 stdlib breadth)
+
+Ordering for lists, mirroring PHP `sort`/`usort`. `Core.List.sort(List<T>) -> List<T>` returns a new
+list in natural ascending order (the input is unchanged — Phorge lists are immutable): ints/floats
+numeric, strings **lexicographic by byte** (`"10"` before `"9"`) — deliberately *not* PHP's
+numeric-string-juggling `<=>`, so the PHP helper dispatches to `strcmp` for strings to match Rust's
+`String` ordering. `Core.List.sortWith(List<T>, (T, T) -> int) -> List<T>` orders by a comparator
+closure (higher-order, reusing the `map`/`reduce` re-entrant machinery; a comparator fault propagates
+cleanly). Both stable (Rust `sort_by` ≡ PHP 8.0+ `usort`); gated `__phorge_sort`/`__phorge_sort_with`
+helpers; byte-identical run/runvm/real PHP. `examples/guide/sort.phg`. **No new `Op`/`Value`.**
+
 ### Added — `Core.Text.parseInt` (the first optional-return native)
 
 `Core.Text.parseInt(string) -> int?` — `None` when the whole string is not a valid base-10 integer

@@ -214,6 +214,12 @@ struct Transpiler {
     /// whitespace) and returns `null` (Phorge `None`) otherwise — including on i64 overflow, which
     /// PHP's `(int)` cast would silently clamp.
     uses_text_parse_int: bool,
+    /// Set when `Core.List.sort` / `sortWith` is emitted — defines the matching `__phorge_sort*`
+    /// helper once per file. Both copy the list before `usort` (Phorge lists are immutable); `sort`
+    /// uses a `<=>`/`strcmp` type-dispatched comparator (string by byte, NOT PHP's numeric-string
+    /// `<=>`) to match Rust's natural order, `sortWith` defers to the user closure.
+    uses_list_sort: bool,
+    uses_list_sort_with: bool,
     /// Classes that must lower to the **interface + trait** decomposition (M-RT S6b): every transitive
     /// ancestor of a multi-parent (`extends A, B`) class. PHP has no multiple inheritance, so a
     /// multi-parent class `implements` its parents' interfaces and `use`s their traits; each ancestor
@@ -389,6 +395,8 @@ impl Transpiler {
             uses_json_pretty: false,
             uses_json_decode: false,
             uses_text_parse_int: false,
+            uses_list_sort: false,
+            uses_list_sort_with: false,
             decomposed: BTreeSet::new(),
             tmp: 0,
         }

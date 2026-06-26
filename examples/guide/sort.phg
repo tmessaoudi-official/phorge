@@ -1,0 +1,38 @@
+// `Core.List.sort` / `sortWith` — ordering a list.
+//
+//   sort(List<T>) -> List<T>              // natural ascending, a NEW list (input unchanged)
+//   sortWith(List<T>, (T, T) -> int) -> List<T>   // by a comparator (negative ⇒ a before b)
+//
+// `sort` orders ints/floats numerically and strings lexicographically by byte — so "10" sorts before
+// "9" (unlike PHP's `sort`, which juggles numeric strings). `sortWith` takes a comparator closure, the
+// same value-level building block as `map`/`filter`/`reduce`. Both are stable and byte-identical on
+// run / runvm / real PHP.
+package Main;
+import Core.Console;
+import Core.List;
+import Core.Text;
+
+function showInts(List<int> xs): string {
+  mutable string out = "";
+  for (int n in xs) { out = "{out}{n} "; }
+  return Text.trim(out);
+}
+
+function showStrs(List<string> xs): string {
+  return Text.join(xs, " ");
+}
+
+function main(): void {
+  List<int> nums = [3, 1, 4, 1, 5, 9, 2, 6];
+
+  // Natural ascending — a new list; `nums` itself is unchanged.
+  Console.println(showInts(List.sort(nums)));   // 1 1 2 3 4 5 6 9
+  Console.println(showInts(nums));               // 3 1 4 1 5 9 2 6  (original intact)
+
+  // Strings sort by byte order: "10" before "9".
+  List<string> words = ["banana", "apple", "10", "9", "cherry"];
+  Console.println(showStrs(List.sort(words)));   // 10 9 apple banana cherry
+
+  // sortWith: a descending comparator (b - a).
+  Console.println(showInts(List.sortWith(nums, fn(int a, int b) => b - a))); // 9 6 5 4 3 2 1 1
+}
