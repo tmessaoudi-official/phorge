@@ -1,0 +1,37 @@
+// Enum variants named after PHP-reserved words.
+//
+// Phorge does not reserve `int`/`float`/`bool`/`null` as identifiers, so they make perfectly good
+// enum *variant* names. PHP, however, reserves them as *class* names — and an enum variant transpiles
+// to `final class <Variant> extends <Enum>`. The transpiler resolves this invisibly by mangling a
+// reserved variant's PHP class name (`Int` → `Int_`), at the declaration, construction, and
+// `instanceof` sites alike. This is transpile-only: `run`/`runvm` address a variant by its Phorge
+// name, so the program behaves and prints identically on all three backends.
+package Main;
+import Core.Console;
+
+// `Int`, `Float`, `Bool`, `Null` would each be an illegal PHP class name without mangling.
+enum Node {
+    Null(),
+    Bool(bool value),
+    Int(int value),
+    Float(float value),
+    Str(string value),
+}
+
+function describe(Node n): string {
+    return match n {
+        Null() => "null",
+        Bool(b) => "bool:{b}",
+        Int(i) => "int:{i}",
+        Float(f) => "float:{f}",
+        Str(s) => "str:{s}",
+    };
+}
+
+function main(): void {
+    Console.println(describe(new Null()));        // null
+    Console.println(describe(new Bool(true)));     // bool:true
+    Console.println(describe(new Int(42)));        // int:42
+    Console.println(describe(new Float(3.5)));     // float:3.5
+    Console.println(describe(new Str("hi")));      // str:hi
+}

@@ -239,6 +239,27 @@ fn last_segment(name: &str) -> &str {
     name.rsplit('\\').next().unwrap_or(name)
 }
 
+/// PHP reserves a fixed set of words as **class names** — `int`/`float`/`bool`/`null` etc. — and
+/// rejects them as a class name *even inside a namespace* (verified vs PHP 8.5). An enum variant
+/// transpiles to `final class <Variant> extends <Enum>`, so a variant named after one of these would
+/// be a parse error. We mangle such a variant's PHP class name by appending `_` (`Int`→`Int_`). This
+/// is **transpiler-only**: `run`/`runvm` address a variant by its Phorge name (`EnumVal.variant`),
+/// never a PHP class name, so program stdout is unaffected. Comparison is case-insensitive (PHP class
+/// names are). (`array`/`callable`/`list`/`enum` are NOT reserved as class names — left untouched.)
+fn php_variant_name(variant: &str) -> String {
+    // The trailing segment is the actual PHP class name (`\Ns\Int` ⇒ `Int`); mangle only that.
+    let leaf = last_segment(variant);
+    const RESERVED: &[&str] = &[
+        "int", "float", "bool", "string", "true", "false", "null", "void", "iterable", "object",
+        "mixed", "never", "self", "parent", "static",
+    ];
+    if RESERVED.contains(&leaf.to_ascii_lowercase().as_str()) {
+        format!("{variant}_")
+    } else {
+        variant.to_string()
+    }
+}
+
 /// Property names PHP's `\Exception` already declares (M-faults 2b). A Phorge `Error` subtype
 /// transpiles to `extends \Exception`, so a promoted/declared field with one of these names would be
 /// a typed redeclaration of an inherited untyped property — a PHP fatal — and must be emitted untyped.

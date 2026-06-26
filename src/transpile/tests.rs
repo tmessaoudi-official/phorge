@@ -362,6 +362,35 @@ fn enum_emits_base_and_subclasses() {
     );
 }
 
+// Slice A: PHP reserves int/float/bool/null (and string/true/false/…) as class names, even inside a
+// namespace. Enum variants transpile to `final class <V> extends <Enum>`, so a variant named after a
+// reserved word must be mangled (trailing `_`) or the PHP is a parse error. Transpiler-only: run/runvm
+// use the Phorge variant string, so stdout byte-identity is untouched.
+const RESERVED_ENUM: &str =
+    "enum Tok { Int(int v), Float(float f), Bool(bool b), Null(), Str(string s) }";
+
+#[test]
+fn reserved_enum_variant_names_are_mangled_in_php() {
+    let out = php(RESERVED_ENUM);
+    assert!(out.contains("final class Int_ extends Tok {"), "{out}");
+    assert!(out.contains("final class Float_ extends Tok {"), "{out}");
+    assert!(out.contains("final class Bool_ extends Tok {"), "{out}");
+    assert!(out.contains("final class Null_ extends Tok {"), "{out}");
+    // A non-reserved variant name is left untouched.
+    assert!(out.contains("final class Str extends Tok {"), "{out}");
+}
+
+#[test]
+fn reserved_variant_construction_and_instanceof_are_mangled() {
+    let src = format!(
+        "{RESERVED_ENUM} function f() -> Tok {{ return Int(5); }} \
+         function g(Tok t) -> int {{ return match t {{ Int(n) => n, _ => 0 }}; }}"
+    );
+    let out = php(&src);
+    assert!(out.contains("new Int_(5)"), "{out}");
+    assert!(out.contains("instanceof Int_"), "{out}");
+}
+
 #[test]
 fn variant_construction_uses_new() {
     let out = php(&format!(

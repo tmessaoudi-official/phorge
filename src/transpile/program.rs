@@ -621,7 +621,10 @@ impl Transpiler {
         let base = last_segment(&e.name);
         self.line(&format!("abstract class {} {{}}", base));
         for v in &e.variants {
-            self.line(&format!("final class {} extends {} {{", v.name, base));
+            // A variant whose name is a PHP-reserved class word (`Int`/`Bool`/`Null`/…) is mangled
+            // (`Int_`); the construction + `instanceof` sites mangle identically via `variant_ref`.
+            let vname = super::php_variant_name(&v.name);
+            self.line(&format!("final class {} extends {} {{", vname, base));
             self.indent += 1;
             if !v.fields.is_empty() {
                 let props: Vec<String> = v

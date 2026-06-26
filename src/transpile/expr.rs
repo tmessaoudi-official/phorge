@@ -434,9 +434,12 @@ impl Transpiler {
     /// namespace (`new \Acme\Geometry\Circle(…)`, an `instanceof` against it), bare for a `package
     /// main` enum (`Circle`) — byte-identical to the pre-lift output for a single-package program.
     pub(super) fn variant_ref(&self, variant: &str) -> String {
+        // Mangle a PHP-reserved variant class name (`Int`→`Int_`) identically to `emit_enum`'s
+        // declaration, so construction (`new Int_`) and `instanceof Int_` reference the real class.
+        let mangled = super::php_variant_name(variant);
         match self.variant_ns.get(variant) {
-            Some(ns) if ns != "Main" => format!("\\{ns}\\{variant}"),
-            _ => variant.to_string(),
+            Some(ns) if ns != "Main" => format!("\\{ns}\\{mangled}"),
+            _ => mangled,
         }
     }
 
