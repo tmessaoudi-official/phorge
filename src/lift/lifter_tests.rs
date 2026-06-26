@@ -192,10 +192,12 @@ fn lifts_c_style_for_loop() {
 }
 
 #[test]
-fn refuses_foreach_pending_element_inference() {
-    // foreach needs element-type inference (Tier-2) — Phorge's for-in requires a concrete type.
-    let e = lift_err("<?php function h(): void { foreach ([1, 2, 3] as $x) { echo $x; } }");
-    assert!(e.contains("foreach needs element-type inference"), "{e}");
+fn lifts_keyless_foreach() {
+    // A-6 gave for-in element-type inference, so a keyless PHP foreach now lifts to the idiomatic
+    // Phorge `foreach (xs as x)` (printed from a Type::Infer for-in).
+    let out = lift("<?php $xs = [1, 2, 3]; foreach ($xs as $x) { echo $x; }");
+    assert!(out.contains("foreach (xs as x) {"), "{out}");
+    assert_reparses(&out);
 }
 
 #[test]

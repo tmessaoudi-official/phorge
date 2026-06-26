@@ -143,6 +143,19 @@ function name(int $c): string {
 echo name(1) . name(9);"#,
         ),
         (
+            // A-6 ↔ lift: a keyless PHP `foreach ($xs as $x)` lifts to Phorge `foreach (xs as x)`
+            // (element type inferred) and round-trips behavior-identically.
+            "foreach",
+            r#"<?php
+function joined(): string {
+    $xs = ["a", "b", "c"];
+    $out = "";
+    foreach ($xs as $x) { $out = $out . $x; }
+    return $out;
+}
+echo joined();"#,
+        ),
+        (
             // C-1: PHP double-quoted interpolation — simple `$var`, simple public `$o->prop`, and
             // complex `{$o->method()}` — lifts to Phorge `"{…}"` holes and round-trips identically.
             "string_interpolation",

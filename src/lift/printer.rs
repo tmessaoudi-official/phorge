@@ -297,7 +297,13 @@ impl Printer {
                 body,
                 ..
             } => {
-                let head = format!("for ({} {name} in {})", ty(t)?, self.expr(iter)?);
+                // An inferred-element for-in prints as the idiomatic `foreach (iter as name)`
+                // (A-6); an explicit element type keeps the typed `for (T name in iter)` form.
+                let head = if matches!(t, Type::Infer(_)) {
+                    format!("foreach ({} as {name})", self.expr(iter)?)
+                } else {
+                    format!("for ({} {name} in {})", ty(t)?, self.expr(iter)?)
+                };
                 self.block_stmt(&head, body)
             }
             Stmt::Break(_) => {

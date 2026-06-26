@@ -347,15 +347,26 @@ impl Lifter {
                     span: SP,
                 }]
             }
-            php::PhpStmt::Foreach { key, .. } => {
-                // Phorge's `for (Type x in iter)` requires a concrete element type (`var`/`Infer` is
-                // valid only in a `VarDecl`), and PHP arrays carry no element type — so a faithful
-                // `foreach` lift needs element-type inference. That (and the `$k => $v` key form) is
-                // the Tier-2 frontier; refuse loudly rather than emit invalid Phorge.
+            php::PhpStmt::Foreach {
+                array,
+                key,
+                value,
+                body,
+            } => {
+                // A-6 gave Phorge's for-in element-type inference, so a keyless PHP `foreach
+                // ($xs as $v)` now lifts to the idiomatic `foreach (xs as v)` (printed from a
+                // `Type::Infer` for-in). The `$k => $v` key form stays Tier-2 (Phorge's foreach has
+                // no key/value binding yet — same boundary as A-6).
                 if key.is_some() {
                     return Err("lift: foreach with a key (`$k => $v`) is Tier-2".into());
                 }
-                return Err("lift: foreach needs element-type inference (Tier-2)".into());
+                vec![Stmt::For {
+                    ty: Type::Infer(SP),
+                    name: value.clone(),
+                    iter: lift_expr(array)?,
+                    body: self.lift_block(body, declared)?,
+                    span: SP,
+                }]
             }
             php::PhpStmt::Break => vec![Stmt::Break(SP)],
             php::PhpStmt::Continue => vec![Stmt::Continue(SP)],

@@ -75,14 +75,15 @@ example.
 | `[a, b]` / `[k => v]` | a `List` / a `Map` |
 | ternary `c ? a : b` / `match` | an expression `if` / a Phorge `match` |
 | `"$name"` / `"$o->prop"` / `"{$o->m()}"` interpolation | Phorge `"{name}"` / `"{o.prop}"` / `"{o.m()}"` holes |
+| `foreach ($xs as $x)` (keyless) | Phorge `foreach (xs as x)` — element type inferred (A-6) |
 
 ## What lift refuses (loudly — the Tier-2 frontier)
 
 Lift errors rather than guess when there is no faithful Phorge form *yet*: an `array` **type**
-annotation (needs `List`/`Map`/`Set` inference), `foreach` (needs element-type inference), backed
-enums and enum methods, default parameter values, untyped parameters, the elvis `?:`, an assignment
-used as a sub-expression, and a non-literal `match` arm. Each is a clear `lift …` message naming what
-to do by hand.
+annotation (needs `List`/`Map`/`Set` inference), a **key/value** `foreach ($xs as $k => $v)` (Phorge's
+`foreach` has no key binding yet), backed enums and enum methods, default parameter values, untyped
+parameters, the elvis `?:`, an assignment used as a sub-expression, and a non-literal `match` arm.
+Each is a clear `lift …` message naming what to do by hand.
 
 Interpolation is lifted only within PHP's *actual* grammar — a `$`-rooted access chain (`$x`,
 `$o->p`, `$a[$k]`, `$o->m()`). The forms PHP itself rejects or that coerce silently are refused
