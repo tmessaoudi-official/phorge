@@ -48,7 +48,9 @@ impl Checker {
                     self.check_args("<lambda>", &param_tys, args, span);
                     return *ret_ty;
                 }
-                self.check_named_call(name, args, span)
+                let ty = self.check_named_call(name, args, span);
+                self.record_pending_fill(callee, args, span);
+                ty
             }
             Expr::Member {
                 object, name, safe, ..
@@ -70,7 +72,9 @@ impl Checker {
                             if n.module == "Core.Reflect" && n.name == "typeName" {
                                 return self.check_reflect_type_name(q, args, span);
                             }
-                            return self.check_native_call(idx, args, span);
+                            let ty = self.check_native_call(idx, args, span);
+                            self.record_pending_fill(callee, args, span);
+                            return ty;
                         }
                     }
                 }
@@ -156,7 +160,9 @@ impl Checker {
                 }
             }
             return if sig.type_params.is_empty() {
-                self.check_args(name, &sig.params, args, span);
+                // M4: defaulted-arity check (a non-default function has all-`None` defaults, so this
+                // is exactly the old exact-arity `check_args`).
+                self.check_args_defaulted(name, &sig.params, &sig.defaults, args, span);
                 sig.ret.clone()
             } else {
                 self.check_generic_call(name, &sig.params, &sig.ret, args, span)
@@ -392,8 +398,20 @@ impl Checker {
         if n.params.iter().any(ty_has_param) || ty_has_param(&n.ret) {
             self.check_generic_call(&label, &n.params, &n.ret, args, span)
         } else {
-            self.check_args(&label, &n.params, args, span);
-            n.ret.clone()
+            // M4: a native may declare defaults for trailing params (e.g. `parseFloat(string, bool
+            // permissive = false)`). Build the parallel `Option<Expr>` list from `native_defaults` —
+            // `None` for the leading required params, then the trailing default literals — and run the
+            // defaulted-arity check (a native with no defaults gets all-`None` ⇒ exact arity).
+            let nd = crate::native::native_defaults(n.module, n.name);
+            let ret = n.ret.clone();
+            let params = n.params.clone();
+            let mut defaults: Vec<Option<crate::ast::Expr>> = vec![None; params.len()];
+            for (off, d) in nd.iter().enumerate() {
+                let idx = params.len() - nd.len() + off;
+                defaults[idx] = Some(native_default_expr(*d, span));
+            }
+            self.check_args_defaulted(&label, &params, &defaults, args, span);
+            ret
         }
     }
 
@@ -413,6 +431,88 @@ impl Checker {
             }
         }
         self.check_expr(arg)
+    }
+
+    /// M4 default parameters: consume a `pending_fill` (set by `check_named_call`/`check_native_call`
+    /// when a call legally omitted trailing defaulted args) and record the full replacement `Call`
+    /// (provided args + appended default literals) in `default_fills`, keyed by the call span. The
+    /// replacement is applied by `rewrite_ufcs` like any other call rewrite, so every backend sees a
+    /// full-arity call (byte-identity-safe — the default literal is identical on all three).
+    pub(super) fn record_pending_fill(
+        &mut self,
+        callee: &crate::ast::Expr,
+        args: &[crate::ast::Expr],
+        span: Span,
+    ) {
+        if let Some(defaults) = self.pending_fill.take() {
+            let mut full: Vec<crate::ast::Expr> = args.to_vec();
+            full.extend(defaults);
+            self.default_fills.insert(
+                span.start,
+                crate::ast::Expr::Call {
+                    callee: Box::new(callee.clone()),
+                    args: full,
+                    span,
+                },
+            );
+        }
+    }
+
+    /// M4 default parameters: type-check a call that may omit trailing defaulted arguments. `defaults`
+    /// is parallel to `params` (`Some(literal)` for a defaulted param). The required arity is the count
+    /// of leading non-default params. A call with `args.len()` in `[required, params.len()]` is valid:
+    /// the provided args are checked against their params, and if any trailing params were omitted the
+    /// caller is told (via `pending_fill`) to append their default literals. Outside that range, the
+    /// usual "expects N argument(s)" error fires. Returns nothing (the caller owns the return type).
+    pub(super) fn check_args_defaulted(
+        &mut self,
+        name: &str,
+        params: &[Ty],
+        defaults: &[Option<crate::ast::Expr>],
+        args: &[crate::ast::Expr],
+        span: Span,
+    ) {
+        let required = defaults.iter().take_while(|d| d.is_none()).count();
+        if args.len() < required || args.len() > params.len() {
+            let detail = if required == params.len() {
+                format!("{}", params.len())
+            } else {
+                format!("{required} to {}", params.len())
+            };
+            self.err(
+                span,
+                format!(
+                    "`{name}` expects {detail} argument(s), found {}",
+                    args.len()
+                ),
+            );
+            for a in args {
+                self.check_expr(a);
+            }
+            return;
+        }
+        // Type-check the provided args against their params (the omitted defaults were validated at
+        // the signature, so they need no re-check here).
+        for (i, (param, arg)) in params.iter().zip(args).enumerate() {
+            let at = self.check_arg(arg, param);
+            if !self.ty_assignable(&at, param) {
+                self.err(
+                    span,
+                    format!(
+                        "`{name}` argument {} expects `{param}`, found `{at}`",
+                        i + 1
+                    ),
+                );
+            }
+        }
+        // Record the trailing defaults to append (only when some were omitted).
+        if args.len() < params.len() {
+            let fill: Vec<crate::ast::Expr> = defaults[args.len()..]
+                .iter()
+                .map(|d| d.clone().expect("trailing params are defaulted"))
+                .collect();
+            self.pending_fill = Some(fill);
+        }
     }
 
     /// Check call arguments against expected parameter types.
@@ -1255,5 +1355,21 @@ impl Checker {
         } else {
             ret
         }
+    }
+}
+
+/// Convert a native parameter's [`NativeDefault`] literal to the equivalent `Expr` literal, used when
+/// filling an omitted trailing native argument (M4 default parameters). The span is the call site's
+/// (the synthesized literal needs *a* span; it is never re-matched by the call-rewrite pass since its
+/// offset differs from the call key only conceptually — it carries no nested sugar regardless).
+fn native_default_expr(d: crate::native::NativeDefault, span: Span) -> crate::ast::Expr {
+    use crate::ast::{Expr, StrPart};
+    use crate::native::NativeDefault as D;
+    match d {
+        D::Bool(b) => Expr::Bool(b, span),
+        D::Int(n) => Expr::Int(n, span),
+        D::Float(f) => Expr::Float(f, span),
+        D::Str(s) => Expr::Str(vec![StrPart::Literal(s.to_string())], span),
+        D::Null => Expr::Null(span),
     }
 }

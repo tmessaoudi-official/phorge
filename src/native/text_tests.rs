@@ -149,6 +149,44 @@ fn text_p3_byte_safe_natives() {
 }
 
 #[test]
+fn text_parse_float_strict_and_permissive() {
+    let p = |s: &str, permissive: bool| {
+        let mut o = String::new();
+        text_parse_float(&[Value::Str(s.into()), Value::Bool(permissive)], &mut o).unwrap()
+    };
+    // strict: accepts integer/fraction/exponent forms; rejects leading/trailing dot, inf/nan, ws.
+    assert!(matches!(p("1.5", false), Value::Float(f) if (f - 1.5).abs() < 1e-12));
+    assert!(matches!(p("-2.5e3", false), Value::Float(f) if (f + 2500.0).abs() < 1e-9));
+    assert!(matches!(p("42", false), Value::Float(f) if (f - 42.0).abs() < 1e-12));
+    assert!(matches!(p("+5", false), Value::Float(f) if (f - 5.0).abs() < 1e-12));
+    assert!(matches!(p(".5", false), Value::Null)); // strict rejects leading dot
+    assert!(matches!(p("5.", false), Value::Null)); // strict rejects trailing dot
+    assert!(matches!(p("inf", false), Value::Null)); // byte-identity: never inf
+    assert!(matches!(p("nan", false), Value::Null)); // byte-identity: never nan
+    assert!(matches!(p(" 1.5", false), Value::Null)); // surrounding whitespace
+    assert!(matches!(p("1.2.3", false), Value::Null));
+    assert!(matches!(p("", false), Value::Null));
+    // permissive: additionally accepts a lone leading/trailing dot; still rejects inf/nan.
+    assert!(matches!(p(".5", true), Value::Float(f) if (f - 0.5).abs() < 1e-12));
+    assert!(matches!(p("5.", true), Value::Float(f) if (f - 5.0).abs() < 1e-12));
+    assert!(matches!(p("inf", true), Value::Null));
+    assert!(matches!(p(".", true), Value::Null));
+    // PHP erasure + signature.
+    let reg = &registry()[index_of("Core.Text", "parseFloat").unwrap()];
+    assert_eq!(
+        (reg.php)(&["$s".into(), "$p".into()]),
+        "__phorge_parse_float($s, $p)"
+    );
+    assert_eq!(reg.ret, Ty::Optional(Box::new(Ty::Float)));
+    assert_eq!(reg.params, vec![Ty::String, Ty::Bool]);
+    // the permissive flag defaults to strict (M4 default parameters).
+    assert!(matches!(
+        crate::native::native_defaults("Core.Text", "parseFloat"),
+        [crate::native::NativeDefault::Bool(false)]
+    ));
+}
+
+#[test]
 fn text_breadth_pad_indexof_substring() {
     let mut o = String::new();
     let s = |v: &str| Value::Str(v.into());

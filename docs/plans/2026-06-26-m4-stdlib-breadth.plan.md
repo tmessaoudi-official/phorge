@@ -56,12 +56,25 @@ total-or-optional conversions**, not a C-cast operator:
    (str_pad, byte), `indexOf -> int?` (gated `__phorge_text_index_of`), `substring` (substr, byte). Tier-1.
 5. **Set ops** — ✅ **DONE** (`examples/guide/set-ops.phg`, byte-identical): `union`/`intersection`/
    `difference` (array_unique∘array_merge / array_intersect / array_diff; first-set order).
-6. **`Text.parseFloat(string) -> float?`** — gated helper matching Rust `f64::from_str`. **Possible
-   pause:** inf/nan/`.5`/`5.` acceptance is a genuine fork (match Rust permissive, or stricter
-   JSON-like?) — surface via AskUserQuestion if non-obvious.
+6. **`Text.parseFloat(string, bool permissive = false) -> float?`** — ✅ **DONE** (shipped with the
+   default-parameters feature, `docs/plans/2026-06-26-default-parameters.plan.md`; example
+   `examples/guide/default-params.phg`, byte-identical 3-way). **M4 pinned backlog is now COMPLETE.**
+   Original blocker note retained below for history:
+   ⛔ ~~**BLOCKED on a new language feature.**~~ Developer
+   chose `parseFloat(string, bool permissive = false)` (strict default, opt-in lax) over strict-only /
+   two-named. That **requires default parameter values**, which Phorge lacks (`Param` has no default
+   field; arity is checked exactly). So **default parameters is now a prerequisite language feature**
+   (plan `docs/plans/2026-06-26-default-parameters.plan.md`, design
+   `docs/specs/2026-06-26-default-parameters-design.md`). Strict grammar locked: rejects `inf`/`nan`
+   (byte-identity — PHP can't match Rust's inf/nan parse), accepts `[+-]?digits(.digits)?([eE][+-]?digits)?`;
+   permissive additionally accepts a leading/trailing dot (`.5`/`5.`).
 
 **Decisions Log (this chunk):**
 - [2026-06-26] Big chunk = **finish M4** (`as` + stdlib sweep), full-auto, over M8 hardening / M-NUM/M-TIME.
+- [2026-06-26] AGREED (after two challenge rounds): **parseFloat = `parseFloat(string, bool permissive =
+  false)`** — strict by default, opt-in permissive. Both reject inf/nan. Chosen over strict-only (my
+  rec) and two-named fns. **Consequence:** needs **default parameters** as a language feature first →
+  new prerequisite slice (see item 6). parseFloat ships as that feature's showcase.
 
 ## Status
 - [x] **Slice 1 sort/sortWith** — DONE (`examples/guide/sort.phg`, byte-identical; gated

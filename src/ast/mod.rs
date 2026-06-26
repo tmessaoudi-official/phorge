@@ -335,6 +335,13 @@ pub enum LambdaBody {
 pub struct Param {
     pub ty: Type,
     pub name: String,
+    /// An optional **default value** (M4 default parameters): `bool b = false`. Restricted to a
+    /// literal constant by the checker (`E-DEFAULT-PARAM-EXPR`). A parameter with a default is
+    /// optional at the call site; the post-check `fill_defaults` pass appends the default expression
+    /// to any under-filled call, so the backends only ever see full-arity calls (byte-identity safe).
+    /// Defaults must be trailing (`E-DEFAULT-PARAM-ORDER`). **Boxed** so the rare-and-large default
+    /// expression does not bloat every `Param` (which is embedded in `ClassMember::Hook`).
+    pub default: Option<Box<Expr>>,
     pub span: Span,
 }
 

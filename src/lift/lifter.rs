@@ -685,6 +685,8 @@ fn lift_params(params: &[php::PhpParam]) -> Result<Vec<Param>, String> {
         out.push(Param {
             ty,
             name: p.name.clone(),
+            // Lifting a PHP default parameter is a Tier-2 follow-up; Tier-1 params have no default.
+            default: None,
             span: SP,
         });
     }

@@ -67,6 +67,8 @@ pub fn expand_aliases(program: &Program) -> Program {
         Param {
             ty: rt(&p.ty, a, 0),
             name: p.name.clone(),
+            // A default is a literal — no alias-bearing types inside — so carry it verbatim.
+            default: p.default.clone(),
             span: p.span,
         }
     }
@@ -250,6 +252,7 @@ pub fn expand_aliases(program: &Program) -> Program {
                         Param {
                             ty: rt(&p.ty, a, 0),
                             name: p.name.clone(),
+                            default: p.default.clone(),
                             span: p.span,
                         },
                         b.iter().map(|s| rstmt(s, a)).collect(),

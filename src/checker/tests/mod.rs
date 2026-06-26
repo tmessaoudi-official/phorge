@@ -7,6 +7,7 @@ mod casing;
 mod casting;
 mod collections;
 mod constants;
+mod default_params;
 mod destructuring;
 mod field_init;
 mod generics;

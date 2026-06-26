@@ -405,6 +405,19 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_text_parse_float {
+            // Mirror the Rust `valid_float` grammar (strict / permissive), rejecting inf/nan, then cast.
+            // PCRE only (tier-1, correct under `php -n`); `(float)` matches `f64::from_str` for the
+            // accepted grammar (typical decimals; extreme-precision divergence is documented).
+            self.line("function __phorge_parse_float($s, $permissive) {");
+            self.indent += 1;
+            self.line("$re = $permissive");
+            self.line("    ? '/^[+-]?(?:[0-9]+\\.?[0-9]*|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?$/'");
+            self.line("    : '/^[+-]?[0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/';");
+            self.line("return preg_match($re, $s) === 1 ? (float)$s : null;");
+            self.indent -= 1;
+            self.line("}");
+        }
         if self.uses_list_sort {
             // Natural ascending over a COPY (Phorge lists are immutable). String by byte (`strcmp`,
             // ≡ Rust `String` Ord) — PHP's `<=>` would juggle numeric strings; ints/floats/bools via

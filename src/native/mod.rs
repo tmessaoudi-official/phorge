@@ -314,6 +314,30 @@ pub fn index_of(module: &str, name: &str) -> Option<usize> {
         .position(|n| n.module == module && n.name == name)
 }
 
+/// A native parameter's **default value** (M4 default parameters). A tiny literal enum kept separate
+/// from the ~50 `NativeFn` literals (only `Core.Text.parseFloat` carries a default today, so a
+/// per-native field would be near-pure churn): [`native_defaults`] returns the defaults for a native's
+/// trailing parameters, and the checker converts each to an `Expr` literal when filling an omitted arg.
+#[derive(Clone, Copy)]
+pub enum NativeDefault {
+    Bool(bool),
+    Int(i64),
+    Float(f64),
+    Str(&'static str),
+    Null,
+}
+
+/// The default values for a native's **trailing** parameters (`&[]` for every native but the few that
+/// opt in). `native_defaults(m, n).len()` is how many trailing parameters are optional; the required
+/// arity is `params.len() - that`. Single small lookup, so no churn across the registry literals.
+pub fn native_defaults(module: &str, name: &str) -> &'static [NativeDefault] {
+    match (module, name) {
+        // `parseFloat(string, bool permissive = false)` — the permissive flag defaults to strict.
+        ("Core.Text", "parseFloat") => &[NativeDefault::Bool(false)],
+        _ => &[],
+    }
+}
+
 /// Index of a native by its module's *leaf* segment + name — e.g. leaf `"console"`, name
 /// `"println"`. Used by the interpreter and compiler, which (unlike the transpiler) track variable
 /// scope and resolve a member call `q.m(..)` locals-first: a qualifier `q` is only leaf-looked-up

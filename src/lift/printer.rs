@@ -203,7 +203,12 @@ impl Printer {
     fn params(&self, params: &[Param]) -> Result<String, String> {
         let mut out = Vec::new();
         for p in params {
-            out.push(format!("{} {}", ty(&p.ty)?, p.name));
+            // A default parameter (M4) prints its `= <expr>` so a format round-trip preserves it.
+            let default = match &p.default {
+                Some(e) => format!(" = {}", self.expr(e)?),
+                None => String::new(),
+            };
+            out.push(format!("{} {}{default}", ty(&p.ty)?, p.name));
         }
         Ok(out.join(", "))
     }

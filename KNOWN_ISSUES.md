@@ -23,6 +23,18 @@ not a panic:
   *method* named after a word PHP forbids as a method (none in the function/class sets are — PHP
   semi-reserves allow method names) is not specially handled; no known case.
 
+- **Default parameter values (M4) — shipped corners + deferrals.** A trailing parameter may declare a
+  literal default (`function f(int x, int y = 10)`); a call that omits it is filled to full arity before
+  the backends. Deferrals (each a clean compile error, never a panic): (1) **free functions only** — a
+  default on a method or constructor parameter is `E-DEFAULT-PARAM-CONTEXT` (the fill pass resolves
+  free/native calls, not method dispatch); (2) **literal defaults only** — a non-literal default
+  (`x = f()`) is `E-DEFAULT-PARAM-EXPR`; (3) **direct calls only** — a function **value** (closure /
+  named-fn ref) called with missing args is the ordinary arity error, not filled (closures carry no
+  default metadata). (4) `Text.parseFloat`'s `(float)` cast matches Rust `f64::from_str` for typical
+  decimals; an extreme-precision input could differ in the last ULP (examples use simple values), and
+  `inf`/`nan` are **rejected by design** in both strict and permissive modes (byte-identity — PHP's
+  cast can't produce them).
+
 - **`Core.Json` — shipped corners + deferrals.** (1) **Float magnitude divergence from native
   `json_encode`:** Phorge renders a float with the positional shortest-round-trip form (`__phorge_float`)
   for consistency with `run`/`runvm` everywhere, so an extreme magnitude (`1e20`) stringifies as

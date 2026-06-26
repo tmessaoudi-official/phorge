@@ -77,6 +77,7 @@ fn builds_function_item() {
                 span: sp(),
             },
             name: "s".into(),
+            default: None,
             span: sp(),
         }],
         ret: Some(Type::Named {
@@ -114,6 +115,7 @@ fn int_param(name: &str) -> Param {
             span: sp(),
         },
         name: name.to_string(),
+        default: None,
         span: sp(),
     }
 }

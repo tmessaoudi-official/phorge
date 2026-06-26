@@ -126,6 +126,7 @@ pub(super) fn resolve_item(item: Item, ctx: &ResolveCtx) -> Item {
                                 Param {
                                     ty: pty,
                                     name: p.name,
+                                    default: p.default,
                                     span: p.span,
                                 },
                                 resolve_block(body, ctx),

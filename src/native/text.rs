@@ -162,6 +162,77 @@ fn text_index_of(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("Text.indexOf expects (string, string)".into()),
     }
 }
+/// The float grammar (M4 `parseFloat`): `[+-]? digits? (. digits?)? ([eE][+-]?digits)?` with the
+/// **strict**/**permissive** difference being only the leading/trailing dot. STRICT requires leading
+/// integer digits and (if a dot is present) trailing fractional digits — `1`, `1.5`, `-2.5e3` ok;
+/// `.5`, `5.` rejected. PERMISSIVE additionally accepts a lone leading or trailing dot (`.5`, `5.`),
+/// requiring only one digit overall. **Both reject `inf`/`nan`** (the grammar requires digits, so
+/// those non-numeric words never match) — this is what keeps `parseFloat` byte-identical with PHP,
+/// whose `(float)` cast can't produce inf/nan and whose rendering would otherwise diverge.
+fn valid_float(s: &str, permissive: bool) -> bool {
+    let b = s.as_bytes();
+    let n = b.len();
+    let mut i = 0;
+    if i < n && (b[i] == b'+' || b[i] == b'-') {
+        i += 1;
+    }
+    let int_start = i;
+    while i < n && b[i].is_ascii_digit() {
+        i += 1;
+    }
+    let int_digits = i - int_start;
+    let mut had_dot = false;
+    let mut frac_digits = 0;
+    if i < n && b[i] == b'.' {
+        had_dot = true;
+        i += 1;
+        let f0 = i;
+        while i < n && b[i].is_ascii_digit() {
+            i += 1;
+        }
+        frac_digits = i - f0;
+    }
+    if permissive {
+        if int_digits == 0 && frac_digits == 0 {
+            return false; // a lone `.` (or `+`/`-`) is not a number
+        }
+    } else {
+        if int_digits == 0 || (had_dot && frac_digits == 0) {
+            return false; // strict: digits before, and after any dot
+        }
+    }
+    if i < n && (b[i] == b'e' || b[i] == b'E') {
+        i += 1;
+        if i < n && (b[i] == b'+' || b[i] == b'-') {
+            i += 1;
+        }
+        let e0 = i;
+        while i < n && b[i].is_ascii_digit() {
+            i += 1;
+        }
+        if i - e0 == 0 {
+            return false; // exponent marker with no digits
+        }
+    }
+    i == n // every byte consumed
+}
+/// `parseFloat(string, bool permissive = false) -> float?` — parse a base-10 float, or `None` when the
+/// string fails the grammar (see [`valid_float`]). Rust's `f64::from_str` is the value source of truth
+/// (run on the validator-accepted slice); the gated PHP helper `__phorge_parse_float` mirrors the
+/// grammar + cast. The `permissive` flag has a default of `false` (M4 default parameters), so
+/// `parseFloat(s)` is strict and `parseFloat(s, true)` is lax.
+fn text_parse_float(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s), Value::Bool(permissive)] => {
+            if valid_float(s, *permissive) {
+                Ok(s.parse::<f64>().map_or(Value::Null, Value::Float))
+            } else {
+                Ok(Value::Null)
+            }
+        }
+        _ => Err("Text.parseFloat expects (string, bool)".into()),
+    }
+}
 /// `substring(string, int, int) -> string` — a byte-indexed slice mirroring PHP `substr($s, start,
 /// len)` exactly (negative start/len count from the end; out-of-range clamps to empty). Byte-based
 /// (no mbstring); a slice that splits a multibyte char yields invalid UTF-8 → faults (EV-7).
@@ -325,6 +396,18 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(text_parse_int),
             php: |a| format!("__phorge_parse_int({})", parg(a, 0)),
+        },
+        // `parseFloat(string, bool permissive = false) -> float?` — the motivating native for M4
+        // default parameters (the `permissive` flag defaults to strict). Rejects inf/nan in both
+        // modes; permissive also accepts a lone leading/trailing dot. Gated `__phorge_parse_float`.
+        NativeFn {
+            module: "Core.Text",
+            name: "parseFloat",
+            params: vec![s(), Ty::Bool],
+            ret: Ty::Optional(Box::new(Ty::Float)),
+            pure: true,
+            eval: NativeEval::Pure(text_parse_float),
+            php: |a| format!("__phorge_parse_float({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `padLeft`/`padRight(string, int, string) -> string` — PHP `str_pad` (byte-based, no mbstring).
         NativeFn {

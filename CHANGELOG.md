@@ -6,6 +6,28 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — default parameter values + `Text.parseFloat` (M4)
+
+A PHP-familiar language feature: a trailing parameter may declare a literal **default value**
+(`function f(int x, int y = 10)`), making that argument optional at the call site (`f(1)` ≡
+`f(1, 10)`). **No new `Op`/`Value` and no backend change** — a call that omits trailing defaulted
+arguments is rewritten to full arity (provided args + the default literals) by the existing
+call-rewrite pass (`rewrite_ufcs`), so the interpreter/VM/transpiler only ever see complete calls; the
+default literal is identical on all three, so `run ≡ runvm ≡ PHP` holds by construction. Rules
+(checker): defaults must be **trailing** (`E-DEFAULT-PARAM-ORDER`), **literal** (`E-DEFAULT-PARAM-EXPR`),
+and **type-assignable** (`E-DEFAULT-PARAM-TYPE`); **free functions only** in v1 (a method/constructor
+default is `E-DEFAULT-PARAM-CONTEXT` — a documented follow-up). Natives may declare defaults via a small
+`native_defaults` lookup (no churn across the ~50 registry literals). `phg explain` documents all four
+codes.
+
+The motivating native lands with it: **`Text.parseFloat(string, bool permissive = false) -> float?`** —
+parse a base-10 float, or `None`. `permissive` defaults to **strict**: `[+-]?digits(.digits)?(e±digits)?`
+(accepts `1`, `1.5`, `-2.5e3`; rejects `.5`, `5.`, hex, surrounding whitespace). `parseFloat(s, true)`
+additionally accepts a lone leading/trailing dot (`.5`, `5.`). **Both reject `inf`/`nan`** — Rust's
+`f64::from_str` accepts them but PHP can't, and the float rendering would diverge, so rejecting keeps the
+spine byte-identical. Rust is the value source of truth (grammar validator + `f64::from_str`); gated
+`__phorge_parse_float` PHP helper mirrors it (PCRE, tier-1). `examples/guide/default-params.phg`.
+
 ### Added — `Core.List` / `Core.Text` / `Core.Set` breadth (M4 stdlib sweep)
 
 A breadth pass over the collection + text modules, all additive natives (no new `Op`/`Value`),

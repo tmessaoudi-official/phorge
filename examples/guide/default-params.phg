@@ -1,0 +1,39 @@
+// Default parameter values (M4) — a trailing parameter may declare a default, so the argument is
+// optional at the call site (PHP-familiar: `function f($x, $b = false)`). The default must be a
+// literal and must trail the required parameters. v1 covers **free functions** (methods are a
+// follow-up). The motivating native, `Text.parseFloat`, carries one: `permissive` defaults to false.
+package Main;
+import Core.Console;
+import Core.Text;
+
+// One default: `greeting` falls back to "Hello" when omitted.
+function greet(string name, string greeting = "Hello") -> string {
+    return "{greeting}, {name}!";
+}
+
+// Two defaults: omit none, the last, or both trailing arguments.
+function pad(string s, int width = 6, string fill = " ") -> string {
+    return Text.padLeft(s, width, fill);
+}
+
+function main(): void {
+    Console.println(greet("World"));         // Hello, World!  (default greeting)
+    Console.println(greet("World", "Hi"));   // Hi, World!     (explicit)
+
+    var a = pad("hi");          // width 6, fill " "  -> "    hi"
+    var b = pad("hi", 4);       // width 4, fill " "  -> "  hi"
+    var c = pad("hi", 4, "*");  // width 4, fill "*"  -> "**hi"
+    Console.println("[{a}]");
+    Console.println("[{b}]");
+    Console.println("[{c}]");
+
+    // parseFloat: strict by default, opt-in permissive — the payoff of the default parameter.
+    var strict = Text.parseFloat("3.5") ?? -1.0;          // 3.5
+    var dotLead = Text.parseFloat(".5") ?? -1.0;          // strict rejects -> -1
+    var dotLeadLax = Text.parseFloat(".5", true) ?? -1.0; // permissive accepts -> 0.5
+    var notInf = Text.parseFloat("inf") ?? -1.0;          // never inf -> -1
+    Console.println("strict 3.5  = {strict}");
+    Console.println("strict .5   = {dotLead}");
+    Console.println("lax .5      = {dotLeadLax}");
+    Console.println("inf -> {notInf}");
+}

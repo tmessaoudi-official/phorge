@@ -134,6 +134,9 @@ impl Checker {
                 m.name.clone(),
                 FnSig {
                     params,
+                    // Default parameters are free-function-only in v1 (methods are a deferral); an
+                    // interface method carries none.
+                    defaults: vec![None; m.params.len()],
                     ret,
                     type_params: Vec::new(),
                     // Interface-method throws are not enforced through dynamic dispatch this slice
@@ -908,7 +911,7 @@ impl Checker {
         self.validate_type_params(&f.type_params, f.span);
         // Resolve the signature with the type parameters in scope so `T` becomes `Ty::Param("T")`.
         self.active_type_params = f.type_params.clone();
-        let params = f.params.iter().map(|p| self.resolve_type(&p.ty)).collect();
+        let params: Vec<Ty> = f.params.iter().map(|p| self.resolve_type(&p.ty)).collect();
         let ret = match &f.ret {
             Some(t) => self.resolve_type(t),
             None => Ty::Void,
@@ -921,8 +924,12 @@ impl Checker {
         // set must share a return type and hold no two identical signatures; a generic overload is
         // not allowed to participate (deferred). Push regardless of legality so downstream resolution
         // sees the whole set (errors already reported).
+        // M4 default parameters (free functions only in v1): validate trailing-only ordering,
+        // literal-only values, and type assignability, building the per-param default list.
+        let defaults = self.collect_param_defaults(&f.params, &params);
         let sig = FnSig {
             params,
+            defaults,
             ret,
             type_params: f.type_params.clone(),
             throws,
@@ -930,6 +937,90 @@ impl Checker {
         let existing = self.funcs.get(&f.name).cloned().unwrap_or_default();
         self.validate_new_overload(&existing, &sig, &f.name, f.span, "function");
         self.funcs.entry(f.name.clone()).or_default().push(sig);
+    }
+
+    /// M4 default parameters: build the per-parameter default list for a free function, validating
+    /// (a) trailing-only ordering — a defaulted parameter may not be followed by a required one
+    /// (`E-DEFAULT-PARAM-ORDER`); (b) literal-only values (`E-DEFAULT-PARAM-EXPR`); (c) the default
+    /// literal's type is assignable to the parameter type (`E-DEFAULT-PARAM-TYPE`). `resolved` is the
+    /// already-resolved parameter types (parallel to `params`). Errors only — the list is returned
+    /// regardless so the fill pass and arity check see the declared shape.
+    pub(super) fn collect_param_defaults(
+        &mut self,
+        params: &[crate::ast::Param],
+        resolved: &[Ty],
+    ) -> Vec<Option<crate::ast::Expr>> {
+        let mut out = Vec::with_capacity(params.len());
+        let mut seen_default = false;
+        for (p, pty) in params.iter().zip(resolved) {
+            match &p.default {
+                None => {
+                    if seen_default {
+                        self.err_coded(
+                            p.span,
+                            format!(
+                                "required parameter `{}` cannot follow a parameter with a default",
+                                p.name
+                            ),
+                            "E-DEFAULT-PARAM-ORDER",
+                            Some("move every defaulted parameter to the end of the list".into()),
+                        );
+                    }
+                    out.push(None);
+                }
+                Some(e) => {
+                    seen_default = true;
+                    match literal_ty(e) {
+                        None => {
+                            self.err_coded(
+                                Self::expr_span(e),
+                                format!(
+                                    "default value for `{}` must be a literal constant",
+                                    p.name
+                                ),
+                                "E-DEFAULT-PARAM-EXPR",
+                                Some(
+                                    "use a literal — a number, string, bool, bytes, or null".into(),
+                                ),
+                            );
+                        }
+                        Some(lt) => {
+                            if !self.ty_assignable(&lt, pty) {
+                                self.err_coded(
+                                    Self::expr_span(e),
+                                    format!(
+                                        "default value of type `{lt}` is not assignable to parameter `{}` of type `{pty}`",
+                                        p.name
+                                    ),
+                                    "E-DEFAULT-PARAM-TYPE",
+                                    None,
+                                );
+                            }
+                        }
+                    }
+                    out.push(Some((**e).clone()));
+                }
+            }
+        }
+        out
+    }
+
+    /// M4 default parameters are free-function-only in v1. Reject a default on any method / constructor
+    /// parameter (`E-DEFAULT-PARAM-CONTEXT`) — the `fill_defaults` pass resolves free/native calls, not
+    /// method dispatch, so a method default would silently never apply. (A documented deferral.)
+    pub(super) fn reject_member_defaults(&mut self, params: &[crate::ast::Param], context: &str) {
+        for p in params {
+            if let Some(e) = &p.default {
+                self.err_coded(
+                    Self::expr_span(e),
+                    format!(
+                        "default parameter values are not yet supported on a {context} (only on free functions)"
+                    ),
+                    "E-DEFAULT-PARAM-CONTEXT",
+                    Some("drop the default, or call the function explicitly with all arguments".into()),
+                );
+            }
+        }
     }
 
     /// M-RT overloading: validate a new overload `sig` against the overloads of the same name already
@@ -1252,10 +1343,14 @@ impl Checker {
                         f.throws.iter().map(|t| self.resolve_type(t)).collect(),
                     );
                     self.active_type_params.clear();
+                    // M4 default parameters are free-function-only in v1; a default on a method param
+                    // is rejected (the fill pass resolves free/native calls, not method dispatch).
+                    self.reject_member_defaults(&f.params, "method");
                     // M-RT overloading: a same-named method joins an overload set (same rules as free
                     // functions — same return, no identical signatures, no generic member).
                     let sig = FnSig {
                         params: p,
+                        defaults: vec![None; f.params.len()],
                         ret,
                         type_params: f.type_params.clone(),
                         throws,
@@ -1348,5 +1443,23 @@ fn reserved_symbol_decl(item: &crate::ast::Item) -> Option<(&str, Span, &'static
         Item::Trait(t) => Some((&t.name, t.span, "trait")),
         Item::TypeAlias { name, span, .. } => Some((name, *span, "type alias")),
         Item::Import { .. } => None,
+    }
+}
+
+/// The type of a *literal constant* expression, or `None` if `e` is not a literal (M4 default
+/// parameters: a default value must be a literal, so its type is determined without invoking the full
+/// checker). A string literal qualifies only when it has no interpolation holes (all `Literal` parts).
+fn literal_ty(e: &crate::ast::Expr) -> Option<Ty> {
+    use crate::ast::{Expr, StrPart};
+    match e {
+        Expr::Int(..) => Some(Ty::Int),
+        Expr::Float(..) => Some(Ty::Float),
+        Expr::Bool(..) => Some(Ty::Bool),
+        Expr::Bytes(..) => Some(Ty::Bytes),
+        Expr::Null(_) => Some(Ty::Null),
+        Expr::Str(parts, _) if parts.iter().all(|p| matches!(p, StrPart::Literal(_))) => {
+            Some(Ty::String)
+        }
+        _ => None,
     }
 }

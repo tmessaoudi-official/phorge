@@ -217,7 +217,19 @@ impl Parser {
             let sp = self.peek_span();
             let ty = self.parse_type()?;
             let name = self.expect_ident("a parameter name")?;
-            params.push(Param { ty, name, span: sp });
+            // Optional default value (M4 default parameters): `bool b = false`. The checker restricts
+            // the expression to a literal and enforces trailing-only ordering.
+            let default = if self.eat(&TokenKind::Eq) {
+                Some(Box::new(self.parse_expr()?))
+            } else {
+                None
+            };
+            params.push(Param {
+                ty,
+                name,
+                default,
+                span: sp,
+            });
             if !self.eat(&TokenKind::Comma) {
                 break;
             }

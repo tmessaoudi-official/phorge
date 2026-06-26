@@ -45,6 +45,11 @@ use common::*;
 #[derive(Clone)]
 struct FnSig {
     params: Vec<Ty>,
+    /// Per-parameter default value (M4 default parameters): `Some(literal)` for a defaulted (trailing)
+    /// parameter, `None` for a required one. Parallel to `params`. The count of leading `None`s is the
+    /// call's *required* arity; an under-filled call records a fill of the trailing defaults, applied
+    /// by `fill_defaults` before any backend. Empty-of-defaults (all `None`) is the common case.
+    defaults: Vec<Option<crate::ast::Expr>>,
     ret: Ty,
     /// Generic type parameters this function declares (`["T"]` for `function id<T>(T x) -> T`).
     /// Empty for a non-generic function — the common case. When non-empty, `params`/`ret` contain
@@ -274,6 +279,17 @@ pub struct Checker {
     /// backends see only ordinary calls/literals — the same "erase front-end sugar before any backend"
     /// discipline. No new `Op`/`Value`; byte-identical by construction.
     reflect_resolutions: HashMap<usize, crate::ast::Expr>,
+    /// Span-keyed **default-argument fills** (M4 default parameters): a call that omits trailing
+    /// defaulted parameters maps its `Call` node's `Span.start` to the **full replacement `Call`**
+    /// (provided args + appended default literals). Merged into the call-rewrite map and applied by
+    /// [`rewrite_ufcs`] like a UFCS/reflect substitution — so the interpreter/VM/transpiler only ever
+    /// see full-arity calls (the "expand before backends" discipline; byte-identical by construction
+    /// since the default literal is the same everywhere). No new pass, no new walker.
+    default_fills: HashMap<usize, crate::ast::Expr>,
+    /// Set by [`check_named_call`]/[`check_native_call`] when a call legally omits trailing defaulted
+    /// arguments: the list of default expressions to append. [`check_call`] consumes it (it holds the
+    /// original callee + args + span) to build the replacement `Call` recorded in `default_fills`.
+    pending_fill: Option<Vec<crate::ast::Expr>>,
     /// Type parameters in scope while resolving the signature/body of the generic function currently
     /// being checked (`["T", "U"]`). A bare type name in this set resolves to `Ty::Param` rather than
     /// being looked up as an alias/enum/class. Set around each generic function and cleared after;
@@ -326,6 +342,8 @@ impl Checker {
             imports: HashMap::new(),
             html_resolutions: HashMap::new(),
             ufcs_resolutions: HashMap::new(),
+            default_fills: HashMap::new(),
+            pending_fill: None,
             reflect_resolutions: HashMap::new(),
             active_type_params: Vec::new(),
             cur_class_type_params: Vec::new(),
@@ -546,6 +564,11 @@ pub fn check_resolutions(
         // embedded original subtrees regardless of nesting direction.
         let mut calls = c.ufcs_resolutions;
         calls.extend(c.reflect_resolutions);
+        // M4 default-parameter fills are recorded as full replacement `Call` exprs (provided args +
+        // appended defaults), keyed by the call's span — just another entry in the call-rewrite map
+        // `rewrite_ufcs` applies. Keys are disjoint from UFCS/reflect (a fill is a direct free/native
+        // call, never a UFCS member call), so the merge is collision-free.
+        calls.extend(c.default_fills);
         Ok((c.warnings, c.html_resolutions, calls))
     } else {
         Err(c.errors)

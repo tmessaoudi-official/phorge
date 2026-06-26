@@ -231,6 +231,9 @@ struct Transpiler {
     /// Set when `Core.Text.indexOf` is emitted — defines `__phorge_text_index_of`, mapping PHP
     /// `strpos`'s `false`-on-miss to `null` (the `int?` return).
     uses_text_index_of: bool,
+    /// Set when `Core.Text.parseFloat` is emitted — defines `__phorge_parse_float`, which gates the
+    /// float grammar (strict / permissive, rejecting inf/nan) then casts, mirroring the Rust kernel.
+    uses_text_parse_float: bool,
     /// Classes that must lower to the **interface + trait** decomposition (M-RT S6b): every transitive
     /// ancestor of a multi-parent (`extends A, B`) class. PHP has no multiple inheritance, so a
     /// multi-parent class `implements` its parents' interfaces and `use`s their traits; each ancestor
@@ -412,6 +415,7 @@ impl Transpiler {
             uses_map_remove: false,
             uses_list_index_of: false,
             uses_text_index_of: false,
+            uses_text_parse_float: false,
             decomposed: BTreeSet::new(),
             tmp: 0,
         }
