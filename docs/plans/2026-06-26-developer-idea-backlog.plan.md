@@ -67,6 +67,20 @@ report feeding fix slices.
 **Decision [2026-06-26]: E = FOLD into the audit (don't fix in isolation); F = RUN the soundness-enforcement
 audit workflow** → findings SSOT at `docs/research/soundness-audit/SSOT.md`, fixes batched into slices after.
 
+**Audit delivered [2026-06-27], committed `8a847d8`:** 17 rules probed → 10 enforced, **7 gaps (6 P0 + 1
+P1)**, all front-end-only (byte-identity-neutral), 7 fix batches A–G. Decisions:
+- **DEFER fixing — stay in design mode** (developer choice 2026-06-27). The fix queue is locked for when
+  we build: **A (ctor visibility) → C (`throws` on methods) → B (generic invariance, `types.rs:228`
+  reflexive short-circuit) → D (definite assignment) → F (lambda return-totality) → E (static-`this`) →
+  G (dup field/param names)** — order = impact × idiomatic reach; each a green byte-identical slice + a
+  guide example; autonomous one-commit-per-batch.
+- **Candidates = FOLD into their parent batch** (probe-while-fixing): container-head invariance
+  (List/Map/Optional/Function) with B; different-type duplicate params with G; conditional field
+  assignment with D. No separate probe round.
+- **Optional-field policy = DEFAULT-NULL:** an uninitialized optional field (`int? n`) reads as `null`
+  (what `T?` means); non-optional fields require definite assignment (`E-FIELD-UNINITIALIZED`). Folded
+  into Batch D.
+
 ## Decisions Log
 - [2026-06-26] AGREED (Batch 1):
   - **A — ADOPT:** formalize "library/web files need no `main`; only running needs an entry"; keep
