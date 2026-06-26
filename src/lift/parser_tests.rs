@@ -362,9 +362,11 @@ fn top_level_statements_and_functions_interleave() {
 // ── loud rejection of out-of-tier constructs (never silently misparse) ──
 
 #[test]
-fn rejects_string_interpolation() {
-    let e = perr(r#"<?php $a = "hi $name";"#);
-    assert!(e.contains("interpolation is Tier-2"), "{e}");
+fn rejects_operator_in_string_interpolation() {
+    // C-1: simple interpolation now parses; a top-level operator inside `{$…}` stays Tier-2
+    // (it is also a PHP parse error — the faithful subset is an access chain only).
+    let e = perr(r#"<?php $a = "{$x + $y}";"#);
+    assert!(e.contains("access chain"), "{e}");
 }
 
 #[test]

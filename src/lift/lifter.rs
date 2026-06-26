@@ -449,6 +449,16 @@ fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
         php::PhpExpr::Int(n) => Expr::Int(*n, SP),
         php::PhpExpr::Float(f) => Expr::Float(*f, SP),
         php::PhpExpr::Str(s) => Expr::Str(vec![StrPart::Literal(s.clone())], SP),
+        php::PhpExpr::Interp(parts) => {
+            let mut out = Vec::with_capacity(parts.len());
+            for part in parts {
+                out.push(match part {
+                    php::PhpStrPart::Lit(s) => StrPart::Literal(s.clone()),
+                    php::PhpStrPart::Expr(e) => StrPart::Expr(Box::new(lift_expr(e)?)),
+                });
+            }
+            Expr::Str(out, SP)
+        }
         php::PhpExpr::Bool(b) => Expr::Bool(*b, SP),
         php::PhpExpr::Null => Expr::Null(SP),
         php::PhpExpr::Var(name) if name == "this" => Expr::This(SP),

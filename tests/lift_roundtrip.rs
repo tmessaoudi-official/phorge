@@ -142,6 +142,21 @@ function name(int $c): string {
 }
 echo name(1) . name(9);"#,
         ),
+        (
+            // C-1: PHP double-quoted interpolation — simple `$var`, simple public `$o->prop`, and
+            // complex `{$o->method()}` — lifts to Phorge `"{…}"` holes and round-trips identically.
+            "string_interpolation",
+            r#"<?php
+class Box {
+    public function __construct(public string $label) {}
+    public function next(): int { return 42; }
+}
+function describe(string $who, Box $b): string {
+    return "Hi $who, label=$b->label next={$b->next()}";
+}
+$b = new Box("crate");
+echo describe("Ada", $b);"#,
+        ),
     ];
 
     for (label, php_src) in cases {

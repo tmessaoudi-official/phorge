@@ -14,46 +14,52 @@ rather than guessed at — lift **never** silently produces wrong Phorge.
 $ phg lift sample.php
 ```
 
-Input — [`sample.php`](sample.php), ordinary typed PHP:
+Input — [`sample.php`](sample.php), ordinary typed PHP (note the double-quoted **interpolation**):
 
 ```php
 function greet(string $name): string {
-    return "Hello, " . $name;
+    return "Hello, $name!";
 }
 
 class Counter {
-    public function __construct(private int $start) {}
+    public function __construct(public int $start) {}
     public function next(): int { return $this->start + 1; }
 }
 
+$c = new Counter(41);
 echo greet("Phorge");
+echo " Counter starts at $c->start, next is {$c->next()}.";
 ```
 
 Output — [`sample.phg`](sample.phg), idiomatic Phorge (PHP is the *floor*, not the ceiling — lift
-emits clean Phorge, it doesn't mirror PHP's quirks):
+emits clean Phorge, it doesn't mirror PHP's quirks). PHP interpolation maps straight to Phorge holes:
+`"$name"` → `"{name}"`, `"$c->start"` → `"{c.start}"`, `"{$c->next()}"` → `"{c.next()}"`:
 
 ```phorge
 package Main;
 import Core.Console;
 
 function greet(string name) -> string {
-    return ("Hello, " + name);
+    return "Hello, {name}!";
 }
 
 open class Counter {
-    constructor(private mutable int start) {}
+    constructor(public mutable int start) {}
     public open function next() -> int {
         return (this.start + 1);
     }
 }
 
 function main() -> void {
+    mutable var c = new Counter(41);
     Console.print(greet("Phorge"));
+    Console.print(" Counter starts at {c.start}, next is {c.next()}.");
 }
 ```
 
-Both print `Hello, Phorge`. The lifted `sample.phg` is part of the example suite, so it is
-byte-identity-gated on `run`, `runvm`, **and** real PHP like every other example.
+Both print `Hello, Phorge! Counter starts at 41, next is 42.` The lifted `sample.phg` is part of the
+example suite, so it is byte-identity-gated on `run`, `runvm`, **and** real PHP like every other
+example.
 
 ## What lift does (idiomatic, not a mirror)
 
@@ -68,14 +74,21 @@ byte-identity-gated on `run`, `runvm`, **and** real PHP like every other example
 | a non-`final` PHP class | an `open` class (Phorge is final-by-default) |
 | `[a, b]` / `[k => v]` | a `List` / a `Map` |
 | ternary `c ? a : b` / `match` | an expression `if` / a Phorge `match` |
+| `"$name"` / `"$o->prop"` / `"{$o->m()}"` interpolation | Phorge `"{name}"` / `"{o.prop}"` / `"{o.m()}"` holes |
 
 ## What lift refuses (loudly — the Tier-2 frontier)
 
 Lift errors rather than guess when there is no faithful Phorge form *yet*: an `array` **type**
 annotation (needs `List`/`Map`/`Set` inference), `foreach` (needs element-type inference), backed
-enums and enum methods, default parameter values, untyped parameters, string interpolation, the elvis
-`?:`, an assignment used as a sub-expression, and a non-literal `match` arm. Each is a clear
-`lift …` message naming what to do by hand.
+enums and enum methods, default parameter values, untyped parameters, the elvis `?:`, an assignment
+used as a sub-expression, and a non-literal `match` arm. Each is a clear `lift …` message naming what
+to do by hand.
+
+Interpolation is lifted only within PHP's *actual* grammar — a `$`-rooted access chain (`$x`,
+`$o->p`, `$a[$k]`, `$o->m()`). The forms PHP itself rejects or that coerce silently are refused
+loudly: a top-level operator inside `{$…}` (a PHP parse error too), the removed `${…}`
+variable-variable form, and a simple-syntax bareword subscript `"$a[key]"` (whose key silently
+becomes the string `'key'` — use the explicit `"{$a['key']}"` form).
 
 > **Review the draft.** A lifted program that type-checks is *structurally* sound, but `lift` cannot
 > prove it preserves the original PHP's behavior — that is the `// lifted (verify)` contract.

@@ -185,6 +185,11 @@ pub enum PhpExpr {
     Float(f64),
     /// A safe (non-interpolating) string literal, escapes decoded.
     Str(String),
+    /// An interpolating double-quoted string (`"hi $name"`, `"v={$o->total}"`) parsed into a
+    /// sequence of literal runs and embedded `$`-rooted access-chain expressions (C-1). The parser
+    /// only admits PHP's actual interpolation grammar (a variable followed by `->prop`/`[idx]`/
+    /// method-call steps); a top-level operator or dynamic/variable-variable form is rejected loudly.
+    Interp(Vec<PhpStrPart>),
     Bool(bool),
     Null,
     /// `$name` — a variable (without the `$`). `$this` arrives as `Var("this")`.
@@ -282,6 +287,16 @@ pub enum PhpExpr {
         subject: Box<PhpExpr>,
         arms: Vec<PhpMatchArm>,
     },
+}
+
+/// One segment of an interpolated double-quoted string (C-1): a literal run or an embedded
+/// `$`-rooted access-chain expression. Built by the parser from a raw `InterpStr` token.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PhpStrPart {
+    /// Literal text between holes (escapes already decoded).
+    Lit(String),
+    /// An embedded `$`-rooted access chain (`$name`, `$o->p`, `$a[$k]`, `$o->m()`).
+    Expr(Box<PhpExpr>),
 }
 
 /// One element of an array literal: `value` or `key => value`.

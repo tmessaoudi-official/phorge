@@ -79,6 +79,61 @@ fn lifts_bitwise_operators() {
     assert_reparses(&not);
 }
 
+// ── C-1: PHP string interpolation → Phorge `"{…}"` (faithful access-chain subset) ──
+
+#[test]
+fn lifts_simple_variable_interpolation() {
+    // C-1: `"$name"` simple syntax → Phorge `"{name}"`.
+    let out = lift(r#"<?php function f(string $name): string { return "hi $name!"; }"#);
+    assert!(out.contains(r#""hi {name}!""#), "{out}");
+    assert_reparses(&out);
+}
+
+#[test]
+fn lifts_simple_property_interpolation() {
+    // C-1: simple syntax allows ONE `->prop`.
+    let out = lift(
+        r#"<?php class P { public function __construct(public string $n) {} public function g(): string { return "v=$this->n"; } }"#,
+    );
+    assert!(out.contains(r#""v={this.n}""#), "{out}");
+    assert_reparses(&out);
+}
+
+#[test]
+fn lifts_complex_member_and_method_interpolation() {
+    // C-1: `{$o->prop}` and `{$o->m()}` complex syntax → `{o.prop}` / `{o.m()}`.
+    let out =
+        lift(r#"<?php function f(Box $o): string { return "p={$o->total} m={$o->label()}"; }"#);
+    assert!(out.contains("{o.total}"), "{out}");
+    assert!(out.contains("{o.label()}"), "{out}");
+    assert_reparses(&out);
+}
+
+#[test]
+fn lifts_index_interpolation() {
+    // C-1: `{$a[$k]}` and simple `$a[0]` → `{a[k]}` / `{a[0]}`. Top-level so `$xs`/`$k` are locals
+    // (a PHP `array` param type is itself Tier-2).
+    let out = lift(r#"<?php $xs = [10, 20]; $k = 0; echo "a={$xs[$k]} b=$xs[0]";"#);
+    assert!(out.contains("{xs[k]}"), "{out}");
+    assert!(out.contains("{xs[0]}"), "{out}");
+    assert_reparses(&out);
+}
+
+#[test]
+fn refuses_operator_in_interpolation() {
+    // C-1: a top-level operator inside `{$…}` is a PHP parse error AND outside Phorge's `{…}`
+    // grammar — loud reject (never lift to something that won't parse).
+    let e = lift_err(r#"<?php function f(int $a, int $b): int { return "{$a + $b}"; }"#);
+    assert!(e.contains("access chain"), "{e}");
+}
+
+#[test]
+fn refuses_bareword_simple_subscript() {
+    // C-1: `"$a[key]"` coerces `key` to the string `'key'` — surprising. Reject; nudge to `{$a['key']}`.
+    let e = lift_err(r#"<?php function f(Map $a): string { return "$a[key]"; }"#);
+    assert!(e.contains("bareword subscript"), "{e}");
+}
+
 #[test]
 fn top_level_code_becomes_main_with_console_import() {
     let out = lift(r#"<?php $x = 1; echo $x;"#);
