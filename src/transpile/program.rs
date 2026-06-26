@@ -427,6 +427,24 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_map_set {
+            // A NEW map (Phorge maps are immutable). `$m` is passed by value, and PHP arrays are
+            // copy-on-write, so assigning into it produces a fresh array — the caller's is untouched.
+            self.line("function __phorge_map_set($m, $k, $v) {");
+            self.indent += 1;
+            self.line("$m[$k] = $v;");
+            self.line("return $m;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_map_remove {
+            self.line("function __phorge_map_remove($m, $k) {");
+            self.indent += 1;
+            self.line("unset($m[$k]);");
+            self.line("return $m;");
+            self.indent -= 1;
+            self.line("}");
+        }
     }
 
     /// The `Core.Json` recursive helpers (each gated by its `uses_json_*` flag). They walk the injected

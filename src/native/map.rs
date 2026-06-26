@@ -34,6 +34,48 @@ fn map_size(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("Map.size expects (Map<K, V>)".into()),
     }
 }
+/// `get(Map<K, V>, K) -> V?` — a *safe* lookup: the value when present, else `null`. Unlike `m[k]`
+/// (which faults on a missing key), `get` surfaces absence as an optional, composing with `??`/if-let.
+/// `V` is non-optional so a present value is never `null` — `null` unambiguously means "absent".
+fn map_get(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Map(m), key] => {
+            let hk = crate::value::HKey::from_value(key)
+                .ok_or_else(|| format!("invalid map key: {}", key.type_name()))?;
+            Ok(m.iter()
+                .find(|(k, _)| *k == hk)
+                .map_or(Value::Null, |(_, v)| v.clone()))
+        }
+        _ => Err("Map.get expects (Map<K, V>, K)".into()),
+    }
+}
+/// `set(Map<K, V>, K, V) -> Map<K, V>` — a NEW map with `key` mapped to `v` (Phorge maps are
+/// immutable; this is a functional update, COW). Insertion-ordered like PHP `$m[$k] = $v`: an existing
+/// key keeps its position and takes the new value, a fresh key appends. Reuses the `value::map_set`
+/// kernel on a clone, so it matches the M-mut element-set semantics.
+fn map_set_native(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Map(m), key, v] => {
+            let mut out = (**m).clone();
+            crate::value::map_set(&mut out, key, v.clone())?;
+            Ok(Value::Map(std::rc::Rc::new(out)))
+        }
+        _ => Err("Map.set expects (Map<K, V>, K, V)".into()),
+    }
+}
+/// `remove(Map<K, V>, K) -> Map<K, V>` — a NEW map without `key` (functional, COW). Removing an absent
+/// key is a no-op (returns an equal map), matching PHP `unset($m[$k])`. Surviving keys keep their order.
+fn map_remove(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Map(m), key] => {
+            let hk = crate::value::HKey::from_value(key)
+                .ok_or_else(|| format!("invalid map key: {}", key.type_name()))?;
+            let out: Vec<_> = m.iter().filter(|(k, _)| *k != hk).cloned().collect();
+            Ok(Value::Map(std::rc::Rc::new(out)))
+        }
+        _ => Err("Map.remove expects (Map<K, V>, K)".into()),
+    }
+}
 
 /// The `Core.Map` registry entries (M-RT S7b). All generic over `K`/`V`; each erases to a PHP array
 /// builtin (D-L9). NOTE the PHP arg order for `has`: `array_key_exists(key, array)` — key first.
@@ -78,6 +120,43 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(map_size),
             php: |a| format!("count({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Map",
+            name: "get",
+            params: vec![map(), k()],
+            ret: Ty::Optional(Box::new(v())),
+            pure: true,
+            eval: NativeEval::Pure(map_get),
+            // `V` is non-optional, so a present value is never null → `?? null` means "absent".
+            php: |a| format!("({}[{}] ?? null)", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.Map",
+            name: "set",
+            params: vec![map(), k(), v()],
+            ret: map(),
+            pure: true,
+            eval: NativeEval::Pure(map_set_native),
+            // Gated `__phorge_map_set($m, $k, $v)` — a copy-then-assign (PHP arrays are COW value
+            // types, so `$m` inside the helper is already a copy → a new map, caller untouched).
+            php: |a| {
+                format!(
+                    "__phorge_map_set({}, {}, {})",
+                    parg(a, 0),
+                    parg(a, 1),
+                    parg(a, 2)
+                )
+            },
+        },
+        NativeFn {
+            module: "Core.Map",
+            name: "remove",
+            params: vec![map(), k()],
+            ret: map(),
+            pure: true,
+            eval: NativeEval::Pure(map_remove),
+            php: |a| format!("__phorge_map_remove({}, {})", parg(a, 0), parg(a, 1)),
         },
     ]
 }

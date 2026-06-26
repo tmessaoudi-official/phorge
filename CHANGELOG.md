@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `Core.Map` access + functional update (M4 stdlib breadth)
+
+`Map<K, V>` was read-only (`keys`/`values`/`has`/`size` + faulting `m[k]`); these add access and
+immutable update. `get(m, k) -> V?` is a **safe** lookup — the value when present, else `null` (so a
+missing key is an optional, not a fault — composes with `??`/if-let; `V` is non-optional so `null`
+unambiguously means "absent"). `set(m, k, v) -> Map<K, V>` and `remove(m, k) -> Map<K, V>` return a
+**new** map (Phorge maps are immutable), insertion-ordered like PHP `$m[$k] = $v` / `unset($m[$k])` —
+the `set` kernel reuses `value::map_set`. `get` erases inline (`($m[$k] ?? null)`); `set`/`remove` use
+gated `__phorge_map_set`/`__phorge_map_remove` helpers (PHP arrays are COW value types, so the by-value
+`$m` is already a copy). Byte-identical run/runvm/real PHP; `examples/guide/map-ops.phg`. **No new
+`Op`/`Value`.**
+
 ### Added — the checked `as` downcast operator (M4 casting, axis 2)
 
 `value as Type` is a **checked** downcast: it yields `Type?` — the value itself when it really is a

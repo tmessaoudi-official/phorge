@@ -220,6 +220,11 @@ struct Transpiler {
     /// `<=>`) to match Rust's natural order, `sortWith` defers to the user closure.
     uses_list_sort: bool,
     uses_list_sort_with: bool,
+    /// Set when `Core.Map.set` / `remove` is emitted — defines the matching `__phorge_map_set` /
+    /// `__phorge_map_remove` helper once per file. Both produce a NEW map (Phorge maps are immutable);
+    /// PHP arrays are COW value types, so the helper's by-value `$m` is already a copy.
+    uses_map_set: bool,
+    uses_map_remove: bool,
     /// Classes that must lower to the **interface + trait** decomposition (M-RT S6b): every transitive
     /// ancestor of a multi-parent (`extends A, B`) class. PHP has no multiple inheritance, so a
     /// multi-parent class `implements` its parents' interfaces and `use`s their traits; each ancestor
@@ -397,6 +402,8 @@ impl Transpiler {
             uses_text_parse_int: false,
             uses_list_sort: false,
             uses_list_sort_with: false,
+            uses_map_set: false,
+            uses_map_remove: false,
             decomposed: BTreeSet::new(),
             tmp: 0,
         }

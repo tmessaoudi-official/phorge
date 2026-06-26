@@ -140,6 +140,13 @@ impl Transpiler {
                                 _ => {}
                             }
                         }
+                        if nat.module == "Core.Map" {
+                            match nat.name {
+                                "set" => self.uses_map_set = true,
+                                "remove" => self.uses_map_remove = true,
+                                _ => {}
+                            }
+                        }
                         // `Convert.toString` erases to the existing `__phorge_str` helper — gate it.
                         if nat.module == "Core.Convert" && nat.name == "toString" {
                             self.uses_str = true;

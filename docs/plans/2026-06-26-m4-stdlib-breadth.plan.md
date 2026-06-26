@@ -47,10 +47,9 @@ total-or-optional conversions**, not a C-cast operator:
 
 1. **`as` operator (Slice 2b)** — ✅ **DONE** (see Slice 2b in Status above). `v as T` ⇒ `T?`, no new
    `Op`, byte-identical 3-way, single-eval proven, foreach-`as` ambiguity fixed. `examples/guide/as-cast.phg`.
-2. **Map mutation/access** — `Core.Map` is read-only today (keys/values/has/size; `m[k]` reads &
-   faults on miss). Add `set(Map<K,V>, K, V) -> Map<K,V>` (new map, COW), `remove(Map<K,V>, K) ->
-   Map<K,V>`, `get(Map<K,V>, K) -> V?` (safe, None on miss; V is non-optional so a present value is
-   never null). PHP: assoc set / `unset` over a copy / `array_key_exists ? : null`.
+2. **Map mutation/access** — ✅ **DONE** (`examples/guide/map-ops.phg`, byte-identical 3-way).
+   `get(Map<K,V>, K) -> V?` (inline `($m[$k] ?? null)`), `set`/`remove -> Map<K,V>` (new map, COW;
+   gated `__phorge_map_set`/`_remove`; `set` reuses `value::map_set`). No new `Op`/`Value`.
 3. **List breadth** — `slice(List<T>, int, int) -> List<T>` (array_slice, clamp), `indexOf(List<T>, T)
    -> int?` (array_search strict → None on miss), `concat(List<T>, List<T>) -> List<T>` (array_merge),
    `first`/`last(List<T>) -> T?`.
