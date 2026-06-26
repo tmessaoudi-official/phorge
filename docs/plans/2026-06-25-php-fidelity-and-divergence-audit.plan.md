@@ -285,10 +285,19 @@ A-61 (`instanceof` lowercase).
   lexer/parser/checker/interpreter/VM/transpiler/lift-printer + a global rewrite of every `.phg`,
   inline test program, doc, example, and the playground default. Highest risk; byte-identity-gated;
   needs its own design spec + codemod tooling. **Mandatory-return already exists** (totality cluster) —
-  not part of this. ✅ **DESIGN SPEC WRITTEN 2026-06-26**:
-  `docs/specs/2026-06-26-m3-stream1-syntax-reshape-design.md` (build order A-62 → A-46 → A-6 → A-1;
-  A-1 last so the codemod lands on a stable parser; two-phase dual-accept→codemod→retire `->`; `:`
-  verified free in signature position). Building now (autonomous overnight).
+  not part of this. ✅ **DESIGN SPEC `docs/specs/2026-06-26-m3-stream1-syntax-reshape-design.md`**.
+  Real build order **A-1 → A-6 → A-62** (revised for risk — A-1 pure-surface+gate-protected first).
+  - ✅ **A-1 DONE (`d39d407`)**: `: T` returns + `=>` function types; parser dual-accept (`->` a SILENT
+    transition alias); 296-arrow codemod across examples/playground/docs; lift printer emits `:`.
+    **`->` full *removal* PARKED** (would corrupt Rust `->` in the ~190 inline `.rs` test programs —
+    needs a string-literal-scoped tool; see `overnight-blockers-2026-06-26.md`).
+  - ✅ **A-6 DONE (`0747385`)**: `foreach (xs as x)` (inferred element type) + `with int i` counter;
+    desugars to for-in, no backend change. Key/value + destructure rejected (follow-up).
+  - ✅ **A-62 DONE (`bcc8476`)**: `"""…"""` auto-dedent text blocks; isolated `scan_text_block` routes
+    through `scan_string` (no new AST/Op); interpolation + literal quotes.
+  - ⏸️ **A-46 (expr `++`/`--`) PARKED** with full design + the **D-A46 scope fork** (locals-only vs
+    all-lvalues) in the blockers file — lowest value, highest subtle-risk (VM lvalue RMW, eval-order
+    parity). Needs a supervised greenlight.
 - **Stream 2 — Transpile interpolation fidelity:** B-1 + B-2 + B-9 (coupled). ✅ **IMPLEMENTED
   2026-06-26.** `emit_string` rewritten to emit native PHP `{$…}` for `$`-rooted Str/Int holes
   (guards: `is_php_interp_chain` + emitted-`$`-rooted + brace-free), concat fallback otherwise;
@@ -316,8 +325,10 @@ A-61 (`instanceof` lowercase).
     `postfix_operand()` parenthesizes a non-atomic receiver; prefix unary is bare (`~a`), nested
     unary kept parenthesized. Goldens updated, `sample.phg` regenerated.
 
-**Stream 3 is COMPLETE** (all of C-1/C-5/6/C-45/C-46/C-47 shipped). **Stream 2 COMPLETE.** Remaining:
-**Stream 1** (spec written, building autonomously).
+**ALL THREE STREAMS COMPLETE** (Stream 2 ✓, Stream 3 ✓, Stream 1 = A-1/A-6/A-62 ✓). The only
+remaining audit item is **A-46** (expr `++`/`--`), deliberately PARKED pending a scope decision
+(D-A46) — see `~/.claude/projects/-stack-projects-phorge/overnight-blockers-2026-06-26.md`.
 
-STATUS: Streams 2 & 3 COMPLETE. Stream 1 spec written (`…-m3-stream1-syntax-reshape-design.md`) —
-building A-62 → A-46 → A-6 → A-1 autonomously overnight.
+STATUS: **PHP-fidelity & divergence audit COMPLETE** (15/16 findings shipped; A-46 parked with full
+design). 6 commits on 2026-06-26 (`4ecb6c0`→`bcc8476`), all green + byte-identical on
+run/runvm/real-PHP-8.5. NOT pushed (push needs explicit request).
