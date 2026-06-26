@@ -11,7 +11,7 @@ open class Limits {
     private const string TAG = "limits";  // private — readable only inside the class
 
     // A private const used internally, and a public const read via the class name.
-    function describe() -> string {
+    function describe(): string {
         return "{Limits.TAG}: {Limits.MAX}";
     }
 }
@@ -19,7 +19,7 @@ open class Limits {
 // A subclass inherits the constant; it is reached via the SUBCLASS's own name (PHP semantics).
 class Sub extends Limits {}
 
-function main() -> void {
+function main(): void {
     Console.println("{Limits.MAX}");      // 100
     Console.println("{Limits.MAX + 1}");  // 101  — a const is a first-class arithmetic operand
     Limits lim = new Limits();

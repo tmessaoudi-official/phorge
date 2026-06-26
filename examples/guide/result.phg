@@ -21,7 +21,7 @@ enum Result<T, E> {
 }
 
 // Parse a small "config" of two integer fields. Each lookup may fail; `?` propagates the first failure.
-function field(int key) -> Result<int, string> {
+function field(int key): Result<int, string> {
     if (key < 0) {
         return new Err("negative key {key}");
     }
@@ -29,13 +29,13 @@ function field(int key) -> Result<int, string> {
 }
 
 // Straight-line happy path: every `?` either unwraps or short-circuits the whole function to its `Err`.
-function combine(int a, int b) -> Result<int, string> {
+function combine(int a, int b): Result<int, string> {
     int x = field(a)?; // unwrap or early-return Err
     int y = field(b)?;
     return new Ok(x + y);
 }
 
-function show(Result<int, string> r) -> string {
+function show(Result<int, string> r): string {
     return match r {
         Ok(v) => "ok {v}",
         Err(e) => "err {e}",
@@ -48,7 +48,7 @@ function show(Result<int, string> r) -> string {
 // fault crashes, panics can't appear in a *runnable* example — but a *passing* `assert` runs cleanly and
 // is byte-identical, so we show that form here. (A failing `panic`/`assert` transpiles to a PHP `throw`.)
 
-function main() -> void {
+function main(): void {
     assert(1 < 2, "arithmetic is intact"); // passes — a no-op; a false condition would fault
     Console.println(show(combine(1, 2))); // ok 30   — both fields succeed (10 + 20)
     Console.println(show(combine(3, -1))); // err negative key -1 — second field fails, `?` short-circuits

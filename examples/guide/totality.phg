@@ -11,7 +11,7 @@ package Main;
 import Core.Console;
 
 // Every branch returns — total over all paths (an `if`/`else if`/`else` chain).
-function classify(int score) -> string {
+function classify(int score): string {
     if (score >= 90) {
         return "A";
     } else if (score >= 60) {
@@ -22,12 +22,12 @@ function classify(int score) -> string {
 }
 
 // An expression `if` in value position returns via BOTH arms — also total.
-function larger(int a, int b) -> int {
+function larger(int a, int b): int {
     return if (a > b) { a } else { b };
 }
 
 // A `match` that returns on every arm is total (the arms are exhaustive over `int` via `_`).
-function sign(int n) -> string {
+function sign(int n): string {
     return match n {
         0 => "zero",
         _ => if (n > 0) { "positive" } else { "negative" },
@@ -36,11 +36,11 @@ function sign(int n) -> string {
 
 // The bottom type: a `-> never` function provably diverges, so it never returns a value. Declared to
 // showcase the type (and its PHP `: never` hint); never called, so the program still terminates.
-function spinForever() -> never {
+function spinForever(): never {
     while (true) {}
 }
 
-function main() -> void {
+function main(): void {
     Console.println(classify(95));
     Console.println(classify(75));
     Console.println(classify(40));

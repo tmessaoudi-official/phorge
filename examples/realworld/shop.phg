@@ -12,9 +12,9 @@ enum Discount {
 class Item {
     constructor(private string name, private int cents, private Discount disc) {}
 
-    function nameOf() -> string { return name; }
+    function nameOf(): string { return name; }
 
-    function price() -> int {
+    function price(): int {
         return match disc {
             None()     => cents,
             Percent(p) => cents - cents * p / 100,
@@ -24,14 +24,14 @@ class Item {
 }
 
 // Recursive bulk price for `n` identical units (no list folding needed).
-function bulk(int unit, int n) -> int {
+function bulk(int unit, int n): int {
     if (n <= 0) {
         return 0;
     }
     return unit + bulk(unit, n - 1);
 }
 
-function main() -> void {
+function main(): void {
     List<Item> cart = [
         new Item("Widget", 1000, new None()),
         new Item("Gadget", 2000, new Percent(10)),

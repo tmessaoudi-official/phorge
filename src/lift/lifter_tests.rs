@@ -27,7 +27,7 @@ fn assert_reparses(phg: &str) {
 fn lifts_typed_function() {
     let out = lift("<?php function add(int $a, int $b): int { return $a + $b; }");
     assert!(out.starts_with("package Main;"), "{out}");
-    assert!(out.contains("function add(int a, int b) -> int {"), "{out}");
+    assert!(out.contains("function add(int a, int b): int {"), "{out}");
     assert!(out.contains("return a + b;"), "{out}");
     assert_reparses(&out);
 }
@@ -36,7 +36,7 @@ fn lifts_typed_function() {
 fn lifts_untyped_function_with_no_value_return_as_void() {
     // C-45: a PHP function with no return hint and no value-returning `return` is provably `void`.
     let out = lift(r#"<?php function greet(string $n) { echo "hi"; }"#);
-    assert!(out.contains("function greet(string n) -> void {"), "{out}");
+    assert!(out.contains("function greet(string n): void {"), "{out}");
     assert_reparses(&out);
 }
 
@@ -138,7 +138,7 @@ fn refuses_bareword_simple_subscript() {
 fn top_level_code_becomes_main_with_console_import() {
     let out = lift(r#"<?php $x = 1; echo $x;"#);
     assert!(out.contains("import Core.Console;"), "{out}");
-    assert!(out.contains("function main() -> void {"), "{out}");
+    assert!(out.contains("function main(): void {"), "{out}");
     assert!(out.contains("mutable var x = 1;"), "{out}");
     assert!(out.contains("Console.print(x);"), "{out}");
     assert_reparses(&out);
@@ -169,7 +169,7 @@ fn lifts_class_with_promotion_and_method() {
         "{out}"
     );
     // A public, non-final PHP method lifts to an `open` Phorge method (override-by-default).
-    assert!(out.contains("function powerOf() -> int {"), "{out}");
+    assert!(out.contains("function powerOf(): int {"), "{out}");
     assert!(out.contains("return this.power;"), "{out}");
     assert_reparses(&out);
 }
@@ -290,10 +290,7 @@ fn end_to_end_representative_program_reparses() {
         out.contains("constructor(private mutable int n) {}"),
         "{out}"
     );
-    assert!(
-        out.contains("function classify(int x) -> string {"),
-        "{out}"
-    );
-    assert!(out.contains("function main() -> void {"), "{out}");
+    assert!(out.contains("function classify(int x): string {"), "{out}");
+    assert!(out.contains("function main(): void {"), "{out}");
     assert_reparses(&out);
 }

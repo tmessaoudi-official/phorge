@@ -20,21 +20,21 @@ open class Account {
     constructor(private mutable int balance, protected string owner) {}
 
     // Public API — callable from anywhere.
-    function balanceOf() -> int { return this.balance; }
-    function deposit(int amount) -> void { this.balance = this.balance + amount; }
+    function balanceOf(): int { return this.balance; }
+    function deposit(int amount): void { this.balance = this.balance + amount; }
 
     // A private helper only this class's own methods may call …
-    private function audit() -> string { return "{this.owner}:{this.balance}"; }
+    private function audit(): string { return "{this.owner}:{this.balance}"; }
     // … reached here through a public method (legal: same class).
-    function statement() -> string { return this.audit(); }
+    function statement(): string { return this.audit(); }
 }
 
 // A subclass may read the `protected` member of its parent (but not the `private` one).
 class Savings extends Account {
-    function ownerLabel() -> string { return "saver {this.owner}"; }
+    function ownerLabel(): string { return "saver {this.owner}"; }
 }
 
-function main() -> void {
+function main(): void {
     Savings s = new Savings(100, "Ada");
     s.deposit(50); // public method mutates the private balance internally
     Console.println("{s.balanceOf()}"); // public accessor → 150

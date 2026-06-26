@@ -121,6 +121,23 @@ fn parses_function_type_annotation() {
 }
 
 #[test]
+fn parses_fat_arrow_function_type() {
+    // A-1: function types now use `=>` (`(int) => int`); `->` stays as a transition alias.
+    match ty("(int) => int") {
+        Type::Function { params, ret, .. } => {
+            assert_eq!(params.len(), 1);
+            assert!(matches!(ret.as_ref(), Type::Named { name, .. } if name == "int"));
+        }
+        other => panic!("expected Type::Function, got {other:?}"),
+    }
+    // multi-param + nested return, fat-arrow form
+    assert!(matches!(ty("(int, string) => bool"), Type::Function { .. }));
+    assert!(matches!(ty("() => (int) => bool"), Type::Function { .. }));
+    // the old `->` form still parses (alias)
+    assert!(matches!(ty("(int) -> int"), Type::Function { .. }));
+}
+
+#[test]
 fn parses_fixed_length_list_type() {
     match ty("[int; 3]") {
         Type::FixedList { elem, len, .. } => {

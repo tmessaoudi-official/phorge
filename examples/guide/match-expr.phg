@@ -11,19 +11,19 @@ import Core.Console;
 enum Color { Red, Green, Blue }
 enum Box { Small(int n), Big(int n) }
 
-function name(Color c) -> string {
+function name(Color c): string {
     // statement-position match (var-decl-init) over variant patterns → `if/elseif` chain
     string n = match c { Red() => "red", Green() => "green", Blue() => "blue" };
     return n;
 }
 
-function weight(Box b) -> int {
+function weight(Box b): int {
     // expression position: a variant match (with a payload binding) used as an operand → PHP
     // `match (true) { $b instanceof Small && (($n = $b->n) || true) => $n, … }` (no IIFE)
     return 1 + (match b { Small(n) => n, Big(n) => n * 10 });
 }
 
-function main() -> void {
+function main(): void {
     int base = 100;
 
     // expression position: a literal match used as the left operand of `+` → native `match ($subj)`
@@ -38,6 +38,6 @@ function main() -> void {
     Console.println("weights={weight(new Small(5))} {weight(new Big(5))}");
 }
 
-function sign(int n) -> string {
+function sign(int n): string {
     return match n { 0 => "zero", x => "nonzero {x}" };
 }

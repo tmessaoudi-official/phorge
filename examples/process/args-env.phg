@@ -14,7 +14,7 @@ import Core.Env;
 import Core.List;
 import Core.Map;
 
-function main() -> void {
+function main(): void {
     // Program arguments — everything after the `--` terminator.
     var args = Process.args();
     Console.println("argc = {List.length(args)}");

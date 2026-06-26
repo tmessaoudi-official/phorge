@@ -419,8 +419,9 @@ impl Parser {
                 self.expect(&TokenKind::LParen, "'(' after 'fn'")?;
                 let params = self.parse_params()?;
                 self.expect(&TokenKind::RParen, "')' to close lambda parameters")?;
-                // Optional return-type annotation before `=>`.
-                let ret = if self.eat(&TokenKind::Arrow) {
+                // Optional return-type annotation before the `=>`/`{` body. A-1: `:` is canonical
+                // (`fn(int x): string => …`); `->` stays as a silent transition alias.
+                let ret = if self.eat(&TokenKind::Colon) || self.eat(&TokenKind::Arrow) {
                     Some(self.parse_type()?)
                 } else {
                     None

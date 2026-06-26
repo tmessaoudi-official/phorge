@@ -32,7 +32,7 @@ class Account {
     }
 }
 
-function main() -> void {
+function main(): void {
     Temp t = new Temp(100.0);
     Console.println("100C is {t.fahrenheit}F"); // 100C is 212F
     // Writing the hook converts back into the stored celsius field.

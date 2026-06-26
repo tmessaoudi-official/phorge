@@ -5,7 +5,7 @@ package Main;
 import Core.Console;
 import Core.Bytes;
 
-function main() -> void {
+function main(): void {
   // fromString + len (BYTE count) + toString round-trip.
   bytes hello = Bytes.fromString("hello");
   int n = Bytes.len(hello);

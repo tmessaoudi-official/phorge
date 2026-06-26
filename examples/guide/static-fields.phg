@@ -17,7 +17,7 @@ class Counter {
     }
 }
 
-function main() -> void {
+function main(): void {
     new Counter();
     new Counter();
     new Counter();

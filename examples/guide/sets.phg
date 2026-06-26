@@ -10,7 +10,7 @@ package Main;
 import Core.Console;
 import Core.Set;
 
-function main() -> void {
+function main(): void {
     // An int set, built from a list with duplicates → deduped, first-occurrence order preserved.
     var s = Set.of([3, 1, 4, 1, 5, 9, 2, 6, 5, 3]);
     var has4 = Set.contains(s, 4);

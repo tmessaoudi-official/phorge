@@ -10,30 +10,30 @@ import Core.Console;
 
 // A contract: anything that can speak.
 interface Speaker {
-    function speak() -> string;
+    function speak(): string;
 }
 
 // Interfaces compose by `extends`: a Pet is a Speaker that also has a name.
 interface Pet extends Speaker {
-    function petName() -> string;
+    function petName(): string;
 }
 
 class Dog implements Pet {
     constructor(public string dogName) {}
-    function speak() -> string { return "Woof"; }
-    function petName() -> string { return this.dogName; }
+    function speak(): string { return "Woof"; }
+    function petName(): string { return this.dogName; }
 }
 
 class Robot implements Speaker {
-    function speak() -> string { return "Beep"; }
+    function speak(): string { return "Beep"; }
 }
 
 // Polymorphism through an interface-typed parameter: `announce` knows only the contract.
-function announce(Speaker s) -> string {
+function announce(Speaker s): string {
     return s.speak();
 }
 
-function main() -> void {
+function main(): void {
     var d = new Dog("Rex");
     var r = new Robot();
 

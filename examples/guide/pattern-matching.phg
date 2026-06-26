@@ -17,7 +17,7 @@ enum Status {
 }
 
 // Several arms share the `Code` shape, separated by guards; the last is the unguarded fallback.
-function classify(Status s) -> string {
+function classify(Status s): string {
     return match s {
         Code(n) when n >= 500 => "server error",
         Code(n) when n >= 400 => "client error",
@@ -35,7 +35,7 @@ class Square {
 }
 
 // Guards on type-patterns over a union, reading a field in the guard condition.
-function describe(Circle | Square sh) -> string {
+function describe(Circle | Square sh): string {
     return match sh {
         Circle c when c.r > 1.0 => "big circle",
         Circle c => "small circle",
@@ -55,14 +55,14 @@ class Line {
 // `Circle { r }`, rename `Point { x: fx }`, and nesting `Line { from: Point { x, y }, to }` — the
 // same `instanceof` test as a type pattern (no new op), then field reads. Bound fields are usable as
 // typed values (here `fx + fy` as an `int` operand — the CTy operand path).
-function areaOf(Circle | Square sh) -> float {
+function areaOf(Circle | Square sh): float {
     return match sh {
         Circle { r } => r,
         Square { side } => side,
     };
 }
 
-function originSum(Line l) -> int {
+function originSum(Line l): int {
     return match l {
         Line { from: Point { x: fx, y: fy }, to } => fx + fy + to.x,
         _ => 0,
@@ -86,7 +86,7 @@ enum Carrier {
 // Nested type pattern inside a variant payload (S5.2): match the variant, then narrow its payload to
 // a concrete class in one pattern. A refutable payload (`Holds(Cat c)`) does not discharge the
 // `Holds` variant, so a `Holds(other)` binding (irrefutable) is the fallback.
-function speak(Carrier c) -> string {
+function speak(Carrier c): string {
     return match c {
         Holds(Cat cat) => "meow from {cat.name}",
         Holds(Dog dog) => "woof from {dog.name}",
@@ -98,7 +98,7 @@ function speak(Carrier c) -> string {
 // `if (!(sh instanceof Circle)) { return … }`, `sh` is a `Circle` for the remaining code — no cast,
 // no nested block. (Also: an `if (x instanceof T) {…} else {…}` narrows `x` to the remaining union
 // member in the else-branch.) Narrowing is a compile-time check — the runtime is unchanged.
-function radiusOrZero(Circle | Square sh) -> float {
+function radiusOrZero(Circle | Square sh): float {
     if (!(sh instanceof Circle)) { return 0.0; }
     return sh.r;
 }
@@ -107,7 +107,7 @@ class User {
     constructor(public string name, public int age) {}
 }
 
-function lookup(int id) -> User? {
+function lookup(int id): User? {
     if (id == 1) { return new User("Ada", 36); }
     if (id == 2) { return new User("Bob", 15); }
     return null;
@@ -117,7 +117,7 @@ function lookup(int id) -> User? {
 // header. The then-branch runs only when the bind succeeds AND the guard holds; the else runs
 // otherwise (bind failed, or guard false). The guard can be a compound condition over the binding.
 // (`when` is contextual; this desugars to a nested `if` inside the bind's scope — no new VM op.)
-function greet(int id) -> string {
+function greet(int id): string {
     if (var u = lookup(id) when u.age >= 18 && u.name != "") {
         return "welcome {u.name}";
     } else {
@@ -134,7 +134,7 @@ enum Light {
 // Or-patterns (Phase 1 operators slice): group alternatives that share one arm body with `|`.
 // No fall-through, still exhaustive; alternatives must be binding-free (concrete patterns only).
 // Desugars to one arm per alternative — every backend sees ordinary arms.
-function band(int n) -> string {
+function band(int n): string {
     return match n {
         0 => "zero",
         1 | 2 | 3 => "low",
@@ -144,14 +144,14 @@ function band(int n) -> string {
 }
 
 // Or-patterns over enum variants (zero-payload variants use the `V()` call form).
-function action(Light l) -> string {
+function action(Light l): string {
     return match l {
         Red() | Yellow() => "stop",
         Green() => "go",
     };
 }
 
-function main() -> void {
+function main(): void {
     Console.println(classify(new Code(503)));
     Console.println(classify(new Code(404)));
     Console.println(classify(new Code(200)));

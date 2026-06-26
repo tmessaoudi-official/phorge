@@ -167,7 +167,9 @@ impl Parser {
         self.expect(&TokenKind::LParen, "'(' after function name")?;
         let params = self.parse_params()?;
         self.expect(&TokenKind::RParen, "')' to close parameters")?;
-        let ret = if self.eat(&TokenKind::Arrow) {
+        // A-1: `: T` is the canonical return-type syntax (PHP/TS); `-> T` is a silent transition
+        // alias (kept until every inline test program is migrated — `.phg` sources use `:`).
+        let ret = if self.eat(&TokenKind::Colon) || self.eat(&TokenKind::Arrow) {
             Some(self.parse_type()?)
         } else {
             None
@@ -446,7 +448,8 @@ impl Parser {
             self.expect(&TokenKind::LParen, "'(' after method name")?;
             let params = self.parse_params()?;
             self.expect(&TokenKind::RParen, "')' to close parameters")?;
-            let ret = if self.eat(&TokenKind::Arrow) {
+            // A-1: `:` canonical, `->` transition alias (see `parse_function`).
+            let ret = if self.eat(&TokenKind::Colon) || self.eat(&TokenKind::Arrow) {
                 Some(self.parse_type()?)
             } else {
                 None

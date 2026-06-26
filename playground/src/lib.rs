@@ -259,7 +259,7 @@ mod tests {
         ));
         assert_eq!(v["ok"], json!(true));
         let phg = v["phorge"].as_str().unwrap();
-        assert!(phg.contains("function add(int a, int b) -> int {"), "{phg}");
+        assert!(phg.contains("function add(int a, int b): int {"), "{phg}");
         assert!(v["error"].is_null());
     }
 

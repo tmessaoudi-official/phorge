@@ -13,10 +13,10 @@ import Core.Console;
 
 // Method reuse, including a `private` helper only other trait methods can call.
 trait Loud {
-    private function emphasize(string s) -> string {
+    private function emphasize(string s): string {
         return "{s}!";
     }
-    function shout(string s) -> string {
+    function shout(string s): string {
         return this.emphasize(s);
     }
 }
@@ -28,14 +28,14 @@ trait Paid {
     constructor(int monthly) {
         this.annual = monthly * 12;
     }
-    function raise(int pct) -> void {
+    function raise(int pct): void {
         this.annual = this.annual + this.annual * pct / 100;
     }
 }
 
 // An `abstract` requirement the using class must satisfy, and a get-hook that reads it.
 trait Identified {
-    abstract function id() -> int;
+    abstract function id(): int;
     string badge {
         get => "#{this.id()}";
     }
@@ -53,12 +53,12 @@ class Employee {
     use Identified;
     use Counted;
 
-    function id() -> int {
+    function id(): int {
         return 7;
     }
 }
 
-function main() -> void {
+function main(): void {
     Employee e = new Employee(1000); // Paid's constructor runs: annual = 1000 * 12 = 12000
     e.raise(10); // 12000 + 10% = 13200
 

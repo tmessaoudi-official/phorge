@@ -3,6 +3,6 @@ package Acme.Convert;
 // One package may span several files. `cToF` calls `scale` by its bare name — a *same-package*
 // call across files (`scale` is defined in scale.phg, also `package Acme.Convert`). The loader
 // resolves both to the same namespaced symbol, so the call works without qualification.
-function cToF(int c) -> int {
+function cToF(int c): int {
     return scale(c) + 32;
 }

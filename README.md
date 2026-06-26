@@ -26,7 +26,7 @@ enum Shape {
     Rect(float w, float h),
 }
 
-function area(Shape s) -> float {
+function area(Shape s): float {
     return match s {
         Circle(r)  => 3.14159 * r * r,
         Rect(w, h) => w * h,
@@ -175,7 +175,7 @@ not). See [ROADMAP.md](ROADMAP.md) for Phase 2/3 details.
 - **Type aliases** — `type UserId = int;` names a type for readability; compile-time only, erased in
   the transpiled PHP.
 - **Immutable by default** — no reassignment; introduce a fresh binding (`int y = x + 1;`).
-- **Functions** — `function f(int n) -> int { ... }`; `main()` is the entry point.
+- **Functions** — `function f(int n): int { ... }`; `main()` is the entry point.
 - **Classes** — with **constructor promotion** (`constructor(private int total) {}` declares and
   assigns the field in one place), fields, and instance methods (`this`).
 - **Enums** — algebraic data types with payloads:

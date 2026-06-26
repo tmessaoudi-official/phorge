@@ -4,7 +4,7 @@ import Core.Console;
 // A tiny program used by ../cli/README.md to demonstrate the phorge CLI:
 // source forms (file / stdin / inline), inspection (check / parse / lex),
 // the diagnostic dictionary (explain), and clean compile/runtime faults.
-function main() -> void {
+function main(): void {
     int n = 6;
     Console.println("phorge CLI demo");
     Console.println("n doubled = {n * 2}");

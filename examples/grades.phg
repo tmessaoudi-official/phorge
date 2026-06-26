@@ -6,14 +6,14 @@ enum Grade {
     Fail(int score),
 }
 
-function classify(int score) -> Grade {
+function classify(int score): Grade {
     if (score >= 50) {
         return new Pass(score);
     }
     return new Fail(score);
 }
 
-function describe(Grade g) -> string {
+function describe(Grade g): string {
     return match g {
         Pass(s) => "PASS ({s})",
         Fail(s) => "FAIL ({s})",
@@ -23,12 +23,12 @@ function describe(Grade g) -> string {
 class Counter {
     constructor(private int total) {}
 
-    function add(int n) -> int {
+    function add(int n): int {
         return total + n;
     }
 }
 
-function main() -> void {
+function main(): void {
     Counter c = new Counter(100);
     int t = c.add(23);
     Console.println("counter total = {t}");

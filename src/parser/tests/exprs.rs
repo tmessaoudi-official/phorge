@@ -127,6 +127,29 @@ fn parses_map_and_list_literals() {
 }
 
 #[test]
+fn parses_lambda_colon_return_type() {
+    // A-1: a typed lambda uses `:` for its return type, then `=>` for the (expression) body:
+    // `fn(int x): string => …`. The `->` form stays as a transition alias.
+    match expr(r#"fn(int x): string => "n""#) {
+        Expr::Lambda { ret, body, .. } => {
+            assert!(ret.is_some());
+            assert!(matches!(body, LambdaBody::Expr(_)));
+        }
+        other => panic!("expected lambda, got {other:?}"),
+    }
+    // block body with `:` return type
+    match expr("fn(int x): int { return x; }") {
+        Expr::Lambda { ret, body, .. } => {
+            assert!(ret.is_some());
+            assert!(matches!(body, LambdaBody::Block(_)));
+        }
+        other => panic!("expected lambda, got {other:?}"),
+    }
+    // `->` alias still parses
+    assert!(matches!(expr("fn(int x) -> int => x"), Expr::Lambda { .. }));
+}
+
+#[test]
 fn rejects_mixed_list_map_separators() {
     // Once list-or-map is chosen by the first element, a mismatched separator errors cleanly.
     assert!(parser("[1, 2 => 3]").parse_expr().is_err()); // list mode, stray `=>`

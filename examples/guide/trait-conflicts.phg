@@ -14,13 +14,13 @@ package Main;
 import Core.Console;
 
 trait English {
-    function hello() -> string { return "hello"; }
-    function bye() -> string { return "bye"; }
+    function hello(): string { return "hello"; }
+    function bye(): string { return "bye"; }
 }
 
 trait French {
-    function hello() -> string { return "bonjour"; }
-    function bye() -> string { return "au revoir"; }
+    function hello(): string { return "bonjour"; }
+    function bye(): string { return "au revoir"; }
 }
 
 // Compose both languages; resolve each collided method explicitly.
@@ -31,7 +31,7 @@ class Greeter {
     rename French.bye as goodbyeFr // keep French's `bye` as `goodbyeFr`; `bye` then falls to English
 }
 
-function main() -> void {
+function main(): void {
     Greeter g = new Greeter();
     Console.println(g.hello()); // English wins  -> hello
     Console.println(g.bye()); // English (French.bye renamed away) -> bye

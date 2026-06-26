@@ -2,6 +2,6 @@ package Acme.Label;
 
 // A second library package. `tag` formats a labelled integer; imported in main as `fmt` (aliased)
 // and called `Fmt.tag(...)`.
-function tag(string name, int value) -> string {
+function tag(string name, int value): string {
     return "{name} = {value}F";
 }

@@ -15,7 +15,7 @@ import Core.List;
 import Core.Text;
 
 // A user free function — UFCS lets it be called method-style on its first argument (`n.triple()`).
-function triple(int x) -> int {
+function triple(int x): int {
     return x * 3;
 }
 
@@ -23,12 +23,12 @@ function triple(int x) -> int {
 class Boxed {
     constructor(public int v) {}
 
-    function describe() -> string {
+    function describe(): string {
         return "boxed {this.v}";
     }
 }
 
-function main() -> void {
+function main(): void {
     var nums = [1, 2, 3, 4, 5];
 
     // Native UFCS + chaining: keep the elements > 2, square them, then sum / count.

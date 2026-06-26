@@ -12,12 +12,12 @@ import Core.Console;
 import Core.Html;
 
 // Wave-1 style: hand-written markup wrapped with Html.raw; the dynamic value escaped.
-function field(string label, string value) -> Html {
+function field(string label, string value): Html {
   return Html.raw("<li>{label}: {Html.render(Html.text(value))}</li>");
 }
 
 // Wave-2 style: the same row built from typed fragments — no hand-written markup.
-function row(string label, string value) -> Html {
+function row(string label, string value): Html {
   return Html.el("li", [Html.attr("data-label", label)],
                  [Html.text("{label}: "), Html.text(value)]);
 }
@@ -25,14 +25,14 @@ function row(string label, string value) -> Html {
 // Wave-3 style: write the markup directly and interpolate by type. Each {hole} escapes
 // unless it is already an Html value — so `{label}`/`{value}` (strings) are escaped, while
 // nesting another html"…" or a builder embeds verbatim. A multi-line literal works too.
-function card(string title, Html bodyHtml) -> Html {
+function card(string title, Html bodyHtml): Html {
   return html"<section>
     <h2>{title}</h2>
     {bodyHtml}
   </section>";
 }
 
-function main() -> void {
+function main(): void {
   string name = "Tom & \"Jerry\"";
   string bio = "<script>alert(1)</script>";
 

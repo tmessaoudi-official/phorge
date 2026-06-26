@@ -11,17 +11,17 @@ enum Shape {
 
 class Named {
     constructor(private string label) {}
-    function labelOf() -> string { return label; }
+    function labelOf(): string { return label; }
 }
 
-function area(Shape s) -> float {
+function area(Shape s): float {
     return match s {
         Circle(r)    => 3.14159 * r * r,
         Square(side) => side * side,
     };
 }
 
-function main() -> void {
+function main(): void {
     Named n = new Named("demo");
     Console.println("{n.labelOf()}: circle area = {area(new Circle(2.0))}");
 }

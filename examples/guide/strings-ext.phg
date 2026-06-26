@@ -17,11 +17,11 @@ package Main;
 import Core.Console;
 
 // `+` composes naturally and chains left-to-right, like any binary operator.
-function fullName(string first, string last) -> string {
+function fullName(string first, string last): string {
     return first + " " + last;
 }
 
-function main() -> void {
+function main(): void {
     // Concatenation — literals, a call result, and a bound variable all compose.
     string who = fullName("Ada", "Lovelace");
     Console.println("Hello, " + who + "!");

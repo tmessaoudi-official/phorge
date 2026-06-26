@@ -13,11 +13,11 @@ enum Availability {
 class Book {
     constructor(private string title, private Availability status) {}
 
-    function titleOf() -> string { return title; }
-    function statusOf() -> Availability { return status; }
+    function titleOf(): string { return title; }
+    function statusOf(): Availability { return status; }
 }
 
-function describe(Availability a) -> string {
+function describe(Availability a): string {
     return match a {
         Available()  => "available",
         Borrowed(by) => "borrowed by {by}",
@@ -26,11 +26,11 @@ function describe(Availability a) -> string {
 }
 
 // Late fee: 25 cents per day (float arithmetic).
-function fee(float days) -> float {
+function fee(float days): float {
     return days * 0.25;
 }
 
-function main() -> void {
+function main(): void {
     List<Book> shelf = [
         new Book("The Rust Book", new Available()),
         new Book("Crafting Interpreters", new Borrowed("Ada")),

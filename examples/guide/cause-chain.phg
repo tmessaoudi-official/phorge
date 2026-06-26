@@ -17,7 +17,7 @@ class ConfigError implements Error {
 }
 
 // Simulate a low-level failure, then wrap it in a higher-level error that preserves the cause.
-function readConfig() -> int throws ConfigError {
+function readConfig(): int throws ConfigError {
   try {
     throw new IoError("disk offline");
   } catch (IoError e) {
@@ -25,7 +25,7 @@ function readConfig() -> int throws ConfigError {
   }
 }
 
-function main() -> void {
+function main(): void {
   try {
     var n = readConfig();
     Console.println("loaded {n}");

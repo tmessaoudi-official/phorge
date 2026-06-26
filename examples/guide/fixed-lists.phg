@@ -9,7 +9,7 @@ import Core.Console;
 // a compile-time-only guarantee.
 
 // A function over plain `List<T>` — a `[T; N]` flows in (a fixed list is a list).
-function total(List<int> xs) -> int {
+function total(List<int> xs): int {
     mutable var sum = 0;
     for (int x in xs) {
         sum = sum + x;
@@ -17,7 +17,7 @@ function total(List<int> xs) -> int {
     return sum;
 }
 
-function main() -> void {
+function main(): void {
     // A fixed-length list literal. The literal's length must equal N (checked at compile time).
     [int; 3] rgb = [255, 128, 0];
     Console.println("r={rgb[0]} g={rgb[1]} b={rgb[2]}");

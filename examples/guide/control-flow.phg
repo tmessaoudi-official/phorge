@@ -2,7 +2,7 @@ package Main;
 import Core.Console;
 
 // recursion
-function fact(int n) -> int {
+function fact(int n): int {
     if (n <= 1) {
         return 1;
     }
@@ -10,21 +10,21 @@ function fact(int n) -> int {
 }
 
 // mutual recursion
-function isEven(int n) -> bool {
+function isEven(int n): bool {
     if (n == 0) {
         return true;
     }
     return isOdd(n - 1);
 }
 
-function isOdd(int n) -> bool {
+function isOdd(int n): bool {
     if (n == 0) {
         return false;
     }
     return isEven(n - 1);
 }
 
-function main() -> void {
+function main(): void {
     if (fact(5) > 100) {
         Console.println("5! is big: {fact(5)}");
     } else {

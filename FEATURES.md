@@ -15,7 +15,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Empty list literal `[]` in call arguments | ✅ | takes its element type from the expected parameter (e.g. `el("p", [], […])`); other positions still need a non-empty literal |
 | Generic lists: `List<T>` + list literals | ✅ | `[1, 2, 3]` |
 | Immutable-by-default bindings | ✅ | no reassignment; fresh binding instead |
-| Functions + recursion | ✅ | `function f(int n) -> int { … }`, `main()` entry point |
+| Functions + recursion | ✅ | `function f(int n): int { … }`, `main()` entry point |
 | Classes + fields + methods (`this`) | ✅ | |
 | Constructor promotion | ✅ | `constructor(private int total) {}` |
 | Enums with payloads | ✅ | `enum Shape { Circle(float r), Rect(float w, float h) }` |
@@ -29,8 +29,8 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Indexing `xs[i]` | ✅ | bounds-checked; out-of-range → clean runtime fault, never a panic |
 | Integer ranges `a..b` / `a..=b` | ✅ | materialize to `List<int>`; mainly `for (int i in 0..n)` |
 | Expression `if` | ✅ | `var x = if (c) { 1 } else { 2 };` (value position; `else` required) |
-| Lambdas / closures | ✅ | `fn(int x) => x * 2` (expression body) and `fn(int x) -> int { … }` (statement body, `-> T` required); capture enclosing locals by value |
-| First-class function values | ✅ | a bare named function is a value (`twice(3, dbl)`); function types `(int) -> int`; transpile to PHP arrow fn / `function(){} use()` / first-class callable |
+| Lambdas / closures | ✅ | `fn(int x) => x * 2` (expression body) and `fn(int x): int { … }` (statement body, `: T` required); capture enclosing locals by value |
+| First-class function values | ✅ | a bare named function is a value (`twice(3, dbl)`); function types `(int) => int`; transpile to PHP arrow fn / `function(){} use()` / first-class callable |
 | `Map<K, V>` literals `[k => v]` + indexing `m[k]` | ✅ | keys are `int`/`bool`/`string`; insertion-ordered; a missing key faults cleanly; transpiles to a PHP `[k => v]` array (M-RT S3) |
 | `Core.Map` query: `keys`/`values`/`has`/`size`; `Core.List` `reverse`/`sum` | ✅ | the first generic stdlib natives — type params inferred at the call site, erased to PHP `array_keys`/`array_values`/`array_key_exists`/`count`/`array_reverse`/`array_sum` (M-RT S7b) |
 | `Set<T>`: `Core.Set` `of`/`contains`/`size` | ✅ | insertion-ordered, deduped (the Map discipline); generic, erases to `array_unique`/`in_array`/`count` (M-RT S7b) |
@@ -40,8 +40,8 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Pipe operator `\|>` | ✅ | `x \|> f ≡ f(x)`; left-associative, lowered to a call in the parser; transpiles to a plain PHP call |
 | Type test `instanceof` | ✅ | `value instanceof T` → `bool` where `T` is a class **or interface** (M-RT S2); smart-casts the operand inside `if (x instanceof T)`; transpiles to PHP `instanceof` |
 | Interfaces + `implements` / `extends` | ✅ | `interface I { method sigs }`, `class C implements I, J`, `interface K extends I`; nominal subtyping (a class flows into an interface-typed slot), polymorphic calls through an interface type; transpiles to a PHP `interface`/`implements`/`extends` (M-RT S2) |
-| Erased generics `<T>` on free functions | ✅ | `function id<T>(T x) -> T`, inferred at the call site (incl. `List<T>` and `(T) -> T` parameters); no monomorphization — type params erase to PHP `mixed`/`array`/`\Closure` before any backend (M-RT S7) |
-| Erased generics `<T>` on methods | ✅ | `class U { function id<T>(T x) -> T … }`, inferred from the call's arguments; reuses the free-function machinery, erases identically (M-RT generics-all) |
+| Erased generics `<T>` on free functions | ✅ | `function id<T>(T x): T`, inferred at the call site (incl. `List<T>` and `(T) => T` parameters); no monomorphization — type params erase to PHP `mixed`/`array`/`\Closure` before any backend (M-RT S7) |
+| Erased generics `<T>` on methods | ✅ | `class U { function id<T>(T x): T … }`, inferred from the call's arguments; reuses the free-function machinery, erases identically (M-RT generics-all) |
 | Generic types/classes (`Box<T>`) | ✅ | `class Box<T> { … }`, `class Pair<A, B> { … }`; the type parameter is inferred at construction (`Box(7)` ⇒ `Box<int>`) and recovered at every use site (`Box(7).get()` is `int`); no monomorphization — `<T>` erases to PHP `mixed` before any backend, an instance carries no runtime type argument (`instanceof Box<int>` ≡ `instanceof Box`) (M-RT generics-all) |
 | Cross-package types — `import type Pkg.Path.Type [as A]` | ✅ | a library package exports a `class`/`enum`/`interface`; another imports it by its terminal name; nominal subtyping, `instanceof`, enum `match` all cross-package; erases to namespaced PHP FQNs (`E-PKG-TYPE` retired) (M-RT) |
 | Union types `A \| B` + match-over-union | ✅ | `A \| B \| C` of classes/interfaces/primitives (`int \| string`); a value of any member flows in; reach a member via `instanceof` narrowing or **type patterns** `match s { Circle c => … }` (exhaustive over the member set, no new `Op` — reuses `Op::IsInstance`); transpiles to PHP 8.0 `A\|B` (M-RT S4) |

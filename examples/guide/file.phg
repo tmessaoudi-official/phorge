@@ -11,7 +11,7 @@ import Core.Text;
 // (Note: a variable may not be named `text`/`file`/`console` here — that would shadow an imported
 // module qualifier, which the checker rejects with E-SHADOW-IMPORT.)
 
-function main() -> void {
+function main(): void {
     string path = "examples/guide/fixtures/poem.txt";
 
     // `exists` → bool; render it through an expression-`if` so the output is a string.

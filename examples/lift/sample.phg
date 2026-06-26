@@ -3,18 +3,18 @@ package Main;
 
 import Core.Console;
 
-function greet(string name) -> string {
+function greet(string name): string {
     return "Hello, {name}!";
 }
 
 open class Counter {
     constructor(public mutable int start) {}
-    public open function next() -> int {
+    public open function next(): int {
         return this.start + 1;
     }
 }
 
-function main() -> void {
+function main(): void {
     mutable var c = new Counter(41);
     Console.print(greet("Phorge"));
     Console.print(" Counter starts at {c.start}, next is {c.next()}.");

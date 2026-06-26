@@ -10,7 +10,7 @@ import Core.Math;
 // instead render identically to the Rust backends. (Earlier this was a transpile-only caveat; it is
 // now closed for every finite float — see KNOWN_ISSUES for the one remaining fault-domain note.)
 
-function main() -> void {
+function main(): void {
     // Irrational result — 17 significant digits. `sqrt` is IEEE-correctly-rounded, so the Rust
     // backends and PHP compute the same double; both now render all of its digits.
     float irrational = Math.sqrt(2.0);

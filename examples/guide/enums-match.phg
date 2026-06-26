@@ -11,7 +11,7 @@ enum Json {
     JStr(string s),
 }
 
-function show(Json j) -> string {
+function show(Json j): string {
     return match j {
         JNull()  => "null",
         JBool(b) => "bool {b}",
@@ -21,14 +21,14 @@ function show(Json j) -> string {
 }
 
 // Literal pattern + binding pattern (catch-all) over a primitive scrutinee.
-function sign(int n) -> string {
+function sign(int n): string {
     return match n {
         0 => "zero",
         x => "nonzero {x}",
     };
 }
 
-function main() -> void {
+function main(): void {
     List<Json> vals = [new JNull(), new JBool(true), new JNum(42), new JStr("hi")];
     for (Json j in vals) {
         Console.println(show(j));

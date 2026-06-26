@@ -9,7 +9,7 @@ import Core.Text;
 // Note: bind call results to locals before interpolating — the interpolation sub-lexer does not
 // nest string literals inside `{…}` (same constraint as guide/strings.phg).
 
-function main() -> void {
+function main(): void {
     string greeting = "Hello, Phorge";
 
     int n = Text.len(greeting);

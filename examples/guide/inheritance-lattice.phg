@@ -15,20 +15,20 @@ package Main;
 import Core.Console;
 
 open class Animal {
-    open function name() -> string {
+    open function name(): string {
         return "animal";
     }
 }
 
 // Single inheritance: Fish IS-A Animal.
 open class Fish extends Animal {
-    open function move() -> string {
+    open function move(): string {
         return "swims";
     }
 }
 
 open class Bird extends Animal {
-    open function move() -> string {
+    open function move(): string {
         return "flies";
     }
 }
@@ -39,11 +39,11 @@ class Duck extends Fish, Bird {
 }
 
 // A parameter typed as an ancestor accepts any subtype (subtyping at a call boundary).
-function describe(Animal a) -> string {
+function describe(Animal a): string {
     return a.name();
 }
 
-function main() -> void {
+function main(): void {
     Duck d = new Duck();
 
     // (1) `instanceof` against every ancestor in the lattice — all true.

@@ -18,19 +18,19 @@ import Core.Console;
 open class Animal {
     // Reached by Duck through BOTH Swimmer and Flyer — but it is the same `Animal.name`, so it
     // auto-merges (the diamond): no conflict, no resolution clause needed.
-    function name() -> string {
+    function name(): string {
         return "animal";
     }
 }
 
 open class Swimmer extends Animal {
-    open function move() -> string {
+    open function move(): string {
         return "swims";
     }
 }
 
 open class Flyer extends Animal {
-    open function move() -> string {
+    open function move(): string {
         return "flies";
     }
 }
@@ -41,7 +41,7 @@ class Duck extends Swimmer, Flyer {
     use Swimmer.move
 }
 
-function main() -> void {
+function main(): void {
     Duck d = new Duck();
     Console.println(d.move()); // "swims" — resolved by `use Swimmer.move`
     Console.println(d.name()); // "animal" — diamond shared base, auto-merged

@@ -28,7 +28,7 @@ enum Result<T, E> {
 }
 
 // Takes a concrete `Option<int>`; the `Some` payload binds at `int`, so `n` is a real integer.
-function describe(Option<int> o) -> string {
+function describe(Option<int> o): string {
     return match o {
         Some(n) => "some {n}",
         None()  => "none",
@@ -36,21 +36,21 @@ function describe(Option<int> o) -> string {
 }
 
 // Returns a generic enum: divide, or report the reason as a string error.
-function safeDiv(int a, int b) -> Result<int, string> {
+function safeDiv(int a, int b): Result<int, string> {
     return match b {
         0 => new Err("divide by zero"),
         _ => new Ok(a / b),
     };
 }
 
-function report(Result<int, string> r) -> string {
+function report(Result<int, string> r): string {
     return match r {
         Ok(v)  => "ok {v}",
         Err(e) => "err {e}",
     };
 }
 
-function main() -> void {
+function main(): void {
     var some = new Some(7); // Option<int> — T inferred from `7`
     Option<int> none = new None(); // None mentions no T — annotate to fix Option<int>
 

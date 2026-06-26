@@ -11,13 +11,13 @@ package Main;
 import Core.Console;
 
 // The classic: returns its argument unchanged, at whatever type it was called with.
-function identity<T>(T x) -> T {
+function identity<T>(T x): T {
   return x;
 }
 
 // `T` is inferred from the list's element type; the fallback shares it, so the whole call is
 // checked against one consistent `T`.
-function firstOr<T>(List<T> xs, T fallback) -> T {
+function firstOr<T>(List<T> xs, T fallback): T {
   for (T x in xs) {
     return x;
   }
@@ -26,16 +26,16 @@ function firstOr<T>(List<T> xs, T fallback) -> T {
 
 // A type parameter can appear inside a *function-typed* parameter too: `f` maps a `T` to a `T`.
 // Unification descends into the `(T) -> T` shape to bind `T` from the function value passed in.
-function applyTwice<T>(T x, (T) -> T f) -> T {
+function applyTwice<T>(T x, (T) => T f): T {
   return f(f(x));
 }
 
 // Two occurrences of the same parameter must agree: both `a` and `b` are the inferred `T`.
-function lastOfTwo<T>(T a, T b) -> T {
+function lastOfTwo<T>(T a, T b): T {
   return b;
 }
 
-function main() -> void {
+function main(): void {
   // `identity` reused at three different concrete types — one definition, no duplication.
   int n = identity(7);
   string s = identity("phorge");

@@ -92,26 +92,27 @@ impl Parser {
                 &TokenKind::RParen,
                 "')' to close a function-type parameter list or a grouped type",
             )?;
-            let mut t = if self.eat(&TokenKind::Arrow) {
-                // `( … ) -> R` — a function type with the parsed parameter list.
+            // A-1: function types use `=>` (`(int) => bool`); `->` stays as a silent transition alias.
+            let mut t = if self.eat(&TokenKind::FatArrow) || self.eat(&TokenKind::Arrow) {
+                // `( … ) => R` — a function type with the parsed parameter list.
                 Type::Function {
                     params,
                     ret: Box::new(self.parse_type()?),
                     span: sp,
                 }
             } else {
-                // No `->`: the parens were grouping, not a parameter list. Exactly one inner type is
-                // `(T)` ≡ `T`; `()` / `(A, B)` without a `->` are invalid (Phorge has no unit-paren
+                // No `=>`: the parens were grouping, not a parameter list. Exactly one inner type is
+                // `(T)` ≡ `T`; `()` / `(A, B)` without a `=>` are invalid (Phorge has no unit-paren
                 // or tuple types — a multi-element list must be a function-type parameter list).
                 match params.len() {
                     1 => params.pop().expect("one grouped type"),
                     0 => {
                         return Err(self
-                            .error("a `->` return type after `()` (an empty `()` is a function-type parameter list)"))
+                            .error("a `=>` return type after `()` (an empty `()` is a function-type parameter list)"))
                     }
                     _ => {
                         return Err(self.error(
-                            "a `->` return type (Phorge has no tuple types — `(A, B)` is a function-type parameter list and needs `-> R`)",
+                            "a `=>` return type (Phorge has no tuple types — `(A, B)` is a function-type parameter list and needs `=> R`)",
                         ))
                     }
                 }

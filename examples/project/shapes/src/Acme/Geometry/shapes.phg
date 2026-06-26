@@ -8,13 +8,13 @@ package Acme.Geometry;
 
 // An interface (a nominal contract). A class implementing it is a subtype of it cross-package.
 interface Shape {
-  function area() -> int;
+  function area(): int;
 }
 
 // A class implementing a same-package interface, with constructor-promoted fields and a method.
 class Rect implements Shape {
   constructor(public int w, public int h) {}
-  function area() -> int {
+  function area(): int {
     return this.w * this.h;
   }
 }

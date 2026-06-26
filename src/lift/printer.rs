@@ -88,7 +88,7 @@ impl Printer {
         };
         let params = self.params(&f.params)?;
         let ret = match &f.ret {
-            Some(t) => format!(" -> {}", ty(t)?),
+            Some(t) => format!(": {}", ty(t)?),
             None => String::new(),
         };
         let is_abstract = f.modifiers.contains(&Modifier::Abstract);

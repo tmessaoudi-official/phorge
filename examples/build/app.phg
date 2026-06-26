@@ -5,14 +5,14 @@ import Core.Console;
 // The produced binary embeds this source (in a CRC-guarded `.phorge` object-file
 // section) and runs it on the bytecode VM at startup — no Phorge install needed.
 
-function fib(int n) -> int {
+function fib(int n): int {
     if (n < 2) {
         return n;
     }
     return fib(n - 1) + fib(n - 2);
 }
 
-function main() -> void {
+function main(): void {
     Console.println("phorge standalone build");
     for (int i in 0..10) {
         Console.println("fib({i}) = {fib(i)}");

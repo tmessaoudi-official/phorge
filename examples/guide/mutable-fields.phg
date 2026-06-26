@@ -12,14 +12,14 @@ class Counter {
     constructor(public mutable int n) {
         this.hits = 0;
     }
-    function bump() -> int {
+    function bump(): int {
         this.n = this.n + 1;
         this.hits = this.hits + 1;
         return this.n;
     }
 }
 
-function main() -> void {
+function main(): void {
     mutable Counter c = new Counter(10);
 
     // Direct field set.

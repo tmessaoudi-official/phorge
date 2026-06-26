@@ -10,38 +10,38 @@ import Core.Console;
 
 // Two independent contracts.
 interface Drawable {
-    function draw() -> string;
+    function draw(): string;
 }
 
 interface Named {
-    function name() -> string;
+    function name(): string;
 }
 
 // A class can implement several interfaces, making it a subtype of each.
 class Badge implements Drawable, Named {
     constructor(public string label) {}
-    function draw() -> string { return "[{this.label}]"; }
-    function name() -> string { return this.label; }
+    function draw(): string { return "[{this.label}]"; }
+    function name(): string { return this.label; }
 }
 
 class Sticker implements Drawable, Named {
     constructor(public string text) {}
-    function draw() -> string { return "<{this.text}>"; }
-    function name() -> string { return this.text; }
+    function draw(): string { return "<{this.text}>"; }
+    function name(): string { return this.text; }
 }
 
 // The intersection in action: `x` is known to be BOTH Drawable and Named, so a method from EACH
 // interface is callable on it — no narrowing needed (that is the whole point of an intersection).
-function describe(Drawable & Named x) -> string {
+function describe(Drawable & Named x): string {
     return "{x.name()} => {x.draw()}";
 }
 
 // some-member-out: an `A & B` value flows into a slot typed as just one of its members.
-function justDraw(Drawable d) -> string {
+function justDraw(Drawable d): string {
     return d.draw();
 }
 
-function main() -> void {
+function main(): void {
     var badge = new Badge("ok");
     var sticker = new Sticker("hi");
 

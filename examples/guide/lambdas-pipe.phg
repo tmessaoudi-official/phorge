@@ -1,20 +1,20 @@
 package Main;
 import Core.Console;
 
-function dbl(int x) -> int { return x * 2; }
-function inc(int x) -> int { return x + 1; }
+function dbl(int x): int { return x * 2; }
+function inc(int x): int { return x + 1; }
 
 // higher-order: a lambda passed to a user function
-function twice(int x, (int) -> int f) -> int { return f(f(x)); }
+function twice(int x, (int) => int f): int { return f(f(x)); }
 
 // A function returning a function — the return type is written in the *parenthesized* form
 // `((int) -> int)` (slice 3 / spec #8); the parens-free `(int) -> int` parses to the same type.
 // The returned lambda captures the local `n` by value.
-function adder(int n) -> ((int) -> int) { return fn(int x) => x + n; }
+function adder(int n): ((int) => int) { return fn(int x) => x + n; }
 
-function main() -> void {
+function main(): void {
     var add10 = fn(int x) => x + 10;          // expression-body lambda
-    var scaled = fn(int x) -> int {           // statement-body lambda (captures none)
+    var scaled = fn(int x): int {           // statement-body lambda (captures none)
         var t = x * x;
         return t + 1;
     };

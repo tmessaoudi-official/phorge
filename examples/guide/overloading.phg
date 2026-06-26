@@ -9,14 +9,14 @@ import Core.Console;
 // overloads of a name share a return type (the call stays statically typed regardless of which fires).
 
 // Free-function overloads distinguished by parameter type (int / string / bool are runtime-disjoint).
-function describe(int n) -> string { return "int {n}"; }
-function describe(string s) -> string { return "string \"{s}\""; }
-function describe(bool b) -> string { return "bool {b}"; }
+function describe(int n): string { return "int {n}"; }
+function describe(string s): string { return "string \"{s}\""; }
+function describe(bool b): string { return "bool {b}"; }
 
 // Overloads distinguished by ARITY.
-function combine(int a) -> int { return a; }
-function combine(int a, int b) -> int { return a + b; }
-function combine(int a, int b, int c) -> int { return a + b + c; }
+function combine(int a): int { return a; }
+function combine(int a, int b): int { return a + b; }
+function combine(int a, int b, int c): int { return a + b + c; }
 
 // Class/interface overloads: a `Circle` value picks `area(Circle)` (most-specific); any other `Shape`
 // falls through to `area(Shape)`. The receiver's runtime type drives the choice, not the static type.
@@ -24,18 +24,18 @@ interface Shape {}
 class Circle implements Shape { constructor(public int r) {} }
 class Square implements Shape { constructor(public int side) {} }
 
-function area(Circle c) -> int { return c.r * c.r * 3; }
-function area(Shape s) -> int { return 0; }
+function area(Circle c): int { return c.r * c.r * 3; }
+function area(Shape s): int { return 0; }
 
 // Method overloading: the same dispatch over a class method (the `this` receiver is not part of it).
 class Formatter {
   constructor(public string sep) {}
-  function render(int n) -> string { return "n{this.sep}{n}"; }
-  function render(string s) -> string { return "s{this.sep}{s}"; }
-  function render(Circle c) -> string { return "circle{this.sep}{c.r}"; }
+  function render(int n): string { return "n{this.sep}{n}"; }
+  function render(string s): string { return "s{this.sep}{s}"; }
+  function render(Circle c): string { return "circle{this.sep}{c.r}"; }
 }
 
-function main() -> void {
+function main(): void {
   Console.println(describe(42));
   Console.println(describe("hi"));
   Console.println(describe(true));

@@ -19,7 +19,7 @@ import Core.Text;
 
 class Point {
     constructor(public int x, public int y) {}
-    function sum() -> int { return x + y; }
+    function sum(): int { return x + y; }
 }
 
 enum Color {
@@ -37,11 +37,11 @@ class Widget extends Base implements Shape, Drawable {
     constructor() {}
 }
 
-function dbl(int n) -> int {
+function dbl(int n): int {
     return n * 2;
 }
 
-function main() -> void {
+function main(): void {
     // Scalars report their PHP-visible kind.
     Console.println("int    -> {Reflect.kind(42)}");
     Console.println("float  -> {Reflect.kind(3.14)}");

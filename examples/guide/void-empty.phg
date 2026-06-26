@@ -17,16 +17,16 @@ package Main;
 import Core.Console;
 
 // The common case: a side-effecting function returns `void` — nothing to capture.
-function note(string msg) -> void {
+function note(string msg): void {
     Console.println(msg);
 }
 
 // `Empty` is the holdable nothing: a function may return it and fall off the end (it implicitly
 // produces the empty value, like `void` — no `return` required).
-function doNothing() -> Empty {
+function doNothing(): Empty {
 }
 
-function main() -> void {
+function main(): void {
     note("start");
 
     // Hold the empty value — the explicit escape from E-VOID-CAPTURE.

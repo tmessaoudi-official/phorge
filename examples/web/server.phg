@@ -19,7 +19,7 @@ class Request {
   constructor(public string method, public string path, public bytes body,
               private List<string> headerLines) {}
 
-  function header(string name) -> string? {
+  function header(string name): string? {
     for (string line in headerLines) {
       if (Text.contains(line, ":")) {
         List<string> kv = Text.splitOnce(line, ":");
@@ -35,7 +35,7 @@ class Response {
   constructor(public int status, public bytes body, public List<string> headerLines) {}
 }
 
-function reasonPhrase(int s) -> string {
+function reasonPhrase(int s): string {
   return if (s == 200) { "OK" }
     else { if (s == 400) { "Bad Request" }
     else { if (s == 404) { "Not Found" }
@@ -43,7 +43,7 @@ function reasonPhrase(int s) -> string {
 }
 
 // Parse a raw HTTP/1.1 request. `null` ⇒ malformed (→ a 400 in `respond`).
-function parseRequest(bytes raw) -> Request? {
+function parseRequest(bytes raw): Request? {
   string nl = Bytes.toString(b"\x0d\x0a") ?? "";
   int sep = Bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
   if (sep < 0) { return null; }
@@ -59,7 +59,7 @@ function parseRequest(bytes raw) -> Request? {
 }
 
 // Serialize a Response to raw HTTP/1.1 bytes (always recomputes Content-Length; Connection: close).
-function serializeResponse(Response resp) -> bytes {
+function serializeResponse(Response resp): bytes {
   string nl = Bytes.toString(b"\x0d\x0a") ?? "";
   string reason = reasonPhrase(resp.status);
   int st = resp.status;
@@ -78,7 +78,7 @@ class Route {
   constructor(public string method, public string path, public Handler tag) {}
 }
 
-function routes() -> List<Route> {
+function routes(): List<Route> {
   return [
     new Route("GET", "/", new Home()),
     new Route("GET", "/greet", new Greet()),
@@ -86,7 +86,7 @@ function routes() -> List<Route> {
   ];
 }
 
-function matchRoute(string method, string path) -> Handler {
+function matchRoute(string method, string path): Handler {
   for (Route r in routes()) {
     if (r.method == method) {
       if (r.path == path) { return r.tag; }
@@ -95,31 +95,31 @@ function matchRoute(string method, string path) -> Handler {
   return new NotFound();
 }
 
-function handleHome(Request req) -> Response {
+function handleHome(Request req): Response {
   return new Response(200, Bytes.fromString("Phorge web — home"), ["Content-Type: text/plain"]);
 }
 
-function handleGreet(Request req) -> Response {
+function handleGreet(Request req): Response {
   string host = req.header("Host") ?? "world";
   return new Response(200, Bytes.fromString("Hello {host}"), ["Content-Type: text/plain"]);
 }
 
-function handleHealth(Request req) -> Response {
+function handleHealth(Request req): Response {
   return new Response(200, Bytes.fromString("ok"), ["Content-Type: text/plain"]);
 }
 
-function handleNotFound(Request req) -> Response {
+function handleNotFound(Request req): Response {
   string m = req.method;
   string p = req.path;
   return new Response(404, Bytes.fromString("not found: {m} {p}"), ["Content-Type: text/plain"]);
 }
 
-function badRequest() -> Response {
+function badRequest(): Response {
   return new Response(400, Bytes.fromString("bad request"), ["Content-Type: text/plain"]);
 }
 
 // The portable handler — the value unit that also round-trips to PHP (server.php calls this).
-function handle(Request req) -> Response {
+function handle(Request req): Response {
   Handler tag = matchRoute(req.method, req.path);
   return match tag {
     Home() => handleHome(req),
@@ -130,7 +130,7 @@ function handle(Request req) -> Response {
 }
 
 // The single entry the serve runtime calls per request: bytes in, bytes out. Malformed → 400.
-function respond(bytes raw) -> bytes {
+function respond(bytes raw): bytes {
   if (var req = parseRequest(raw)) {
     return serializeResponse(handle(req));
   } else {
@@ -139,7 +139,7 @@ function respond(bytes raw) -> bytes {
 }
 
 // Print the status line + byte count of the response to one canned request (one clean ASCII line).
-function summarize(bytes raw) -> void {
+function summarize(bytes raw): void {
   bytes wire = respond(raw);
   string nl = Bytes.toString(b"\x0d\x0a") ?? "";
   string wireStr = Bytes.toString(wire) ?? "(binary)";
@@ -149,7 +149,7 @@ function summarize(bytes raw) -> void {
   Console.println("{statusLine} ({len}B)");
 }
 
-function main() -> void {
+function main(): void {
   // Exercise the served pipe on five canned requests: a hit per route, an unknown path (404), a
   // method mismatch (404), and a malformed buffer (400) — deterministic, no socket, no File.
   summarize(b"GET / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");

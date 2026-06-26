@@ -136,6 +136,46 @@ fn parses_fn_throws_clause() {
     }
 }
 
+// ── A-1: `:` return-type syntax (PHP/TS); `->` kept as a silent transition alias ──
+
+#[test]
+fn parses_colon_return_type_on_function() {
+    // A-1: `function f(): T` — the new canonical return-type syntax.
+    match item("function area(Shape s): float { return s; }") {
+        Item::Function(f) => {
+            assert_eq!(f.name, "area");
+            assert!(f.ret.is_some());
+        }
+        other => panic!("got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_colon_return_type_on_method_and_interface() {
+    // A-1: methods (via parse_function) and interface signatures accept `:` too.
+    match &prog("package Main;\nclass C { function m(int x): int { return x; } }").items[0] {
+        Item::Class(c) => match &c.members[0] {
+            ClassMember::Method(f) => assert!(f.ret.is_some()),
+            other => panic!("expected method, got {other:?}"),
+        },
+        other => panic!("expected class, got {other:?}"),
+    }
+    match &prog("package Main;\ninterface I { function m(): int; }").items[0] {
+        Item::Interface(_) => {}
+        other => panic!("expected interface, got {other:?}"),
+    }
+}
+
+#[test]
+fn arrow_return_type_still_parses_as_transition_alias() {
+    // A-1: `->` is retained (silently) so the ~190 inline test programs keep parsing during the
+    // migration; `.phg` sources are codemodded to `:`. (Full `->` removal is a tracked follow-up.)
+    match item("function f() -> int { return 1; }") {
+        Item::Function(f) => assert!(f.ret.is_some()),
+        other => panic!("got {other:?}"),
+    }
+}
+
 #[test]
 fn parses_function_decl() {
     match item("function area(Shape s) -> float { return s; }") {

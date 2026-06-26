@@ -13,10 +13,10 @@ enum Tx {
 class Account {
     constructor(private string owner, private int cents) {}
 
-    function ownerName() -> string { return owner; }
-    function balance() -> int { return cents; }
+    function ownerName(): string { return owner; }
+    function balance(): int { return cents; }
 
-    function apply(Tx t) -> Account {
+    function apply(Tx t): Account {
         return match t {
             Deposit(c)      => new Account(owner, cents + c),
             Withdraw(c)     => new Account(owner, cents - c),
@@ -25,7 +25,7 @@ class Account {
     }
 }
 
-function describe(Tx t) -> string {
+function describe(Tx t): string {
     return match t {
         Deposit(c)      => "deposit {c}c",
         Withdraw(c)     => "withdraw {c}c",
@@ -34,14 +34,14 @@ function describe(Tx t) -> string {
 }
 
 // Recursive integer compound interest: 5% per year, floored (no list folding needed).
-function grow(int cents, int years) -> int {
+function grow(int cents, int years): int {
     if (years <= 0) {
         return cents;
     }
     return grow(cents + cents * 5 / 100, years - 1);
 }
 
-function main() -> void {
+function main(): void {
     Account a0 = new Account("Ada", 1000);
     Account a1 = a0.apply(new Deposit(500));
     Account a2 = a1.apply(new Withdraw(200));

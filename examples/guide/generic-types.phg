@@ -19,13 +19,13 @@ class Box<T> {
   constructor(private T value) {}
 
   // Returns the stored value at whatever concrete type the box was constructed with.
-  function get() -> T {
+  function get(): T {
     return this.value;
   }
 
   // A method *taking* a `T`: the parameter is checked at the instance's concrete type, so
   // `Box(7).orElse(0)` type-checks but `Box(7).orElse("x")` would not.
-  function orElse(T fallback) -> T {
+  function orElse(T fallback): T {
     return this.value;
   }
 }
@@ -33,15 +33,15 @@ class Box<T> {
 // Two type parameters, inferred independently from the two constructor arguments.
 class Pair<A, B> {
   constructor(private A first, private B second) {}
-  function left() -> A {
+  function left(): A {
     return this.first;
   }
-  function right() -> B {
+  function right(): B {
     return this.second;
   }
 }
 
-function main() -> void {
+function main(): void {
   var bi = new Box(7); // Box<int>  — T inferred from `7`
   int x = bi.get(); // int
   int y = bi.orElse(0); // int — the T-typed parameter accepts an int

@@ -5,31 +5,31 @@ import Core.Console;
 // A function with no `-> T` (like `main`) returns nothing.
 
 // Two typed parameters, returns int.
-function add(int a, int b) -> int {
+function add(int a, int b): int {
     return a + b;
 }
 
 // A string in, a string out — interpolation builds the result.
-function greet(string name) -> string {
+function greet(string name): string {
     return "hello, {name}";
 }
 
 // Functions compose: `shout` calls `greet`.
-function shout(string name) -> string {
+function shout(string name): string {
     return "{greet(name)}!";
 }
 
 // A function may return a List<int>; a range materializes into one.
-function upTo(int n) -> List<int> {
+function upTo(int n): List<int> {
     return 0..n;
 }
 
 // No return type: this function just prints.
-function banner(string title) -> void {
+function banner(string title): void {
     Console.println("== {title} ==");
 }
 
-function main() -> void {
+function main(): void {
     banner("functions");
     Console.println("add(2, 3) = {add(2, 3)}");
     Console.println(greet("phorge"));

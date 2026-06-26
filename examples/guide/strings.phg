@@ -1,11 +1,11 @@
 package Main;
 import Core.Console;
 
-function greet(string who) -> string {
+function greet(string who): string {
     return "Hello, {who}!";
 }
 
-function main() -> void {
+function main(): void {
     string name = "Phorge";
     int n = 3;
     float pi = 3.14;

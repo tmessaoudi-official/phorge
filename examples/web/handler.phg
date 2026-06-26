@@ -26,7 +26,7 @@ class Request {
 
   // Linear scan, parse on lookup. `splitOnce` keeps `:` inside a value intact (e.g. a Host:port).
   // Lines without a `:` (the request-line) are skipped by the `contains` guard.
-  function header(string name) -> string? {
+  function header(string name): string? {
     for (string line in headerLines) {
       if (Text.contains(line, ":")) {
         List<string> kv = Text.splitOnce(line, ":");
@@ -45,7 +45,7 @@ class Response {
 }
 
 // status code → reason phrase, as nested expression-`if` (match is over enums, not ints).
-function reasonPhrase(int s) -> string {
+function reasonPhrase(int s): string {
   return if (s == 200) { "OK" }
     else { if (s == 400) { "Bad Request" }
     else { if (s == 404) { "Not Found" }
@@ -53,7 +53,7 @@ function reasonPhrase(int s) -> string {
 }
 
 // Parse a raw HTTP/1.1 request. Returns `null` (→ a 400 at the socket layer) when malformed.
-function parseRequest(bytes raw) -> Request? {
+function parseRequest(bytes raw): Request? {
   string nl = Bytes.toString(b"\x0d\x0a") ?? "";
   // Locate the CRLFCRLF head/body boundary at the BYTE level (the body may be non-UTF-8).
   int sep = Bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
@@ -72,7 +72,7 @@ function parseRequest(bytes raw) -> Request? {
 }
 
 // Serialize a Response to raw HTTP/1.1 Bytes. Always (re)computes Content-Length from the body.
-function serializeResponse(Response resp) -> bytes {
+function serializeResponse(Response resp): bytes {
   string nl = Bytes.toString(b"\x0d\x0a") ?? "";
   string reason = reasonPhrase(resp.status);
   int st = resp.status;
@@ -85,7 +85,7 @@ function serializeResponse(Response resp) -> bytes {
 }
 
 // The application: greet by path, echoing the Host header.
-function handle(Request req) -> Response {
+function handle(Request req): Response {
   string host = req.header("Host") ?? "world";
   string path = req.path;
   string msg = "Hello {path} (host {host})";
@@ -93,7 +93,7 @@ function handle(Request req) -> Response {
   return new Response(200, body, ["Content-Type: text/plain"]);
 }
 
-function main() -> void {
+function main(): void {
   string nl = Bytes.toString(b"\x0d\x0a") ?? "";
   // A canonical raw request, built as a `b"…"` literal with explicit `\x0d\x0a` CRLFs — deterministic
   // (no committed-file autocrlf hazard) and a showcase of W0's byte literals.

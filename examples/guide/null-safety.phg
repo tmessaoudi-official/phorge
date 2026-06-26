@@ -7,7 +7,7 @@ import Core.Console;
 
 class Box {
     constructor(private int v) {}
-    function get() -> int { return v; }
+    function get(): int { return v; }
 }
 
 // A self-optional field (`Node? next`) — the building block of a linked list. Exercises chained
@@ -18,14 +18,14 @@ class Node {
 }
 
 // `match` over an optional: the `null` arm handles absence; the binding arm narrows `v` to `int`.
-function describe(int? o) -> string {
+function describe(int? o): string {
     return match o {
         null => "absent",
         v => "present {v}",
     };
 }
 
-function main() -> void {
+function main(): void {
     // A `T?` holds a value or `null`; a non-optional `T` widens to `T?`.
     int? some = 7;
     int? none = null;

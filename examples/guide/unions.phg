@@ -25,7 +25,7 @@ class Triangle {
 
 // match-over-union: one arm per member, each binding the narrowed instance. Exhaustive — no `_`
 // needed, exactly like an enum match.
-function area(Circle | Square | Triangle s) -> int {
+function area(Circle | Square | Triangle s): int {
     return match s {
         Circle c => c.radius * c.radius,
         Square sq => sq.side * sq.side,
@@ -34,7 +34,7 @@ function area(Circle | Square | Triangle s) -> int {
 }
 
 // instanceof narrowing on a union operand: each `if` smart-casts `s` to the tested class in its body.
-function name(Circle | Square | Triangle s) -> string {
+function name(Circle | Square | Triangle s): string {
     if (s instanceof Circle) {
         return "circle r={s.radius}";
     }
@@ -45,7 +45,7 @@ function name(Circle | Square | Triangle s) -> string {
 }
 
 // A primitive union accepts either type; literal patterns match by value, with a `_` for the rest.
-function classify(int | string code) -> string {
+function classify(int | string code): string {
     return match code {
         0 => "zero",
         "ok" => "okay",
@@ -53,7 +53,7 @@ function classify(int | string code) -> string {
     };
 }
 
-function main() -> void {
+function main(): void {
     Circle c = new Circle(2);
     Square s = new Square(3);
     Triangle t = new Triangle(4, 3);

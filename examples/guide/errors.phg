@@ -17,7 +17,7 @@ class TooLarge implements Error {
 }
 
 // `throws A | B` declares the checked exceptions this function may raise (the union is a set).
-function validate(int n) -> int throws NegativeInput | TooLarge {
+function validate(int n): int throws NegativeInput | TooLarge {
   if (n < 0) {
     throw new NegativeInput("must not be negative");
   }
@@ -28,12 +28,12 @@ function validate(int n) -> int throws NegativeInput | TooLarge {
 }
 
 // `?` propagates a throwing call's exceptions to this function's own `throws` — no boilerplate.
-function doubled(int n) -> int throws NegativeInput | TooLarge {
+function doubled(int n): int throws NegativeInput | TooLarge {
   var v = validate(n)?;
   return v * 2;
 }
 
-function main() -> void {
+function main(): void {
   // Multiple `catch` clauses dispatch by type; `finally` runs on every path (ok, caught, or
   // propagated). `?`-throws inside `doubled` surfaces the exception here.
   for (int n in [50, 0 - 5, 200]) {

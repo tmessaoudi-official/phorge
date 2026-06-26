@@ -18,7 +18,7 @@ import Core.Console;
 open class Named {
     constructor(public string name) {}
 
-    function label() -> string {
+    function label(): string {
         return this.name;
     }
 }
@@ -33,12 +33,12 @@ open class Paid {
 
 // Two orthogonal parents, no own constructor → a synthesized ctor(string name, int monthly).
 class Employee extends Named, Paid {
-    function summary() -> string {
+    function summary(): string {
         return "{this.name}: {this.annual}/yr";
     }
 }
 
-function main() -> void {
+function main(): void {
     Employee e = new Employee("Ada", 1000);
 
     // Inherited state from BOTH parents is initialized: Named's promoted `name`, Paid's derived `annual`.

@@ -6,7 +6,7 @@ import Core.Console;
 // ONCE at program start, in declaration order, before `main`. Lowered to a PHP `__phorge_init_statics`
 // run once before `main()`. (A literal static still works and stays a plain PHP static default.)
 
-function seed() -> int {
+function seed(): int {
     return 6 * 7;
 }
 
@@ -16,7 +16,7 @@ class Registry {
     static mutable int hits = 0;            // a literal static — still a plain PHP default
 }
 
-function main() -> void {
+function main(): void {
     Console.println("{Registry.answer}");   // 42
     Console.println("{Registry.derived}");   // 43
     Registry.hits = Registry.hits + 1;

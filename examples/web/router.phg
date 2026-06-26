@@ -21,7 +21,7 @@ class Request {
   constructor(public string method, public string path, public bytes body,
               private List<string> headerLines) {}
 
-  function header(string name) -> string? {
+  function header(string name): string? {
     for (string line in headerLines) {
       if (Text.contains(line, ":")) {
         List<string> kv = Text.splitOnce(line, ":");
@@ -37,7 +37,7 @@ class Response {
   constructor(public int status, public bytes body, public List<string> headerLines) {}
 }
 
-function reasonPhrase(int s) -> string {
+function reasonPhrase(int s): string {
   return if (s == 200) { "OK" }
     else { if (s == 400) { "Bad Request" }
     else { if (s == 404) { "Not Found" }
@@ -45,7 +45,7 @@ function reasonPhrase(int s) -> string {
 }
 
 // Parse a raw HTTP/1.1 request (identical to W1's parser). `null` ⇒ malformed (→ a 400 at W3).
-function parseRequest(bytes raw) -> Request? {
+function parseRequest(bytes raw): Request? {
   string nl = Bytes.toString(b"\x0d\x0a") ?? "";
   int sep = Bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
   if (sep < 0) { return null; }
@@ -71,7 +71,7 @@ class Route {
 
 // The route table — pure data. Adding a route is one literal row (+ one `match` arm in `dispatch`,
 // which the exhaustiveness check enforces).
-function routes() -> List<Route> {
+function routes(): List<Route> {
   return [
     new Route("GET", "/", new Home()),
     new Route("GET", "/greet", new Greet()),
@@ -81,7 +81,7 @@ function routes() -> List<Route> {
 
 // Exact-match linear scan: first route whose method AND path both equal the request wins; otherwise
 // `NotFound()`. Method-sensitive (a registered path under the wrong verb falls through to 404).
-function matchRoute(string method, string path) -> Handler {
+function matchRoute(string method, string path): Handler {
   for (Route r in routes()) {
     if (r.method == method) {
       if (r.path == path) { return r.tag; }
@@ -90,23 +90,23 @@ function matchRoute(string method, string path) -> Handler {
   return new NotFound();
 }
 
-function handleHome(Request req) -> Response {
+function handleHome(Request req): Response {
   bytes body = Bytes.fromString("Phorge web — home");
   return new Response(200, body, ["Content-Type: text/plain"]);
 }
 
-function handleGreet(Request req) -> Response {
+function handleGreet(Request req): Response {
   string host = req.header("Host") ?? "world";
   bytes body = Bytes.fromString("Hello {host}");
   return new Response(200, body, ["Content-Type: text/plain"]);
 }
 
-function handleHealth(Request req) -> Response {
+function handleHealth(Request req): Response {
   bytes body = Bytes.fromString("ok");
   return new Response(200, body, ["Content-Type: text/plain"]);
 }
 
-function handleNotFound(Request req) -> Response {
+function handleNotFound(Request req): Response {
   string m = req.method;
   string p = req.path;
   bytes body = Bytes.fromString("not found: {m} {p}");
@@ -114,7 +114,7 @@ function handleNotFound(Request req) -> Response {
 }
 
 // The router: route the request to its handler. The `match` is exhaustive over `Handler`.
-function dispatch(Request req) -> Response {
+function dispatch(Request req): Response {
   Handler tag = matchRoute(req.method, req.path);
   return match tag {
     Home() => handleHome(req),
@@ -125,7 +125,7 @@ function dispatch(Request req) -> Response {
 }
 
 // Parse one raw request, route it, and print a one-line summary: METHOD PATH -> STATUS REASON: body.
-function show(bytes raw) -> void {
+function show(bytes raw): void {
   if (var req = parseRequest(raw)) {
     Response resp = dispatch(req);
     string m = req.method;
@@ -139,7 +139,7 @@ function show(bytes raw) -> void {
   }
 }
 
-function main() -> void {
+function main(): void {
   // Five raw requests exercising the table: a hit per route, an unknown path (404), and a method
   // mismatch (POST on a GET-only path → 404). CRLFs as explicit `\x0d\x0a` (deterministic, no file).
   show(b"GET / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
