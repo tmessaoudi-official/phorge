@@ -4,8 +4,10 @@
 //! guessing at syntax. (Growing this into a full `phg fmt` is a later, independent expansion.)
 //!
 //! Correctness discipline: strings are escaped (incl. `{`/`}` → `\{`/`\}`, since a bare `{` opens a
-//! Phorge interpolation) and binary/unary expressions are **fully parenthesized** — both keep the
-//! printed text re-parsing to the *same* AST, which the round-trip tests assert directly.
+//! Phorge interpolation) and binary/unary expressions are parenthesized **only where precedence or
+//! associativity requires it** (C-5/6) — `~a`, `a + b * c`, `(a + b) * c` — mirroring the Phorge
+//! parser's binding-power table so the printed text re-parses to the *same* AST. The round-trip
+//! tests assert that fixed point directly.
 
 use crate::ast::{
     BinaryOp, ClassDecl, ClassMember, CtorParam, EnumDecl, Expr, FunctionDecl, Item, Modifier,
@@ -469,39 +471,68 @@ impl Printer {
                 }
                 Ok(format!("[{}]", xs.join(", ")))
             }
-            Expr::Unary { op, expr, .. } => Ok(format!("{}({})", unary_op(*op), self.expr(expr)?)),
-            Expr::Binary { op, lhs, rhs, .. } => Ok(format!(
-                "({} {} {})",
-                self.expr(lhs)?,
-                binary_op(*op),
-                self.expr(rhs)?
-            )),
+            Expr::Unary { op, expr, .. } => {
+                // Unary binds tighter than every binary op; a binary/range operand needs parens, and
+                // so does a nested unary (to avoid `--`/`~~` re-lexing as a multi-char token).
+                let needs = prec_of(expr) < PREC_UNARY || matches!(**expr, Expr::Unary { .. });
+                let inner = self.expr(expr)?;
+                let inner = if needs { format!("({inner})") } else { inner };
+                Ok(format!("{}{inner}", unary_op(*op)))
+            }
+            Expr::Binary { op, lhs, rhs, .. } => {
+                let p = bin_prec(*op);
+                let right_assoc = matches!(op, BinaryOp::Pow);
+                let l = self.operand(lhs, p, false, right_assoc)?;
+                let r = self.operand(rhs, p, true, right_assoc)?;
+                Ok(format!("{l} {} {r}", binary_op(*op)))
+            }
             Expr::InstanceOf {
                 value, type_name, ..
-            } => Ok(format!("({} instanceof {type_name})", self.expr(value)?)),
+            } => {
+                // `instanceof` is a left-precedence-8 test; its value operand needs parens below 8.
+                let v = self.operand(value, 8, false, false)?;
+                Ok(format!("{v} instanceof {type_name}"))
+            }
             Expr::Call { callee, args, .. } => {
                 let a: Result<Vec<_>, _> = args.iter().map(|x| self.expr(x)).collect();
-                Ok(format!("{}({})", self.expr(callee)?, a?.join(", ")))
+                Ok(format!(
+                    "{}({})",
+                    self.postfix_operand(callee)?,
+                    a?.join(", ")
+                ))
             }
             Expr::Member {
                 object, name, safe, ..
             } => {
                 let dot = if *safe { "?." } else { "." };
-                Ok(format!("{}{dot}{name}", self.expr(object)?))
+                Ok(format!("{}{dot}{name}", self.postfix_operand(object)?))
             }
-            Expr::Index { object, index, .. } => {
-                Ok(format!("{}[{}]", self.expr(object)?, self.expr(index)?))
-            }
-            Expr::Force { inner, .. } => Ok(format!("{}!", self.expr(inner)?)),
-            Expr::Propagate { inner, .. } => Ok(format!("{}?", self.expr(inner)?)),
+            Expr::Index { object, index, .. } => Ok(format!(
+                "{}[{}]",
+                self.postfix_operand(object)?,
+                self.expr(index)?
+            )),
+            Expr::Force { inner, .. } => Ok(format!("{}!", self.postfix_operand(inner)?)),
+            Expr::Propagate { inner, .. } => Ok(format!("{}?", self.postfix_operand(inner)?)),
             Expr::Range {
                 start,
                 end,
                 inclusive,
                 ..
             } => {
+                // Range is the loosest expression (operands are full binaries); only a nested range
+                // operand needs parens.
                 let dots = if *inclusive { "..=" } else { ".." };
-                Ok(format!("{}{dots}{}", self.expr(start)?, self.expr(end)?))
+                let wrap = |pr: &Self, e: &Expr| -> Result<String, String> {
+                    let s = pr.expr(e)?;
+                    // Only a nested range (the single loosest form) needs parens here.
+                    Ok(if prec_of(e) == PREC_RANGE {
+                        format!("({s})")
+                    } else {
+                        s
+                    })
+                };
+                Ok(format!("{}{dots}{}", wrap(self, start)?, wrap(self, end)?))
             }
             Expr::If {
                 cond,
@@ -552,6 +583,38 @@ impl Printer {
         }
         s.push('"');
         Ok(s)
+    }
+
+    /// Print a binary operand, parenthesizing only when precedence/associativity requires it.
+    /// `parent` is the operator's binding power; `is_right`/`right_assoc` pick the associativity
+    /// side. Left-assoc: the right operand needs parens at equal precedence; right-assoc (`**`):
+    /// the left operand does.
+    fn operand(
+        &self,
+        e: &Expr,
+        parent: u8,
+        is_right: bool,
+        right_assoc: bool,
+    ) -> Result<String, String> {
+        let cp = prec_of(e);
+        let needs = if is_right == right_assoc {
+            cp < parent
+        } else {
+            cp <= parent
+        };
+        let s = self.expr(e)?;
+        Ok(if needs { format!("({s})") } else { s })
+    }
+
+    /// Print the receiver of a postfix operator (`.`/`[]`/call/`!`/`?`), which binds tighter than
+    /// every prefix/binary form — so a non-atomic receiver (a binary, unary, or range) needs parens.
+    fn postfix_operand(&self, e: &Expr) -> Result<String, String> {
+        let s = self.expr(e)?;
+        Ok(if prec_of(e) < PREC_ATOM {
+            format!("({s})")
+        } else {
+            s
+        })
     }
 
     fn pattern(&self, p: &Pattern) -> Result<String, String> {
@@ -618,6 +681,45 @@ fn modifiers_str(mods: &[Modifier]) -> String {
         }
     }
     s
+}
+
+/// Atoms and every postfix form (member/index/call/force/propagate) — and keyword-led primaries
+/// (`if`/`match`/`new`) — never need parentheses as a child. Above any operator.
+const PREC_ATOM: u8 = 100;
+/// Prefix unary (`-`/`!`/`~`): tighter than every binary op, looser than postfix.
+const PREC_UNARY: u8 = 80;
+/// Ranges (`a..b`) bind looser than every binary operator (operands are full binaries).
+const PREC_RANGE: u8 = 0;
+
+/// Binding power of a binary operator — mirrors the Phorge parser's `infix_op` table exactly
+/// (`src/parser/exprs.rs`); higher binds tighter. The shared source of truth for re-parse fidelity.
+fn bin_prec(op: BinaryOp) -> u8 {
+    match op {
+        BinaryOp::Pipe => 1,
+        BinaryOp::Coalesce => 2,
+        BinaryOp::Or => 3,
+        BinaryOp::And => 4,
+        BinaryOp::BitOr => 5,
+        BinaryOp::BitXor => 6,
+        BinaryOp::BitAnd => 7,
+        BinaryOp::Eq | BinaryOp::NotEq => 8,
+        BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => 9,
+        BinaryOp::Shl | BinaryOp::Shr => 10,
+        BinaryOp::Add | BinaryOp::Sub => 11,
+        BinaryOp::Mul | BinaryOp::Div | BinaryOp::Rem => 12,
+        BinaryOp::Pow => 13,
+    }
+}
+
+/// The precedence of an expression's top node, for deciding whether it needs parens as a child.
+fn prec_of(e: &Expr) -> u8 {
+    match e {
+        Expr::Binary { op, .. } => bin_prec(*op),
+        Expr::InstanceOf { .. } => 8,
+        Expr::Unary { .. } => PREC_UNARY,
+        Expr::Range { .. } => PREC_RANGE,
+        _ => PREC_ATOM,
+    }
 }
 
 fn binary_op(op: BinaryOp) -> &'static str {

@@ -28,7 +28,7 @@ fn lifts_typed_function() {
     let out = lift("<?php function add(int $a, int $b): int { return $a + $b; }");
     assert!(out.starts_with("package Main;"), "{out}");
     assert!(out.contains("function add(int a, int b) -> int {"), "{out}");
-    assert!(out.contains("return (a + b);"), "{out}");
+    assert!(out.contains("return a + b;"), "{out}");
     assert_reparses(&out);
 }
 
@@ -147,9 +147,9 @@ fn top_level_code_becomes_main_with_console_import() {
 #[test]
 fn php_concat_becomes_plus_and_strict_eq_becomes_eq() {
     let out = lift(r#"<?php function g(string $a): string { return $a . "!"; }"#);
-    assert!(out.contains(r#"(a + "!")"#), "concat → +: {out}");
+    assert!(out.contains(r#"return a + "!";"#), "concat → +: {out}");
     let out2 = lift("<?php function h(int $a, int $b): bool { return $a === $b; }");
-    assert!(out2.contains("(a == b)"), "=== → ==: {out2}");
+    assert!(out2.contains("return a == b;"), "=== → ==: {out2}");
     assert_reparses(&out);
     assert_reparses(&out2);
 }
@@ -185,7 +185,7 @@ fn lifts_pure_enum() {
 fn lifts_c_style_for_loop() {
     let out = lift("<?php function f(): void { for ($i = 0; $i < 3; $i++) { echo $i; } }");
     assert!(
-        out.contains("for (mutable var i = 0; (i < 3); i = (i + 1)) {"),
+        out.contains("for (mutable var i = 0; i < 3; i = i + 1) {"),
         "{out}"
     );
     assert_reparses(&out);

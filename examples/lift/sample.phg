@@ -10,7 +10,7 @@ function greet(string name) -> string {
 open class Counter {
     constructor(public mutable int start) {}
     public open function next() -> int {
-        return (this.start + 1);
+        return this.start + 1;
     }
 }
 

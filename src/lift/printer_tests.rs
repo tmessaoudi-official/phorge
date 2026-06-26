@@ -21,7 +21,7 @@ fn prints_package_and_function() {
     let out = pp("package Main;\nfunction add(int a, int b) -> int { return a + b; }\n");
     assert_eq!(
         out,
-        "package Main;\n\nfunction add(int a, int b) -> int {\n    return (a + b);\n}\n"
+        "package Main;\n\nfunction add(int a, int b) -> int {\n    return a + b;\n}\n"
     );
 }
 
@@ -63,7 +63,7 @@ fn prints_control_flow_and_var() {
         "package Main;\nfunction f() -> void {\n  mutable var i = 0;\n  while (i < 10) { i = i + 1; }\n  for (int x in 0..5) { Console.println(\"{x}\"); }\n}\n",
     );
     assert!(out.contains("mutable var i = 0;"), "{out}");
-    assert!(out.contains("while ((i < 10)) {"), "{out}");
+    assert!(out.contains("while (i < 10) {"), "{out}");
     assert!(out.contains("for (int x in 0..5) {"), "{out}");
 }
 
@@ -72,8 +72,8 @@ fn prints_if_elseif_else_chain() {
     let out = pp(
         "package Main;\nfunction f(int n) -> int {\n  if (n < 0) { return 0; } else if (n < 10) { return 1; } else { return 2; }\n}\n",
     );
-    assert!(out.contains("if ((n < 0)) {"), "{out}");
-    assert!(out.contains("} else if ((n < 10)) {"), "{out}");
+    assert!(out.contains("if (n < 0) {"), "{out}");
+    assert!(out.contains("} else if (n < 10) {"), "{out}");
     assert!(out.contains("} else {"), "{out}");
 }
 
@@ -90,6 +90,38 @@ fn escapes_strings_including_braces() {
     // A literal `{`/`}`/quote/newline must be escaped so it re-parses as a literal, not interpolation.
     let out = pp("package Main;\nfunction f() -> void { Console.println(\"a\\{b\\}c\"); }\n");
     assert!(out.contains("\\{b\\}"), "braces must be escaped: {out}");
+}
+
+// ── C-5/6: minimal parentheses (precedence-aware) + prefix unary without parens ──
+
+#[test]
+fn minimal_parens_respect_precedence() {
+    // `+`/`-` (11) inside `*` (12): the `*` operands keep parens, the outer expression does not.
+    let out = pp("package Main;\nfunction f(int a, int b) -> int { return (a + b) * (a - b); }\n");
+    assert!(out.contains("return (a + b) * (a - b);"), "{out}");
+    // Higher-precedence child needs no parens: `a + b * c` ≡ `a + (b * c)`.
+    let o2 = pp("package Main;\nfunction f(int a, int b, int c) -> int { return a + b * c; }\n");
+    assert!(o2.contains("return a + b * c;"), "{o2}");
+}
+
+#[test]
+fn minimal_parens_respect_left_associativity() {
+    // Left-assoc: same-precedence left child needs no parens, a right-nested one does.
+    let l = pp("package Main;\nfunction f(int a, int b, int c) -> int { return a - b + c; }\n");
+    assert!(l.contains("return a - b + c;"), "{l}");
+    let r = pp("package Main;\nfunction f(int a, int b, int c) -> int { return a - (b + c); }\n");
+    assert!(r.contains("return a - (b + c);"), "{r}");
+}
+
+#[test]
+fn prefix_unary_without_parens() {
+    let n = pp("package Main;\nfunction f(int a) -> int { return ~a; }\n");
+    assert!(n.contains("return ~a;"), "{n}");
+    let g = pp("package Main;\nfunction f(bool a) -> bool { return !a; }\n");
+    assert!(g.contains("return !a;"), "{g}");
+    // A binary operand still needs parens (unary binds tighter than `+`).
+    let b = pp("package Main;\nfunction f(int a, int b) -> int { return ~(a + b); }\n");
+    assert!(b.contains("return ~(a + b);"), "{b}");
 }
 
 // ── round-trip: print output must be valid Phorge and printing must be idempotent ──
