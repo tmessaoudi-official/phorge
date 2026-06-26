@@ -46,6 +46,59 @@ fn convert_round(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
+/// `Convert.toInt(float) -> int?` (M-NUM S3) — truncate toward zero, or `null` on NaN / ±∞ /
+/// out-of-i64-range. Single-sourced with `value::float_to_int` (the edge-safe guards), so `run`/`runvm`
+/// agree; mirrored by the PHP `__phorge_float_to_int` helper. Avoids PHP's `(int)NAN == 0`.
+fn convert_to_int(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Float(f)] => Ok(crate::value::float_to_int(*f).map_or(Value::Null, Value::Int)),
+        _ => Err("Convert.toInt expects (float)".into()),
+    }
+}
+
+/// `Convert.intToDecimal(int) -> decimal` (M-NUM S3) — total widening to a scale-0 decimal. PHP carrier
+/// is the integer's string form (`(string)$i`).
+fn convert_int_to_decimal(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Int(n)] => Ok(Value::Decimal {
+            unscaled: i128::from(*n),
+            scale: 0,
+        }),
+        _ => Err("Convert.intToDecimal expects (int)".into()),
+    }
+}
+
+/// `Convert.decimalToFloat(decimal) -> float` (M-NUM S3) — parse the decimal's rendered string to f64
+/// (lossy by nature). The PHP carrier is already that string, so PHP `(float)$s` matches. A value other
+/// than a decimal is checker-unreachable (handled defensively as a fault).
+fn convert_decimal_to_float(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [v @ Value::Decimal { .. }] => {
+            let s = v
+                .as_display()
+                .ok_or_else(|| "Convert.decimalToFloat: unrenderable decimal".to_string())?;
+            let f: f64 = s
+                .parse()
+                .map_err(|_| "Convert.decimalToFloat: bad decimal string".to_string())?;
+            Ok(Value::Float(f))
+        }
+        _ => Err("Convert.decimalToFloat expects (decimal)".into()),
+    }
+}
+
+/// `Convert.decimalToInt(decimal) -> int?` (M-NUM S3) — truncate toward zero (drop the fraction), or
+/// `null` if the integer part is out of i64 range. Single-sourced with `value::decimal_to_int` (exact
+/// i128 carrier math, no BCMath); mirrored by the PHP `__phorge_dec_to_int` helper (string split before
+/// the dot). For *rounded* decimal→int, compose `Decimal.round(d, 0, mode)` then `decimalToInt`.
+fn convert_decimal_to_int(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [v @ Value::Decimal { .. }] => {
+            Ok(crate::value::decimal_to_int(v).map_or(Value::Null, Value::Int))
+        }
+        _ => Err("Convert.decimalToInt expects (decimal)".into()),
+    }
+}
+
 pub(crate) fn convert_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
@@ -84,6 +137,49 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(convert_round),
             php: |a| format!("(int)round({})", parg(a, 0)),
+        },
+        // --- Numeric conversions (M-NUM S3) ---
+        NativeFn {
+            module: "Core.Convert",
+            name: "toInt",
+            params: vec![Ty::Float],
+            ret: Ty::Optional(Box::new(Ty::Int)),
+            pure: true,
+            // `__phorge_float_to_int` is gated in `transpile::emit_member_call` (a native's `php`
+            // closure has no `&mut self`). Mirrors `value::float_to_int`.
+            php: |a| format!("__phorge_float_to_int({})", parg(a, 0)),
+            eval: NativeEval::Pure(convert_to_int),
+        },
+        NativeFn {
+            module: "Core.Convert",
+            name: "intToDecimal",
+            params: vec![Ty::Int],
+            ret: Ty::Decimal,
+            pure: true,
+            // The decimal carrier is the integer's string form (M-NUM S1 carrier convention).
+            php: |a| format!("(string)({})", parg(a, 0)),
+            eval: NativeEval::Pure(convert_int_to_decimal),
+        },
+        NativeFn {
+            module: "Core.Convert",
+            name: "decimalToFloat",
+            params: vec![Ty::Decimal],
+            ret: Ty::Float,
+            pure: true,
+            // The carrier is already the decimal's string form; `(float)$s` parses it (lossy).
+            php: |a| format!("(float)({})", parg(a, 0)),
+            eval: NativeEval::Pure(convert_decimal_to_float),
+        },
+        NativeFn {
+            module: "Core.Convert",
+            name: "decimalToInt",
+            params: vec![Ty::Decimal],
+            ret: Ty::Optional(Box::new(Ty::Int)),
+            pure: true,
+            // `__phorge_dec_to_int` is gated in `transpile::emit_member_call`. Mirrors
+            // `value::decimal_to_int` (split the carrier string before the dot, range-check).
+            php: |a| format!("__phorge_dec_to_int({})", parg(a, 0)),
+            eval: NativeEval::Pure(convert_decimal_to_int),
         },
     ]
 }

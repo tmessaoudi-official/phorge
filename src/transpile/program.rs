@@ -616,6 +616,39 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_float_to_int {
+            // `Convert.toInt($f) -> int?`: null on NaN/±∞/out-of-i64-range, else truncate toward zero.
+            // The upper bound is the EXCLUSIVE `9.2233720368547758E18` (i64::MAX is not exactly f64-
+            // representable); the lower bound is the exact i64::MIN as f64. Matches `value::float_to_int`,
+            // and avoids PHP's surprising `(int)NAN == 0`.
+            self.line("function __phorge_float_to_int($f) {");
+            self.indent += 1;
+            // `$t` is the truncate-toward-zero of `$f` (Rust `f64::trunc`): floor for >=0, ceil for <0.
+            self.line("if (!is_finite($f)) { return null; }");
+            self.line("$t = ($f < 0) ? ceil($f) : floor($f);");
+            self.line(
+                "return ($t >= -9.2233720368547758E18 && $t < 9.2233720368547758E18) ? (int)$t : null;",
+            );
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_dec_to_int {
+            // `Convert.decimalToInt($s) -> int?`: the carrier string's integer part (before the dot),
+            // truncated toward zero, or null if outside i64 range. Mirrors `value::decimal_to_int`
+            // (i128 `unscaled / 10^scale`). Uses `bccomp` against the i64 bounds (BCMath is loaded for
+            // decimals already). `(int)"123"` is exact for in-range integer strings.
+            self.line("function __phorge_dec_to_int($s) {");
+            self.indent += 1;
+            self.line("$dot = strpos($s, '.');");
+            self.line("$int = $dot === false ? $s : substr($s, 0, $dot);");
+            self.line("if ($int === '' || $int === '-') { $int = '0'; }");
+            self.line(
+                "if (bccomp($int, '9223372036854775807', 0) > 0 || bccomp($int, '-9223372036854775808', 0) < 0) { return null; }",
+            );
+            self.line("return (int)$int;");
+            self.indent -= 1;
+            self.line("}");
+        }
         if self.uses_list_sort {
             // Natural ascending over a COPY (Phorge lists are immutable). String by byte (`strcmp`,
             // ≡ Rust `String` Ord) — PHP's `<=>` would juggle numeric strings; ints/floats/bools via

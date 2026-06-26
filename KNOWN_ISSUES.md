@@ -73,6 +73,27 @@ not a panic:
   native this milestone). (4) **A `scale` past 255** (`u8::MAX`) faults `"decimal scale out of range"` —
   far beyond any realistic money use, and an i128 decimal can carry at most ~38 significant digits anyway.
 
+- **Float predicates + numeric conversions (M-NUM S3) — shipped corners + deferrals.** `Core.Math`'s
+  `isNan`/`isFinite`/`isInfinite`/`nan`/`infinity`/`negInfinity`/`intdiv` and `Core.Convert`'s
+  `toFloat`/`toInt`/`intToDecimal`/`decimalToFloat`/`decimalToInt` ship as additive natives.
+  Corners: (1) **`intdiv` faults are not runnable examples** — a zero divisor (`"division by zero"`) and
+  the `intdiv(i64::MIN, -1)` overflow (`"integer overflow"`) are clean faults, byte-identical on
+  `run`/`runvm` (FaultKind parity) and PHP `intdiv` throws the matching class; but every shipped example
+  must produce identical *Ok* output, so the faults are exercised by the `value::int_intdiv_truncates_and_faults`
+  kernel test + the `math_intdiv` native test, not the example set. (2) **`Math.nan()`/`infinity()`/`negInfinity()`
+  must not be *printed*** — Rust renders `NaN`/`inf`/`-inf` while PHP `echo`es `NAN`/`INF`/`-INF`
+  (the pre-existing float-display divergence, also noted for `Core.Json`); the example exercises them
+  only through the `bool`-returning predicates, never `Console.println(infinity())`. The `run ≡ runvm`
+  spine is always byte-identical (both Rust); only printing a special value would diverge from PHP.
+  (3) **`toInt(float) -> int?` / `decimalToInt(decimal) -> int?` return `null` on out-of-range / special
+  inputs** — `toInt` is `null` for NaN/±∞/out-of-i64-range (deliberately avoiding PHP's `(int)NAN == 0`);
+  `decimalToInt` is `null` when the integer part is outside i64. The i64 *edge* is closed with a shared
+  exclusive upper bound (`9.2233720368547758E18`) on both sides because `i64::MAX` is not exactly
+  f64-representable — verified by a near-edge probe (`value::float_to_int_guards_the_edge`). (4) **No
+  `floatToDecimal`** — by design (float→decimal is lossy/surprising; use `Decimal.of(string)`); for a
+  *rounded* decimal→int, compose `Decimal.round(d, 0, mode)` then `decimalToInt`. (5) **`decimalToFloat`
+  is lossy by nature** — examples keep printed results to exactly-representable values (`12.5d`).
+
 - **`Core.Json` — shipped corners + deferrals.** (1) **Float magnitude divergence from native
   `json_encode`:** Phorge renders a float with the positional shortest-round-trip form (`__phorge_float`)
   for consistency with `run`/`runvm` everywhere, so an extreme magnitude (`1e20`) stringifies as

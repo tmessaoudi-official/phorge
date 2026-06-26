@@ -7,6 +7,7 @@
 - [2026-06-26] AGREED: **Literal syntax = `1.50d` suffix** (lex the literal TEXT so scale is preserved: `1.50` ⇒ scale 2), **plus `Decimal.of(string) -> decimal?`** for dynamic/string input. Both ship.
 - [2026-06-26] LOCKED (SSOT, not re-opened): `decimal` is a **primitive** (`Ty::Decimal` / `Value::Decimal` + operator support across all backends), not a stdlib class.
 - [2026-06-26] AGREED (S2): **bare `decimal / decimal` is a compile error** (`E-DECIMAL-DIV`, hint → `Decimal.div`). Division goes through **`Decimal.div(decimal a, decimal b, int scale, RoundingMode mode) -> decimal`** + **`Decimal.round(decimal d, int scale, RoundingMode mode) -> decimal`**. Rationale: removes the silent-precision surprise (on-philosophy), and is *more* PHP-familiar (devs already pass scale to `bcdiv`). Accepted trade-off: breaks `+ - * /` symmetry.
+- [2026-06-26] AGREED (S3): **numeric conversions live in a dedicated `Core.Convert` module** (matches SSOT L-convert; groups cross-type conversions; consistent with namespace-everything). **`NaN`/`Infinity` + float predicates are `Core.Math` functions** (`nan()`/`infinity()`/`negInfinity()`, `isNan`/`isFinite`/`isInfinite`), not keywords/literals. `Convert.toInt(float) -> int?` returns **null** on NaN/Inf/out-of-i64-range (avoids PHP `(int)`'s quirky 0+warning — verified — and I control both sides for byte-identity). `Convert.decimalToInt -> int?` truncates toward zero (compose with `Decimal.round(d,0,mode)` for explicit rounding — keeps Convert decoupled from the RoundingMode injection).
 - [2026-06-26] AGREED (S2): **full 7-mode `RoundingMode` set** — `HalfUp`, `HalfDown`, `HalfEven` (banker's), `Up` (away from zero), `Down` (truncate toward zero, = raw `bcdiv`), `Ceiling` (toward +∞), `Floor` (toward −∞). A `RoundingMode` enum injected when `Core.Decimal` is imported (the [[core-json-and-injected-types]] injected-type pattern). [Verified byte-identity enabler: BCMath `bcdiv`/`bcmod` truncate toward zero, `bcmod` takes the dividend sign — identical to Rust i128 `/`/`%` — so a (quotient, remainder)-based rounding algorithm matches across all three backends.]
 
 ## Scope (from SSOT `docs/specs/2026-06-21-php-parity-and-beyond.md`)
@@ -28,8 +29,14 @@ Deferred to **M-NUM-2**: `BigInt`, arbitrary-precision decimal, composite `Money
 - **S1 — decimal primitive core (original spec):** `Ty::Decimal`/`Value::Decimal{i128,u8}`; `1.50d` literal lex
   + `Decimal.of(string)`; exact `+ - *`; comparison/equality; scale-aligning rules; `toString`; mixed
   `decimal`/`int` coercion rule; transpile to BCMath (`bcadd`/`bcsub`/`bcmul`/`bccomp`). Overflow fault.
-- **S2 — division + rounding:** `/` (target scale + rounding), explicit rounding modes
-  (`Decimal.round(d, scale, mode)`), match `bcdiv` truncation semantics byte-for-byte.
+- **S2 — division + rounding: ✅ COMPLETE (`1a2774d`).** Bare `decimal /`/`%` → `E-DECIMAL-DIV`;
+  `Decimal.div(a,b,scale,mode)` + `Decimal.round(d,scale,mode)` natives; injected 7-mode `RoundingMode`
+  enum; single-sourced `value::round_div` (trunc-toward-zero q/rem, all 7 modes, checked i128); BCMath
+  `__phorge_dec_div`/`_round` (PHP-8.4 builtin-`RoundingMode` collision dodged via `RoundingMode_`
+  mangle); div-by-zero / scale-out-of-range / overflow faults. `examples/guide/decimal-div.phg`
+  byte-identical run≡runvm≡PHP 8.5. **CI fix (`63ba3f7`):** decimal transpile emits BCMath, which the
+  `php -n` oracle disables (shared ext) → CI red on S1; harness now loads it via `-d extension=bcmath`
+  (`php_n_args`, probe-gated) + `setup-php extensions: bcmath`. See [[transpile-no-ini-extensions]].
 - **S3 — float predicates + numeric conversions:** `isNan`/`isFinite`/`isInfinite`, `NaN`/`Infinity`,
   `toFloat`/`toInt`/`Decimal.of`, `intdiv`; document `int`=i64.
 - **S4 — math breadth + number_format:** `Core.Math` round/sign/clamp/gcd/log/exp/trig/PI/E (float

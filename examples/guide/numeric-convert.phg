@@ -1,0 +1,55 @@
+// Float predicates + numeric conversions (M-NUM S3) — detect float special values and convert
+// explicitly between int / float / decimal. All additive stdlib natives; no implicit coercion.
+//
+//   Core.Math:
+//     isNan / isFinite / isInfinite (float) -> bool   // detect special values
+//     nan / infinity / negInfinity () -> float        // construct them (never PRINTED directly:
+//                                                      //   PHP echoes NAN/INF, Rust prints NaN/inf —
+//                                                      //   so exercise them through the predicates)
+//     intdiv(int, int) -> int                          // truncating-toward-zero division
+//
+//   Core.Convert:
+//     toFloat(int) -> float            // total widening
+//     toInt(float) -> int?             // truncate toward zero; null on NaN/Inf/out-of-range
+//     intToDecimal(int) -> decimal     // exact, scale 0
+//     decimalToFloat(decimal) -> float // lossy by nature (parses the rendered value)
+//     decimalToInt(decimal) -> int?    // truncate toward zero; null if the integer part is out of range
+package Main;
+
+import Core.Console;
+import Core.Math;
+import Core.Convert;
+
+function main(): void {
+    // --- Float predicates. The special values are detected, not printed (printing NAN/INF would
+    // diverge between Rust and PHP rendering). The bool results ARE byte-identical.
+    Console.println("isNan(nan())        = {Math.isNan(Math.nan())}");          // true
+    Console.println("isNan(1.5)          = {Math.isNan(1.5)}");                 // false
+    Console.println("isFinite(2.0)       = {Math.isFinite(2.0)}");             // true
+    Console.println("isFinite(infinity()) = {Math.isFinite(Math.infinity())}"); // false
+    Console.println("isInfinite(inf())   = {Math.isInfinite(Math.infinity())}"); // true
+    Console.println("isInfinite(negInf()) = {Math.isInfinite(Math.negInfinity())}"); // true
+    Console.println("isInfinite(3.0)     = {Math.isInfinite(3.0)}");           // false
+
+    // --- Integer division (truncating toward zero), the named twin of `/`.
+    Console.println("intdiv(7, 2)   = {Math.intdiv(7, 2)}");    // 3
+    Console.println("intdiv(-7, 2)  = {Math.intdiv(-7, 2)}");   // -3 (toward zero)
+    Console.println("intdiv(17, 5)  = {Math.intdiv(17, 5)}");   // 3
+
+    // --- int -> float (total). Stays exactly representable, so it prints cleanly.
+    float f = Convert.toFloat(7);
+    Console.println("toFloat(7)     = {f}");   // 7
+
+    // --- float -> int? (truncate toward zero; null on NaN/Inf/out-of-range). Use `??` for the null.
+    Console.println("toInt(3.9)     = {Convert.toInt(3.9) ?? -1}");    // 3
+    Console.println("toInt(-3.9)    = {Convert.toInt(-3.9) ?? -1}");   // -3
+    Console.println("toInt(nan())   = {Convert.toInt(Math.nan()) ?? -1}");  // -1 (null → fallback)
+    Console.println("toInt(1e30)    = {Convert.toInt(1000000000000000000000000000000.0) ?? -1}"); // -1 (out of range)
+
+    // --- int <-> decimal and decimal -> int/float.
+    decimal d = Convert.intToDecimal(42);
+    Console.println("intToDecimal(42)        = {d}");                       // 42
+    Console.println("decimalToFloat(12.5d)   = {Convert.decimalToFloat(12.5d)}"); // 12.5 (representable)
+    Console.println("decimalToInt(19.99d)    = {Convert.decimalToInt(19.99d) ?? -1}");  // 19
+    Console.println("decimalToInt(-19.99d)   = {Convert.decimalToInt(-19.99d) ?? -1}"); // -19 (toward zero)
+}

@@ -52,11 +52,129 @@ fn convert_numeric() {
 }
 
 #[test]
-fn convert_natives_registered() {
-    for name in ["toString", "toFloat", "truncate", "round"] {
+fn convert_to_int_guards_special_and_range() {
+    let mut o = String::new();
+    // normal + fractional truncate toward zero
+    assert!(matches!(
+        convert_to_int(&[Value::Float(42.0)], &mut o),
+        Ok(Value::Int(42))
+    ));
+    assert!(matches!(
+        convert_to_int(&[Value::Float(3.9)], &mut o),
+        Ok(Value::Int(3))
+    ));
+    assert!(matches!(
+        convert_to_int(&[Value::Float(-3.9)], &mut o),
+        Ok(Value::Int(-3))
+    ));
+    // NaN / +Inf / out-of-range → null (avoids PHP (int)NAN==0)
+    assert!(matches!(
+        convert_to_int(&[Value::Float(f64::NAN)], &mut o),
+        Ok(Value::Null)
+    ));
+    assert!(matches!(
+        convert_to_int(&[Value::Float(f64::INFINITY)], &mut o),
+        Ok(Value::Null)
+    ));
+    assert!(matches!(
+        convert_to_int(&[Value::Float(1e30)], &mut o),
+        Ok(Value::Null)
+    ));
+}
+
+#[test]
+fn convert_int_to_decimal_is_scale_zero() {
+    let mut o = String::new();
+    assert!(matches!(
+        convert_int_to_decimal(&[Value::Int(42)], &mut o),
+        Ok(Value::Decimal {
+            unscaled: 42,
+            scale: 0
+        })
+    ));
+    assert!(matches!(
+        convert_int_to_decimal(&[Value::Int(-7)], &mut o),
+        Ok(Value::Decimal {
+            unscaled: -7,
+            scale: 0
+        })
+    ));
+}
+
+#[test]
+fn convert_decimal_to_float_parses_carrier() {
+    let mut o = String::new();
+    // 12.5 is exactly representable → parses back losslessly.
+    assert!(matches!(
+        convert_decimal_to_float(&[Value::Decimal { unscaled: 125, scale: 1 }], &mut o),
+        Ok(Value::Float(f)) if f == 12.5
+    ));
+    assert!(matches!(
+        convert_decimal_to_float(&[Value::Decimal { unscaled: -250, scale: 2 }], &mut o),
+        Ok(Value::Float(f)) if f == -2.5
+    ));
+}
+
+#[test]
+fn convert_decimal_to_int_truncates_or_nulls() {
+    let mut o = String::new();
+    assert!(matches!(
+        convert_decimal_to_int(
+            &[Value::Decimal {
+                unscaled: 1999,
+                scale: 2
+            }],
+            &mut o
+        ),
+        Ok(Value::Int(19))
+    ));
+    assert!(matches!(
+        convert_decimal_to_int(
+            &[Value::Decimal {
+                unscaled: -1999,
+                scale: 2
+            }],
+            &mut o
+        ),
+        Ok(Value::Int(-19))
+    ));
+    // out-of-i64-range integer part → null
+    assert!(matches!(
+        convert_decimal_to_int(
+            &[Value::Decimal {
+                unscaled: i128::from(i64::MAX) + 1,
+                scale: 0
+            }],
+            &mut o
+        ),
+        Ok(Value::Null)
+    ));
+}
+
+#[test]
+fn convert_natives_registered_and_emit() {
+    for name in [
+        "toString",
+        "toFloat",
+        "truncate",
+        "round",
+        "toInt",
+        "intToDecimal",
+        "decimalToFloat",
+        "decimalToInt",
+    ] {
         assert!(
             crate::native::index_of("Core.Convert", name).is_some(),
             "Core.Convert.{name} not registered"
         );
     }
+    let php = |name: &str, args: &[&str]| {
+        let i = crate::native::index_of("Core.Convert", name).unwrap();
+        let a: Vec<String> = args.iter().map(|s| (*s).to_string()).collect();
+        (crate::native::registry()[i].php)(&a)
+    };
+    assert_eq!(php("toInt", &["$f"]), "__phorge_float_to_int($f)");
+    assert_eq!(php("intToDecimal", &["$i"]), "(string)($i)");
+    assert_eq!(php("decimalToFloat", &["$d"]), "(float)($d)");
+    assert_eq!(php("decimalToInt", &["$d"]), "__phorge_dec_to_int($d)");
 }

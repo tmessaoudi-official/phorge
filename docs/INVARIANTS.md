@@ -42,6 +42,15 @@ kernels (`float_*`), and `compare_ord` live **once**, in `src/value.rs`. Both ba
   `pub const` in `value.rs`; the `agree_err` oracle classifies on these exact bodies, so changing a
   body string is a parity-affecting change.
 
+**`int` is a fixed 64-bit signed integer (`i64`), pinned by design.** Unlike PHP's `int`, whose width
+is platform-dependent (32-bit on a 32-bit build, 64-bit elsewhere), Phorge's `int` is **always** `i64`
+on every target — the backends all carry `Value::Int(i64)` and the transpile floor (PHP 8.5) is 64-bit
+in practice, so the width never varies. `int` arithmetic that would leave the `i64` range is a **checked
+fault** (`FAULT_INT_OVERFLOW`, EV-7 — never a silent wrap, unlike PHP which auto-promotes an overflowing
+`int` to `float`). `float` is IEEE-754 double (`f64`). `decimal` is an exact i128-carried fixed-point
+value (M-NUM S1). Conversions between these are **explicit** natives (`Core.Convert`) — there is no
+implicit coercion.
+
 ## 4. Float display parity — `12.0` renders as `"12"`
 `println`/interpolation render via `Value::as_display`, which formats floats with Rust `{}`
 (`12.0 → "12"`, design rule EV-6). Both backends use the same method, so the transpiled PHP and

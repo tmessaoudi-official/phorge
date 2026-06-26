@@ -257,6 +257,14 @@ struct Transpiler {
     /// `__phorge_dec_check` for the i128 overflow fault. Both gate the shared `__phorge_round_div`.
     uses_dec_div: bool,
     uses_dec_round: bool,
+    /// Set when `Convert.toInt(float)` is emitted (M-NUM S3) — defines `__phorge_float_to_int`,
+    /// returning `null` on NaN/±∞/out-of-i64-range else the truncated int, with the edge-safe float
+    /// bounds that agree with Rust `value::float_to_int` (avoids PHP's `(int)NAN == 0`).
+    uses_float_to_int: bool,
+    /// Set when `Convert.decimalToInt(decimal)` is emitted (M-NUM S3) — defines `__phorge_dec_to_int`,
+    /// truncating the carrier string toward zero (split before the dot) and range-checking i64, else
+    /// `null`. Mirrors Rust `value::decimal_to_int`.
+    uses_dec_to_int: bool,
     /// Classes that must lower to the **interface + trait** decomposition (M-RT S6b): every transitive
     /// ancestor of a multi-parent (`extends A, B`) class. PHP has no multiple inheritance, so a
     /// multi-parent class `implements` its parents' interfaces and `use`s their traits; each ancestor
@@ -462,6 +470,8 @@ impl Transpiler {
             uses_dec_of: false,
             uses_dec_div: false,
             uses_dec_round: false,
+            uses_float_to_int: false,
+            uses_dec_to_int: false,
             decomposed: BTreeSet::new(),
             tmp: 0,
         }

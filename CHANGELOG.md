@@ -6,6 +6,33 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — float predicates + numeric conversions (M-NUM S3)
+
+Rounds out the numeric surface: detect float special values and convert **explicitly** between
+`int`/`float`/`decimal` (Phorge has no implicit coercion). All additive stdlib natives — **no new
+`Op`, no new `Value`** (reuses the native registry, S2's `Value::Null`/optionals, and S1's
+`Value::Decimal`). Every primitive is PHP **core** (available under `php -n` — no extension):
+
+- **`Core.Math` float predicates + special values:** `isNan`/`isFinite`/`isInfinite(float) -> bool`
+  (→ PHP `is_nan`/`is_finite`/`is_infinite`); `nan`/`infinity`/`negInfinity() -> float`
+  (→ `NAN`/`INF`/`-INF`). The predicates return `bool`, so they are byte-identical even for a
+  non-representable float operand (the divergence is in float *display*, not in a `bool`).
+- **`Core.Math.intdiv(int, int) -> int`** — integer division truncating toward zero (→ PHP `intdiv`);
+  single-sourced with `value::int_intdiv`. A zero divisor faults `"division by zero"` and
+  `intdiv(i64::MIN, -1)` faults `"integer overflow"` — both run≡runvm (FaultKind parity), PHP `intdiv`
+  throws the matching class (not a runnable example).
+- **`Core.Convert` numeric conversions:** `toFloat(int) -> float` (total widening; already present),
+  `toInt(float) -> int?` (truncate toward zero; **null** on NaN/±∞/out-of-i64-range — avoids PHP's
+  surprising `(int)NAN == 0`), `intToDecimal(int) -> decimal` (exact, scale 0),
+  `decimalToFloat(decimal) -> float` (lossy by nature), `decimalToInt(decimal) -> int?` (truncate
+  toward zero; null if the integer part is out of i64 range).
+
+The edge-safe guards are **single-sourced** in `value.rs` (`float_to_int`, `decimal_to_int` — exact
+i128-carrier math, no BCMath) and mirrored by gated PHP helpers `__phorge_float_to_int` /
+`__phorge_dec_to_int`, so the float→int range verdict and the decimal→int truncation agree byte-for-byte
+across `run`/`runvm`/real PHP. `int` is documented as a pinned 64-bit signed integer (i64) in
+`docs/INVARIANTS.md`. Byte-identical `run ≡ runvm ≡ real PHP 8.5`; `examples/guide/numeric-convert.phg`.
+
 ### Added — decimal division + rounding (M-NUM S2)
 
 Exact, **explicitly-rounded** decimal division — the precision-safe complement to S1's `+ - *`.

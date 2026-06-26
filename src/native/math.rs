@@ -66,6 +66,55 @@ fn math_round(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
+// --- Float predicates + special values (M-NUM S3). All PHP-core (`php -n`): `is_nan`/`is_finite`/
+// `is_infinite`, `NAN`/`INF`. The predicates return `bool`, so they are byte-identical even for a
+// non-representable float operand (the divergence is in float *display*, not in a `bool` result).
+fn math_is_nan(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Float(x)] => Ok(Value::Bool(x.is_nan())),
+        _ => Err("Math.isNan expects (float)".into()),
+    }
+}
+fn math_is_finite(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Float(x)] => Ok(Value::Bool(x.is_finite())),
+        _ => Err("Math.isFinite expects (float)".into()),
+    }
+}
+fn math_is_infinite(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Float(x)] => Ok(Value::Bool(x.is_infinite())),
+        _ => Err("Math.isInfinite expects (float)".into()),
+    }
+}
+fn math_nan(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [] => Ok(Value::Float(f64::NAN)),
+        _ => Err("Math.nan expects ()".into()),
+    }
+}
+fn math_infinity(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [] => Ok(Value::Float(f64::INFINITY)),
+        _ => Err("Math.infinity expects ()".into()),
+    }
+}
+fn math_neg_infinity(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [] => Ok(Value::Float(f64::NEG_INFINITY)),
+        _ => Err("Math.negInfinity expects ()".into()),
+    }
+}
+/// `Math.intdiv(int, int) -> int` (M-NUM S3) — integer division truncating toward zero. Single-sourced
+/// with `value::int_intdiv`: `b == 0` faults `"division by zero"`, `intdiv(i64::MIN, -1)` faults
+/// `"integer overflow"` (both run≡runvm via FaultKind; PHP `intdiv` throws the matching class).
+fn math_intdiv(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Int(a), Value::Int(b)] => crate::value::int_intdiv(*a, *b).map(Value::Int),
+        _ => Err("Math.intdiv expects (int, int)".into()),
+    }
+}
+
 /// The `Core.Math` registry entries (M3 Track B Wave 2).
 pub(crate) fn math_natives() -> Vec<NativeFn> {
     vec![
@@ -153,6 +202,70 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(math_round),
             php: |a| format!("(int)round({})", parg(a, 0)),
+        },
+        // --- Float predicates + special values + intdiv (M-NUM S3) ---
+        NativeFn {
+            module: "Core.Math",
+            name: "isNan",
+            params: vec![Ty::Float],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::Pure(math_is_nan),
+            php: |a| format!("is_nan({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Math",
+            name: "isFinite",
+            params: vec![Ty::Float],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::Pure(math_is_finite),
+            php: |a| format!("is_finite({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Math",
+            name: "isInfinite",
+            params: vec![Ty::Float],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::Pure(math_is_infinite),
+            php: |a| format!("is_infinite({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Math",
+            name: "nan",
+            params: vec![],
+            ret: Ty::Float,
+            pure: true,
+            eval: NativeEval::Pure(math_nan),
+            php: |_| "NAN".to_string(),
+        },
+        NativeFn {
+            module: "Core.Math",
+            name: "infinity",
+            params: vec![],
+            ret: Ty::Float,
+            pure: true,
+            eval: NativeEval::Pure(math_infinity),
+            php: |_| "INF".to_string(),
+        },
+        NativeFn {
+            module: "Core.Math",
+            name: "negInfinity",
+            params: vec![],
+            ret: Ty::Float,
+            pure: true,
+            eval: NativeEval::Pure(math_neg_infinity),
+            php: |_| "-INF".to_string(),
+        },
+        NativeFn {
+            module: "Core.Math",
+            name: "intdiv",
+            params: vec![Ty::Int, Ty::Int],
+            ret: Ty::Int,
+            pure: true,
+            eval: NativeEval::Pure(math_intdiv),
+            php: |a| format!("intdiv({}, {})", parg(a, 0), parg(a, 1)),
         },
     ]
 }

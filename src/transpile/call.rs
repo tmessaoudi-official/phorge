@@ -153,9 +153,15 @@ impl Transpiler {
                                 _ => {}
                             }
                         }
-                        // `Convert.toString` erases to the existing `__phorge_str` helper — gate it.
-                        if nat.module == "Core.Convert" && nat.name == "toString" {
-                            self.uses_str = true;
+                        // `Convert.*` gated helpers: `toString` reuses `__phorge_str`; `toInt` /
+                        // `decimalToInt` each define their own edge-safe helper (M-NUM S3).
+                        if nat.module == "Core.Convert" {
+                            match nat.name {
+                                "toString" => self.uses_str = true,
+                                "toInt" => self.uses_float_to_int = true,
+                                "decimalToInt" => self.uses_dec_to_int = true,
+                                _ => {}
+                            }
                         }
                         // `Decimal.*` erases to gated `__phorge_dec_*` helpers (M-NUM S1/S2).
                         if nat.module == "Core.Decimal" {

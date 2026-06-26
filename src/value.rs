@@ -452,6 +452,35 @@ pub fn int_neg(n: i64) -> Result<i64, String> {
     n.checked_neg()
         .ok_or_else(|| FAULT_INT_OVERFLOW.to_string())
 }
+/// `Math.intdiv(a, b)` (M-NUM S3): integer division truncating toward zero (PHP `intdiv`). `b == 0`
+/// is [`FAULT_DIV_ZERO`]; `i64::MIN / -1` overflows ([`FAULT_INT_OVERFLOW`]) — both clean faults, never
+/// a panic (EV-7). Distinct from [`int_div`] only in name/intent (both truncate toward zero); kept
+/// separate so the `intdiv` native and the `/`-on-int operator can diverge later without coupling.
+pub fn int_intdiv(a: i64, b: i64) -> Result<i64, String> {
+    if b == 0 {
+        return Err(FAULT_DIV_ZERO.to_string());
+    }
+    a.checked_div(b)
+        .ok_or_else(|| FAULT_INT_OVERFLOW.to_string())
+}
+/// `Convert.toInt(float)` (M-NUM S3): truncate a float toward zero to an `int`, or `None` on NaN,
+/// ±∞, or a value outside the i64 range. The range guard uses the float bounds that **both** Rust and
+/// PHP agree on at the i64 edge: `2^63` (9223372036854775808.0) is exactly f64-representable, but
+/// `i64::MAX` (2^63 − 1) is not — so the in-range window is `[-2^63, 2^63)` (upper **exclusive**;
+/// `i64::MIN` is exactly `-2^63`). A value `v` with `LOWER <= v.trunc() < UPPER` casts losslessly via
+/// `as i64`; anything else (incl. NaN/±∞, which fail the comparisons) returns `None`. This avoids
+/// PHP's surprising `(int)NAN == 0`. Single-sourced so `run`/`runvm` agree; mirrored by the PHP
+/// `__phorge_float_to_int` helper (which uses the same `9.2233720368547758E18` literal).
+pub fn float_to_int(v: f64) -> Option<i64> {
+    const UPPER: f64 = 9_223_372_036_854_775_808.0; // 2^63 — exclusive upper bound
+    const LOWER: f64 = -UPPER; // i64::MIN as f64 (exact)
+    let t = v.trunc();
+    if v.is_finite() && (LOWER..UPPER).contains(&t) {
+        Some(t as i64)
+    } else {
+        None
+    }
+}
 
 /// Bitwise AND / OR / XOR on `int` (never fault — total over `i64`). PHP-identical.
 pub fn int_bitand(a: i64, b: i64) -> i64 {
@@ -760,6 +789,23 @@ pub fn decimal_round(d: &Value, scale: i64, mode: RoundMode) -> Result<Value, St
     })
 }
 
+/// `Convert.decimalToInt(decimal)` (M-NUM S3): the decimal's integer part, truncated toward zero
+/// (drop the fraction), or `None` if that integer part is outside the i64 range. Computed exactly on
+/// the i128 carrier — `unscaled / 10^scale` truncates toward zero (i128 `/` rounds toward zero, like
+/// PHP `intdiv`/`bcdiv`), then `i64::try_from` range-checks. No string parsing, no BCMath. Single-
+/// sourced; mirrored by the PHP `__phorge_dec_to_int` helper (which splits the carrier string before
+/// the dot). A non-decimal value is checker-unreachable (handled defensively as `None`).
+pub fn decimal_to_int(d: &Value) -> Option<i64> {
+    let (unscaled, scale) = match d {
+        Value::Decimal { unscaled, scale } => (*unscaled, *scale),
+        _ => return None,
+    };
+    // 10^scale fits i128 for any realistic scale; an absurd scale (>38) overflows pow → None.
+    let divisor = 10i128.checked_pow(u32::from(scale))?;
+    let int_part = unscaled / divisor; // i128 `/` truncates toward zero
+    i64::try_from(int_part).ok()
+}
+
 /// `10^exp` as a checked `i128`, [`FAULT_DECIMAL_OVERFLOW`] on overflow (M-NUM S2 helper).
 fn pow10(exp: u32) -> Result<i128, String> {
     10i128
@@ -950,6 +996,56 @@ mod tests {
 
     fn dec(unscaled: i128, scale: u8) -> Value {
         Value::Decimal { unscaled, scale }
+    }
+
+    #[test]
+    fn int_intdiv_truncates_and_faults() {
+        assert_eq!(int_intdiv(7, 2), Ok(3));
+        assert_eq!(int_intdiv(-7, 2), Ok(-3)); // toward zero
+        assert_eq!(int_intdiv(7, -2), Ok(-3));
+        assert_eq!(int_intdiv(-7, -2), Ok(3));
+        assert_eq!(int_intdiv(6, 3), Ok(2));
+        // divisor zero → division by zero fault
+        assert_eq!(int_intdiv(5, 0).unwrap_err(), FAULT_DIV_ZERO);
+        // i64::MIN / -1 overflows → integer overflow fault
+        assert_eq!(int_intdiv(i64::MIN, -1).unwrap_err(), FAULT_INT_OVERFLOW);
+    }
+
+    #[test]
+    fn float_to_int_guards_the_edge() {
+        assert_eq!(float_to_int(3.9), Some(3)); // truncate toward zero
+        assert_eq!(float_to_int(-3.9), Some(-3));
+        assert_eq!(float_to_int(0.0), Some(0));
+        assert_eq!(float_to_int(42.0), Some(42));
+        // special values → None (avoids PHP `(int)NAN == 0`)
+        assert_eq!(float_to_int(f64::NAN), None);
+        assert_eq!(float_to_int(f64::INFINITY), None);
+        assert_eq!(float_to_int(f64::NEG_INFINITY), None);
+        // out-of-range huge magnitudes → None
+        assert_eq!(float_to_int(1e30), None);
+        assert_eq!(float_to_int(-1e30), None);
+        // near the i64 edge: `i64::MIN as f64` is exactly `-2^63` (representable, in-range);
+        // `i64::MAX as f64` rounds UP to `2^63` (== the exclusive UPPER), so it is OUT — exactly the
+        // edge the shared bound is chosen to close (Rust and PHP both reject `2^63`).
+        assert_eq!(float_to_int(i64::MIN as f64), Some(i64::MIN));
+        assert_eq!(float_to_int(i64::MAX as f64), None); // rounds to 2^63 == UPPER (exclusive)
+                                                         // a large but exactly-representable in-range value (2^53) round-trips.
+        assert_eq!(
+            float_to_int(9_007_199_254_740_992.0),
+            Some(9_007_199_254_740_992)
+        );
+    }
+
+    #[test]
+    fn decimal_to_int_truncates_toward_zero() {
+        assert_eq!(decimal_to_int(&dec(1999, 2)), Some(19)); // 19.99 → 19
+        assert_eq!(decimal_to_int(&dec(-1999, 2)), Some(-19)); // -19.99 → -19 (toward zero)
+        assert_eq!(decimal_to_int(&dec(100, 0)), Some(100)); // 100 → 100
+        assert_eq!(decimal_to_int(&dec(5, 4)), Some(0)); // 0.0005 → 0
+        assert_eq!(decimal_to_int(&dec(-5, 1)), Some(0)); // -0.5 → 0
+                                                          // integer part out of i64 range → None
+        assert_eq!(decimal_to_int(&dec(i128::from(i64::MAX) + 1, 0)), None);
+        assert_eq!(decimal_to_int(&dec(i128::from(i64::MIN) - 1, 0)), None);
     }
 
     #[test]
