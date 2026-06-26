@@ -6,6 +6,32 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `Core.Json` (JSON parse / stringify)
+
+A std-only, deterministic JSON module over a compiler-injected `Json` enum (`Null`/`Bool`/`Int`/
+`Float`/`Str`/`Arr`/`Obj`) — expressible now that generic enums + `Map` + `List` all ship. The enum
+is injected (head of `cli::check_and_expand`) only when a program `import Core.Json`s, then flows
+through every backend as an ordinary enum.
+
+- `Core.Json.parse(string) -> Json?` (None on malformed), `stringify(Json) -> string` (compact,
+  matches `json_encode`), `stringifyPretty(Json) -> string` (4-space, matches `JSON_PRETTY_PRINT`).
+- **PHP-faithful numbers:** `parse("42")` → `Int`, `"42.0"`/`"1e3"` → `Float` (mirrors `json_decode`;
+  an `i64` overflow falls back to `Float`). Objects preserve `Map` key order; duplicate keys keep
+  first position / last value (PHP assoc semantics). Strings escape to match `json_encode`'s default
+  (`\/`, `\uXXXX` non-ASCII, surrogate pairs).
+- **No new `Op`/`Value`:** three `Pure` natives; the one `eval` body is shared by both Rust backends,
+  the PHP leg uses gated `__phorge_json_*` recursive helpers. Floats render via the positional
+  shortest-round-trip form (`format!("{}")`/`__phorge_float`), so `run ≡ runvm ≡ real PHP 8.5` is
+  byte-identical. `examples/guide/json.phg`.
+
+### Added — PHP-reserved enum variant names are mangled in the transpiler
+
+A variant named after a PHP-reserved class word (`Int`/`Float`/`Bool`/`Null`/…) now transpiles to a
+mangled PHP class name (`Int` → `Int_`) at the declaration, `new`, and `instanceof` sites, instead of
+emitting an invalid `final class Int`. Transpiler-only (the backends address a variant by its Phorge
+name), so stdout byte-identity is untouched; reusable for any enum and load-bearing for the clean
+`Core.Json` variant API. `examples/guide/enum-reserved-variants.phg`.
+
 ### Changed — `var` is now a contextual keyword
 
 `var` was a hard-reserved keyword, so it could not be used as an identifier — naming a parameter,

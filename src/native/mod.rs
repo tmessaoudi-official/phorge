@@ -23,6 +23,7 @@ use std::sync::OnceLock;
 mod bytes;
 mod file;
 mod html;
+mod json;
 mod list;
 mod map;
 mod math;
@@ -283,6 +284,7 @@ fn build() -> Vec<NativeFn> {
     registry.extend(list::list_natives());
     registry.extend(map::map_natives());
     registry.extend(set::set_natives());
+    registry.extend(json::json_natives());
     registry.extend(reflect::reflect_natives());
     registry.extend(process::process_natives());
     // Pinned-slot invariant: the constant the compiler bakes into `Op::CallNative` must address the

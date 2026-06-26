@@ -303,7 +303,7 @@ impl Transpiler {
         // `__phorge_float` is needed by `__phorge_str` AND directly by a statically-float interpolation
         // hole (T6) — so it is emitted whenever either is in play, independent of the `__phorge_str`
         // dispatch helper above.
-        if self.uses_str || self.uses_float {
+        if self.uses_str || self.uses_float || self.uses_json_encode {
             // Reproduce Rust's `f64` Display exactly (EV-6): the shortest decimal that round-trips to
             // the same double, in positional notation (never scientific, for any magnitude), with an
             // integer-valued float rendered without a trailing `.0`. The `%.{p}e` loop finds the
@@ -386,6 +386,105 @@ impl Transpiler {
         }
         if self.uses_reflect_tables {
             self.emit_reflect_table();
+        }
+        self.emit_json_helpers();
+    }
+
+    /// The `Core.Json` recursive helpers (each gated by its `uses_json_*` flag). They walk the injected
+    /// `Json` enum's PHP class hierarchy — mangled variant classes `Null_`/`Bool_`/`Int_`/`Float_` and
+    /// bare `Str`/`Arr`/`Obj` (the reserved-name mangle from this slice's prerequisite). Encoding
+    /// mirrors the Rust `native::json` kernels byte-for-byte: a string scalar uses native
+    /// `json_encode` (authoritative escaping); a float uses `__phorge_float` (positional shortest
+    /// round-trip — NOT json's scientific notation, so it matches `run`/`runvm`); structure is
+    /// hand-walked. Decoding delegates to native `json_decode` (objects → `stdClass` so `{}` ≠ `[]`),
+    /// returning `null` (Phorge `None`) on any parse error, then rebuilds the enum hierarchy.
+    fn emit_json_helpers(&mut self) {
+        if self.uses_json_encode {
+            self.line("function __phorge_json_encode($j) {");
+            self.indent += 1;
+            self.line("if ($j instanceof Null_) { return \"null\"; }");
+            self.line("if ($j instanceof Bool_) { return $j->value ? \"true\" : \"false\"; }");
+            self.line("if ($j instanceof Int_) { return (string)$j->value; }");
+            self.line("if ($j instanceof Float_) { return __phorge_float($j->value); }");
+            self.line("if ($j instanceof Str) { return json_encode($j->value); }");
+            self.line("if ($j instanceof Arr) {");
+            self.indent += 1;
+            self.line("$parts = [];");
+            self.line("foreach ($j->items as $x) { $parts[] = __phorge_json_encode($x); }");
+            self.line("return \"[\" . implode(\",\", $parts) . \"]\";");
+            self.indent -= 1;
+            self.line("}");
+            self.line("$parts = [];");
+            self.line(
+                "foreach ($j->entries as $k => $v) { $parts[] = json_encode((string)$k) . \":\" . __phorge_json_encode($v); }",
+            );
+            self.line("return \"{\" . implode(\",\", $parts) . \"}\";");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_json_pretty {
+            self.line(
+                "function __phorge_json_encode_pretty($j) { return __phorge_json_pretty($j, 0); }",
+            );
+            self.line("function __phorge_json_pretty($j, $indent) {");
+            self.indent += 1;
+            self.line("if ($j instanceof Arr && count($j->items) > 0) {");
+            self.indent += 1;
+            self.line("$pad = str_repeat(\" \", $indent + 4);");
+            self.line("$parts = [];");
+            self.line(
+                "foreach ($j->items as $x) { $parts[] = $pad . __phorge_json_pretty($x, $indent + 4); }",
+            );
+            self.line(
+                "return \"[\\n\" . implode(\",\\n\", $parts) . \"\\n\" . str_repeat(\" \", $indent) . \"]\";",
+            );
+            self.indent -= 1;
+            self.line("}");
+            self.line("if ($j instanceof Obj && count($j->entries) > 0) {");
+            self.indent += 1;
+            self.line("$pad = str_repeat(\" \", $indent + 4);");
+            self.line("$parts = [];");
+            self.line(
+                "foreach ($j->entries as $k => $v) { $parts[] = $pad . json_encode((string)$k) . \": \" . __phorge_json_pretty($v, $indent + 4); }",
+            );
+            self.line(
+                "return \"{\\n\" . implode(\",\\n\", $parts) . \"\\n\" . str_repeat(\" \", $indent) . \"}\";",
+            );
+            self.indent -= 1;
+            self.line("}");
+            self.line("return __phorge_json_encode($j);");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_json_decode {
+            self.line("function __phorge_json_decode($s) {");
+            self.indent += 1;
+            self.line("$d = json_decode($s);");
+            self.line("if (json_last_error() !== JSON_ERROR_NONE) { return null; }");
+            self.line("return __phorge_json_build($d);");
+            self.indent -= 1;
+            self.line("}");
+            self.line("function __phorge_json_build($d) {");
+            self.indent += 1;
+            self.line("if (is_null($d)) { return new Null_(); }");
+            self.line("if (is_bool($d)) { return new Bool_($d); }");
+            self.line("if (is_int($d)) { return new Int_($d); }");
+            self.line("if (is_float($d)) { return new Float_($d); }");
+            self.line("if (is_string($d)) { return new Str($d); }");
+            self.line("if (is_array($d)) {");
+            self.indent += 1;
+            self.line("$items = [];");
+            self.line("foreach ($d as $x) { $items[] = __phorge_json_build($x); }");
+            self.line("return new Arr($items);");
+            self.indent -= 1;
+            self.line("}");
+            self.line("$entries = [];");
+            self.line(
+                "foreach (get_object_vars($d) as $k => $v) { $entries[(string)$k] = __phorge_json_build($v); }",
+            );
+            self.line("return new Obj($entries);");
+            self.indent -= 1;
+            self.line("}");
         }
     }
 

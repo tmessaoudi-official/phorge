@@ -289,7 +289,50 @@ pub fn parse_program(src: &str) -> Result<Program, String> {
 /// never gate the build. `diag_src` is the source used to render error carets — the single file for a
 /// loose program, or `""` for a merged multi-file unit (where no single source aligns, so diagnostics
 /// print message + position without a source line).
+/// The canonical `Core.Json` value model, injected (below) when a program imports `Core.Json`. A
+/// recursive enum over the JSON shapes; `Int`/`Float` are distinct (PHP-faithful, design-locked).
+const JSON_PRELUDE: &str = "enum Json { Null(), Bool(bool value), Int(int value), \
+     Float(float value), Str(string value), Arr(List<Json> items), Obj(Map<string, Json> entries) }";
+
+/// Inject the `Json` enum at the head of a program that imports `Core.Json`, so the `Core.Json.*`
+/// natives' `Json`-typed signatures resolve and user code can construct/`match` the variants — the
+/// enum then flows through every backend as an ordinary enum (`docs/specs/2026-06-26-core-json-design.md`).
+/// Runs before `check_resolutions` (below), the single chokepoint covering run/runvm/transpile + the
+/// loader. A no-op (borrowed) unless `Core.Json` is imported and no `Json` enum is already declared.
+fn inject_json_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
+    use crate::ast::Item;
+    let imports_json = prog.items.iter().any(|it| {
+        matches!(it, Item::Import { path, type_only: false, .. }
+            if path.len() == 2 && path[0] == "Core" && path[1] == "Json")
+    });
+    let already_declared = prog
+        .items
+        .iter()
+        .any(|it| matches!(it, Item::Enum(e) if e.name == "Json"));
+    if !imports_json || already_declared {
+        return std::borrow::Cow::Borrowed(prog);
+    }
+    match lex_parse(JSON_PRELUDE)
+        .ok()
+        .and_then(|p| p.items.into_iter().find(|i| matches!(i, Item::Enum(_))))
+    {
+        Some(enum_item) => {
+            let mut items = Vec::with_capacity(prog.items.len() + 1);
+            items.push(enum_item);
+            items.extend(prog.items.iter().cloned());
+            std::borrow::Cow::Owned(Program {
+                package: prog.package.clone(),
+                items,
+                span: prog.span,
+            })
+        }
+        None => std::borrow::Cow::Borrowed(prog), // unreachable: JSON_PRELUDE is valid
+    }
+}
+
 pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, String> {
+    let injected = inject_json_prelude(prog);
+    let prog = injected.as_ref();
     match crate::checker::check_resolutions(prog) {
         Ok((warnings, html, ufcs)) => {
             for w in &warnings {

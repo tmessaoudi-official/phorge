@@ -1,0 +1,63 @@
+// `Core.Json` — JSON parse / stringify.
+//
+// JSON values are modelled by the `Json` enum, injected when you `import Core.Json`. It is a faithful
+// mirror of what `json_decode` produces: numbers are split into `Int` and `Float` (PHP returns an int
+// for `42`, a float for `42.0`), strings/bools/null are scalars, and arrays/objects nest recursively.
+// Objects preserve key order (`Map`).
+//
+//   Core.Json.parse(string) -> Json?          // None on malformed input
+//   Core.Json.stringify(Json) -> string        // compact (matches json_encode)
+//   Core.Json.stringifyPretty(Json) -> string  // 4-space indent (matches JSON_PRETTY_PRINT)
+//
+// You build a `Json` with the ordinary enum constructors and read it back with `match`. (`Int`/`Bool`/
+// `Null`/`Float` are PHP-reserved class names; the transpiler mangles them invisibly — see
+// `enum-reserved-variants.phg`.)
+package Main;
+import Core.Console;
+import Core.Json;
+
+// Render a parsed JSON value's top-level shape — demonstrates matching every variant.
+function shapeOf(Json j): string {
+    return match j {
+        Null()  => "null",
+        Bool(b) => "bool",
+        Int(n)  => "int",
+        Float(f) => "float",
+        Str(s)  => "string",
+        Arr(xs) => "array",
+        Obj(es) => "object",
+    };
+}
+
+function main(): void {
+    // Build a JSON document with the enum constructors.
+    Json doc = new Obj([
+        "name" => new Str("phorge"),
+        "stars" => new Int(42),
+        "ratio" => new Float(0.5),
+        "tags" => new Arr([new Str("lang"), new Str("php")]),
+        "stable" => new Bool(true),
+        "parent" => new Null(),
+    ]);
+
+    Console.println(Json.stringify(doc));        // compact, one line
+    Console.println("---");
+    Console.println(Json.stringifyPretty(doc));  // 4-space indented
+
+    // Parse a literal back. `parse` returns `Json?` — None on malformed input.
+    Console.println("---");
+    var parsed = Json.parse("[true, 1, \"two\", 3.5, null]");
+    Console.println(Json.stringify(parsed ?? new Null()));     // round-trips
+    Console.println(shapeOf(parsed ?? new Null()));            // array
+
+    // Round-trip number fidelity: 42 stays an int, 42.0 becomes a float.
+    Console.println(shapeOf(Json.parse("42") ?? new Null()));   // int
+    Console.println(shapeOf(Json.parse("42.0") ?? new Null())); // float
+
+    // Malformed input yields None — handle it with if-let.
+    if (var v = Json.parse("[1, 2")) {
+        Console.println(shapeOf(v));
+    } else {
+        Console.println("malformed -> None");
+    }
+}

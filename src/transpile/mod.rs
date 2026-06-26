@@ -200,6 +200,15 @@ struct Transpiler {
     /// Set when a `Core.Reflect.interfaces`/`parents`/… call is emitted — defines the
     /// `__phorge_reflect_of($v, $kind)` helper + its static table once per file.
     uses_reflect_tables: bool,
+    /// Set when `Core.Json.stringify` / `stringifyPretty` / `parse` is emitted — each defines its
+    /// `__phorge_json_*` recursive helper once per file (the gated-helper pattern, set in
+    /// `emit_member_call` because a native's `php` closure has no `&mut self`). The helpers walk the
+    /// injected `Json` enum's PHP class hierarchy (mangled variant classes `Int_`/`Bool_`/…) so the
+    /// PHP leg matches `run`/`runvm` byte-for-byte; floats route through `__phorge_float` (positional,
+    /// not native json's scientific), so `uses_float` is implied by an encode.
+    uses_json_encode: bool,
+    uses_json_pretty: bool,
+    uses_json_decode: bool,
     /// Classes that must lower to the **interface + trait** decomposition (M-RT S6b): every transitive
     /// ancestor of a multi-parent (`extends A, B`) class. PHP has no multiple inheritance, so a
     /// multi-parent class `implements` its parents' interfaces and `use`s their traits; each ancestor
@@ -371,6 +380,9 @@ impl Transpiler {
             class_implements: std::collections::BTreeMap::new(),
             class_tables: crate::native::ClassTables::default(),
             uses_reflect_tables: false,
+            uses_json_encode: false,
+            uses_json_pretty: false,
+            uses_json_decode: false,
             decomposed: BTreeSet::new(),
             tmp: 0,
         }

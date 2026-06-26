@@ -21,6 +21,17 @@ not a panic:
   a planned hardening item. The byte-identity oracle still catches any such program — it just reports a
   PHP parse error instead of a clean `E-RESERVED-NAME`.
 
+- **`Core.Json` — shipped corners + deferrals.** (1) **Float magnitude divergence from native
+  `json_encode`:** Phorge renders a float with the positional shortest-round-trip form (`__phorge_float`)
+  for consistency with `run`/`runvm` everywhere, so an extreme magnitude (`1e20`) stringifies as
+  `100000000000000000000`, not json's `1.0e+20`. `run ≡ runvm ≡ real PHP` is always byte-identical (the
+  PHP leg uses the same helper); only the comparison to PHP's *native* `json_encode` differs at
+  magnitude extremes. (2) **`package Main` only:** the injected `Json` enum is emitted flat, so a
+  multi-package project that `import`s `Core.Json` is a follow-up. (3) **Reserved-variant collision
+  edge:** an enum literally declaring both `Int` and `Int_` would collide after mangling — adversarial,
+  not hit by any first-party code. (4) `NaN`/`Infinity` (non-JSON) stringify to `NaN`/`inf` tokens
+  (consistent across backends, not standard JSON).
+
 - **Stack traces — slice 1 (reporting) shipped; deferrals:** (1) catching/handling faults — a
   `try`/`catch` or `Result<T, E>` model — is a separate later slice; this slice only *reports* faults
   that abort. (2) Method/constructor/closure frames show `line`-only (no `file:line`) — their frame

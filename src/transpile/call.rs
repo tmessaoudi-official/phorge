@@ -117,6 +117,19 @@ impl Transpiler {
                                 _ => {}
                             }
                         }
+                        if nat.module == "Core.Json" {
+                            match nat.name {
+                                // `stringifyPretty` reuses `__phorge_json_encode` for scalars/empties,
+                                // so it gates both the pretty and the compact helper.
+                                "stringify" => self.uses_json_encode = true,
+                                "stringifyPretty" => {
+                                    self.uses_json_pretty = true;
+                                    self.uses_json_encode = true;
+                                }
+                                "parse" => self.uses_json_decode = true,
+                                _ => {}
+                            }
+                        }
                         let php = (nat.php)(&argv);
                         // Inside a namespace block a bare `strlen(...)` would resolve to
                         // `CurrentNs\strlen`; emit `\strlen(...)` for global-function natives (M5-8).
