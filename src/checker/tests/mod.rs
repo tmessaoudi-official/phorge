@@ -7,6 +7,7 @@ mod casing;
 mod casting;
 mod collections;
 mod constants;
+mod ctor_visibility;
 mod decimal;
 mod default_params;
 mod destructuring;

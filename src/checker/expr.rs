@@ -65,6 +65,9 @@ impl Checker {
                     )
                 }
             },
+            Expr::This(span) if self.in_static_init => {
+                self.err(*span, "`this` is not available in a static field initializer")
+            }
             Expr::This(span) => match &self.cur_class {
                 // Inside a generic class body, `this` carries the class's own type parameters as
                 // opaque `Ty::Param`s, so `this.value` (a `T` field) types as `T` and member access
@@ -159,6 +162,13 @@ impl Checker {
         use crate::ast::Expr;
         match inner {
             Expr::Call { callee, .. } if self.is_construction_callee(callee) => {
+                // Batch A: a class constructor's visibility is enforced here (the 7th access site).
+                // Enum-variant construction has no visibility, so gate only real class names.
+                if let Expr::Ident(cname, _) = &**callee {
+                    if self.classes.contains_key(cname) {
+                        self.enforce_ctor_vis(cname, span);
+                    }
+                }
                 self.under_new = true;
                 let t = self.check_expr(inner);
                 self.under_new = false; // defensive — the construction call already took it

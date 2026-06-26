@@ -109,6 +109,15 @@ struct ClassInfo {
     /// with a zero-arg ctor from one with no ctor at all (both leave `ctor` empty) — `merge_inherited`
     /// inherits a single parent's `ctor` only into a class that has none of its own (M-RT S6c.2a).
     has_ctor: bool,
+    /// Constructor member visibility (Soundness Batch A) — `public` (default) unless the `constructor`
+    /// keyword carries `private`/`protected`. Enforced at the construction site (`new C(...)`) so a
+    /// private/protected ctor blocks external construction (the factory/singleton pattern), the 7th
+    /// member-visibility access site. Inherited alongside `ctor` for a class with no own constructor.
+    ctor_vis: MemberVis,
+    /// The class that *declares* the constructor (Batch A) — itself for an own ctor, the parent for an
+    /// inherited one. The owner for the `protected`-scope subtype check and the `E-CTOR-VISIBILITY`
+    /// message, mirroring [`ConstEntry`]'s `owner`.
+    ctor_owner: String,
     /// Generic type parameters this class declares (`["T"]` for `class Box<T>`). Empty for a
     /// non-generic class. When non-empty, `fields`/`ctor`/`methods` may contain `Ty::Param`
     /// occurrences: construction unifies the ctor against the arguments to bind them, and member
@@ -236,6 +245,12 @@ pub struct Checker {
     /// when an initializer runs, so capturing the receiver is the F8 footgun. Outside this context a
     /// method-body lambda *may* capture `this`.
     in_field_init: bool,
+    /// Set while type-checking a **static** field initializer (Batch A). The init runs in the class's
+    /// own scope (so it may call a `private`/`protected` constructor — the singleton pattern, and
+    /// `cur_class` is set to the owner for that visibility check), but there is no instance, so `this`
+    /// is forbidden even though `cur_class` is `Some`. Distinct from `in_field_init` (an *instance*
+    /// field initializer, where `this` IS in scope).
+    in_static_init: bool,
     /// class currently being checked (for `this` and bare field refs)
     cur_class: Option<String>,
     /// live `check_expr` recursion depth, bounded by [`MAX_EXPR_DEPTH`]
@@ -334,6 +349,7 @@ impl Checker {
             skip_throws_discharge: false,
             under_new: false,
             in_field_init: false,
+            in_static_init: false,
             cur_class: None,
             depth: 0,
             loop_depth: 0,

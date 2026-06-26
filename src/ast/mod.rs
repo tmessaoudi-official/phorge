@@ -635,6 +635,11 @@ pub enum ClassMember {
         span: Span,
     },
     Constructor {
+        /// Modifiers on the `constructor` keyword itself — its *own* visibility
+        /// (`private`/`protected`/`public`), distinct from the per-param promotion modifiers in
+        /// `params`. Enforced at the construction site (`E-CTOR-VISIBILITY`); non-visibility
+        /// modifiers here are rejected (`E-CTOR-MODIFIER`). Previously parsed and dropped.
+        modifiers: Vec<Modifier>,
         params: Vec<CtorParam>,
         body: Vec<Stmt>,
         span: Span,

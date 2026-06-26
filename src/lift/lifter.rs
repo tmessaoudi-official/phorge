@@ -219,7 +219,15 @@ impl Lifter {
                 Some(b) => self.lift_block(b, &mut declared)?,
                 None => Vec::new(),
             };
+            // Preserve a non-public `__construct` visibility (the factory/singleton pattern);
+            // a public ctor stays modifier-free to match the bare-`constructor` printer output.
+            let modifiers = if m.vis == php::PhpVisibility::Public {
+                Vec::new()
+            } else {
+                vec![vis_modifier(m.vis)]
+            };
             return Ok(ClassMember::Constructor {
+                modifiers,
                 params,
                 body,
                 span: SP,

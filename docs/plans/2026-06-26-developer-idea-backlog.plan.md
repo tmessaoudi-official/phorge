@@ -81,6 +81,26 @@ P1)**, all front-end-only (byte-identity-neutral), 7 fix batches A–G. Decision
   (what `T?` means); non-optional fields require definite assignment (`E-FIELD-UNINITIALIZED`). Folded
   into Batch D.
 
+## Build progress (autonomous night, 2026-06-27)
+- **Batch A — constructor visibility — ✅ DONE** (autonomous). A `private`/`protected constructor`
+  now blocks external `new C(...)` — the 7th member-visibility access site. Threaded `modifiers` into
+  the `ClassMember::Constructor` AST node (parser no longer drops them); checker stores `ctor_vis`/
+  `ctor_owner` on `ClassInfo` (inherited alongside the ctor), enforces at `check_new` via
+  `enforce_ctor_vis` (`E-CTOR-VISIBILITY`), and rejects non-visibility ctor modifiers
+  (`E-CTOR-MODIFIER`, closing the §5 abstract/static/… variants). A static field initializer is
+  now checked in its **owning class's scope** (new `in_static_init` flag — `cur_class` set for
+  visibility but `this` forbidden), so the singleton pattern is legal. **Byte-identity fix:** the
+  transpiler emits the PHP visibility keyword on `__construct` AND wraps a static initializer of a
+  restricted-ctor class in a class-scope-bound closure (`Closure::bind(static fn() => …, null,
+  C::class)`), so PHP allows the private construction that the global `__phorge_init_statics` would
+  otherwise reject — `run≡runvm≡real PHP 8.5` preserved. Example `examples/guide/ctor-visibility.phg`
+  (singleton + factory-method construction) byte-identical on all three legs; `phg explain` for both
+  codes; 11 new checker tests; full workspace gate green (1002 lib + 112 differential w/ PHP oracle).
+  **KNOWN_ISSUE (rare, deferred):** a static init that constructs a *parent's* `protected` ctor via an
+  inherited-subtype scope isn't class-scope-wrapped (the wrap keys on the field's own class having a
+  restricted ctor, not an expr-walk) — needs an init-expr scan; the common self-construction singleton
+  is fully covered.
+
 ## Decisions Log
 - [2026-06-26] AGREED (Batch 1):
   - **A — ADOPT:** formalize "library/web files need no `main`; only running needs an entry"; keep

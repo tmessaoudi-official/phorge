@@ -1108,6 +1108,44 @@ impl Checker {
         );
     }
 
+    /// Enforce a constructor's visibility at a `new C(...)` site (Soundness Batch A — the 7th
+    /// member-visibility access site). A `private` ctor is constructible only inside its declaring
+    /// class (`cur_class == owner`); a `protected` ctor inside the declaring class or a subclass. The
+    /// in-scope cases are the factory/singleton patterns (a static factory method or a static field
+    /// initializer, both running in the class's scope). Public (the default) is always allowed.
+    pub(super) fn enforce_ctor_vis(&mut self, class_name: &str, span: Span) {
+        let Some(info) = self.classes.get(class_name) else {
+            return;
+        };
+        let vis = info.ctor_vis;
+        if vis == MemberVis::Public {
+            return;
+        }
+        let owner = info.ctor_owner.clone();
+        let cur = self.cur_class.clone();
+        let visible = match vis {
+            MemberVis::Public => true,
+            MemberVis::Private => cur.as_deref() == Some(owner.as_str()),
+            MemberVis::Protected => cur.as_deref().is_some_and(|c| self.is_subtype(c, &owner)),
+        };
+        if visible {
+            return;
+        }
+        let (visword, scope) = if vis == MemberVis::Private {
+            ("private", format!("inside `{owner}`"))
+        } else {
+            ("protected", format!("inside `{owner}` and its subclasses"))
+        };
+        self.err_coded(
+            span,
+            format!("the constructor of `{class_name}` is {visword}"),
+            "E-CTOR-VISIBILITY",
+            Some(format!(
+                "construct it only {scope} — e.g. a static factory method or a static field initializer"
+            )),
+        );
+    }
+
     /// The substitution mapping a generic enum's type parameters to a scrutinee's type arguments
     /// (`Option<int>` ⇒ `{T → int}`), so a `match` binds a variant payload at the concrete type
     /// (`Some(n)` ⇒ `n: int`). Empty for a non-generic enum, so it is the identity in the common case

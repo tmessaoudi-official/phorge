@@ -220,7 +220,13 @@ pub fn expand_aliases(program: &Program) -> Program {
                 init: init.clone(),
                 span: *span,
             },
-            ClassMember::Constructor { params, body, span } => ClassMember::Constructor {
+            ClassMember::Constructor {
+                modifiers,
+                params,
+                body,
+                span,
+            } => ClassMember::Constructor {
+                modifiers: modifiers.clone(),
                 params: params
                     .iter()
                     .map(|p| CtorParam {

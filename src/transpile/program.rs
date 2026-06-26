@@ -31,6 +31,19 @@ fn runtime_static_inits(program: &Program) -> Vec<(&str, &str, &Expr)> {
     out
 }
 
+/// Whether class `cls` declares its own `private`/`protected` constructor (Batch A). A static-field
+/// initializer of such a class (the singleton pattern — `static C inst = new C(...)`) must run in the
+/// class's own scope in PHP, else PHP rejects the construction from the global `__phorge_init_statics`
+/// while the Phorge backends (which treat a static init as in-class) accept it — a byte-identity break.
+fn class_has_restricted_ctor(program: &Program, cls: &str) -> bool {
+    program.items.iter().any(|it| {
+        matches!(it, Item::Class(c) if c.name == cls
+            && c.members.iter().any(|m| matches!(m,
+                ClassMember::Constructor { modifiers, .. }
+                    if modifiers.iter().any(|md| matches!(md, Modifier::Private | Modifier::Protected)))))
+    })
+}
+
 impl Transpiler {
     /// Pass 1 — index top-level names so call dispatch and match binding can resolve them.
     pub(super) fn collect(&mut self, program: &Program) {
@@ -181,7 +194,15 @@ impl Transpiler {
             self.indent += 1;
             for (cls, field, e) in &rt_statics {
                 let v = self.emit_expr(e)?;
-                self.line(&format!("{cls}::${field} = {v};"));
+                if class_has_restricted_ctor(program, cls) {
+                    // Run the initializer in the class's own scope so a `private`/`protected` ctor is
+                    // callable here (the singleton pattern), matching the Phorge backends (Batch A).
+                    self.line(&format!(
+                        "{cls}::${field} = (\\Closure::bind(static fn() => {v}, null, {cls}::class))();"
+                    ));
+                } else {
+                    self.line(&format!("{cls}::${field} = {v};"));
+                }
             }
             self.indent -= 1;
             self.line("}");
@@ -1351,7 +1372,20 @@ impl Transpiler {
                         self.line(&format!("{v} {} ${name};", self.emit_type(ty)));
                     }
                 }
-                ClassMember::Constructor { params, body, .. } => {
+                ClassMember::Constructor {
+                    modifiers,
+                    params,
+                    body,
+                    ..
+                } => {
+                    // Batch A: a `private`/`protected constructor` emits the PHP visibility keyword on
+                    // `__construct` (so PHP enforces it natively, matching the checker). A public/default
+                    // ctor stays bare (`function __construct`) for byte-identity with prior output.
+                    let cvis = match vis(modifiers) {
+                        "private" => "private ",
+                        "protected" => "protected ",
+                        _ => "",
+                    };
                     // M-RT S6c.2b: in a decomposed class's trait, a constructor can't be `__construct`
                     // (two trait `__construct`s are a PHP fatal). Emit its promoted params as plain
                     // `public` fields (the trait owns the storage); the construction logic moves to the
@@ -1418,9 +1452,12 @@ impl Transpiler {
                     // initializer reads `this` and an earlier sibling — matching the Rust backends.
                     let field_inits = crate::ast::own_field_initializers(c);
                     if body.is_empty() && parent_args.is_none() && field_inits.is_empty() {
-                        self.line(&format!("function __construct({}) {{}}", ps.join(", ")));
+                        self.line(&format!(
+                            "{cvis}function __construct({}) {{}}",
+                            ps.join(", ")
+                        ));
                     } else {
-                        self.line(&format!("function __construct({}) {{", ps.join(", ")));
+                        self.line(&format!("{cvis}function __construct({}) {{", ps.join(", ")));
                         self.indent += 1;
                         self.push_scope();
                         for p in params {

@@ -1,0 +1,34 @@
+// Constructor visibility (Soundness Batch A) — a `private`/`protected constructor` blocks external
+// `new C(...)`, so construction is funneled through the class's own scope. This is the missing 7th
+// member-visibility access site, alongside field/method visibility.
+//
+// A `private constructor` is constructible only inside the declaring class. The two in-scope sites:
+//   - a static field initializer (the singleton pattern — `Counter.zero`), and
+//   - an instance method that derives a new value (`next()` returns a fresh `Counter`).
+// An external `new Counter(0)` is rejected by the type-checker (E-CTOR-VISIBILITY) — see the README.
+//
+// Non-visibility modifiers on a constructor (`abstract`/`static`/`const`/…) are rejected
+// (E-CTOR-MODIFIER) rather than silently dropped.
+package Main;
+
+import Core.Console;
+
+class Counter {
+    // The promoted `n` is private; the constructor itself is private too.
+    private constructor(private int n) {}
+
+    // A static field initializer runs in the class's own scope, so it may call the private ctor.
+    static Counter zero = new Counter(0);
+
+    function value() -> int { return this.n; }
+
+    // An instance method is also in the class's scope — internal construction is allowed.
+    function next() -> Counter { return new Counter(this.n + 1); }
+}
+
+function main() -> void {
+    var a = Counter.zero;
+    var b = a.next().next();
+    Console.println("a = {a.value()}");
+    Console.println("b = {b.value()}");
+}

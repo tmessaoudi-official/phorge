@@ -762,6 +762,15 @@ impl Checker {
             // class declaring its own ctor keeps it (the deferred parent-forwarding case, KNOWN_ISSUES).
             if !child.has_ctor {
                 child.ctor.extend(parent_info.ctor.iter().cloned());
+                // Inherit the constructor's visibility + declaring owner (Batch A) from the first
+                // parent in `extends` order — so `new Child(...)` is gated by the inherited ctor's
+                // visibility (an inherited `private`/`protected __construct` blocks external
+                // construction, matching PHP). `ctor_owner` defaults to the child's own name, so a
+                // public-by-default chain is unaffected; only a non-public parent ctor changes it.
+                if child.ctor_owner == name && parent_info.ctor_vis != MemberVis::Public {
+                    child.ctor_vis = parent_info.ctor_vis;
+                    child.ctor_owner = parent_info.ctor_owner.clone();
+                }
             }
         }
     }
@@ -1157,6 +1166,8 @@ impl Checker {
                 hooks: HashMap::new(),
                 ctor: Vec::new(),
                 has_ctor: false,
+                ctor_vis: MemberVis::Public,
+                ctor_owner: c.name.clone(),
                 type_params: c.type_params.clone(),
                 is_abstract: c.is_abstract,
                 field_vis: HashMap::new(),
@@ -1176,6 +1187,7 @@ impl Checker {
         let mut methods: HashMap<String, Vec<FnSig>> = HashMap::new();
         let mut hooks: HashMap<String, HookInfo> = HashMap::new();
         let mut ctor = Vec::new();
+        let mut ctor_vis = MemberVis::Public;
         // The class's type parameters are in scope while resolving every member signature (fields,
         // constructor, methods), so a bare `T` resolves to `Ty::Param("T")` (M-RT generics-all). A
         // generic method adds its own parameters on top.
@@ -1282,7 +1294,29 @@ impl Checker {
                         }
                     }
                 }
-                ClassMember::Constructor { params, .. } => {
+                ClassMember::Constructor {
+                    modifiers,
+                    params,
+                    span,
+                    ..
+                } => {
+                    // The constructor's own visibility (Batch A). A non-visibility modifier
+                    // (`abstract`/`static`/`const`/`open`/`mutable`) on a constructor is meaningless —
+                    // reject it rather than silently dropping it (closes the §5 dropped-modifier gaps).
+                    ctor_vis = MemberVis::of(modifiers);
+                    if modifiers.iter().any(|m| {
+                        !matches!(
+                            m,
+                            Modifier::Public | Modifier::Private | Modifier::Protected
+                        )
+                    }) {
+                        self.err_coded(
+                            *span,
+                            "a constructor takes only a visibility modifier (`private`/`protected`/`public`)".to_string(),
+                            "E-CTOR-MODIFIER",
+                            Some("remove `abstract`/`static`/`const`/`open`/`mutable` from the constructor".into()),
+                        );
+                    }
                     // Resolve each param type once; reuse for both the ctor signature
                     // and field promotion to avoid duplicate "unknown type" errors.
                     self.active_type_params = class_tp.clone();
@@ -1427,6 +1461,9 @@ impl Checker {
             .iter()
             .any(|m| matches!(m, ClassMember::Constructor { .. }));
         info.ctor = ctor;
+        info.ctor_vis = ctor_vis;
+        // `ctor_owner` was initialized to the class's own name; an own ctor keeps it. An inherited
+        // ctor's owner/visibility are merged in `merge_inherited` for a class with no own ctor.
     }
 }
 

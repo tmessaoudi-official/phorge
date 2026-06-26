@@ -448,9 +448,15 @@ pub fn erase_generics(program: Program) -> Program {
                                 span,
                             }
                         }
-                        ClassMember::Constructor { params, body, span } => {
+                        ClassMember::Constructor {
+                            modifiers,
+                            params,
+                            body,
+                            span,
+                        } => {
                             let set: Params = class_params.iter().copied().collect();
                             ClassMember::Constructor {
+                                modifiers,
                                 params: params.iter().map(|p| rctorparam(p, &set)).collect(),
                                 body: body.iter().map(|s| rstmt(s, &set)).collect(),
                                 span,

@@ -508,7 +508,8 @@ impl Parser {
     }
 
     /// One class member: a field, a constructor, or a method. Modifiers preceding
-    /// `constructor` are consumed and dropped (M1: constructors are implicitly public).
+    /// `constructor` are its own visibility (default public); the checker enforces them at the
+    /// construction site and rejects non-visibility modifiers (Soundness Batch A).
     pub(super) fn parse_class_member(&mut self) -> Result<ClassMember, Diagnostic> {
         let sp = self.peek_span();
         let modifiers = self.parse_modifiers();
@@ -520,6 +521,7 @@ impl Parser {
                 self.expect(&TokenKind::RParen, "')' to close constructor parameters")?;
                 let body = self.parse_block()?;
                 Ok(ClassMember::Constructor {
+                    modifiers,
                     params,
                     body,
                     span: sp,

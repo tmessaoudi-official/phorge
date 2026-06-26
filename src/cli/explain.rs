@@ -733,6 +733,21 @@ pub fn explain_text(code: &str) -> Option<String> {
              type-checker so the interpreter, VM, and transpiled PHP all reject the same call. Call it\n\
              through a public method of the class, or make the method `public`.\n"
         }
+        "E-CTOR-VISIBILITY" => {
+            "E-CTOR-VISIBILITY — a `private`/`protected` constructor was called from outside its scope.\n\n\
+             A `private constructor` is callable only inside the declaring class; a `protected` one only\n\
+             inside that class and its subclasses (an un-annotated constructor is `public`). This blocks\n\
+             external `new C(...)` so construction is funneled through a factory — e.g. a static factory\n\
+             method or a static field initializer (the singleton pattern), both of which run in the\n\
+             class's own scope. Enforced in the type-checker so the interpreter, VM, and transpiled PHP\n\
+             all reject the same construction.\n"
+        }
+        "E-CTOR-MODIFIER" => {
+            "E-CTOR-MODIFIER — a non-visibility modifier was placed on a constructor.\n\n\
+             A constructor takes at most one visibility modifier (`private`/`protected`/`public`).\n\
+             `abstract`/`static`/`const`/`open`/`mutable` are meaningless on a constructor and are\n\
+             rejected rather than silently dropped. Remove the offending modifier.\n"
+        }
         "E-CONST-INSTANCE-ACCESS" => {
             "E-CONST-INSTANCE-ACCESS — a constant was read through an instance.\n\n\
              A `const` lives on the class, not the instance: read it as `ClassName.NAME`, never\n\
@@ -815,7 +830,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-PKG-CASE, E-INSTANCEOF-TYPE, E-CAST-TYPE, E-DECIMAL-DIV, E-DECIMAL-FLOAT-MIX, E-DECIMAL-LITERAL, E-DEFAULT-PARAM-ORDER, E-DEFAULT-PARAM-EXPR, E-DEFAULT-PARAM-TYPE, E-DEFAULT-PARAM-CONTEXT, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-FIELD-VISIBILITY, E-METHOD-VISIBILITY, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE, E-STRUCT-PAT-TYPE, E-STRUCT-FIELD-UNKNOWN, E-PATTERN-DUP-BIND, E-OR-PATTERN-BIND, E-FIXEDLIST-LEN, E-FIXEDLIST-BOUNDS, E-DESTRUCTURE-TYPE, E-DESTRUCTURE-NOT-CLASS, E-DESTRUCTURE-FIELD-UNKNOWN, E-DESTRUCTURE-NOT-LIST, E-DESTRUCTURE-NEEDS-ELSE, E-DESTRUCTURE-ELSE-IRREFUTABLE, E-DESTRUCTURE-ELSE-FALLTHROUGH, E-DESTRUCTURE-DUP-BIND, E-FIXEDLIST-DESTRUCTURE-LEN)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-PKG-CASE, E-INSTANCEOF-TYPE, E-CAST-TYPE, E-DECIMAL-DIV, E-DECIMAL-FLOAT-MIX, E-DECIMAL-LITERAL, E-DEFAULT-PARAM-ORDER, E-DEFAULT-PARAM-EXPR, E-DEFAULT-PARAM-TYPE, E-DEFAULT-PARAM-CONTEXT, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-FIELD-VISIBILITY, E-METHOD-VISIBILITY, E-CTOR-VISIBILITY, E-CTOR-MODIFIER, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE, E-STRUCT-PAT-TYPE, E-STRUCT-FIELD-UNKNOWN, E-PATTERN-DUP-BIND, E-OR-PATTERN-BIND, E-FIXEDLIST-LEN, E-FIXEDLIST-BOUNDS, E-DESTRUCTURE-TYPE, E-DESTRUCTURE-NOT-CLASS, E-DESTRUCTURE-FIELD-UNKNOWN, E-DESTRUCTURE-NOT-LIST, E-DESTRUCTURE-NEEDS-ELSE, E-DESTRUCTURE-ELSE-IRREFUTABLE, E-DESTRUCTURE-ELSE-FALLTHROUGH, E-DESTRUCTURE-DUP-BIND, E-FIXEDLIST-DESTRUCTURE-LEN)"
         )
     })
 }

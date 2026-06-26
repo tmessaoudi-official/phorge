@@ -181,9 +181,14 @@ impl Checker {
     /// function or read another static. A type mismatch is `E-STATIC-INIT-TYPE`.
     fn check_static_inits(&mut self, program: &crate::ast::Program) {
         use crate::ast::{ClassMember, Item, Modifier};
-        let prev = self.cur_class.take(); // statics have no instance — `this` is out of scope here
+        let prev = self.cur_class.take();
+        // A static initializer runs in its owning class's scope (so it may call that class's
+        // `private`/`protected` constructor — the singleton pattern), but there is no instance, so
+        // `this` is forbidden via `in_static_init` (Batch A).
+        self.in_static_init = true;
         for item in &program.items {
             let Item::Class(c) = item else { continue };
+            self.cur_class = Some(c.name.clone());
             for m in &c.members {
                 if let ClassMember::Field {
                     modifiers,
@@ -210,6 +215,7 @@ impl Checker {
                 }
             }
         }
+        self.in_static_init = false;
         self.cur_class = prev;
     }
 
