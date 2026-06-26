@@ -57,3 +57,59 @@ fn set_natives_eval_and_emit() {
         Ty::Set(Box::new(Ty::Param("T".into())))
     );
 }
+
+#[test]
+fn set_algebra_union_intersection_difference() {
+    use crate::value::HKey;
+    let mut o = String::new();
+    let set = |ns: &[i64]| {
+        Value::Set(std::rc::Rc::new(
+            ns.iter().map(|n| HKey::Int(*n)).collect::<Vec<_>>(),
+        ))
+    };
+    let ints = |v: &Value| match v {
+        Value::Set(s) => s
+            .iter()
+            .map(|k| match k {
+                HKey::Int(n) => *n,
+                other => panic!("non-int {other:?}"),
+            })
+            .collect::<Vec<_>>(),
+        other => panic!("non-set {other:?}"),
+    };
+    let a = set(&[1, 2, 3]);
+    let b = set(&[2, 3, 4]);
+    // union: a's order, then b's new elements.
+    assert_eq!(
+        ints(&set_union(&[a.clone(), b.clone()], &mut o).unwrap()),
+        vec![1, 2, 3, 4]
+    );
+    // intersection: a's order, members also in b.
+    assert_eq!(
+        ints(&set_intersection(&[a.clone(), b.clone()], &mut o).unwrap()),
+        vec![2, 3]
+    );
+    // difference: a's elements not in b.
+    assert_eq!(ints(&set_difference(&[a, b], &mut o).unwrap()), vec![1]);
+    // PHP erasures.
+    let php = |n: &str, args: &[&str]| {
+        let a: Vec<String> = args.iter().map(|s| (*s).to_string()).collect();
+        (registry()[index_of("Core.Set", n).unwrap()].php)(&a)
+    };
+    assert_eq!(
+        php("union", &["$a", "$b"]),
+        "array_values(array_unique(array_merge($a, $b), SORT_STRING))"
+    );
+    assert_eq!(
+        php("intersection", &["$a", "$b"]),
+        "array_values(array_intersect($a, $b))"
+    );
+    assert_eq!(
+        php("difference", &["$a", "$b"]),
+        "array_values(array_diff($a, $b))"
+    );
+    assert_eq!(
+        registry()[index_of("Core.Set", "union").unwrap()].ret,
+        Ty::Set(Box::new(Ty::Param("T".into())))
+    );
+}

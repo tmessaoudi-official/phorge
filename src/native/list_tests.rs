@@ -167,6 +167,99 @@ fn list_contains_eval_and_emit() {
 }
 
 #[test]
+fn list_breadth_slice_indexof_concat_first_last() {
+    let mut o = String::new();
+    let nums = || {
+        Value::List(std::rc::Rc::new(vec![
+            Value::Int(10),
+            Value::Int(20),
+            Value::Int(30),
+            Value::Int(40),
+            Value::Int(50),
+        ]))
+    };
+    let ints = |xs: &Value| match xs {
+        Value::List(v) => v
+            .iter()
+            .map(|e| match e {
+                Value::Int(n) => *n,
+                other => panic!("non-int {other:?}"),
+            })
+            .collect::<Vec<_>>(),
+        other => panic!("non-list {other:?}"),
+    };
+    // slice mirrors PHP array_slice(offset, length): positive, negative, out-of-range → clamp/empty.
+    assert_eq!(
+        ints(&list_slice(&[nums(), Value::Int(1), Value::Int(2)], &mut o).unwrap()),
+        vec![20, 30]
+    );
+    assert_eq!(
+        ints(&list_slice(&[nums(), Value::Int(-2), Value::Int(1)], &mut o).unwrap()),
+        vec![40]
+    );
+    assert_eq!(
+        ints(&list_slice(&[nums(), Value::Int(1), Value::Int(-1)], &mut o).unwrap()),
+        vec![20, 30, 40]
+    );
+    assert_eq!(
+        ints(&list_slice(&[nums(), Value::Int(9), Value::Int(2)], &mut o).unwrap()),
+        Vec::<i64>::new()
+    );
+    // indexOf: first match → int, miss → null.
+    assert!(matches!(
+        list_index_of(&[nums(), Value::Int(30)], &mut o).unwrap(),
+        Value::Int(2)
+    ));
+    assert!(matches!(
+        list_index_of(&[nums(), Value::Int(99)], &mut o).unwrap(),
+        Value::Null
+    ));
+    // concat: joins; both inputs unchanged.
+    let a = Value::List(std::rc::Rc::new(vec![Value::Int(1), Value::Int(2)]));
+    let b = Value::List(std::rc::Rc::new(vec![Value::Int(3)]));
+    assert_eq!(ints(&list_concat(&[a, b], &mut o).unwrap()), vec![1, 2, 3]);
+    // first / last: head/tail, or null for an empty list.
+    assert!(matches!(
+        list_first(&[nums()], &mut o).unwrap(),
+        Value::Int(10)
+    ));
+    assert!(matches!(
+        list_last(&[nums()], &mut o).unwrap(),
+        Value::Int(50)
+    ));
+    let empty = Value::List(std::rc::Rc::new(vec![]));
+    assert!(matches!(
+        list_first(std::slice::from_ref(&empty), &mut o).unwrap(),
+        Value::Null
+    ));
+    assert!(matches!(
+        list_last(std::slice::from_ref(&empty), &mut o).unwrap(),
+        Value::Null
+    ));
+    // PHP erasures + optional return types.
+    let php = |n: &str, a: &[&str]| {
+        let args: Vec<String> = a.iter().map(|s| (*s).to_string()).collect();
+        (registry()[index_of("Core.List", n).unwrap()].php)(&args)
+    };
+    assert_eq!(
+        php("slice", &["$xs", "$o", "$l"]),
+        "array_slice($xs, $o, $l)"
+    );
+    assert_eq!(php("indexOf", &["$xs", "$n"]), "__phorge_index_of($xs, $n)");
+    assert_eq!(php("concat", &["$a", "$b"]), "array_merge($a, $b)");
+    assert_eq!(php("first", &["$xs"]), "($xs[0] ?? null)");
+    assert_eq!(php("last", &["$xs"]), "($xs[count($xs) - 1] ?? null)");
+    assert_eq!(
+        registry()[index_of("Core.List", "indexOf").unwrap()].ret,
+        Ty::Optional(Box::new(Ty::Int))
+    );
+    assert_eq!(
+        registry()[index_of("Core.List", "first").unwrap()].ret,
+        Ty::Optional(Box::new(Ty::Param("T".into())))
+    );
+}
+
+#[test]
 fn list_higher_order_eval_and_emit() {
     // The HOF natives drive the closure via the backend-supplied invoker; here a stub invoker
     // stands in for a backend (the `f` Value is a placeholder the stub ignores). The end-to-end

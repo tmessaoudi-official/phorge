@@ -225,6 +225,12 @@ struct Transpiler {
     /// PHP arrays are COW value types, so the helper's by-value `$m` is already a copy.
     uses_map_set: bool,
     uses_map_remove: bool,
+    /// Set when `Core.List.indexOf` is emitted — defines `__phorge_index_of`, which maps PHP
+    /// `array_search`'s `false`-on-miss to `null` (the `int?` return).
+    uses_list_index_of: bool,
+    /// Set when `Core.Text.indexOf` is emitted — defines `__phorge_text_index_of`, mapping PHP
+    /// `strpos`'s `false`-on-miss to `null` (the `int?` return).
+    uses_text_index_of: bool,
     /// Classes that must lower to the **interface + trait** decomposition (M-RT S6b): every transitive
     /// ancestor of a multi-parent (`extends A, B`) class. PHP has no multiple inheritance, so a
     /// multi-parent class `implements` its parents' interfaces and `use`s their traits; each ancestor
@@ -404,6 +410,8 @@ impl Transpiler {
             uses_list_sort_with: false,
             uses_map_set: false,
             uses_map_remove: false,
+            uses_list_index_of: false,
+            uses_text_index_of: false,
             decomposed: BTreeSet::new(),
             tmp: 0,
         }

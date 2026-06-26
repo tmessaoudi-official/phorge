@@ -1,0 +1,30 @@
+// Core.Text breadth (M4 stdlib) — padding, search, slicing. Byte-based (no mbstring; the example
+// domain is ASCII), byte-identical on run / runvm / real PHP:
+//   • `padLeft`/`padRight(s, width, pad) -> string` — fill to `width` by repeating `pad` (PHP
+//                                                     `str_pad`); an already-wide string is unchanged.
+//   • `indexOf(s, needle) -> int?`  — byte offset of the first occurrence, else `null` (PHP `strpos`).
+//   • `substring(s, start, len) -> string` — a byte slice (PHP `substr`: negatives count from the end).
+package Main;
+
+import Core.Console;
+import Core.Text;
+
+function main(): void {
+    // padLeft / padRight: format a number column.
+    var id = Text.padLeft("7", 4, "0");   // "0007"
+    var label = Text.padRight("hi", 5, "."); // "hi..."
+    Console.println("id    = {id}");
+    Console.println("label = {label}");
+
+    // indexOf: present → offset, absent → null (via `??`).
+    var at = Text.indexOf("hello world", "world") ?? -1;
+    var miss = Text.indexOf("hello world", "xyz") ?? -1;
+    Console.println("indexOf world = {at}");   // 6
+    Console.println("indexOf xyz   = {miss}"); // -1
+
+    // substring: a window; a negative start counts from the end.
+    var ell = Text.substring("hello", 1, 3); // "ell"
+    var last2 = Text.substring("hello", -2, 2); // "lo"
+    Console.println("sub 1,3  = {ell}");
+    Console.println("sub -2,2 = {last2}");
+}

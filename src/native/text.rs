@@ -111,6 +111,82 @@ fn text_repeat(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("Text.repeat expects (string, int)".into()),
     }
 }
+/// Shared byte-level pad (PHP `str_pad`): if `s` is already >= `width` bytes (or `pad` is empty), `s`
+/// is returned unchanged; otherwise `pad` is repeated (last copy truncated) to fill the gap, on the
+/// left or right. Byte-based to match PHP (no mbstring); the example domain is ASCII. An empty pad
+/// faults cleanly (PHP `ValueError`); a multibyte pad truncated mid-char yields invalid UTF-8 →
+/// faults rather than panicking (EV-7).
+fn text_pad(s: &str, width: i64, pad: &str, left: bool) -> Result<Value, String> {
+    let cur = s.len();
+    let want = if width < 0 { 0 } else { width as usize };
+    if cur >= want {
+        return Ok(Value::Str(s.to_string()));
+    }
+    if pad.is_empty() {
+        return Err("Text.pad: pad string must not be empty".into());
+    }
+    let needed = want - cur;
+    let pb = pad.as_bytes();
+    let padding: Vec<u8> = (0..needed).map(|i| pb[i % pb.len()]).collect();
+    let mut out = Vec::with_capacity(want);
+    if left {
+        out.extend_from_slice(&padding);
+        out.extend_from_slice(s.as_bytes());
+    } else {
+        out.extend_from_slice(s.as_bytes());
+        out.extend_from_slice(&padding);
+    }
+    String::from_utf8(out)
+        .map(Value::Str)
+        .map_err(|_| "Text.pad: pad split a multibyte character (use an ASCII pad)".into())
+}
+fn text_pad_left(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s), Value::Int(w), Value::Str(p)] => text_pad(s, *w, p, true),
+        _ => Err("Text.padLeft expects (string, int, string)".into()),
+    }
+}
+fn text_pad_right(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s), Value::Int(w), Value::Str(p)] => text_pad(s, *w, p, false),
+        _ => Err("Text.padRight expects (string, int, string)".into()),
+    }
+}
+/// `indexOf(string, string) -> int?` — the byte offset of the first occurrence of `needle`, else
+/// `null` (PHP `strpos`, mapped from `false`). An empty needle is `0` (PHP 8 + Rust `find` agree).
+fn text_index_of(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s), Value::Str(needle)] => Ok(s
+            .find(needle.as_str())
+            .map_or(Value::Null, |i| Value::Int(i as i64))),
+        _ => Err("Text.indexOf expects (string, string)".into()),
+    }
+}
+/// `substring(string, int, int) -> string` — a byte-indexed slice mirroring PHP `substr($s, start,
+/// len)` exactly (negative start/len count from the end; out-of-range clamps to empty). Byte-based
+/// (no mbstring); a slice that splits a multibyte char yields invalid UTF-8 → faults (EV-7).
+fn text_substring(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s), Value::Int(start), Value::Int(length)] => {
+            let bytes = s.as_bytes();
+            let n = bytes.len() as i64;
+            let begin = if *start < 0 {
+                (n + *start).max(0)
+            } else {
+                (*start).min(n)
+            };
+            let end = if *length < 0 {
+                (n + *length).max(begin)
+            } else {
+                (begin + *length).min(n)
+            };
+            String::from_utf8(bytes[begin as usize..end as usize].to_vec())
+                .map(Value::Str)
+                .map_err(|_| "Text.substring split a multibyte character (byte-indexed)".into())
+        }
+        _ => Err("Text.substring expects (string, int, int)".into()),
+    }
+}
 
 /// The `Core.Text` registry entries (M3 Track B Wave 2). NOTE the PHP arg order: `explode`/`implode`
 /// take the separator first, and `str_replace` is `(search, replace, subject)` — the `php` closures
@@ -249,6 +325,60 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(text_parse_int),
             php: |a| format!("__phorge_parse_int({})", parg(a, 0)),
+        },
+        // `padLeft`/`padRight(string, int, string) -> string` — PHP `str_pad` (byte-based, no mbstring).
+        NativeFn {
+            module: "Core.Text",
+            name: "padLeft",
+            params: vec![s(), Ty::Int, s()],
+            ret: Ty::String,
+            pure: true,
+            eval: NativeEval::Pure(text_pad_left),
+            php: |a| {
+                format!(
+                    "str_pad({}, {}, {}, STR_PAD_LEFT)",
+                    parg(a, 0),
+                    parg(a, 1),
+                    parg(a, 2)
+                )
+            },
+        },
+        NativeFn {
+            module: "Core.Text",
+            name: "padRight",
+            params: vec![s(), Ty::Int, s()],
+            ret: Ty::String,
+            pure: true,
+            eval: NativeEval::Pure(text_pad_right),
+            // STR_PAD_RIGHT is the default, but pass it explicitly for symmetry/legibility.
+            php: |a| {
+                format!(
+                    "str_pad({}, {}, {}, STR_PAD_RIGHT)",
+                    parg(a, 0),
+                    parg(a, 1),
+                    parg(a, 2)
+                )
+            },
+        },
+        // `indexOf(string, string) -> int?` — gated `__phorge_text_index_of` (PHP `strpos` → null).
+        NativeFn {
+            module: "Core.Text",
+            name: "indexOf",
+            params: vec![s(), s()],
+            ret: Ty::Optional(Box::new(Ty::Int)),
+            pure: true,
+            eval: NativeEval::Pure(text_index_of),
+            php: |a| format!("__phorge_text_index_of({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        // `substring(string, int, int) -> string` — PHP `substr` (byte-indexed; negatives from end).
+        NativeFn {
+            module: "Core.Text",
+            name: "substring",
+            params: vec![s(), Ty::Int, Ty::Int],
+            ret: Ty::String,
+            pure: true,
+            eval: NativeEval::Pure(text_substring),
+            php: |a| format!("substr({}, {}, {})", parg(a, 0), parg(a, 1), parg(a, 2)),
         },
     ]
 }

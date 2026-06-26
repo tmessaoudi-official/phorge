@@ -86,6 +86,68 @@ fn list_contains(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("List.contains expects (List<T>, T)".into()),
     }
 }
+/// `slice(List<T>, int, int) -> List<T>` — a sub-list, mirroring PHP `array_slice($xs, offset, len)`
+/// EXACTLY (so the erasure is the bare builtin): a negative `offset`/`len` counts from the end, an
+/// out-of-range slice clamps to empty. Returns a fresh (re-indexed) list.
+fn list_slice(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), Value::Int(offset), Value::Int(length)] => {
+            let n = xs.len() as i64;
+            // PHP `array_slice` offset/length normalization, replicated for byte-identity.
+            let start = if *offset < 0 {
+                (n + *offset).max(0)
+            } else {
+                (*offset).min(n)
+            };
+            let end = if *length < 0 {
+                (n + *length).max(start)
+            } else {
+                (start + *length).min(n)
+            };
+            let out: Vec<Value> = xs[start as usize..end as usize].to_vec();
+            Ok(Value::List(std::rc::Rc::new(out)))
+        }
+        _ => Err("List.slice expects (List<T>, int, int)".into()),
+    }
+}
+/// `indexOf(List<T>, T) -> int?` — the index of the first element equal to the needle (structural
+/// `eq_val`, like `contains`), else `null`. Erases to a gated `__phorge_index_of` (PHP `array_search`
+/// returns `false` on miss, mapped to `null`).
+fn list_index_of(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), needle] => Ok(xs
+            .iter()
+            .position(|x| x.eq_val(needle))
+            .map_or(Value::Null, |i| Value::Int(i as i64))),
+        _ => Err("List.indexOf expects (List<T>, T)".into()),
+    }
+}
+/// `concat(List<T>, List<T>) -> List<T>` — the two lists joined (PHP `array_merge`, which re-indexes
+/// sequential lists). A fresh list; both inputs are untouched (immutability).
+fn list_concat(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(a), Value::List(b)] => {
+            let mut out = (**a).clone();
+            out.extend(b.iter().cloned());
+            Ok(Value::List(std::rc::Rc::new(out)))
+        }
+        _ => Err("List.concat expects (List<T>, List<T>)".into()),
+    }
+}
+/// `first(List<T>) -> T?` / `last(List<T>) -> T?` — the first/last element, or `null` for an empty
+/// list. Erase inline to `($xs[0] ?? null)` / `($xs[count($xs) - 1] ?? null)`.
+fn list_first(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs)] => Ok(xs.first().cloned().unwrap_or(Value::Null)),
+        _ => Err("List.first expects (List<T>)".into()),
+    }
+}
+fn list_last(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs)] => Ok(xs.last().cloned().unwrap_or(Value::Null)),
+        _ => Err("List.last expects (List<T>)".into()),
+    }
+}
 
 fn list_sum(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
@@ -276,6 +338,63 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::HigherOrder(list_sort_with),
             php: |a| format!("__phorge_sort_with({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        // `slice(List<T>, int, int) -> List<T>` — PHP `array_slice` (offset, length; negatives count
+        // from the end; out-of-range clamps to empty).
+        NativeFn {
+            module: "Core.List",
+            name: "slice",
+            params: vec![list(t()), Ty::Int, Ty::Int],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_slice),
+            php: |a| {
+                format!(
+                    "array_slice({}, {}, {})",
+                    parg(a, 0),
+                    parg(a, 1),
+                    parg(a, 2)
+                )
+            },
+        },
+        // `indexOf(List<T>, T) -> int?` — gated `__phorge_index_of` (PHP `array_search` strict → null).
+        NativeFn {
+            module: "Core.List",
+            name: "indexOf",
+            params: vec![list(t()), t()],
+            ret: Ty::Optional(Box::new(Ty::Int)),
+            pure: true,
+            eval: NativeEval::Pure(list_index_of),
+            php: |a| format!("__phorge_index_of({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        // `concat(List<T>, List<T>) -> List<T>` — PHP `array_merge` (re-indexes sequential lists).
+        NativeFn {
+            module: "Core.List",
+            name: "concat",
+            params: vec![list(t()), list(t())],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_concat),
+            php: |a| format!("array_merge({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        // `first(List<T>) -> T?` / `last(List<T>) -> T?` — head/tail or null for an empty list.
+        NativeFn {
+            module: "Core.List",
+            name: "first",
+            params: vec![list(t())],
+            ret: Ty::Optional(Box::new(t())),
+            pure: true,
+            eval: NativeEval::Pure(list_first),
+            php: |a| format!("({}[0] ?? null)", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "last",
+            params: vec![list(t())],
+            ret: Ty::Optional(Box::new(t())),
+            pure: true,
+            eval: NativeEval::Pure(list_last),
+            php: |a| format!("({0}[count({0}) - 1] ?? null)", parg(a, 0)),
         },
     ]
 }

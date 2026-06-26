@@ -445,6 +445,26 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_list_index_of {
+            // PHP `array_search($needle, $xs, true)` returns the int key or `false`; map `false` to
+            // `null` for the `int?` return (strict `===` matches Phorge's `eq_val` for scalars).
+            self.line("function __phorge_index_of($xs, $needle) {");
+            self.indent += 1;
+            self.line("$i = array_search($needle, $xs, true);");
+            self.line("return $i === false ? null : $i;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_text_index_of {
+            // PHP `strpos` returns the byte offset or `false` (note: 0 is a valid offset); map only
+            // `false` to `null` for the `int?` return.
+            self.line("function __phorge_text_index_of($s, $needle) {");
+            self.indent += 1;
+            self.line("$i = strpos($s, $needle);");
+            self.line("return $i === false ? null : $i;");
+            self.indent -= 1;
+            self.line("}");
+        }
     }
 
     /// The `Core.Json` recursive helpers (each gated by its `uses_json_*` flag). They walk the injected

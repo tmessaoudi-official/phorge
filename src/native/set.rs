@@ -27,6 +27,44 @@ fn set_size(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("Set.size expects (Set<T>)".into()),
     }
 }
+/// `union(a, b) -> Set<T>` — every element of `a` then every element of `b` not already present
+/// (first-occurrence order, like `build_set`). Already deduped (both inputs are sets); no rebuild
+/// needed. PHP `array_unique(array_merge(...))` keeps the same first-seen order.
+fn set_union(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Set(a), Value::Set(b)] => {
+            let mut out = (**a).clone();
+            for k in b.iter() {
+                if !out.contains(k) {
+                    out.push(k.clone());
+                }
+            }
+            Ok(Value::Set(std::rc::Rc::new(out)))
+        }
+        _ => Err("Set.union expects (Set<T>, Set<T>)".into()),
+    }
+}
+/// `intersection(a, b) -> Set<T>` — elements of `a` that are also in `b`, in `a`'s order (PHP
+/// `array_intersect`, which preserves the first array's order).
+fn set_intersection(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Set(a), Value::Set(b)] => {
+            let out: Vec<_> = a.iter().filter(|k| b.contains(k)).cloned().collect();
+            Ok(Value::Set(std::rc::Rc::new(out)))
+        }
+        _ => Err("Set.intersection expects (Set<T>, Set<T>)".into()),
+    }
+}
+/// `difference(a, b) -> Set<T>` — elements of `a` not in `b`, in `a`'s order (PHP `array_diff`).
+fn set_difference(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Set(a), Value::Set(b)] => {
+            let out: Vec<_> = a.iter().filter(|k| !b.contains(k)).cloned().collect();
+            Ok(Value::Set(std::rc::Rc::new(out)))
+        }
+        _ => Err("Set.difference expects (Set<T>, Set<T>)".into()),
+    }
+}
 
 /// The `Core.Set` registry entries (M-RT S7b). All generic over the element type `T`.
 pub(crate) fn set_natives() -> Vec<NativeFn> {
@@ -60,6 +98,49 @@ pub(crate) fn set_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(set_size),
             php: |a| format!("count({})", parg(a, 0)),
+        },
+        // Set algebra — each returns a new set; the result order follows the FIRST set (and, for
+        // union, the second set's new elements after it). SORT_STRING in the union's `array_unique`
+        // matches `HKey` string-distinctness (as `Set.of` does); `array_intersect`/`array_diff`
+        // compare by string too, agreeing for a homogeneous `Set<T>`.
+        NativeFn {
+            module: "Core.Set",
+            name: "union",
+            params: vec![Ty::Set(Box::new(t())), Ty::Set(Box::new(t()))],
+            ret: Ty::Set(Box::new(t())),
+            pure: true,
+            eval: NativeEval::Pure(set_union),
+            php: |a| {
+                format!(
+                    "array_values(array_unique(array_merge({}, {}), SORT_STRING))",
+                    parg(a, 0),
+                    parg(a, 1)
+                )
+            },
+        },
+        NativeFn {
+            module: "Core.Set",
+            name: "intersection",
+            params: vec![Ty::Set(Box::new(t())), Ty::Set(Box::new(t()))],
+            ret: Ty::Set(Box::new(t())),
+            pure: true,
+            eval: NativeEval::Pure(set_intersection),
+            php: |a| {
+                format!(
+                    "array_values(array_intersect({}, {}))",
+                    parg(a, 0),
+                    parg(a, 1)
+                )
+            },
+        },
+        NativeFn {
+            module: "Core.Set",
+            name: "difference",
+            params: vec![Ty::Set(Box::new(t())), Ty::Set(Box::new(t()))],
+            ret: Ty::Set(Box::new(t())),
+            pure: true,
+            eval: NativeEval::Pure(set_difference),
+            php: |a| format!("array_values(array_diff({}, {}))", parg(a, 0), parg(a, 1)),
         },
     ]
 }

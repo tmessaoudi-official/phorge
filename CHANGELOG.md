@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `Core.List` / `Core.Text` / `Core.Set` breadth (M4 stdlib sweep)
+
+A breadth pass over the collection + text modules, all additive natives (no new `Op`/`Value`),
+byte-identical run/runvm/real PHP 8.5, each with a guide example:
+
+- **`Core.List`**: `slice(xs, offset, len)` (PHP `array_slice`; negatives count from the end,
+  out-of-range clamps to empty — the Rust kernel replicates the normalization), `indexOf(xs, x) ->
+  int?` (gated `__phorge_index_of`, mapping `array_search`'s `false` to `null`), `concat(a, b)` (PHP
+  `array_merge`), `first(xs)` / `last(xs) -> T?`. Each returns a fresh list (immutable). Example
+  `examples/guide/list-ops.phg`.
+- **`Core.Text`**: `padLeft` / `padRight(s, width, pad)` (PHP `str_pad`), `indexOf(s, needle) -> int?`
+  (gated `__phorge_text_index_of`, from `strpos`), `substring(s, start, len)` (PHP `substr`). Byte-based
+  / tier-1 (no mbstring) — ASCII domain; a slice/pad that splits a multibyte char faults cleanly (EV-7)
+  rather than panicking. Example `examples/guide/text-ops.phg`.
+- **`Core.Set`**: `union` / `intersection` / `difference(a, b) -> Set<T>` (PHP `array_unique(array_merge)`
+  / `array_intersect` / `array_diff`); the result follows the first set's order. Example
+  `examples/guide/set-ops.phg`.
+
 ### Added — `Core.Map` access + functional update (M4 stdlib breadth)
 
 `Map<K, V>` was read-only (`keys`/`values`/`has`/`size` + faulting `m[k]`); these add access and

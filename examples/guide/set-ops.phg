@@ -1,0 +1,32 @@
+// Core.Set algebra (M4 stdlib) — `union` / `intersection` / `difference`, each returning a new set:
+//   • `union(a, b)`        — every element of either set.
+//   • `intersection(a, b)` — elements in both.
+//   • `difference(a, b)`   — elements in `a` but not `b`.
+// A `Set<T>` is insertion-ordered + deduplicated; results follow the first set's order (then the
+// second set's new elements, for union). Contents are shown via `size`/`contains` (a set isn't a
+// list). Byte-identical on run / runvm / real PHP.
+package Main;
+
+import Core.Console;
+import Core.Set;
+
+function main(): void {
+    var a = Set.of([1, 2, 3]);
+    var b = Set.of([2, 3, 4]);
+
+    var u = Set.union(a, b);        // {1, 2, 3, 4}
+    var i = Set.intersection(a, b); // {2, 3}
+    var d = Set.difference(a, b);   // {1}
+
+    Console.println("union size = {Set.size(u)}");        // 4
+    Console.println("inter size = {Set.size(i)}");        // 2
+    Console.println("diff size  = {Set.size(d)}");        // 1
+
+    // membership checks confirm the contents.
+    var uHas4 = Set.contains(u, 4);
+    var iHas1 = Set.contains(i, 1);
+    var dHas1 = Set.contains(d, 1);
+    Console.println("union has 4 = {uHas4}");  // true
+    Console.println("inter has 1 = {iHas1}");  // false (1 is not in b)
+    Console.println("diff has 1  = {dHas1}");  // true
+}

@@ -50,14 +50,12 @@ total-or-optional conversions**, not a C-cast operator:
 2. **Map mutation/access** — ✅ **DONE** (`examples/guide/map-ops.phg`, byte-identical 3-way).
    `get(Map<K,V>, K) -> V?` (inline `($m[$k] ?? null)`), `set`/`remove -> Map<K,V>` (new map, COW;
    gated `__phorge_map_set`/`_remove`; `set` reuses `value::map_set`). No new `Op`/`Value`.
-3. **List breadth** — `slice(List<T>, int, int) -> List<T>` (array_slice, clamp), `indexOf(List<T>, T)
-   -> int?` (array_search strict → None on miss), `concat(List<T>, List<T>) -> List<T>` (array_merge),
-   `first`/`last(List<T>) -> T?`.
-4. **Text breadth** — `padLeft`/`padRight(string, int, string) -> string` (str_pad), `indexOf(string,
-   string) -> int?` (strpos → None), `substring(string, int, int) -> string` (substr, byte-safe /
-   tier-1, no mbstring — see [[transpile-no-ini-extensions]]).
-5. **Set ops** — `union`/`intersection`/`difference(Set<T>, Set<T>) -> Set<T>` (insertion-ordered Set
-   discipline; PHP array_unique/array_intersect/array_diff). Deferred since S7b.
+3. **List breadth** — ✅ **DONE** (`examples/guide/list-ops.phg`, byte-identical): `slice` (array_slice,
+   normalized), `indexOf -> int?` (gated `__phorge_index_of`), `concat` (array_merge), `first`/`last -> T?`.
+4. **Text breadth** — ✅ **DONE** (`examples/guide/text-ops.phg`, byte-identical): `padLeft`/`padRight`
+   (str_pad, byte), `indexOf -> int?` (gated `__phorge_text_index_of`), `substring` (substr, byte). Tier-1.
+5. **Set ops** — ✅ **DONE** (`examples/guide/set-ops.phg`, byte-identical): `union`/`intersection`/
+   `difference` (array_unique∘array_merge / array_intersect / array_diff; first-set order).
 6. **`Text.parseFloat(string) -> float?`** — gated helper matching Rust `f64::from_str`. **Possible
    pause:** inf/nan/`.5`/`5.` acceptance is a genuine fork (match Rust permissive, or stricter
    JSON-like?) — surface via AskUserQuestion if non-obvious.

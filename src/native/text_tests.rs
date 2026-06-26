@@ -147,3 +147,99 @@ fn text_p3_byte_safe_natives() {
         "str_repeat($s, $n)"
     );
 }
+
+#[test]
+fn text_breadth_pad_indexof_substring() {
+    let mut o = String::new();
+    let s = |v: &str| Value::Str(v.into());
+    let str_of = |r: Result<Value, String>| match r.unwrap() {
+        Value::Str(t) => t,
+        other => panic!("non-string {other:?}"),
+    };
+    // padLeft / padRight (PHP str_pad): pad to width, repeating+truncating the pad; already-wide → no-op.
+    assert_eq!(
+        str_of(text_pad_left(&[s("7"), Value::Int(3), s("0")], &mut o)),
+        "007"
+    );
+    assert_eq!(
+        str_of(text_pad_right(&[s("7"), Value::Int(3), s("0")], &mut o)),
+        "700"
+    );
+    assert_eq!(
+        str_of(text_pad_left(&[s("ab"), Value::Int(5), s("xy")], &mut o)),
+        "xyxab"
+    );
+    assert_eq!(
+        str_of(text_pad_left(
+            &[s("toolong"), Value::Int(3), s(" ")],
+            &mut o
+        )),
+        "toolong"
+    );
+    // empty pad faults cleanly (PHP ValueError), never panics.
+    assert!(text_pad_left(&[s("x"), Value::Int(3), s("")], &mut o).is_err());
+    // indexOf (PHP strpos): first byte offset, else null; empty needle → 0.
+    assert!(matches!(
+        text_index_of(&[s("hello"), s("ll")], &mut o).unwrap(),
+        Value::Int(2)
+    ));
+    assert!(matches!(
+        text_index_of(&[s("hello"), s("z")], &mut o).unwrap(),
+        Value::Null
+    ));
+    assert!(matches!(
+        text_index_of(&[s("hello"), s("")], &mut o).unwrap(),
+        Value::Int(0)
+    ));
+    // substring (PHP substr): positive, negative, out-of-range.
+    assert_eq!(
+        str_of(text_substring(
+            &[s("hello"), Value::Int(1), Value::Int(3)],
+            &mut o
+        )),
+        "ell"
+    );
+    assert_eq!(
+        str_of(text_substring(
+            &[s("hello"), Value::Int(-2), Value::Int(1)],
+            &mut o
+        )),
+        "l"
+    );
+    assert_eq!(
+        str_of(text_substring(
+            &[s("hello"), Value::Int(1), Value::Int(-1)],
+            &mut o
+        )),
+        "ell"
+    );
+    assert_eq!(
+        str_of(text_substring(
+            &[s("hi"), Value::Int(9), Value::Int(2)],
+            &mut o
+        )),
+        ""
+    );
+    // PHP erasures.
+    let php = |n: &str, a: &[&str]| {
+        let args: Vec<String> = a.iter().map(|x| (*x).to_string()).collect();
+        (registry()[index_of("Core.Text", n).unwrap()].php)(&args)
+    };
+    assert_eq!(
+        php("padLeft", &["$s", "$w", "$p"]),
+        "str_pad($s, $w, $p, STR_PAD_LEFT)"
+    );
+    assert_eq!(
+        php("padRight", &["$s", "$w", "$p"]),
+        "str_pad($s, $w, $p, STR_PAD_RIGHT)"
+    );
+    assert_eq!(
+        php("indexOf", &["$s", "$n"]),
+        "__phorge_text_index_of($s, $n)"
+    );
+    assert_eq!(php("substring", &["$s", "$a", "$b"]), "substr($s, $a, $b)");
+    assert_eq!(
+        registry()[index_of("Core.Text", "indexOf").unwrap()].ret,
+        Ty::Optional(Box::new(Ty::Int))
+    );
+}

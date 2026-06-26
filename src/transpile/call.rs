@@ -130,13 +130,18 @@ impl Transpiler {
                                 _ => {}
                             }
                         }
-                        if nat.module == "Core.Text" && nat.name == "parseInt" {
-                            self.uses_text_parse_int = true;
+                        if nat.module == "Core.Text" {
+                            match nat.name {
+                                "parseInt" => self.uses_text_parse_int = true,
+                                "indexOf" => self.uses_text_index_of = true,
+                                _ => {}
+                            }
                         }
                         if nat.module == "Core.List" {
                             match nat.name {
                                 "sort" => self.uses_list_sort = true,
                                 "sortWith" => self.uses_list_sort_with = true,
+                                "indexOf" => self.uses_list_index_of = true,
                                 _ => {}
                             }
                         }
