@@ -39,6 +39,37 @@ total-or-optional conversions**, not a C-cast operator:
 - Open: does Phorge already auto-widen `int → float` in arithmetic (`1 + 2.0`)? The spec must pin the
   implicit-coercion rules. Spec-first.
 
+## Pinned completion backlog (autonomous — full-auto bypass active, 2026-06-26)
+
+> Developer pinned **"finish M4 = `as` operator + stdlib breadth sweep"** as the next big chunk. Run
+> hands-off, commit green slices, NEVER `git push`, pause only on genuine design forks (→ AskUserQuestion).
+> Each item byte-identity-gated (run≡runvm≡real PHP 8.5) + a guide example, per standing rules.
+
+1. **`as` operator (Slice 2b)** — speced in `docs/specs/2026-06-26-m4-casting-conversion-design.md`.
+   `v as T` ⇒ `T?` (checked, Kotlin/Swift model). Reuse `Op::IsInstance` (NO new Op): lower to
+   `if (v instanceof T) Some(v) else None`; transpile `($v instanceof T ? $v : null)`. Scrutinee =
+   class/interface/union; primitive `as` rejected (`E-CAST-TYPE`). `as` is contextual (import-alias
+   reuse). Precedence tighter than `??`, looser than member. Smart-cast in `if (var t = v as T)`.
+   `phg explain E-CAST-TYPE`; `examples/guide/as-cast.phg`.
+2. **Map mutation/access** — `Core.Map` is read-only today (keys/values/has/size; `m[k]` reads &
+   faults on miss). Add `set(Map<K,V>, K, V) -> Map<K,V>` (new map, COW), `remove(Map<K,V>, K) ->
+   Map<K,V>`, `get(Map<K,V>, K) -> V?` (safe, None on miss; V is non-optional so a present value is
+   never null). PHP: assoc set / `unset` over a copy / `array_key_exists ? : null`.
+3. **List breadth** — `slice(List<T>, int, int) -> List<T>` (array_slice, clamp), `indexOf(List<T>, T)
+   -> int?` (array_search strict → None on miss), `concat(List<T>, List<T>) -> List<T>` (array_merge),
+   `first`/`last(List<T>) -> T?`.
+4. **Text breadth** — `padLeft`/`padRight(string, int, string) -> string` (str_pad), `indexOf(string,
+   string) -> int?` (strpos → None), `substring(string, int, int) -> string` (substr, byte-safe /
+   tier-1, no mbstring — see [[transpile-no-ini-extensions]]).
+5. **Set ops** — `union`/`intersection`/`difference(Set<T>, Set<T>) -> Set<T>` (insertion-ordered Set
+   discipline; PHP array_unique/array_intersect/array_diff). Deferred since S7b.
+6. **`Text.parseFloat(string) -> float?`** — gated helper matching Rust `f64::from_str`. **Possible
+   pause:** inf/nan/`.5`/`5.` acceptance is a genuine fork (match Rust permissive, or stricter
+   JSON-like?) — surface via AskUserQuestion if non-obvious.
+
+**Decisions Log (this chunk):**
+- [2026-06-26] Big chunk = **finish M4** (`as` + stdlib sweep), full-auto, over M8 hardening / M-NUM/M-TIME.
+
 ## Status
 - [x] **Slice 1 sort/sortWith** — DONE (`examples/guide/sort.phg`, byte-identical; gated
   `__phorge_sort`/`__phorge_sort_with`; no new Op/Value).
