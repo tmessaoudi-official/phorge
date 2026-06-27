@@ -36,6 +36,7 @@ mod reflect;
 mod set;
 mod text;
 mod url;
+mod validate;
 
 pub use process::{process_args_value, set_process_args};
 
@@ -294,6 +295,7 @@ fn build() -> Vec<NativeFn> {
     registry.extend(encoding::encoding_natives());
     registry.extend(hash::hash_natives());
     registry.extend(url::url_natives());
+    registry.extend(validate::validate_natives());
     registry.extend(json::json_natives());
     registry.extend(reflect::reflect_natives());
     registry.extend(process::process_natives());

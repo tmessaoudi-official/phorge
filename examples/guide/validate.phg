@@ -1,0 +1,26 @@
+// Core.Validate — syntactic string predicates (native-stdlib wave).
+//
+// Format checks, each `string -> bool`: `isInt`, `isNumber` (int or fixed-point), `isAlpha`,
+// `isAlnum`, `isHex`. Phorge is std-only (no regex crate), so each check is hand-rolled in Rust and
+// the transpiled PHP uses the *same* anchored pattern via `preg_match` — byte-identical by
+// construction. These check shape, not range (e.g. `isInt("007")` is true).
+package Main;
+
+import Core.Console;
+import Core.Validate;
+
+function report(string label, bool ok): void {
+    Console.println("{label}: {ok}");
+}
+
+function main(): void {
+    report("isInt(-42)", Validate.isInt("-42"));
+    report("isInt(3.14)", Validate.isInt("3.14"));
+    report("isNumber(3.14)", Validate.isNumber("3.14"));
+    report("isNumber(.5)", Validate.isNumber(".5"));
+    report("isAlpha(Phorge)", Validate.isAlpha("Phorge"));
+    report("isAlpha(Phorge9)", Validate.isAlpha("Phorge9"));
+    report("isAlnum(abc123)", Validate.isAlnum("abc123"));
+    report("isHex(DEADbeef)", Validate.isHex("DEADbeef"));
+    report("isHex(0xFF)", Validate.isHex("0xFF"));
+}
