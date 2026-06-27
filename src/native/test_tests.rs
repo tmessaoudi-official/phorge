@@ -59,6 +59,21 @@ fn assert_null_natives() {
 }
 
 #[test]
+fn assert_faults_passes_only_when_the_closure_faults() {
+    // The closure value is a stand-in (the eval just hands it to the invoker, which ignores it here).
+    let f = Value::Unit;
+    // Closure faults (invoker returns Err) → assertion passes.
+    let mut faulting = |_f: &Value, _args: Vec<Value>| Err::<Value, String>("boom".into());
+    assert!(matches!(
+        test_assert_faults(std::slice::from_ref(&f), &mut faulting),
+        Ok(Value::Unit)
+    ));
+    // Closure returns normally → assertion fails.
+    let mut completing = |_f: &Value, _args: Vec<Value>| Ok::<Value, String>(Value::Int(1));
+    assert!(test_assert_faults(std::slice::from_ref(&f), &mut completing).is_err());
+}
+
+#[test]
 fn test_natives_registered_and_typed() {
     // All seven asserts are addressable by (module, name) and by leaf, and are `pure`.
     for name in [
@@ -69,6 +84,7 @@ fn test_natives_registered_and_typed() {
         "assertNotEquals",
         "assertNull",
         "assertNotNull",
+        "assertFaults",
     ] {
         let i = index_of("Core.Test", name).unwrap_or_else(|| panic!("{name} registered"));
         assert_eq!(index_of_by_leaf("Test", name), Some(i), "{name} leaf");

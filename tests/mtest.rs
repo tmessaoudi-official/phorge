@@ -106,6 +106,28 @@ fn no_test_files_found_exits_zero() {
 }
 
 #[test]
+fn assert_faults_passes_when_the_closure_faults() {
+    let d = TempDir::new("faults");
+    d.write(
+        "faults_test.phg",
+        "package Main;\nimport Core.Test;\n\
+         test \"oob faults\" { Test.assertFaults(fn() => [1, 2, 3][9]); }\n\
+         test \"no fault is a failure\" { Test.assertFaults(fn() => 1 + 1); }\n",
+    );
+    let (report, code) = cli::cmd_test(&[d.path().display().to_string()]);
+    assert_eq!(code, 1, "{report}");
+    assert!(report.contains("1 passed, 1 failed"), "{report}");
+    assert!(
+        report.contains(":: oob faults ... ok"),
+        "the faulting closure should pass:\n{report}"
+    );
+    assert!(
+        report.contains("expected the closure to fault"),
+        "the non-faulting closure should fail:\n{report}"
+    );
+}
+
+#[test]
 fn a_single_file_path_runs_just_that_file() {
     let d = TempDir::new("single");
     let f = d.write(

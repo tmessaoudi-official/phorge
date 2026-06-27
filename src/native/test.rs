@@ -101,6 +101,22 @@ fn test_assert_not_null(args: &[Value], _: &mut String) -> Result<Value, String>
     }
 }
 
+/// `Test.assertFaults(() -> T)` (M-Test T4) — runs the closure and **passes iff it faults**. A
+/// `HigherOrder` native: the backend supplies `call`, which runs a `Value::Closure` and returns
+/// `Err` for a fault (the dual of "must not fault" is just running the code directly — an uncaught
+/// fault fails the test). The closure's normal return value is discarded.
+fn test_assert_faults(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [f] => match call(f, Vec::new()) {
+            Err(_fault) => Ok(Value::Unit),
+            Ok(_v) => {
+                Err("assertion failed: expected the closure to fault, but it returned".into())
+            }
+        },
+        _ => Err("Test.assertFaults expects (() -> T)".into()),
+    }
+}
+
 /// The `Core.Test` registry entries (M-Test T2). All `pure` (deterministic) but only used by the
 /// `phg test` runner — never in a byte-identity example, so never seen by the PHP oracle.
 pub(crate) fn test_natives() -> Vec<NativeFn> {
@@ -205,6 +221,23 @@ pub(crate) fn test_natives() -> Vec<NativeFn> {
             php: |a| {
                 format!(
                     "(({}) !== null ? null : throw new \\Exception('assertion failed: expected non-null'))",
+                    parg(a, 0)
+                )
+            },
+        },
+        NativeFn {
+            module: "Core.Test",
+            name: "assertFaults",
+            // `() -> T`: a zero-arg closure returning any T. `T` is inferred from the closure's
+            // declared/inferred return type (the native-generic path), though the value is discarded.
+            params: vec![Ty::Function(vec![], Box::new(Ty::Param("T".into())))],
+            ret: Ty::Void,
+            pure: true,
+            eval: NativeEval::HigherOrder(test_assert_faults),
+            php: |a| {
+                // Bridge-only (never byte-identity-gated): run the closure; pass iff it throws.
+                format!(
+                    "(function($__f) {{ try {{ $__f(); }} catch (\\Throwable $__e) {{ return null; }} throw new \\Exception('assertion failed: expected the closure to fault'); }})({})",
                     parg(a, 0)
                 )
             },
