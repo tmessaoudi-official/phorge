@@ -2,6 +2,11 @@
 
 use super::*;
 
+/// A resolved method-overload signature for call checking (Batch C): `(params, ret, throws)`, with
+/// the class type-argument substitution already applied. The `throws` set is discharged at the call
+/// site exactly like a free-function call.
+pub(super) type MethodSig = (Vec<Ty>, Ty, Vec<Ty>);
+
 /// How a UFCS member call was navigated (Slice 6 / F-002): a plain `.`, a `?.` on a genuinely nullable
 /// receiver (needs the null-safe `match` desugar), or a `?.` on a non-null receiver (rare — a plain call
 /// with an optional-typed result, matching `?.`-on-non-optional elsewhere).
@@ -231,12 +236,22 @@ impl Checker {
     pub(super) fn check_method_sigs(
         &mut self,
         name: &str,
-        applied: &[(Vec<Ty>, Ty)],
+        applied: &[MethodSig],
         args: &[crate::ast::Expr],
         span: Span,
     ) -> Ty {
+        // Batch C: a method call discharges its declared checked exceptions exactly like a free-fn
+        // call (finding #3 — previously dropped, letting a `throws E` escape uncaught). The `?`
+        // suppression flag is honored for symmetry, though method-`?` propagation is still the
+        // documented `free_call_throws` deferral (a method throw must be caught in a `try`).
+        let skip_throws = std::mem::take(&mut self.skip_throws_discharge);
         if applied.len() == 1 {
-            let (params, ret) = &applied[0];
+            let (params, ret, throws) = &applied[0];
+            if !skip_throws {
+                for e in throws {
+                    self.discharge_call_throw(name, e, span);
+                }
+            }
             return if params.iter().any(ty_has_param) || ty_has_param(ret) {
                 self.check_generic_call(name, params, ret, args, span)
             } else {
@@ -245,7 +260,27 @@ impl Checker {
             };
         }
         let arg_tys: Vec<Ty> = args.iter().map(|a| self.check_expr(a)).collect();
-        let matched = applied.iter().find(|(params, _)| {
+        // Discharge the union of every statically-matching overload's throws — runtime dispatch may
+        // pick any of them (mirrors `check_overload_call`).
+        if !skip_throws {
+            let mut discharged: Vec<Ty> = Vec::new();
+            for (params, _, throws) in applied {
+                let matches = params.len() == arg_tys.len()
+                    && params
+                        .iter()
+                        .zip(&arg_tys)
+                        .all(|(p, a)| self.ty_assignable(a, p));
+                if matches {
+                    for e in throws {
+                        if !discharged.contains(e) {
+                            discharged.push(e.clone());
+                            self.discharge_call_throw(name, e, span);
+                        }
+                    }
+                }
+            }
+        }
+        let matched = applied.iter().find(|(params, _, _)| {
             params.len() == arg_tys.len()
                 && params
                     .iter()
@@ -253,7 +288,7 @@ impl Checker {
                     .all(|(p, a)| self.ty_assignable(a, p))
         });
         match matched {
-            Some((_, ret)) => ret.clone(),
+            Some((_, ret, _)) => ret.clone(),
             None => {
                 let got = arg_tys
                     .iter()
@@ -728,15 +763,18 @@ impl Checker {
                     .and_then(|info| info.methods.get(name))
                     .map(|v| {
                         v.iter()
-                            .map(|s| (s.params.clone(), s.ret.clone()))
+                            .map(|s| (s.params.clone(), s.ret.clone(), s.throws.clone()))
                             .collect::<Vec<_>>()
                     })
                     .or_else(|| {
                         if self.interfaces.contains_key(&cls) {
+                            // Interface-method `throws` via an interface-typed receiver is a
+                            // documented follow-up (the flattened form drops `throws`); the concrete
+                            // implementer's class-method call still discharges. Emit no throws here.
                             self.iface_flat_methods(&cls)
                                 .into_iter()
                                 .find(|(m, _)| m == name)
-                                .map(|(_, sig)| vec![sig])
+                                .map(|(_, sig)| vec![(sig.0, sig.1, Vec::new())])
                         } else {
                             None
                         }
@@ -756,12 +794,13 @@ impl Checker {
                             .get(&cls)
                             .and_then(|i| i.method_vis.get(name).cloned());
                         self.enforce_member_vis(v, name, span, false);
-                        let applied: Vec<(Vec<Ty>, Ty)> = sigs
+                        let applied: Vec<MethodSig> = sigs
                             .iter()
-                            .map(|(ps, r)| {
+                            .map(|(ps, r, th)| {
                                 (
                                     ps.iter().map(|p| apply_subst(p, &theta)).collect(),
                                     apply_subst(r, &theta),
+                                    th.iter().map(|t| apply_subst(t, &theta)).collect(),
                                 )
                             })
                             .collect();
@@ -794,7 +833,7 @@ impl Checker {
                 // method present in two members agrees on its signature (E-INTERSECT-SIG at the type
                 // site), so first-found is unambiguous. None → E-INTERSECT-NO-MEMBER. The value is a
                 // concrete instance underneath, so dispatch is polymorphic at runtime — no Op change.
-                let mut found: Option<Vec<(Vec<Ty>, Ty)>> = None;
+                let mut found: Option<Vec<MethodSig>> = None;
                 for m in &members {
                     if let Ty::Named(mn, margs) = m {
                         let sig = self
@@ -803,7 +842,7 @@ impl Checker {
                             .and_then(|info| info.methods.get(name))
                             .map(|v| {
                                 v.iter()
-                                    .map(|s| (s.params.clone(), s.ret.clone()))
+                                    .map(|s| (s.params.clone(), s.ret.clone(), s.throws.clone()))
                                     .collect::<Vec<_>>()
                             })
                             .or_else(|| {
@@ -811,7 +850,7 @@ impl Checker {
                                     self.iface_flat_methods(mn)
                                         .into_iter()
                                         .find(|(mm, _)| mm == name)
-                                        .map(|(_, sig)| vec![sig])
+                                        .map(|(_, sig)| vec![(sig.0, sig.1, Vec::new())])
                                 } else {
                                     None
                                 }
@@ -820,10 +859,11 @@ impl Checker {
                             let theta = self.class_subst(mn, margs);
                             found = Some(
                                 sigs.iter()
-                                    .map(|(ps, r)| {
+                                    .map(|(ps, r, th)| {
                                         (
                                             ps.iter().map(|p| apply_subst(p, &theta)).collect(),
                                             apply_subst(r, &theta),
+                                            th.iter().map(|t| apply_subst(t, &theta)).collect(),
                                         )
                                     })
                                     .collect(),

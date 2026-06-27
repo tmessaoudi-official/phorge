@@ -33,6 +33,19 @@ function doubled(int n): int throws NegativeInput | TooLarge {
   return v * 2;
 }
 
+// A class **method** may declare `throws` too — and the checker now enforces it at the call site
+// exactly like a free function (Soundness Batch C): a bare `v.check(n)` that is neither caught nor
+// declared is a compile error (`E-CALL-UNHANDLED`), so a checked exception can never escape silently
+// through the OO surface (previously it did — finding #3).
+class Validator {
+  function check(int n): int throws TooLarge {
+    if (n > 100) {
+      throw new TooLarge("method: must be at most 100");
+    }
+    return n;
+  }
+}
+
 function main(): void {
   // Multiple `catch` clauses dispatch by type; `finally` runs on every path (ok, caught, or
   // propagated). `?`-throws inside `doubled` surfaces the exception here.
@@ -55,5 +68,14 @@ function main(): void {
     Console.println("unreached");
   } catch (NegativeInput | TooLarge e) {
     Console.println("union catch handled a checked error");
+  }
+
+  // A throwing **method** call is enforced just like a free call — wrap it in `try`/`catch`.
+  var validator = new Validator();
+  try {
+    var c = validator.check(150);
+    Console.println("unreached");
+  } catch (TooLarge e) {
+    Console.println("method throw handled: {e.message}");
   }
 }

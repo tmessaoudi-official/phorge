@@ -265,3 +265,39 @@ fn throws_mode_propagate_is_recorded_for_erasure() {
         "throws-mode `?` Propagate node was not erased"
     );
 }
+
+// ── method-call throws discharge (Soundness Batch C) ─────────────────────────────────────────────
+
+#[test]
+fn method_throws_unhandled_at_bare_call_is_error() {
+    // A method declaring `throws BadInput`, called bare (no `try`), must be rejected at the call
+    // site — the same `E-CALL-UNHANDLED` as a free function (previously silently accepted).
+    let bad = errors_of(&format!(
+        "{ERRDEF} class Svc {{ function risky() -> int throws BadInput {{ throw new BadInput(\"x\"); }} }} \
+             function main() -> void {{ var s = new Svc(); var n = s.risky(); }}"
+    ));
+    assert!(
+        bad.iter().any(|d| d.code == Some("E-CALL-UNHANDLED")),
+        "expected E-CALL-UNHANDLED for an unhandled method throw, got {bad:?}"
+    );
+}
+
+#[test]
+fn method_throws_wrapped_in_try_is_clean() {
+    // The same method call inside a `try` catching the declared type discharges cleanly.
+    let ok = errors_of(&format!(
+        "{ERRDEF} class Svc {{ function risky() -> int throws BadInput {{ throw new BadInput(\"x\"); }} }} \
+             function main() -> void {{ var s = new Svc(); try {{ var n = s.risky(); }} catch (BadInput e) {{}} }}"
+    ));
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}
+
+#[test]
+fn non_throwing_method_call_is_clean() {
+    // Regression guard: a method that declares no `throws` is unaffected.
+    let ok = errors_of(
+        "class Svc { function ok() -> int { return 1; } } \
+             function main() -> void { var s = new Svc(); var n = s.ok(); }",
+    );
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}

@@ -101,6 +101,21 @@ P1)**, all front-end-only (byte-identity-neutral), 7 fix batches A–G. Decision
   restricted ctor, not an expr-walk) — needs an init-expr scan; the common self-construction singleton
   is fully covered.
 
+- **Batch C — `throws` enforced on method calls — ✅ DONE** (autonomous). Finding #3 (P0, biggest
+  idiomatic surface): a method declaring `throws E` did **not** discharge at the call site (only free
+  fns did), so a checked exception escaped uncaught through the entire OO surface. Fixed by widening
+  the method-overload tuple `(Vec<Ty>, Ty)` → `(Vec<Ty>, Ty, Vec<Ty>)` (params, ret, **throws**) in
+  `check_method_sigs` + both `applied` builders (class + intersection arms, throws `apply_subst`-ed
+  by the class θ), and discharging each matched overload's throws (single + multi-overload union),
+  honoring the `?`-suppression flag — mirroring `check_overload_call`. Now `s.risky()` requires a
+  `try`/`catch` exactly like `risky()`. Front-end only (no new `Op`/`Value`); `examples/guide/errors.phg`
+  extended with a throwing **method** + try/catch (byte-identical run≡runvm≡real PHP 8.5); 3 new
+  checker tests; full workspace gate green (1005 lib + 112 differential w/ PHP oracle). **Deferred
+  (documented, narrow):** (1) method-`?` *propagation* (`x.m()?`) stays the existing `free_call_throws`
+  deferral — a method throw must be caught in a `try`, not propagated; (2) an interface-method `throws`
+  reached *through an interface-typed receiver* isn't discharged (the flattened iface-method form drops
+  `throws`) — the concrete implementer's call still discharges, so the hole is narrow.
+
 ## Decisions Log
 - [2026-06-26] AGREED (Batch 1):
   - **A — ADOPT:** formalize "library/web files need no `main`; only running needs an entry"; keep
