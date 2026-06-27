@@ -11,7 +11,7 @@ enum Shape {
 
 class Named {
     constructor(private string label) {}
-    function labelOf(): string { return label; }
+    function labelOf(): string { return this.label; }
 }
 
 function area(Shape s): float {

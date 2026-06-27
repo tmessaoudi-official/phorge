@@ -12,13 +12,13 @@ enum Discount {
 class Item {
     constructor(private string name, private int cents, private Discount disc) {}
 
-    function nameOf(): string { return name; }
+    function nameOf(): string { return this.name; }
 
     function price(): int {
-        return match disc {
-            None()     => cents,
-            Percent(p) => cents - cents * p / 100,
-            Flat(c)    => cents - c,
+        return match this.disc {
+            None()     => this.cents,
+            Percent(p) => this.cents - this.cents * p / 100,
+            Flat(c)    => this.cents - c,
         };
     }
 }

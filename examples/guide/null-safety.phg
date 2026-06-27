@@ -7,7 +7,7 @@ import Core.Console;
 
 class Box {
     constructor(private int v) {}
-    function get(): int { return v; }
+    function get(): int { return this.v; }
 }
 
 // A self-optional field (`Node? next`) — the building block of a linked list. Exercises chained

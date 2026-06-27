@@ -24,7 +24,7 @@ class Counter {
     constructor(private int total) {}
 
     function add(int n): int {
-        return total + n;
+        return this.total + n;
     }
 }
 

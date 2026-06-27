@@ -1215,7 +1215,7 @@ fn s2_safe_access_is_byte_identical() {
     // the receiver is present. Field read and method call both go through `?.`.
     // `v` is `public` so the `?.v` field-read case below is a legal external access (Wave 1.1
     // visibility enforcement); the method cases read `v` internally regardless.
-    let cls = "class Box { constructor(public int v) {} function vOf() -> int { return v; } function plus(int n) -> int { return v + n; } }";
+    let cls = "class Box { constructor(public int v) {} function vOf() -> int { return this.v; } function plus(int n) -> int { return this.v + n; } }";
     let field = cls.to_string()
         + "import Core.Console;  function main() -> void { Box? a = null; Console.println(\"{(a?.v) ?? -1}\"); Box? b = new Box(7); Console.println(\"{(b?.v) ?? -1}\"); }";
     assert_eq!(cmd_run(&with_pkg(&field)).as_deref(), Ok("-1\n7\n"));
@@ -1287,7 +1287,8 @@ fn s2_multiple_null_ops_in_one_expr_are_byte_identical() {
     assert_eq!(cmd_run(&with_pkg(two_force)).as_deref(), Ok("1 2\n"));
     agree(two_force);
 
-    let cls = "class Box { constructor(private int v) {} function get() -> int { return v; } }";
+    let cls =
+        "class Box { constructor(private int v) {} function get() -> int { return this.v; } }";
     let two_safe = cls.to_string()
         + "import Core.Console;  function main() -> void { Box? a = new Box(7); Box? b = null; Console.println(\"{(a?.get()) ?? -1} {(b?.get()) ?? -1}\"); }";
     assert_eq!(cmd_run(&with_pkg(&two_safe)).as_deref(), Ok("7 -1\n"));

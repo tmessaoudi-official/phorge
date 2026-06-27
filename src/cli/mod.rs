@@ -386,7 +386,7 @@ import Core.Text;
 class Request {
   constructor(public string method, public string path, public bytes body, private List<string> headerLines) {}
   function header(string name): string? {
-    for (string line in headerLines) {
+    for (string line in this.headerLines) {
       if (Text.contains(line, ":")) {
         List<string> kv = Text.splitOnce(line, ":");
         string key = Text.trim(kv[0]);
@@ -423,13 +423,13 @@ class Response {
   }
   function serialize(): bytes {
     string nl = Bytes.toString(b"\x0d\x0a") ?? "";
-    string reason = Response.reason(status);
-    int st = status;
+    string reason = Response.reason(this.status);
+    int st = this.status;
     string statusLine = "HTTP/1.1 {st} {reason}";
-    int bodyLen = Bytes.length(body);
-    string userHeaders = Text.join(headerLines, nl);
+    int bodyLen = Bytes.length(this.body);
+    string userHeaders = Text.join(this.headerLines, nl);
     string head = "{statusLine}{nl}Content-Length: {bodyLen}{nl}{userHeaders}{nl}{nl}";
-    return Bytes.concat(Bytes.fromString(head), body);
+    return Bytes.concat(Bytes.fromString(head), this.body);
   }
 }
 "#;

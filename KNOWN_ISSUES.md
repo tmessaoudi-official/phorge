@@ -473,14 +473,17 @@ references, and the pipe operator `|>` all ship in M3 S3 and are byte-identical 
 and round-trip through real PHP. These refinements are deliberately deferred (each rejected cleanly
 or simply unavailable, never a crash):
 
-- **`this`-capture ships** (Phase 1 closures slice): a method-body lambda may reference `this`,
-  captured *live* (the instance handle), byte-identical on `run`/`runvm`/PHP. `E-LAMBDA-THIS` now fires
-  only inside a **field/static initializer** (partially-built instance). Deferred corner: a **bare
-  field reference inside a lambda** (`fn() => v` instead of `fn() => this.v`) is *not* captured — it
-  type-checks (the field is in the enclosing method scope) but isn't resolved at runtime (interpreter:
-  "undefined variable"; VM: a compile error). This is pre-existing (a non-`this` lambda was never
-  rejected); **write `this.v` explicitly** inside a lambda. Recognising a bare field as `this.v`
-  (and triggering capture) needs field-set awareness in the capture walker — a follow-up.
+- **No bare field access — `this.field` is required everywhere** (2026-06-27, PHP-faithful — PHP has no
+  bare field access, always `$this->field`). A bare name in a method resolves to a parameter, local, or
+  captured variable, *never* a field; an instance field referenced without `this.` is `E-BARE-FIELD`
+  (`E-STATIC-THIS` in a static method, where there is no instance). This removes the refactor footgun
+  where adding a local silently rebinds a field reference, and makes method bodies and lambdas
+  consistent (the old "bare field works in a method but not its lambda" gap is gone). Diagnostic-quality
+  limitation: a bare field used *inside a string interpolation* (`"{name}"`) reports the error at line
+  `1:1` rather than the real position (the interpolation sub-expression's span) — the error fires
+  correctly, only the location is imprecise; a follow-up. Backend note: the interpreter/compiler retain
+  their bare-field resolution paths, but the checker gates every program, so they are unreachable for
+  valid code.
 - **Lambdas and first-class function references are supported in `package Main` (and single-file
   programs), not yet inside library (non-`main`) packages.** The M5 loader's name-mangling pass
   rewrites *call sites*, but not a bare function reference used as a *value* nor the body of a lambda,

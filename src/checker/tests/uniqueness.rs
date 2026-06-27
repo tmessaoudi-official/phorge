@@ -53,7 +53,7 @@ fn explicit_field_matching_a_promoted_param_is_ok() {
     // Intentional: an explicit field declaration is authoritative; a promoted ctor param of the same
     // (matching) name/type is allowed (the explicit decl wins). Not a duplicate.
     let src = "class C { private int total; constructor(private int total) {} \
-                         function add(int n) -> int { return total + n; } } \
+                         function add(int n) -> int { return this.total + n; } } \
                function main() -> void { }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }

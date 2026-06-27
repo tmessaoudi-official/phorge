@@ -13,14 +13,14 @@ enum Tx {
 class Account {
     constructor(private string owner, private int cents) {}
 
-    function ownerName(): string { return owner; }
-    function balance(): int { return cents; }
+    function ownerName(): string { return this.owner; }
+    function balance(): int { return this.cents; }
 
     function apply(Tx t): Account {
         return match t {
-            Deposit(c)      => new Account(owner, cents + c),
-            Withdraw(c)     => new Account(owner, cents - c),
-            Transfer(c, to) => new Account(owner, cents - c),
+            Deposit(c)      => new Account(this.owner, this.cents + c),
+            Withdraw(c)     => new Account(this.owner, this.cents - c),
+            Transfer(c, to) => new Account(this.owner, this.cents - c),
         };
     }
 }

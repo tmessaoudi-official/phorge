@@ -5,8 +5,8 @@ use super::support::*;
 /// Two classes implementing one interface, plus a union-typed local, reused across the cases.
 fn prelude() -> String {
     "interface Shape { function area() -> int; } \
-     class Circle implements Shape { constructor(public int r) {} function area() -> int { return r; } } \
-     class Square implements Shape { constructor(public int s) {} function area() -> int { return s; } } "
+     class Circle implements Shape { constructor(public int r) {} function area() -> int { return this.r; } } \
+     class Square implements Shape { constructor(public int s) {} function area() -> int { return this.s; } } "
         .to_string()
 }
 

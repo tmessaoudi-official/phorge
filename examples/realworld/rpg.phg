@@ -12,14 +12,14 @@ enum Action {
 class Character {
     constructor(private string name, private int hp) {}
 
-    function nameOf(): string { return name; }
-    function hpOf(): int { return hp; }
+    function nameOf(): string { return this.name; }
+    function hpOf(): int { return this.hp; }
 
     function act(Action a): Character {
         return match a {
-            Attack(d) => new Character(name, hp - d),
-            Heal(h)   => new Character(name, hp + h),
-            Defend()  => new Character(name, hp),
+            Attack(d) => new Character(this.name, this.hp - d),
+            Heal(h)   => new Character(this.name, this.hp + h),
+            Defend()  => new Character(this.name, this.hp),
         };
     }
 }

@@ -13,8 +13,8 @@ enum Availability {
 class Book {
     constructor(private string title, private Availability status) {}
 
-    function titleOf(): string { return title; }
-    function statusOf(): Availability { return status; }
+    function titleOf(): string { return this.title; }
+    function statusOf(): Availability { return this.status; }
 }
 
 function describe(Availability a): string {

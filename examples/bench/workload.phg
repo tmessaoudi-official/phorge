@@ -12,7 +12,7 @@ import Core.Console;
 // single int field; `squared` exercises a method call + field read per instance.
 class Cell {
     constructor(private int v) {}
-    function squared(): int { return v * v; }
+    function squared(): int { return this.v * this.v; }
 }
 
 // Heap pressure: at recursion depth d, d `Cell`s are simultaneously live — each frame keeps its

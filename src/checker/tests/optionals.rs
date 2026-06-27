@@ -77,7 +77,8 @@ fn coalesce_typing() {
 
 #[test]
 fn safe_member_access_typing() {
-    let cls = "class Box { constructor(public int v) {} function vOf() -> int { return v; } } ";
+    let cls =
+        "class Box { constructor(public int v) {} function vOf() -> int { return this.v; } } ";
     // `?.` on an optional yields an optional member, usable via `??`.
     let ok_field =
         cls.to_string() + "function main() -> void { Box? b = null; int y = (b?.v) ?? -1; }";

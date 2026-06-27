@@ -31,7 +31,7 @@ function area(Shape s): float {
 class Greeter {
     private string name;
     constructor(private string name) {}
-    function greet(): string { return "Hello {name}"; }
+    function greet(): string { return "Hello {this.name}"; }
 }
 
 function main(): void {

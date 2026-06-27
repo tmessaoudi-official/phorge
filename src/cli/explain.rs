@@ -803,6 +803,15 @@ pub fn explain_text(code: &str) -> Option<String> {
              the value in as a parameter, or make the method non-static (drop `static`). A static\n\
              factory may still construct the class (`new Self(…)`).\n"
         }
+        "E-BARE-FIELD" => {
+            "E-BARE-FIELD — an instance field was referenced without `this.`.\n\n\
+             Phorge has no bare field access: a field is always written `this.field`, exactly like\n\
+             PHP's `$this->field`. A bare name inside a method resolves to a parameter, a local, or a\n\
+             captured variable — never silently to a field — so that adding a local can never quietly\n\
+             rebind what looked like a field. Qualify it:\n\n\
+             \tfunction total(): int { return this.amount + this.tax; }  // not `amount + tax`\n\n\
+             (In a static method there is no instance at all — that is `E-STATIC-THIS`.)\n"
+        }
         "E-CONST-INSTANCE-ACCESS" => {
             "E-CONST-INSTANCE-ACCESS — a constant was read through an instance.\n\n\
              A `const` lives on the class, not the instance: read it as `ClassName.NAME`, never\n\

@@ -27,7 +27,7 @@ class Request {
   // Linear scan, parse on lookup. `splitOnce` keeps `:` inside a value intact (e.g. a Host:port).
   // Lines without a `:` (the request-line) are skipped by the `contains` guard.
   function header(string name): string? {
-    for (string line in headerLines) {
+    for (string line in this.headerLines) {
       if (Text.contains(line, ":")) {
         List<string> kv = Text.splitOnce(line, ":");
         string key = Text.trim(kv[0]);

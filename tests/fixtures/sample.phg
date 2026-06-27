@@ -19,7 +19,7 @@ class Greeter {
     constructor(private string name) {}
 
     function greet() -> string {
-        return "Hello {name}";
+        return "Hello {this.name}";
     }
 }
 

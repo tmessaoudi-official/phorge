@@ -19,7 +19,7 @@ import Core.Text;
 
 class Point {
     constructor(public int x, public int y) {}
-    function sum(): int { return x + y; }
+    function sum(): int { return this.x + this.y; }
 }
 
 enum Color {

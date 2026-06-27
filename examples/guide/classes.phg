@@ -3,16 +3,16 @@ import Core.Console;
 
 class Engine {
     constructor(private int power) {}
-    function powerOf(): int { return power; }
+    function powerOf(): int { return this.power; }
 }
 
 class Car {
     // composition: a Car *has an* Engine
     constructor(private string make, private Engine engine) {}
 
-    function makeOf(): string { return make; }
+    function makeOf(): string { return this.make; }
     // a method that calls a method on a field (the Wave-4 class-aware path)
-    function horsepower(): int { return engine.powerOf(); }
+    function horsepower(): int { return this.engine.powerOf(); }
 }
 
 function main(): void {

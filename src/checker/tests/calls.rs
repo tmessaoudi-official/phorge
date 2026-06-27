@@ -187,10 +187,24 @@ fn field_access_typed() {
 }
 
 #[test]
-fn bare_field_visible_in_method() {
+fn field_accessible_in_method_via_this() {
+    // A field is read through `this.` (Phorge requires `this.field` everywhere, like PHP `$this->`).
+    let src =
+        "class C { constructor(private string name) {} function who() -> string { return this.name; } }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn bare_field_access_is_rejected() {
+    // Bare field access (no `this.`) is `E-BARE-FIELD` (2026-06-27, PHP-faithful — PHP has no bare
+    // field access). The same code with `this.name` type-checks (see above).
     let src =
         "class C { constructor(private string name) {} function who() -> string { return name; } }";
-    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    let errs = errors_of(src);
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-BARE-FIELD")),
+        "bare field must be E-BARE-FIELD: {errs:?}"
+    );
 }
 
 #[test]
@@ -227,7 +241,7 @@ fn promoted_ctor_param_is_field() {
     // the promoted param becomes an instance field, matching the evaluator (EV-4).
     let errs = errors_of(
         "class C { constructor(private int total) {} \
-               function add(int n) -> int { return total + n; } }",
+               function add(int n) -> int { return this.total + n; } }",
     );
     assert!(errs.is_empty(), "promoted field should resolve: {errs:?}");
 }
@@ -238,7 +252,7 @@ fn explicit_field_decl_wins_over_promotion_type() {
     // param of the same name does not override its declared type.
     let errs = errors_of(
         "class C { private int total; constructor(private int total) {} \
-               function add(int n) -> int { return total + n; } }",
+               function add(int n) -> int { return this.total + n; } }",
     );
     assert!(
         errs.is_empty(),

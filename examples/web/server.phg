@@ -20,7 +20,7 @@ class Request {
               private List<string> headerLines) {}
 
   function header(string name): string? {
-    for (string line in headerLines) {
+    for (string line in this.headerLines) {
       if (Text.contains(line, ":")) {
         List<string> kv = Text.splitOnce(line, ":");
         string key = Text.trim(kv[0]);

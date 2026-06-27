@@ -53,21 +53,24 @@ impl Checker {
                         let ret_ty = sig.ret.clone();
                         return Ty::Function(param_tys, Box::new(ret_ty));
                     }
-                    // Batch E: a bare instance-field reference in a static method (the field exists on
-                    // the class but there is no instance) — a targeted `E-STATIC-THIS` over the generic
-                    // unknown-identifier error.
-                    if self.in_static_method
-                        && self
-                            .cur_class
-                            .as_ref()
-                            .and_then(|c| self.classes.get(c))
-                            .is_some_and(|info| info.fields.contains_key(name))
-                    {
+                    // A bare instance-field reference. Phorge requires `this.field` everywhere (like
+                    // PHP's `$this->field`; no bare field access) — so this is always an error, with a
+                    // distinct code per context: in a static method there is no instance at all
+                    // (`E-STATIC-THIS`), otherwise the fix is to qualify it (`E-BARE-FIELD`).
+                    if self.is_cur_field(name) {
+                        if self.in_static_method {
+                            return self.err_coded(
+                                *span,
+                                format!("instance field `{name}` is not accessible in a static method"),
+                                "E-STATIC-THIS",
+                                Some("a static method has no instance — pass the value as a parameter, use a static field, or make the method non-static".into()),
+                            );
+                        }
                         return self.err_coded(
                             *span,
-                            format!("instance field `{name}` is not accessible in a static method"),
-                            "E-STATIC-THIS",
-                            Some("a static method has no instance — pass the value as a parameter, use a static field, or make the method non-static".into()),
+                            format!("bare field reference `{name}` — write `this.{name}`"),
+                            "E-BARE-FIELD",
+                            Some(format!("Phorge has no bare field access (like PHP's `$this->`): qualify it as `this.{name}`")),
                         );
                     }
                     let cands = self.in_scope_names();

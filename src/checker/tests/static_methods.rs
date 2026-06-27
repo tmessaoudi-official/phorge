@@ -40,8 +40,8 @@ fn static_method_reading_static_field_is_ok() {
 
 #[test]
 fn instance_method_using_this_is_ok() {
-    // Regression guard: a non-static method still sees `this` and bare fields.
-    let src = "class C { int x = 0; function f() -> int { return this.x + x; } } \
+    // Regression guard: a non-static method sees `this` (fields are always `this.field`, 2026-06-27).
+    let src = "class C { int x = 0; function f() -> int { return this.x + this.x; } } \
                function main() -> void { }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }

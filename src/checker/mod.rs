@@ -515,23 +515,25 @@ impl Checker {
         }
         None
     }
+    /// Resolve a name against the lexical scope stack only (params + locals + captures). Bare *field*
+    /// access is intentionally NOT resolved here (2026-06-27): Phorge requires `this.field` everywhere,
+    /// matching PHP's `$this->field` (no bare field access) — a bare field reference is reported as
+    /// `E-BARE-FIELD` at the `Ident` site, not silently resolved.
     fn lookup(&self, name: &str) -> Option<Ty> {
         for scope in self.scopes.iter().rev() {
             if let Some((t, _)) = scope.get(name) {
                 return Some(t.clone());
             }
         }
-        // bare field reference inside a method — but NOT in a static method (no instance; Batch E).
-        if !self.in_static_method {
-            if let Some(cls) = &self.cur_class {
-                if let Some(info) = self.classes.get(cls) {
-                    if let Some(t) = info.fields.get(name) {
-                        return Some(t.clone());
-                    }
-                }
-            }
-        }
         None
+    }
+    /// Is `name` an instance field of the class currently being checked? Used by the `Ident` site to
+    /// turn a bare field reference into a targeted `E-BARE-FIELD` ("write `this.{name}`").
+    fn is_cur_field(&self, name: &str) -> bool {
+        self.cur_class
+            .as_ref()
+            .and_then(|c| self.classes.get(c))
+            .is_some_and(|info| info.fields.contains_key(name))
     }
 
     // ---- totality: structural termination analysis (M-RT totality cluster) ----

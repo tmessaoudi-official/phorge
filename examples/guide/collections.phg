@@ -4,7 +4,7 @@ import Core.List;
 
 class Point {
     constructor(private int x, private int y) {}
-    function show(): string { return "({x}, {y})"; }
+    function show(): string { return "({this.x}, {this.y})"; }
 }
 
 function main(): void {

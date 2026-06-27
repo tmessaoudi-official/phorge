@@ -17,12 +17,12 @@ interface Shape {
 
 class Circle implements Shape {
     constructor(public int radius) {}
-    function area(): int { return radius * radius; }
+    function area(): int { return this.radius * this.radius; }
 }
 
 class Square implements Shape {
     constructor(public int side) {}
-    function area(): int { return side * side; }
+    function area(): int { return this.side * this.side; }
 }
 
 // Downcast a `Shape` to `Circle`: success → read `radius`; failure → fall back. The if-let smart-cast
