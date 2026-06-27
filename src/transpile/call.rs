@@ -94,11 +94,24 @@ impl Transpiler {
             // so a same-spelled value receiver is impossible).
             if !*safe {
                 if let Expr::Ident(q, _) = &**object {
-                    if let Some(idx) = self
+                    // Resolve the native: normally via the import map (no scope to tell a qualifier
+                    // from a value). A primitive `as`-cast rewrite (M4 as-matrix) synthesizes an
+                    // *un-imported* `Convert.*`/`Text.*` call; resolve those two leaves directly. Safe
+                    // because (a) the checker rejects any user-written un-imported stdlib call
+                    // (E-UNKNOWN-IDENT), and (b) we skip the fallback when `q` is a user class — so a
+                    // user `Convert`/`Text` static call still wins.
+                    let cast_leaf =
+                        matches!(q.as_str(), "Convert" | "Text") && !self.classes.contains(q);
+                    let resolved = self
                         .imports
                         .get(q)
                         .and_then(|m| crate::native::index_of(m, name))
-                    {
+                        .or_else(|| {
+                            cast_leaf
+                                .then(|| crate::native::index_of_by_leaf(q, name))
+                                .flatten()
+                        });
+                    if let Some(idx) = resolved {
                         let argv: Vec<String> = args
                             .iter()
                             .map(|a| self.emit_expr(a))
@@ -160,6 +173,8 @@ impl Transpiler {
                                 "toString" => self.uses_str = true,
                                 "toInt" => self.uses_float_to_int = true,
                                 "decimalToInt" => self.uses_dec_to_int = true,
+                                "floatToIntExact" => self.uses_float_to_int_exact = true,
+                                "decimalToIntExact" => self.uses_dec_to_int_exact = true,
                                 _ => {}
                             }
                         }

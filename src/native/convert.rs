@@ -99,6 +99,30 @@ fn convert_decimal_to_int(args: &[Value], _: &mut String) -> Result<Value, Strin
     }
 }
 
+/// `Convert.floatToIntExact(float) -> int?` (M4 as-matrix) — the `float as int` kernel: `Some` only
+/// when the float is integral & in range (`3.0 → 3`, `3.9 → null`), never a silent truncate.
+/// Single-sourced with `value::float_to_int_exact`; PHP `__phorge_float_to_int_exact`.
+fn convert_float_to_int_exact(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Float(f)] => {
+            Ok(crate::value::float_to_int_exact(*f).map_or(Value::Null, Value::Int))
+        }
+        _ => Err("Convert.floatToIntExact expects (float)".into()),
+    }
+}
+
+/// `Convert.decimalToIntExact(decimal) -> int?` (M4 as-matrix) — the `decimal as int` kernel: `Some`
+/// only when the decimal is integral & in range (`3.00d → 3`, `3.50d → null`), never a silent
+/// truncate. Single-sourced with `value::decimal_to_int_exact`; PHP `__phorge_dec_to_int_exact`.
+fn convert_decimal_to_int_exact(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [v @ Value::Decimal { .. }] => {
+            Ok(crate::value::decimal_to_int_exact(v).map_or(Value::Null, Value::Int))
+        }
+        _ => Err("Convert.decimalToIntExact expects (decimal)".into()),
+    }
+}
+
 pub(crate) fn convert_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
@@ -180,6 +204,25 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             // `value::decimal_to_int` (split the carrier string before the dot, range-check).
             php: |a| format!("__phorge_dec_to_int({})", parg(a, 0)),
             eval: NativeEval::Pure(convert_decimal_to_int),
+        },
+        // --- exact int conversions (M4 `as`-matrix `float/decimal as int`) ---
+        NativeFn {
+            module: "Core.Convert",
+            name: "floatToIntExact",
+            params: vec![Ty::Float],
+            ret: Ty::Optional(Box::new(Ty::Int)),
+            pure: true,
+            php: |a| format!("__phorge_float_to_int_exact({})", parg(a, 0)),
+            eval: NativeEval::Pure(convert_float_to_int_exact),
+        },
+        NativeFn {
+            module: "Core.Convert",
+            name: "decimalToIntExact",
+            params: vec![Ty::Decimal],
+            ret: Ty::Optional(Box::new(Ty::Int)),
+            pure: true,
+            php: |a| format!("__phorge_dec_to_int_exact({})", parg(a, 0)),
+            eval: NativeEval::Pure(convert_decimal_to_int_exact),
         },
     ]
 }

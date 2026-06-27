@@ -272,6 +272,14 @@ struct Transpiler {
     /// truncating the carrier string toward zero (split before the dot) and range-checking i64, else
     /// `null`. Mirrors Rust `value::decimal_to_int`.
     uses_dec_to_int: bool,
+    /// Set when `Convert.floatToIntExact(float)` is emitted (M4 as-matrix `float as int`) — defines
+    /// `__phorge_float_to_int_exact`: the integral-or-null kernel (`3.0→3`, `3.9→null`). Mirrors Rust
+    /// `value::float_to_int_exact`.
+    uses_float_to_int_exact: bool,
+    /// Set when `Convert.decimalToIntExact(decimal)` is emitted (M4 as-matrix `decimal as int`) —
+    /// defines `__phorge_dec_to_int_exact`: integral-or-null over the carrier string. Mirrors Rust
+    /// `value::decimal_to_int_exact`.
+    uses_dec_to_int_exact: bool,
     /// Set when `Math.gcd(int, int)` is emitted (M-NUM S4) — defines `__phorge_gcd` (Euclid over the
     /// magnitudes), since gmp is absent under `php -n`. Mirrors the Rust `math_gcd` native body.
     uses_math_gcd: bool,
@@ -493,6 +501,8 @@ impl Transpiler {
             uses_dec_round: false,
             uses_float_to_int: false,
             uses_dec_to_int: false,
+            uses_float_to_int_exact: false,
+            uses_dec_to_int_exact: false,
             uses_math_gcd: false,
             uses_math_number_format: false,
             uses_rng: false,

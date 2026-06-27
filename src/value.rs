@@ -490,6 +490,19 @@ pub fn float_to_int(v: f64) -> Option<i64> {
     }
 }
 
+/// `float as int` (M4 as-matrix) — **exact-or-null**: `Some(i)` only when `v` is integral and in
+/// i64 range (`3.0 → 3`, `3.9 → None`, NaN/±∞ → None). Unlike [`float_to_int`] (truncate, used by
+/// `Convert.toInt`), this never drops a fraction silently — the `as` operator's "no silent loss"
+/// rule. `v.fract() == 0.0` is false for NaN/∞, so the finite+range guard in [`float_to_int`] runs
+/// only for a genuinely integral value. Mirrored by the PHP `__phorge_float_to_int_exact` helper.
+pub fn float_to_int_exact(v: f64) -> Option<i64> {
+    if v.fract() == 0.0 {
+        float_to_int(v)
+    } else {
+        None
+    }
+}
+
 /// `Math.numberFormat(value, decimals)` (M-NUM S4): a non-locale `number_format` — `value` rounded
 /// half-away-from-zero to `decimals` places, grouped with `,` every three integer digits and a `.`
 /// decimal point. **Digit-string rounding** (2026-06-27): it rounds the *shortest-round-trip decimal
@@ -1009,6 +1022,22 @@ pub fn decimal_to_int(d: &Value) -> Option<i64> {
     let divisor = 10i128.checked_pow(u32::from(scale))?;
     let int_part = unscaled / divisor; // i128 `/` truncates toward zero
     i64::try_from(int_part).ok()
+}
+
+/// `decimal as int` (M4 as-matrix) — **exact-or-null**: `Some(i)` only when the decimal has a zero
+/// fractional part and the integer is in i64 range (`3.00d → 3`, `3.50d → None`). Unlike
+/// [`decimal_to_int`] (truncate, used by `Convert.decimalToInt`), it never drops a fraction silently
+/// — the `as` "no silent loss" rule. Mirrored by the PHP `__phorge_dec_to_int_exact` helper.
+pub fn decimal_to_int_exact(d: &Value) -> Option<i64> {
+    let (unscaled, scale) = match d {
+        Value::Decimal { unscaled, scale } => (*unscaled, *scale),
+        _ => return None,
+    };
+    let divisor = 10i128.checked_pow(u32::from(scale))?;
+    if unscaled % divisor != 0 {
+        return None; // non-integral → null (exact-or-null)
+    }
+    i64::try_from(unscaled / divisor).ok()
 }
 
 /// `10^exp` as a checked `i128`, [`FAULT_DECIMAL_OVERFLOW`] on overflow (M-NUM S2 helper).

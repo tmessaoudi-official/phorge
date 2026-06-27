@@ -249,15 +249,24 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-CAST-TYPE" => {
             "E-CAST-TYPE — an `as` cast operand is not valid.\n\n\
-             `value as T` is a **checked downcast**: it yields `T?` — the value itself when it really\n\
-             is a `T` at runtime, else `null` (the Kotlin/Swift `as?` model). The right operand must\n\
-             name a declared **class or interface**, and the left operand must be a class instance (or\n\
-             a union/intersection of them) — the same operands as `instanceof`. Compose it with `??`\n\
-             for a fallback or with if-let (`if (var c = v as T) { … }`) to bind the narrowed value.\n\n\
-             `as` is *type assertion* — it never changes a value, only reinterprets it. To **convert** a\n\
-             value to another type (int→float, float→int, string→int?), use `Core.Convert`\n\
-             (`Convert.toFloat`/`truncate`/`round`) or `Core.Text.parseInt`/`parseFloat` instead — so a\n\
-             primitive target like `x as int` is rejected here.\n"
+             `as` has two axes. Over a **class/interface** it is a checked downcast: `value as T`\n\
+             yields `T?` (the value when it really is a `T` at runtime, else `null` — Kotlin/Swift\n\
+             `as?`); the right operand must name a declared class or interface and the left must be a\n\
+             class instance (or a union/intersection of them). Compose with `??` or if-let\n\
+             (`if (var c = v as T) { … }`).\n\n\
+             Over a **primitive** it is a value conversion, fallibility-typed: lossless → total `T`\n\
+             (`int as float`, `int as decimal`, `decimal as float`, any `as string`); lossy/fallible →\n\
+             `T?` (`float`/`decimal as int` is exact-or-null — never a silent truncate; `string as\n\
+             int`/`as float` is a strict parse). It never inherits PHP's loose coercion. This error\n\
+             fires for a pair that is impossible or not yet supported (bool casts, `float as decimal`,\n\
+             `string as decimal` ship in a later slice) — use `Core.Convert` / `Core.Text.parse*`, or\n\
+             `Convert.truncate` when you explicitly want truncation.\n"
+        }
+        "W-REDUNDANT-CAST" => {
+            "W-REDUNDANT-CAST — a cast whose target is already the value's type (lint).\n\n\
+             `value as T` where `value` is already a `T` does nothing — e.g. `n as int` when `n: int`.\n\
+             It is harmless (the value passes through) but reads as if a conversion happens. Remove the\n\
+             `as`. This is a non-fatal warning; it never gates the build.\n"
         }
         "E-DECIMAL-FLOAT-MIX" => {
             "E-DECIMAL-FLOAT-MIX — `decimal` and `float` were mixed in one operation.\n\n\

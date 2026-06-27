@@ -43,6 +43,13 @@
 - [2026-06-27] **CHANGE** `as` operator → **support all types incl. primitives** (`x as int`). Needs a
   cast-vs-convert reconciliation design (don't reintroduce the C-cast surprise; unify with Core.Convert
   semantics — total vs optional). **TODO: design first.**
+- [2026-06-27] AGREED (Option 2 build, item a — design fork resolved): `as`→primitives uses the
+  **Unified, fallibility-typed** model. `x as T` (T primitive) result type tracks fallibility:
+  **lossless/infallible → total `T`** (int→float, int→decimal, *→string, identity);
+  **lossy or fallible → `T?`** (float/decimal→int = null unless integral; string→int/float = parse,
+  null on non-numeric; primitive-union/erased member = assertion/narrow). **No silent lossy
+  conversion** — lossy narrowing is always optional (loud null); `Convert.truncate` stays the named
+  tool for "I want truncation". `T as T` = identity (W-redundant-cast lint).
 
 ### Batch 4 (minor / technical-constraint items)
 - [2026-06-27] **CHANGE** float `/0` → **clean fault** (general principle: ANY division by zero throws —

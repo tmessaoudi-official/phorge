@@ -67,6 +67,15 @@ impl Interp {
             Expr::Cast {
                 value, type_name, ..
             } => {
+                // M4 as-matrix: a primitive `as` that is a CONVERSION was rewritten to a native call
+                // before this backend; the only primitive `Cast` reaching here is the **identity**
+                // (`T as T`) — evaluate the value unchanged.
+                if matches!(
+                    type_name.as_str(),
+                    "int" | "float" | "string" | "bool" | "decimal"
+                ) {
+                    return self.eval(value);
+                }
                 // Checked downcast (M4 casting axis 2): evaluate `value` ONCE; keep it when it really is
                 // a `type_name` (same predicate as `instanceof` above — exact class or a supertype via
                 // `class_implements`), else produce `null`. Result type is `type_name?` (checker). Never

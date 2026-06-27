@@ -90,6 +90,16 @@ impl Compiler<'_> {
                 type_name,
                 span,
             } => {
+                // M4 as-matrix: a primitive `as` CONVERSION was rewritten to a native call before this
+                // backend; the only primitive `Cast` reaching here is the **identity** (`T as T`) —
+                // compile the value unchanged.
+                if matches!(
+                    type_name.as_str(),
+                    "int" | "float" | "string" | "bool" | "decimal"
+                ) {
+                    self.expr(value)?;
+                    return Ok(());
+                }
                 // Checked downcast (M4 casting axis 2): keep `value` if it `IsInstance` of `type_name`,
                 // else replace it with `null` — result type `type_name?`. `value` is evaluated ONCE:
                 // stash it in a scratch slot (the `??`/`$match` trick — its frame-relative top, NOT

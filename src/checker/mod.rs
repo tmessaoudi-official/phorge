@@ -310,6 +310,14 @@ pub struct Checker {
     /// see full-arity calls (the "expand before backends" discipline; byte-identical by construction
     /// since the default literal is the same everywhere). No new pass, no new walker.
     default_fills: HashMap<usize, crate::ast::Expr>,
+    /// Span-keyed substitutions for a primitive `as`-cast that is a value CONVERSION (M4 as-matrix),
+    /// keyed by the `Cast` node's `Span.start` (the `as` token offset — distinct from any wrapped
+    /// call's span). The replacement is a leaf-qualified native call (`Convert.toFloat(v)` etc.) the
+    /// backends resolve via `index_of_by_leaf` without an import, exactly like a UFCS rewrite. Merged
+    /// into the combined call-rewrite map applied by [`rewrite_ufcs`]. Identity casts (`T as T`) are
+    /// NOT recorded (they stay `Expr::Cast`, handled trivially by each backend); only conversions are
+    /// rewritten. No new `Op`/`Value` — byte-identical by construction.
+    cast_resolutions: HashMap<usize, crate::ast::Expr>,
     /// Set by [`check_named_call`]/[`check_native_call`] when a call legally omits trailing defaulted
     /// arguments: the list of default expressions to append. [`check_call`] consumes it (it holds the
     /// original callee + args + span) to build the replacement `Call` recorded in `default_fills`.
@@ -369,6 +377,7 @@ impl Checker {
             html_resolutions: HashMap::new(),
             ufcs_resolutions: HashMap::new(),
             default_fills: HashMap::new(),
+            cast_resolutions: HashMap::new(),
             pending_fill: None,
             reflect_resolutions: HashMap::new(),
             active_type_params: Vec::new(),
@@ -599,6 +608,10 @@ pub fn check_resolutions(
         // `rewrite_ufcs` applies. Keys are disjoint from UFCS/reflect (a fill is a direct free/native
         // call, never a UFCS member call), so the merge is collision-free.
         calls.extend(c.default_fills);
+        // M4 as-matrix: primitive-cast → native-conversion-call substitutions, keyed by the `Cast`
+        // node's span (the `as` token — disjoint from every call/UFCS/fill/reflect span). Applied by
+        // the same `rewrite_ufcs` walker (its `Cast` arm now consults this map).
+        calls.extend(c.cast_resolutions);
         Ok((c.warnings, c.html_resolutions, calls))
     } else {
         Err(c.errors)

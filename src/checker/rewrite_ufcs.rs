@@ -112,14 +112,22 @@ pub fn rewrite_ufcs(program: Program, ufcs: &HashMap<usize, crate::ast::Expr>) -
                 type_name,
                 span,
             },
+            // A primitive `as`-cast the checker rewrote to a native conversion call (M4 as-matrix),
+            // keyed by the `Cast` node's span (the `as` token). `apply_repl` re-walks the embedded
+            // original value (its span differs from this key) but reconstructs the call root directly,
+            // so it never re-matches this key. An identity cast is not recorded → falls to the None
+            // branch (the `Cast` survives; each backend emits the value).
             Expr::Cast {
                 value,
                 type_name,
                 span,
-            } => Expr::Cast {
-                value: Box::new(rexpr(*value, u)),
-                type_name,
-                span,
+            } => match u.get(&span.start) {
+                Some(repl) => apply_repl(repl, u),
+                None => Expr::Cast {
+                    value: Box::new(rexpr(*value, u)),
+                    type_name,
+                    span,
+                },
             },
             Expr::Member {
                 object,

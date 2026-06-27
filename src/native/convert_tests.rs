@@ -178,3 +178,42 @@ fn convert_natives_registered_and_emit() {
     assert_eq!(php("decimalToFloat", &["$d"]), "(float)($d)");
     assert_eq!(php("decimalToInt", &["$d"]), "__phorge_dec_to_int($d)");
 }
+
+#[test]
+fn convert_exact_int_is_integral_or_null() {
+    // M4 `float as int` — exact-or-null: only an integral, in-range float converts.
+    let f = |x: f64| {
+        let mut o = String::new();
+        convert_float_to_int_exact(&[Value::Float(x)], &mut o).unwrap()
+    };
+    assert!(matches!(f(3.0), Value::Int(3)));
+    assert!(matches!(f(-3.0), Value::Int(-3)));
+    assert!(matches!(f(3.9), Value::Null)); // non-integral → null (never a silent truncate)
+    assert!(matches!(f(f64::NAN), Value::Null));
+    assert!(matches!(f(f64::INFINITY), Value::Null));
+
+    // M4 `decimal as int` — exact-or-null over the i128 carrier.
+    let d = |unscaled: i128, scale: u8| {
+        let mut o = String::new();
+        convert_decimal_to_int_exact(&[Value::Decimal { unscaled, scale }], &mut o).unwrap()
+    };
+    assert!(matches!(d(300, 2), Value::Int(3))); // 3.00 → 3
+    assert!(matches!(d(-300, 2), Value::Int(-3)));
+    assert!(matches!(d(350, 2), Value::Null)); // 3.50 → null
+    assert!(matches!(d(7, 0), Value::Int(7)));
+
+    // PHP emission of the two exact converters.
+    let php = |name: &str, args: &[&str]| {
+        let i = crate::native::index_of("Core.Convert", name).unwrap();
+        let a: Vec<String> = args.iter().map(|s| (*s).to_string()).collect();
+        (crate::native::registry()[i].php)(&a)
+    };
+    assert_eq!(
+        php("floatToIntExact", &["$f"]),
+        "__phorge_float_to_int_exact($f)"
+    );
+    assert_eq!(
+        php("decimalToIntExact", &["$d"]),
+        "__phorge_dec_to_int_exact($d)"
+    );
+}

@@ -758,6 +758,42 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_float_to_int_exact {
+            // `Convert.floatToIntExact($f) -> int?` (M4 `float as int`): integral-or-null, never a
+            // silent truncate. Mirrors `value::float_to_int_exact` (`fmod==0` then the finite+range
+            // guard of `__phorge_float_to_int`). `fmod(-3.0,1.0)` is `-0.0` (== 0.0 in PHP), so a
+            // negative integral passes; `(int)$f` is exact for an integral in-range float.
+            self.line("function __phorge_float_to_int_exact($f) {");
+            self.indent += 1;
+            self.line("if (!is_finite($f) || fmod($f, 1.0) != 0.0) { return null; }");
+            self.line(
+                "return ($f >= -9.2233720368547758E18 && $f < 9.2233720368547758E18) ? (int)$f : null;",
+            );
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_dec_to_int_exact {
+            // `Convert.decimalToIntExact($s) -> int?` (M4 `decimal as int`): integral-or-null. The
+            // carrier always renders exactly `scale` fractional digits, so a non-zero fraction
+            // (after stripping trailing zeros) means non-integral → null. Mirrors
+            // `value::decimal_to_int_exact` (`unscaled % 10^scale != 0`).
+            self.line("function __phorge_dec_to_int_exact($s) {");
+            self.indent += 1;
+            self.line("$dot = strpos($s, '.');");
+            self.line("if ($dot !== false) {");
+            self.indent += 1;
+            self.line("if (rtrim(substr($s, $dot + 1), '0') !== '') { return null; }");
+            self.line("$int = substr($s, 0, $dot);");
+            self.indent -= 1;
+            self.line("} else { $int = $s; }");
+            self.line("if ($int === '' || $int === '-') { $int = '0'; }");
+            self.line(
+                "if (bccomp($int, '9223372036854775807', 0) > 0 || bccomp($int, '-9223372036854775808', 0) < 0) { return null; }",
+            );
+            self.line("return (int)$int;");
+            self.indent -= 1;
+            self.line("}");
+        }
         if self.uses_math_gcd {
             // `Math.gcd` — Euclid over the magnitudes (gmp is absent under `php -n`). Mirrors the Rust
             // `math_gcd` native body for every in-range input (the `i64::MIN` magnitude edge faults in

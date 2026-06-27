@@ -178,6 +178,15 @@ impl Transpiler {
             Expr::Cast {
                 value, type_name, ..
             } => {
+                // M4 as-matrix: a primitive `as` CONVERSION was rewritten to a native call before the
+                // transpiler; the only primitive `Cast` reaching here is the **identity** (`T as T`) —
+                // emit the value unchanged.
+                if matches!(
+                    type_name.as_str(),
+                    "int" | "float" | "string" | "bool" | "decimal"
+                ) {
+                    return self.emit_expr(value);
+                }
                 let v = self.emit_expr(value)?;
                 Ok(format!(
                     "(fn($__as) => $__as instanceof {} ? $__as : null)({v})",

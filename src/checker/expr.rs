@@ -489,6 +489,12 @@ impl Checker {
         span: Span,
     ) -> Ty {
         let v = self.check_expr(value);
+        // M4 as-matrix: a primitive target is a value CONVERSION (or identity), not a class downcast.
+        // `value as int/float/string/bool/decimal` is typed here (and conversions are rewritten to a
+        // native call), so it never falls into the class/interface path below.
+        if matches!(type_name, "int" | "float" | "string" | "bool" | "decimal") {
+            return self.check_cast_primitive(value, &v, type_name, span);
+        }
         // A trait is reuse, not a type — same guard as `instanceof`.
         if self.traits.contains(type_name) {
             return self.err_coded(
@@ -544,6 +550,100 @@ impl Checker {
             type_name.to_string(),
             vec![Ty::Error; arity],
         )))
+    }
+
+    /// `value as <primitive>` (M4 as-matrix, S1 — concrete-primitive sources). Types the result per
+    /// the **Unified, fallibility-typed** model (lossless → total `T`, lossy/fallible → `T?`) and, for
+    /// a real conversion, records a span-keyed rewrite to a leaf-qualified native call
+    /// (`Convert.toFloat(v)` / `Text.parseInt(v)` …) that the backends resolve by `index_of_by_leaf`
+    /// without an import. **Identity** (`T as T`) is total, fires `W-REDUNDANT-CAST`, and is NOT
+    /// rewritten — the `Cast` node survives and each backend emits the value unchanged. Bool cells,
+    /// `float as decimal`, `string as decimal`, and union/erased *assertion* sources land in later
+    /// slices (rejected for now with a forward-looking hint). No new `Op`/`Value`.
+    fn check_cast_primitive(
+        &mut self,
+        value: &crate::ast::Expr,
+        v: &Ty,
+        target: &str,
+        span: Span,
+    ) -> Ty {
+        use crate::ast::Expr;
+        let target_ty = match target {
+            "int" => Ty::Int,
+            "float" => Ty::Float,
+            "string" => Ty::String,
+            "bool" => Ty::Bool,
+            "decimal" => Ty::Decimal,
+            _ => unreachable!("guarded by the caller"),
+        };
+        // Identity — already the target type. Total, no rewrite, redundant-cast lint.
+        if *v == target_ty {
+            self.warn_coded(
+                span,
+                format!("redundant cast: value is already `{target}`"),
+                "W-REDUNDANT-CAST",
+                Some("remove the `as` — the value already has this type".into()),
+            );
+            return target_ty;
+        }
+        // A poisoned operand already reported; type the cast as the (likely) target to avoid a cascade.
+        if matches!(v, Ty::Error) {
+            return target_ty;
+        }
+        // (source, target) → (qualifier leaf, native name, result type). `opt(t)` = `T?`.
+        let opt = |t: Ty| Ty::Optional(Box::new(t));
+        let cell: Option<(&str, &str, Ty)> = match (v, target) {
+            (Ty::Int, "float") => Some(("Convert", "toFloat", Ty::Float)),
+            (Ty::Int, "decimal") => Some(("Convert", "intToDecimal", Ty::Decimal)),
+            (Ty::Float, "int") => Some(("Convert", "floatToIntExact", opt(Ty::Int))),
+            (Ty::Decimal, "int") => Some(("Convert", "decimalToIntExact", opt(Ty::Int))),
+            (Ty::Decimal, "float") => Some(("Convert", "decimalToFloat", Ty::Float)),
+            (Ty::String, "int") => Some(("Text", "parseInt", opt(Ty::Int))),
+            (Ty::String, "float") => Some(("Text", "parseFloat", opt(Ty::Float))),
+            // any primitive → string is total (Convert.toString is generic). bool→string is S3.
+            (Ty::Int | Ty::Float | Ty::Decimal, "string") => {
+                Some(("Convert", "toString", Ty::String))
+            }
+            _ => None,
+        };
+        match cell {
+            Some((leaf, name, ret)) => {
+                let callee = Expr::Member {
+                    object: Box::new(Expr::Ident(leaf.to_string(), span)),
+                    name: name.to_string(),
+                    safe: false,
+                    span,
+                };
+                // The synthetic call must be full-arity (the default-param fill pass does not see a
+                // post-check rewrite): `Text.parseFloat` takes `(string, bool permissive=false)`, so
+                // supply the `false` (strict-parse) default explicitly.
+                let mut call_args = vec![value.clone()];
+                if name == "parseFloat" {
+                    call_args.push(Expr::Bool(false, span));
+                }
+                let repl = Expr::Call {
+                    callee: Box::new(callee),
+                    args: call_args,
+                    span,
+                };
+                self.cast_resolutions.insert(span.start, repl);
+                ret
+            }
+            None => {
+                // Deferred cell (bool, float→decimal, string→decimal) or an impossible pair.
+                self.err_coded(
+                    span,
+                    format!("`{v} as {target}` is not a supported conversion"),
+                    "E-CAST-TYPE",
+                    Some(
+                        "convert via `Core.Convert` / `Core.Text.parse*`; bool/decimal-from-float/string \
+                         casts ship in a later slice"
+                            .into(),
+                    ),
+                );
+                Ty::Error
+            }
+        }
     }
 
     // ---- stubs replaced in later tasks ----

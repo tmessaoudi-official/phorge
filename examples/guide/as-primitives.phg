@@ -1,0 +1,41 @@
+// `as` → primitives (M4 as-matrix, S1) — the Unified, fallibility-typed cast.
+//
+// `as` is honest and LOUD — it never inherits PHP's loose coercion. The result type tracks
+// fallibility: a lossless conversion is total `T`; a lossy or fallible one is `T?` (so a loss is
+// never silent — you must unwrap). `Convert.truncate` stays the named tool for "I want truncation".
+//
+//   lossless / total →  int as float, int as decimal, decimal as float, any as string
+//   lossy / fallible → `T?`:  float/decimal as int (exact-or-null), string as int/float (parse)
+//
+// (Class/interface downcasts are the OTHER `as` axis — see `as-cast.phg`.)
+package Main;
+import Core.Console;
+
+function main(): void {
+    int n = 7;
+    // lossless widening / stringify → total (no `?`)
+    float f = n as float;             // 7.0
+    decimal d = n as decimal;         // 7
+    string s = n as string;           // "7"
+    Console.println("{f} {d} {s}");                       // 7 7 7
+
+    // float as int — exact-or-null (3.0 → 3, but 4.5 → null, NEVER a silent truncate)
+    float whole = 4.0;
+    float frac = 4.5;
+    int? a = whole as int;            // 4
+    int? b = frac as int;             // null
+    Console.println("{a ?? -1} {b ?? -1}");              // 4 -1
+
+    // decimal as int — same exact-or-null rule
+    decimal exact = 8.00d;
+    decimal partial = 8.50d;
+    Console.println("{exact as int ?? -1} {partial as int ?? -1}");   // 8 -1
+
+    // decimal as float — total; string as int/float — fallible parse → optional
+    decimal half = 2.50d;
+    float hf = half as float;         // 2.5
+    string num = "42";
+    string nope = "x";
+    string flt = "0.5";
+    Console.println("{hf} {num as int ?? -1} {nope as int ?? -1} {flt as float ?? -1.0}"); // 2.5 42 -1 0.5
+}

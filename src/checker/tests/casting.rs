@@ -58,13 +58,75 @@ fn cast_to_interface_and_union_scrutinee() {
     );
 }
 
+// ── S1: `as` → primitive conversions (Unified, fallibility-typed) ────────────────────────────────
+
 #[test]
-fn cast_rejects_primitive_target() {
-    // `x as int` is rejected — `as` is assertion, not value conversion (use Core.Convert).
-    let e = errors_of("function main() -> void { int x = 3; int? y = x as int; }");
+fn as_int_to_float_is_total() {
+    // Lossless widening → total `float` (not optional). Binding to `float` is fine; to `int` fails.
+    assert!(errors_of("function main() -> void { int n = 3; float f = n as float; }").is_empty());
+    let e = errors_of("function main() -> void { int n = 3; int bad = n as float; }");
     assert!(
-        e.iter().any(|d| d.code == Some("E-CAST-TYPE")),
-        "expected E-CAST-TYPE for a primitive target, got {e:?}"
+        e.iter()
+            .any(|d| d.message.contains("expected `int`, found `float`")),
+        "{e:?}"
+    );
+}
+
+#[test]
+fn as_float_to_int_is_optional() {
+    // Lossy narrowing → `int?` (exact-or-null, never a silent truncate). Binding to non-optional
+    // `int` must fail; to `int?` is fine.
+    let e = errors_of("function main() -> void { float f = 3.0; int n = f as int; }");
+    assert!(
+        e.iter().any(|d| d.code == Some("E-OPT-ASSIGN")),
+        "expected E-OPT-ASSIGN (float as int is int?), got {e:?}"
+    );
+    assert!(errors_of("function main() -> void { float f = 3.0; int? n = f as int; }").is_empty());
+}
+
+#[test]
+fn as_string_parse_is_optional() {
+    // `string as int`/`as float` are fallible parses → `T?`.
+    assert!(
+        errors_of("function main() -> void { string s = \"5\"; int? n = s as int; }").is_empty()
+    );
+    assert!(
+        errors_of("function main() -> void { string s = \"5\"; float? f = s as float; }")
+            .is_empty()
+    );
+}
+
+#[test]
+fn as_any_to_string_is_total() {
+    // Every primitive → string is total (reuses Convert.toString).
+    assert!(errors_of("function main() -> void { int n = 3; string s = n as string; }").is_empty());
+    assert!(
+        errors_of("function main() -> void { float f = 1.5; string s = f as string; }").is_empty()
+    );
+}
+
+#[test]
+fn as_int_and_decimal_round_trip_types() {
+    // int → decimal (total widen); decimal → int (exact-or-null → int?).
+    assert!(
+        errors_of("function main() -> void { int n = 3; decimal d = n as decimal; }").is_empty()
+    );
+    let e = errors_of("function main() -> void { decimal d = 3.00d; int n = d as int; }");
+    assert!(
+        e.iter().any(|d| d.code == Some("E-OPT-ASSIGN")),
+        "expected E-OPT-ASSIGN (decimal as int is int?), got {e:?}"
+    );
+}
+
+#[test]
+fn as_identity_warns_redundant_but_is_not_an_error() {
+    // `T as T` is the identity — no error, but a `W-REDUNDANT-CAST` lint fires.
+    let src = "function main() -> void { int n = 3; int m = n as int; }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    let w = warnings_of(src);
+    assert!(
+        w.iter().any(|d| d.code == Some("W-REDUNDANT-CAST")),
+        "expected W-REDUNDANT-CAST, got {w:?}"
     );
 }
 
