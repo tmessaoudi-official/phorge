@@ -251,6 +251,11 @@ pub struct Checker {
     /// is forbidden even though `cur_class` is `Some`. Distinct from `in_field_init` (an *instance*
     /// field initializer, where `this` IS in scope).
     in_static_init: bool,
+    /// Set while checking a **static method** body (Batch E, finding #5). A static method has no
+    /// instance, so `this` and bare instance-field references are rejected (`E-STATIC-THIS`) even
+    /// though `cur_class` stays set — static-member access (`Class.field`) and constructing the class
+    /// (a static factory, whose ctor visibility is checked against `cur_class`) remain valid.
+    in_static_method: bool,
     /// class currently being checked (for `this` and bare field refs)
     cur_class: Option<String>,
     /// live `check_expr` recursion depth, bounded by [`MAX_EXPR_DEPTH`]
@@ -350,6 +355,7 @@ impl Checker {
             under_new: false,
             in_field_init: false,
             in_static_init: false,
+            in_static_method: false,
             cur_class: None,
             depth: 0,
             loop_depth: 0,
@@ -511,11 +517,13 @@ impl Checker {
                 return Some(t.clone());
             }
         }
-        // bare field reference inside a method
-        if let Some(cls) = &self.cur_class {
-            if let Some(info) = self.classes.get(cls) {
-                if let Some(t) = info.fields.get(name) {
-                    return Some(t.clone());
+        // bare field reference inside a method — but NOT in a static method (no instance; Batch E).
+        if !self.in_static_method {
+            if let Some(cls) = &self.cur_class {
+                if let Some(info) = self.classes.get(cls) {
+                    if let Some(t) = info.fields.get(name) {
+                        return Some(t.clone());
+                    }
                 }
             }
         }

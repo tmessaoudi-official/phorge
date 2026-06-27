@@ -269,7 +269,15 @@ impl Checker {
             .collect();
         for m in members {
             match m {
-                ClassMember::Method(f) => self.check_function(f),
+                ClassMember::Method(f) => {
+                    // Batch E: a static method body must not touch instance state (`this` / bare
+                    // fields) — `in_static_method` forbids it while `cur_class` stays set for
+                    // static-member access and factory construction.
+                    let was_static = self.in_static_method;
+                    self.in_static_method = f.modifiers.contains(&Modifier::Static);
+                    self.check_function(f);
+                    self.in_static_method = was_static;
+                }
                 ClassMember::Constructor { params, body, .. } => {
                     let prev_ret = std::mem::replace(&mut self.cur_ret, Ty::Void);
                     // type params in scope for any `T` annotation in the body

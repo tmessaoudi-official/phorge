@@ -22,6 +22,7 @@ mod mutation;
 mod optionals;
 mod overloading;
 mod reflect;
+mod static_methods;
 mod support;
 mod throws;
 mod totality;

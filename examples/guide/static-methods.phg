@@ -1,0 +1,31 @@
+// Static methods (Soundness Batch E) — a `static` method belongs to the class, not an instance.
+//
+// A static method has no `this`, so it cannot read instance fields (bare or via `this`) — attempting
+// to is a compile error (E-STATIC-THIS), see the README. It may take parameters, return a value, and
+// read static members. (It is currently invoked through an instance — `m.square(5)`.)
+package Main;
+
+import Core.Console;
+
+class MathUtil {
+  // A static counter — class-level state, read via `MathUtil.calls` (not through an instance).
+  static mutable int calls = 0;
+
+  constructor() {}
+
+  // Pure static helper: depends only on its parameter, no instance state.
+  static function square(int n) -> int {
+    return n * n;
+  }
+
+  // A static method may read another static member.
+  static function describe() -> string {
+    return "MathUtil";
+  }
+}
+
+function main() -> void {
+  var m = new MathUtil();
+  Console.println("square(5) = {m.square(5)}");
+  Console.println("describe = {m.describe()}");
+}

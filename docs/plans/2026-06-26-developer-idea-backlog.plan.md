@@ -159,6 +159,20 @@ P1)**, all front-end-only (byte-identity-neutral), 7 fix batches A–G. Decision
   real PHP 8.5). Reuses `E-MISSING-RETURN` (`phg explain` already covers it). Full workspace gate green
   (1020 lib + 112 differential w/ PHP oracle).
 
+- **Batch E — static method `this`-leak — ✅ DONE** (autonomous, P0 subset). Finding #5 P0: a `static`
+  method could read `this` AND bare instance fields (both checked clean + ran) — instance state with
+  no instance. Fixed with a new `in_static_method` flag (the in_static_init sibling): set around a
+  static method's body in `check_type_body`; `cur_class` stays set (so `Class.member` static access and
+  factory ctor visibility still work), but the `Expr::This` arm rejects `this` (`E-STATIC-THIS`),
+  `lookup` skips the bare-instance-field fallback in a static method, and the `Ident` arm emits a
+  targeted `E-STATIC-THIS` when a bare name is an instance field. Front-end only (no Op/Value). 5 new
+  checker tests; `examples/guide/static-methods.phg` (byte-identical run≡runvm≡real PHP 8.5); `phg
+  explain E-STATIC-THIS`; README index + rejected-cases. Full workspace gate green (1025 lib + 112
+  differential w/ PHP oracle). **Deferred (documented, ergonomic P1/P2, not unsoundness):** class-name
+  static call path (`Class.method()` — calls go via an instance today), static-via-instance rejection,
+  and emitting `static function` in the transpiler (a sound static method called via an instance is
+  byte-identical whether or not PHP marks it `static`).
+
 ## Decisions Log
 - [2026-06-26] AGREED (Batch 1):
   - **A — ADOPT:** formalize "library/web files need no `main`; only running needs an entry"; keep

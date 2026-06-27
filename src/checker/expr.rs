@@ -53,6 +53,23 @@ impl Checker {
                         let ret_ty = sig.ret.clone();
                         return Ty::Function(param_tys, Box::new(ret_ty));
                     }
+                    // Batch E: a bare instance-field reference in a static method (the field exists on
+                    // the class but there is no instance) — a targeted `E-STATIC-THIS` over the generic
+                    // unknown-identifier error.
+                    if self.in_static_method
+                        && self
+                            .cur_class
+                            .as_ref()
+                            .and_then(|c| self.classes.get(c))
+                            .is_some_and(|info| info.fields.contains_key(name))
+                    {
+                        return self.err_coded(
+                            *span,
+                            format!("instance field `{name}` is not accessible in a static method"),
+                            "E-STATIC-THIS",
+                            Some("a static method has no instance — pass the value as a parameter, use a static field, or make the method non-static".into()),
+                        );
+                    }
                     let cands = self.in_scope_names();
                     let hint = self
                         .nearest_name(name, &cands)
@@ -68,6 +85,12 @@ impl Checker {
             Expr::This(span) if self.in_static_init => {
                 self.err(*span, "`this` is not available in a static field initializer")
             }
+            Expr::This(span) if self.in_static_method => self.err_coded(
+                *span,
+                "`this` is not available in a static method".to_string(),
+                "E-STATIC-THIS",
+                Some("a static method has no instance — access static members as `Class.member`, or make the method non-static".into()),
+            ),
             Expr::This(span) => match &self.cur_class {
                 // Inside a generic class body, `this` carries the class's own type parameters as
                 // opaque `Ty::Param`s, so `this.value` (a `T` field) types as `T` and member access
