@@ -80,3 +80,12 @@ Path parameters (`/users/{id}`) and middleware/closure routes gate on later feat
 (parallel-list-iteration / generics for segment matching; lambdas for middleware). The
 `handle(Request) -> Response` contract does **not** change when they land — they layer on top of the
 exact-match core shown here.
+
+**Drop the `respond` bridge (gated on `Core.Http`).** Today each app writes the same
+`respond(bytes) -> bytes` glue — parse → `handle` → serialize, with a `400`-on-malformed fallback.
+That boilerplate is identical everywhere, but it can't be synthesized by the runtime yet because the
+`Request`/`Response` types and the parse/serialize/error policy are still defined per-app (and baking
+that policy into Rust would break the determinism layering). Once a standard **`Core.Http`** module
+ships `Request`/`Response` + `parseRequest`/`serializeResponse`, `phg serve` will run a bare
+`handle(Request) -> Response` directly — the `respond` shim disappears, the contract is unchanged.
+`Core.Http` is tracked with the native-stdlib wave.
