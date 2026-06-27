@@ -8,8 +8,8 @@
 //!     the separator, the enclosure, or a line break, doubling any internal quote.
 //!
 //! The parser replicates `str_getcsv`'s exact quirks (verified against `php -n` 8.5), with **one**
-//! documented deviation: an empty input yields `[""]` (one empty field) rather than PHP's `[null]`,
-//! so the return type stays a clean `List<string>` — the PHP emission special-cases `""` to match.
+//! documented deviation: an empty input yields `[]` (zero fields) rather than PHP's `[null]`, so the
+//! return type stays a clean `List<string>` — the PHP emission special-cases `""` to match.
 //! Multi-row parsing (a `List<List<string>>`) is deferred (embedded newlines make line-splitting its
 //! own problem). Every quoting edge is pinned to real `php -n` output in the unit tests.
 
@@ -23,9 +23,11 @@ const QUOTE: u8 = b'"';
 /// Parse a single CSV row, mirroring PHP `str_getcsv($s, ",", "\"", "")`. Only ASCII control bytes
 /// (`,` and `"`) are ever inspected or cut on, so every field slice falls on a UTF-8 boundary.
 fn parse_row(s: &str) -> Vec<String> {
-    // Deviation from str_getcsv (which returns `[null]`): an empty row is one empty field.
+    // Empty input → zero fields (an empty list), matching Python/Rust CSV semantics and keeping a
+    // clean `List<string>` (str_getcsv would give `[null]`; the PHP emission special-cases `""` to
+    // an empty array to agree).
     if s.is_empty() {
-        return vec![String::new()];
+        return Vec::new();
     }
     let b = s.as_bytes();
     let n = b.len();
@@ -144,11 +146,11 @@ pub(crate) fn csv_natives() -> Vec<NativeFn> {
             ret: Ty::List(Box::new(Ty::String)),
             pure: true,
             eval: NativeEval::Pure(csv_parse),
-            // Empty input → `[""]` to match the Rust kernel (str_getcsv would give `[null]`); the
+            // Empty input → `[]` to match the Rust kernel (str_getcsv would give `[null]`); the
             // scratch `$__csv` avoids double-evaluating the argument expression.
             php: |a| {
                 format!(
-                    r#"(($__csv = {}) === "" ? [""] : str_getcsv($__csv, ",", "\"", ""))"#,
+                    r#"(($__csv = {}) === "" ? [] : str_getcsv($__csv, ",", "\"", ""))"#,
                     parg(a, 0)
                 )
             },

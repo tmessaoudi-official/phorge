@@ -26,7 +26,7 @@ fn f(fields: &[&str]) -> String {
 }
 
 // Every expected value is pinned to `php -n` 8.5 `str_getcsv($s, ",", "\"", "")` output, except the
-// empty-input row (documented `[""]` deviation from PHP's `[null]`).
+// empty-input row (documented `[]` deviation from PHP's `[null]`).
 #[test]
 fn parse_matches_php_str_getcsv() {
     assert_eq!(p("a,b,c"), ["a", "b", "c"]);
@@ -35,7 +35,7 @@ fn parse_matches_php_str_getcsv() {
         p("a,\"he said \"\"hi\"\"\",d"),
         ["a", "he said \"hi\"", "d"]
     );
-    assert_eq!(p(""), [""]); // deviation: PHP returns [null]
+    assert!(p("").is_empty()); // deviation: PHP returns [null]; we return [] (zero fields)
     assert_eq!(p("a,,c"), ["a", "", "c"]);
     assert_eq!(p("\"\""), [""]);
     assert_eq!(p(" \"a\""), ["a"]); // leading space before quote is discarded

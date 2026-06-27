@@ -9,6 +9,7 @@ package Main;
 
 import Core.Console;
 import Core.Csv;
+import Core.List;
 
 function main(): void {
     // Parse a row whose middle field is quoted and contains the separator.
@@ -16,6 +17,11 @@ function main(): void {
     for (string field in fields) {
         Console.println("field: {field}");
     }
+
+    // Empty input parses to zero fields (a clean empty list — deviates from PHP
+    // str_getcsv's `[null]` so the type stays a plain List<string>).
+    var empty = Csv.parse("");
+    Console.println("empty field count: {List.length(empty)}");
 
     // A doubled quote inside an enclosed field decodes to one literal quote.
     var quoted = Csv.parse("\"she said \"\"hi\"\"\",ok");
