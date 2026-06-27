@@ -188,6 +188,12 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
 ## Status
 - [ ] 1. M4 charter — IN PROGRESS
 - [x] 2. phg fmt — **COMPLETE** (F1–F4: comment side-channel + full-surface AST printer + gofmt-shaped CLI + dogfood). F5 (lift L5) deferred. GA 52% → 57%.
+- [2026-06-28] AGREED (post M-Test + M-fmt): developer pushes the commits; next sequence = **(1) LSP
+  — design-first then build** (minimal language server reusing the checker's `Diagnostic` surface;
+  `phg check --json` already emits structured diagnostics — finishes GA rock 2), **then (2) rock 3
+  stability/conformance** (conformance corpus + semver/BC + deprecation policy + frozen surface — the
+  biggest remaining GA mover, ~17 pts). Build LSP design-spec first (the developer's spec-first
+  preference), surface forks, then implement autonomously.
 - [x] 3. M-Test — **COMPLETE** (T1–T5: `test` item + `Core.Test` + `assertFaults` + `phg test` runner + `selftest/` showcase). GA 49% → 52%.
 - [ ] 4. M-text
 - [ ] 5. breadth gaps
