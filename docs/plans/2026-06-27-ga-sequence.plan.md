@@ -84,13 +84,17 @@ Each its own commit, TDD, byte-identity-gated (run≡runvm≡real PHP 8.5), + ex
    (string/bytes→string, List/Map/Set→array, Optional recursive); explain + checker test.
 8. **Lambda bare-field fix** ✅ DONE — resolved by the bigger decision: **require `this.field`
    everywhere** (`E-BARE-FIELD`, PHP-faithful; `53dc203`). Migrated 16 examples + tests + Http prelude.
-   Pending additive bonus: optional `fn(x): int => e` lambda return annotation.
+   Additive bonus ✅ DONE (`04ebe63`): the optional `fn(x): int => e` lambda return annotation was
+   already built+parser-tested (parser `:`/`->`; checker assignability check); added the missing
+   checker tests (match/mismatch, non-vacuous) + showcased it in `guide/lambdas-pipe.phg`
+   (byte-identity-gated run≡runvm≡PHP) + README note. Backends ignore the annotation (checker-only).
 9. **opt!-on-null PHP message** ✅ DONE — verified the body ALREADY matches across all backends
    (`"force-unwrap of null"`); only the source *location* differs (inherent to PHP exceptions,
    fault-domain). No code change; KNOWN_ISSUES note corrected (it overstated the difference).
 
-**All 9 decision-fixes COMPLETE.** Additive bonus pending: optional `fn(x): int => e` lambda return
-annotation. Then the 3 design-first items (as→primitives, password hashing, statics research).
+**All 9 decision-fixes COMPLETE.** Additive bonus ✅ DONE (`04ebe63` — `fn(x): int => e` lambda
+return annotation, coverage+example). Next: the 3 design-first items (as→primitives, password
+hashing, statics research) — each its own brainstorm + AskUserQuestion on the API before building.
 
 **Then design-first items** (each: brainstorm + AskUserQuestion on the API before building), slotted
 into the GA sequence: `as`→primitives (cast/convert reconciliation) · password hashing (quarantined
