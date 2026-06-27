@@ -40,6 +40,7 @@ mod process;
 mod random;
 mod reflect;
 mod set;
+mod test;
 mod text;
 mod url;
 mod validate;
@@ -307,6 +308,7 @@ fn build() -> Vec<NativeFn> {
     registry.extend(json::json_natives());
     registry.extend(reflect::reflect_natives());
     registry.extend(process::process_natives());
+    registry.extend(test::test_natives());
     #[cfg(feature = "crypto")]
     registry.extend(crypto::crypto_natives());
     // Pinned-slot invariant: the constant the compiler bakes into `Op::CallNative` must address the
