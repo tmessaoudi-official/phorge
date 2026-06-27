@@ -6,6 +6,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — inherited / trait static methods (Statics-A)
+
+A `static` method is now inherited: `Child.staticFromBase(..)` resolves the declaring class's body,
+and a `trait`-supplied static is callable on the using class. Closes the B0 own-class-only limitation.
+No new `Op`/`Value`. Research: `docs/specs/2026-06-28-statics-research-design.md`.
+
+- The checker propagates inherited/trait static-method *names* through `merge_inherited` + the
+  trait-`use` path (mirroring `methods`), so the `static_methods` gate accepts them; the interpreter's
+  `call_static_method` resolves through the shared `method_origins` table (like `call_method`); the
+  compiler's `class_method_origins` already aliased the dispatch entry. Byte-identical run≡runvm≡PHP.
+- `examples/guide/static-inheritance.phg`; checker tests. **Deferred:** overloaded statics (the VM has
+  no static-overload dispatch set) and late static binding (`static::`/`new static()` — a deliberate
+  non-feature). An *instance* method called via the class name is still `E-STATIC-CALL`.
+
 ### Added — `Secret<T>` opaque wrapper (Fork B)
 
 A type for sensitive values (passwords, API keys, tokens). No new `Op`/`Value`/`Ty` — an injected

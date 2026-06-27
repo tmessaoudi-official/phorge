@@ -355,35 +355,43 @@ impl Interp {
         self.run_call(&mname, &names, &f.body, args, Some(Value::Instance(inst)))
     }
 
-    /// `ClassName.method(args)` — a **static** method call (slice B0). The method is resolved on the
-    /// class's *own* members (the checker's `static_methods` is own-only, so this never sees an
-    /// inherited/trait static — a documented v1 limitation). No receiver (`this = None`); overload
-    /// selection mirrors `call_method`.
+    /// `ClassName.method(args)` — a **static** method call. Resolved through the shared
+    /// `method_origins` dispatch table (Statics-A, 2026-06-28), exactly like `call_method`, so an
+    /// **inherited** or **trait** static resolves to its declaring class's body (the compiler's
+    /// pre-flattened `methods` table dispatches `run`/`runvm` identically). The candidates are that
+    /// origin class's `static` overloads of the resolved name; overload selection mirrors `call_method`.
+    /// No receiver (`this = None`).
     pub(super) fn call_static_method(
         &mut self,
         cls: &str,
         name: &str,
         args: Vec<Value>,
     ) -> R<Value> {
-        let candidates: Vec<FunctionDecl> = self
-            .classes
-            .get(cls)
-            .map(|class| {
-                class
-                    .members
-                    .iter()
-                    .filter_map(|m| match m {
-                        ClassMember::Method(f)
-                            if f.name == name
-                                && f.modifiers.contains(&crate::ast::Modifier::Static) =>
-                        {
-                            Some(f.clone())
-                        }
-                        _ => None,
+        let candidates: Vec<FunctionDecl> = {
+            let key = (cls.to_string(), name.to_string());
+            match self.method_origins.get(&key) {
+                Some((origin_class, origin_method)) => self
+                    .classes
+                    .get(origin_class)
+                    .map(|class| {
+                        class
+                            .members
+                            .iter()
+                            .filter_map(|m| match m {
+                                ClassMember::Method(f)
+                                    if &f.name == origin_method
+                                        && f.modifiers.contains(&crate::ast::Modifier::Static) =>
+                                {
+                                    Some(f.clone())
+                                }
+                                _ => None,
+                            })
+                            .collect()
                     })
-                    .collect()
-            })
-            .unwrap_or_default();
+                    .unwrap_or_default(),
+                None => Vec::new(),
+            }
+        };
         let f = match candidates.len() {
             0 => return rt(format!("class `{cls}` has no static method `{name}`")),
             1 => candidates[0].clone(),

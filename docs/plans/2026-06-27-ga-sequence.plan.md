@@ -215,6 +215,17 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
   (`E-REGEX-UNSUPPORTED`). (API) **compiled `Regex` value + named groups** — `Regex.compile(p) ->
   Regex` (validates once, reusable), `r.matches/find/findAll/replace/split`, named-group typed match;
   transpiles to `preg_*` with the compiled pattern + `/u`.
+- [2026-06-28] ITEM C (statics research) DELIVERED + scope locked — research
+  `docs/specs/2026-06-28-statics-research-design.md`. Developer chose **A+B, defer C**: build
+  **inherited statics (A)** + **overloaded statics (B)** (both compile-time, no new `Op`/`Value`, reuse
+  inheritance-flattening + `check_overload_call`); **defer late static binding (C)** as a documented
+  non-feature (runtime called-class cost + `self::`/`static::` footgun; explicit per-subclass override
+  is the workaround).
+- [2026-06-28] FORK B **COMPLETE** (`c8f4fea`) — `Secret<T>` shipped: injected generic class,
+  non-printable (compile error) + private field (`.expose()` sole read path), `W-SECRET` lint on
+  expose→sink, `final class Secret` + `#[\SensitiveParameter]` transpile. 1360 tests green, clippy+fmt
+  clean, `examples/guide/secret.phg` byte-identical run≡runvm≡PHP 8.5. NOT pushed. **Both forks done →
+  next: Item C (statics research), then Item D (LSP).**
 - [2026-06-28] FORK B RESOLVED — **`Secret<T>` = Path 1 (opaque & non-printable)**, design
   `docs/specs/2026-06-28-secret-type-design.md`. An implementation discovery reopened the earlier
   "displays as `***`" wording: Phorge's `as_display` renders only primitives, so a class-typed `Secret`

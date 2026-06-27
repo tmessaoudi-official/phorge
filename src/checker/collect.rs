@@ -668,6 +668,11 @@ impl Checker {
                 for (k, v) in &tinfo.methods {
                     child.methods.entry(k.clone()).or_insert_with(|| v.clone());
                 }
+                // Statics-A (2026-06-28): a trait's `static` method is callable as `Class.m()` on the
+                // using class — propagate its static-method names (mirrors the `extends` path).
+                for sm in &tinfo.static_methods {
+                    child.static_methods.insert(sm.clone());
+                }
                 // Wave 1.1: trait members flatten INTO the using class, so their visibility is
                 // re-owned to `cls` (PHP `use` semantics — a trait's `private` member is accessible
                 // from the using class, unlike an inherited `private` parent member). Own members win.
@@ -761,6 +766,13 @@ impl Checker {
             }
             for (k, v) in &parent_info.methods {
                 child.methods.entry(k.clone()).or_insert_with(|| v.clone());
+            }
+            // Statics-A (2026-06-28): a `static` method is inherited too — propagate the parent's
+            // static-method *names* so `Child.parentStatic()` passes the `static_methods` gate (the
+            // signature already flattened via `methods` above; the compiler's `class_method_origins`
+            // aliases the dispatch entry, and the interpreter walks ancestors). Mirrors `methods`.
+            for sm in &parent_info.static_methods {
+                child.static_methods.insert(sm.clone());
             }
             // Wave 1.1: inherit member visibility, **preserving the declaring owner** (like consts) —
             // so an inherited `private` member is checked against the parent (not visible from the

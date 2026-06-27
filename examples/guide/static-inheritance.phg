@@ -1,0 +1,39 @@
+// Inherited static methods (Statics-A) — a `static` method is inherited, so it is callable on a
+// subclass by name (`Child.make(..)`), resolving to the declaring class's body. Same for a static
+// supplied by a `trait`. This closes the B0 limitation where a static call was own-class-only.
+//
+// (Still deliberately out of scope: late static binding — `static::` / `new static()` — see
+// KNOWN_ISSUES; the explicit per-subclass override is the workaround.)
+package Main;
+
+import Core.Console;
+
+// `open` is required to allow extension (Phorge classes are final by default).
+open class Shape {
+    static function describe(int sides) -> string {
+        return "a polygon with {sides} sides";
+    }
+}
+
+// Inherits `describe` — no redeclaration needed.
+class Triangle extends Shape {}
+
+// A trait can also supply a static, callable on the using class.
+trait Tagged {
+    static function tag() -> string {
+        return "tagged";
+    }
+}
+
+class Widget {
+    use Tagged;
+}
+
+function main() -> void {
+    // Called on the subclass — resolves Shape.describe.
+    Console.println(Triangle.describe(3));
+    // Still callable on the declaring class.
+    Console.println(Shape.describe(6));
+    // A trait-supplied static, called on the using class.
+    Console.println(Widget.tag());
+}

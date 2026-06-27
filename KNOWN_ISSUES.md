@@ -10,16 +10,19 @@ parse error, non-zero exit) — never a crash.
 These are designed but not in the current surface; using them produces a clean compile-time error,
 not a panic:
 
-- **Static method call sites (slice B0) — shipped corners + deferrals.** `ClassName.method(args)` calls
-  a `static` method directly on the class (the static-factory pattern, e.g. `Greeter.make("w")`); calling
-  an *instance* method this way is `E-STATIC-CALL`. **Deferrals** (each rejected cleanly, never a runtime
-  divergence): (1) **inherited / trait static methods** are resolved on the *declaring* class only — a
-  `Child.parentStatic()` where `parentStatic` is inherited is rejected (`static_methods` is own-only,
-  consistent across all backends); call it on the declaring class. (2) **Overloaded static methods** are
-  not callable via the class name (`E-STATIC-CALL`) — a static call lowers to a single direct `Op::Call`,
-  so an overload set can't be dispatched; give the static method a single signature or call it on an
-  instance. (3) A static method using the **class's own type parameter** (a static on a generic class) is
-  out of scope — there is no instance to bind the class type argument.
+- **Static method call sites — shipped corners + deferrals.** `ClassName.method(args)` calls a `static`
+  method directly on the class (the static-factory pattern, e.g. `Greeter.make("w")`); calling an
+  *instance* method this way is `E-STATIC-CALL`. **Inherited / trait static methods now work**
+  (Statics-A, 2026-06-28): `Child.parentStatic()` resolves the declaring class's body via the shared
+  `method_origins` dispatch table, and a `trait`-supplied static is callable on the using class —
+  byte-identical run≡runvm≡real PHP. **Remaining deferrals** (each rejected cleanly, never a runtime
+  divergence): (1) **Overloaded static methods** are not callable via the class name (`E-STATIC-CALL`) —
+  a static call lowers to a single direct `Op::Call` and the VM has no static-overload dispatch set
+  (the interpreter already selects, but enabling it without the VM path would diverge); give the static
+  a single signature or call it on an instance. (2) A static method using the **class's own type
+  parameter** (a static on a generic class) is out of scope — no instance binds the class type argument.
+  (3) **Late static binding** (`static::` / `new static()`) is a deliberate non-feature (a runtime
+  called-class concept + the `self::`/`static::` footgun) — override the static per subclass instead.
 
 - **PHP-reserved identifiers as symbol names — now guarded (F-m, kind-aware).** Phorge and PHP have
   different keyword sets, so a Phorge identifier that is a *PHP* reserved word would transpile to

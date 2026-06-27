@@ -94,6 +94,34 @@ fn overloaded_static_call_is_rejected_for_now() {
 }
 
 #[test]
+fn inherited_static_call_is_ok() {
+    // Statics-A (2026-06-28): a static method is inherited — `Child.make(..)` resolves the parent's
+    // static (the signature was already flattened; the gate now flattens `static_methods` too).
+    let src = "open class Base { static function make(int n) -> int { return n; } } \
+               class Child extends Base {} \
+               function main() -> void { var r = Child.make(7); }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn inherited_static_via_trait_is_ok() {
+    // A trait's static is callable on the using class.
+    let src = "trait T { static function tag() -> int { return 1; } } \
+               class C { use T; } \
+               function main() -> void { var r = C.tag(); }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn inherited_instance_method_via_class_name_still_errors() {
+    // An *instance* method (even inherited) is still not a static call — E-STATIC-CALL.
+    let src = "open class Base { function inst() -> int { return 1; } } \
+               class Child extends Base {} \
+               function main() -> void { var r = Child.inst(); }";
+    assert!(has(src, "E-STATIC-CALL"), "{:?}", errors_of(src));
+}
+
+#[test]
 fn static_factory_returns_instance() {
     // The static-factory pattern: a static method constructs and returns an instance.
     let src = "class C { constructor(public int x) {} \
