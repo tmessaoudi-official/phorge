@@ -38,4 +38,11 @@ function main(): void {
     string nope = "x";
     string flt = "0.5";
     Console.println("{hf} {num as int ?? -1} {nope as int ?? -1} {flt as float ?? -1.0}"); // 2.5 42 -1 0.5
+
+    // union ASSERTION (S2): `as` on a one-of value narrows at runtime → `T?` (no conversion).
+    // `as string` stays the total `toString` (every value renders).
+    int|string maybe = 5;
+    int|string other = "hi";
+    Console.println("{maybe as int ?? -1} {other as int ?? -1}");  // 5 -1
+    Console.println("{maybe as string} {other as string}");        // 5 hi
 }

@@ -217,3 +217,38 @@ fn convert_exact_int_is_integral_or_null() {
         "__phorge_dec_to_int_exact($d)"
     );
 }
+
+#[test]
+fn convert_runtime_assertions_keep_or_null() {
+    // M4 S2 `as int/float/bool` on a union — return the value when its variant matches, else null.
+    let call = |f: fn(&[Value], &mut String) -> Result<Value, String>, v: Value| {
+        let mut o = String::new();
+        f(&[v], &mut o).unwrap()
+    };
+    assert!(matches!(call(convert_as_int, Value::Int(7)), Value::Int(7)));
+    assert!(matches!(
+        call(convert_as_int, Value::Str("x".into())),
+        Value::Null
+    ));
+    assert!(matches!(
+        call(convert_as_float, Value::Float(1.5)),
+        Value::Float(_)
+    ));
+    assert!(matches!(call(convert_as_float, Value::Int(1)), Value::Null));
+    assert!(matches!(
+        call(convert_as_bool, Value::Bool(true)),
+        Value::Bool(true)
+    ));
+    assert!(matches!(call(convert_as_bool, Value::Int(1)), Value::Null));
+
+    // PHP emission is an arrow-IIFE (single-eval of the operand).
+    let php = |name: &str| {
+        let i = crate::native::index_of("Core.Convert", name).unwrap();
+        (crate::native::registry()[i].php)(&["$x".to_string()])
+    };
+    assert_eq!(php("asInt"), "(fn($__a) => is_int($__a) ? $__a : null)($x)");
+    assert_eq!(
+        php("asBool"),
+        "(fn($__a) => is_bool($__a) ? $__a : null)($x)"
+    );
+}

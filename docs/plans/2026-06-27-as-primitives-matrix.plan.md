@@ -66,6 +66,10 @@ higher-order `(T)->bool` predicates all require a real `bool`; no C-ternary exis
   an `index_of_by_leaf` fallback (guarded: only those 2 leaves + not a user class — safe because the
   checker rejects user-written un-imported stdlib calls). Example `examples/guide/as-primitives.phg`.
   No new `Op`/`Value`; byte-identical run≡runvm≡real PHP 8.5.
-- [ ] S2 assertions (primitive-union / erased source → `T?`)
+- [x] **S2 assertions — DONE.** Primitive-union source → `T?` runtime assertion via internal natives
+  `Convert.asInt`/`asFloat`/`asBool` (return value-or-null by runtime variant; arrow-IIFE PHP =
+  single-eval). `as string` on a union stays total `toString`. **`as decimal` assertion deferred**
+  (decimal's PHP carrier is a string — indistinguishable from a `string` union member; `is_*` can't
+  tell them apart). Erased-generic sources also deferred. Example extended; if-let smart-cast works.
 - [ ] S3 bool cells (numeric↔bool, bool→string, string→bool? strict)
 - [ ] S4 decimal extras (`float as decimal?`, `string as decimal?`)

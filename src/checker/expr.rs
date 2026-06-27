@@ -567,7 +567,6 @@ impl Checker {
         target: &str,
         span: Span,
     ) -> Ty {
-        use crate::ast::Expr;
         let target_ty = match target {
             "int" => Ty::Int,
             "float" => Ty::Float,
@@ -590,6 +589,37 @@ impl Checker {
         if matches!(v, Ty::Error) {
             return target_ty;
         }
+        // Union source (S2): the value is one-of, so `as P` is a runtime ASSERTION → `P?` (the value
+        // when its runtime variant is `P`, else null) — except `as string`, which is the total
+        // `toString` conversion (every value renders). `decimal` is deferred (its PHP carrier is a
+        // string, indistinguishable from a `string` union member).
+        if matches!(v, Ty::Union(_)) {
+            let assert_cell: Option<&str> = match target {
+                "int" => Some("asInt"),
+                "float" => Some("asFloat"),
+                "bool" => Some("asBool"),
+                _ => None,
+            };
+            if let Some(name) = assert_cell {
+                self.record_cast_call("Convert", name, value, span);
+                return Ty::Optional(Box::new(target_ty));
+            }
+            if target == "string" {
+                self.record_cast_call("Convert", "toString", value, span);
+                return Ty::String;
+            }
+            // `as decimal` on a union — deferred (carrier conflation).
+            self.err_coded(
+                span,
+                format!("`{v} as {target}` is not a supported conversion"),
+                "E-CAST-TYPE",
+                Some(
+                    "`as decimal` on a union is deferred (decimal shares PHP's string carrier)"
+                        .into(),
+                ),
+            );
+            return Ty::Error;
+        }
         // (source, target) → (qualifier leaf, native name, result type). `opt(t)` = `T?`.
         let opt = |t: Ty| Ty::Optional(Box::new(t));
         let cell: Option<(&str, &str, Ty)> = match (v, target) {
@@ -608,25 +638,7 @@ impl Checker {
         };
         match cell {
             Some((leaf, name, ret)) => {
-                let callee = Expr::Member {
-                    object: Box::new(Expr::Ident(leaf.to_string(), span)),
-                    name: name.to_string(),
-                    safe: false,
-                    span,
-                };
-                // The synthetic call must be full-arity (the default-param fill pass does not see a
-                // post-check rewrite): `Text.parseFloat` takes `(string, bool permissive=false)`, so
-                // supply the `false` (strict-parse) default explicitly.
-                let mut call_args = vec![value.clone()];
-                if name == "parseFloat" {
-                    call_args.push(Expr::Bool(false, span));
-                }
-                let repl = Expr::Call {
-                    callee: Box::new(callee),
-                    args: call_args,
-                    span,
-                };
-                self.cast_resolutions.insert(span.start, repl);
+                self.record_cast_call(leaf, name, value, span);
                 ret
             }
             None => {
@@ -644,6 +656,33 @@ impl Checker {
                 Ty::Error
             }
         }
+    }
+
+    /// Record a primitive `as`-cast rewrite: `value as T` ⇒ `Leaf.name(value)` (a leaf-qualified
+    /// native call the backends resolve by `index_of_by_leaf` without an import), keyed by the cast
+    /// node's span. The synthetic call must be full-arity — the default-param fill pass does not see a
+    /// post-check rewrite — so `Text.parseFloat` (which takes `(string, bool permissive=false)`) gets
+    /// its `false` (strict) default supplied explicitly.
+    fn record_cast_call(&mut self, leaf: &str, name: &str, value: &crate::ast::Expr, span: Span) {
+        use crate::ast::Expr;
+        let callee = Expr::Member {
+            object: Box::new(Expr::Ident(leaf.to_string(), span)),
+            name: name.to_string(),
+            safe: false,
+            span,
+        };
+        let mut call_args = vec![value.clone()];
+        if name == "parseFloat" {
+            call_args.push(Expr::Bool(false, span));
+        }
+        self.cast_resolutions.insert(
+            span.start,
+            Expr::Call {
+                callee: Box::new(callee),
+                args: call_args,
+                span,
+            },
+        );
     }
 
     // ---- stubs replaced in later tasks ----

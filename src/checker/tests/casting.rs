@@ -119,6 +119,30 @@ fn as_int_and_decimal_round_trip_types() {
 }
 
 #[test]
+fn as_union_member_is_assertion() {
+    // S2: a PRIMITIVE union narrows via `as` → `T?` (runtime assertion, not conversion).
+    assert!(
+        errors_of("function main() -> void { int|string v = 5; int? n = v as int; }").is_empty()
+    );
+    // `as string` on a union is the total `toString` conversion (every value renders) → `string`.
+    assert!(
+        errors_of("function main() -> void { int|string v = 5; string s = v as string; }")
+            .is_empty()
+    );
+    // if-let smart-cast binds the narrowed `int`.
+    assert!(errors_of(
+        "function main() -> void { int|string v = 5; if (var n = v as int) { int m = n + 1; } }"
+    )
+    .is_empty());
+    // The assertion result is genuinely optional — binding to a non-optional `int` fails.
+    let e = errors_of("function main() -> void { int|string v = 5; int n = v as int; }");
+    assert!(
+        e.iter().any(|d| d.code == Some("E-OPT-ASSIGN")),
+        "expected E-OPT-ASSIGN, got {e:?}"
+    );
+}
+
+#[test]
 fn as_identity_warns_redundant_but_is_not_an_error() {
     // `T as T` is the identity — no error, but a `W-REDUNDANT-CAST` lint fires.
     let src = "function main() -> void { int n = 3; int m = n as int; }";

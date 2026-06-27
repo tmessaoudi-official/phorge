@@ -123,6 +123,35 @@ fn convert_decimal_to_int_exact(args: &[Value], _: &mut String) -> Result<Value,
     }
 }
 
+/// `value as <int|float|bool>` on a **union** source (M4 as-matrix S2) — runtime type ASSERTION,
+/// not conversion: return the value when its runtime variant is the target primitive, else `null`
+/// (`(int|string) as int` ⇒ the int, or `null` for the string arm). The PHP carrier is a real
+/// `int`/`float`/`bool`, so `is_int`/`is_float`/`is_bool` distinguish them; `decimal` is deferred
+/// (its carrier is a string, indistinguishable from a `string` union member in PHP).
+fn convert_as_int(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [v @ Value::Int(_)] => Ok(v.clone()),
+        [_] => Ok(Value::Null),
+        _ => Err("Convert.asInt expects (T)".into()),
+    }
+}
+
+fn convert_as_float(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [v @ Value::Float(_)] => Ok(v.clone()),
+        [_] => Ok(Value::Null),
+        _ => Err("Convert.asFloat expects (T)".into()),
+    }
+}
+
+fn convert_as_bool(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [v @ Value::Bool(_)] => Ok(v.clone()),
+        [_] => Ok(Value::Null),
+        _ => Err("Convert.asBool expects (T)".into()),
+    }
+}
+
 pub(crate) fn convert_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
@@ -223,6 +252,35 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             pure: true,
             php: |a| format!("__phorge_dec_to_int_exact({})", parg(a, 0)),
             eval: NativeEval::Pure(convert_decimal_to_int_exact),
+        },
+        // --- runtime type assertions (M4 as-matrix S2: union source `as int/float/bool`) ---
+        NativeFn {
+            module: "Core.Convert",
+            name: "asInt",
+            params: vec![Ty::Param("T".into())],
+            ret: Ty::Optional(Box::new(Ty::Int)),
+            pure: true,
+            // Arrow-IIFE so the operand is evaluated exactly once (the `as` single-eval contract).
+            php: |a| format!("(fn($__a) => is_int($__a) ? $__a : null)({})", parg(a, 0)),
+            eval: NativeEval::Pure(convert_as_int),
+        },
+        NativeFn {
+            module: "Core.Convert",
+            name: "asFloat",
+            params: vec![Ty::Param("T".into())],
+            ret: Ty::Optional(Box::new(Ty::Float)),
+            pure: true,
+            php: |a| format!("(fn($__a) => is_float($__a) ? $__a : null)({})", parg(a, 0)),
+            eval: NativeEval::Pure(convert_as_float),
+        },
+        NativeFn {
+            module: "Core.Convert",
+            name: "asBool",
+            params: vec![Ty::Param("T".into())],
+            ret: Ty::Optional(Box::new(Ty::Bool)),
+            pure: true,
+            php: |a| format!("(fn($__a) => is_bool($__a) ? $__a : null)({})", parg(a, 0)),
+            eval: NativeEval::Pure(convert_as_bool),
         },
     ]
 }
