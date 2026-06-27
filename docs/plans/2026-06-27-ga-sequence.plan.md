@@ -120,6 +120,9 @@ return annotation, coverage+example).
   example (committed PHC hash) IS gateable (deterministic). argon2 feature-gated OFF for the WASM
   playground. **Principle reaffirmed:** transpile/lift are migration+test bridges, never a runtime
   Phorge depends on — every native has a real Rust impl; PHP is only an emission target.
+  **✅ COMPLETE** (`e345b85`): `argon2` crate adopted; `Core.Crypto.hashPassword`(impure)/
+  `verifyPassword`(pure) native on Rust backends + PHP peer emission (PHC cross-verify proven);
+  feature-gated off for the playground; `tests/crypto.rs` + verify-only gated example; 1112 tests green.
 - (c) **statics research** — inherited/overloaded/LSB statics; research + brainstorm pass.
 
 **Then design-first items** (each: brainstorm + AskUserQuestion on the API before building), slotted
