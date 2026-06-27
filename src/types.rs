@@ -225,7 +225,28 @@ impl Ty {
             // the same head with **invariant** type arguments (matching `List`/`Map`/`Set`: `Box<int>`
             // is not a `Box<float>`). A non-generic nominal has empty args on both sides, so this
             // reduces to the name check. A `T?` never widens to a non-optional `T` — handled above.
-            (Ty::Named(a, aa), Ty::Named(b, ba)) => subtype(a, b) || (a == b && aa == ba),
+            // Same head ⇒ **invariant** type arguments (`Box<string>` is not a `Box<int>`); different
+            // heads ⇒ a nominal subtype edge (class→interface, subclass→superclass). The split is
+            // load-bearing: the `subtype` oracle is reflexive (`subtype(a, a) == true`), so testing it
+            // first would short-circuit the invariant arg check for the same head — the finding #2
+            // type hole (a `Box<string>` flowing into a `Box<int>` slot). A non-generic nominal has
+            // empty args on both sides, so the same-head branch reduces to the name check.
+            (Ty::Named(a, aa), Ty::Named(b, ba)) => {
+                if a == b {
+                    // Invariant per argument, but a `Ty::Error` arg is the wildcard (an un-inferred
+                    // generic param defaults to `Ty::Error` — e.g. `new None()` ⇒ `Option<Error>`,
+                    // `new Ok(1)` ⇒ `Result<int, Error>` — and poison must never cascade), matching
+                    // the top-level `Ty::Error` short-circuit. So `Option<Error> -> Option<int>` binds
+                    // while `Box<string> -> Box<int>` (both concrete) is still rejected (finding #2).
+                    aa.len() == ba.len()
+                        && aa
+                            .iter()
+                            .zip(ba)
+                            .all(|(fa, ta)| *fa == Ty::Error || *ta == Ty::Error || fa == ta)
+                } else {
+                    subtype(a, b)
+                }
+            }
             // A type parameter is opaque inside its generic body: assignable only to the same
             // parameter (by name), with no coercion to/from any concrete type. Call sites do not
             // reach here — they unify the parameter away first (M-RT S7).

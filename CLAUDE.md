@@ -512,11 +512,11 @@ checker-only, params erased pre-backend ⇒ byte-identity safe by construction).
 classes: `package Main`-only, inference-only construction (annotate to fix a non-inferring variant —
 `Option<int> n = None();`), invariant, no bounds, no generic enum methods. Reuses `E-GENERIC-PARAM`;
 `examples/guide/generic-enums.phg` byte-identical run≡runvm≡**real PHP 8.6**; 591 lib + PHP-oracle
-differential + integration green. **Verified gap surfaced (KNOWN_ISSUES, pre-existing & shared with
-generic classes):** same-head generic types are *not* actually invariant at an assignment boundary
-(`Box<string>`/`Option<string>` is accepted where `<int>` is expected) — the nominal assignability
-check short-circuits on the reflexive name edge before the invariant arg compare; a real fix touches
-the shared subtype oracle and is deferred.
+differential + integration green. **(Former gap now FIXED — Soundness Batch B, finding #2):** same-head
+generic types are now correctly **invariant** at an assignment boundary (`Box<string>`/`Option<string>`
+is *rejected* where `<int>` is expected) — the nominal assignability arm splits same-head (invariant
+arg compare, `Ty::Error` per-arg wildcard for un-inferred params) from a true subtype edge, so the
+reflexive name short-circuit no longer smuggles a mismatched type argument through (`src/types.rs`).
 
 **M-RT (Rich Types) is now CLOSED (2026-06-23).** The full slice chain shipped: method overloading →
 S6 inheritance (single + multiple, final-by-default, abstract) → **S8 traits** (`trait`/`use` horizontal

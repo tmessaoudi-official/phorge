@@ -428,3 +428,57 @@ function main() -> void {
         "{errs:?}"
     );
 }
+
+// ── generic type-argument invariance (Soundness Batch B, finding #2) ─────────────────────────────
+
+const BOX: &str =
+    "class Box<T> { constructor(public T value) {} function get() -> T { return this.value; } }";
+
+#[test]
+fn generic_class_different_args_is_rejected() {
+    // `Box<string>` must NOT flow into a `Box<int>` slot — the reflexive same-head short-circuit used
+    // to accept it, smuggling a string into a statically-`int` slot (finding #2).
+    let bad = errors_of(&format!(
+        "{BOX} function main() -> void {{ Box<string> bs = new Box(\"hi\"); Box<int> bi = bs; }}"
+    ));
+    assert!(
+        !bad.is_empty(),
+        "expected rejection of Box<string> -> Box<int>"
+    );
+}
+
+#[test]
+fn generic_class_same_args_is_ok() {
+    // Regression guard: identical type arguments still assign cleanly.
+    let ok = errors_of(&format!(
+        "{BOX} function main() -> void {{ Box<int> a = new Box(7); Box<int> b = a; }}"
+    ));
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}
+
+#[test]
+fn generic_enum_different_args_is_rejected() {
+    // Same hole closes for generic enums (`Option<string>` !<: `Option<int>`).
+    let bad = errors_of(
+        "enum Option<T> { Some(T value), None() } \
+         function main() -> void { Option<string> os = new Some(\"hi\"); Option<int> oi = os; }",
+    );
+    assert!(
+        !bad.is_empty(),
+        "expected rejection of Option<string> -> Option<int>"
+    );
+}
+
+#[test]
+fn nominal_subtype_still_assignable() {
+    // The fix must not break real subtyping: a subclass still flows into a superclass slot.
+    let ok = errors_of(
+        "open class Animal { constructor() {} } \
+         class Dog extends Animal {} \
+         function main() -> void { Animal a = new Dog(); }",
+    );
+    assert!(
+        ok.is_empty(),
+        "expected clean subtype assignment, got {ok:?}"
+    );
+}

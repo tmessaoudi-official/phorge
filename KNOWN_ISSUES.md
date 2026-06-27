@@ -434,13 +434,14 @@ type argument (`instanceof Box<int>` ≡ `instanceof Box`). These refinements ar
   `Option<int>` binds `n: int`), but — like every erased generic — that payload is `mixed` to the
   backend, so it is **not a specialized VM arithmetic operand** (the operand limitation above); since
   match arms are single-expression, return the payload into a typed local for arithmetic.
-- **Same-head generic types are not actually invariant at an assignment boundary.** `Box<string>` /
-  `Option<string>` *is* accepted where `Box<int>` / `Option<int>` is expected, because the nominal
-  assignability check short-circuits on the reflexive name edge (`subtype("Box","Box")` is true) before
-  the invariant type-argument comparison runs. [Verified: `Box<int> b = Box("x")` and `Option<int> o =
-  Some("x")` both type-check clean.] This is a **pre-existing gap shared by generic classes** (not new
-  to generic enums); the documented "invariant" intent is only enforced for the built-in containers
-  (`List`/`Map`/`Set`). A real fix touches the shared subtype oracle (used everywhere) and is deferred.
+- **Same-head generic types ARE now invariant at an assignment boundary** (fixed — Soundness Batch B,
+  finding #2). `Box<string>` / `Option<string>` is correctly **rejected** where `Box<int>` /
+  `Option<int>` is expected. The nominal assignability arm now splits same-head (invariant type-arg
+  comparison) from a true subtype edge, so the reflexive-name short-circuit no longer smuggles a
+  mismatched type argument through. An un-inferred type arg (`new None()` ⇒ `Option<Error>`) still
+  binds via the per-arg `Ty::Error` wildcard. (A nested un-inferred placeholder under another generic
+  head — e.g. `Box<Option<Error>> -> Box<Option<int>>` — is conservatively rejected rather than bound;
+  a rare, safe over-rejection.)
 - **A generic function used as a first-class *value*** (`var f = id;` then `f(x)`) is not supported —
   call a generic function directly so the call site can infer its type parameters. (A monomorphic
   named function as a value already works — M3 S3.)

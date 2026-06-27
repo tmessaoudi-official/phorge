@@ -9,6 +9,10 @@
 // interpreter, the bytecode VM, and the transpiled PHP all run identical, type-variable-free code —
 // byte-for-byte identical output. An instance carries no type argument at runtime: `instanceof
 // Box<int>` is just `instanceof Box`.
+//
+// Type arguments are **invariant** (Soundness Batch B): a `Box<string>` does NOT flow into a
+// `Box<int>` slot (it would be unsound — same storage). `Box<int> b = new Box("x");` is a type error.
+// (Can't be shown in a runnable example — every example must produce identical Ok output.)
 
 package Main;
 

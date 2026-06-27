@@ -116,6 +116,23 @@ P1)**, all front-end-only (byte-identity-neutral), 7 fix batches A–G. Decision
   reached *through an interface-typed receiver* isn't discharged (the flattened iface-method form drops
   `throws`) — the concrete implementer's call still discharges, so the hole is narrow.
 
+- **Batch B — generic type-arg invariance — ✅ DONE** (autonomous). Finding #2 (P0, the type hole):
+  `Box<string>` flowed into a `Box<int>` slot (and `Option<string>` → `Option<int>`), because the
+  nominal assignability arm tested the reflexive `subtype(a, a)` (always true) *before* the invariant
+  arg compare — a string reached a statically-`int` slot. Fixed in `src/types.rs` `assignable_with`'s
+  `(Named, Named)` arm: **split same-head (invariant per-arg compare) from a true subtype edge**
+  (`if a == b { args invariant } else { subtype(a, b) }`). An un-inferred type arg defaults to
+  `Ty::Error` (`new None()` ⇒ `Option<Error>`), so the per-arg compare treats `Ty::Error` as a
+  wildcard (consistent with the top-level poison short-circuit) — `Option<Error> -> Option<int>` still
+  binds while `Box<string> -> Box<int>` is rejected. One line closes generic classes AND generic enums.
+  Container heads (`List`/`Map`/`Set`) were already invariant (they fall through `from == to`, not the
+  Named arm — verified); optionals stay intentionally covariant. Pure front-end (no Op/Value change);
+  3 previously-regressed inference tests (None/Ok/Result) recovered via the wildcard; 4 new generics
+  tests; KNOWN_ISSUES + CLAUDE.md + `examples/guide/generic-types.phg` comment updated (gap → fixed).
+  Full workspace gate green (1009 lib + 112 differential w/ PHP oracle). **Limitation (documented):** a
+  *nested* un-inferred placeholder (`Box<Option<Error>> -> Box<Option<int>>`) is conservatively
+  rejected (safe over-rejection) rather than bound.
+
 ## Decisions Log
 - [2026-06-26] AGREED (Batch 1):
   - **A — ADOPT:** formalize "library/web files need no `main`; only running needs an entry"; keep
