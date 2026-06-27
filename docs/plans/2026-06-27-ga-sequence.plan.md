@@ -132,10 +132,13 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
 ## Sequence (dependency order)
 1. **M4 charter** — codify the *de-facto* conventions from the ~18 shipped native modules into a
    one-page conventions doc + minimal enforcement. Governs items 3–6. (No API rework: descriptive.)
-2. **`phg fmt` + lints** — `fmt` reuses the existing `src/lift/printer.rs`; add unused-import /
-   unused-local lints on the warning channel. Near-free; speeds all later authoring.
-3. **M-Test** — `phg test` runner + `Core.Test` assertions + `assertFaults` + fixtures/selection/skip
-   (+ PHPUnit bridge if cheap). Determinism seam (seedable Random + quarantine) already built. **FORK.**
+2. **`phg fmt`** — **design-specced** `docs/specs/2026-06-27-phg-fmt-design.md`. NOT a printer reuse:
+   the lexer discards comments, so a real formatter needs trivia preservation (comment side-channel +
+   reattachment, F1–F5). Recommended scope v1 = "tidy + comment-safe, no reflow".
+3. **M-Test** — `phg test` runner + `Core.Test` assertions + `assertFaults`. **Design-specced**
+   `docs/specs/2026-06-27-m-test-design.md` (T1–T5). Recommended: `test "name" {}` items, failure =
+   catchable fault, discover `tests/**/*.phg`, interpreter runner. **Build M-Test FIRST** (unblocked;
+   fmt needs the trivia slice). Both specs have flagged forks awaiting developer confirmation.
 4. **M-text** — `Core.Regex` (PCRE `/u`), codepoint-aware string ops, `\u{…}` escapes, `number_format`.
    **FORK** (regex API surface).
 5. **Breadth gaps** — only what `m4-stdlib-breadth.plan.md` left open (most is ✅); `core.json`
