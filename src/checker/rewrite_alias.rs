@@ -317,6 +317,13 @@ pub fn expand_aliases(program: &Program) -> Program {
                     .collect(),
                 span: e.span,
             })),
+            // M-Test: a `test` body may use a `type` alias, so its statements are alias-rewritten like
+            // a function body — keeping test bodies alias-free for the `phg test` runner (M-Test T3).
+            Item::Test { name, body, span } => Some(Item::Test {
+                name: name.clone(),
+                body: body.iter().map(|s| rstmt(s, &aliases)).collect(),
+                span: *span,
+            }),
         })
         .collect();
 

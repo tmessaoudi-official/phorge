@@ -171,6 +171,8 @@ impl Transpiler {
                 Item::Trait(_) => {}
                 // Aliases are expanded out of the AST before transpiling; arm only for exhaustiveness.
                 Item::TypeAlias { .. } => {}
+                // M-Test: `test` items are checker-gated out of any transpiled build.
+                Item::Test { .. } => {}
             }
         }
     }
@@ -215,6 +217,8 @@ impl Transpiler {
                 Item::Trait(t) => self.emit_trait(t)?,
                 // Aliases are expanded out of the AST before transpiling; arm only for exhaustiveness.
                 Item::TypeAlias { .. } => {}
+                // M-Test: `test` items are checker-gated out of any transpiled build.
+                Item::Test { .. } => {}
             }
         }
         // Feature B-static: runtime static initializers run once, before `main` (matching the Rust

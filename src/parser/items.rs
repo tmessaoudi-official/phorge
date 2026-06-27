@@ -8,6 +8,15 @@ impl Parser {
     /// stamped onto the declaration by the free `stamp_visibility`.
     pub fn parse_item(&mut self) -> Result<Item, Diagnostic> {
         let sp = self.peek_span();
+        // Contextual `test "name" { … }` item (M-Test T1), recognized *before* any modifier parsing.
+        // `test` lexes as an ordinary identifier, so it is special only at item position when
+        // immediately followed by a string literal — `test` followed by anything else stays a usable
+        // name. A leading visibility/`open`/`abstract` modifier therefore never reaches here, so a
+        // `public test "x" {}` falls through to the normal item match and is rejected (a test carries
+        // no modifiers).
+        if self.at_kw("test") && matches!(self.peek2(), TokenKind::Str(_)) {
+            return self.parse_test(sp);
+        }
         // Optional leading declaration visibility (visibility modifiers): at most one of
         // public/internal/private. Absent ⇒ the default `Visibility::Public`.
         let vis = self.parse_decl_visibility()?;
@@ -152,6 +161,30 @@ impl Parser {
         let ty = self.parse_type()?;
         self.expect(&TokenKind::Semicolon, "';' after type alias")?;
         Ok(Item::TypeAlias { name, ty, span: sp })
+    }
+
+    /// `test "name" { stmts }` (M-Test T1) — assumes the contextual `test` keyword is current and the
+    /// next token is a string literal (the caller established both). The name must be a plain string
+    /// literal (no interpolation — a test name is a label, not a runtime value); the body is an
+    /// ordinary statement block.
+    pub(super) fn parse_test(&mut self, sp: Span) -> Result<Item, Diagnostic> {
+        self.eat_kw("test", "'test'")?;
+        let name = match self.advance().kind {
+            TokenKind::Str(segs) => match segs.as_slice() {
+                [crate::token::StrSeg::Lit(s)] => s.clone(),
+                [] => String::new(),
+                _ => {
+                    return Err(self.error("a plain test name string (no interpolation)"));
+                }
+            },
+            _ => return Err(self.error("a test name string literal after 'test'")),
+        };
+        let body = self.parse_block()?;
+        Ok(Item::Test {
+            name,
+            body,
+            span: sp,
+        })
     }
 
     /// `function name(params) [-> RetType] BLOCK`. `modifiers` are pre-parsed by the caller

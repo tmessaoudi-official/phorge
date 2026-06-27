@@ -45,6 +45,15 @@ pub(super) fn errors_of_raw(src: &str) -> Vec<Diagnostic> {
     }
 }
 
+/// Type-check `src` in **test mode** (`phg test` semantics — `test` items are allowed) and return
+/// the errors. M-Test T1.
+pub(super) fn test_errors_of(src: &str) -> Vec<Diagnostic> {
+    match check_tests(&prog(src)) {
+        Ok(_warnings) => Vec::new(),
+        Err(e) => e,
+    }
+}
+
 /// Recursively scan a checked program for any surviving `Expr::Propagate` node (test helper for
 /// the throws-`?` erasure invariant).
 pub(super) fn program_has_propagate(p: &Program) -> bool {

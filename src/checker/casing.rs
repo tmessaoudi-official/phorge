@@ -102,6 +102,13 @@ impl Checker {
                 }
                 Item::TypeAlias { name, span, .. } => self.want_type_case(name, *span),
                 Item::Import { .. } => {}
+                // M-Test: a test name is a free-form string label (not an identifier), so it has no
+                // casing rule; the body's `var` bindings follow the same camelCase walk as a function.
+                Item::Test { body, .. } => {
+                    for s in body {
+                        self.check_stmt_casing(s);
+                    }
+                }
             }
         }
     }

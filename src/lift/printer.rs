@@ -71,8 +71,11 @@ impl Printer {
             Item::Function(f) => self.function(f),
             Item::Class(c) => self.class(c),
             Item::Enum(e) => self.enum_decl(e),
-            Item::Interface(_) | Item::Trait(_) | Item::TypeAlias { .. } => {
-                Err("printer: interfaces/traits/type-aliases are outside the lift subset".into())
+            Item::Interface(_) | Item::Trait(_) | Item::TypeAlias { .. } | Item::Test { .. } => {
+                Err(
+                    "printer: interfaces/traits/type-aliases/tests are outside the lift subset"
+                        .into(),
+                )
             }
         }
     }

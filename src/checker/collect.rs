@@ -73,6 +73,9 @@ impl Checker {
                         self.aliases.insert(name.clone(), ty.clone());
                     }
                 }
+                // M-Test: a `test` item declares no top-level symbol; nothing to hoist here. Its body
+                // is checked (test mode) / rejected (normal build) in `check_program`.
+                Item::Test { .. } => {}
             }
         }
         // Interfaces are fully registered now: validate the extends graph + every class's
@@ -1580,6 +1583,8 @@ fn reserved_symbol_decl(item: &crate::ast::Item) -> Option<(&str, Span, &'static
         Item::Trait(t) => Some((&t.name, t.span, "trait")),
         Item::TypeAlias { name, span, .. } => Some((name, *span, "type alias")),
         Item::Import { .. } => None,
+        // A `test` name is a string label, not a PHP symbol — no reserved-name concern.
+        Item::Test { .. } => None,
     }
 }
 

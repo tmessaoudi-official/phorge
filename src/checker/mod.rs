@@ -255,6 +255,11 @@ pub struct Checker {
     /// is forbidden even though `cur_class` is `Some`. Distinct from `in_field_init` (an *instance*
     /// field initializer, where `this` IS in scope).
     in_static_init: bool,
+    /// Set when checking a program under `phg test` (M-Test). When true, `test "name" { … }` items
+    /// are allowed and their bodies type-checked; when false (every normal build — run/runvm/check/
+    /// transpile), a `test` item is rejected as `E-TEST-OUTSIDE-TESTS` so production code cannot
+    /// smuggle test blocks. Default `false`; flipped only by [`check_tests`].
+    test_mode: bool,
     /// Set while checking a **static method** body (Batch E, finding #5). A static method has no
     /// instance, so `this` and bare instance-field references are rejected (`E-STATIC-THIS`) even
     /// though `cur_class` stays set — static-member access (`Class.field`) and constructing the class
@@ -367,6 +372,7 @@ impl Checker {
             under_new: false,
             in_field_init: false,
             in_static_init: false,
+            test_mode: false,
             in_static_method: false,
             cur_class: None,
             depth: 0,
@@ -563,7 +569,14 @@ impl Checker {
 /// `html"…"` desugarings collected along the way). The single shared entry behind both [`check`]
 /// (gate only) and [`check_resolutions`] (gate + html replacements for the backend pipeline).
 fn run_checker(program: &Program) -> Checker {
+    run_checker_mode(program, false)
+}
+
+/// The shared checker driver. `test_mode` is `true` only under `phg test` — it allows `test` items
+/// (M-Test); every other entry runs with it `false`.
+fn run_checker_mode(program: &Program, test_mode: bool) -> Checker {
     let mut c = Checker::new();
+    c.test_mode = test_mode;
     c.collect(program);
     c.check_program(program);
     c
@@ -571,6 +584,18 @@ fn run_checker(program: &Program) -> Checker {
 
 pub fn check(program: &Program) -> Result<Vec<Diagnostic>, Vec<Diagnostic>> {
     let c = run_checker(program);
+    if c.errors.is_empty() {
+        Ok(c.warnings)
+    } else {
+        Err(c.errors)
+    }
+}
+
+/// Like [`check`], but in **test mode**: `test "name" { … }` items are accepted and their bodies
+/// type-checked (a normal build rejects them as `E-TEST-OUTSIDE-TESTS`). Used by the `phg test`
+/// runner (M-Test T3) so a test file is checked as a real program plus its test blocks.
+pub fn check_tests(program: &Program) -> Result<Vec<Diagnostic>, Vec<Diagnostic>> {
+    let c = run_checker_mode(program, true);
     if c.errors.is_empty() {
         Ok(c.warnings)
     } else {

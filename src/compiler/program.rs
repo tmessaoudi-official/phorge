@@ -82,6 +82,9 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
             // Aliases are expanded out of the AST before compiling (checker::expand_aliases); this
             // arm only satisfies the exhaustive match.
             Item::TypeAlias { .. } => {}
+            // M-Test: a `test` item never reaches a normal compile (checker-gated); the `phg test`
+            // runner executes test bodies on the interpreter (M-Test T3), not the VM.
+            Item::Test { .. } => {}
         }
     }
     // M-RT S8: register the synthetic trait decls alongside real classes for method compilation.

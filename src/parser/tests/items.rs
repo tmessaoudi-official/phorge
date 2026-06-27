@@ -484,3 +484,40 @@ fn empty_program_parses() {
     let prog = parser("").parse_program().expect("parse ok");
     assert!(prog.items.is_empty());
 }
+
+// --- M-Test T1: `test "name" { … }` item ---------------------------------------------------------
+
+#[test]
+fn parses_test_item() {
+    match item("test \"addition works\" { var x = 2 + 2; }") {
+        Item::Test { name, body, .. } => {
+            assert_eq!(name, "addition works");
+            assert_eq!(body.len(), 1);
+        }
+        other => panic!("expected a test item, got {other:?}"),
+    }
+}
+
+#[test]
+fn parses_empty_test_item() {
+    match item("test \"nothing yet\" {}") {
+        Item::Test { name, body, .. } => {
+            assert_eq!(name, "nothing yet");
+            assert!(body.is_empty());
+        }
+        other => panic!("expected a test item, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_is_a_contextual_keyword() {
+    // `test` stays usable as an ordinary identifier (a local variable here), because it is special
+    // only at item position when immediately followed by a string literal.
+    let p = prog("package Main;\nfunction main() -> void { var test = 3; }");
+    assert!(matches!(&p.items[0], Item::Function(_)));
+}
+
+#[test]
+fn test_item_rejects_visibility_modifier() {
+    assert!(parser("public test \"x\" {}").parse_item().is_err());
+}

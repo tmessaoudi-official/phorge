@@ -201,6 +201,10 @@ impl Checker {
                 // (correct spans, no double-reporting), with the trait's own collected members as
                 // `this`. A trait has no type parameters this slice.
                 Item::Trait(t) => self.check_type_body(&t.name, &[], &t.members),
+                // M-Test: a `test "name" { … }` block is checked like a `-> void` body with no `this`,
+                // but only under `phg test`; in a normal build it is rejected (production code cannot
+                // smuggle test blocks).
+                Item::Test { name, body, span } => self.check_test(name, body, *span),
                 // Interface method signatures have no body to check (the conformance/graph
                 // validation ran in `collect`); enums/imports/aliases have nothing here.
                 Item::Enum(_)
@@ -209,6 +213,26 @@ impl Checker {
                 | Item::TypeAlias { .. } => {}
             }
         }
+    }
+
+    /// Type-check one `test "name" { … }` item (M-Test). Outside test mode it is an error so test
+    /// blocks cannot appear in production code. In test mode the body is checked like a `-> void`
+    /// function body — fresh scope, no parameters, no `this`, no return value expected.
+    fn check_test(&mut self, _name: &str, body: &[crate::ast::Stmt], span: crate::token::Span) {
+        if !self.test_mode {
+            self.err_coded(
+                span,
+                "a `test` block is only allowed in a test file run by `phg test`",
+                "E-TEST-OUTSIDE-TESTS",
+                Some("move this into a `*.phg` under `tests/` and run `phg test`".into()),
+            );
+            return;
+        }
+        let prev_ret = std::mem::replace(&mut self.cur_ret, Ty::Void);
+        let prev_class = self.cur_class.take();
+        self.check_block(body);
+        self.cur_ret = prev_ret;
+        self.cur_class = prev_class;
     }
 
     /// Feature B-static: type-check each class's static-field initializers (now arbitrary expressions,

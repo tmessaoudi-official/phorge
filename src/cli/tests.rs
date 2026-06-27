@@ -359,6 +359,15 @@ fn explain_covers_main_signature_code() {
 }
 
 #[test]
+fn explain_covers_test_outside_tests_code() {
+    // M-Test: the test-block placement diagnostic self-documents via `phg explain`.
+    let body =
+        explain_text("E-TEST-OUTSIDE-TESTS").expect("E-TEST-OUTSIDE-TESTS has an explanation");
+    assert!(body.starts_with("E-TEST-OUTSIDE-TESTS"), "{body}");
+    assert!(body.contains("phg test"), "{body}");
+}
+
+#[test]
 fn explain_covers_member_visibility_codes() {
     // Wave 1.1 member-visibility diagnostics self-document via `phg explain`.
     for code in ["E-FIELD-VISIBILITY", "E-METHOD-VISIBILITY"] {

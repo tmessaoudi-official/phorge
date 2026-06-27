@@ -454,6 +454,9 @@ impl Interp {
                 // Aliases are expanded out of the AST before any backend runs (checker::
                 // expand_aliases); this arm only satisfies the exhaustive match.
                 Item::TypeAlias { .. } => {}
+                // M-Test: `test` items declare no callable symbol; the `phg test` runner executes
+                // each test body directly (M-Test T3). Nothing to hoist here.
+                Item::Test { .. } => {}
             }
         }
         // M-RT S8: seed a `use`d trait's `static` field as a per-using-class copy (PHP `use` semantics)
