@@ -1,0 +1,25 @@
+// Core.Hash — crc32 / md5 / sha1 / sha256 digests (native-stdlib wave).
+//
+// Pure, deterministic, std-only digests over `bytes`, returned as lowercase hex `string`. Each is
+// byte-identical to a PHP core function (`hash("crc32b")` / `md5` / `sha1` / `hash("sha256")`), so
+// run/runvm/real PHP agree exactly. These are checksums/content digests — NOT password hashing
+// (that needs a salted, constant-time KDF, which is deliberately out of scope).
+package Main;
+
+import Core.Console;
+import Core.Bytes;
+import Core.Hash;
+
+function main(): void {
+    var data = Bytes.fromString("Hello, Phorge!");
+
+    Console.println("crc32:  {Hash.crc32(data)}");
+    Console.println("md5:    {Hash.md5(data)}");
+    Console.println("sha1:   {Hash.sha1(data)}");
+    Console.println("sha256: {Hash.sha256(data)}");
+
+    // The empty input has well-known digests (a handy sanity check).
+    var empty = Bytes.fromString("");
+    Console.println("md5(\"\"):    {Hash.md5(empty)}");
+    Console.println("sha256(\"\"): {Hash.sha256(empty)}");
+}

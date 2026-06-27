@@ -25,6 +25,7 @@ mod convert;
 mod decimal;
 mod encoding;
 mod file;
+mod hash;
 mod html;
 mod json;
 mod list;
@@ -290,6 +291,7 @@ fn build() -> Vec<NativeFn> {
     registry.extend(convert::convert_natives());
     registry.extend(decimal::decimal_natives());
     registry.extend(encoding::encoding_natives());
+    registry.extend(hash::hash_natives());
     registry.extend(json::json_natives());
     registry.extend(reflect::reflect_natives());
     registry.extend(process::process_natives());
