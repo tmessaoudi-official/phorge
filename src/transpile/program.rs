@@ -825,6 +825,50 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_rng {
+            // `Core.Random` — the SAME xorshift64 as the Rust kernel (`src/native/random.rs`), so a
+            // seeded sequence is byte-identical across all backends. State persists in a by-reference
+            // function-static (no global statement needed). `GOLDEN` is the signed-i64 reinterpretation
+            // of `0x9E3779B97F4A7C15` (the unsigned literal exceeds PHP_INT_MAX → would parse as float).
+            // PHP `>>` is arithmetic, so the `>> 7` masks the 7 sign-extended top bits to emulate Rust's
+            // logical `u64 >>`. `next()` masks the high bit (`& PHP_INT_MAX`) for a non-negative i64.
+            self.line("function &__phorge_rng_state() {");
+            self.indent += 1;
+            self.line("static $s = -7046029254386353131;");
+            self.line("return $s;");
+            self.indent -= 1;
+            self.line("}");
+            self.line("function __phorge_rng_step() {");
+            self.indent += 1;
+            self.line("$r = &__phorge_rng_state();");
+            self.line("$x = $r;");
+            self.line("$x ^= ($x << 13);");
+            self.line("$x ^= (($x >> 7) & 0x01FFFFFFFFFFFFFF);");
+            self.line("$x ^= ($x << 17);");
+            self.line("$r = $x;");
+            self.line("return $x;");
+            self.indent -= 1;
+            self.line("}");
+            self.line("function __phorge_rng_seed($seed) {");
+            self.indent += 1;
+            self.line("$r = &__phorge_rng_state();");
+            self.line("$r = $seed ^ (-7046029254386353131);");
+            self.line("if ($r === 0) { $r = -7046029254386353131; }");
+            self.line("return null;");
+            self.indent -= 1;
+            self.line("}");
+            self.line("function __phorge_rng_next() {");
+            self.indent += 1;
+            self.line("return __phorge_rng_step() & PHP_INT_MAX;");
+            self.indent -= 1;
+            self.line("}");
+            self.line("function __phorge_rng_int_between($lo, $hi) {");
+            self.indent += 1;
+            self.line("$span = $hi - $lo + 1;");
+            self.line("return $lo + ((__phorge_rng_step() & PHP_INT_MAX) % $span);");
+            self.indent -= 1;
+            self.line("}");
+        }
         if self.uses_list_sort {
             // Natural ascending over a COPY (Phorge lists are immutable). String by byte (`strcmp`,
             // ≡ Rust `String` Ord) — PHP's `<=>` would juggle numeric strings; ints/floats/bools via

@@ -279,6 +279,11 @@ struct Transpiler {
     /// `__phorge_number_format`, assembling the grouped string byte-for-byte like `value::number_format`
     /// (so the PHP leg never relies on PHP's own `number_format` and its `-0`/locale quirks).
     uses_math_number_format: bool,
+    /// Set when any `Core.Random` native is emitted (2026-06-27) — defines the `__phorge_rng_*`
+    /// helpers: a process-global state plus a hand-rolled xorshift64 byte-identical to the Rust kernel
+    /// (so a seeded sequence matches `run`/`runvm`). `>>` is masked for logical shift; `GOLDEN` is the
+    /// signed-i64 reinterpretation of the unsigned constant.
+    uses_rng: bool,
     /// Classes that must lower to the **interface + trait** decomposition (M-RT S6b): every transitive
     /// ancestor of a multi-parent (`extends A, B`) class. PHP has no multiple inheritance, so a
     /// multi-parent class `implements` its parents' interfaces and `use`s their traits; each ancestor
@@ -490,6 +495,7 @@ impl Transpiler {
             uses_dec_to_int: false,
             uses_math_gcd: false,
             uses_math_number_format: false,
+            uses_rng: false,
             decomposed: BTreeSet::new(),
             tmp: 0,
         }

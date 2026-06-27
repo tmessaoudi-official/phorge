@@ -1,12 +1,14 @@
-//! `Core.Random` — a seeded pseudo-random generator (native-stdlib wave, QUARANTINED).
+//! `Core.Random` — a seeded pseudo-random generator (native-stdlib wave).
 //!
-//! These are `pure: false` natives, like `Core.Process`/`Core.Env`: they read+advance a process
-//! **global** RNG state, so a call's result depends on prior calls, not on the program text alone.
-//! A program that imports `Core.Random` is therefore **quarantined** from the byte-identity
-//! differential (`uses_impure_native` in `tests/differential.rs`) — the Rust backends share the one
-//! global generator (so `run ≡ runvm` always), but the transpiled PHP uses PHP's own Mersenne-Twister
-//! (`mt_srand`/`mt_rand`), whose sequence need not match. Correctness is exercised in `tests/random.rs`
-//! (seed determinism + `run ≡ runvm` + bounds) and walked through in `examples/random/` (not gated).
+//! `pure: true` (2026-06-27): the result is deterministic w.r.t. the program text — a process-global
+//! xorshift64 state advanced by each call, seeded deterministically, replaying the same stream on
+//! every backend. The transpiler hand-rolls the **same** xorshift64 in PHP (`__phorge_rng_*`), so a
+//! seeded sequence is **byte-identical** on `run`/`runvm`/transpiled PHP and Random is gated by the
+//! oracle like any other native (no longer quarantined; the prior `mt_srand`/`mt_rand` divergence is
+//! gone). The PHP `>>` is arithmetic where Rust's `u64 >>` is logical, so the emitted step masks the
+//! sign-extended bits (`& 0x01FFFFFFFFFFFFFF` for the `>> 7`); `GOLDEN` is emitted as its signed-i64
+//! reinterpretation (the unsigned literal exceeds `PHP_INT_MAX`). Correctness is exercised in
+//! `tests/random.rs` (seed determinism + `run ≡ runvm` + bounds) and `examples/random/`.
 //!
 //! The Rust kernel is a `xorshift64` generator: only XOR and shifts in `1..=63` (no multiply that
 //! could overflow-panic in debug, no float division), and every emitted value is masked to a
@@ -87,9 +89,12 @@ fn random_int_between(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
-/// The `Core.Random` registry entries. All `pure: false` (quarantined). The PHP emission uses PHP's
-/// native Mersenne-Twister (`mt_srand`/`mt_rand`); the sequence need not match the Rust kernel because
-/// importing this module excludes the program from the oracle.
+/// The `Core.Random` registry entries. `pure: true` (2026-06-27): the PHP emission **hand-rolls the
+/// same xorshift64** (`__phorge_rng_*` helpers) rather than PHP's Mersenne-Twister, so a seeded
+/// sequence is **byte-identical** on `run`/`runvm`/transpiled PHP — Random rejoins the oracle and
+/// reproducibility survives transpile. The kernel itself is still process-global state (the result of
+/// a call depends on prior calls), but it is *deterministic w.r.t. the program text*, which is what
+/// `pure` means here; an unseeded program replays the same default-`GOLDEN` stream on every backend.
 pub(crate) fn random_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
@@ -97,27 +102,27 @@ pub(crate) fn random_natives() -> Vec<NativeFn> {
             name: "seed",
             params: vec![Ty::Int],
             ret: Ty::Void,
-            pure: false,
+            pure: true,
             eval: NativeEval::Pure(random_seed),
-            php: |a| format!("mt_srand({})", parg(a, 0)),
+            php: |a| format!("__phorge_rng_seed({})", parg(a, 0)),
         },
         NativeFn {
             module: "Core.Random",
             name: "next",
             params: vec![],
             ret: Ty::Int,
-            pure: false,
+            pure: true,
             eval: NativeEval::Pure(random_next),
-            php: |_| "mt_rand()".to_string(),
+            php: |_| "__phorge_rng_next()".to_string(),
         },
         NativeFn {
             module: "Core.Random",
             name: "intBetween",
             params: vec![Ty::Int, Ty::Int],
             ret: Ty::Int,
-            pure: false,
+            pure: true,
             eval: NativeEval::Pure(random_int_between),
-            php: |a| format!("mt_rand({}, {})", parg(a, 0), parg(a, 1)),
+            php: |a| format!("__phorge_rng_int_between({}, {})", parg(a, 0), parg(a, 1)),
         },
     ]
 }

@@ -174,6 +174,12 @@ impl Transpiler {
                                 _ => {}
                             }
                         }
+                        // `Core.Random` erases to gated `__phorge_rng_*` helpers (2026-06-27): a
+                        // hand-rolled xorshift64 byte-identical to the Rust kernel (so seeded output
+                        // matches across all backends — Random is no longer quarantined).
+                        if nat.module == "Core.Random" {
+                            self.uses_rng = true;
+                        }
                         // `Decimal.*` erases to gated `__phorge_dec_*` helpers (M-NUM S1/S2).
                         if nat.module == "Core.Decimal" {
                             match nat.name {
