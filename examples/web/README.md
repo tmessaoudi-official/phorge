@@ -10,6 +10,40 @@ a real socket — one native, one PHP — and both call the *same* `handle`.
 | `handler.phg` | **W1** — the handler model: `Request`/`Response` classes, `parseRequest(bytes) -> Request?`, `serializeResponse(Response) -> bytes`, `handle(Request) -> Response`. Bodies are `bytes`; headers are raw `List<string>` lines behind `req.header(name)`. No socket. |
 | `router.phg` | **W2** — a static exact-match router: a `List<Route>` table + linear `(method, path)` scan → a `Handler` enum tag → exhaustive `match` dispatch. Pure Phorge, no new language feature. |
 | `server.phg` | **W4** — the full served app: W1 parse/serialize + W2 routing + the single entry `respond(bytes) -> bytes`. This is what `phg serve` runs. |
+| `password-verify.phg` | **`Core.Crypto`** — verify a password against a committed Argon2id PHC hash. Deterministic ⇒ byte-identity-gated; the non-deterministic `hashPassword` is documented below. |
+
+## `Core.Crypto` — password hashing (Argon2id)
+
+Secure password hashing follows the one inviolable rule — **never roll your own crypto**. Phorge
+implements it natively on the Rust backends via the audited RustCrypto **`argon2`** crate (the sole
+external dependency, admitted under `docs/specs/2026-06-27-dependency-policy.md`); the transpile
+bridge emits PHP's `password_hash`/`password_verify` as a *peer* target. Both speak the standard PHC
+string (`$argon2id$…`), so **a hash made by either backend verifies in the other**.
+
+```phorge
+package Main;
+import Core.Console;
+import Core.Crypto;
+
+function main(): void {
+    // hashPassword uses a fresh random salt → a different string every call (this is correct).
+    string hash = Crypto.hashPassword("correct horse battery staple");
+    Console.println(hash); // e.g. $argon2id$v=19$m=...$.../...
+
+    // Verify is deterministic for a fixed (password, hash) pair.
+    Console.println("{Crypto.verifyPassword(\"correct horse battery staple\", hash)}"); // true
+    Console.println("{Crypto.verifyPassword(\"wrong\", hash)}");                        // false
+}
+```
+
+- **`Crypto.hashPassword(password: string) -> string`** — Argon2id over a random salt; returns the PHC
+  string. **Non-deterministic** (random salt) ⇒ it is *quarantined* from the byte-identity oracle and
+  has no runnable gated example (its output differs every run by design); it is covered by
+  `tests/crypto.rs` instead.
+- **`Crypto.verifyPassword(password: string, hash: string) -> bool`** — constant-time verify; a
+  malformed hash is `false`, never a fault. Deterministic ⇒ `password-verify.phg` gates it 3-way.
+- **Salt is internal.** You don't manage a salt (unlike a raw KDF) — Argon2id embeds it in the PHC
+  string, and `verifyPassword` reads it back. Rotate cost params by re-hashing on next login.
 | `server.php` | **W4** — the PHP front-controller bridge: builds a `Request` from PHP superglobals, calls the transpiled `handle`, emits the `Response`. Runnable under `php -S`. |
 | `json-api.phg` | **`Core.Json` + the handler model** — a JSON endpoint: POST a JSON array of ints to get `{"count": N, "sum": S}`; a non-array body or malformed JSON returns `400` with a JSON `{"error": …}`. Bodies are JSON-in-`bytes`; `handle` parses with `Core.Json.parse`, branches with `match`, and answers with `Core.Json.stringify`. Pure value-in/value-out, byte-identical run/runvm/real PHP. |
 

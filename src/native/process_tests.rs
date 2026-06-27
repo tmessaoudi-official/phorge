@@ -21,13 +21,16 @@ fn process_env_natives_are_impure_and_registered() {
 
 #[test]
 fn every_other_native_is_pure() {
-    // The quarantine seam relies on exactly the quarantined modules being impure: the
-    // ambient-environment natives (`Core.Process`/`Core.Env`). `Core.Random` is now PURE (2026-06-27):
-    // the transpiler hand-rolls the same xorshift64, so a seeded sequence is byte-identical and Random
-    // rejoins the oracle.
+    // The quarantine seam relies on exactly the impure natives being marked impure. Whole-module
+    // impure: the ambient-environment natives (`Core.Process`/`Core.Env`). `Core.Random` is PURE
+    // (2026-06-27): the transpiler hand-rolls the same xorshift64, so a seeded sequence is
+    // byte-identical and Random rejoins the oracle. `Core.Crypto` is the one **mixed** module —
+    // `hashPassword` is impure (random salt → quarantined) but `verifyPassword` is pure
+    // (deterministic for a fixed `(password, hash)` → gateable).
     let impure_modules = ["Core.Process", "Core.Env"];
     for n in registry() {
-        let impure = impure_modules.contains(&n.module);
+        let impure = impure_modules.contains(&n.module)
+            || (n.module == "Core.Crypto" && n.name == "hashPassword");
         assert_eq!(
             n.pure, !impure,
             "{}.{} purity flag disagrees with its module",

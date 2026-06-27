@@ -19,6 +19,18 @@ path = "src/lib.rs"
 name = "phg"
 path = "src/main.rs"
 
+# Phorge core is std-only. The SOLE exception is audited crypto primitives, behind this feature so the
+# WASM playground builds without the dependency (docs/specs/2026-06-27-dependency-policy.md).
+[features]
+default = ["crypto"]
+crypto = ["dep:argon2"]
+
+[dependencies]
+# FIRST external dependency (RustCrypto, audited). Powers `Core.Crypto` (Argon2id password hashing) —
+# a domain where rolling your own is the security anti-pattern and std has no equivalent. `std` enables
+# the OS RNG (`OsRng`) for salt generation; feature-gated off for the playground.
+argon2 = { version = "0.5", optional = true, features = ["std"] }
+
 # Quality gate (M2 P3.5 Wave 0, Task 0.5): clippy-clean and warning-free become a *compile* gate,
 # not just a CI nicety. Solo dev controls the toolchain, so the known fragility of denying warnings
 # in the manifest (a newer rustc/clippy can introduce warnings that then fail the build) is accepted.

@@ -22,6 +22,10 @@ use std::sync::OnceLock;
 // ordering coordinator (the pinned-slot invariant). `Core.Console` stays here (slot 0, inlined).
 mod bytes;
 mod convert;
+// `Core.Crypto` (Argon2id) is the one crate-backed module — gated so the WASM playground builds
+// without the dependency (see docs/specs/2026-06-27-dependency-policy.md).
+#[cfg(feature = "crypto")]
+mod crypto;
 mod csv;
 mod decimal;
 mod encoding;
@@ -303,6 +307,8 @@ fn build() -> Vec<NativeFn> {
     registry.extend(json::json_natives());
     registry.extend(reflect::reflect_natives());
     registry.extend(process::process_natives());
+    #[cfg(feature = "crypto")]
+    registry.extend(crypto::crypto_natives());
     // Pinned-slot invariant: the constant the compiler bakes into `Op::CallNative` must address the
     // entry it names. Cheap one-time check at first `registry()` access.
     assert_eq!(
