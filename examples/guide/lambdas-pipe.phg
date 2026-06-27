@@ -13,12 +13,14 @@ function twice(int x, (int) => int f): int { return f(f(x)); }
 function adder(int n): ((int) => int) { return fn(int x) => x + n; }
 
 function main(): void {
-    var add10 = fn(int x) => x + 10;          // expression-body lambda
+    var add10 = fn(int x) => x + 10;          // expression-body lambda (return type inferred)
+    var add100 = fn(int x): int => x + 100;   // expression-body lambda WITH an explicit `: int` return type
     var scaled = fn(int x): int {           // statement-body lambda (captures none)
         var t = x * x;
         return t + 1;
     };
     Console.println("{add10(5)}");            // 15
+    Console.println("{add100(7)}");           // 107
     Console.println("{scaled(4)}");           // 17
     Console.println("{twice(3, add10)}");     // 23
     Console.println("{5 |> dbl |> inc}");     // inc(dbl(5)) = 11
