@@ -30,9 +30,14 @@ running a bare `handle` without the per-app `respond` bridge — REQUIRES a stan
 Extended Phase 0 (harness purity already exists; sub-2^63 `Core.Random`) → Tier-A modules. Each a
 gated guide example. **`Core.Http`** added here (absorbs the web `respond` bridge so `handle` is
 directly servable — Batch-1 C remainder).
-- **`Core.Encoding`** — base64 + hex (encode `bytes->string`, decode `string->bytes?`). DONE (pending commit).
-- Next: `Core.Hash` (md5/sha1/sha256/crc32, hand-rolled, hex out) → `Core.Url` → `Core.Validate` →
-  `Core.Csv` → `Core.Random` (quarantined, seeded) → `Core.Http`.
+- **`Core.Encoding`** — base64 + hex (encode `bytes->string`, decode `string->bytes?`). DONE `31745c3`.
+- **`Core.Hash`** — crc32/md5/sha1/sha256 (hand-rolled, `bytes->string` hex). DONE `8b8896f`.
+- Next: `Core.Url` (urlEncode/urlDecode/rawUrlEncode/rawUrlDecode — percent-encoding, `string->string`,
+  byte-identical to PHP urlencode/rawurlencode; decode never fails) → `Core.Validate` (regex preds via
+  PCRE — pin patterns to PHP) → `Core.Csv` (parse/format) → `Core.Random` (QUARANTINED — seeded PRNG,
+  PRNG constants `<2^63`, shifts `1..=63`, no PHP-float `/`; examples in `examples/random/` like
+  process) → `Core.Http` (Request/Response/parse/serialize → makes `handle` directly servable, closes
+  Batch-1 C remainder).
 Pattern: `src/native/<m>.rs` (`Vec<NativeFn>` + `php:` emission) + register in `native/mod.rs` +
 `#[path]` unit tests + a gated `examples/guide/<m>.phg` + README row. Tier-A only if byte-identical to
 a PHP **core** fn under `php -n` (no mbstring; hash/base64/bin2hex/pcre are core).
@@ -41,7 +46,22 @@ a PHP **core** fn under `php -n` (no mbstring; hash/base64/bin2hex/pcre are core
 L5 round-trip semantic gate (PHP→Phorge→PHP via oracle) + L6 `phg lift <file.php>` CLI.
 
 ## Status
-Batch-1 B DONE (`b710c6e`). Next: Batch-1 C. Base `9fb9f32`. Autonomous; commit green, no push.
+**Stage 1 DONE** (`b710c6e` Batch-1 B, `6f0a939` Batch-1 C). **Stage 2 in progress**: Encoding
+`31745c3`, Hash `8b8896f` done; next = Url → Validate → Csv → Random → Http. **Stage 3 (lift L5/L6)**
+not started. Base `9fb9f32`; 4 commits this session, all green, **unpushed** (awaiting explicit push).
+Autonomous; commit green, no push.
+
+### Native-module recipe (reuse for Url/Validate/Csv/Http)
+1. `src/native/<m>.rs`: `<m>_natives() -> Vec<NativeFn>` (each: `module:"Core.X"`, `name`, `params`,
+   `ret`, `pure:true`, `eval: NativeEval::Pure(fn)`, `php: |a| ...` using `parg(a,i)`).
+2. Register: `mod <m>;` + `registry.extend(<m>::<m>_natives());` in `src/native/mod.rs`.
+3. `#[cfg(test)] #[path="<m>_tests.rs"] mod tests;` — pin kernels to **real `php -n` output**.
+   (`Value` has NO `PartialEq` → compare via `matches!` / extract fields.)
+4. Gated `examples/guide/<m>.phg` + a row in `examples/README.md`. Tier-A only if byte-identical to a
+   PHP **core** fn under `php -n` (hash/base64/bin2hex/pcre are core; mbstring is NOT — see
+   [[transpile-no-ini-extensions]]). Quarantine impure modules (import-based, like `Core.Process`).
+5. Gate: `PHORGE_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php PHORGE_REQUIRE_PHP=1 cargo test
+   --workspace` + `cargo clippy --all-targets -- -D warnings` + `cargo fmt --all --check`. Commit green.
 
 ### Batch-1 B notes (for reuse)
 - `interpret`/`Vm::run` kept stdout-only (delegate to `interpret_main`/`run_main` returning
