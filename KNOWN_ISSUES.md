@@ -555,6 +555,25 @@ or simply unavailable, never a crash):
 - **aarch64 / Windows artifacts aren't executed in CI here.** They're validated by an object-section
   round-trip; native execution is verified for the host-runnable `x86_64-musl` target.
 
+## `as` → primitives (M4 as-matrix) — deferred cells
+
+The primitive `as` matrix (Unified, fallibility-typed) ships S1–S4: every concrete-primitive
+conversion, primitive-union assertion, the bool cells, and `float`/`string as decimal?`. Deferred
+(each rejected cleanly with `E-CAST-TYPE`, never a crash):
+
+- **`as decimal` on a *union* source is unsupported.** A decimal's PHP carrier is a string, so
+  `is_*` cannot distinguish a `decimal` union member from a `string` one at runtime — the assertion
+  would diverge between the Rust backends and PHP. Convert the concrete arm explicitly instead.
+- **Erased-generic / `mixed` sources are not assertable.** `as` on a primitive target requires a
+  concrete primitive or a primitive *union* source; an erased generic value (`mixed`) has no
+  distinguishable static shape. Bind it to a typed local first.
+- **`float as decimal?` captures the *displayed* value, not the exact binary.** It parses the float's
+  shortest round-trip string (`2.5 → 2.5`, `0.1 → 0.1`), so it matches what the float prints, not the
+  exact IEEE-754 value. A float whose shortest string overflows i128 → `null` (the overflow boundary
+  is not guaranteed byte-identical to PHP at the extreme edge — examples stay in range).
+- **`string as bool` is strict** (`"true"`/`"false"` only) — `"1"`, `"yes"`, `""`, `"false"`-as-true
+  are all `null`. This is deliberate: Phorge never inherits PHP's string truthiness.
+
 ## Maps (M-RT S3 — foundation)
 
 `Map<K, V>` ships its **foundation** this slice: literals `[k => v, …]` and indexing `m[k]`,

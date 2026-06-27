@@ -100,8 +100,17 @@ Each its own commit, TDD, byte-identity-gated (run≡runvm≡real PHP 8.5), + ex
    fault-domain). No code change; KNOWN_ISSUES note corrected (it overstated the difference).
 
 **All 9 decision-fixes COMPLETE.** Additive bonus ✅ DONE (`04ebe63` — `fn(x): int => e` lambda
-return annotation, coverage+example). Next: the 3 design-first items (as→primitives, password
-hashing, statics research) — each its own brainstorm + AskUserQuestion on the API before building.
+return annotation, coverage+example).
+
+**Option 2 design-first items (each brainstorm + AskUserQuestion on the API before building):**
+- (a) **`as`→primitives ✅ COMPLETE** (plan `docs/plans/2026-06-27-as-primitives-matrix.plan.md`;
+  `fc60682` S1 + `85c569e` S2 + `bcb6ea7` S3+S4). Unified, fallibility-typed cast over the full
+  primitive matrix + union assertion; no new `Op`/`Value`; byte-identical run≡runvm≡PHP 8.5.
+  Design forks resolved with the developer (full matrix; honest/loud, not PHP coercion; bool
+  conditions already strict everywhere — verified). Deferred edges in KNOWN_ISSUES.
+- (b) **password hashing** — NEXT. Quarantined `Core.Crypto`, security design pass, brainstorm +
+  API question first.
+- (c) **statics research** — inherited/overloaded/LSB statics; research + brainstorm pass.
 
 **Then design-first items** (each: brainstorm + AskUserQuestion on the API before building), slotted
 into the GA sequence: `as`→primitives (cast/convert reconciliation) · password hashing (quarantined
