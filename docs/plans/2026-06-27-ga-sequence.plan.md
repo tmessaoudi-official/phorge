@@ -215,6 +215,22 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
   (`E-REGEX-UNSUPPORTED`). (API) **compiled `Regex` value + named groups** — `Regex.compile(p) ->
   Regex` (validates once, reusable), `r.matches/find/findAll/replace/split`, named-group typed match;
   transpiles to `preg_*` with the compiled pattern + `/u`.
+- [2026-06-28] ITEM D (LSP) design-first DELIVERED (`docs/specs/2026-06-28-lsp-design.md`) + scope
+  locked. Hard constraint: an LSP server isn't security-critical → dependency policy excludes
+  `tower-lsp`/`lsp-server`/`serde` → **hand-rolled JSON-RPC over stdio in std** (incl. a minimal
+  internal request-JSON parser, off the byte-identity spine). Developer chose: **scope = diagnostics +
+  hover + go-to-definition** (needs a new position→symbol/type index over the checker's resolved data);
+  **editor client = VSCode thin client in-repo (`editors/vscode/`) + generic-registration docs**;
+  **full document sync**. `phg lsp` subcommand. Build slices: JSON-RPC core → lifecycle/doc-store →
+  diagnostics (publishDiagnostics, reuse checker, surface `phg explain`) → hover + go-to-def → VSCode
+  client + docs; `tests/lsp.rs` drives framed requests (outside `differential.rs`).
+- [2026-06-28] ITEM C **COMPLETE** — research delivered + **Area A (inherited/trait statics) shipped**
+  (`7ce4ed7`): byte-identical run≡runvm≡PHP, no new `Op`/`Value`, `examples/guide/static-inheritance.phg`,
+  3 checker tests, 1363 tests green. **Area B (overloaded statics) DEFERRED** (developer chose
+  "defer B, move to LSP"): re-estimated bigger than the research said — the VM has no static-overload
+  dispatch set, so B needs a runtime VM dispatch path matching the interpreter's `select_overload`
+  (else run↔runvm divergence). Cleanly rejected as today; revisit as a dedicated VM slice. LSB stays a
+  documented non-feature. **Next: Item D (LSP), design-first.**
 - [2026-06-28] ITEM C (statics research) DELIVERED + scope locked — research
   `docs/specs/2026-06-28-statics-research-design.md`. Developer chose **A+B, defer C**: build
   **inherited statics (A)** + **overloaded statics (B)** (both compile-time, no new `Op`/`Value`, reuse

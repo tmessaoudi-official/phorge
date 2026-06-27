@@ -17,6 +17,7 @@ pub mod lift;
 pub mod limits;
 pub mod loader;
 pub mod lock;
+pub mod lsp;
 pub mod manifest;
 pub mod mem;
 pub mod native;

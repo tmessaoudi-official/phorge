@@ -6,6 +6,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `phg lsp` language server (Item D, diagnostics core)
+
+A Language Server over stdio so editors show Phorge diagnostics inline (GA rock 2 — daily-use tooling).
+Design: `docs/specs/2026-06-28-lsp-design.md`. No new `Op`/`Value`; off the byte-identity spine.
+
+- **Hand-rolled JSON-RPC in `std`** (`src/lsp/`): an LSP server is not a security-critical primitive,
+  so the dependency policy excludes `tower-lsp`/`lsp-server`/`serde`. The module owns a minimal total
+  JSON parser (inbound bodies), `Content-Length` framing, the server loop, and the diagnostic mapping.
+- **`phg lsp`** speaks LSP on stdin/stdout: `initialize` (advertises `textDocumentSync: full`),
+  `didOpen`/`didChange`/`didClose`, `shutdown`/`exit`. On open/change it runs the **same** pipeline as
+  `phg check` (lex → parse → check) and pushes `publishDiagnostics`, so editor squiggles equal the CLI.
+- Diagnostics map 1-based `line`/`col` → LSP 0-based ranges, error/`W-…` → severity 1/2, and carry the
+  stable `code` (resolvable via `phg explain`). `tests/`-style coverage in `src/lsp/tests.rs` (10 tests:
+  JSON parser, lifecycle, diagnostics, severity). **Next slice:** hover + go-to-definition (a
+  position→symbol index) and a VSCode thin client.
+
 ### Added — inherited / trait static methods (Statics-A)
 
 A `static` method is now inherited: `Child.staticFromBase(..)` resolves the declaring class's body,

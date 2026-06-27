@@ -7,7 +7,7 @@ use std::process::exit;
 use phorge::{cli, loader};
 
 const USAGE: &str =
-    "usage: phg <run|runvm|check|parse|lex|transpile|lift|disasm|bench|build|vendor|serve|test|fmt|explain> \
+    "usage: phg <run|runvm|check|parse|lex|transpile|lift|disasm|bench|build|vendor|serve|lsp|test|fmt|explain> \
                      <file | - | -e code> [-o out]   (phg -h for help, -v for version)";
 
 fn main() {
@@ -67,7 +67,7 @@ fn main() {
     let cmd = match args.get(1).map(String::as_str) {
         Some(
             c @ ("run" | "runvm" | "check" | "parse" | "lex" | "transpile" | "lift" | "disasm"
-            | "bench" | "build" | "vendor" | "serve" | "test" | "fmt" | "explain"),
+            | "bench" | "build" | "vendor" | "serve" | "lsp" | "test" | "fmt" | "explain"),
         ) => c,
         _ => {
             eprintln!("{USAGE}");
@@ -223,6 +223,17 @@ fn main() {
             }
             Err(err) => {
                 eprintln!("{err}");
+                exit(1);
+            }
+        }
+    }
+    // `lsp` runs the language server over stdio (Item D). No source file: it speaks JSON-RPC on
+    // stdin/stdout for an editor client. Returns the process exit code (0 after a clean shutdown/exit).
+    if cmd == "lsp" {
+        match phorge::lsp::run() {
+            Ok(code) => exit(code),
+            Err(e) => {
+                eprintln!("lsp: {e}");
                 exit(1);
             }
         }
