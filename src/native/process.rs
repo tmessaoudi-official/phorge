@@ -40,6 +40,13 @@ fn process_args(_args: &[Value], _: &mut String) -> Result<Value, String> {
     Ok(Value::List(Rc::new(items)))
 }
 
+/// The current process args as a `Value::List<string>` — the value `Core.Process.args()` returns and
+/// the value bound to `main`'s optional `List<string>` parameter (Batch-1 B). Single-sourced through
+/// [`process_args`] so both surfaces stay identical.
+pub fn process_args_value() -> Value {
+    process_args(&[], &mut String::new()).unwrap_or_else(|_| Value::List(Rc::new(Vec::new())))
+}
+
 fn env_get(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         // An unset variable is `null` (string?); composes with `??` / if-let like any optional.

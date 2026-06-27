@@ -1,0 +1,23 @@
+// Entry point — `main(args): int` with exit codes (Batch-1 B).
+//
+// `main` is where a Phorge program starts. It can take no parameters, or a single `List<string>`
+// parameter — the program arguments (everything after `phg run file.phg --`). It returns `void`
+// (exit code 0) or `int` (the process exit code). The same argv is also available anywhere via
+// `Core.Process.args()`, so a small program can just take it as a parameter.
+//
+// This example returns 0 (success), so it runs identically on every backend (and `phg run` exits 0).
+// A non-zero return becomes the process exit status — handy for scripts and CI:
+//   function main(): int { if (!ok) { return 1; } return 0; }
+//
+// An incompatible signature is rejected at compile time (`E-MAIN-SIGNATURE`) — try
+// `phg explain E-MAIN-SIGNATURE`. The argv-as-a-parameter form is shown in `examples/process/`.
+package Main;
+
+import Core.Console;
+
+function main(): int {
+    Console.println("starting up");
+    Console.println("work done");
+    // 0 = success. Returning a non-zero value here would set the process exit code instead.
+    return 0;
+}

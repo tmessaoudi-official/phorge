@@ -327,6 +327,12 @@ impl<'a> Vm<'a> {
 
             Op::Return => {
                 let rv = self.pop();
+                // Batch-1 B: when the entry (`main`) frame is about to pop, stash its return value
+                // as the exit code before `do_return` discards it (it only re-pushes a return value
+                // when a caller frame remains).
+                if self.frames.len() == 1 {
+                    self.exit_value = rv.clone();
+                }
                 self.do_return(rv);
                 if self.frames.is_empty() {
                     return Ok(Flow::Done);

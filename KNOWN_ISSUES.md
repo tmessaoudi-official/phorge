@@ -526,9 +526,14 @@ or simply unavailable, never a crash):
   `cargo-zigbuild`, so they must run from a phorge source tree. A *distributed* (sourceless) phorge
   can still do a **host** build (it reuses the running binary as the stub) but not a cross build until
   the Phase 3 prebuilt-stub registry lands.
-- **Built binaries ignore argv and always exit 0.** A standalone built binary runs its embedded
-  program; command-line arguments passed to it are currently ignored. (`--version`/`--help` are
-  features of the `phorge` CLI itself, not of built binaries.)
+- **Built binaries honor argv + the exit code (Batch-1 B).** A standalone built binary passes its
+  real command-line arguments to `Core.Process.args()` / `main`'s `List<string>` parameter and exits
+  with `main`'s `int` return. (`--version`/`--help` remain features of the `phorge` CLI itself, not of
+  built binaries — a built binary's argv belongs entirely to its embedded program.)
+- **Process exit codes follow the OS 8-bit convention (0–255).** `main`'s `int` return is passed
+  verbatim to the OS exit (`std::process::exit` / PHP `exit($n)`), so a value outside 0–255 wraps the
+  same way on every backend (all defer to the OS); a value outside `i32` range from the Rust backends
+  becomes exit 1. Use small, conventional codes.
 - **aarch64 / Windows artifacts aren't executed in CI here.** They're validated by an object-section
   round-trip; native execution is verified for the host-runnable `x86_64-musl` target.
 

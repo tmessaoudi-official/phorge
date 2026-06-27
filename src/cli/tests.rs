@@ -351,6 +351,14 @@ fn explain_covers_totality_codes() {
 }
 
 #[test]
+fn explain_covers_main_signature_code() {
+    // Batch-1 B: the entry-point signature diagnostic self-documents via `phg explain`.
+    let body = explain_text("E-MAIN-SIGNATURE").expect("E-MAIN-SIGNATURE has an explanation");
+    assert!(body.starts_with("E-MAIN-SIGNATURE"), "{body}");
+    assert!(body.contains("exit code"), "{body}");
+}
+
+#[test]
 fn explain_covers_member_visibility_codes() {
     // Wave 1.1 member-visibility diagnostics self-document via `phg explain`.
     for code in ["E-FIELD-VISIBILITY", "E-METHOD-VISIBILITY"] {

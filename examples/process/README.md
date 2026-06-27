@@ -12,6 +12,20 @@ Env.get(name: string) -> string?    // one environment variable, or null if unse
 Env.all() -> Map<string, string>    // every environment variable, sorted by key
 ```
 
+A program that just needs its arguments can take them as `main`'s single `List<string>` parameter
+instead of calling `Process.args()` — see [`main-args.phg`](main-args.phg), which also returns its
+argument count as the process **exit code** (Batch-1 B). Both surfaces read the same argv:
+
+```console
+$ phg run examples/process/main-args.phg -- alpha beta
+argc = 2
+arg: alpha
+arg: beta
+matches Process.args() = true
+$ echo $?
+2
+```
+
 Run [`args-env.phg`](args-env.phg) and pass arguments after the `--` terminator:
 
 ```console

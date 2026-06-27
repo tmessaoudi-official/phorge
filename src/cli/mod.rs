@@ -6,7 +6,7 @@
 use crate::ast::Program;
 use crate::chunk::{BytecodeProgram, Chunk, Op};
 use crate::compiler::compile;
-use crate::interpreter::interpret;
+use crate::interpreter::{interpret, interpret_main};
 use crate::lexer::lex;
 use crate::parser::Parser;
 use crate::vm::Vm;
@@ -444,6 +444,24 @@ pub fn cmd_runvm(src: &str) -> Result<String, String> {
     })
 }
 
+/// Like [`cmd_run`], but also returns `main`'s exit code (Batch-1 B). The string source path
+/// (`-e`/stdin and standalone built binaries); the project-loader path is [`run_program_exit`].
+pub fn cmd_run_exit(src: &str) -> Result<(String, i64), String> {
+    on_deep_stack(|| {
+        let prog = parse_checked(src)?;
+        interpret_main(&prog).map_err(|e| e.to_string())
+    })
+}
+
+/// Like [`cmd_runvm`], but also returns `main`'s exit code (Batch-1 B).
+pub fn cmd_runvm_exit(src: &str) -> Result<(String, i64), String> {
+    on_deep_stack(|| {
+        let prog = parse_checked(src)?;
+        let program = compile(&prog).map_err(|e| e.to_string())?;
+        Vm::new(&program).run_main().map_err(|e| e.to_string())
+    })
+}
+
 /// `check`: lex -> parse -> check; report success or the type errors.
 pub fn cmd_check(src: &str) -> Result<String, String> {
     on_deep_stack(|| {
@@ -477,6 +495,30 @@ pub fn runvm_program(unit: &crate::loader::Unit) -> Result<String, String> {
         let checked = check_and_expand(&unit.program, &unit.diag_src)?;
         let program = compile(&checked).map_err(|e| e.to_string())?;
         Vm::new(&program).run().map_err(|mut e| {
+            let src = unit.attribute_frames(&mut e);
+            e.render(&src)
+        })
+    })
+}
+
+/// Like [`run_program`], but also returns `main`'s exit code (Batch-1 B). `phg run <file>` uses this
+/// to set the process exit status; the stdout-only [`run_program`] stays for the differential.
+pub fn run_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64), String> {
+    on_deep_stack(|| {
+        let checked = check_and_expand(&unit.program, &unit.diag_src)?;
+        interpret_main(&checked).map_err(|mut e| {
+            let src = unit.attribute_frames(&mut e);
+            e.render(&src)
+        })
+    })
+}
+
+/// Like [`runvm_program`], but also returns `main`'s exit code (Batch-1 B).
+pub fn runvm_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64), String> {
+    on_deep_stack(|| {
+        let checked = check_and_expand(&unit.program, &unit.diag_src)?;
+        let program = compile(&checked).map_err(|e| e.to_string())?;
+        Vm::new(&program).run_main().map_err(|mut e| {
             let src = unit.attribute_frames(&mut e);
             e.render(&src)
         })

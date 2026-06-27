@@ -463,6 +463,34 @@ impl Checker {
         }
     }
 
+    /// Batch-1 B: validate the entry point `main`'s signature. `main` accepts **zero or one**
+    /// parameters — the one allowed param is `List<string>` (the program argv) — and returns `void`
+    /// (no exit code → 0) or `int` (the process exit code). Any other shape is `E-MAIN-SIGNATURE`:
+    /// the interpreter/VM call `main` with at most the argv list and read back at most an int, so a
+    /// different shape would be silently mis-called. `ret` is the already-resolved return type.
+    fn check_main_signature(&mut self, f: &crate::ast::FunctionDecl, ret: &Ty) {
+        let params_ok = match f.params.as_slice() {
+            [] => true,
+            [p] => matches!(self.resolve_type(&p.ty), Ty::List(elem) if *elem == Ty::String),
+            _ => false,
+        };
+        let ret_ok = matches!(ret, Ty::Void | Ty::Int);
+        if !params_ok || !ret_ok {
+            self.err_coded(
+                f.span,
+                "`main` must be `main(): void`, `main(): int`, or take a single `List<string>` argv \
+                 parameter — found an incompatible signature"
+                    .to_string(),
+                "E-MAIN-SIGNATURE",
+                Some(
+                    "the entry point is `main([List<string> args]): int|void` — the optional \
+                     parameter is the program arguments, the `int` return is the exit code"
+                        .into(),
+                ),
+            );
+        }
+    }
+
     /// Check one free function or method body. Seeds a fresh scope with params. A generic function's
     /// type parameters are made active for the whole body so `T`-typed params/locals resolve to
     /// `Ty::Param` (M-RT S7). Functions never nest, so a flat set + clear is sufficient.
@@ -496,6 +524,11 @@ impl Checker {
         // active discharge context for the body (M-faults 2b).
         let throws = Self::flatten_throws(f.throws.iter().map(|t| self.resolve_type(t)).collect());
         self.validate_throws_decl(f, &throws);
+        // Batch-1 B: the entry point `main` has a constrained signature — 0 or 1 params (the one
+        // allowed param is `List<string>`, the argv), returning `void` or `int` (the exit code).
+        if f.name == "main" {
+            self.check_main_signature(f, &ret);
+        }
         let prev_ret = std::mem::replace(&mut self.cur_ret, ret.clone());
         let prev_throws = std::mem::replace(&mut self.cur_throws, throws);
         let prev_main = std::mem::replace(&mut self.cur_is_main, f.name == "main");

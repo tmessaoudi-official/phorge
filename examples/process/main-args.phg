@@ -1,0 +1,29 @@
+// `main(List<string> args): int` — argv as a parameter, plus an exit code (Batch-1 B).
+//
+// A program that needs its arguments can take them directly as `main`'s single `List<string>`
+// parameter, instead of calling `Core.Process.args()`. Both surfaces read the SAME argv, so this
+// file also imports `Core.Process` to show they agree.
+//
+// The returned `int` is the process exit code — here, the number of arguments. Run it as:
+//   phg run examples/process/main-args.phg -- alpha beta
+//   echo $?      # → 2
+//
+// This is a walkthrough, not a gated example: it depends on the ambient argv (and imports the
+// `pure: false` `Core.Process`), so `tests/differential.rs` quarantines it — it is exercised under a
+// controlled environment in tests/process.rs instead.
+package Main;
+
+import Core.Console;
+import Core.List;
+import Core.Process;
+
+function main(List<string> args): int {
+    Console.println("argc = {List.length(args)}");
+    for (string s in args) {
+        Console.println("arg: {s}");
+    }
+    // Both forms see the same arguments.
+    var same = List.length(args) == List.length(Process.args());
+    Console.println("matches Process.args() = {same}");
+    return List.length(args);
+}

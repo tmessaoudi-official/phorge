@@ -200,6 +200,14 @@ pub struct Interp {
 /// the caller — `cli::cmd_run` runs the whole pipeline on a 256 MB worker thread — keeping this
 /// function a plain recursive walk.
 pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
+    interpret_main(program).map(|(out, _exit)| out)
+}
+
+/// Like [`interpret`], but also returns `main`'s exit code (Batch-1 B): the `int` it returns, or `0`
+/// for a `void` `main` / a `main` that falls off the end. The CLI (`phg run`) maps this to the
+/// process exit status; the stdout-only [`interpret`] wrapper preserves every existing caller and the
+/// differential harness (which gates stdout identity).
+pub fn interpret_main(program: &Program) -> Result<(String, i64), Diagnostic> {
     let mut interp = Interp {
         funcs: HashMap::new(),
         classes: HashMap::new(),
@@ -238,9 +246,20 @@ pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
         )),
     };
     let names: Vec<String> = main.params.iter().map(|p| p.name.clone()).collect();
-    match interp.run_call("main", &names, &main.body, vec![], None) {
-        Ok(_) => Ok(interp.out),
-        Err(Signal::Return(_)) => Ok(interp.out),
+    // Batch-1 B: a one-parameter `main` receives the program argv (the same `List<string>` value
+    // `Core.Process.args()` exposes); a zero-parameter `main` gets none. The checker's
+    // `E-MAIN-SIGNATURE` guarantees the arity is 0 or 1, so this never under/over-supplies.
+    let args = if names.is_empty() {
+        vec![]
+    } else {
+        vec![crate::native::process_args_value()]
+    };
+    match interp.run_call("main", &names, &main.body, args, None) {
+        // `run_call` converts `main`'s `return n` into `Ok(Value::Int(n))` (and a fall-off-the-end
+        // `void` `main` into `Ok(Value::Unit)`); `exit_code_of` maps both to the exit status.
+        Ok(v) => Ok((interp.out, exit_code_of(&v))),
+        // Defensive: a `Return` that escapes `run_call` uncaught carries the same exit value.
+        Err(Signal::Return(v)) => Ok((interp.out, exit_code_of(&v))),
         Err(Signal::Runtime(e)) => Err(e.with_frames(interp.snapshot_frames())),
         // An exception that escapes `main` uncaught (defensive — the checker's `E-UNCAUGHT-THROW`
         // guarantees `main` handles every throw, so this is unreachable for a checked program).
@@ -254,6 +273,16 @@ pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
         Err(Signal::Break | Signal::Continue) => {
             Err(Diagnostic::runtime("internal error: loop control escaped"))
         }
+    }
+}
+
+/// The process exit code carried by `main`'s return value (Batch-1 B): the `int` it returned, or `0`
+/// for anything else (a `void` `main` returns `Value::Unit`). The checker's `E-MAIN-SIGNATURE`
+/// constrains `main`'s return to `void`/`int`, so the non-`Int` case is only the `void` path.
+fn exit_code_of(v: &Value) -> i64 {
+    match v {
+        Value::Int(n) => *n,
+        _ => 0,
     }
 }
 

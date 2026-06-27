@@ -17,10 +17,11 @@ fn main() {
         // A standalone built binary runs as a normal executable, so `Core.Process.args()` reads the
         // real process arguments (everything after the program name).
         phorge::native::set_process_args(std::env::args().skip(1).collect());
-        match cli::cmd_runvm(&src) {
-            Ok(text) => {
+        // Batch-1 B: a built binary honors `main`'s `int` return as its process exit status.
+        match cli::cmd_runvm_exit(&src) {
+            Ok((text, code)) => {
                 print!("{text}");
-                exit(0);
+                exit(i32::try_from(code).unwrap_or(1));
             }
             Err(err) => {
                 eprintln!("{err}");
@@ -296,9 +297,26 @@ fn main() {
                 exit(1);
             }
         };
+        // run/runvm carry an exit code (Batch-1 B): `main`'s `int` return becomes the process exit
+        // status. Print stdout, then exit with the code (errors already exit 1 above/below).
+        if matches!(cmd, "run" | "runvm") {
+            let outcome = if cmd == "run" {
+                cli::run_program_exit(&unit)
+            } else {
+                cli::runvm_program_exit(&unit)
+            };
+            match outcome {
+                Ok((text, code)) => {
+                    print!("{text}");
+                    exit(i32::try_from(code).unwrap_or(1));
+                }
+                Err(err) => {
+                    eprintln!("{err}");
+                    exit(1);
+                }
+            }
+        }
         match cmd {
-            "run" => cli::run_program(&unit),
-            "runvm" => cli::runvm_program(&unit),
             "check" if check_json => {
                 // JSON diagnostics go to stdout regardless; exit 0 (clean) or 1 (errors present).
                 let (json, had_errors) = cli::check_json_program(&unit.program);

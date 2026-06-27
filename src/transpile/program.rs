@@ -31,6 +31,39 @@ fn runtime_static_inits(program: &Program) -> Vec<(&str, &str, &Expr)> {
     out
 }
 
+/// The entry-point bootstrap shape (Batch-1 B): `(main takes an argv param, main returns int)`. Drives
+/// the PHP call site — argv is passed as `array_slice($argv ?? [], 1)` (matching `Core.Process.args()`)
+/// and an `int`-returning `main` is wrapped in `exit(…)` so the return value becomes the process exit
+/// status. A `void` `main()` keeps the bare `main();` call (byte-identical to pre-Batch-1 B output).
+fn main_entry_shape(program: &Program) -> (bool, bool) {
+    for it in &program.items {
+        if let Item::Function(f) = it {
+            if f.name == "main" {
+                let has_argv = !f.params.is_empty();
+                let returns_int = matches!(&f.ret, Some(Type::Named { name, .. }) if name == "int");
+                return (has_argv, returns_int);
+            }
+        }
+    }
+    (false, false)
+}
+
+/// The PHP statement that invokes the entry point (Batch-1 B), given the call target (`main` or
+/// `\Main\main`). Composes [`main_entry_shape`]'s argv + exit-code decisions.
+fn main_bootstrap_stmt(program: &Program, callee: &str) -> String {
+    let (has_argv, returns_int) = main_entry_shape(program);
+    let call = if has_argv {
+        format!("{callee}(array_slice($argv ?? [], 1))")
+    } else {
+        format!("{callee}()")
+    };
+    if returns_int {
+        format!("exit({call});")
+    } else {
+        format!("{call};")
+    }
+}
+
 /// Whether class `cls` declares its own `private`/`protected` constructor (Batch A). A static-field
 /// initializer of such a class (the singleton pattern — `static C inst = new C(...)`) must run in the
 /// class's own scope in PHP, else PHP rejects the construction from the global `__phorge_init_statics`
@@ -187,7 +220,8 @@ impl Transpiler {
             if !rt_statics.is_empty() {
                 self.line("__phorge_init_statics();");
             }
-            self.line("main();");
+            let stmt = main_bootstrap_stmt(program, "main");
+            self.line(&stmt);
         }
         if !rt_statics.is_empty() {
             self.line("function __phorge_init_statics() {");
@@ -269,7 +303,8 @@ impl Transpiler {
         self.line("namespace {");
         self.indent += 1;
         if self.funcs.contains("main") {
-            self.line("\\Main\\main();");
+            let stmt = main_bootstrap_stmt(program, "\\Main\\main");
+            self.line(&stmt);
         }
         self.emit_runtime_helpers();
         self.indent -= 1;

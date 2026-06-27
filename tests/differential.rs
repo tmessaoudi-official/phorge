@@ -8,7 +8,7 @@
 //! bodies (e.g. `"division by zero"`) but the CLI wraps them with stage-specific prefixes
 //! (`"runtime error:"` vs `"compile error:"`), so a raw `assert_eq!` would spuriously fail.
 
-use phorge::cli::{cmd_run, cmd_runvm};
+use phorge::cli::{cmd_run, cmd_run_exit, cmd_runvm, cmd_runvm_exit};
 use phorge::{cli, loader};
 use std::process::Command;
 
@@ -1845,6 +1845,36 @@ fn run_php(php: &str, php_src: &str, label: &str) -> String {
         String::from_utf8_lossy(&out.stderr)
     );
     String::from_utf8(out.stdout).expect("utf-8 php stdout")
+}
+
+/// Batch-1 B: `main`'s `int` return is the process exit code on ALL three legs — `run`, `runvm`, and
+/// the transpiled PHP — with byte-identical stdout. `run_php` asserts a zero exit, so this drives php
+/// directly to read the non-zero status.
+#[test]
+fn main_exit_code_is_byte_identical_across_backends() {
+    let src = "package Main;\nimport Core.Console;\n\
+               function main(): int {\n    Console.println(\"x\");\n    return 7;\n}";
+    let run = cmd_run_exit(src).expect("run ok");
+    let runvm = cmd_runvm_exit(src).expect("runvm ok");
+    assert_eq!(run, runvm, "run vs runvm (stdout, exit)");
+    assert_eq!(run, ("x\n".to_string(), 7));
+    if let Some(php) = php_or_gate("main_exit_code") {
+        let php_src = cli::cmd_transpile(src).expect("transpile ok");
+        let path = std::env::temp_dir().join("phorge_exitcode_oracle.php");
+        std::fs::write(&path, &php_src).expect("write php");
+        let out = Command::new(&php)
+            .args(php_n_args(&php))
+            .arg(&path)
+            .output()
+            .expect("spawn php");
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(out.status.code(), Some(7), "php exit code\n{php_src}");
+        assert_eq!(
+            String::from_utf8(out.stdout).expect("utf-8"),
+            "x\n",
+            "php stdout\n{php_src}"
+        );
+    }
 }
 
 /// M-RT S6b.4 — the `rename` resolution clause lowers to PHP `T::m insteadof …; T::m as n;`. The

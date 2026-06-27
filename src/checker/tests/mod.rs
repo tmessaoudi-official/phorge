@@ -11,6 +11,7 @@ mod ctor_visibility;
 mod decimal;
 mod default_params;
 mod destructuring;
+mod entry_point;
 mod field_init;
 mod generics;
 mod inheritance;

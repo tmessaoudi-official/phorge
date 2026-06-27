@@ -46,6 +46,15 @@ struct Handler {
     stack_height: usize,
 }
 
+/// The process exit code carried by `main`'s return value (Batch-1 B; mirrors the interpreter's
+/// `exit_code_of`): the `int` it returned, or `0` for `Value::Unit` (a `void` `main`).
+fn exit_code_of(v: &Value) -> i64 {
+    match v {
+        Value::Int(n) => *n,
+        _ => 0,
+    }
+}
+
 /// Display name of a thrown value for an uncaught-exception message — its class for an instance,
 /// else its type name (M-faults 2b; mirrors the interpreter's `throw_what` for trace parity).
 fn throw_display(v: &Value) -> String {
@@ -70,6 +79,10 @@ pub struct Vm<'a> {
     /// interpreter's field): set by `Op::Throw`, taken by the unwind that lands it or by the
     /// uncaught-exception path (M-faults 2b).
     pending_throw: Option<Value>,
+    /// `main`'s return value, captured by `Op::Return` when the entry frame is about to pop (Batch-1
+    /// B). `do_return` discards a return value once the stack is empty, so it is stashed here first;
+    /// [`run_main`](Vm::run_main) reads its `int` (or `0` for `Value::Unit`) as the process exit code.
+    exit_value: Value,
 }
 
 // cohesion split (M-Decomp W4): exec/closure clusters.
@@ -86,16 +99,30 @@ impl<'a> Vm<'a> {
             out: String::new(),
             handlers: Vec::new(),
             pending_throw: None,
+            exit_value: Value::Unit,
         }
     }
 
     /// Execute the program from `main`, returning captured output (`Ok`) or a runtime
-    /// error (`Err`).
-    pub fn run(mut self) -> Result<String, Diagnostic> {
+    /// error (`Err`). Stdout-only wrapper over [`run_main`](Vm::run_main) — preserves every existing
+    /// caller and the differential harness (which gates stdout identity).
+    pub fn run(self) -> Result<String, Diagnostic> {
+        self.run_main().map(|(out, _exit)| out)
+    }
+
+    /// Like [`run`](Vm::run), but also returns `main`'s exit code (Batch-1 B): the `int` it returned,
+    /// or `0` for a `void` `main`. The CLI maps it to the process exit status.
+    pub fn run_main(mut self) -> Result<(String, i64), Diagnostic> {
         // Fail fast on malformed bytecode (a compiler bug) with a clean error instead of a panic
         // mid-execution — keeps the no-crash contract (EV-7). See `BytecodeProgram::validate`.
         // Bytecode-validation faults have no source line, so they surface position-less.
         self.program.validate().map_err(Diagnostic::runtime)?;
+        // Batch-1 B: a one-parameter `main` receives the program argv at slot 0 (params occupy
+        // slots `0..arity`); a zero-parameter `main` gets nothing. `E-MAIN-SIGNATURE` guarantees
+        // arity is 0 or 1, so at most one value is pushed.
+        if self.program.functions[self.program.main].arity == 1 {
+            self.stack.push(crate::native::process_args_value());
+        }
         self.frames.push(Frame {
             func: self.program.main,
             ip: 0,
@@ -111,7 +138,7 @@ impl<'a> Vm<'a> {
                 // the end without one is a compiler bug — treat as an implicit `Unit` return.
                 self.do_return(Value::Unit);
                 if self.frames.is_empty() {
-                    return Ok(self.out);
+                    return Ok((self.out, exit_code_of(&self.exit_value)));
                 }
                 continue;
             }
@@ -125,7 +152,7 @@ impl<'a> Vm<'a> {
             // asymmetry the `agree_err` oracle tolerates: it classifies by fault body, not text.)
             match self.exec_op(op, fr, func) {
                 Ok(Flow::Next) => {}
-                Ok(Flow::Done) => return Ok(self.out),
+                Ok(Flow::Done) => return Ok((self.out, exit_code_of(&self.exit_value))),
                 Err(msg) => {
                     // A thrown exception: unwind to the nearest handler (any handler, floor 0) and
                     // resume at its catch landing pad. If none exists, it escapes `main` uncaught —

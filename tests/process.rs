@@ -7,10 +7,18 @@
 //! so it may call the (edition-2024-`unsafe`) `std::env::set_var`.
 
 use phorge::cli::cmd_run;
+use phorge::cli::{cmd_run_exit, cmd_runvm_exit};
 use phorge::native::set_process_args;
+use std::sync::Mutex;
+
+/// `PROCESS_ARGS` is a process global, so the argv-setting tests must not run concurrently (each sets
+/// then reads it). Serialize them through this lock; poison-tolerant so one failing test doesn't cas-
+/// cade. (The env test consolidates into a single fn for the same reason.)
+static ARGS_LOCK: Mutex<()> = Mutex::new(());
 
 #[test]
 fn process_args_are_visible_to_the_program() {
+    let _g = ARGS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     set_process_args(vec!["hello".into(), "world".into()]);
     let src = r#"package Main;
 import Core.Console;
@@ -57,4 +65,49 @@ function main() -> void {
     assert_eq!(cmd_run(all_src).unwrap(), "has=true\n");
 
     unsafe { std::env::remove_var("PHORGE_IT_PRESENT") };
+}
+
+// --- Batch-1 B: entry-point exit codes + argv-to-main ------------------------------------------
+
+#[test]
+fn main_int_return_is_the_exit_code() {
+    // `main(): int` — the returned int is the process exit code; stdout is unaffected, and both
+    // backends agree on (stdout, exit).
+    let src = r#"package Main;
+import Core.Console;
+function main(): int {
+    Console.println("done");
+    return 7;
+}"#;
+    assert_eq!(cmd_run_exit(src).unwrap(), ("done\n".to_string(), 7));
+    assert_eq!(cmd_runvm_exit(src).unwrap(), ("done\n".to_string(), 7));
+}
+
+#[test]
+fn main_void_exits_zero() {
+    let src = r#"package Main;
+import Core.Console;
+function main(): void { Console.println("hi"); }"#;
+    assert_eq!(cmd_run_exit(src).unwrap(), ("hi\n".to_string(), 0));
+    assert_eq!(cmd_runvm_exit(src).unwrap(), ("hi\n".to_string(), 0));
+}
+
+#[test]
+fn main_receives_argv_as_a_parameter() {
+    // `main(List<string> args)` — the param is bound to the same argv `Core.Process.args()` exposes.
+    let _g = ARGS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    set_process_args(vec!["a".into(), "bb".into(), "ccc".into()]);
+    let src = r#"package Main;
+import Core.Console;
+import Core.List;
+function main(List<string> args): int {
+    for (string s in args) { Console.println(s); }
+    return List.length(args);
+}"#;
+    assert_eq!(cmd_run_exit(src).unwrap(), ("a\nbb\nccc\n".to_string(), 3));
+    assert_eq!(
+        cmd_runvm_exit(src).unwrap(),
+        ("a\nbb\nccc\n".to_string(), 3)
+    );
+    set_process_args(Vec::new());
 }

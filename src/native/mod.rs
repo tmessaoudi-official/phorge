@@ -34,7 +34,7 @@ mod reflect;
 mod set;
 mod text;
 
-pub use process::set_process_args;
+pub use process::{process_args_value, set_process_args};
 
 /// One built-in function, addressed by `(module, name)`. See the module docs for the four facets.
 pub struct NativeFn {
