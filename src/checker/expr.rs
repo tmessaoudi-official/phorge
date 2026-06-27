@@ -912,9 +912,12 @@ impl Checker {
                     Some(rt) => {
                         let declared = self.resolve_type(rt);
                         self.cur_ret = declared.clone();
-                        for s in stmts {
-                            self.check_stmt(s);
-                        }
+                        // Batch F (finding #6): a statement-body lambda must return on all paths just
+                        // like a free fn/method — falling off the end of a `-> int` lambda bound `unit`
+                        // into an `int` slot. Route through `check_body` (W-UNREACHABLE) + enforce
+                        // return totality.
+                        self.check_body(stmts);
+                        self.check_return_totality(&declared, stmts, span);
                         declared
                     }
                     None => self.err(

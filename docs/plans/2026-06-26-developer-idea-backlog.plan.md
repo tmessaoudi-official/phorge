@@ -150,6 +150,15 @@ P1)**, all front-end-only (byte-identity-neutral), 7 fix batches A–G. Decision
   8.5); `phg explain E-FIELD-UNINITIALIZED`; README index + rejected-cases. Full workspace gate green
   (1017 lib + 112 differential w/ PHP oracle).
 
+- **Batch F — lambda return totality — ✅ DONE** (autonomous). Finding #6 (P0, the one-line fix): a
+  statement-body lambda's `LambdaBody::Block` arm never ran `check_return_totality`, so a `-> int`
+  lambda that fell off the end bound `unit` into an `int` slot (free fns/methods already enforced it).
+  Fixed in `check_lambda`: route the block through `check_body` (W-UNREACHABLE) + call
+  `check_return_totality(&declared, stmts, span)`. Pure front-end (no Op/Value). 3 new totality tests;
+  `examples/guide/totality.phg` extended with a returns-on-all-paths lambda (byte-identical run≡runvm≡
+  real PHP 8.5). Reuses `E-MISSING-RETURN` (`phg explain` already covers it). Full workspace gate green
+  (1020 lib + 112 differential w/ PHP oracle).
+
 ## Decisions Log
 - [2026-06-26] AGREED (Batch 1):
   - **A — ADOPT:** formalize "library/web files need no `main`; only running needs an entry"; keep

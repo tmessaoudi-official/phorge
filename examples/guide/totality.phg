@@ -6,6 +6,9 @@
 // (today, via an infinite loop). Unreachable code after a `return`, and a `match` arm after a
 // catch-all, are flagged as non-fatal warnings. All of this is checker-only — it transpiles 1:1 to
 // PHP (`never` → PHP 8.1 native `never`) and runs byte-identically on both backends.
+//
+// The return-on-all-paths rule applies to statement-body **lambdas** too (Soundness Batch F): a
+// `fn(int) -> int { … }` that can fall off the end is `E-MISSING-RETURN`, just like a named function.
 package Main;
 
 import Core.Console;
@@ -48,4 +51,13 @@ function main(): void {
     Console.println(sign(0));
     Console.println(sign(7));
     Console.println(sign(-2));
+    // A statement-body lambda that returns on every path (Batch F) — one that could fall off the end
+    // would be `E-MISSING-RETURN`.
+    var absOf = fn(int n) -> int {
+        if (n < 0) {
+            return 0 - n;
+        }
+        return n;
+    };
+    Console.println("abs = {absOf(-4)}");
 }
