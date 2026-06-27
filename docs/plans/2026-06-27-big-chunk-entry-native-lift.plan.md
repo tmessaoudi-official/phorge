@@ -55,9 +55,30 @@ L5 round-trip semantic gate (PHP→Phorge→PHP via oracle) + L6 `phg lift <file
 
 ## Status
 **Stage 1 DONE** (`b710c6e` Batch-1 B, `6f0a939` Batch-1 C). **Stage 2 5/6 done**: Encoding `31745c3`,
-Hash `8b8896f`, Url `fe5ef1e`, Validate `08eb5e5`, Csv `b19fa89`, Random `d0a1cb2`; next = `Core.Http`
-(the last + biggest). **Stage 3 (lift L5/L6)** not started. All commits green, **unpushed** (awaiting an
-explicit push). Autonomous; commit green, no push.
+Hash `8b8896f`, Url `fe5ef1e`, Validate `08eb5e5`, Csv `b19fa89`, Random `d0a1cb2`.
+
+**Batch-1 D (class entry points)** inserted before Core.Http (developer's class-static-entry request):
+- **Slice A — class-static `main` — DONE `08ba1ed`** (design `docs/specs/2026-06-27-class-entry-points-design.md`):
+  shared `ast::entry_point`/`entry_point_count`; checker entry-scoping + `E-MULTIPLE-MAIN`; interpreter/
+  compiler/VM (`main_is_static`+`main_params`, dummy `$this`) / transpiler (`static` methods, `App::main()`
+  bootstrap); gated `examples/guide/class-main.phg`; byte-identical run/runvm/real PHP. No new Op/Value.
+- **Slice B — Core.Http (Option 1)** — NEXT, but has a **newly-discovered hard prerequisite**:
+  - **B0 (prerequisite): static-method call sites** `ClassName.staticMethod(args)`. VERIFIED unsupported
+    today — `Math.square(5)` is `E-UNKNOWN-IDENT` (the checker treats the class name as an unknown
+    identifier; statics are invokable only through an *instance*, `m.square(5)`). Option 1's public API
+    (`Request.parse(raw)`, `Response.text(status, body)`) is exactly this form, so it must land first:
+    parser/checker (resolve a `Member` whose head is a class name to a static call) + interpreter +
+    compiler/VM (dispatch to the `(class,method)` fn index, no receiver) + transpiler (`Class::method(...)`).
+    Its own gated example. (Slice A only enabled class-static methods as *entry points*, not call sites.)
+  - **B1: Core.Http** — once B0 lands: inject `Request`/`Response` types with static methods
+    (`Request.parse`/`resp.serialize`/`Response.text`) gated on `import Core.Http;` (injected-type pattern,
+    like `Core.Json`); `handle` is a top-level fn; `phg serve` keeps `respond(bytes)->bytes`, Core.Http
+    injects a `respond` bridge wrapping `handle`. Promotes the W1 `handler.phg` types into the stdlib.
+- **Slice C — class-static `handle`** — reuse `ast::entry_point("handle")`; make the injected `respond`
+  bridge resolve `handle` wherever it is (top-level OR `App.handle`). Last.
+
+**Stage 3 (lift L5/L6)** not started. All commits green, **unpushed** (awaiting an explicit push).
+Autonomous; commit green, no push.
 
 ### Native-module recipe (reuse for Url/Validate/Csv/Http)
 1. `src/native/<m>.rs`: `<m>_natives() -> Vec<NativeFn>` (each: `module:"Core.X"`, `name`, `params`,
