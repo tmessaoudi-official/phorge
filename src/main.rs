@@ -7,7 +7,7 @@ use std::process::exit;
 use phorge::{cli, loader};
 
 const USAGE: &str =
-    "usage: phg <run|runvm|check|parse|lex|transpile|lift|disasm|bench|build|vendor|serve|explain> \
+    "usage: phg <run|runvm|check|parse|lex|transpile|lift|disasm|bench|build|vendor|serve|test|explain> \
                      <file | - | -e code> [-o out]   (phg -h for help, -v for version)";
 
 fn main() {
@@ -67,7 +67,7 @@ fn main() {
     let cmd = match args.get(1).map(String::as_str) {
         Some(
             c @ ("run" | "runvm" | "check" | "parse" | "lex" | "transpile" | "lift" | "disasm"
-            | "bench" | "build" | "vendor" | "serve" | "explain"),
+            | "bench" | "build" | "vendor" | "serve" | "explain" | "test"),
         ) => c,
         _ => {
             eprintln!("{USAGE}");
@@ -99,6 +99,14 @@ fn main() {
                 exit(1);
             }
         }
+    }
+    // `test [path…]` discovers and runs `test` blocks (M-Test). It takes optional file/dir paths
+    // (not a single program source), so it is handled before the source-resolving run-family path.
+    if cmd == "test" {
+        let paths: Vec<String> = args[2..].to_vec();
+        let (report, code) = cli::cmd_test(&paths);
+        print!("{report}");
+        exit(code as i32);
     }
     // `vendor [project-dir | phorge.toml]` resolves a project (not a program source) and fetches its
     // git dependencies — the only network-touching command. Defaults to the current directory; any

@@ -16,9 +16,11 @@ use crate::vm::Vm;
 mod bench;
 mod explain;
 mod rewrite_new;
+mod test_runner;
 pub use bench::{cmd_bench, cmd_bench_vs_php};
 pub use explain::{cmd_explain, explain_text};
 pub use rewrite_new::cmd_rewrite_new;
+pub use test_runner::cmd_test;
 
 /// The `--version` line: `phg <version>` (from `CARGO_PKG_VERSION`).
 pub fn version_line() -> String {
@@ -44,6 +46,7 @@ pub fn help_text() -> String {
          build      compile to a standalone executable (-o <out>)\n  \
          vendor     fetch [require] git deps into an offline vendor/ (writes phorge.lock)\n  \
          serve      serve the program over HTTP (calls respond(bytes) -> bytes per request)\n  \
+         test       discover and run `test` blocks (under tests/, or a given file/dir)\n  \
          explain    explain a diagnostic code (e.g. phg explain E-UNKNOWN-IDENT)\n\n\
          source:\n  \
          <file>     read the program from a file\n  \
@@ -137,6 +140,19 @@ pub fn help_for(cmd: &str) -> String {
                     phg build app.phg\n  \
                     phg build app.phg -o dist/app\n  \
                     phg build app.phg --target x86_64-unknown-linux-musl\n"
+        }
+        "test" => {
+            "test — discover and run `test \"name\" { … }` blocks on the interpreter.\n\n\
+                   With no path, runs every `*.phg` under the project's `tests/` directory (the\n\
+                   project root is the nearest ancestor holding a `phorge.toml`, else the current\n\
+                   directory). With a path, runs that file, or every `*.phg` under that directory.\n\
+                   Each test runs independently; a failing assertion (or any fault) is reported with\n\
+                   its message and the test keeps going. Exit 0 iff every test passed, else 1.\n\n\
+                   usage:\n  phg test [path…]\n\n\
+                   examples:\n  \
+                   phg test\n  \
+                   phg test tests/math.phg\n  \
+                   phg test tests/\n"
         }
         "explain" => {
             "explain — print the explanation for a diagnostic code.\n\n\

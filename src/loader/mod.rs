@@ -160,6 +160,13 @@ fn plural(n: usize) -> &'static str {
     }
 }
 
+/// Recursively collect every `*.phg` under `dir` (sorted, deterministic). Public wrapper over the
+/// internal walker, used by the `phg test` runner (M-Test T3) to discover test files. An empty Vec
+/// for a non-directory or empty tree.
+pub fn discover_phg(dir: &Path) -> Result<Vec<PathBuf>, String> {
+    collect_phg(dir)
+}
+
 /// Load the entry at `path`: project mode if a `phorge.toml` is found by walking up, else loose mode.
 pub fn load(entry: &Path) -> Result<Unit, String> {
     // Canonicalize so walk-up detection works from a relative entry path; fall back to the raw path
