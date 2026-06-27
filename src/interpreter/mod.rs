@@ -232,7 +232,10 @@ pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
     }
     let main = match interp.funcs.get("main").and_then(|v| v.first()) {
         Some(f) => f.clone(),
-        None => return Err(Diagnostic::runtime("no `main` function")),
+        None => return Err(Diagnostic::runtime(
+            "no entry point: running needs a `main` function. A library or web file (no `main`) \
+                 still type-checks and transpiles — use `phg check` / `phg transpile`",
+        )),
     };
     let names: Vec<String> = main.params.iter().map(|p| p.name.clone()).collect();
     match interp.run_call("main", &names, &main.body, vec![], None) {

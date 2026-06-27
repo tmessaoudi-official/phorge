@@ -147,6 +147,27 @@ fn run_reports_parse_error() {
 }
 
 #[test]
+fn library_file_without_main_checks_and_transpiles_but_run_errors_clearly() {
+    // Batch-1 A: a library/web file with no `main` is valid — it type-checks and transpiles. Only
+    // *running* needs an entry point; the run/runvm error names it clearly (not a bare "no main").
+    let lib = wp("function helper(int n) -> int { return n + 1; }");
+    assert!(cmd_check(&lib).unwrap().contains("OK"), "check should pass");
+    assert!(
+        cmd_transpile(&lib)
+            .expect("transpile")
+            .contains("function helper"),
+        "transpile should emit the library function"
+    );
+    let run_err = cmd_run(&lib).unwrap_err();
+    assert!(
+        run_err.contains("no entry point") && run_err.contains("main"),
+        "run error: {run_err}"
+    );
+    let vm_err = cmd_runvm(&lib).unwrap_err();
+    assert!(vm_err.contains("no entry point"), "runvm error: {vm_err}");
+}
+
+#[test]
 fn check_passes_on_clean_program() {
     let ok = cmd_check(SAMPLE).unwrap();
     assert!(ok.contains("OK"), "{ok}");

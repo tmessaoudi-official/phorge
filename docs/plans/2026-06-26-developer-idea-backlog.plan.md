@@ -199,7 +199,13 @@ P1)**, all front-end-only (byte-identity-neutral), 7 fix batches A–G. Decision
   inline server program). `Map`/`Set.size` kept (JS/TS split: `length` for ordered/indexed, `size` for
   keyed). Hard rename, no alias (pre-1.0). Front-end (registry name only) → byte-identical run≡runvm≡
   real PHP 8.5; full workspace gate green. CHANGELOG's historical `Bytes.len` mention left as-is (a
-  past-state record). **Next in Batch 1:** A (no-main) → B (`main(args)`) → C (`handle()` web entry).
+  past-state record). **Next in Batch 1:** B (`main(args)`) → C (`handle()` web entry).
+- **A no-main formalized — ✅ DONE.** Confirmed `check`/`transpile` already accept a library/web file
+  with no `main` (the transpiler emits the `main()` bootstrap only when `main` exists). Improved the
+  `run`/`runvm` "no `main`" error to a clear, consistent entry-point message naming the library path
+  (`use phg check`/`transpile`). A cli test asserts a no-main library file checks + transpiles but
+  run/runvm error clearly. No example (a no-main file can't be a runnable example — the differential
+  requires Ok run output). Top-level statements remain unsupported in project files (Go/Rust model).
 
 ## Decisions Log
 - [2026-06-26] AGREED (Batch 1):

@@ -88,10 +88,11 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
     for s in &trait_synths {
         class_decls.push(s);
     }
-    let main = fns
-        .get("main")
-        .map(|m| m.index)
-        .ok_or_else(|| "no `main` function".to_string())?;
+    let main = fns.get("main").map(|m| m.index).ok_or_else(|| {
+        "no entry point: running needs a `main` function. A library or web file (no `main`) \
+             still type-checks and transpiles — use `phg check` / `phg transpile`"
+            .to_string()
+    })?;
 
     // M-RT overloading post-pass: for every name with more than one declaration, build a dispatch
     // table (each overload's runtime `ParamKind`s + its function index) and stamp the name's `FnMeta`
