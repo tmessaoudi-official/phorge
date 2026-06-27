@@ -1,0 +1,30 @@
+// Core.Random — a seeded pseudo-random generator.
+//
+// This is a WALKTHROUGH, not a byte-identity-gated example. `Core.Random` advances a process-global
+// generator (`pure: false`), so programs importing it are QUARANTINED from the oracle: the Rust
+// backends (`run`/`runvm`) share one generator and agree, but the transpiled PHP uses PHP's own
+// `mt_rand`, whose sequence intentionally differs. Reproducibility + `run ≡ runvm` are covered in
+// tests/random.rs.
+//
+// Run it:   phg run examples/random/dice.phg
+package Main;
+
+import Core.Console;
+import Core.Random;
+
+function main(): void {
+    // A fixed seed makes the stream reproducible — the same seed always replays the same rolls.
+    Random.seed(2026);
+
+    // Roll a six-sided die five times. `intBetween(lo, hi)` is inclusive on both ends.
+    Console.println("Five d6 rolls:");
+    for (int i in 0..5) {
+        var roll = Random.intBetween(1, 6);
+        Console.println("  roll {i}: {roll}");
+    }
+
+    // `next()` returns the raw non-negative value (useful as a hash-ish key or to derive your own
+    // bounded value).
+    var raw = Random.next();
+    Console.println("raw next: {raw}");
+}

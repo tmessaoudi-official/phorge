@@ -21,9 +21,12 @@ fn process_env_natives_are_impure_and_registered() {
 
 #[test]
 fn every_other_native_is_pure() {
-    // The quarantine seam relies on exactly the ambient-environment natives being impure.
+    // The quarantine seam relies on exactly the quarantined modules being impure: the
+    // ambient-environment natives (`Core.Process`/`Core.Env`) plus the global-state generator
+    // (`Core.Random`, whose PHP `mt_rand` sequence can't match the Rust kernel).
+    let impure_modules = ["Core.Process", "Core.Env", "Core.Random"];
     for n in registry() {
-        let impure = n.module == "Core.Process" || n.module == "Core.Env";
+        let impure = impure_modules.contains(&n.module);
         assert_eq!(
             n.pure, !impure,
             "{}.{} purity flag disagrees with its module",
