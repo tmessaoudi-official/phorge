@@ -1,0 +1,33 @@
+// Core.Csv — single-row CSV parse and format (native-stdlib wave).
+//
+// `parse(string) -> List<string>` splits one CSV record into fields (RFC-4180: comma separator,
+// double-quote enclosure, doubled `""` for a literal quote), mirroring PHP `str_getcsv` with the
+// escape mechanism disabled. `format(List<string>) -> string` is the inverse: it quotes a field iff
+// it contains a comma, a quote, or a line break, doubling internal quotes. run/runvm/real PHP are
+// byte-identical.
+package Main;
+
+import Core.Console;
+import Core.Csv;
+
+function main(): void {
+    // Parse a row whose middle field is quoted and contains the separator.
+    var fields = Csv.parse("id,\"Doe, Jane\",42");
+    for (string field in fields) {
+        Console.println("field: {field}");
+    }
+
+    // A doubled quote inside an enclosed field decodes to one literal quote.
+    var quoted = Csv.parse("\"she said \"\"hi\"\"\",ok");
+    Console.println("first: {quoted[0]}");
+
+    // Format is the inverse: fields needing protection are quoted automatically.
+    var row = ["name", "city, state", "note \"x\""];
+    var line = Csv.format(row);
+    Console.println("formatted: {line}");
+
+    // parse ∘ format round-trips.
+    var back = Csv.parse(line);
+    var same = back == row;
+    Console.println("round-trips: {same}");
+}

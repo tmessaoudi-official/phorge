@@ -22,6 +22,7 @@ use std::sync::OnceLock;
 // ordering coordinator (the pinned-slot invariant). `Core.Console` stays here (slot 0, inlined).
 mod bytes;
 mod convert;
+mod csv;
 mod decimal;
 mod encoding;
 mod file;
@@ -296,6 +297,7 @@ fn build() -> Vec<NativeFn> {
     registry.extend(hash::hash_natives());
     registry.extend(url::url_natives());
     registry.extend(validate::validate_natives());
+    registry.extend(csv::csv_natives());
     registry.extend(json::json_natives());
     registry.extend(reflect::reflect_natives());
     registry.extend(process::process_natives());
