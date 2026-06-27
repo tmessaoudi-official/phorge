@@ -22,7 +22,7 @@ function main(): void {
     // `read` → string?; `??` returns the contents for a present File.
     string? maybe = File.read(path);
     string body = maybe ?? "(missing)";
-    int bytes = Text.len(body);
+    int bytes = Text.length(body);
     Console.println("read {bytes} bytes");
 
     // A missing file reads as `null` → the fallback (never a fault).
@@ -32,7 +32,7 @@ function main(): void {
 
     // `if (var c = …)` binds the non-null content (S2 smart-cast) only inside the then-block.
     if (var c = File.read(path)) {
-        int n = Text.len(c);
+        int n = Text.length(c);
         Console.println("if-let ok: {n} bytes");
     } else {
         Console.println("if-let: absent");

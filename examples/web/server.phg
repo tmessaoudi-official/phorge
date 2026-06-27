@@ -48,7 +48,7 @@ function parseRequest(bytes raw): Request? {
   int sep = Bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
   if (sep < 0) { return null; }
   bytes headBytes = Bytes.slice(raw, 0, sep);
-  bytes body = Bytes.slice(raw, sep + 4, Bytes.len(raw));
+  bytes body = Bytes.slice(raw, sep + 4, Bytes.length(raw));
   string head = Bytes.toString(headBytes) ?? "";
   List<string> lines = Text.split(head, nl);
   string requestLine = lines[0];
@@ -64,7 +64,7 @@ function serializeResponse(Response resp): bytes {
   string reason = reasonPhrase(resp.status);
   int st = resp.status;
   string statusLine = "HTTP/1.1 {st} {reason}";
-  int bodyLen = Bytes.len(resp.body);
+  int bodyLen = Bytes.length(resp.body);
   string userHeaders = Text.join(resp.headerLines, nl);
   string head = "{statusLine}{nl}Content-Length: {bodyLen}{nl}Connection: close{nl}{userHeaders}{nl}{nl}";
   return Bytes.concat(Bytes.fromString(head), resp.body);
@@ -145,7 +145,7 @@ function summarize(bytes raw): void {
   string wireStr = Bytes.toString(wire) ?? "(binary)";
   List<string> lines = Text.split(wireStr, nl);
   string statusLine = lines[0];
-  int len = Bytes.len(wire);
+  int len = Bytes.length(wire);
   Console.println("{statusLine} ({len}B)");
 }
 

@@ -40,7 +40,7 @@ function parseRequest(bytes raw) -> Request? {
   int sep = Bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
   if (sep < 0) { return null; }
   bytes headBytes = Bytes.slice(raw, 0, sep);
-  bytes body = Bytes.slice(raw, sep + 4, Bytes.len(raw));
+  bytes body = Bytes.slice(raw, sep + 4, Bytes.length(raw));
   string head = Bytes.toString(headBytes) ?? "";
   List<string> lines = Text.split(head, nl);
   string requestLine = lines[0];
@@ -55,7 +55,7 @@ function serializeResponse(Response resp) -> bytes {
   string reason = reasonPhrase(resp.status);
   int st = resp.status;
   string statusLine = "HTTP/1.1 {st} {reason}";
-  int bodyLen = Bytes.len(resp.body);
+  int bodyLen = Bytes.length(resp.body);
   string userHeaders = Text.join(resp.headerLines, nl);
   string head = "{statusLine}{nl}Content-Length: {bodyLen}{nl}{userHeaders}{nl}{nl}";
   return Bytes.concat(Bytes.fromString(head), resp.body);
@@ -84,7 +84,7 @@ function respond(bytes raw) -> bytes {
 
 function main() -> void {
   bytes raw = b"GET / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a";
-  int len = Bytes.len(respond(raw));
+  int len = Bytes.length(respond(raw));
   Console.println("served {len} bytes");
 }
 "#;

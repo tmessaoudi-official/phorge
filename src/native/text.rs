@@ -5,7 +5,7 @@ use crate::value::Value;
 fn text_len(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s)] => Ok(Value::Int(s.len() as i64)),
-        _ => Err("Text.len expects (string)".into()),
+        _ => Err("Text.length expects (string)".into()),
     }
 }
 fn text_upper(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -267,7 +267,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
             module: "Core.Text",
-            name: "len",
+            name: "length",
             params: vec![s()],
             ret: Ty::Int,
             pure: true,

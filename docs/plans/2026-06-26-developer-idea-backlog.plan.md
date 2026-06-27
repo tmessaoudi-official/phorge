@@ -192,6 +192,15 @@ P1)**, all front-end-only (byte-identity-neutral), 7 fix batches A–G. Decision
 > intact. Deferrals (documented in each batch above): method-`?` propagation + interface-method throws
 > (C), nested generic placeholder (B), static call-path/`static function` emission (E).
 
+### Batch 1 build progress (autonomous, 2026-06-27)
+- **D `len`→`length` rename — ✅ DONE.** `Core.Bytes.len`/`Core.Text.len` renamed to `.length` (the
+  native registry `name`, error messages, the `index_of` test, and all call sites: examples
+  `guide/bytes.phg`/`text.phg`/`file.phg` + `web/{router,handler,server}.phg` + `tests/serve.rs`'s
+  inline server program). `Map`/`Set.size` kept (JS/TS split: `length` for ordered/indexed, `size` for
+  keyed). Hard rename, no alias (pre-1.0). Front-end (registry name only) → byte-identical run≡runvm≡
+  real PHP 8.5; full workspace gate green. CHANGELOG's historical `Bytes.len` mention left as-is (a
+  past-state record). **Next in Batch 1:** A (no-main) → B (`main(args)`) → C (`handle()` web entry).
+
 ## Decisions Log
 - [2026-06-26] AGREED (Batch 1):
   - **A — ADOPT:** formalize "library/web files need no `main`; only running needs an entry"; keep

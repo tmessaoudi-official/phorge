@@ -50,7 +50,7 @@ function parseRequest(bytes raw): Request? {
   int sep = Bytes.find(raw, b"\x0d\x0a\x0d\x0a") ?? -1;
   if (sep < 0) { return null; }
   bytes headBytes = Bytes.slice(raw, 0, sep);
-  bytes body = Bytes.slice(raw, sep + 4, Bytes.len(raw));
+  bytes body = Bytes.slice(raw, sep + 4, Bytes.length(raw));
   string head = Bytes.toString(headBytes) ?? "";
   List<string> lines = Text.split(head, nl);
   string requestLine = lines[0];

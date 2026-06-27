@@ -94,8 +94,8 @@ fn text_natives_eval_and_emit() {
         "str_replace($a, $b, $s)"
     );
     assert_eq!(
-        index_of_by_leaf("Text", "len"),
-        index_of("Core.Text", "len")
+        index_of_by_leaf("Text", "length"),
+        index_of("Core.Text", "length")
     );
 }
 

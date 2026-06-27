@@ -4,7 +4,7 @@ import Core.Text;
 
 // M3 Track B Wave 2 — the `Core.Text` stdlib module. Each function erases to a PHP string builtin
 // (`strlen`/`strtoupper`/`explode`/`implode`/`strReplace`/…). ASCII text keeps the Rust backends
-// and PHP byte-identical (`len` is the byte length; `upper`/`lower` are ASCII-case).
+// and PHP byte-identical (`length` is the byte length; `upper`/`lower` are ASCII-case).
 //
 // Note: bind call results to locals before interpolating — the interpolation sub-lexer does not
 // nest string literals inside `{…}` (same constraint as guide/strings.phg).
@@ -12,7 +12,7 @@ import Core.Text;
 function main(): void {
     string greeting = "Hello, Phorge";
 
-    int n = Text.len(greeting);
+    int n = Text.length(greeting);
     string up = Text.upper(greeting);
     string down = Text.lower(greeting);
     string padded = Text.trim("   padded   ");

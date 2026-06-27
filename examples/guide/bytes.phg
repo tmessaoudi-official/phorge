@@ -6,16 +6,16 @@ import Core.Console;
 import Core.Bytes;
 
 function main(): void {
-  // fromString + len (BYTE count) + toString round-trip.
+  // fromString + length (BYTE count) + toString round-trip.
   bytes hello = Bytes.fromString("hello");
-  int n = Bytes.len(hello);
+  int n = Bytes.length(hello);
   Console.println("len={n}");                         // len=5
   Console.println(Bytes.toString(hello) ?? "?");     // hello
 
   // A `b"…"` literal with \xHH escapes — 0x48 0x69 = "Hi".
   bytes raw = b"\x48\x69";
   Console.println(Bytes.toString(raw) ?? "?");       // Hi
-  int rn = Bytes.len(raw);
+  int rn = Bytes.length(raw);
   Console.println("rawlen={rn}");                     // rawlen=2
 
   // Invalid UTF-8 decodes to `null` (never a fault) — composes with `??`.
@@ -25,7 +25,7 @@ function main(): void {
   // concat + slice (half-open, bounds-clamped).
   bytes ab = Bytes.concat(b"foo", b"bar");
   Console.println(Bytes.toString(ab) ?? "?");        // foobar
-  int abn = Bytes.len(ab);
+  int abn = Bytes.length(ab);
   Console.println("ablen={abn}");                     // ablen=6
 
   bytes sl = Bytes.slice(ab, 1, 4);
@@ -33,7 +33,7 @@ function main(): void {
 
   // start > end clamps to an empty slice (total, no fault).
   bytes empty = Bytes.slice(ab, 5, 2);
-  int en = Bytes.len(empty);
+  int en = Bytes.length(empty);
   Console.println("slempty={en}");                    // slempty=0
 
   // byte-vector equality.

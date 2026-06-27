@@ -21,7 +21,7 @@ fn bytes_to_string(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn bytes_len(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Bytes(b)] => Ok(Value::Int(b.len() as i64)),
-        _ => Err("Bytes.len expects (bytes)".into()),
+        _ => Err("Bytes.length expects (bytes)".into()),
     }
 }
 fn bytes_concat(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -97,7 +97,7 @@ pub(crate) fn bytes_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.Bytes",
-            name: "len",
+            name: "length",
             params: vec![Ty::Bytes],
             ret: Ty::Int,
             pure: true,

@@ -71,7 +71,7 @@ pub(crate) fn file_natives() -> Vec<NativeFn> {
 // ---- Core.Bytes ---------------------------------------------------------------------------------
 // Octet-sequence natives bridging `bytes` ↔ `string` (M6 W0). `to_string` returns `string?` — `null`
 // on invalid UTF-8 (composes with S2 `??` / if-let), never a fault. `len` is the BYTE count
-// (`strlen`), as is `Core.Text.len` — the std stays extension-free (no mbstring). `slice` is a total,
+// (`strlen`), as is `Core.Text.length` — the std stays extension-free (no mbstring). `slice` is a total,
 // bounds-clamped half-open `[start, end)` (no fault, unlike list `xs[i]`). PHP strings are byte
 // arrays, so the erasures are exact.
 
