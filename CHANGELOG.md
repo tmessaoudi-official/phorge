@@ -6,6 +6,23 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `Secret<T>` opaque wrapper (Fork B)
+
+A type for sensitive values (passwords, API keys, tokens). No new `Op`/`Value`/`Ty` — an injected
+generic class reusing the `Box<T>` machinery. Design: `docs/specs/2026-06-28-secret-type-design.md`.
+
+- **Loud, by construction**: a `Secret` is not a string and has no display, so
+  `Console.println(secret)` / `"{secret}"` is a **compile error**; the wrapped field is `private`, so
+  `.expose()` is the only read path. (Chosen over a runtime-`***`-redacting wrapper, which would need
+  a new `Value` variant + a *silent* `***` — loud beats silent.)
+- **`import Core.Secret;`** injects `class Secret<T> { constructor(private T value){} expose(): T }`.
+  `new Secret(x)` infers `Secret<T>`.
+- **`W-SECRET` lint** (non-fatal, stderr) fires when `.expose()` is a *direct* argument to a sink
+  (`Console.println`/`print`, `Core.File.write`). Syntactic on the direct argument; `phg explain W-SECRET`.
+- **Transpiles** to a `final class Secret` whose constructor parameter carries `#[\SensitiveParameter]`
+  (PHP redacts it in stack traces — the `K-secrets-type` intent). Byte-identical run≡runvm≡real PHP.
+  Showcase `examples/guide/secret.phg`.
+
 ### Added — `Core.Regex` (Fork A) + 2nd vetted dependency
 
 A ReDoS-safe regular-expression engine. No new `Op`, no new `Value` (the compiled value reuses the

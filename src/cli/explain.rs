@@ -174,6 +174,16 @@ pub fn explain_text(code: &str) -> Option<String> {
              flags every `!` so you can prefer a total alternative — `??` (default value), `?.`\n\
              (safe access), or `if (var x = opt) { … }` (narrow) — where null is a real possibility.\n"
         }
+        "W-SECRET" => {
+            "W-SECRET — a Secret's plaintext is exposed directly into a sink (lint).\n\n\
+             `Secret<T>` is opaque: it cannot be printed or interpolated (that is a type error), and\n\
+             `.expose()` is the only way to read the wrapped value. This lint fires when an\n\
+             `.expose()` call is a *direct* argument to a sink — `Console.println`/`Console.print` or\n\
+             `Core.File.write` — because the plaintext would then be logged or persisted. Bind the\n\
+             exposed value and use it deliberately (hash it, compare it), or avoid sending a secret to\n\
+             the sink at all. (The lint is syntactic on the direct argument; a value laundered through\n\
+             a local is not flagged — the type-system non-printability is the real guarantee.)\n"
+        }
         "E-LAMBDA-THIS" => {
             "E-LAMBDA-THIS — a field-initializer lambda captures `this`.\n\n\
              A method-body lambda MAY capture `this` (it is captured live, by the instance handle). The\n\

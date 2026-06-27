@@ -24,6 +24,7 @@ mod mutation;
 mod optionals;
 mod overloading;
 mod reflect;
+mod secret;
 mod static_methods;
 mod support;
 mod throws;

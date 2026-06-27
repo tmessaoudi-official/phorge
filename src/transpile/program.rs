@@ -1669,6 +1669,10 @@ impl Transpiler {
                             && p.name == "cause"
                             && is_error_marker_type(&p.ty)
                     };
+                    // Fork B: the injected `Secret` class's promoted value param is marked
+                    // `#[\SensitiveParameter]` so PHP redacts it in stack traces (the `K-secrets-type`
+                    // intent). Keyed by class name — every other class is byte-identical to before.
+                    let is_secret = c.name == "Secret";
                     let ps: Vec<String> = params
                         .iter()
                         .map(|p| {
@@ -1677,14 +1681,19 @@ impl Transpiler {
                             // emitted untyped (PHP rejects a typed redeclaration); a plain param keeps
                             // its type (it is not a property).
                             let untyped = is_error && !v.is_empty() && exception_reserved(&p.name);
-                            if is_cause(p) {
-                                format!("{v} ?\\Throwable ${}", p.name)
-                            } else if v.is_empty() {
-                                format!("{} ${}", self.emit_type(&p.ty), p.name)
-                            } else if untyped {
-                                format!("{} ${}", v, p.name)
+                            let attr = if is_secret && !v.is_empty() {
+                                "#[\\SensitiveParameter] "
                             } else {
-                                format!("{} {} ${}", v, self.emit_type(&p.ty), p.name)
+                                ""
+                            };
+                            if is_cause(p) {
+                                format!("{attr}{v} ?\\Throwable ${}", p.name)
+                            } else if v.is_empty() {
+                                format!("{attr}{} ${}", self.emit_type(&p.ty), p.name)
+                            } else if untyped {
+                                format!("{attr}{} ${}", v, p.name)
+                            } else {
+                                format!("{attr}{} {} ${}", v, self.emit_type(&p.ty), p.name)
                             }
                         })
                         .collect();

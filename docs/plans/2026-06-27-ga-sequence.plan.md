@@ -199,6 +199,10 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
   model** — each brainstorm + AskUserQuestion + spec, then build; **then (C) statics research pass**
   (inherited/overloaded/LSB); **then (D) LSP design-first then build**. Statics is research-not-fork;
   LSP is last.
+- [2026-06-28] FORK A **COMPLETE** (`159b296`) — `Core.Regex` shipped: `regex` crate (2nd vetted dep,
+  policy amended), injected `Regex` class, 7 natives (compile/matches/find/findAll/findGroups/replace/
+  split), gated `__phorge_regex_*` transpile helpers. 1354 tests green, clippy+fmt clean, playground
+  builds without it, `examples/guide/regex.phg` byte-identical run≡runvm≡PHP 8.5. NOT pushed.
 - [2026-06-28] FORK A RESOLVED — **`Core.Regex`**: (engine) **adopt the `regex` crate** as the 2nd
   vetted dependency (developer reframed the question to "best & most secure regardless of byte-identity
   /PHP" — `regex` is RE2-style, **ReDoS-immune by construction**, unlike PHP/PCRE backtracking; "never
@@ -211,11 +215,16 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
   (`E-REGEX-UNSUPPORTED`). (API) **compiled `Regex` value + named groups** — `Regex.compile(p) ->
   Regex` (validates once, reusable), `r.matches/find/findAll/replace/split`, named-group typed match;
   transpiles to `preg_*` with the compiled pattern + `/u`.
-- [2026-06-28] FORK B RESOLVED — **`Secret<T>`**: **runtime-redacting wrapper + `W-SECRET` lint**.
-  `Secret<T>` Displays/interpolates as `***`; `.expose()` is the sole read path; `W-SECRET` flow-lint
-  flags a secret reaching a sink (`Console.println`/`File.write`/error) without `.expose()`. Both a
-  runtime guarantee and a compile nudge. Transpiles to a `final` PHP class (redacting `__toString`) +
-  `#[\SensitiveParameter]` on params. Matches SSOT `K-secrets-type` (⊂ opaque-newtype).
+- [2026-06-28] FORK B RESOLVED — **`Secret<T>` = Path 1 (opaque & non-printable)**, design
+  `docs/specs/2026-06-28-secret-type-design.md`. An implementation discovery reopened the earlier
+  "displays as `***`" wording: Phorge's `as_display` renders only primitives, so a class-typed `Secret`
+  is **already unprintable** — `Console.println(s)`/`"{s}"` is a clean type error, the strongest+loudest
+  guarantee, free from the type system. Chosen over Path 2 (runtime `***`, which needs a new `Value`
+  variant + a *silent* `***`) — loud > silent, no new `Op`/`Value`. Model: an **injected generic class**
+  `class Secret<T> { constructor(private T value){} function expose(): T {…} }` (gated on
+  `import Core.Secret;`; reuses `Box<T>` machinery). `.expose()` sole read path (field private);
+  `W-SECRET` lint flags `s.expose()` as a *direct* sink argument (syntactic; full taint deferred).
+  Transpiles to `final class Secret` + `#[\SensitiveParameter]`. Byte-identical run≡runvm≡PHP.
 - [x] 3. M-Test — **COMPLETE** (T1–T5: `test` item + `Core.Test` + `assertFaults` + `phg test` runner + `selftest/` showcase). GA 49% → 52%.
 - [ ] 4. M-text
 - [ ] 5. breadth gaps

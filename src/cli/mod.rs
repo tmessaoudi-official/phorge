@@ -586,11 +586,53 @@ fn inject_regex_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
     }
 }
 
+/// The `Secret<T>` opaque-wrapper type, injected when a program imports `Core.Secret` (Fork B,
+/// `docs/specs/2026-06-28-secret-type-design.md`). A `Secret<T>` value is constructed `new Secret(x)`
+/// and read only through `expose()` — the `value` field is private, and a `Secret` instance is not a
+/// `string`, so printing/interpolating it is a clean type error (the primary, loud guarantee; no
+/// runtime `***`). Reuses the generic-class machinery (`Box<T>`) wholesale — no new `Op`/`Value`/`Ty`.
+/// Mirrors [`inject_regex_prelude`]: a no-op unless `Core.Secret` is imported and no `Secret` class is
+/// already declared. The transpiler adds `final` + `#[\SensitiveParameter]` for this class by name.
+const SECRET_PRELUDE: &str =
+    "class Secret<T> { constructor(private T value) {} function expose(): T { return this.value; } }";
+
+fn inject_secret_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
+    use crate::ast::Item;
+    let imports_secret = prog.items.iter().any(|it| {
+        matches!(it, Item::Import { path, type_only: false, .. }
+            if path.len() == 2 && path[0] == "Core" && path[1] == "Secret")
+    });
+    let already_declared = prog
+        .items
+        .iter()
+        .any(|it| matches!(it, Item::Class(c) if c.name == "Secret"));
+    if !imports_secret || already_declared {
+        return std::borrow::Cow::Borrowed(prog);
+    }
+    match lex_parse(SECRET_PRELUDE)
+        .ok()
+        .and_then(|p| p.items.into_iter().find(|i| matches!(i, Item::Class(_))))
+    {
+        Some(class_item) => {
+            let mut items = Vec::with_capacity(prog.items.len() + 1);
+            items.push(class_item);
+            items.extend(prog.items.iter().cloned());
+            std::borrow::Cow::Owned(Program {
+                package: prog.package.clone(),
+                items,
+                span: prog.span,
+            })
+        }
+        None => std::borrow::Cow::Borrowed(prog), // unreachable: SECRET_PRELUDE is valid
+    }
+}
+
 pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, String> {
     let json_injected = inject_json_prelude(prog);
     let rm_injected = inject_rounding_mode_prelude(json_injected.as_ref());
     let http_injected = inject_http_prelude(rm_injected.as_ref());
-    let injected = inject_regex_prelude(http_injected.as_ref());
+    let regex_injected = inject_regex_prelude(http_injected.as_ref());
+    let injected = inject_secret_prelude(regex_injected.as_ref());
     let prog = injected.as_ref();
     match crate::checker::check_resolutions(prog) {
         Ok((warnings, html, ufcs)) => {

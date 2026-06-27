@@ -653,6 +653,25 @@ are deliberate edges, each either rejected cleanly or kept inside ASCII where th
   class lives in the entry package, so a *namespaced* multi-package program emitting `new Regex(...)`
   inside another package block is untested. Single-package `run ≡ runvm ≡ real PHP` is gated green.
 
+## Secret<T> (Fork B) — scope
+
+`Secret<T>` is an opaque wrapper whose guarantee is by construction: a `Secret` is non-printable
+(`Console.println(s)` / interpolation is a type error) and its value is private (`.expose()` is the
+only read path). Deliberate scope edges:
+
+- **`W-SECRET` is syntactic on the direct sink argument.** It flags `sink(secret.expose())` (where
+  the sink is `Console.println`/`print` or `Core.File.write`) but **not** a value laundered through a
+  local (`var p = s.expose(); println(p);`). Full taint/flow analysis is out of scope — the
+  type-system non-printability is the real guarantee; the lint is a convenience for the common slip.
+- **No runtime `***` redaction.** Path 1 (opaque + non-printable) was chosen over a runtime-redacting
+  wrapper, so there is no `Value::Secret` and a Secret never renders as `***` — it simply can't be
+  printed. (PHP gets `#[\SensitiveParameter]` for *trace* redaction; Phorge's own traces don't dump
+  local values, so there is no in-Phorge leak vector to redact.)
+- **The lint keys on the type name `Secret`.** A user-defined class also named `Secret` with an
+  `expose()` method would be linted too (harmless — the signal still applies).
+- **Multi-package transpile is a follow-up** (same boundary as `Core.Json`/`Core.Regex`): the injected
+  `Secret` class lives in the entry package; namespaced multi-package emission is untested.
+
 ## Behavioral quirks
 
 - **Errors inside string interpolation report line 1 (and the caret points there).** A fault *or* a

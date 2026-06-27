@@ -434,6 +434,26 @@ impl Checker {
         let n = &crate::native::registry()[idx];
         let leaf = n.module.rsplit('.').next().unwrap_or(n.module);
         let label = format!("{leaf}.{}", n.name);
+        // W-SECRET (Fork B): a freshly-`expose()`d `Secret` flowing *directly* into a sink is almost
+        // certainly a leak (the plaintext gets logged / persisted). Syntactic on the direct argument —
+        // a value laundered through a local is not flagged (full taint analysis is out of scope; the
+        // type-system non-printability of `Secret` is the real guarantee). Sinks: Console.println/print,
+        // File.write. `n` borrows the `'static` registry, so the `&mut self` lint call does not alias.
+        if matches!(
+            (n.module, n.name),
+            ("Core.Console", "println") | ("Core.Console", "print") | ("Core.File", "write")
+        ) {
+            for a in args {
+                if self.arg_is_secret_expose(a) {
+                    self.warn_coded(
+                        span,
+                        "exposing a Secret directly into a sink — the plaintext will be logged or persisted",
+                        "W-SECRET",
+                        Some("bind the exposed value and use it deliberately, or avoid sending a secret's plaintext to a sink".into()),
+                    );
+                }
+            }
+        }
         // A native whose stored signature carries a type parameter (`Map.keys(Map<K,V>) -> List<K>`,
         // `List.reverse(List<T>) -> List<T>`) is checked exactly like a generic free function: unify
         // the declared params against the argument types, then substitute into the return (M-RT S7b).
@@ -459,6 +479,23 @@ impl Checker {
             self.check_args_defaulted(&label, &params, &defaults, args, span);
             ret
         }
+    }
+
+    /// W-SECRET helper (Fork B): is `arg` syntactically `<recv>.expose()` where `recv: Secret<_>`?
+    /// Matches the method-call shape (`Call` whose callee is a `Member` named `expose`, no args) and
+    /// confirms the receiver's type. Re-checking the receiver is side-effect-free for the common case
+    /// (a local var read) and span-keyed records are idempotent, so the later full arg-check is safe.
+    fn arg_is_secret_expose(&mut self, arg: &crate::ast::Expr) -> bool {
+        if let crate::ast::Expr::Call { callee, args, .. } = arg {
+            if args.is_empty() {
+                if let crate::ast::Expr::Member { object, name, .. } = callee.as_ref() {
+                    if name == "expose" {
+                        return matches!(self.check_expr(object), Ty::Named(n, _) if n == "Secret");
+                    }
+                }
+            }
+        }
+        false
     }
 
     /// Check a single call argument against its expected parameter type. Identical to `check_expr`
