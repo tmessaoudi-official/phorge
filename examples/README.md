@@ -214,6 +214,14 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
   Access static members as `Class.member`, pass values as parameters, or drop `static`.
   `phg explain E-STATIC-THIS` documents it.
 
+- **Declaration names must be unique (Soundness Batch G)** — no runnable example (these are all
+  compile errors):
+  - duplicate parameter names — `function add(int a, int a)` → `E-DUP-PARAM` (free fn, method, ctor);
+  - duplicate explicit field names — `class C { int x = 0; int x = 1; }` → `E-DUP-FIELD`.
+  Previously the later declaration silently won. An explicit field that also names a promoted ctor
+  param stays allowed (the explicit declaration is authoritative). `phg explain E-DUP-PARAM` /
+  `E-DUP-FIELD` document each.
+
 ## Not yet supported (intentionally absent here)
 
 These are designed but not implemented; they will arrive in later milestones, and examples will be

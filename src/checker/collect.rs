@@ -918,6 +918,7 @@ impl Checker {
             return;
         }
         self.validate_type_params(&f.type_params, f.span);
+        self.reject_dup_param_names(f.params.iter().map(|p| (p.name.as_str(), p.span)));
         // Resolve the signature with the type parameters in scope so `T` becomes `Ty::Param("T")`.
         self.active_type_params = f.type_params.clone();
         let params: Vec<Ty> = f.params.iter().map(|p| self.resolve_type(&p.ty)).collect();
@@ -1027,6 +1028,26 @@ impl Checker {
                     ),
                     "E-DEFAULT-PARAM-CONTEXT",
                     Some("drop the default, or call the function explicitly with all arguments".into()),
+                );
+            }
+        }
+    }
+
+    /// Reject duplicate parameter names (Soundness Batch G, finding #7) on a function/method/ctor
+    /// signature — previously the last declaration silently won (`E-DUP-PARAM`). Takes `(name, span)`
+    /// pairs so it serves both `Param` and `CtorParam` sites.
+    pub(super) fn reject_dup_param_names<'a>(
+        &mut self,
+        params: impl Iterator<Item = (&'a str, Span)>,
+    ) {
+        let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for (name, span) in params {
+            if !seen.insert(name) {
+                self.err_coded(
+                    span,
+                    format!("duplicate parameter `{name}`"),
+                    "E-DUP-PARAM",
+                    Some("each parameter must have a distinct name".into()),
                 );
             }
         }
@@ -1175,6 +1196,35 @@ impl Checker {
             },
         );
         use crate::ast::Modifier;
+        // Batch G (finding #7): reject an explicit instance field declared twice (previously the last
+        // silently won). An explicit field that *also* names a promoted ctor param is intentionally
+        // allowed — the explicit declaration is authoritative (`explicit_field_decl_wins_over_promotion`);
+        // a duplicate *promoted* param is caught by `E-DUP-PARAM` on the constructor.
+        {
+            let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+            for m in &c.members {
+                if let ClassMember::Field {
+                    modifiers,
+                    name,
+                    span,
+                    ..
+                } = m
+                {
+                    if modifiers.contains(&Modifier::Static) || modifiers.contains(&Modifier::Const)
+                    {
+                        continue;
+                    }
+                    if !seen.insert(name.as_str()) {
+                        self.err_coded(
+                            *span,
+                            format!("duplicate field `{name}`"),
+                            "E-DUP-FIELD",
+                            Some("each field must have a distinct name".into()),
+                        );
+                    }
+                }
+            }
+        }
         let mut fields = HashMap::new();
         // Member visibility (Wave 1.1): instance-field and method name → (vis, owner==this class).
         // Inherited entries (with their original owner) are merged in by `merge_inherited`.
@@ -1317,6 +1367,7 @@ impl Checker {
                             Some("remove `abstract`/`static`/`const`/`open`/`mutable` from the constructor".into()),
                         );
                     }
+                    self.reject_dup_param_names(params.iter().map(|p| (p.name.as_str(), p.span)));
                     // Resolve each param type once; reuse for both the ctor signature
                     // and field promotion to avoid duplicate "unknown type" errors.
                     self.active_type_params = class_tp.clone();
@@ -1352,6 +1403,7 @@ impl Checker {
                     // the call site, method params unified from the call's arguments. A method param
                     // that shadows a class param is rejected so composition stays unambiguous. Erased
                     // before any backend by `erase_generics`.
+                    self.reject_dup_param_names(f.params.iter().map(|p| (p.name.as_str(), p.span)));
                     self.validate_type_params(&f.type_params, f.span);
                     for tp in &f.type_params {
                         if class_tp.iter().any(|c| c == tp) {

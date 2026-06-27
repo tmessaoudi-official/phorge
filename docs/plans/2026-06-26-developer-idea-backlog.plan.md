@@ -173,6 +173,25 @@ P1)**, all front-end-only (byte-identity-neutral), 7 fix batches A–G. Decision
   and emitting `static function` in the transpiler (a sound static method called via an instance is
   byte-identical whether or not PHP marks it `static`).
 
+- **Batch G — declaration uniqueness — ✅ DONE; the soundness fix queue A–G is now COMPLETE**
+  (autonomous). Finding #7 (P1): duplicate parameter names (free fn / method / ctor) and duplicate
+  explicit field names were silently accepted (the later declaration won). **Escalation probe result
+  [Verified]:** a different-type duplicate param (`f(int a, string a)`) is NOT a P0 hole — the checker
+  binds the *last* type so a mismatched use is caught (run≡runvm both reject), and the runtime binds
+  the last arg; consistent, so it stays P1. Fixed with a shared `reject_dup_param_names` helper
+  (`(name, span)` pairs, serves `Param` + `CtorParam`) called from `collect_function`, the method arm,
+  and the ctor arm → `E-DUP-PARAM`; plus an explicit-field uniqueness scan in the class collection →
+  `E-DUP-FIELD`. **Kept intentional:** an explicit field that also names a promoted ctor param is
+  allowed (the explicit decl is authoritative — `explicit_field_decl_wins_over_promotion`; promoted-vs-
+  promoted is caught by `E-DUP-PARAM`). Front-end only (no Op/Value). 8 new checker tests; `phg explain
+  E-DUP-PARAM`/`E-DUP-FIELD`; README rejected-cases (no runnable example — pure faults). Full workspace
+  gate green (1033 lib + 112 differential w/ PHP oracle).
+
+> **Soundness-audit fix queue COMPLETE (A→C→B→D→F→E→G):** all 6 P0 + the 1 P1 from
+> `docs/research/soundness-audit/SSOT.md` are closed. Every fix front-end-only, byte-identity spine
+> intact. Deferrals (documented in each batch above): method-`?` propagation + interface-method throws
+> (C), nested generic placeholder (B), static call-path/`static function` emission (E).
+
 ## Decisions Log
 - [2026-06-26] AGREED (Batch 1):
   - **A — ADOPT:** formalize "library/web files need no `main`; only running needs an entry"; keep

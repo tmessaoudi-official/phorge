@@ -29,4 +29,5 @@ mod totality;
 mod traits;
 mod types;
 mod unions;
+mod uniqueness;
 mod visibility;
