@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `phg test` runner + `Core.Test` assertions (M-Test)
+
+A first-class testing story so Phorge can dogfood itself (GA rock 2 — daily-use tooling). No new `Op`,
+no new `Value`.
+
+- **`test "name" { … }` items** — a contextual `test` keyword (special only at item position before a
+  string literal, so it stays a usable identifier). A test body is checked like a `-> void` body (no
+  `this`); a `test` block in a normal build is rejected as `E-TEST-OUTSIDE-TESTS` (`phg explain`).
+- **`Core.Test` assertions** — `assert(bool, string)`, `assertTrue`/`assertFalse`, `assertEquals`/
+  `assertNotEquals` (value equality via the shared `==` kernel; same-type-required, generic),
+  `assertNull`/`assertNotNull`, and **`assertFaults(() -> T)`** (a HigherOrder native — passes iff the
+  closure faults). A failing assertion raises a fault the runner catches per-test.
+- **`phg test [path…]`** — discovers `*.phg` under the project's `tests/` (or a given file/dir), loads
+  each through the normal loader, validates in test mode, and runs every `test` block independently on
+  the interpreter (each body is lowered into a synthetic `main` and routed through the ordinary
+  check/expand/interpret pipeline — no test-specific backend path). cargo-style report; exit `0` iff all
+  pass. Runnable showcase under `selftest/`.
+
 ### Added — math breadth + number formatting (M-NUM S4) — closes M-NUM
 
 The final M-NUM slice rounds out `Core.Math`. All additive stdlib natives — **no new `Op`, no new

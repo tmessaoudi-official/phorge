@@ -1,0 +1,30 @@
+package Main;
+import Core.Test;
+
+// A couple of ordinary functions, tested below. A `test` file is a normal Phorge program: it can
+// declare functions, classes, imports — anything — alongside its `test` blocks.
+function add(int a, int b): int {
+    return a + b;
+}
+
+function double(int n): int {
+    return n * 2;
+}
+
+test "addition" {
+    Test.assertEquals(add(2, 3), 5);
+    Test.assertEquals(add(-1, 1), 0);
+}
+
+test "doubling" {
+    Test.assertEquals(double(21), 42);
+    Test.assertNotEquals(double(3), 5);
+}
+
+test "booleans and null" {
+    Test.assertTrue(add(1, 1) == 2);
+    Test.assertFalse(add(1, 1) == 3);
+    int? maybe = null;
+    Test.assertNull(maybe);
+    Test.assertNotNull(add(0, 0));
+}

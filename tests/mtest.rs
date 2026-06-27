@@ -36,6 +36,17 @@ impl Drop for TempDir {
     }
 }
 
+/// The committed self-hosted suite under `selftest/` must always pass (it doubles as the M-Test
+/// showcase — `selftest/README.md`). It lives outside `examples/`, so the byte-identity differential
+/// never touches it; this is its gate.
+#[test]
+fn the_selftest_suite_is_green() {
+    let suite = Path::new(env!("CARGO_MANIFEST_DIR")).join("selftest");
+    let (report, code) = cli::cmd_test(&[suite.display().to_string()]);
+    assert_eq!(code, 0, "selftest/ suite must be green:\n{report}");
+    assert!(report.contains("0 failed"), "{report}");
+}
+
 #[test]
 fn all_passing_tests_exit_zero() {
     let d = TempDir::new("pass");

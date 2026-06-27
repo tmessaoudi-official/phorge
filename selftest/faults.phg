@@ -1,0 +1,23 @@
+package Main;
+import Core.Test;
+
+// `Test.assertFaults(() -> T)` passes iff the closure faults — the way to test the error surface.
+function firstOf(List<int> xs): int {
+    return xs[0];
+}
+
+test "indexing past the end faults" {
+    var xs = [10, 20, 30];
+    Test.assertFaults(fn() => xs[5]);
+}
+
+test "a missing map key faults" {
+    var scores = ["alice" => 1, "bob" => 2];
+    Test.assertFaults(fn() => scores["carol"]);
+}
+
+test "code that should NOT fault" {
+    // The inverse of assertFaults is just running the code directly: an uncaught fault fails the test.
+    var xs = [1, 2, 3];
+    Test.assertEquals(firstOf(xs), 1);
+}

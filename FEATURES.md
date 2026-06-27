@@ -70,6 +70,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Diagnostic dictionary (look up a code) | ✅ | `phg explain <CODE>` |
 | Program from stdin / inline / `--` | ✅ | `run -`, `run -e '…'`, `run -- <file>` |
 | Vendor git dependencies (offline, lockfile-pinned) | ✅ | `phg vendor` |
+| Test runner: `test "name" {}` blocks + `Core.Test` assertions (incl. `assertFaults`) | ✅ | `phg test [path…]` |
 | HTTP server: `handle(Request) -> Response` (pure Phorge) over a real socket; PHP `php -S` bridge | ✅ | `phg serve foo.phg` |
 | Standalone executable (host) | ✅ | `phg build foo.phg` |
 | Standalone executable (Linux cross + Windows) | 🔨 | `phg build --target … / --all` |

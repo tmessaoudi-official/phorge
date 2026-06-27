@@ -1,8 +1,11 @@
 # M-Test — `phg test` runner + `Core.Test` assertions (design)
 
-> Status: **design — pending developer confirmation of the flagged decisions** (2026-06-27). Goal: a
-> first-class testing story so Phorge can dogfood itself. Highest GA-leverage tooling item (unblocked,
-> unlike `phg fmt`). Plan slot: GA-sequence item 3.
+> Status: **COMPLETE** (2026-06-27, T1–T5) — all recommended defaults adopted (`test "name" {}` items,
+> catchable-fault assertions, `tests/`-discovery, interpreter runner). Shipped: contextual `test` item +
+> `E-TEST-OUTSIDE-TESTS`; `Core.Test` (`assert`/`assertTrue`/`assertFalse`/`assertEquals`/
+> `assertNotEquals`/`assertNull`/`assertNotNull`/`assertFaults`); the `phg test [path…]` runner; and the
+> `selftest/` showcase. Deferred follow-ups (fixtures, parameterized, `--vm`, TAP/JUnit, PHPUnit bridge)
+> tracked in KNOWN_ISSUES. Goal achieved: a first-class testing story so Phorge can dogfood itself.
 
 ## Goals
 - Write tests *in Phorge*, run them with one command, get a clear pass/fail report + non-zero exit on

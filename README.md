@@ -132,6 +132,7 @@ phg <command> <source> [options]
 | `build` | compile to a standalone native executable | exit 1 on type error / build failure |
 | `vendor` | fetch + pin git dependencies into `vendor/` (the only network-touching command), writing `phorge.lock` | exit 1 on fetch/lock failure |
 | `serve` | run an HTTP server that dispatches requests to a Phorge `handle(Request) -> Response` (M6) | exit 1 on bind/handler error |
+| `test` | discover + run `test "name" { … }` blocks (under `tests/`, or a given file/dir) with `Core.Test` assertions | exit 1 if any test fails |
 | `explain` | look up a diagnostic code (`phg explain E-UNKNOWN-IDENT`) | exit 1 on unknown code |
 
 **Source** (for the run-family commands):
@@ -166,6 +167,35 @@ linker) plus `llvm-objcopy`. Supported targets today: `x86_64-unknown-linux-musl
 is tested, but macOS *stub production* (signing) is deferred to a later phase — apple targets are
 rejected with a clear message. Cross-builds require a phorge source checkout (the host build does
 not). See [ROADMAP.md](ROADMAP.md) for Phase 2/3 details.
+
+## Testing (`phg test`)
+
+Write tests *in Phorge* and run them with one command:
+
+```phorge
+package Main;
+import Core.Test;
+
+function add(int a, int b): int { return a + b; }
+
+test "addition" {
+    Test.assertEquals(add(2, 3), 5);
+    Test.assertTrue(1 < 2);
+}
+```
+
+```console
+$ phg test            # every *.phg under tests/ (or: phg test <file|dir>)
+... :: addition ... ok
+1 passed, 0 failed, 1 tests in 1 files
+```
+
+A `test "name" { … }` block is checked like a `-> void` body and runs on the interpreter; a failing
+assertion (or any other fault) is reported with its message, line, and stack trace, and the runner
+continues. Exit code is `0` iff every test passes — so `phg test` drops straight into CI. The
+`Core.Test` assertions are `assert`, `assertTrue`/`assertFalse`, `assertEquals`/`assertNotEquals`,
+`assertNull`/`assertNotNull`, and `assertFaults(() -> T)` (passes iff the closure faults). A runnable
+showcase lives in [`selftest/`](selftest/README.md).
 
 ## Language at a glance
 

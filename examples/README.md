@@ -110,6 +110,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `transpile/demo.phg` | the **Phorge → PHP** bridge — see `transpile/README.md` |
 | `build/app.phg` | **standalone executables** — `phg build` — see `build/README.md` |
 | `cli/demo.phg` | the **`phg` CLI** — source forms, `check`/`parse`/`lex`, diagnostics, `explain` — see `cli/README.md` |
+| (`../selftest/`) | the **`phg test` runner** — `test "name" { … }` blocks + `Core.Test` assertions — lives outside `examples/` (test blocks aren't byte-identity programs; gated by `tests/mtest.rs`) — see `../selftest/README.md` |
 | `web/handler.phg` | the **M6 W1 HTTP handler model** — `Request`/`Response` classes, `parseRequest`/`serializeResponse` in pure Phorge, `handle(Request) -> Response`; `bytes` bodies, `req.header(name)` lookup, `bytes.find` + `text.splitOnce`. No socket yet (that's W3's `phg serve`) |
 | `web/router.phg` | the **M6 W2 static router** — a data-driven `List<Route>` table, linear exact-match `(method, path)` scan → a `Handler` enum tag, dispatched by exhaustive `match` to named handler functions; method-sensitive 404 fallback. Pure Phorge (no new feature); path params + middleware deferred (Track A / generics) |
 | `web/server.phg` | the **M6 W4 served app** — W1 parse/serialize + W2 routing + the single entry `respond(bytes) -> bytes` that **`phg serve`** runs over a real socket. `web/server.php` is the **`php -S`** front-controller bridge (both call the same `handle(Request) -> Response`) — see `web/README.md` |

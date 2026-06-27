@@ -707,6 +707,18 @@ closure-from-native mechanism — `NativeEval::HigherOrder` + a re-entrant VM cl
   contributed. Also unprovided: reflection over enum variants (`interfaces(variant)` etc. return `[]`)
   and `Reflect.*` across packages with namespaced (FQN) class names.
 
+- **`phg test` — known limitations (M-Test).** The test runner is intentionally minimal this
+  milestone. (1) **Tests run on the interpreter only** — there is no `--vm` mode yet to also run each
+  test on the bytecode VM as a free parity check. (2) **No fixtures / setup-teardown, no parameterized
+  (table) tests, no TAP/JUnit output, and no PHPUnit-emitting bridge** — each is an additive follow-up
+  on top of the core runner. (3) A failing test's **stack-trace frame is named `main`** (the test body
+  is lowered into a synthetic `main` to reuse the normal check/expand/run pipeline) — the test's own
+  name is on the result line, not in the trace. (4) **A project whose entry is a class `static main`**
+  could collide when a test file is loaded in project mode (the runner drops a *top-level* `main` when
+  synthesizing the per-test entry, not a class-static one) — keep test files self-contained or use a
+  library project. `Core.Test` is `pure` but only meaningful under `phg test`; its PHP emission exists
+  only for a future `--emit-phpunit` bridge and is **not** byte-identity-gated.
+
 ## Reporting
 
 Found something not listed here — especially a panic, hang, or crash on any input? That's a bug.

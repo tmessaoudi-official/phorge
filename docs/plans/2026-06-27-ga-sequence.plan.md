@@ -60,6 +60,15 @@
   comment side-channel + reattachment + gofmt-shaped CLI + tidy-no-reflow v1. **Finding:** phg fmt is
   NOT a printer reuse — the lexer discards comments, so it needs the trivia slice (F1–F5); M-Test is
   unblocked, hence first. Build order: M-Test T1→T5, then phg fmt F1→F5.
+- [2026-06-27] DONE: **M-Test COMPLETE** (T1–T5, commits `fc0ea9f`/`6e657ff`/`e33eafa`/`195d186` + T5).
+  No new `Op`/`Value`. Key implementation choices: (a) `test` is contextual, recognized before any
+  modifier in `parse_item` so a leading modifier cleanly rejects it; (b) test-mode threaded via a
+  `Checker.test_mode` flag + a `check_tests` entry (E-TEST-OUTSIDE-TESTS otherwise); (c) the runner
+  **lowers each test body into a synthetic `main`** and reuses the ordinary check_and_expand→interpret
+  pipeline, so every front-end pass processes the body with no test-specific backend path; (d) the
+  self-hosted suite lives at top-level **`selftest/`** (outside `examples/`, so the byte-identity
+  differential never touches it), gated by `tests/mtest.rs`. GA rock 2 30%→45%, total 49%→52%.
+  **Next on the critical path: phg fmt (F1–F5).**
 
 ### Batch 4 (minor / technical-constraint items)
 - [2026-06-27] **CHANGE** float `/0` → **clean fault** (general principle: ANY division by zero throws —
@@ -162,7 +171,7 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
 ## Status
 - [ ] 1. M4 charter — IN PROGRESS
 - [ ] 2. phg fmt + lints
-- [ ] 3. M-Test
+- [x] 3. M-Test — **COMPLETE** (T1–T5: `test` item + `Core.Test` + `assertFaults` + `phg test` runner + `selftest/` showcase). GA 49% → 52%.
 - [ ] 4. M-text
 - [ ] 5. breadth gaps
 - [ ] 6. M-NUM S4
