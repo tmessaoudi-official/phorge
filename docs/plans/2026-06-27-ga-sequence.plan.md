@@ -74,6 +74,18 @@
   side-channel + position reattachment, D2 gofmt-shaped CLI, D3 tidy-no-reflow v1, quotes left as
   written. Build order F1 (lexer comment capture) → F2 (comment-aware printer) → F3 (`phg fmt` CLI) →
   F4 (dogfood) → F5 (bonus: lift L5 comment fidelity).
+- [2026-06-27] CHALLENGED + REDECIDED (F2 engine): the spec's recommended option B ("comment-aware AST
+  printer reusing the printer that already produces canonical layout") rested on a **false premise** —
+  `src/lift/printer.rs` covers only the Tier-1 lift subset (it `Err`s on interfaces/traits/type-aliases/
+  generics/unions/intersections/lambdas/try-throw/html/bytes/destructuring/property-hooks), so a fmt
+  built on it would error on nearly every real file. Surfaced both real options (token reformatter vs a
+  new full AST printer). **Developer chose B' — a full, exhaustive, comment-aware AST printer** in a NEW
+  `src/fmt/` module (lift printer untouched). Rationale: a formatter's one hard rule is meaning-
+  preservation; an AST printer gives `parse(fmt(x)) ≡ parse(x)` and, with exhaustive matches, compiler-
+  proven completeness (can never silently mis-handle/error a parseable file) — a token reformatter can
+  only guess at `<`/unary-`-`/`>>`/interpolation spacing. Gate: round-trip `parse(fmt(x))≡parse(x)` +
+  idempotence `fmt(fmt(x))==fmt(x)`. Build slice-by-slice: items → stmts → exprs → types/patterns →
+  comment interleaving (F1 channel). F1 `cd38064` DONE.
 
 ### Batch 4 (minor / technical-constraint items)
 - [2026-06-27] **CHANGE** float `/0` → **clean fault** (general principle: ANY division by zero throws —

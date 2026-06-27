@@ -7,7 +7,7 @@ use std::process::exit;
 use phorge::{cli, loader};
 
 const USAGE: &str =
-    "usage: phg <run|runvm|check|parse|lex|transpile|lift|disasm|bench|build|vendor|serve|test|explain> \
+    "usage: phg <run|runvm|check|parse|lex|transpile|lift|disasm|bench|build|vendor|serve|test|fmt|explain> \
                      <file | - | -e code> [-o out]   (phg -h for help, -v for version)";
 
 fn main() {
@@ -67,7 +67,7 @@ fn main() {
     let cmd = match args.get(1).map(String::as_str) {
         Some(
             c @ ("run" | "runvm" | "check" | "parse" | "lex" | "transpile" | "lift" | "disasm"
-            | "bench" | "build" | "vendor" | "serve" | "explain" | "test"),
+            | "bench" | "build" | "vendor" | "serve" | "test" | "fmt" | "explain"),
         ) => c,
         _ => {
             eprintln!("{USAGE}");
@@ -105,6 +105,35 @@ fn main() {
     if cmd == "test" {
         let paths: Vec<String> = args[2..].to_vec();
         let (report, code) = cli::cmd_test(&paths);
+        print!("{report}");
+        exit(code as i32);
+    }
+    // `fmt [--check] [path… | -]` formats source (M-fmt). Like `test`, it takes paths/flags, not a
+    // single program source, so it is handled before the source-resolving run-family path.
+    if cmd == "fmt" {
+        // `phg fmt -` (or `--check -`) reads stdin → formats → stdout.
+        if args[2..].iter().any(|a| a == "-") {
+            let src = read_stdin();
+            match cli::fmt_source(&src) {
+                Ok(out) => {
+                    print!("{out}");
+                    return;
+                }
+                Err(err) => {
+                    eprintln!("{err}");
+                    exit(2);
+                }
+            }
+        }
+        let mut check = false;
+        let mut paths: Vec<String> = Vec::new();
+        for a in &args[2..] {
+            match a.as_str() {
+                "--check" => check = true,
+                other => paths.push(other.to_string()),
+            }
+        }
+        let (report, code) = cli::cmd_fmt(&paths, check);
         print!("{report}");
         exit(code as i32);
     }

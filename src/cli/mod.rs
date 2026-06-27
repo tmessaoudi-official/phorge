@@ -15,10 +15,12 @@ use crate::vm::Vm;
 // `bench` profiling suite. Re-exported so callers keep referring to `cli::cmd_explain` etc.
 mod bench;
 mod explain;
+mod fmt_cmd;
 mod rewrite_new;
 mod test_runner;
 pub use bench::{cmd_bench, cmd_bench_vs_php};
 pub use explain::{cmd_explain, explain_text};
+pub use fmt_cmd::{cmd_fmt, fmt_source};
 pub use rewrite_new::cmd_rewrite_new;
 pub use test_runner::cmd_test;
 
@@ -47,6 +49,7 @@ pub fn help_text() -> String {
          vendor     fetch [require] git deps into an offline vendor/ (writes phorge.lock)\n  \
          serve      serve the program over HTTP (calls respond(bytes) -> bytes per request)\n  \
          test       discover and run `test` blocks (under tests/, or a given file/dir)\n  \
+         fmt        format source to canonical form (--check for CI; - for stdin)\n  \
          explain    explain a diagnostic code (e.g. phg explain E-UNKNOWN-IDENT)\n\n\
          source:\n  \
          <file>     read the program from a file\n  \
@@ -153,6 +156,26 @@ pub fn help_for(cmd: &str) -> String {
                    phg test\n  \
                    phg test tests/math.phg\n  \
                    phg test tests/\n"
+        }
+        "fmt" => {
+            "fmt — format Phorge source to canonical form (comment-preserving, meaning-preserving).\n\n\
+                  Prints from the parsed AST, so formatting never changes what the program means\n\
+                  (parse(fmt(x)) == parse(x)); it is idempotent, and an unparseable file is left\n\
+                  untouched (its diagnostic is reported, exit 2). v1 is tidy + comment-safe (canonical\n\
+                  indentation/spacing/blank-lines), no line-wrapping yet.\n\n\
+                  usage:\n  phg fmt [--check] [path… | -]\n\n\
+                  flags:\n  \
+                  --check   report files that aren't already formatted and exit 1; write nothing (CI)\n\n\
+                  paths:\n  \
+                  <none>    format every *.phg under the current directory, recursively\n  \
+                  <file>    format that file in place\n  \
+                  <dir>     format every *.phg under that directory in place\n  \
+                  -         read from stdin, write the formatted result to stdout\n\n\
+                  examples:\n  \
+                  phg fmt\n  \
+                  phg fmt src/app.phg\n  \
+                  phg fmt --check .\n  \
+                  cat app.phg | phg fmt -\n"
         }
         "explain" => {
             "explain — print the explanation for a diagnostic code.\n\n\
