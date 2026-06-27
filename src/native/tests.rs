@@ -39,6 +39,46 @@ fn php_emission_is_echo_with_newline() {
     assert_eq!(php, r#"echo $x, "\n""#);
 }
 
+// --- M4 stdlib charter guards (docs/specs/2026-06-27-m4-stdlib-charter.md) ---
+// Mechanized Rule 1: module = `Core.<PascalCase>`, function = lowerCamelCase. These lock the
+// conventions already shared by every shipped module (regression guards, not new behavior) so a
+// future native cannot silently introduce an inconsistent public name.
+
+#[test]
+fn charter_module_names_are_core_pascalcase() {
+    for n in registry() {
+        let leaf = n.module.strip_prefix("Core.").unwrap_or_else(|| {
+            panic!(
+                "module {} must be under the reserved `Core.` root",
+                n.module
+            )
+        });
+        let mut chars = leaf.chars();
+        let ok = chars.next().is_some_and(|c| c.is_ascii_uppercase())
+            && chars.all(|c| c.is_ascii_alphanumeric())
+            && !leaf.contains('.');
+        assert!(
+            ok,
+            "module `{}` leaf must be a single PascalCase segment",
+            n.module
+        );
+    }
+}
+
+#[test]
+fn charter_function_names_are_lowercamel() {
+    for n in registry() {
+        let mut chars = n.name.chars();
+        let ok = chars.next().is_some_and(|c| c.is_ascii_lowercase())
+            && n.name.chars().all(|c| c.is_ascii_alphanumeric());
+        assert!(
+            ok,
+            "native `{}.{}` name must be lowerCamelCase",
+            n.module, n.name
+        );
+    }
+}
+
 #[test]
 fn import_map_binds_leaf_to_full_path() {
     use crate::token::Span;
