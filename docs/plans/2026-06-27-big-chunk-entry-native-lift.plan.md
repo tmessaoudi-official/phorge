@@ -62,20 +62,20 @@ Hash `8b8896f`, Url `fe5ef1e`, Validate `08eb5e5`, Csv `b19fa89`, Random `d0a1cb
   shared `ast::entry_point`/`entry_point_count`; checker entry-scoping + `E-MULTIPLE-MAIN`; interpreter/
   compiler/VM (`main_is_static`+`main_params`, dummy `$this`) / transpiler (`static` methods, `App::main()`
   bootstrap); gated `examples/guide/class-main.phg`; byte-identical run/runvm/real PHP. No new Op/Value.
-- **Slice B — Core.Http (Option 1)** — NEXT, but has a **newly-discovered hard prerequisite**:
-  - **B0 (prerequisite): static-method call sites** `ClassName.staticMethod(args)`. VERIFIED unsupported
-    today — `Math.square(5)` is `E-UNKNOWN-IDENT` (the checker treats the class name as an unknown
-    identifier; statics are invokable only through an *instance*, `m.square(5)`). Option 1's public API
-    (`Request.parse(raw)`, `Response.text(status, body)`) is exactly this form, so it must land first:
-    parser/checker (resolve a `Member` whose head is a class name to a static call) + interpreter +
-    compiler/VM (dispatch to the `(class,method)` fn index, no receiver) + transpiler (`Class::method(...)`).
-    Its own gated example. (Slice A only enabled class-static methods as *entry points*, not call sites.)
-  - **B1: Core.Http** — once B0 lands: inject `Request`/`Response` types with static methods
-    (`Request.parse`/`resp.serialize`/`Response.text`) gated on `import Core.Http;` (injected-type pattern,
-    like `Core.Json`); `handle` is a top-level fn; `phg serve` keeps `respond(bytes)->bytes`, Core.Http
-    injects a `respond` bridge wrapping `handle`. Promotes the W1 `handler.phg` types into the stdlib.
-- **Slice C — class-static `handle`** — reuse `ast::entry_point("handle")`; make the injected `respond`
-  bridge resolve `handle` wherever it is (top-level OR `App.handle`). Last.
+- **Slice B0 — static-method call sites `ClassName.method(args)` — DONE `81df62f`.** `static_methods`
+  on ClassInfo (own-only); `check_static_method_call` reuses `check_method_sigs`; `E-STATIC-CALL`;
+  interpreter `call_static_method`; compiler threads the `(class,method)→idx` map + emits dummy-`$this`
+  + `Op::Call`; transpiler `Class::method(...)`. Gated `examples/guide/static-calls.phg`. Scope
+  (KNOWN_ISSUES): own-class statics only; non-overloaded only.
+- **Slice B1 — Core.Http — DONE `b8608ad`. Stage 2 native wave COMPLETE (6/6); Batch-1 C CLOSED.**
+  `import Core.Http;` injects `Request`/`Response` (static-method API) + the `Core.Bytes`/`Core.Text`
+  imports their bodies need, via `cli::inject_http_prelude` (injected-prelude pattern, like Core.Json).
+  When `handle` exists and no `respond`, a `respond(bytes)->bytes` serve bridge is synthesized wrapping
+  `handle` (malformed→400) → a bare handler is directly servable by `phg serve`. Gated
+  `examples/web/core-http.phg` + `tests/serve.rs` bridge test.
+- **Slice C — class-static `handle`** — NEXT (small): the injected `respond` bridge currently calls a
+  *top-level* `handle`. Make bridge generation dynamic — resolve `handle` via `ast::entry_point` and
+  emit `App.handle(req)` when it's a class-static method. Reuses Slice A/B0 machinery.
 
 **Stage 3 (lift L5/L6)** not started. All commits green, **unpushed** (awaiting an explicit push).
 Autonomous; commit green, no push.
