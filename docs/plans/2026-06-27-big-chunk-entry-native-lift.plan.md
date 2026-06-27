@@ -32,12 +32,15 @@ gated guide example. **`Core.Http`** added here (absorbs the web `respond` bridg
 directly servable — Batch-1 C remainder).
 - **`Core.Encoding`** — base64 + hex (encode `bytes->string`, decode `string->bytes?`). DONE `31745c3`.
 - **`Core.Hash`** — crc32/md5/sha1/sha256 (hand-rolled, `bytes->string` hex). DONE `8b8896f`.
-- Next: `Core.Url` (urlEncode/urlDecode/rawUrlEncode/rawUrlDecode — percent-encoding, `string->string`,
-  byte-identical to PHP urlencode/rawurlencode; decode never fails) → `Core.Validate` (regex preds via
-  PCRE — pin patterns to PHP) → `Core.Csv` (parse/format) → `Core.Random` (QUARANTINED — seeded PRNG,
-  PRNG constants `<2^63`, shifts `1..=63`, no PHP-float `/`; examples in `examples/random/` like
-  process) → `Core.Http` (Request/Response/parse/serialize → makes `handle` directly servable, closes
-  Batch-1 C remainder).
+- **`Core.Url`** — urlEncode/urlDecode/rawUrlEncode/rawUrlDecode (percent-encoding; decode `->string?`
+  null on invalid-UTF-8). DONE `fe5ef1e`.
+- **`Core.Validate`** — isInt/isNumber/isAlpha/isAlnum/isHex (`string->bool`, hand-roll + matching PHP
+  `preg_match`). DONE `08eb5e5`.
+- Next: `Core.Csv` (parse line `string->List<string>` / format `List<string>->string`; match PHP
+  `str_getcsv`/`fputcsv` quoting — FIDDLY, pin every quoting edge to php) → `Core.Random` (QUARANTINED
+  — seeded PRNG, constants `<2^63`, shifts `1..=63`, no PHP-float `/`; examples in `examples/random/`
+  like process) → `Core.Http` (Request/Response/parse/serialize → makes `handle` directly servable,
+  closes Batch-1 C remainder; the biggest module).
 Pattern: `src/native/<m>.rs` (`Vec<NativeFn>` + `php:` emission) + register in `native/mod.rs` +
 `#[path]` unit tests + a gated `examples/guide/<m>.phg` + README row. Tier-A only if byte-identical to
 a PHP **core** fn under `php -n` (no mbstring; hash/base64/bin2hex/pcre are core).
@@ -46,9 +49,9 @@ a PHP **core** fn under `php -n` (no mbstring; hash/base64/bin2hex/pcre are core
 L5 round-trip semantic gate (PHP→Phorge→PHP via oracle) + L6 `phg lift <file.php>` CLI.
 
 ## Status
-**Stage 1 DONE** (`b710c6e` Batch-1 B, `6f0a939` Batch-1 C). **Stage 2 in progress**: Encoding
-`31745c3`, Hash `8b8896f` done; next = Url → Validate → Csv → Random → Http. **Stage 3 (lift L5/L6)**
-not started. Base `9fb9f32`; 4 commits this session, all green, **unpushed** (awaiting explicit push).
+**Stage 1 DONE** (`b710c6e` Batch-1 B, `6f0a939` Batch-1 C). **Stage 2 in progress**: Encoding `31745c3`,
+Hash `8b8896f`, Url `fe5ef1e`, Validate `08eb5e5` done; next = Csv → Random → Http. **Stage 3 (lift
+L5/L6)** not started. Base `9fb9f32`; 7 commits this session, all green, **unpushed** (awaiting push).
 Autonomous; commit green, no push.
 
 ### Native-module recipe (reuse for Url/Validate/Csv/Http)
