@@ -27,9 +27,15 @@ running a bare `handle` without the per-app `respond` bridge — REQUIRES a stan
 `Core.Http` module. Recorded the deferral in `examples/web/README.md`. No code this slice.
 
 ## Stage 2 — Native stdlib wave  [ACTIVE]
-Extended Phase 0 (harness purity already exists; sub-2^63 `Core.Random`) → Tier-A modules: Hash →
-Encoding → Url → Validate → Csv. Each a gated guide example. **`Core.Http`** added here (absorbs the
-web `respond` bridge so `handle` is directly servable — Batch-1 C remainder).
+Extended Phase 0 (harness purity already exists; sub-2^63 `Core.Random`) → Tier-A modules. Each a
+gated guide example. **`Core.Http`** added here (absorbs the web `respond` bridge so `handle` is
+directly servable — Batch-1 C remainder).
+- **`Core.Encoding`** — base64 + hex (encode `bytes->string`, decode `string->bytes?`). DONE (pending commit).
+- Next: `Core.Hash` (md5/sha1/sha256/crc32, hand-rolled, hex out) → `Core.Url` → `Core.Validate` →
+  `Core.Csv` → `Core.Random` (quarantined, seeded) → `Core.Http`.
+Pattern: `src/native/<m>.rs` (`Vec<NativeFn>` + `php:` emission) + register in `native/mod.rs` +
+`#[path]` unit tests + a gated `examples/guide/<m>.phg` + README row. Tier-A only if byte-identical to
+a PHP **core** fn under `php -n` (no mbstring; hash/base64/bin2hex/pcre are core).
 
 ## Stage 3 — Bidirectional lift (L5 + L6)
 L5 round-trip semantic gate (PHP→Phorge→PHP via oracle) + L6 `phg lift <file.php>` CLI.

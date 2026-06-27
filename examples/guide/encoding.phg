@@ -1,0 +1,33 @@
+// Core.Encoding — base64 and hex codecs (native-stdlib wave).
+//
+// Pure, deterministic conversions between `bytes` and their text encodings. Each maps 1:1 to a PHP
+// core function (`base64_encode` / `base64_decode` / `bin2hex` / `hex2bin`), so run/runvm/real PHP
+// are byte-identical. Encoders take `bytes` → `string`; decoders take `string` → `bytes?` (`null`
+// on malformed input — never a fault).
+package Main;
+
+import Core.Console;
+import Core.Bytes;
+import Core.Encoding;
+
+function main(): void {
+    var data = Bytes.fromString("Hello, Phorge!");
+
+    // Encode to base64 and hex.
+    var b64 = Encoding.base64Encode(data);
+    var hex = Encoding.hexEncode(data);
+    Console.println("base64: {b64}");
+    Console.println("hex:    {hex}");
+
+    // Decode back (decoders return `bytes?` — `??` supplies a fallback on the absent case).
+    var fromB64 = Encoding.base64Decode(b64) ?? data;
+    var fromHex = Encoding.hexDecode(hex) ?? data;
+    var b64Ok = fromB64 == data;
+    var hexOk = fromHex == data;
+    Console.println("base64 round-trip: {b64Ok}");
+    Console.println("hex round-trip:    {hexOk}");
+
+    // Encoding raw (non-text) bytes works too — base64/hex are byte codecs, not text codecs.
+    var raw = Bytes.fromString("a/b+c");
+    Console.println("encoded slashes: {Encoding.base64Encode(raw)}");
+}

@@ -23,6 +23,7 @@ use std::sync::OnceLock;
 mod bytes;
 mod convert;
 mod decimal;
+mod encoding;
 mod file;
 mod html;
 mod json;
@@ -288,6 +289,7 @@ fn build() -> Vec<NativeFn> {
     registry.extend(set::set_natives());
     registry.extend(convert::convert_natives());
     registry.extend(decimal::decimal_natives());
+    registry.extend(encoding::encoding_natives());
     registry.extend(json::json_natives());
     registry.extend(reflect::reflect_natives());
     registry.extend(process::process_natives());
