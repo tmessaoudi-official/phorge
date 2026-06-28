@@ -45,10 +45,10 @@ are allowed when — is defined in [`SEMVER.md`](SEMVER.md).
 - **Reflection** — `Core.Reflect` (runtime kind/type queries).
 - **Cast operator** — `value as Type` over the full primitive/union matrix (fallibility-typed).
 - **`Secret<T>`** — the opaque, non-printable wrapper (security primitive; surface still settling).
-- **HTTP router & route attributes** — the `Core.Http` `Router` (path params, literal>param
-  precedence) + the `#[Route(...)]` attribute + `Http.autoRouter()` desugar (M6 W2; the web layer is
-  in progress — middleware, regex constraints, and attribute targets beyond free functions are still
-  to come).
+- **HTTP router, middleware & route attributes** — the `Core.Http` `Router` (path params, literal>param
+  precedence, `use` middleware, `group` sub-routers) + the `#[Route(...)]` attribute +
+  `Http.autoRouter()` desugar (M6 W2 + W2-ext; the web layer is in progress — regex/typed route
+  constraints and `#[Route]` on methods are still to come).
 
 ## Stdlib modules
 

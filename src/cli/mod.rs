@@ -488,9 +488,44 @@ class Route {
   constructor(public string method, public string pattern, public (Request) -> Response handler) {}
 }
 class Router {
-  constructor(private List<Route> table) {}
+  // `table` = the registered routes; `mws` = middleware applied (outermost-first) to every matched
+  // handler. Middleware is `(Request, next) -> Response`: it may call `next(req)` to continue the
+  // chain, or short-circuit (e.g. return 401 without calling `next`).
+  constructor(private List<Route> table, private List<(Request, (Request) -> Response) -> Response> mws) {}
   function route(string method, string pattern, (Request) -> Response handler): Router {
-    return new Router(List.concat(this.table, [new Route(method, pattern, handler)]));
+    return new Router(List.concat(this.table, [new Route(method, pattern, handler)]), this.mws);
+  }
+  // Append a middleware (applies to every route this router handles). Chainable, immutable.
+  function use((Request, (Request) -> Response) -> Response mw): Router {
+    return new Router(this.table, List.concat(this.mws, [mw]));
+  }
+  // Mount a sub-router under `prefix`: run `build` on a fresh empty router, then merge each sub-route
+  // with `prefix` prepended to its pattern and the sub-router's own middleware composed around its
+  // handler (so group-scoped middleware applies). The parent's `use` middleware still applies on top
+  // in `handle`.
+  function group(string prefix, (Router) -> Router build): Router {
+    var builder = build;
+    Router sub = builder(new Router([], []));
+    mutable List<Route> merged = this.table;
+    for (Route r in sub.table) {
+      var h = r.handler;
+      var wrapped = Router.compose(sub.mws, h);
+      merged = List.concat(merged, [new Route(r.method, prefix + r.pattern, wrapped)]);
+    }
+    return new Router(merged, this.mws);
+  }
+  // Fold a middleware list around a handler: first-registered runs OUTERMOST. Each step builds a
+  // `fn(req) => mw(req, prev)` closure capturing the middleware and the previously-wrapped handler.
+  static function compose(List<(Request, (Request) -> Response) -> Response> mws, (Request) -> Response handler): (Request) -> Response {
+    mutable var h = handler;
+    mutable int i = List.length(mws) - 1;
+    while (i >= 0) {
+      var mw = mws[i];
+      var prev = h;
+      h = fn(Request req) -> Response { return mw(req, prev); };
+      i -= 1;
+    }
+    return h;
   }
   static function idStrs(List<string> xs): List<string> { return xs; }
   static function segScore(string pattern, string path): int {
@@ -541,8 +576,8 @@ class Router {
     if (best < 0) { return Response.text(404, "Not Found: {req.method} {req.path}"); }
     Route chosen = this.table[best];
     List<string> params = Router.extractParams(chosen.pattern, req.path);
-    var h = chosen.handler;
-    return h(req.withParams(params));
+    var composed = Router.compose(this.mws, chosen.handler);
+    return composed(req.withParams(params));
   }
 }
 "#;

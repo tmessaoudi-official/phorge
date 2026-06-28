@@ -550,9 +550,12 @@ or simply unavailable, never a crash):
 - **Only `#[Route]` has semantics.** The grammar parses any `#[Name(args)]`, but every name other than
   `Route` is a hard `E-UNKNOWN-ATTRIBUTE` (no silent ignore). A general attribute/annotation facility
   is future work.
-- **No middleware, route groups, or regex/typed constraints.** Routing is exact-segment with `{name}`
-  captures only; `{id:\d+}`, optional segments, wildcards, and a middleware pipeline are deferred. The
-  `handle(Request) -> Response` contract will not change when they land.
+- **Middleware + route groups shipped (W2-ext slice 1); regex/typed constraints + nested groups
+  not yet.** `router.use(mw)` and `router.group(prefix, build)` work. Still deferred: regex/typed route
+  constraints (`{id:\d+}`, slice 2), optional segments, wildcards, and `#[Route]` on class methods
+  (slice 3). A group's middleware is composed into its routes at merge time; deeply-nested group
+  middleware ordering beyond one level is not specially tested. The `handle(Request) -> Response`
+  contract does not change when the rest land.
 - **Router lives on the injected `Core.Http` types.** A program that declares its *own* `Request`/
   `Response` (the W1 examples) does not get the injected `Router`; import `Core.Http` to use it.
 

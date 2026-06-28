@@ -106,7 +106,8 @@ fn build_router(routes: &[Route], sp: Span) -> Expr {
     let mut e = Expr::New(
         Box::new(Expr::Call {
             callee: Box::new(Expr::Ident("Router".into(), sp)),
-            args: vec![Expr::List(Vec::new(), sp)],
+            // `new Router([], [])` — empty route table + empty middleware list (M6 W2-ext slice 1).
+            args: vec![Expr::List(Vec::new(), sp), Expr::List(Vec::new(), sp)],
             span: sp,
         }),
         sp,

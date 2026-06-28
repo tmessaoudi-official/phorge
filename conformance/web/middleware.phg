@@ -1,0 +1,42 @@
+// Conformance: Router middleware (`use`) + route groups (`group`) with short-circuit + pass-through
+// (M6 W2-ext slice 1). Experimental tier; byte-identical run≡runvm≡real PHP.
+package Main;
+
+import Core.Console;
+import Core.Bytes;
+import Core.Http;
+
+function home(Request req) -> Response { return Response.text(200, "home"); }
+function secret(Request req) -> Response { return Response.text(200, "secret"); }
+
+function tag(Request req, (Request) -> Response next) -> Response {
+  var n = next;
+  Response resp = n(req);
+  return Response.text(resp.status, "[" + (Bytes.toString(resp.body) ?? "?") + "]");
+}
+
+function requireAuth(Request req, (Request) -> Response next) -> Response {
+  var n = next;
+  if ((req.header("Authorization") ?? "") == "") { return Response.text(401, "no"); }
+  return n(req);
+}
+
+function show(Router rt, string method, string path, List<string> headers) -> void {
+  Response resp = rt.handle(new Request(method, path, b"", headers, []));
+  int st = resp.status;
+  string body = Bytes.toString(resp.body) ?? "?";
+  Console.println("{method} {path} -> {st} {body}");
+}
+
+function main() -> void {
+  Router rt = new Router([], [])
+    .use(tag)
+    .route("GET", "/", home)
+    .group("/admin", fn(Router r) -> Router {
+      return r.use(requireAuth).route("GET", "/x", secret);
+    });
+
+  show(rt, "GET", "/", []);                              // tag wraps home
+  show(rt, "GET", "/admin/x", []);                       // auth 401 (still tag-wrapped)
+  show(rt, "GET", "/admin/x", ["Authorization: t"]);     // authorized, tag+auth pass-through
+}

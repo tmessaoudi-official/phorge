@@ -50,7 +50,7 @@ function showPost(Request req): Response {
 
 // Build the router once: registration order does not affect literal>param precedence.
 function app(): Router {
-  return new Router([])
+  return new Router([], [])
     .route("GET", "/", home)
     .route("GET", "/health", health)
     .route("GET", r"/users/{id}", showUser)

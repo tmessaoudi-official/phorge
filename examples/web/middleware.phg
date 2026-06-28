@@ -1,0 +1,63 @@
+package Main;
+
+// M6 W2-ext slice 1 — **middleware + route groups** on the Core.Http Router.
+//
+// A middleware is `(Request, next) -> Response`: it may call `next(req)` to continue the chain (and
+// post-process the result), or **short-circuit** by returning a `Response` without calling `next`.
+//   * `router.use(mw)` adds a middleware applied (outermost-first) to every route the router handles.
+//   * `router.group(prefix, build)` mounts a sub-router under a path prefix; `build` registers the
+//     sub-routes (and their own group-scoped middleware) on a fresh router.
+// It's all pure Phorge over first-class functions + closures — no new `Op`, no runtime framework, so
+// run / runvm / real PHP stay byte-identical. Middleware composition is `fn(req) => mw(req, next)`
+// folded over the list.
+import Core.Console;
+import Core.Bytes;
+import Core.Http;
+
+function home(Request req): Response { return Response.text(200, "home"); }
+function secret(Request req): Response { return Response.text(200, "secret data"); }
+
+// A logging middleware: continues the chain, then logs the status (post-processing after `next`).
+function logging(Request req, (Request) -> Response next): Response {
+  var n = next;
+  Response resp = n(req);
+  Console.println("LOG {req.method} {req.path} -> {resp.status}");
+  return resp;
+}
+
+// An auth middleware: SHORT-CIRCUITS with 401 when there is no Authorization header (never calls
+// `next`, so the protected handler is not reached).
+function requireAuth(Request req, (Request) -> Response next): Response {
+  var n = next;
+  if ((req.header("Authorization") ?? "") == "") {
+    return Response.text(401, "unauthorized");
+  }
+  return n(req);
+}
+
+function show(Router rt, bytes raw): void {
+  if (var req = Request.parse(raw)) {
+    Response resp = rt.handle(req);
+    int st = resp.status;
+    string m = req.method;
+    string p = req.path;
+    string body = Bytes.toString(resp.body) ?? "?";
+    Console.println("{m} {p} -> {st}: {body}");
+  } else {
+    Console.println("malformed request");
+  }
+}
+
+function main(): void {
+  // `logging` applies to every route; the `/admin` group adds `requireAuth` to just its routes.
+  Router rt = new Router([], [])
+    .use(logging)
+    .route("GET", "/", home)
+    .group("/admin", fn(Router r) -> Router {
+      return r.use(requireAuth).route("GET", "/secret", secret);
+    });
+
+  show(rt, b"GET / HTTP/1.1\x0d\x0aHost: x\x0d\x0a\x0d\x0a");                                  // logged, 200
+  show(rt, b"GET /admin/secret HTTP/1.1\x0d\x0aHost: x\x0d\x0a\x0d\x0a");                       // 401, auth short-circuits
+  show(rt, b"GET /admin/secret HTTP/1.1\x0d\x0aHost: x\x0d\x0aAuthorization: t\x0d\x0a\x0d\x0a"); // 200, authorized
+}

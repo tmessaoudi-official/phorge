@@ -713,6 +713,28 @@ impl<'a> Compiler<'a> {
                         crate::native::index_of_by_leaf(q, name).unwrap(),
                     ))
                 }
+                // Static method call `ClassName.method(args)` (slice B0 / Statics): the head is a bare
+                // class name, not a value, so `ctype(object)` would reject it — resolve directly via
+                // `method_rets[(class, method)]`. Without this, `var f = Router.compose(...)` gets
+                // `CTy::Other` and a later `f(x)` is rejected on the VM as "not a function" — a parity
+                // break (the same CTy-operand/fn-value trap as the native arm above).
+                Expr::Member {
+                    object,
+                    name,
+                    safe: false,
+                    ..
+                } if matches!(&**object, Expr::Ident(cls, _)
+                    if self.resolve_local(cls).is_none() && self.resolve_binding(cls).is_none()
+                        && self.classes.contains_key(cls)) =>
+                {
+                    let Expr::Ident(cls, _) = &**object else {
+                        unreachable!()
+                    };
+                    self.method_rets
+                        .get(&(cls.clone(), name.clone()))
+                        .cloned()
+                        .ok_or_else(|| format!("no static method `{name}` on `{cls}`"))
+                }
                 // Method call: the return type is keyed on the receiver's runtime class.
                 Expr::Member { object, name, .. } => match self.ctype(object)? {
                     CTy::Class(cls) => self

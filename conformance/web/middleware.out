@@ -1,0 +1,3 @@
+GET / -> 200 [home]
+GET /admin/x -> 401 [no]
+GET /admin/x -> 200 [secret]

@@ -3,7 +3,7 @@ package Main;
 // M6 W2 — the **`#[Route(...)]` attribute** form of the router (see `router.phg` for the explicit
 // `.route(...)` form). Each handler is annotated with a PHP-8-style attribute declaring its method +
 // path; `Http.autoRouter()` collects them and **desugars at compile time** into the exact same
-// `new Router([]).route(...).route(...)` chain — there is NO runtime reflection. The attribute is a
+// `new Router([], []).route(...).route(...)` chain — there is NO runtime reflection. The attribute is a
 // front-end-only surface: the checker validates it (`E-UNKNOWN-ATTRIBUTE`, `E-ROUTE-*`) and the
 // desugar consumes it before any backend, so `run` / `runvm` / real PHP are byte-identical and the
 // emitted PHP contains explicit registration (not PHP attributes).

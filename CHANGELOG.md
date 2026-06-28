@@ -6,6 +6,32 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M6 W2 extensions: router middleware + route groups
+
+The `Core.Http` `Router` gains a middleware pipeline and sub-router groups — pure Phorge over
+first-class functions, **no new `Op`, no new `Value`**, byte-identical `run ≡ runvm ≡ real PHP`.
+
+- **Middleware** — `router.use(mw)` where `mw : (Request, next) -> Response`. A middleware may call
+  `next(req)` to continue the chain (and post-process the result) or **short-circuit** by returning a
+  `Response` without calling `next` (e.g. a 401 from an auth middleware). Applied outermost-first to
+  every matched handler, composed as `fn(req) => mw(req, next)` folded over the list.
+- **Route groups** — `router.group(prefix, build)` runs the `(Router) -> Router` builder on a fresh
+  sub-router, then merges each sub-route with `prefix` prepended and the group's own middleware
+  composed around its handler. The parent's `use` middleware still applies on top.
+- `Router` is now two-field (`table` + middleware); the `Http.autoRouter()` desugar and the router
+  examples/conformance build it as `new Router([], [])`. `examples/web/middleware.phg` +
+  `conformance/web/middleware.phg` showcase a logging + auth stack and an `/admin` group.
+
+### Fixed
+
+- **VM-compiler: a native-qualified call or a static-method call used as an arithmetic operand / a
+  function value.** `List.length(xs) - 1` (and `Module.fn(...) <op> n`) compiled on the interpreter
+  but failed on the VM (`undefined variable \`List\``); likewise a `var f = Class.staticFn(...)` whose
+  result is a function then failed `f(x)` as "not a function". `ctype`'s `Call`→`Member` arm now
+  resolves native-qualified and static-method calls to their return `CTy` (a new `ty_to_cty`/
+  `native_ret_cty`), closing two latent `run`↔`runvm` breaks (the documented CTy-operand trap).
+  Regression: `conformance/lang/native-operand.phg`.
+
 ### Added — M2.5 Phase 3a: cross-stub registry (distributed `phg build --target`)
 
 A **distributed** (sourceless) `phg` can now `build --target <triple>` / `--all` for the Phase-2 cross
