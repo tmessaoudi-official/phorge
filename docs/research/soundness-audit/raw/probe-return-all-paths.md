@@ -4,7 +4,7 @@
 unsound).** A `: T` (value-carrying) lambda that falls off the end type-checks clean and silently
 yields `unit`/`Empty` at runtime on **both** backends.
 
-Binary: `/stack/projects/phorge/target/release/phg` (prebuilt release, not rebuilt).
+Binary: `/stack/projects/phorj/target/release/phg` (prebuilt release, not rebuilt).
 Probe dir: `/tmp/.../scratchpad/audit` (nothing written into the repo).
 
 ---

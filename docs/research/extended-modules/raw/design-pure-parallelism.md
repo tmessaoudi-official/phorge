@@ -30,7 +30,7 @@ does everything needed.
 
 Three primitives, all HigherOrder natives in a new `src/native/parallel.rs` (`Core.Parallel`):
 
-| Native | Signature (Phorge) | Sequential semantics today | PHP transpile |
+| Native | Signature (Phorj) | Sequential semantics today | PHP transpile |
 |---|---|---|---|
 | `Parallel.map` | `<T,U>(List<T>, (T) -> U) -> List<U>` | identical to `List.map` | `array_map($f, $xs)` |
 | `Parallel.reduce` | `<T,U>(List<T>, U, (U,T) -> U) -> U` | identical to `List.reduce`, **left-fold, fixed order** | `array_reduce($xs, $f, $init)` |
@@ -50,9 +50,9 @@ implementation** only.
 
 ---
 
-## 3. Phorge-syntax API sketch
+## 3. Phorj-syntax API sketch
 
-```phorge
+```phorj
 package Main;
 import Core.Console;
 import Core.List;
@@ -147,15 +147,15 @@ E-PARALLEL-IMPURE: a function passed to Core.Parallel.* must be pure
 
 What "impure" covers, **honestly scoped**:
 - **Reliably caught:** calls to `pure: false` natives (the only *ambient-nondeterministic* surface
-  Phorge has — clock/env/process). This is the real hazard for the physical backend.
-- **Not a hazard in Phorge's model, so deliberately allowed:** `Console.println` (a `pure: true`
+  Phorj has — clock/env/process). This is the real hazard for the physical backend.
+- **Not a hazard in Phorj's model, so deliberately allowed:** `Console.println` (a `pure: true`
   output-buffer append). Output ordering *would* be observable under physical threads, so the physical
   backend (§6) must keep per-task output buffers and concatenate them in submission order — which it
   already must do to preserve byte-identity. So `println` inside a parallel body is **allowed** and
   remains deterministic because the merge is ordered. (Verified the output buffer is a `&mut String`
   threaded through `Pure` natives, `src/native/mod.rs:81`; the HigherOrder invoker reaches it via the
   invoked closure, not the native directly.)
-- **Mutation of shared instance state:** Phorge instances are `Rc`-shared *mutable* (M-mut). A parallel
+- **Mutation of shared instance state:** Phorj instances are `Rc`-shared *mutable* (M-mut). A parallel
   body that mutates a captured instance is a genuine data race under physical threads. **This slice
   rejects capture of a mutable binding into a parallel closure body** via a second guard
   (`E-PARALLEL-CAPTURE`): a `Core.Parallel` closure may capture only **immutable** locals (the common
@@ -241,7 +241,7 @@ guide example, KNOWN_ISSUES + `phg explain` entries.
 1. **`reduce` order / associativity.** `Parallel.reduce` is shipped as a strict **left-fold in input
    order** — *not* a tree-reduce — so it is deterministic and equal to `List.reduce`. The genuinely
    parallel, tree-shaped combine (rayon `reduce`) needs a **declared-associative** combiner to be
-   order-independent; Phorge has no way to assert associativity, so a tree-reduce would produce a
+   order-independent; Phorj has no way to assert associativity, so a tree-reduce would produce a
    *different* (still deterministic, but not left-fold-equal) result and is **deferred** (`Parallel.mapReduce`,
    §2). Risk avoided by not shipping tree-reduce this slice.
 2. **Future physical backend output interleaving.** If/when worker threads run bodies that call
@@ -291,7 +291,7 @@ only semantics vs deferring it.
    only `map` + `forkJoin` (honest: both genuinely parallelisable), defer all reduce to `mapReduce`
    with a declared-associative combiner. Option B: ship `reduce` as documented-left-fold for API
    symmetry. **Recommend A** (don't ship a primitive whose name implies a benefit it can't deliver —
-   the philosophy-of-Phorge "no surprises" rule).
+   the philosophy-of-Phorj "no surprises" rule).
 2. **`E-PARALLEL-CAPTURE` strictness.** Reject *all* mutable-local captures (simple, conservative,
    maybe annoying), or only those the body actually mutates (precise, more checker work)? Recommend the
    conservative version this slice; tighten later if it bites.

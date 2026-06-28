@@ -3,7 +3,7 @@ import Core.Console;
 
 // Feature B — expression field initializers. PHP restricts property defaults to *constant
 // expressions* (no calls, no `$this`, no other-property reads — "Constant expression contains
-// invalid operations"). Phorge lifts that: an instance field may be initialized by ANY expression,
+// invalid operations"). Phorj lifts that: an instance field may be initialized by ANY expression,
 // evaluated per-instance at construction in declaration order, after the promoted constructor params
 // are bound. An initializer may read `this` and EARLIER-declared sibling fields (a later field is
 // `E-FIELD-INIT-FORWARD-REF`). Lowered to a PHP constructor prelude.

@@ -1,5 +1,5 @@
 [package]
-name = "phorge"
+name = "phorj"
 # Pre-1.0; the version tracks milestone progress, not a release cadence. First tagged pre-release:
 # 0.5.0-alpha.1 rolls up everything since the 0.4.0 internal mark — M3 + M-RT (full rich-type system),
 # M5 (packages), M2.5 cross-OS `phg build`, M6 (web, partial), the pattern cluster, and the WASM
@@ -7,22 +7,22 @@ name = "phorge"
 version = "0.5.0-alpha.1"
 edition = "2021"
 # Single-sources the cross-stub registry base (M2.5 Phase 3a): the download client derives
-# `{repository}/releases/download/v{version}/` as the default registry. `PHORGE_STUB_REGISTRY` overrides.
-repository = "https://github.com/tmessaoudi-official/phorge"
+# `{repository}/releases/download/v{version}/` as the default registry. `PHORJ_STUB_REGISTRY` overrides.
+repository = "https://github.com/tmessaoudi-official/phorj"
 # Cargo floor for the `[lints]` table below (stabilised in Cargo 1.74); older Cargo silently
 # ignores `[lints]`, which would drop the warnings=deny / clippy=deny quality gate. The crate is
 # developed and verified on the toolchain pinned in `rust-toolchain.toml`.
 rust-version = "1.74"
 
 [lib]
-name = "phorge"
+name = "phorj"
 path = "src/lib.rs"
 
 [[bin]]
 name = "phg"
 path = "src/main.rs"
 
-# Phorge core is std-only. The exceptions are security-critical primitives where std has none and
+# Phorj core is std-only. The exceptions are security-critical primitives where std has none and
 # rolling-your-own is the anti-pattern: audited crypto, and a ReDoS-safe regex engine. Each is behind
 # a feature so the WASM playground builds without it (docs/specs/2026-06-27-dependency-policy.md).
 [features]
@@ -53,7 +53,7 @@ warnings = "deny"
 [lints.clippy]
 all = "deny"
 
-# The WASM playground (`playground/`) is a separate workspace member so the core `phorge` crate above
+# The WASM playground (`playground/`) is a separate workspace member so the core `phorj` crate above
 # stays dependency-free and `#![forbid(unsafe_code)]`. wasm-bindgen (the only external crate in the
 # project) lives solely in that member, as a wasm32-only target dependency — see `playground/Cargo.toml`.
 [workspace]

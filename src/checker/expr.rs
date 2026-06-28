@@ -53,7 +53,7 @@ impl Checker {
                         let ret_ty = sig.ret.clone();
                         return Ty::Function(param_tys, Box::new(ret_ty));
                     }
-                    // A bare instance-field reference. Phorge requires `this.field` everywhere (like
+                    // A bare instance-field reference. Phorj requires `this.field` everywhere (like
                     // PHP's `$this->field`; no bare field access) — so this is always an error, with a
                     // distinct code per context: in a static method there is no instance at all
                     // (`E-STATIC-THIS`), otherwise the fix is to qualify it (`E-BARE-FIELD`).
@@ -70,7 +70,7 @@ impl Checker {
                             *span,
                             format!("bare field reference `{name}` — write `this.{name}`"),
                             "E-BARE-FIELD",
-                            Some(format!("Phorge has no bare field access (like PHP's `$this->`): qualify it as `this.{name}`")),
+                            Some(format!("Phorj has no bare field access (like PHP's `$this->`): qualify it as `this.{name}`")),
                         );
                     }
                     let cands = self.in_scope_names();

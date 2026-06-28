@@ -81,7 +81,7 @@ AST for a `Member`/qualified call resolving to a native whose `pure == false`). 
 ## Scope / non-goals (unchanged from the origin spec)
 
 - **Included:** `Process.args`, `Env.get`, `Env.all`.
-- **Rejected (ambient superglobals — the thing Phorge removes):** `$_REQUEST`, implicit `$_SERVER`
+- **Rejected (ambient superglobals — the thing Phorj removes):** `$_REQUEST`, implicit `$_SERVER`
   access, `$_SESSION` (stateful, M6+). `$_GET`/`$_POST`/`$_FILES`/`$_COOKIE` → M6 `Request`, not here.
 - No env *mutation* (`putenv`) in v1 — read-only, matching the reflection read-only stance.
 

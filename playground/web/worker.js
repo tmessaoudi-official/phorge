@@ -1,4 +1,4 @@
-// Web Worker: owns the Phorge WASM module and runs the pipeline off the main thread, so the main
+// Web Worker: owns the Phorj WASM module and runs the pipeline off the main thread, so the main
 // thread can terminate it on a runaway program (wasm is single-threaded and non-interruptible).
 //
 // Built by `wasm-pack build playground --target web --out-dir web/pkg`, which emits ./pkg/.
@@ -9,7 +9,7 @@ import init, {
   pg_transpile,
   pg_explain,
   pg_lift,
-} from "./pkg/phorge_playground.js";
+} from "./pkg/phorj_playground.js";
 
 const ready = init(); // resolves once the wasm module is instantiated
 
@@ -19,7 +19,7 @@ const OPS = {
   runvm: pg_runvm,
   transpile: pg_transpile,
   explain: pg_explain,
-  lift: pg_lift, // PHP source -> Phorge draft (the inverse of transpile)
+  lift: pg_lift, // PHP source -> Phorj draft (the inverse of transpile)
 };
 
 self.onmessage = async (e) => {

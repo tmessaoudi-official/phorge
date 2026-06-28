@@ -2,7 +2,7 @@
 //!
 //! Deliberately kept close to PHP semantics, NOT pre-lifted: `array` stays [`PhpExpr::Array`]
 //! (its List/Map/Set role is undecided here), `?T` stays [`PhpType::Nullable`]. The lossy mapping to
-//! Phorge's typed world (`array` → `List`/`Map`/`Set`, `?T` → `T?`, `??`/`?->` → Phorge equivalents)
+//! Phorj's typed world (`array` → `List`/`Map`/`Set`, `?T` → `T?`, `??`/`?->` → Phorj equivalents)
 //! is **L4's** job (the lifter), not the parser's — separation of concerns keeps each stage honest.
 //!
 //! Tier boundary: anything outside this AST (closures, references, union types, casts, heredoc,
@@ -209,7 +209,7 @@ pub enum PhpExpr {
         right: Box<PhpExpr>,
     },
     /// `value instanceof ClassName` (C-46). `class` is a static type name (a dynamic
-    /// `$x instanceof $cls` has no Phorge equivalent and is rejected by the parser).
+    /// `$x instanceof $cls` has no Phorj equivalent and is rejected by the parser).
     InstanceOf {
         value: Box<PhpExpr>,
         class: String,
@@ -220,7 +220,7 @@ pub enum PhpExpr {
         value: Box<PhpExpr>,
     },
     /// `target op= value` (`+=`, `.=`, `??=`, …). Kept distinct from `Assign` so it round-trips to
-    /// Phorge's own compound assignment.
+    /// Phorj's own compound assignment.
     CompoundAssign {
         target: Box<PhpExpr>,
         op: PhpBinOp,
@@ -340,7 +340,7 @@ pub enum PhpBinOp {
     Or,
     /// Null-coalesce `??`.
     Coalesce,
-    /// Bitwise `&` `|` `^` and shifts `<<` `>>` (C-47). Map 1:1 to Phorge's bitwise ops.
+    /// Bitwise `&` `|` `^` and shifts `<<` `>>` (C-47). Map 1:1 to Phorj's bitwise ops.
     BitAnd,
     BitOr,
     BitXor,

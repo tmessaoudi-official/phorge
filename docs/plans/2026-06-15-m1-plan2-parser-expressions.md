@@ -1,14 +1,14 @@
-# Phorge M1 — Plan 2: Parser Core (AST + Expressions + Types + Patterns)
+# Phorj M1 — Plan 2: Parser Core (AST + Expressions + Types + Patterns)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the AST data model and a recursive-descent + Pratt expression parser that turns the lexer's `Vec<Token>` into typed expression, type, and pattern trees — including `match` and string interpolation.
 
-**Architecture:** A hand-written recursive-descent parser with Pratt (precedence-climbing) expression parsing over the `Vec<Token>` produced by `phorge::lexer::lex`. The AST lives in its own module (`ast.rs`, pure data); the parser (`parser.rs`) owns the token cursor and all grammar productions. Generics are parsed only in **type position** (`List<Shape>`), which removes `<`/`>` ambiguity. String interpolation (`"Hello {name}"`) is split here — the lexer preserved the raw body — by re-lexing and re-parsing each `{...}` segment as a sub-expression.
+**Architecture:** A hand-written recursive-descent parser with Pratt (precedence-climbing) expression parsing over the `Vec<Token>` produced by `phorj::lexer::lex`. The AST lives in its own module (`ast.rs`, pure data); the parser (`parser.rs`) owns the token cursor and all grammar productions. Generics are parsed only in **type position** (`List<Shape>`), which removes `<`/`>` ambiguity. String interpolation (`"Hello {name}"`) is split here — the lexer preserved the raw body — by re-lexing and re-parsing each `{...}` segment as a sub-expression.
 
 **Tech Stack:** Rust (stable, edition 2021), `cargo test`. No external crates.
 
-**Spec:** `/stack/projects/phorge/docs/specs/2026-06-15-phorge-language-design.md`
+**Spec:** `/stack/projects/phorj/docs/specs/2026-06-15-phorj-language-design.md`
 
 **Depends on:** Plan 1 (lexer) — complete. Consumes `lex() -> Result<Vec<Token>, LexError>`, `Token{kind,span}`, `TokenKind`, `Span{start,len,line,col}`.
 
@@ -1276,9 +1276,9 @@ git commit -m "feat(parser): match expression with arms"
 
 Create `tests/parser_integration.rs`:
 ```rust
-use phorge::ast::{Expr, Pattern};
-use phorge::lexer::lex;
-use phorge::parser::Parser;
+use phorj::ast::{Expr, Pattern};
+use phorj::lexer::lex;
+use phorj::parser::Parser;
 
 fn parse_expr(src: &str) -> Expr {
     let tokens = lex(src).expect("lex ok");

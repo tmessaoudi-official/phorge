@@ -34,6 +34,6 @@ function main(): void {
     Console.println("add(3, 4) = {MathUtil.add(3, 4)}");
 
     // A static factory returns an instance you then use normally.
-    var g = Greeter.make("Phorge");
+    var g = Greeter.make("Phorj");
     Console.println(g.greet());
 }

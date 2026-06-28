@@ -1,6 +1,6 @@
-//! Phorge language server (`phg lsp`) — Item D, `docs/specs/2026-06-28-lsp-design.md`.
+//! Phorj language server (`phg lsp`) — Item D, `docs/specs/2026-06-28-lsp-design.md`.
 //!
-//! A minimal LSP over stdio so editors show Phorge diagnostics inline. **Hand-rolled** JSON-RPC in
+//! A minimal LSP over stdio so editors show Phorj diagnostics inline. **Hand-rolled** JSON-RPC in
 //! `std`: an LSP server is not a security-critical primitive, so the dependency policy excludes
 //! `tower-lsp`/`lsp-server`/`serde`. This module owns a tiny total JSON parser (for inbound request
 //! bodies), the `Content-Length` framing, the server loop, and the diagnostic mapping. It is internal
@@ -168,7 +168,7 @@ impl Server {
                     symbols::signature_text(&text, span)
                 };
                 format!(
-                    "{{\"contents\":{{\"kind\":\"markdown\",\"value\":\"```phorge\\n{}\\n```\"}}}}",
+                    "{{\"contents\":{{\"kind\":\"markdown\",\"value\":\"```phorj\\n{}\\n```\"}}}}",
                     escape(&sig)
                 )
             }
@@ -209,7 +209,7 @@ impl Server {
         let mut items: Vec<String> = Vec::new();
         // Top-level declarations (deduped names already unique per the checker).
         for (name, kind) in symbols::top_level_symbols(&program) {
-            items.push(completion_item(&name, kind, "phorge symbol"));
+            items.push(completion_item(&name, kind, "phorj symbol"));
         }
         // In-scope locals/params of the enclosing callable.
         let mut seen_local: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -377,7 +377,7 @@ impl Server {
 /// The advertised server capabilities: full-text sync (`1`) — the client sends the whole document on
 /// each change — push diagnostics, hover, go-to-definition, completion, and document symbols (v2).
 const INITIALIZE_RESULT: &str =
-    "{\"capabilities\":{\"textDocumentSync\":1,\"hoverProvider\":true,\"definitionProvider\":true,\"completionProvider\":{\"triggerCharacters\":[\".\"]},\"documentSymbolProvider\":true,\"referencesProvider\":true,\"documentHighlightProvider\":true,\"renameProvider\":true,\"documentFormattingProvider\":true},\"serverInfo\":{\"name\":\"phorge-lsp\"}}";
+    "{\"capabilities\":{\"textDocumentSync\":1,\"hoverProvider\":true,\"definitionProvider\":true,\"completionProvider\":{\"triggerCharacters\":[\".\"]},\"documentSymbolProvider\":true,\"referencesProvider\":true,\"documentHighlightProvider\":true,\"renameProvider\":true,\"documentFormattingProvider\":true},\"serverInfo\":{\"name\":\"phorj-lsp\"}}";
 
 /// Compute the diagnostics for a document buffer — the **same** pipeline `phg check` runs (lex →
 /// parse → `check`), so editor diagnostics equal the CLI's. A lex or parse error is a single
@@ -397,7 +397,7 @@ fn diagnostics_for(text: &str) -> Vec<Diagnostic> {
     }
 }
 
-/// Map a Phorge `Diagnostic` to an LSP `Diagnostic` JSON object. Phorge `line`/`col` are 1-based; LSP
+/// Map a Phorj `Diagnostic` to an LSP `Diagnostic` JSON object. Phorj `line`/`col` are 1-based; LSP
 /// positions are 0-based. v2 spans the offending **token** (the `Diagnostic` struct is span-less, so
 /// the end is re-derived from `text`: the token starting at the caret gives its `Span.len`; absent
 /// that, a 1-char caret). `code` carries the stable `E-…`/`W-…` code (resolvable via `phg explain`); a
@@ -425,7 +425,7 @@ fn lsp_diagnostic_json(d: &Diagnostic, text: &str) -> String {
         .code
         .map_or_else(|| String::from("null"), |c| format!("\"{}\"", escape(c)));
     format!(
-        "{{\"range\":{},\"severity\":{severity},\"code\":{code},\"source\":\"phorge\",\"message\":\"{}\"}}",
+        "{{\"range\":{},\"severity\":{severity},\"code\":{code},\"source\":\"phorj\",\"message\":\"{}\"}}",
         range_json(line, col, end_line, end_col),
         escape(&message)
     )
@@ -447,7 +447,7 @@ fn completion_item(label: &str, kind: u32, detail: &str) -> String {
     )
 }
 
-/// The Phorge keyword set surfaced in completion (CompletionItemKind 14 = Keyword). Not exhaustive of
+/// The Phorj keyword set surfaced in completion (CompletionItemKind 14 = Keyword). Not exhaustive of
 /// every contextual word, but the structural keywords a user types most.
 const KEYWORDS: &[&str] = &[
     "package",

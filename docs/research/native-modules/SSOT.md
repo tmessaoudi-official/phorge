@@ -2,7 +2,7 @@
 
 > Single source of truth for the "rich native modules" initiative (Stage 5 synthesis).
 > Consolidates: prior-art sweep (`priorart-{php,python,go,rust}.md`), 12 per-module feasibility spikes
-> (`feasibility-*.md`), the PHP-can/Phorge-can't upgrade-lens sweep (`phpgap-{strings-arrays,types-runtime}.md`),
+> (`feasibility-*.md`), the PHP-can/Phorj-can't upgrade-lens sweep (`phpgap-{strings-arrays,types-runtime}.md`),
 > two designs (`design-dump.md`, `design-sql.md`), and the adversarial byte-identity review
 > (`refutation-*.md`, `refute-*.md`, `adversarial-Validate.md`, `stage2b-refutation-Csv.md`).
 > Plan + Decisions Log: `docs/plans/2026-06-26-native-modules-research.plan.md`.
@@ -13,11 +13,11 @@
 ## 1. Executive summary + the Determinism Partition
 
 The initiative asked: which "rich" PHP/ecosystem capabilities (var-dumper, URL, hashing, HTTP, DB,
-regex, …) can Phorge ship as `Core.*` native modules — and how? The answer is decided **before**
+regex, …) can Phorj ship as `Core.*` native modules — and how? The answer is decided **before**
 usefulness by one framing:
 
-**The Determinism Partition.** Phorge's correctness spine is three backends (`run` tree-walker,
-`runvm` stack VM, Phorge→PHP transpiler under real `php -n` 8.5) that must produce **byte-identical
+**The Determinism Partition.** Phorj's correctness spine is three backends (`run` tree-walker,
+`runvm` stack VM, Phorj→PHP transpiler under real `php -n` 8.5) that must produce **byte-identical
 stdout** (`tests/differential.rs`). A module is feasible *as a first-class native* only if its output is
 a **pure, deterministic function** of its inputs:
 
@@ -30,11 +30,11 @@ a **pure, deterministic function** of its inputs:
 
 **The verdict of the adversarial pass: tier is the right axis, but "Tier A" is not a clean bill of
 health.** Six of the eight modules judged Tier A by the feasibility spikes carry a *silent byte-identity
-divergence* the spike missed — almost always at the **PHP leg**, where Phorge's rich, statically-tagged
+divergence* the spike missed — almost always at the **PHP leg**, where Phorj's rich, statically-tagged
 `Value` enum (Map/Set/Bytes/Decimal/Enum) collapses onto PHP's untyped array/string runtime, or where a
 PHP-core builtin's semantics differ from a hand-rolled Rust kernel (PCRE `$` anchor, `intdiv` vs
 `div_euclid`, `gmmktime` legacy-year pivot, loose `array_unique`/`array_diff` comparison). **These are
-fixable** — every one resolves to a *static-type tag*, a *gated `__phorge_*` helper*, an *anchor/operator
+fixable** — every one resolves to a *static-type tag*, a *gated `__phorj_*` helper*, an *anchor/operator
 pin*, or a *narrowed example surface* — but they move the module from "free by construction" to "free
 *after* a named, design-time mitigation." The partition stands; the per-module honesty bar is higher
 than the spikes claimed.
@@ -60,7 +60,7 @@ shippable but only with the named mitigation (§3).
 | **Core.Validate** | A | 88 | high | no | small | **adopt-now** | `filter_var`-better typed `T?` predicates; **PCRE `$`→`\z` anchor fix** is mandatory (else trailing-`\n` diverges). |
 | **Core.Random** | A | 88 | high | no | medium | **adopt-now** | *seeded* PRNG = deterministic; **PRNG constants must be `<2^63`, shifts `1..=63`, rejection loop must avoid PHP-float `/`/`*`**. |
 | **Core.Url** | A | 80 | high | no | medium | **adopt-now** | codec+query slice high-conf; **parse/build RFC-3986 scanner ≈65%** (own-the-edge-matrix on three legs unproven). |
-| **Core.Dump** | mixed | 88 | high | no | medium | **adopt-now** (w/ static-tag fix) | var-dumper; **Map key-type / empty-Map-vs-List / Bytes / Set / Enum lose their Phorge kind on the PHP leg** → static-type-tagged emission is the central fix. |
+| **Core.Dump** | mixed | 88 | high | no | medium | **adopt-now** (w/ static-tag fix) | var-dumper; **Map key-type / empty-Map-vs-List / Bytes / Set / Enum lose their Phorj kind on the PHP leg** → static-type-tagged emission is the central fix. |
 | **Core.Sql** | A | 92 | high | no | medium | **adopt-later** | typed injection-safe query *builder*; safe-by-construction (parameterize, never inline); blocked-API fixes are in `design-sql.md` (binds = `Json`). |
 | **Core.Time** | mixed | 85 | high | no | medium | **adopt-now** (pure parts only) | date arithmetic/format/parse pure; `now()` Tier B; **`diffDays` floor-vs-trunc, `gmmktime` year-pivot + out-of-range normalization** are silent traps → v1 literal-format-only. |
 | **Core.Http** | B | 55 | medium | no | medium | **defer** | no std TLS; **native faults are NOT byte-identical run≡runvm** (VM adds a line prefix), HTTPS asymmetry is a hidden run-divergence, the new `TcpStream` transport has *no* parity gate. |
@@ -77,7 +77,7 @@ feed the existing **M4 stdlib-breadth** plan, not the 12-step initiative order.
 Six modules had `determinism_holds=false`. Each is shippable *after* the named mitigation.
 
 ### Core.Dump — `determinism_holds=false` (revised tier: **mixed**)
-The PHP leg cannot recover Phorge's static `Value` kind at runtime — multiple refutations, one root cause:
+The PHP leg cannot recover Phorj's static `Value` kind at runtime — multiple refutations, one root cause:
 - **P0 — Map key-type destroyed.** `HKey{Int,Bool,Str}` keys → bare PHP arrays; PHP coerces keys
   (Verified `php -n 8.5.7`: `true=>1`, `false=>0`, `"5"=>5`). `Map<bool,V>` and numeric-string-keyed maps
   silently diverge.
@@ -85,12 +85,12 @@ The PHP leg cannot recover Phorge's static `Value` kind at runtime — multiple 
   proposed disambiguator *is* the predicate that collides them).
 - **P1 — `Value::Enum` rendering entirely unanalyzed** by the spike's trap table (Option/Result/Json/
   RoundingMode/user enums are pervasive; an enum payload can itself carry a Map, inheriting both P0s).
-- **P2 — float special-value tokens** (NaN/inf/-0) must route through `as_display`/`__phorge_float`, not
+- **P2 — float special-value tokens** (NaN/inf/-0) must route through `as_display`/`__phorj_float`, not
   a literal `format!("{x}")`.
 - **P2 — string/Bytes escape scheme asserted, not pinned** (char-oriented Rust vs byte-oriented PHP).
 - **Mitigation (already in `design-dump.md`):** the dump native's `php` mapping is **static-type-tagged at
-  the call site** — `__phorge_dump($x,'set'|'bytes'|'decimal'|'map'|'closure')` (mirrors `Reflect.kind`/
-  `Convert.toInt`); a pinned 5-sequence escape scheme; floats via `__phorge_float`; Enum is the one kind
+  the call site** — `__phorj_dump($x,'set'|'bytes'|'decimal'|'map'|'closure')` (mirrors `Reflect.kind`/
+  `Convert.toInt`); a pinned 5-sequence escape scheme; floats via `__phorj_float`; Enum is the one kind
   needing an impl-time check against the actual enum lowering. **This is the design's central decision.**
 
 ### Core.Encoding — `determinism_holds=false` (revised tier: **A**)
@@ -134,7 +134,7 @@ The determinism *holds* (seeded), but the PHP transpile has live integer-model t
 ### Core.Validate — `determinism_holds=false` (revised tier: **A**)
 - **R1 PRIMARY:** PCRE `$` matches before a trailing `\n` — `preg_match('/…$/',"a@b.com\n")===1` on
   `php -n 8.5.7` but a Rust end-of-input scanner returns false. **Fix (Verified): replace `$` with `\z`.**
-- **R2 CORROBORATING:** the *already-shipped* `__phorge_parse_float` helper has the identical `$`-anchor bug
+- **R2 CORROBORATING:** the *already-shipped* `__phorj_parse_float` helper has the identical `$`-anchor bug
   (`"1.5\n"`→1.5 on PHP, `Err` on Rust) — a real undetected bug class → file separately / KNOWN_ISSUES.
 - **R6:** the spike's example set has no trailing-`\n` input → false assurance; a `"a@b.com\n"=>false`
   differential case must regression-gate the `\z` fix. `isInt`/`isIpv4` are Verified-safe.
@@ -219,7 +219,7 @@ unchanged but **Http needs a harness edit** and **Db is PHP-only, not Tier-A-gat
 
 ---
 
-## 5. PHP-can / Phorge-can't + better-port findings (the upgrade lens)
+## 5. PHP-can / Phorj-can't + better-port findings (the upgrade lens)
 
 From `phpgap-strings-arrays.md` + `phpgap-types-runtime.md`. **All Tier A, no new Op** — every gap is an
 `Op::CallNative` native (Pure or HigherOrder) reusing the proven generic + closure-invoker path. These
@@ -235,7 +235,7 @@ initiative. Deduped against the language parity SSOT (which tracks *syntax* gaps
   native `groupBy`); `diff`/`intersect`; `find`/`findIndex`/`any`/`all`/`count` (PHP has no `some`/`every`/
   `find`); `Map.mapValues`/`filter`/`merge`; `take`/`drop`/`takeWhile`/`dropWhile`/`flatten`/`flatMap`;
   `sortBy`/`sortDesc`.
-- **`Core.Debug.export`** (the `var_export` sibling — re-parseable *Phorge* literal source) — one extra
+- **`Core.Debug.export`** (the `var_export` sibling — re-parseable *Phorj* literal source) — one extra
   renderer arm on the Dump module.
 - **JSON:** an edge-case conformance audit + flag-pinning (not new natives).
 
@@ -263,17 +263,17 @@ the reflective-table mechanism this module owns).
 **The three load-bearing cross-cutting findings:**
 1. **PHP's loose-comparison defaults are the recurring trap** — `array_unique` (SORT_STRING), `array_diff`
    (`(string)` cast), `in_array` (loose `==`). Every list-membership/dedupe native MUST transpile to a gated
-   `__phorge_*` helper using strict `===` to match Phorge's structural `eq_val`, **never the bare builtin.**
+   `__phorj_*` helper using strict `===` to match Phorj's structural `eq_val`, **never the bare builtin.**
 2. **An injected `Pair<K,V>` type is the unlock** for `Map.entries`/`zip`/`fromEntries` — one design decision
    opens a cluster of TS-idiomatic natives.
 3. **`Text.trim`'s Unicode-vs-ASCII whitespace divergence is a likely *live* bug** — Rust `trim()` strips all
    Unicode WS; PHP `trim()` strips 6 ASCII chars. **Must-verify the current transpile and pin to the ASCII
-   set on both sides** (graded must-check, P1 if confirmed). *(Plus the §3-R2 `__phorge_parse_float` `$`-anchor
+   set on both sides** (graded must-check, P1 if confirmed). *(Plus the §3-R2 `__phorj_parse_float` `$`-anchor
    bug — a second confirmed live divergence to file.)*
 
 **The value-walk cluster** (biggest leverage point in the types/runtime area): `Core.Dump`
 (dump/inspect/export), `Core.Serde` (encode/decode), and `Reflect.entries` all walk the closed `Value`
-enum, reuse `eq_val_rec`'s cyclic visited-set, and share the `ClassTables` field order + `__phorge_float`
+enum, reuse `eq_val_rec`'s cyclic visited-set, and share the `ClassTables` field order + `__phorj_float`
 float discipline. **Design and build them as one cluster** to single-source the walk skeleton.
 
 ---
@@ -281,11 +281,11 @@ float discipline. **Design and build them as one cluster** to single-source the 
 ## 6. Core.Dump format + Core.Sql builder designs (summaries)
 
 ### Core.Dump — deterministic value-dumper (`design-dump.md`, Tier A, no new Op)
-A multi-line, 2-space-indented, type-annotated tree, identical on all three legs because **Phorge owns the
+A multi-line, 2-space-indented, type-annotated tree, identical on all three legs because **Phorj owns the
 format** (no addresses/object-ids/resource handles — unlike PHP `var_dump`'s non-deterministic `#N` ids).
 - **API:** `Dump.dump(value) -> string` (unbounded depth, cycle-safe), `Dump.inspect(value, depth) -> string`
   (depth-capped). `NativeEval::Reflective` (reads `&ClassTables` for sorted, inheritance-flattened field
-  order), `pure: true`, `Op::CallNative`. One `src/native/dump.rs` leaf + a gated `__phorge_dump*` PHP helper
+  order), `pure: true`, `Op::CallNative`. One `src/native/dump.rs` leaf + a gated `__phorj_dump*` PHP helper
   block.
 - **Per-kind format:** scalars single-line; compounds nest with trailing commas (`List` → `[ i => v, ]`,
   `Map` → `{ k => v, }`, `Set` → `Set { … }`, `Instance` → `ClassName { field: v, }`, `Enum` →
@@ -293,11 +293,11 @@ format** (no addresses/object-ids/resource handles — unlike PHP `var_dump`'s n
   divergence axis).
 - **The central decision (resolving the §3 P0s):** **static-type-tagged emission** — the transpiler bakes a
   literal tag (`'set'`/`'bytes'`/`'decimal'`/`'map'`/`'closure'`) into the call based on the argument's
-  *static* Phorge type (mirrors `Reflect.kind`/`Convert.toInt` call-site dispatch), because Set→list-array,
+  *static* Phorj type (mirrors `Reflect.kind`/`Convert.toInt` call-site dispatch), because Set→list-array,
   Bytes→string, Decimal→numeric-string, empty-Map→empty-list-array are runtime-indistinguishable on the PHP
   leg. No tag reaches a backend value.
 - **Determinism single-sources:** field order from `ClassTables.fields` (BTreeMap, never the `HashMap`);
-  floats via `__phorge_float`; decimals via `fmt_decimal`; cycle detection via path-scoped `Rc::as_ptr` /
+  floats via `__phorj_float`; decimals via `fmt_decimal`; cycle detection via path-scoped `Rc::as_ptr` /
   `spl_object_id` (gates a `<circular>` token, **never printed**); pinned 5-sequence string escape; lowercase
   `\xHH` bytes; code-point truncation via PCRE `/./us` (no mbstring).
 - **Highest-effort sub-part:** Enum PHP rendering (one impl-time check against the actual enum lowering).
@@ -321,7 +321,7 @@ The **pure half of DB**: a pure function from typed inputs to a `(sql: string, p
   allowlisted to `ASC`/`DESC`. LIMIT/OFFSET inlined as `int` (drivers reject bound LIMIT; int render is
   deterministic).
 - **Byte-identity free by construction:** build path emits only `string` + `List<Json>` (already-identical
-  primitives); the PHP leg runs the *same* transpiled Phorge string code (`implode`/`str_replace`/`.` — all
+  primitives); the PHP leg runs the *same* transpiled Phorj string code (`implode`/`str_replace`/`.` — all
   core under `-n`), so there is no second implementation to diverge. Float binds are *carried, never
   formatted* (Ryū-vs-PHP-14-digit never touches the build path).
 - **The materially-new build piece:** injecting a **method-bearing class pair** (no shipped prelude does
@@ -336,10 +336,10 @@ The **pure half of DB**: a pure function from typed inputs to a `(sql: string, p
 
 **Cluster-wide (decide once):**
 - **The value-walk cluster** — build `Core.Dump` + `Core.Serde` + `Reflect.entries` as one cluster
-  (single-source the `Value`-walk + cycle guard + `__phorge_float`)? Or ship Dump alone first?
+  (single-source the `Value`-walk + cycle guard + `__phorj_float`)? Or ship Dump alone first?
 - **Inject `Pair<K,V>`** as a stdlib type now (unlocks `Map.entries`/`zip`/`fromEntries`/`List.zip`), or
   defer those natives until it lands?
-- **Live-bug triage:** confirm + fix the two `$`-anchor / `trim`-whitespace divergences (`__phorge_parse_float`
+- **Live-bug triage:** confirm + fix the two `$`-anchor / `trim`-whitespace divergences (`__phorj_parse_float`
   R2, `Text.trim` Unicode-vs-ASCII) as standalone P1 items before building dependent validators.
 
 **Per-module gates before build:**

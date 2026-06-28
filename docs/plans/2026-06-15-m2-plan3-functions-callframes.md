@@ -810,7 +810,7 @@ const P3_PROGRAMS: &[&str] = &[
        function main() { println("{half(5.0) + 1.0}"); }"#,
     // void function (no return type) called for its side effect
     r#"function greet(string who) { println("hi, {who}"); }
-       function main() { greet("Phorge"); greet("world"); }"#,
+       function main() { greet("Phorj"); greet("world"); }"#,
     // call used as a statement (return value discarded)
     r#"function noisy(int n) -> int { println("got {n}"); return n; }
        function main() { noisy(42); println("done"); }"#,
@@ -838,7 +838,7 @@ fn examples_match_between_backends() {
     agree(r#"import std.io;
 
 function main() {
-    println("Hello, Phorge!");
+    println("Hello, Phorj!");
 }"#);
     let fib = std::fs::read_to_string("examples/fib.phg").expect("read examples/fib.phg");
     agree(&fib);

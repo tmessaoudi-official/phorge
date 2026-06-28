@@ -21,7 +21,7 @@ inevitable runtime counterpart of the pure `Core.Sql` builder), but it cannot sh
   order, MySQL clustered-index order, SQLite rowid order) — three different orders for "the same" query.
 - **Auto-increment IDs, timestamps, `NOW()`/`CURRENT_TIMESTAMP` defaults, sequence values** are all
   clocks/counters — the exact traps the prior-art digest names (clock, OS-iteration-order).
-- **Floats** coming back from the DB re-trip the known `__phorge_str`/Ryū divergence (14-digit PHP echo
+- **Floats** coming back from the DB re-trip the known `__phorj_str`/Ryū divergence (14-digit PHP echo
   vs Rust formatting) on top of everything else.
 
 This places it firmly with `Core.Http`, `Time.now()`, true-RNG, and filesystem **writes**. It is the
@@ -33,7 +33,7 @@ identity-gateable): the spec's intended pairing is `Sql.select(...).build()` →
 
 ## 2. std-only feasibility (the Rust legs)
 
-**This is the hard blocker.** Phorge's `[dependencies]` is empty and `#![forbid(unsafe_code)]` is on the
+**This is the hard blocker.** Phorj's `[dependencies]` is empty and `#![forbid(unsafe_code)]` is on the
 crate roots (verified: `Cargo.toml` — only `wasm-bindgen` exists, confined to the wasm32-only
 `playground/` workspace member). The interpreter and VM are pure-Rust, zero-dep.
 
@@ -120,9 +120,9 @@ it's a PHP-only feature with stub Rust legs, not a real tri-backend feature mere
 
 ---
 
-## 5. Phorge API sketch
+## 5. Phorj API sketch
 
-```phorge
+```phorj
 import Core.Db;
 import Core.Sql;   // the pure builder — its output feeds Db
 

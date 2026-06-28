@@ -27,7 +27,7 @@ $ php -n -r 'echo date("Y-m-d H:i:s", 0)."\n";'
   (UTC seconds)** — `fromUnix`, `toUnix`, component extraction (`year`/`month`/`day`/`hour`/`minute`/
   `second`/`dayOfWeek`/`dayOfYear`), second-granular arithmetic (`addSeconds`/`addDays`/`diffSeconds`/
   `diffDays`), `format(epoch, fmt)` over a pinned letter subset, and `parse(s, fmt) -> int?`. All
-  transpile to **`gmdate`/`gmmktime`** (or a `__phorge_time_*` helper) which are **TZ-env-independent**.
+  transpile to **`gmdate`/`gmmktime`** (or a `__phorj_time_*` helper) which are **TZ-env-independent**.
 - **Tier B (impure, quarantined):** `Time.now() -> int` (reads the wall clock). One native, `pure:
   false`, excluded from the byte-identity differential exactly like `Core.Process`/`Core.Env`.
 
@@ -131,7 +131,7 @@ precedent exactly.
 Any letter outside this set is rejected by the checker/native (a documented edge), so we never emit a
 `gmdate` letter whose Rust render we haven't pinned.
 
-**No float anywhere in Tier A** → the Ryū/`__phorge_str` float-divergence KNOWN_ISSUE cannot bite. Every
+**No float anywhere in Tier A** → the Ryū/`__phorj_str` float-divergence KNOWN_ISSUE cannot bite. Every
 output is an `int`, a zero-padded `string`, or an English name. This is a major reason the feasibility is
 high: time is integer-native, unlike Math/CSV which carry floats.
 
@@ -145,20 +145,20 @@ seconds and no DST). Calendar-month arithmetic (`addMonths`) is deliberately def
 
 Each native's `php` closure (single-sourced in the `NativeFn` registry, like `Core.Math`):
 
-- `Time.fromUnix(e)` / component reads — the **`DateTime` struct is Phorge-defined** (an injected enum/
+- `Time.fromUnix(e)` / component reads — the **`DateTime` struct is Phorj-defined** (an injected enum/
   class via the `inject_*_prelude` pattern, like `Core.Json`'s `Json` and `Core.Math`'s `RoundingMode`),
   so `fromUnix` builds the struct from `gmdate`-extracted fields and the transpiler emits a small
   constructor expression — OR, simpler and recommended, **make `DateTime` opaque: carry the `int` epoch
   only** and compute components on demand (see §5). With epoch-carrier, the transpile is direct:
   - `Time.format(e, f)` → `gmdate(<f>, <e>)` (for a literal pinned format string; a dynamic format string
-    routes through a `__phorge_gmdate` helper that pre-validates the letter set, or is rejected at
+    routes through a `__phorj_gmdate` helper that pre-validates the letter set, or is rejected at
     compile time if non-literal — see §8).
   - `dt.year()` → `(int)gmdate("Y", <e>)`, `dt.month()` → `(int)gmdate("n", <e>)`, etc.
   - `dt.dayOfWeek()` → `(int)gmdate("w", <e>)`.
   - `dt.addSeconds(n)` → `(<e>) + (<n>)`; `dt.addDays(n)` → `(<e>) + (<n>) * 86400`.
   - `Time.diffSeconds(a,b)` → `(<a>) - (<b>)`; `diffDays` → `intdiv((<a>) - (<b>), 86400)`.
   - `Time.toUnix(y,m,d,h,mi,s)` (or from struct) → `gmmktime(<h>,<mi>,<s>,<m>,<d>,<y>)`.
-  - `Time.parse(s, fmt)` → a **`__phorge_time_parse($s,$fmt)` runtime helper** (gated `uses_time_parse`
+  - `Time.parse(s, fmt)` → a **`__phorj_time_parse($s,$fmt)` runtime helper** (gated `uses_time_parse`
     bool + `emit_runtime_helpers`), NOT `strtotime`/`DateTime::createFromFormat`. `strtotime` is
     heuristic/locale-ish/version-drifting (the `filter_var`-style trap); `createFromFormat` pulls
     timezone state. The helper is a small hand-written PHP scanner mirroring the Rust one, returning
@@ -172,13 +172,13 @@ types/builtins are insufficient" rule from the M7 PHP-leg memory.
 
 ---
 
-## 5. Phorge API sketch
+## 5. Phorj API sketch
 
 **Recommended representation: `DateTime` as an opaque epoch carrier** (a `package Main` injected class
 with one `int` field, or — even lighter — Tier-A ops just take/return `int` epochs and the struct is
 sugar). Carrying only the epoch keeps `fromUnix`/`toUnix` a no-op and sidesteps a wide struct value:
 
-```phorge
+```phorj
 package Main;
 import Core.Time;
 import Core.Console;
@@ -228,7 +228,7 @@ still no new `Op` or `Value`. **"No new Op" is satisfied.**
    `strftime`/`IntlDateFormatter` (the latter is absent under `-n` regardless). Documented invariant.
 4. **`parse` via PHP library functions.** `strtotime`/`DateTime::createFromFormat` are heuristic /
    TZ-bearing / version-drifting (the `filter_var` trap). **Mitigation:** own the algorithm in a
-   `__phorge_time_parse` helper mirrored on both legs; never call a PHP date-parsing builtin.
+   `__phorj_time_parse` helper mirrored on both legs; never call a PHP date-parsing builtin.
 5. **i64 overflow on huge epochs / `addSeconds`.** `checked_add`/`checked_mul`; overflow → clean fault
    (EV-7), byte-identical via FaultKind. The PHP helper bounds-checks to match (or examples stay in a
    sane range).
@@ -254,7 +254,7 @@ still no new `Op` or `Value`. **"No new Op" is satisfied.**
 - **Explicit-format parse only.** No natural-language / `strtotime` parsing — heuristic, undeterministic,
   version-drifting. The format dialect is the **PHP `gmdate` letter subset** (§3), minimizing
   Rust↔PHP translation (one dialect, not Go `2006-01-02` + strftime `%Y` + PHP `Y`).
-- **Dynamic (non-literal) format strings:** either route through a `__phorge_gmdate` helper that
+- **Dynamic (non-literal) format strings:** either route through a `__phorj_gmdate` helper that
   validates the letter set at runtime, or restrict v1 to literal format strings (compile-time letter
   check). Recommend the helper for ergonomics; both are byte-identical.
 - **No fractional seconds / microseconds** in v1 (PHP `microtime` is a clock → Tier B anyway).
@@ -268,7 +268,7 @@ still no new `Op` or `Value`. **"No new Op" is satisfied.**
   one `src/native/time.rs` + the civil-calendar kernel (well-known integer algorithm, ~60 lines) +
   registry entries + the `gmdate`/`gmmktime` php closures + `examples/guide/time.phg` (incl. a
   **negative-epoch** and a **leap-day** case). ~1 focused session.
-- `Time.parse` + `__phorge_time_parse` helper (the harder ~70% piece — two mirrored scanners, fault
+- `Time.parse` + `__phorj_time_parse` helper (the harder ~70% piece — two mirrored scanners, fault
   parity): a second slice.
 - `Time.now()` Tier B + quarantine test + README walkthrough: small, reuses the `pure: false` seam.
 

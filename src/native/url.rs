@@ -5,7 +5,7 @@
 //! `rawurlencode` / `urldecode` / `rawurldecode`. The `url*` pair is the `application/x-www-form-
 //! urlencoded` form (space ⇒ `+`, `~` encoded); the `rawUrl*` pair is RFC 3986 (space ⇒ `%20`, `~`
 //! left as-is). Decoders return `string?` — `null` when the decoded bytes are not valid UTF-8 (a
-//! Phorge `string` is UTF-8; the PHP side mirrors with a `//u` check), so they stay byte-identical.
+//! Phorj `string` is UTF-8; the PHP side mirrors with a `//u` check), so they stay byte-identical.
 
 use super::*;
 use crate::types::Ty;

@@ -60,7 +60,7 @@ impl Transpiler {
                 // return position, which is where a `-> never` function uses it.
                 "never" => "never".into(),
                 // The two-type nothing model (S0a). `void` → PHP `: void` (forbids capture, matching
-                // Phorge's uncapturable `void`). `Empty` → `mixed` (capturable: a `-> Empty` function
+                // Phorj's uncapturable `void`). `Empty` → `mixed` (capturable: a `-> Empty` function
                 // returns PHP `null`, which `: mixed` accepts — `: void` would make the result
                 // uncapturable in PHP and break byte-identity for the holdable case).
                 "void" => "void".into(),

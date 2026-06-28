@@ -1,4 +1,4 @@
-# Phorge GA Definition-of-Done
+# Phorj GA Definition-of-Done
 
 > Created 2026-06-27 because the GA "percentage" had become uncalibrated gut-feel stuck near ~70-77%.
 > This file is the **real denominator**: GA% is computed from the weighted table below, not estimated.
@@ -17,7 +17,7 @@
 | 3 | **Stability & conformance** | 20% | **15%** | 3.0 | Missing: frozen language surface, a **conformance test corpus** asserting the spec, a written **semver/BC + deprecation policy**. Bar: surface frozen + conformance suite green + BC policy published. |
 | 4 | **Stdlib completeness** | 15% | **70%** | 10.5 | ~22 modules ✓. Missing: **regex, datetime**, IO/streams beyond `File`, full higher-order collections, `sprintf`/format, path, log. Bar: charter-complete coverage of the common-program surface. |
 | 5 | **Documentation** | 12% | **40%** | 4.8 | README/ROADMAP/VISION/FEATURES/CONTRIBUTING ✓. Missing: a real **language reference**, a **tutorial**, a complete **stdlib reference**, a PHP-migration guide. Bar: a newcomer can learn + a user can look up any feature/native. |
-| 6 | **Validation / dogfooding** | 8% | **10%** | 0.8 | Missing: a **nontrivial real app built in Phorge**, perf targets stated+met vs PHP, CI on it. Bar: ≥1 real program shipped in Phorge + perf bar met. |
+| 6 | **Validation / dogfooding** | 8% | **10%** | 0.8 | Missing: a **nontrivial real app built in Phorj**, perf targets stated+met vs PHP, CI on it. Bar: ≥1 real program shipped in Phorj + perf bar met. |
 | | **GA total** | 100% | | **≈ 57%** | |
 
 **Honest GA ≈ 57%** (baseline 49% → +3 M-Test → +5 M-fmt). The gap from the old vibe-77% is the whole

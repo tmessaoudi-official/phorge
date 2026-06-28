@@ -3,7 +3,7 @@
 // Two encoding flavours, each `string -> string`, byte-identical to PHP:
 //   * urlEncode / urlDecode       — form-encoded: space ⇒ `+`, `~` is encoded (PHP urlencode)
 //   * rawUrlEncode / rawUrlDecode — RFC 3986: space ⇒ `%20`, `~` left as-is (PHP rawurlencode)
-// Decoders return `string?` — `null` only when the decoded bytes aren't valid UTF-8 (a Phorge
+// Decoders return `string?` — `null` only when the decoded bytes aren't valid UTF-8 (a Phorj
 // `string` is UTF-8); on the common path `??` supplies the value. Decoding is lenient: a malformed
 // `%` escape is left literal, never a fault.
 package Main;

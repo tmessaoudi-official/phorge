@@ -1,7 +1,7 @@
 # Autonomous Backlog Plan (post-2026-06-26 compact)
 
 > Ordered queue for autonomous progression. Each item ships independently **green + committable**
-> (`PHORGE_PHP=…/php-8.5.7 PHORGE_REQUIRE_PHP=1 cargo test --workspace` + clippy + fmt) and follows the
+> (`PHORJ_PHP=…/php-8.5.7 PHORJ_REQUIRE_PHP=1 cargo test --workspace` + clippy + fmt) and follows the
 > standing rules: an example + `examples/README.md` entry per feature, build the release binary after
 > each, **commit green slices but NEVER `git push`** without an explicit request, genuine design forks
 > still pause via `AskUserQuestion` (autonomy suppresses *confirmation* gates, never *information* gates).
@@ -12,17 +12,17 @@
   forks). Spec-first for Core.Json (breaking/meaty design); the rest are direct slices.
 - [2026-06-26] **Core.Json number model = `Int(int) + Float(float)`** (PHP-faithful; developer
   confirmed my recommendation over `Num(float)`). Mirrors PHP `json_decode` (int for `"42"`, float
-  for `"42.0"`) + Phorge's own int/float split; least-surprising for a PHP dev; byte-identical either
+  for `"42.0"`) + Phorj's own int/float split; least-surprising for a PHP dev; byte-identical either
   way (`json_encode(42.0)`→`"42"`).
 - [2026-06-26] **Core.Json ships both `stringify` (compact) AND `stringifyPretty` (4-space,
   `JSON_PRETTY_PRINT`-matching)** in the first slice (developer chose "Add stringifyPretty too").
 - [2026-06-26] **PHP-reserved enum-variant names are mangled in the transpiler** (append `_`:
   `Int`→`Int_`, `Bool`→`Bool_`, `Null`→`Null_`, `Float`→`Float_`) so the Json API stays clean
   (`Json.Int/Bool/Null/Float/Str/Arr/Obj`). PHP reserves int/float/bool/null as class names even
-  inside a namespace (verified vs 8.5). Transpiler-only (run/runvm use the Phorge variant string →
+  inside a namespace (verified vs 8.5). Transpiler-only (run/runvm use the Phorj variant string →
   stdout byte-identity untouched); reusable for ANY enum. Developer chose this over a J-prefix API.
 - [2026-06-26] Autonomy = **FULL AUTO**. Persistent per-project bypass SET at
-  `~/.claude/projects/-stack-projects-phorge/state/autonomous-3c-bypass` (never expires; remove
+  `~/.claude/projects/-stack-projects-phorj/state/autonomous-3c-bypass` (never expires; remove
   manually to stop — statusline shows `⚠⚠ AUTO-3C(proj)`). Post-compact sessions run this backlog
   hands-off. Hard stops that still apply: `git push` (never autonomous), risky/destructive actions,
   and genuine design forks (→ `AskUserQuestion`).
@@ -35,7 +35,7 @@
   Arr(List<Json>), Obj(Map<string, Json>) }` (expressible today: generic enums + `Map` + `List` all
   shipped; **no new type-system feature needed** — this is what unblocked it).
 - **Design risk (the spec's job): byte-identity with PHP `json_encode`/`json_decode`** — number
-  formatting (reuse `__phorge_float`; integers-as-floats?), key ordering (insertion-ordered `Map` ✓),
+  formatting (reuse `__phorj_float`; integers-as-floats?), key ordering (insertion-ordered `Map` ✓),
   string escaping (`/`, unicode, control chars), compact vs `JSON_PRETTY_PRINT`. Std-only deterministic
   recursive-descent parser. Verify no `Core.Json` native exists yet; check the `native::registry` shape.
 - Likely a higher-order/`Reflective`-free pure native pair returning the `Json` enum; transpile to

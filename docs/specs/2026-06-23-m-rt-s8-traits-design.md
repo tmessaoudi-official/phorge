@@ -5,7 +5,7 @@ horizontal code reuse (`trait` + `use`) on top of the multiple-inheritance machi
 
 ## Context
 
-Phorge already has explicit-resolution **multiple inheritance** (S6): `open class` parents composed via
+Phorj already has explicit-resolution **multiple inheritance** (S6): `open class` parents composed via
 `extends A, B` with `insteadof`/`as` conflict resolution, and S6 already lowers each MI parent to a PHP
 `interface I<name>` + `trait T<name>` + a concrete class. So the *PHP backend lowering for traits already
 exists end-to-end* in `transpile.rs` (`emit_decomposed_class`, `emit_multi_class`, the `as_trait` mode
@@ -34,7 +34,7 @@ into using classes before any backend, and let the transpiler reconstruct native
   `static mutable` per-class copy; property hooks in traits; abstract requirements; `const`; `use`+`extends`
   together).
 - [2026-06-23] **D5** — Every PHP-**fatal** or PHP-**silent** trait footgun becomes a **clean
-  ahead-of-time Phorge diagnostic** (the Phorge value-add over PHP — same capability, surprise converted to
+  ahead-of-time Phorj diagnostic** (the Phorj value-add over PHP — same capability, surprise converted to
   a legible error/warning *before* any backend runs).
 - [2026-06-23] **D6** — P2 case (`extends Base` with a ctor + `use TraitWithCtor`, no own ctor): match PHP
   (the trait ctor wins, parent ctor is **not** auto-run) **plus** a `W-TRAIT-CTOR-PARENT-SKIPPED` warning so
@@ -50,7 +50,7 @@ into using classes before any backend, and let the transpiler reconstruct native
 
 ## Surface Syntax
 
-```phorge
+```phorj
 trait Loud {
     mutable int volume;                          // immutable-default + `mutable` opt-in (D3)
     const int MAX = 11;                           // trait const
@@ -72,7 +72,7 @@ class Crier {
 Conflict resolution **reuses the existing S6b grammar verbatim** — users learn `insteadof`/`as` once and it
 works for both `extends` parents and `use` traits:
 
-```phorge
+```phorj
 class C { use A, B { A.greet insteadof B; B.greet as bgreet; } }
 ```
 
@@ -100,7 +100,7 @@ emission).
 
 ## Diagnostics (the D5 value-add)
 
-| PHP behavior | Phorge diagnostic |
+| PHP behavior | Phorj diagnostic |
 |---|---|
 | Two trait ctors collide (fatal) | `E-TRAIT-CTOR-COLLISION` → require `insteadof` |
 | Unresolved trait/parent method collision (fatal) | reuse existing `E-MI-*` collision error |

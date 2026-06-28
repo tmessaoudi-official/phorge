@@ -15,7 +15,7 @@ The developer wants two import ergonomics:
 1. **Qualified** — `import Acme.Geometry;` then `Geometry.Point` (package-qualified type reference).
 2. **Terminal/selective** — `import Acme.Geometry.Point;` then bare `Point`.
 
-This is the **Go-vs-Java axis**. Phorge locked **Go** for *functions* ("everything namespaced, nothing
+This is the **Go-vs-Java axis**. Phorj locked **Go** for *functions* ("everything namespaced, nothing
 in the wind", leaf-qualified calls, Java object-path rejected — `[[namespace-system-decisions]]`). The
 question is whether *types* get the extra **terminal** form.
 
@@ -46,8 +46,8 @@ new \Acme\Geometry\Point();     // FQN, no `use`
 ```
 
 PHP has **no `use Acme\Geometry\*`** — you cannot bulk-import a namespace's symbols. `use` is terminal,
-file-scoped, and symbol-segregated (`use` = class, `use function`, `use const`). **Therefore Phorge's
-type-reference model must map onto terminal `use` or FQN — a Phorge `import Acme.Geometry.*;` wildcard
+file-scoped, and symbol-segregated (`use` = class, `use function`, `use const`). **Therefore Phorj's
+type-reference model must map onto terminal `use` or FQN — a Phorj `import Acme.Geometry.*;` wildcard
 has no honest PHP target** and would have to be desugared into one explicit `use` per exported type
 (compiler-enumerated). Reject wildcard for v1.
 
@@ -77,7 +77,7 @@ import). Rejected:
 - **Case can't disambiguate**: package segments, leaf modules (`Core.List`), and types are **all
   PascalCase**, so casing gives no signal.
 
-Explicit `import type …;` mirrors TypeScript `import type` and matches Phorge's established explicit
+Explicit `import type …;` mirrors TypeScript `import type` and matches Phorj's established explicit
 taste (mandatory `package`, explicit imports even for the stdlib). The rare both-a-package-and-a-type
 collision is then a clean `E-…` rather than a silent flip.
 
@@ -103,7 +103,7 @@ Emitting `use Acme\Geometry\Point;` per consuming block reads prettier, but requ
 pass and per-block dedup/alias bookkeeping. Emitting the **FQN** `\Acme\Geometry\Point` at each use site
 is **uniform with how functions are already de-mangled**, needs no new pass, and the generated PHP is
 machine-output (never hand-edited), so ugliness is irrelevant. **Recommend FQN.** Consequence: `import
-type` buys **nothing at the PHP level** — it is purely a *Phorge-source* ergonomic (write bare `Point`).
+type` buys **nothing at the PHP level** — it is purely a *Phorj-source* ergonomic (write bare `Point`).
 That is exactly analogous to Go's qualifier being erased, and it keeps the transpiler trivial.
 
 ## 5. Collision & shadowing rules (sketch)
@@ -136,21 +136,21 @@ Developer question (2026-06-20): why `namespace Acme\Geometry { … }` instead o
 then the rest of the file? Answer — it is **forced**, not stylistic [Verified: `phg transpile
 examples/project/tempconv` output + PHP namespace rules]. A transpiled program is **one PHP file** that
 contains *multiple* package namespaces **plus a global `namespace { }` block** holding the bootstrap
-(`\Main\main();`) and the `__phorge_*` runtime helpers:
+(`\Main\main();`) and the `__phorj_*` runtime helpers:
 
 ```php
 namespace Acme\Convert { … }
 namespace Acme\Label   { … }
 namespace Main { function main(): void { … } }
-namespace { \Main\main(); /* __phorge_* helpers */ }   // global, unnamespaced
+namespace { \Main\main(); /* __phorj_* helpers */ }   // global, unnamespaced
 ```
 
 PHP permits the semicolon form `namespace X;` only for a file with a *single* namespace and *no* global
 code. PHP's rule: **to combine non-namespaced (global) code with namespaced code, only the bracketed
-syntax is supported.** Phorge's output has both multiple namespaces and a global block → braces are
+syntax is supported.** Phorj's output has both multiple namespaces and a global block → braces are
 mandatory; `namespace Acme\Convert;` beside a global block is a parse error. The only alternative
 (`namespace X;` per file) needs **one file per package + a PSR-4 autoloader**, which was rejected
-because PSR-4 autoloads *classes, not free functions*, and Phorge is function-heavy. Type-import is
+because PSR-4 autoloads *classes, not free functions*, and Phorj is function-heavy. Type-import is
 unaffected: the FQN `\Acme\Geometry\Point` (or a `use`) simply lives inside the consuming brace block.
 
 ## 8. Open forks (for the developer)

@@ -288,7 +288,7 @@ synthesize the orchestrating ctor and choose the call order; PHP will never chai
 
 ---
 
-## 7. Synthesis for Phorge
+## 7. Synthesis for Phorj
 
 ### The decomposition `class C extends A, B  ⟶  interface IA + trait TA, interface IB + trait TB; class C implements IA, IB { use TA, TB; }`
 
@@ -314,19 +314,19 @@ impl* an interface cannot. Together they reproduce "C is-a A, is-a B, has A's an
 
 ### Breakpoints + required generated-PHP workarounds
 
-1. **Method-name collision across parents** (both define `m`) → fatal. **Workaround:** Phorge must already
+1. **Method-name collision across parents** (both define `m`) → fatal. **Workaround:** Phorj must already
    have resolved this at the type-check level (its own MI conflict rule). For PHP, emit
-   `use TA, TB { TA::m insteadof TB; }` choosing the winner Phorge's semantics dictate, and optionally
+   `use TA, TB { TA::m insteadof TB; }` choosing the winner Phorj's semantics dictate, and optionally
    `TB::m as <mangled>;` if the loser still needs to be reachable.
 
 2. **Constructor collision** → fatal if two parents have `__construct`. **Workaround:** never emit two
    trait `__construct`s as-is. Lower each parent's constructor to a uniquely-named init method
-   (`__ctor_A`, `__ctor_B`) and synthesize `C::__construct` that invokes them in Phorge's defined order
-   (Pattern A). This also gives Phorge full control of ctor sequencing (PHP gives none).
+   (`__ctor_A`, `__ctor_B`) and synthesize `C::__construct` that invokes them in Phorj's defined order
+   (Pattern A). This also gives Phorj full control of ctor sequencing (PHP gives none).
 
 3. **Incompatible property/constant collision** (same name, differing type/default/value) → fatal, and
-   `insteadof` does NOT help (it's method-only). **Workaround options:** (a) Phorge rejects such MI at
-   check time (cleanest — matches Phorge's "provably correct" stance); or (b) the generator name-mangles
+   `insteadof` does NOT help (it's method-only). **Workaround options:** (a) Phorj rejects such MI at
+   check time (cleanest — matches Phorj's "provably correct" stance); or (b) the generator name-mangles
    one parent's field/const so PHP sees distinct names, and rewrites accesses. Identical defs are safe and
    need no work.
 
@@ -336,9 +336,9 @@ impl* an interface cannot. Together they reproduce "C is-a A, is-a B, has A's an
    whether one merely inherited it. Don't rely on PHP's auto-dedup except for the byte-identical case.
 
 5. **No trait-`super`/MRO.** PHP flattens; there is no linearized "call the next parent's version" chain.
-   **Workaround:** if Phorge MI needs MRO-style chained dispatch, the generator must materialize the order
+   **Workaround:** if Phorj MI needs MRO-style chained dispatch, the generator must materialize the order
    itself (aliased trait methods called explicitly in sequence). For a TS/PHP-pragmatic language this is
-   likely out of scope — prefer Phorge forbidding ambiguous diamonds over emulating C3 linearization.
+   likely out of scope — prefer Phorj forbidding ambiguous diamonds over emulating C3 linearization.
 
 6. **Interfaces can't carry impl** (no default bodies in 8.4) — which is exactly why the **trait** half of
    the decomposition is mandatory; the interface is type-only. Not a breakpoint, just the reason the pair
@@ -350,8 +350,8 @@ impl* an interface cannot. Together they reproduce "C is-a A, is-a B, has A's an
 `instanceof`/type-compatibility against every parent, member override precedence, and visibility
 re-exposure — i.e. the *state + behavior + type-identity* of multiple inheritance.
 
-**NOT free / needs generator work or a Phorge-side restriction:** constructor composition (must be
+**NOT free / needs generator work or a Phorj-side restriction:** constructor composition (must be
 synthesized, never auto), any incompatible same-name field/const/method collision (must be resolved by
-Phorge's checker or by name-mangling before emission), and MRO/`super`-chaining (no PHP equivalent;
-recommend Phorge disallow ambiguous diamonds rather than emulate linearization). PHP's diamond auto-dedup
+Phorj's checker or by name-mangling before emission), and MRO/`super`-chaining (no PHP equivalent;
+recommend Phorj disallow ambiguous diamonds rather than emulate linearization). PHP's diamond auto-dedup
 is reliable ONLY for byte-identical shared members.

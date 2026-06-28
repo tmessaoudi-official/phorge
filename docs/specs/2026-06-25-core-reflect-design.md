@@ -14,7 +14,7 @@
 >   collections** (rejected — would bloat every array + break interop).
 > - **Plus `Reflect.kind(x) -> string`** (the developer's "parent type" idea, as its own native): the
 >   **coarse** PHP-reproducible kind (`"array"` for List/Map/Set, `"string"` for bytes, `"object"`,
->   `"int"`, …) via a `__phorge_kind` helper — byte-identical for *all* inputs.
+>   `"int"`, …) via a `__phorj_kind` helper — byte-identical for *all* inputs.
 > - **Q5 — full set** (`className` + `typeName` + `kind` + the sorted enumeration natives).
 > - **Q2/Q3/Q4 — I resolve during build:** Q2 verify `get_class` matches the transpiled (possibly FQN)
 >   class name; Q3 sidestepped (literals); Q4 `fieldNames` via a transpiler-emitted per-class static list.
@@ -31,9 +31,9 @@
 >   variant-vs-enum mismatch is moot). **No runtime enum inspection anywhere.**
 > - **`kind` PHP emission needs a gated helper:** native `php` closures emit inline PHP and can't set a
 >   transpiler `uses_*` flag, so `Reflect.kind` is special-cased in `emit_member_call` (set
->   `uses_reflect_kind`, emit `__phorge_kind($x)`), with `__phorge_kind` defined once in
->   `emit_runtime_helpers` — the established gated-helper pattern (`__phorge_str`/`_div`/…). `__phorge_kind`
->   checks `is_callable` **before** `is_object` (a PHP closure is both; Phorge closures must map to
+>   `uses_reflect_kind`, emit `__phorj_kind($x)`), with `__phorj_kind` defined once in
+>   `emit_runtime_helpers` — the established gated-helper pattern (`__phorj_str`/`_div`/…). `__phorj_kind`
+>   checks `is_callable` **before** `is_object` (a PHP closure is both; Phorj closures must map to
 >   `"callable"`, instances/enums to `"object"`).
 > - **`typeName`/`className` resolution** is a checker pass (type-directed, span-keyed substitution like
 >   UFCS): value type → string literal; object type → a `Reflect.__classOf` native (`get_class`,
@@ -44,10 +44,10 @@
 
 ## The problem (why this needs a design, not just a slice)
 
-Phorge's correctness spine is `run ≡ runvm ≡ real PHP` (byte-identical stdout) for **every** program.
-But the Phorge→PHP transpiler **erases** type distinctions that the Rust backends still see at runtime:
+Phorj's correctness spine is `run ≡ runvm ≡ real PHP` (byte-identical stdout) for **every** program.
+But the Phorj→PHP transpiler **erases** type distinctions that the Rust backends still see at runtime:
 
-| Phorge runtime value | PHP runtime value | Can PHP recover the Phorge name? |
+| Phorj runtime value | PHP runtime value | Can PHP recover the Phorj name? |
 |---|---|---|
 | `int` / `float` / `bool` / `string` | `int` / `float` / `bool` / `string` | ✅ yes (`is_int`/…) |
 | `bytes` | **`string`** | ❌ indistinguishable from a real `string` |
@@ -81,7 +81,7 @@ to expose runtime type identity; erasure has thrown some of that identity away b
 | `isInstance<T>(T x, ...) ` | *(omit — that's just `instanceof`)* | — | — |
 
 `className` on a **class instance** is byte-identical: `get_class` returns the PHP class name, which
-equals the Phorge class name for a `package Main` program (and the de-mangled FQN for a packaged class —
+equals the Phorj class name for a `package Main` program (and the de-mangled FQN for a packaged class —
 needs a check that the transpiler's class name matches what `className` would report; see Q2).
 
 ### Tier 2 — needs the `ClassTables` plumbing + a sortable contract
@@ -139,8 +139,8 @@ struct ClassTables {
 
 - **Q1-A — Coarse + byte-identical:** `typeName` returns what PHP *can* see: `"int"`/`"float"`/`"bool"`/
   `"string"` (bytes also → `"string"`), `"array"` (List/Map/Set all → `"array"`), the class name for an
-  object, `"null"`, `"function"`. A `__phorge_type_name($x)` helper reproduces exactly this. **Byte-
-  identical for all inputs**, but loses Phorge's finer distinctions (a Map reports `"array"`).
+  object, `"null"`, `"function"`. A `__phorj_type_name($x)` helper reproduces exactly this. **Byte-
+  identical for all inputs**, but loses Phorj's finer distinctions (a Map reports `"array"`).
 - **Q1-B — Drop `typeName`; keep only `className`.** Most of the "what is this" need is "what class is
   this" (`className`) + "is it a T" (`instanceof`). Skip `typeName` entirely.
 - **Q1-C — Precise but run/runvm-only.** Keep precise names (`"Map"`/`"bytes"`/enum), but **exclude any

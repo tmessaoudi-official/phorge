@@ -1,17 +1,17 @@
-# Phorge Milestones
+# Phorj Milestones
 
-Living status doc. Frozen design lives in `docs/specs/2026-06-15-phorge-language-design.md`
+Living status doc. Frozen design lives in `docs/specs/2026-06-15-phorj-language-design.md`
 (§5 = roadmap). Per-milestone plans live in `docs/plans/`. `examples/README.md` is the living
 showcase of the runnable language surface (every example byte-identical on both backends + the
-Phorge→PHP transpile bridge).
+Phorj→PHP transpile bridge).
 
 ## M1 — Tree-walking interpreter + transpiler — ✅ COMPLETE (2026-06-15, `9da6e56`)
 
-The socle. Real Phorge programs run end-to-end (the frozen `Shape`/`area`/`match` sample).
+The socle. Real Phorj programs run end-to-end (the frozen `Shape`/`area`/`match` sample).
 
 - **Pipeline:** lexer → parser → type-checker → tree-walking evaluator (`src/{lexer,parser,checker,interpreter}.rs`).
 - **CLI:** `phg <run|check|parse|lex|transpile> <file>`.
-- **Phorge → PHP transpiler** (`src/transpile.rs`) — round-trip-verified against real PHP 8.6.
+- **Phorj → PHP transpiler** (`src/transpile.rs`) — round-trip-verified against real PHP 8.6.
 - **Docs/tests:** `README.md`, 3 runnable `examples/*.phg` (guarded by `tests/examples.rs`), 162 tests green at the M1 tag, clippy clean.
 - **Delivered language surface:** static types, immutable-by-default bindings, functions, classes + constructor promotion, single-payload enums + exhaustive `match`, string interpolation, `List<T>` literals, `for…in`, checked int/float arithmetic.
 - **Not yet implemented** (designed in §3, rejected cleanly — never panics): null safety / `T?` / `Option`, exceptions (try/catch/throw), `Map`/`Set`/tuples, `|>`, `is`, method overloading, traits, value types/structs, operator overloading, property accessors, sized ints / `decimal`, `const`/`final` enforcement, real `import` resolution, concurrency.
@@ -71,19 +71,19 @@ enrichment = M3; single-binary bundling = M2.5.
 ## M2.5 — Standalone executables (`phg build`) — 🔨 IN PROGRESS (Phases 1–2 complete; Phase 3 next)
 
 Single-binary bundling: `phg build foo.phg` → a standalone executable that runs `foo.phg` on the
-VM with no Phorge install. Design (advisor-reviewed twice): payload = a **named section** (`.phorge`
-on ELF, `__PHORGE,__source` on Mach-O — never a raw overlay, which breaks Mach-O signing) holding a
+VM with no Phorj install. Design (advisor-reviewed twice): payload = a **named section** (`.phorj`
+on ELF, `__PHORJ,__source` on Mach-O — never a raw overlay, which breaks Mach-O signing) holding a
 **versioned CRC-guarded container** (source→bytecode is a `payload_kind` flip, not a format break);
-distribution via a **stub registry** (CI builds/signs per-target stubs once per release; `phorge
+distribution via a **stub registry** (CI builds/signs per-target stubs once per release; `phorj
 build` fetches+caches+`llvm-objcopy --add-section`s the payload); macOS signed+notarized **from
 Linux** via `rcodesign` (no Mac needed). std-only line = the produced binary + the hand-rolled
 section reader; build tooling (zig, llvm-tools, rcodesign, CI) is exempt. Spec:
-`docs/specs/2026-06-16-m2.5-phorge-build-design.md`.
+`docs/specs/2026-06-16-m2.5-phorj-build-design.md`.
 
 - **Phase 1 ✅ (2026-06-16)** — host `x86_64-linux-gnu`, no CI/signing:
   `docs/plans/2026-06-16-m2.5-phase1-build-linux-gnu.md`. `src/bundle.rs` (CRC-32 + versioned
   container + hand-rolled ELF64 reader + `embedded_source()`), the `main()` self-detect hook,
-  `cli::cmd_build` (copy `current_exe` + `llvm-objcopy --add-section .phorge=…`), and `tests/build.rs`
+  `cli::cmd_build` (copy `current_exe` + `llvm-objcopy --add-section .phorj=…`), and `tests/build.rs`
   (built binary byte-identical to `runvm`). This is the **4th backend** the Rule-of-Three note below
   anticipated — still a free-function path, no `Backend` trait yet.
 - **Phase 2 ✅ (2026-06-17)** — cross-OS builds via `cargo-zigbuild` (zig as the C/linker driver):
@@ -110,7 +110,7 @@ section reader; build tooling (zig, llvm-tools, rcodesign, CI) is exempt. Spec:
 
 ## M3 — Language enrichment — 🔨 IN PROGRESS
 
-Slice-by-slice language growth under the transpile contract **Phorge : PHP :: TypeScript : JavaScript**
+Slice-by-slice language growth under the transpile contract **Phorj : PHP :: TypeScript : JavaScript**
 (every feature maps to idiomatic PHP; PHP-absent features are compile-time-only and erased). Shipped so
 far: **S0** (developer experience — `var` inference, `type` aliases, sharp caret diagnostics + stable
 codes, `phg explain`), **S1** (ergonomics — indexing `xs[i]`, integer ranges `a..b`/`a..=b`, expression
@@ -166,7 +166,7 @@ example `examples/guide/pattern-matching.phg`.
 - **S5.3 flow-narrowing** — `narrow_from_condition`: `instanceof` then/else (else → remaining union
   members), `!`/`&&`/`||` composition, early-return guards narrow the rest of a block; plus **if-let
   `when` guards** (parser-desugar, no `Stmt::If.guard` field). Deferred (KNOWN_ISSUES): `||`-true-side,
-  equality/literal refinement and `== null` (Phorge rejects those comparisons), post-match narrowing
+  equality/literal refinement and `== null` (Phorj rejects those comparisons), post-match narrowing
   (match is an expression), while-let guards.
 - **Primitives sweep** — number-literal formats (`0x`/`0b`/`0o`/`_`/`1e3`), bitwise `& | ^ ~ << >>`
   (int-only; `>>` = two `Gt`), `Console.print`, byte-safe stdlib (`Text.startsWith`/`endsWith`/`repeat`,
@@ -175,7 +175,7 @@ example `examples/guide/pattern-matching.phg`.
 ## M-TIME — dates, time, durations — ✅ COMPLETE (2026-06-28)
 
 A typed, deterministic, byte-identical time library, design `docs/specs/2026-06-28-m-time-design.md`.
-Architecture: an **injected pure-Phorge prelude** (`cli::inject_time_prelude`, gated on
+Architecture: an **injected pure-Phorj prelude** (`cli::inject_time_prelude`, gated on
 `import Core.Time`) defines `Instant`/`Duration`/`Date`; because the prelude runs through the same
 backends *and* transpiler as user code, all calendar/formatting math is byte-identical
 `run ≡ runvm ≡ real PHP 8.5` by construction. The only native (`src/native/time.rs`) is the **freezable
@@ -193,7 +193,7 @@ Deferred (KNOWN_ISSUES): timezones, sub-millisecond, locale/arbitrary-format par
 
 ## M-mut — In-place mutation — ✅ FEATURE-COMPLETE (2026-06-21)
 
-Phorge began as a pure single-assignment language (no assignment statement); the mutation milestone
+Phorj began as a pure single-assignment language (no assignment statement); the mutation milestone
 adds in-place mutation **immutable-by-default, `mutable` opt-in**, with **no tracing GC**. Locked spine
 (forced by the real-PHP oracle, design `docs/specs/2026-06-21-mutation-milestone-design.md`):
 `List`/`Map`/`Set`/`Bytes` are **copy-on-write value types** (can't cycle ⇒ `Rc`/`Drop` reclaims fully);
@@ -248,7 +248,7 @@ cause-chain and the test runner's `assertFaults`. Detailed rationale + examples 
 ## M5 — Modules & packages — ✅ COMPLETE (2026-06-18)
 
 Go-shaped, `src/`-rooted project model: **mandatory `package` declarations** (`package Main` = runnable
-entry), `phorge.toml` manifests (Composer *vocabulary* in a TOML container — `[require]`, git deps pinned by
+entry), `phorj.toml` manifests (Composer *vocabulary* in a TOML container — `[require]`, git deps pinned by
 tag/rev), strict folder = package path, **single-file brace-namespace PHP emission** (no Composer/autoloader
 — [ADR-0004](adr/0004-single-file-brace-namespace-php.md)), cross-package qualified calls via a loader-side
 name-mangling pass (`run ≡ runvm` structural; the transpiler de-mangles to `namespace` blocks), and
@@ -260,7 +260,7 @@ never fetch ([ADR-0005](adr/0005-offline-only-vendor.md)). Design
 
 A portable `handle(Request) -> Response` model at the *value* level (PSR-7/15 shape); the socket bridge is
 runtime glue, quarantined in `src/serve.rs` behind a `Transport` trait, outside the byte-identity spine.
-Shipped: **W0** (`bytes` primitive + `b"…"` literals + `Core.Bytes`), **W1** (pure-Phorge
+Shipped: **W0** (`bytes` primitive + `b"…"` literals + `Core.Bytes`), **W1** (pure-Phorj
 `Request`/`Response` + `parse_request`/`serialize_response`, `examples/web/handler.phg`), **W2** (the
 `Core.Http` `Router` with **path parameters** `r"/users/{id}"` → `req.param`, literal>param precedence,
 404 fallback, `examples/web/router.phg`, plus the PHP-8 **`#[Route(...)]` attribute** + the
@@ -285,14 +285,14 @@ optional/wildcard route segments, instance-controller routing. Design
 
 Closed the third backend leg: `tests/differential.rs` now transpiles every example/project, runs it under a
 real `php`, and asserts stdout byte-identical to the interpreter — so `run ≡ runvm ≡ php` is *enforced*, not
-just `run ≡ runvm`. **Fails-not-skips:** `PHORGE_REQUIRE_PHP=1` makes a missing `php` a test failure
-(`PHORGE_PHP=<path>` overrides). Four silent transpiler→PHP P0 divergences fixed via runtime helpers
-(`__phorge_div`/`_rem`/`_str`/`_range`), plus a large-range cap. Spec
+just `run ≡ runvm`. **Fails-not-skips:** `PHORJ_REQUIRE_PHP=1` makes a missing `php` a test failure
+(`PHORJ_PHP=<path>` overrides). Four silent transpiler→PHP P0 divergences fixed via runtime helpers
+(`__phorj_div`/`_rem`/`_str`/`_range`), plus a large-range cap. Spec
 `docs/specs/2026-06-19-m7-correctness-closure-design.md`.
 
 ## M8–M12 — Road to GA 1.0 — 🔨 / 🔲
 
-The sequenced path to a stable 1.0 lives in **`docs/plans/2026-06-19-phorge-ga-roadmap.plan.md`** — the
+The sequenced path to a stable 1.0 lives in **`docs/plans/2026-06-19-phorj-ga-roadmap.plan.md`** — the
 forward SSOT, mapping ~50 review findings: **M8** trust & hardening (vendor/serve/`write_atomic`, lints) ∥
 **M9** engineering hygiene (CI enforcement ✅, ADRs ✅, exhaustive `validate` ✅, single-sourcing, doc-SSOT) →
 **M10** erasure-first generics (`Ty::Var` — [ADR-0002](adr/0002-erasure-not-monomorphization.md)) → **M11**

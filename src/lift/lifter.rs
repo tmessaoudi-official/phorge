@@ -1,8 +1,8 @@
-//! M-Lift L4 — the **lifter**: PHP AST ([`super::ast`]) → Phorge AST ([`crate::ast`]). The lossy
-//! half of the bridge. PHP is the floor, not the ceiling: lifted Phorge is *idiomatic* (PHP `.`
+//! M-Lift L4 — the **lifter**: PHP AST ([`super::ast`]) → Phorj AST ([`crate::ast`]). The lossy
+//! half of the bridge. PHP is the floor, not the ceiling: lifted Phorj is *idiomatic* (PHP `.`
 //! concat → `+`, `===` → `==`, top-level code → a `main()`, PHP fields → `mutable`) and never mirrors
 //! a wart. The contract is a **draft you verify**, so the output is annotated `// lifted (verify)` by
-//! the CLI (L6); anything that has no faithful Phorge form is a **loud lift error**, never a guess.
+//! the CLI (L6); anything that has no faithful Phorj form is a **loud lift error**, never a guess.
 //!
 //! Tier-1 core: typed functions, classes (typed props, ctor promotion, methods), pure enums, and the
 //! plain statement/expression set. The Tier-2 frontier (`array`→List/Map/Set inference, default
@@ -28,16 +28,16 @@ const SP: Span = Span {
     col: 0,
 };
 
-/// End-to-end convenience: PHP source → Phorge `.phg` source. Lexes (L1), parses (L2), lifts (L4),
+/// End-to-end convenience: PHP source → Phorj `.phg` source. Lexes (L1), parses (L2), lifts (L4),
 /// and prints (L3). Any stage's error propagates as a `lift …` / `printer: …` string.
 pub fn lift_source(php_src: &str) -> Result<String, String> {
     let toks = lex_php(php_src)?;
     let prog = parse_php(toks)?;
-    let phorge = lift(&prog)?;
-    print_program(&phorge)
+    let phorj = lift(&prog)?;
+    print_program(&phorj)
 }
 
-/// Lift a parsed PHP program into a Phorge program (`package Main;`).
+/// Lift a parsed PHP program into a Phorj program (`package Main;`).
 pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
     let mut l = Lifter {
         needs_console: false,
@@ -144,7 +144,7 @@ impl Lifter {
             type_params: Vec::new(),
             extends: c.extends.clone().into_iter().collect(),
             implements: c.implements.clone(),
-            // PHP is extensible-by-default (only `final` seals it); Phorge is final-by-default, so a
+            // PHP is extensible-by-default (only `final` seals it); Phorj is final-by-default, so a
             // non-final PHP class lifts to `open` to preserve extensibility. `abstract` implies open.
             open: c.is_abstract || !c.is_final,
             is_abstract: c.is_abstract,
@@ -214,7 +214,7 @@ impl Lifter {
 
     fn lift_method(&mut self, m: &php::PhpMethod) -> Result<ClassMember, String> {
         let mut declared = HashSet::new();
-        // `__construct` → a Phorge `constructor` (with promotion), not an ordinary method.
+        // `__construct` → a Phorj `constructor` (with promotion), not an ordinary method.
         if m.name == "__construct" {
             let params = lift_ctor_params(&m.params)?;
             for p in &params {
@@ -249,7 +249,7 @@ impl Lifter {
         if m.is_abstract {
             modifiers.push(Modifier::Abstract);
         } else if !m.is_final && m.vis != php::PhpVisibility::Private {
-            // PHP methods are overridable by default; Phorge is final-by-default, so mark `open` to
+            // PHP methods are overridable by default; Phorj is final-by-default, so mark `open` to
             // preserve overridability (abstract is implicitly open, so only the concrete case).
             modifiers.push(Modifier::Open);
         }
@@ -368,9 +368,9 @@ impl Lifter {
                 value,
                 body,
             } => {
-                // A-6 gave Phorge's for-in element-type inference, so a keyless PHP `foreach
+                // A-6 gave Phorj's for-in element-type inference, so a keyless PHP `foreach
                 // ($xs as $v)` now lifts to the idiomatic `foreach (xs as v)` (printed from a
-                // `Type::Infer` for-in). The `$k => $v` key form stays Tier-2 (Phorge's foreach has
+                // `Type::Infer` for-in). The `$k => $v` key form stays Tier-2 (Phorj's foreach has
                 // no key/value binding yet — same boundary as A-6).
                 if key.is_some() {
                     return Err("lift: foreach with a key (`$k => $v`) is Tier-2".into());
@@ -391,7 +391,7 @@ impl Lifter {
         })
     }
 
-    /// A PHP expression statement: an assignment becomes a Phorge `var`-decl (first time) or
+    /// A PHP expression statement: an assignment becomes a Phorj `var`-decl (first time) or
     /// `Stmt::Assign` (thereafter); `$i++`/`$x += e` desugar; anything else is an `Expr` statement.
     fn lift_expr_stmt(
         &mut self,
@@ -458,7 +458,7 @@ impl Lifter {
         }
     }
 
-    /// Lift a single PHP expression used as a C-`for` init/step clause into one Phorge statement.
+    /// Lift a single PHP expression used as a C-`for` init/step clause into one Phorj statement.
     fn lift_for_clause(
         &mut self,
         e: &php::PhpExpr,
@@ -505,7 +505,7 @@ fn lift_expr(e: &php::PhpExpr) -> Result<Expr, String> {
             rhs: Box::new(lift_expr(right)?),
             span: SP,
         },
-        // C-46: PHP `value instanceof ClassName` → Phorge's existing `instanceof` (M-RT S1).
+        // C-46: PHP `value instanceof ClassName` → Phorj's existing `instanceof` (M-RT S1).
         php::PhpExpr::InstanceOf { value, class } => Expr::InstanceOf {
             value: Box::new(lift_expr(value)?),
             type_name: class.clone(),
@@ -618,7 +618,7 @@ fn lift_match(subject: &php::PhpExpr, arms: &[php::PhpMatchArm]) -> Result<Expr,
                 span: SP,
             }),
             Some(conds) => {
-                // PHP shares one body across comma-separated conditions; Phorge has one pattern per
+                // PHP shares one body across comma-separated conditions; Phorj has one pattern per
                 // arm, so duplicate the (cloned) body per literal condition.
                 let body = lift_expr(&arm.body)?;
                 for c in conds {
@@ -639,7 +639,7 @@ fn lift_match(subject: &php::PhpExpr, arms: &[php::PhpMatchArm]) -> Result<Expr,
     })
 }
 
-/// A PHP `match` condition must be a literal to become a Phorge pattern (a non-literal arm compares
+/// A PHP `match` condition must be a literal to become a Phorj pattern (a non-literal arm compares
 /// by `===` at runtime — no pattern equivalent, so it's a loud Tier-2 error).
 fn literal_pattern(e: &php::PhpExpr) -> Result<Pattern, String> {
     Ok(match e {
@@ -657,13 +657,13 @@ fn literal_pattern(e: &php::PhpExpr) -> Result<Pattern, String> {
 fn lift_enum(e: &php::PhpEnum) -> Result<EnumDecl, String> {
     if e.backing.is_some() {
         return Err(format!(
-            "lift: backed enum `{}` (cases with scalar values) has no Phorge equivalent (Tier-2)",
+            "lift: backed enum `{}` (cases with scalar values) has no Phorj equivalent (Tier-2)",
             e.name
         ));
     }
     if !e.methods.is_empty() {
         return Err(format!(
-            "lift: enum `{}` has methods — Phorge enums carry no methods (Tier-2)",
+            "lift: enum `{}` has methods — Phorj enums carry no methods (Tier-2)",
             e.name
         ));
     }
@@ -738,10 +738,10 @@ fn lift_ctor_params(params: &[php::PhpParam]) -> Result<Vec<CtorParam>, String> 
 }
 
 /// Lift a function/method's declared return type (C-45). A PHP `: T` lifts directly. **No** hint is
-/// the trap: the old code emitted a Phorge function with no return type, which *parses* but fails the
+/// the trap: the old code emitted a Phorj function with no return type, which *parses* but fails the
 /// checker (Tier-1 requires explicit returns) — a silent non-compiling draft. Instead: if the body
 /// never returns a value, the function is provably `void` (a fact from the body, not a guess); if it
-/// returns a value we cannot infer the type, so reject loudly rather than emit invalid Phorge.
+/// returns a value we cannot infer the type, so reject loudly rather than emit invalid Phorj.
 fn lift_ret(
     php_ret: &Option<php::PhpType>,
     body: Option<&[php::PhpStmt]>,
@@ -807,9 +807,9 @@ fn lift_binop(op: php::PhpBinOp) -> Result<BinaryOp, String> {
         P::Mul => BinaryOp::Mul,
         P::Div => BinaryOp::Div,
         P::Rem => BinaryOp::Rem,
-        // PHP string concatenation `.` is Phorge's type-directed `+`.
+        // PHP string concatenation `.` is Phorj's type-directed `+`.
         P::Concat => BinaryOp::Add,
-        // Phorge is statically typed, so loose and strict equality coincide.
+        // Phorj is statically typed, so loose and strict equality coincide.
         P::Eq | P::Identical => BinaryOp::Eq,
         P::NotEq | P::NotIdentical => BinaryOp::NotEq,
         P::Lt => BinaryOp::Lt,
@@ -819,7 +819,7 @@ fn lift_binop(op: php::PhpBinOp) -> Result<BinaryOp, String> {
         P::And => BinaryOp::And,
         P::Or => BinaryOp::Or,
         P::Coalesce => BinaryOp::Coalesce,
-        // C-47: bitwise / shift map 1:1 to Phorge's existing operators (PHP-identical int semantics).
+        // C-47: bitwise / shift map 1:1 to Phorj's existing operators (PHP-identical int semantics).
         P::BitAnd => BinaryOp::BitAnd,
         P::BitOr => BinaryOp::BitOr,
         P::BitXor => BinaryOp::BitXor,
@@ -861,7 +861,7 @@ fn vis_modifier(v: php::PhpVisibility) -> Modifier {
     }
 }
 
-/// The Phorge type-name for a literal expression (used to type a lifted class `const`).
+/// The Phorj type-name for a literal expression (used to type a lifted class `const`).
 fn lit_type(e: &php::PhpExpr) -> Option<&'static str> {
     match e {
         php::PhpExpr::Int(_) => Some("int"),

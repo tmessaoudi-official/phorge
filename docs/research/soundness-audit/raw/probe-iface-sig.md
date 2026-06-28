@@ -13,7 +13,7 @@ for the right reason (the diagnostic names the class, method, and interface).
 
 ## Evidence
 
-`BIN=/stack/projects/phorge/target/release/phg`
+`BIN=/stack/projects/phorj/target/release/phg`
 
 ### Probe A — wrong return type (interface `string`, class returns `int`)
 

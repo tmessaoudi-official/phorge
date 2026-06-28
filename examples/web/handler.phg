@@ -1,10 +1,10 @@
 package Main;
 
-// M6 W1 — the portable HTTP handler model, written in pure Phorge: `handle(Request) -> Response`.
+// M6 W1 — the portable HTTP handler model, written in pure Phorj: `handle(Request) -> Response`.
 //
 // This is the value-level contract (PSR-7/15 shaped): a Request and Response are immutable values,
-// and `parseRequest` / `serializeResponse` are Phorge code — there is NO socket here (W3's
-// `phorge serve`). The same `handle` transpiles to idiomatic PHP and runs under `php -S` via a thin
+// and `parseRequest` / `serializeResponse` are Phorj code — there is NO socket here (W3's
+// `phorj serve`). The same `handle` transpiles to idiomatic PHP and runs under `php -S` via a thin
 // front-controller (W4). The whole pipe is byte-identical on `run` / `runvm` + real PHP.
 //
 // Design notes (docs/specs/2026-06-18-m6-w1-handler-design.md):

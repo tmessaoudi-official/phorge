@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use phorge::cli;
+use phorj::cli;
 
 struct TempDir(PathBuf);
 impl TempDir {
@@ -12,7 +12,7 @@ impl TempDir {
         static N: AtomicUsize = AtomicUsize::new(0);
         let unique = N.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!(
-            "phorge_fmt_it_{tag}_{}_{unique}",
+            "phorj_fmt_it_{tag}_{}_{unique}",
             std::process::id()
         ));
         std::fs::create_dir_all(&dir).unwrap();

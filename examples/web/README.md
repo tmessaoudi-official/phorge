@@ -1,26 +1,26 @@
 # Web examples — the M6 HTTP story
 
-Phorge's web model is **`handle(Request) -> Response` at the value level** (PSR-7/15 shaped). The
-request/response types and the parse/route/serialize logic are **pure Phorge**, byte-identity-gated
+Phorj's web model is **`handle(Request) -> Response` at the value level** (PSR-7/15 shaped). The
+request/response types and the parse/route/serialize logic are **pure Phorj**, byte-identity-gated
 on `run` / `runvm` like every other example. Two thin, untranspiled runtimes carry those bytes over
 a real socket — one native, one PHP — and both call the *same* `handle`.
 
 | File | What it is |
 |---|---|
 | `handler.phg` | **W1** — the handler model: `Request`/`Response` classes, `parseRequest(bytes) -> Request?`, `serializeResponse(Response) -> bytes`, `handle(Request) -> Response`. Bodies are `bytes`; headers are raw `List<string>` lines behind `req.header(name)`. No socket. |
-| `router.phg` | **W2** — a static exact-match router: a `List<Route>` table + linear `(method, path)` scan → a `Handler` enum tag → exhaustive `match` dispatch. Pure Phorge, no new language feature. |
+| `router.phg` | **W2** — a static exact-match router: a `List<Route>` table + linear `(method, path)` scan → a `Handler` enum tag → exhaustive `match` dispatch. Pure Phorj, no new language feature. |
 | `server.phg` | **W4** — the full served app: W1 parse/serialize + W2 routing + the single entry `respond(bytes) -> bytes`. This is what `phg serve` runs. |
 | `password-verify.phg` | **`Core.Crypto`** — verify a password against a committed Argon2id PHC hash. Deterministic ⇒ byte-identity-gated; the non-deterministic `hashPassword` is documented below. |
 
 ## `Core.Crypto` — password hashing (Argon2id)
 
-Secure password hashing follows the one inviolable rule — **never roll your own crypto**. Phorge
+Secure password hashing follows the one inviolable rule — **never roll your own crypto**. Phorj
 implements it natively on the Rust backends via the audited RustCrypto **`argon2`** crate (the sole
 external dependency, admitted under `docs/specs/2026-06-27-dependency-policy.md`); the transpile
 bridge emits PHP's `password_hash`/`password_verify` as a *peer* target. Both speak the standard PHC
 string (`$argon2id$…`), so **a hash made by either backend verifies in the other**.
 
-```phorge
+```phorj
 package Main;
 import Core.Console;
 import Core.Crypto;
@@ -52,7 +52,7 @@ function main(): void {
 `server.phg` defines `respond(bytes) -> bytes`. `phg serve` binds a socket, frames each HTTP/1.1
 request (`Connection: close`, one request per connection), calls `respond` once, and writes the
 bytes back. All HTTP logic — parsing, routing, the 400-on-malformed — lives in `respond`, in pure
-Phorge; the runtime (`src/serve.rs`) is the thinnest possible glue and knows nothing about the
+Phorj; the runtime (`src/serve.rs`) is the thinnest possible glue and knows nothing about the
 `Request`/`Response` layout.
 
 ```console
@@ -65,10 +65,10 @@ Content-Length: 17
 Connection: close
 Content-Type: text/plain
 
-Phorge web — home
+Phorj web — home
 
-$ curl -s http://127.0.0.1:8080/greet -H 'Host: phorge.dev'
-Hello phorge.dev
+$ curl -s http://127.0.0.1:8080/greet -H 'Host: phorj.dev'
+Hello phorj.dev
 $ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/missing
 404
 ```
@@ -93,8 +93,8 @@ native side) that calls the transpiled `handle`. Generate the handlers next to i
 $ phg transpile examples/web/server.phg | sed '$d' > examples/web/web_app.php
 $ php -S 127.0.0.1:8080 examples/web/server.php
 
-$ curl -s http://127.0.0.1:8080/greet -H 'Host: phorge.dev'
-Hello phorge.dev
+$ curl -s http://127.0.0.1:8080/greet -H 'Host: phorj.dev'
+Hello phorj.dev
 ```
 
 `web_app.php` is a generated artifact — regenerate it from `server.phg`; it is not committed.
@@ -103,8 +103,8 @@ Hello phorge.dev
 
 - **One value contract, two engines.** `handle(Request) -> Response` is the portable unit. `phg
   serve` and `php -S` are interchangeable hosts for it; the byte path is identical because the
-  Phorge backends are byte-identical and PHP round-trips the same logic.
-- **Determinism stays intact.** Everything testable (parse, route, serialize) is pure Phorge, gated
+  Phorj backends are byte-identical and PHP round-trips the same logic.
+- **Determinism stays intact.** Everything testable (parse, route, serialize) is pure Phorj, gated
   on `run ≡ runvm`. The non-deterministic socket is one quarantined module checked over an in-memory
   transport — it never touches `tests/differential.rs`.
 

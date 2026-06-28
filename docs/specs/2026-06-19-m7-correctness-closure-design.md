@@ -2,10 +2,10 @@
 
 > **Status:** ✅ Implemented (this session, on `8c6fbb2`). Oracle + 4 P0 fixes + range guard all
 > landed; ~453 tests green, clippy + fmt clean, oracle green over all examples/projects under
-> `PHORGE_REQUIRE_PHP=1`. The design below is as-built (runtime-helper approach adopted).
+> `PHORJ_REQUIRE_PHP=1`. The design below is as-built (runtime-helper approach adopted).
 > **Milestone:** M7 (first, non-negotiable) of the GA roadmap
-> (`docs/plans/2026-06-19-phorge-ga-roadmap.plan.md`).
-> **Source findings:** `~/.claude/projects/-stack-projects-phorge/REVIEW-2026-06-19.md`
+> (`docs/plans/2026-06-19-phorj-ga-roadmap.plan.md`).
+> **Source findings:** `~/.claude/projects/-stack-projects-phorj/REVIEW-2026-06-19.md`
 > (P0-1…4, P0-ROOT, QW-13, P1-#9). Code state at spec time: master `8c6fbb2` (docs-only since
 > the review; code spine still `687a7bd`), tree clean, 452 tests green, clippy + fmt clean,
 > `php 8.6.0-dev` present on PATH.
@@ -27,12 +27,12 @@ plus two range correctness items:
 
 | ID | Divergence | Site | Fix vehicle |
 |----|-----------|------|-------------|
-| P0-1 | integer `/` → PHP float `/` (`7/2` ⇒ `3.5`, must be `3`); LIVE in `operators.phg` | `src/transpile.rs:855` (`Div => "/"`) | `__phorge_div` helper |
+| P0-1 | integer `/` → PHP float `/` (`7/2` ⇒ `3.5`, must be `3`); LIVE in `operators.phg` | `src/transpile.rs:855` (`Div => "/"`) | `__phorj_div` helper |
 | P0-2 | dropped operand grouping parens (`a-(b-c)`, `-(a+b)`, `!(a&&b)`) | `src/transpile.rs:517-536` (Unary/Binary emit) | syntactic precedence parens |
-| P0-3 | `bool` interpolation `true`/`false` vs PHP `"1"`/`""`; LIVE | `src/transpile.rs` `emit_string` (`:673`) | `__phorge_str` helper |
-| P0-4 | float `%` → PHP integer `%` (`5.5%2.0` ⇒ `1.5`, PHP gives `1`) | `src/transpile.rs:856` (`Rem => "%"`) | `__phorge_rem` helper |
+| P0-3 | `bool` interpolation `true`/`false` vs PHP `"1"`/`""`; LIVE | `src/transpile.rs` `emit_string` (`:673`) | `__phorj_str` helper |
+| P0-4 | float `%` → PHP integer `%` (`5.5%2.0` ⇒ `1.5`, PHP gives `1`) | `src/transpile.rs:856` (`Rem => "%"`) | `__phorj_rem` helper |
 | P0-ROOT | no PHP execution oracle; `cli.rs` PHP tests self-skip-to-PASS | `tests/differential.rs`, `tests/cli.rs:107-139` | the oracle (§3) |
-| QW-13 | empty/reversed range → PHP `range()` *descends* instead of yielding `[]` | `src/transpile.rs:575-588` | `__phorge_range` helper |
+| QW-13 | empty/reversed range → PHP `range()` *descends* instead of yielding `[]` | `src/transpile.rs:575-588` | `__phorj_range` helper |
 | P1-#9 | large range materialization OOM/abort (exit 101), breaks EV-7 | `src/vm.rs:252-263`, `src/interpreter.rs:380-389` | shared size cap → clean fault |
 
 The `run ≡ runvm` spine itself held up under every review lens; M7 closes the **third leg** and
@@ -44,7 +44,7 @@ the value-correctness edges adjacent to it.
 - A `php`-gated **3-way oracle** over the full `examples/**/*.phg` glob **and** the example
   projects: transpiled PHP, run by a real `php`, prints byte-for-byte what the interpreter prints
   (`= runvm`, already gated ⇒ all three identical).
-- `PHORGE_REQUIRE_PHP=1` makes a missing `php` **fail, not skip** (no silent-green path survives).
+- `PHORJ_REQUIRE_PHP=1` makes a missing `php` **fail, not skip** (no silent-green path survives).
 - All four P0 emitter divergences fixed, enforced on first commit by the oracle.
 - Range edges closed: QW-13 (empty/reversed emit) and P1-#9 (large-range clean fault, byte-identical
   on both backends, `agree_err`-gated).
@@ -55,7 +55,7 @@ the value-correctness edges adjacent to it.
   runtime helpers precisely to avoid pulling type inference forward.
 - **Not** fixing the `package Main` PHP-builtin-name collision (P1-#12) or promoted-field visibility
   (P1-#13) — those are PHP *fatals*, not wrong numbers, and are front-end lints scheduled for **M8**.
-- **Not** building GitHub Actions CI — that's **M9**; M7 ships the test + the `PHORGE_REQUIRE_PHP`
+- **Not** building GitHub Actions CI — that's **M9**; M7 ships the test + the `PHORJ_REQUIRE_PHP`
   contract, M9 wires CI to *set* it (the seam is documented in §3.4).
 - **Not** making irrational/large-magnitude floats byte-identical to PHP — a pre-existing
   KNOWN_ISSUE; examples already restrict to exactly-representable values (§3.5).
@@ -76,7 +76,7 @@ For each file from `collect_phg("examples")`:
    pass this.)
 2. `let php_src = cli::cmd_transpile(&src)?;`
 3. Write `php_src` to a **unique** temp path (avoid the current fixed-`sample.php` collision under
-   parallel `cargo test`): `std::env::temp_dir().join(format!("phorge_oracle_{}.php", sanitized_stem))`
+   parallel `cargo test`): `std::env::temp_dir().join(format!("phorj_oracle_{}.php", sanitized_stem))`
    — or a per-call counter. One file per example.
 4. Run `php -n <tmp>` (see §3.5 for flags), capture stdout + status.
 5. Assert `status.success()` (on failure, surface php **stderr** in the panic message).
@@ -92,21 +92,21 @@ For each project from `collect_projects("examples")`:
    flat single-file emit, so it must be oracle-covered too.
 4. Same write → `php -n` → compare-stdout → cleanup as §3.2.
 
-### 3.4 Gating contract (`PHORGE_REQUIRE_PHP`) — the fails-not-skips rule
+### 3.4 Gating contract (`PHORJ_REQUIRE_PHP`) — the fails-not-skips rule
 A single helper `php_bin() -> Option<PathBuf>` resolves php once:
-- honors an optional `PHORGE_PHP` env override (absolute path to a php binary; convenience for
+- honors an optional `PHORJ_PHP` env override (absolute path to a php binary; convenience for
   non-PATH installs), else probes `php --version` on PATH.
 
 A single helper `require_or_skip() -> Option<PathBuf>`:
-- **`PHORGE_REQUIRE_PHP=1`** (the CI / enforced mode): if php is **absent**, `panic!` — the test
-  **fails** ("php required (PHORGE_REQUIRE_PHP=1) but not found on PATH / PHORGE_PHP"). This is the
+- **`PHORJ_REQUIRE_PHP=1`** (the CI / enforced mode): if php is **absent**, `panic!` — the test
+  **fails** ("php required (PHORJ_REQUIRE_PHP=1) but not found on PATH / PHORJ_PHP"). This is the
   inversion of today's self-skip-to-PASS.
 - **unset/empty** (dev convenience): if php is absent, emit a **loud** skip line to stderr
-  (`eprintln!("SKIP php oracle: php not found — set PHORGE_REQUIRE_PHP=1 to make this a failure")`)
+  (`eprintln!("SKIP php oracle: php not found — set PHORJ_REQUIRE_PHP=1 to make this a failure")`)
   and `return None`. Loud, never a silent green that reads as "ran".
 
 **M7/M9 seam:** M7 ships the oracle + this contract; the developer runs it locally (php present on
-this box). **M9's GitHub Actions** adds a PHP job that exports `PHORGE_REQUIRE_PHP=1` so CI fails if
+this box). **M9's GitHub Actions** adds a PHP job that exports `PHORJ_REQUIRE_PHP=1` so CI fails if
 php regresses or is missing. M7 is therefore *not* blocked on M9 — the contract is honored locally
 from day one.
 
@@ -122,7 +122,7 @@ example `examples/guide/null-safety.phg`). The **golden-file** test that asserts
   oracle compares **stdout** only. Run with `php -n` (ignore `php.ini`) for a hermetic baseline; if a
   notice ever reaches stdout in practice, switch to `php -d display_errors=stderr -d error_reporting=0`
   (decided empirically during impl by running the suite — Completion-Gate evidence).
-- **Float formatting:** `__phorge_str`/PHP `(string)$float` matches Rust `format!("{x}")` only for
+- **Float formatting:** `__phorj_str`/PHP `(string)$float` matches Rust `format!("{x}")` only for
   exactly-representable values; irrational/large-magnitude floats (`sqrt(2.0)`, `1e20`) diverge from
   PHP's 14-digit `echo` — a pre-existing KNOWN_ISSUE. Examples already restrict to representable
   floats; the oracle inherits, not widens, that constraint. (`run≡runvm` is always identical.)
@@ -143,53 +143,53 @@ Two ways to get types:
   targets — *and* an inference-completeness risk (a missed local-decl site ⇒ `Other` ⇒ wrong emit ⇒
   silent P0-1 regression).
 - **(B, chosen) runtime helpers** — emit PHP that inspects operand types at **PHP runtime**, mirroring
-  Phorge's own type-driven value kernels (`src/value.rs`). No static inference, no duplication, no
+  Phorj's own type-driven value kernels (`src/value.rs`). No static inference, no duplication, no
   completeness risk; each helper maps 1:1 to a kernel / `as_display`.
 
 **Chosen: (B).** The transpile contract is *correctness/byte-identity first*; the helpers are honest
-about Phorge's type-driven `/`/`%`/display semantics. The minor loss of "idiomatic" PHP
-(`__phorge_div($a,$b)` vs `intdiv($a,$b)`) is an explicit, accepted trade — a later optional pass
+about Phorj's type-driven `/`/`%`/display semantics. The minor loss of "idiomatic" PHP
+(`__phorj_div($a,$b)` vs `intdiv($a,$b)`) is an explicit, accepted trade — a later optional pass
 *may* specialize to `intdiv`/bare-`%` when a static type is provably int (deferred; not M7).
 
-Helpers follow the existing `__phorge_unwrap` precedent exactly (`src/transpile.rs:557-566`): a
+Helpers follow the existing `__phorj_unwrap` precedent exactly (`src/transpile.rs:557-566`): a
 once-per-file emission gated by a `uses_*` flag, and in namespaced mode placed in the nameless global
 block and called with a leading `\` (the existing `bs` pattern).
 
 ### 4.1 Emitted helper bodies
 ```php
-function __phorge_div($a, $b) {
-    // Phorge `/`: int/int truncates toward zero (intdiv); float/float is real division.
+function __phorj_div($a, $b) {
+    // Phorj `/`: int/int truncates toward zero (intdiv); float/float is real division.
     return (is_int($a) && is_int($b)) ? intdiv($a, $b) : $a / $b;
 }
-function __phorge_rem($a, $b) {
-    // Phorge `%`: int/int integer modulo; float/float fmod (sign of dividend, matches Rust `%`).
+function __phorj_rem($a, $b) {
+    // Phorj `%`: int/int integer modulo; float/float fmod (sign of dividend, matches Rust `%`).
     return (is_int($a) && is_int($b)) ? $a % $b : fmod($a, $b);
 }
-function __phorge_str($v) {
+function __phorj_str($v) {
     // Mirror Value::as_display (src/value.rs:106): bool -> "true"/"false"; everything else PHP-cast.
     if (is_bool($v)) { return $v ? "true" : "false"; }
     return (string)$v;
 }
-function __phorge_range($a, $b, $inclusive) {
-    // Phorge range: empty when start > hi; never descends (PHP range() descends — QW-13).
+function __phorj_range($a, $b, $inclusive) {
+    // Phorj range: empty when start > hi; never descends (PHP range() descends — QW-13).
     $hi = $inclusive ? $b : $b - 1;
     return ($a <= $hi) ? range($a, $hi) : [];
 }
 ```
-Kernel-parity rationale (verified against `src/value.rs`): Phorge int `/` = i64 truncate-toward-zero
-= PHP `intdiv`; Phorge float `%` = Rust f64 `%` (truncated, sign-of-dividend) = PHP `fmod`;
+Kernel-parity rationale (verified against `src/value.rs`): Phorj int `/` = i64 truncate-toward-zero
+= PHP `intdiv`; Phorj float `%` = Rust f64 `%` (truncated, sign-of-dividend) = PHP `fmod`;
 `as_display` bool ⇒ `"true"/"false"`, int/float/string ⇒ their `{}`-format ≈ PHP `(string)` for
 representable values. Div/mod-by-zero stays a **fault** on all backends (PHP `intdiv($x,0)` /
-`$x/0` / `fmod($x,0)` and Phorge's `DivZero`/`ModZero`) — a non-example case, not oracle-covered.
+`$x/0` / `fmod($x,0)` and Phorj's `DivZero`/`ModZero`) — a non-example case, not oracle-covered.
 
 ### 4.2 P0-1 / P0-4 wiring (Div, Rem)
 In `emit_expr`'s `Expr::Binary` arm (`transpile.rs:525-536`), special-case `Div` and `Rem` **before**
 the generic `{l} {op} {r}` join (exactly as `Coalesce` is already special-cased at `:531-534`):
 ```rust
 if matches!(op, BinaryOp::Div) { self.uses_div = true;
-    return Ok(format!("{bs}__phorge_div({l}, {r})")); }
+    return Ok(format!("{bs}__phorj_div({l}, {r})")); }
 if matches!(op, BinaryOp::Rem) { self.uses_rem = true;
-    return Ok(format!("{bs}__phorge_rem({l}, {r})")); }
+    return Ok(format!("{bs}__phorj_rem({l}, {r})")); }
 ```
 `Div`/`Rem` then become `unreachable!` in `binop()` (`:855-856`), matching the existing
 `Coalesce`/`Is`/`Pipe` arms. The helper output is a PHP call ⇒ a primary ⇒ never needs operand parens.
@@ -199,9 +199,9 @@ In `emit_string` (`transpile.rs:673`), wrap **each interpolated expr** (`StrPart
 str helper instead of bare `({code})`:
 ```rust
 StrPart::Expr(e) => { let code = self.emit_expr(e)?; self.uses_str = true;
-    chunks.push(format!("{bs}__phorge_str({code})")); }
+    chunks.push(format!("{bs}__phorj_str({code})")); }
 ```
-Scope: only the string-interpolation/`println` path coerces (that is the only context where Phorge's
+Scope: only the string-interpolation/`println` path coerces (that is the only context where Phorj's
 `as_display` semantics apply). A bool used in `==`, a condition, or a function argument is untouched.
 For int/float/string the helper is a semantic no-op (matches today's concat); for bool it corrects
 `"1"/""` → `"true"/"false"`. **No regression** to currently-passing examples (verified by the matrix).
@@ -217,7 +217,7 @@ fn is_primary(e: &Expr) -> bool {
         | Expr::Bytes(..) | Expr::Ident(..) | Expr::This(..) | Expr::Null(..)
         | Expr::Call{..} | Expr::Member{..} | Expr::Index{..} | Expr::Force{..}
         | Expr::Range{..} | Expr::List(..))
-    // Force→__phorge_unwrap(...), Range→__phorge_range(...)/range(...), Call/Member/Index →
+    // Force→__phorj_unwrap(...), Range→__phorj_range(...)/range(...), Call/Member/Index →
     // PHP primaries; all self-contained. Binary/Unary/If/Match/Lambda/Coalesce are NOT primary.
 }
 ```
@@ -239,8 +239,8 @@ decide in impl, oracle-verified).
 
 ### 5.1 QW-13 — empty/reversed range emit
 Replace the inline `range($s, $e)` / `range($s, $e - 1)` emit (`transpile.rs:583-587`) with
-`{bs}__phorge_range({s}, {e}, true|false)` (§4.1). PHP `range()` descends for `a > b`; Phorge yields
-`[]`. The helper restores Phorge semantics. `uses_range` flag.
+`{bs}__phorj_range({s}, {e}, true|false)` (§4.1). PHP `range()` descends for `a > b`; Phorj yields
+`[]`. The helper restores Phorj semantics. `uses_range` flag.
 
 ### 5.2 P1-#9 — large-range clean fault (both backends, lockstep)
 Both `src/vm.rs:252-263` (`Op::MakeRange`) and `src/interpreter.rs:380-389` (`Expr::Range`) currently
@@ -269,7 +269,7 @@ the same `agree_err` machinery, exactly as the GA roadmap sequences it.
 ### 6.1 The oracle (P0-ROOT)
 - `all_examples_transpile_and_match_php` — §3.2, glob.
 - `all_example_projects_transpile_and_match_php` — §3.3, projects.
-Both gated by `require_or_skip()`; under `PHORGE_REQUIRE_PHP=1` a missing php fails.
+Both gated by `require_or_skip()`; under `PHORJ_REQUIRE_PHP=1` a missing php fails.
 
 ### 6.2 Per-P0 targeted tests (TDD — write red first)
 | Fix | Test (Ok-output, oracle-eligible) | Asserts |

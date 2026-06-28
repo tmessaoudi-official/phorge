@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-Canonical records of Phorge's **load-bearing architectural decisions** — the *verdict* and its
+Canonical records of Phorj's **load-bearing architectural decisions** — the *verdict* and its
 *consequences* for each, in [Michael Nygard's ADR format](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions).
 
 **Authority split** (see [ADR-0001](0001-no-shared-run-vm-ir.md) and `docs/ARCHITECTURE.md`):

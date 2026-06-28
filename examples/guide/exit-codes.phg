@@ -1,6 +1,6 @@
 // Entry point — `main(args): int` with exit codes (Batch-1 B).
 //
-// `main` is where a Phorge program starts. It can take no parameters, or a single `List<string>`
+// `main` is where a Phorj program starts. It can take no parameters, or a single `List<string>`
 // parameter — the program arguments (everything after `phg run file.phg --`). It returns `void`
 // (exit code 0) or `int` (the process exit code). The same argv is also available anywhere via
 // `Core.Process.args()`, so a small program can just take it as a parameter.

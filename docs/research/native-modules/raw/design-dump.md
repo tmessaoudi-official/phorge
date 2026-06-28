@@ -3,7 +3,7 @@
 **Stage 4 (DESIGN).** Module: `Core.Dump`. Tier A (pure/deterministic), std-only, **no new VM Op**,
 fits the existing `NativeEval::Reflective` dispatch with zero new plumbing. This document specifies the
 EXACT textual format for every `Value` kind, circular-ref handling, depth limiting, string truncation,
-and indentation — then the IDENTICAL `__phorge_dump()` PHP helper so transpiled output is byte-for-byte
+and indentation — then the IDENTICAL `__phorj_dump()` PHP helper so transpiled output is byte-for-byte
 equal to the two Rust backends.
 
 Confidence: **high** on mechanism + determinism argument (every divergence axis traces to a verified
@@ -27,22 +27,22 @@ wrong and one trap is missing. All three are load-bearing for byte-identity:
    escape scheme** (§5.4) identical on both legs: escape `\` `"` `\n` `\t` `\r`, everything else
    literal. The escaper is a new shared helper, written once per leg, byte-matched.
 
-2. **CRITICAL missing trap — `Set` and `Bytes` lose their Phorge type on the PHP leg.** I verified:
-   - A Phorge **`Set`** transpiles to a PHP **plain list-array** (`array_is_list($x) === true`) — it is
+2. **CRITICAL missing trap — `Set` and `Bytes` lose their Phorj type on the PHP leg.** I verified:
+   - A Phorj **`Set`** transpiles to a PHP **plain list-array** (`array_is_list($x) === true`) — it is
      *runtime-indistinguishable from a `List`* on the PHP side (`src/native/set.rs`: a Set is just a
      deduped `array`).
-   - A Phorge **`Bytes`** transpiles to a PHP **string** (`src/transpile/expr.rs:185`,
+   - A Phorj **`Bytes`** transpiles to a PHP **string** (`src/transpile/expr.rs:185`,
      `php_escape_bytes`) — *runtime-indistinguishable from a `Str`* on the PHP side.
 
-   So a PHP `__phorge_dump($v)` that sniffs `is_array`/`is_string` **cannot** tell `Set` from `List` or
+   So a PHP `__phorj_dump($v)` that sniffs `is_array`/`is_string` **cannot** tell `Set` from `List` or
    `Bytes` from `Str`. The two Rust backends *can* (the `Value` enum is closed and tagged). A runtime
    dispatch on the PHP leg therefore CANNOT be byte-identical for these two kinds.
 
    **Resolution (the design's central decision):** the dump native's `php` mapping is **static-type
    driven at the call site**, exactly like `Convert.toInt`/`Reflect.kind` already are
-   (`src/transpile/call.rs:100-170`). The transpiler knows the *static* Phorge type of the argument
+   (`src/transpile/call.rs:100-170`). The transpiler knows the *static* Phorj type of the argument
    expression. It emits a **type-tagged** call so the PHP helper renders the correct kind:
-   `__phorge_dump($x, 'set')` / `__phorge_dump($x, 'bytes')` / `__phorge_dump($x)` (untagged → runtime
+   `__phorj_dump($x, 'set')` / `__phorj_dump($x, 'bytes')` / `__phorj_dump($x)` (untagged → runtime
    sniff for everything else). See §5.2. This keeps `Set`/`Bytes` byte-identical without any runtime tag
    on the PHP value.
 
@@ -69,17 +69,17 @@ wrong and one trap is missing. All three are load-bearing for byte-identity:
     so the dumper **never iterates it directly**. It takes the field-name list from
     `ClassTables.fields` (a `BTreeMap<String, Vec<String>>`, `src/native/mod.rs:110` → **sorted,
     transitive-with-inheritance, deterministic**) and looks each name up in the instance map. This is
-    exactly what `Reflect.fields` and the transpiler's `__phorge_reflect_of` static table already do, so
+    exactly what `Reflect.fields` and the transpiler's `__phorj_reflect_of` static table already do, so
     field order is *already* byte-identical across all three legs;
 - **float rendering single-sourced** through Rust shortest-round-trip (`format!("{x}")` via
-  `as_display`, `src/value.rs:242`) on the Rust legs and `__phorge_float` (positional Ryū,
+  `as_display`, `src/value.rs:242`) on the Rust legs and `__phorj_float` (positional Ryū,
   `src/transpile/program.rs:312`) on the PHP leg — the same pairing every existing float-touching native
   uses;
 - **decimal rendering single-sourced** through `fmt_decimal(unscaled, scale)` (`src/value.rs:847`); the
   emitted PHP BCMath string `(string)`s to the same form (M-NUM S1 invariant).
 
 Because every axis of potential divergence resolves to an **already-shipped single-source mechanism**,
-the format is Phorge-owned: *we define what byte-identical means*, and the differential harness enforces
+the format is Phorj-owned: *we define what byte-identical means*, and the differential harness enforces
 it.
 
 ---
@@ -103,7 +103,7 @@ line's indent. Empty compounds render on one line (`[]`, `{}`, `Set {}`, `Foo {}
 
 ### 2.1 Worked example
 
-```phorge
+```phorj
 import Core.Dump;
 import Core.Console;
 
@@ -169,9 +169,9 @@ Render `n.to_string()` (Rust) / `(string)$v` (PHP, an int is exact). No type ann
 ```
 
 ### 3.2 `Float(x)`
-Render via the **float single-source**: Rust `format!("{x}")` (== `as_display`); PHP `__phorge_float($v)`
+Render via the **float single-source**: Rust `format!("{x}")` (== `as_display`); PHP `__phorj_float($v)`
 (gate `uses_float = true` when the dump helper is emitted). Shortest round-trip, positional, never
-scientific; integer-valued floats print without a trailing `.0` (the existing `__phorge_float`
+scientific; integer-valued floats print without a trailing `.0` (the existing `__phorj_float`
 behavior — verified `src/transpile/program.rs:312`). Examples must use exactly-representable floats
 (standing KNOWN_ISSUE; irrational floats diverge at PHP's 14-digit `echo`, unrelated to the dumper).
 ```
@@ -198,9 +198,9 @@ The literal `unit` (matches `as_display`'s `Value::Unit => "unit"`, `src/value.r
 PHP: there is no PHP value for `Unit` in normal dumps (it is the empty/void result); if it ever reaches
 the dumper it is `null`-shaped — but to stay faithful, `Unit` is **statically known at the call site**
 when the argument type is `void`/`Empty`. In practice `Unit` is not a first-class dumpable value in
-Phorge programs, so this arm is defensive. Rust renders `unit`; the PHP leg is reached only via a
+Phorj programs, so this arm is defensive. Rust renders `unit`; the PHP leg is reached only via a
 statically-`void` argument, which is degenerate — **deferred / not in any gated example** (a `void`
-expression cannot be a value argument in Phorge anyway). State explicitly: `Unit` is unreachable as a
+expression cannot be a value argument in Phorj anyway). State explicitly: `Unit` is unreachable as a
 real argument; the Rust arm exists for totality only.
 
 ### 3.6 `Str(s)`
@@ -228,14 +228,14 @@ if `b.len() > MAX_BYTES` (default 64) keep the first `MAX_BYTES` octets, then `�
 b"hello"
 b"\x00\x01\xff"
 ```
-**PHP leg:** the static type is `bytes`, so the transpiler emits `__phorge_dump($x, 'bytes')`; the helper
+**PHP leg:** the static type is `bytes`, so the transpiler emits `__phorj_dump($x, 'bytes')`; the helper
 runs a `bin2hex`-free per-octet loop (`ord()`, `sprintf("\\x%02x", …)`) — tier-1 only, survives `php -n`.
 
 ### 3.8 `Decimal { unscaled, scale }`
 Render `fmt_decimal(unscaled, scale)` (`src/value.rs:847`) with a trailing `d` to disambiguate from a
 float/int. Rust: `format!("{}d", fmt_decimal(u, s))`. PHP: the BCMath string already `(string)`s to the
 `fmt_decimal` form (M-NUM S1); append the literal `d`. The static type is `decimal`, so the call emits
-`__phorge_dump($x, 'decimal')` (PHP can't distinguish a BCMath decimal-string from a plain numeric
+`__phorj_dump($x, 'decimal')` (PHP can't distinguish a BCMath decimal-string from a plain numeric
 string at runtime).
 ```
 19.99d
@@ -283,7 +283,7 @@ the hashable subset (`HKey::{Int, Bool, Str}`): an `Int` key prints bare (`3 =>`
 (the same predicate the Json helper relies on): `array_is_list` true → render as List (§3.10); false (or
 the array is empty *and* statically a Map — see below) → render as Map. **Empty-collision caveat:** an
 empty PHP array is `array_is_list([]) === true`, so an empty `Map` and an empty `List` collide on the PHP
-leg. Resolve it the same way as Set/Bytes: when the static type is a `Map`, emit `__phorge_dump($x,
+leg. Resolve it the same way as Set/Bytes: when the static type is a `Map`, emit `__phorj_dump($x,
 'map')`; the helper then renders `{}` for an empty array instead of `[]`. A non-empty array is
 unambiguous via `array_is_list`, so the tag matters only for the empty case (but emit it unconditionally
 for any `Map`-typed argument — it costs nothing and removes the edge).
@@ -300,7 +300,7 @@ Set {
   3,
 }
 ```
-**PHP leg:** a Set is runtime-indistinguishable from a List → the transpiler emits `__phorge_dump($x,
+**PHP leg:** a Set is runtime-indistinguishable from a List → the transpiler emits `__phorj_dump($x,
 'set')` (static type drives it). The helper, seeing the `'set'` tag, renders the `Set { … }` wrapper and
 walks the array as values (no keys).
 
@@ -315,16 +315,16 @@ Point {
   y: 2,
 }
 ```
-**Field order single-source:** `ClassTables.fields` (`BTreeMap`, sorted; `__phorge_reflect_of`'s static
+**Field order single-source:** `ClassTables.fields` (`BTreeMap`, sorted; `__phorj_reflect_of`'s static
 table emits the identical sorted list on the PHP leg). The PHP helper reads the field names from the
-**same static class table** `__phorge_reflect_of` builds (§5.3), then `$obj->$name` for each — so the
+**same static class table** `__phorj_reflect_of` builds (§5.3), then `$obj->$name` for each — so the
 order is byte-identical by construction. **Never** `get_object_vars($obj)` (insertion/declaration order,
 divergent).
 
 ### 3.14 `Enum(ev)` — `TypeName.Variant(payload…)`
 `TypeName.Variant` for a zero-payload variant; `TypeName.Variant(p0, p1, …)` for a payload, with each
 payload element rendered by the full dumper (nested compounds indent). Payload is positional (no field
-names — enum payloads are positional in Phorge). A multi-line payload nests:
+names — enum payloads are positional in Phorj). A multi-line payload nests:
 ```
 Color.Red
 Shape.Circle(2.5)
@@ -335,10 +335,10 @@ Tree.Node(
 ```
 *(Single-line when every payload element is a scalar; multi-line only when a payload element is itself a
 compound. This is the one place a compound renders inline — for a scalar payload — because the
-`Variant(...)` call syntax is the natural Phorge form. The same rule applies on all three legs: a payload
+`Variant(...)` call syntax is the natural Phorj form. The same rule applies on all three legs: a payload
 element that is a compound forces the multi-line form. Medium confidence; trivially byte-matched.)*
-**PHP leg:** a Phorge enum transpiles to a PHP class hierarchy with a discriminant. The dumper reads the
-type/variant from the emitted enum representation (the same `__phorge_reflect_of`-style static info, or
+**PHP leg:** a Phorj enum transpiles to a PHP class hierarchy with a discriminant. The dumper reads the
+type/variant from the emitted enum representation (the same `__phorj_reflect_of`-style static info, or
 the enum object's known shape — to be pinned in implementation against the actual enum PHP emission;
 `src/transpile` enum lowering). This is the **one kind whose PHP rendering needs an implementation-time
 check** against the enum lowering; flagged as the highest-effort sub-part (still front-end-only).
@@ -397,7 +397,7 @@ checker/compiler surgery beyond standard generic-native registration (`T value` 
 
 Because `Set→list-array`, `Bytes→string`, `Decimal→numeric-string`, and `empty Map→empty list-array` are
 runtime-indistinguishable on the PHP leg (§0.2), the transpiler emits a **type tag** derived from the
-**static** Phorge type of the argument, mirroring the existing `Reflect.kind`/`Convert.toInt` call-site
+**static** Phorj type of the argument, mirroring the existing `Reflect.kind`/`Convert.toInt` call-site
 dispatch (`src/transpile/call.rs:100-170`). In the `Core.Dump` arm of `emit_call`:
 
 ```rust
@@ -411,71 +411,71 @@ if nat.module == "Core.Dump" && nat.name == "dump" {
         Ty::Function(..)      => Some("'closure'"),
         _                     => None,            // int/float/bool/str/null/list/instance/enum: runtime sniff
     };
-    // emit __phorge_dump($arg) or __phorge_dump($arg, <tag>)
+    // emit __phorj_dump($arg) or __phorj_dump($arg, <tag>)
 }
 ```
 
-`inspect(value, depth)` emits `__phorge_dump_depth($arg, <depth>, <tag?>)` (same tag logic).
+`inspect(value, depth)` emits `__phorj_dump_depth($arg, <depth>, <tag?>)` (same tag logic).
 **No type tag reaches a backend value** — it is a *literal string argument the transpiler bakes into the
 call*. The two Rust backends ignore the concept entirely (they read the closed enum tag directly).
 
-### 5.3 The gated `__phorge_dump` helper (emitted in `emit_runtime_helpers`)
+### 5.3 The gated `__phorj_dump` helper (emitted in `emit_runtime_helpers`)
 
-Modeled exactly on `__phorge_reflect_of` (`src/transpile/program.rs:816`) for the field table, and
-`__phorge_float`/`__phorge_json_encode` for the gated-recursive-helper pattern. Gated by `uses_dump`.
-Reuses `__phorge_float` (sets `uses_float`) and the `__phorge_reflect_of` static field table (sets
+Modeled exactly on `__phorj_reflect_of` (`src/transpile/program.rs:816`) for the field table, and
+`__phorj_float`/`__phorj_json_encode` for the gated-recursive-helper pattern. Gated by `uses_dump`.
+Reuses `__phorj_float` (sets `uses_float`) and the `__phorj_reflect_of` static field table (sets
 `uses_reflect_tables`). Pseudocode (the literal emission, indentation elided):
 
 ```php
-function __phorge_dump($v, $tag = null) { $seen = []; return __phorge_dump_inner($v, $seen, 0, PHP_INT_MAX, $tag); }
-function __phorge_dump_depth($v, $depth, $tag = null) { $seen = []; return __phorge_dump_inner($v, $seen, 0, $depth, $tag); }
+function __phorj_dump($v, $tag = null) { $seen = []; return __phorj_dump_inner($v, $seen, 0, PHP_INT_MAX, $tag); }
+function __phorj_dump_depth($v, $depth, $tag = null) { $seen = []; return __phorj_dump_inner($v, $seen, 0, $depth, $tag); }
 
-function __phorge_dump_inner($v, &$seen, $ind, $maxDepth, $tag) {
+function __phorj_dump_inner($v, &$seen, $ind, $maxDepth, $tag) {
     // depth elision FIRST (so an over-deep compound is elided, scalars below cap still print)
     // see §6 for the exact trigger condition
 
     // --- type-tag branches (Set/Bytes/Decimal/Map/closure forced by the static tag) ---
     if ($tag === 'closure') { return "<closure>"; }
-    if ($tag === 'bytes')   { return __phorge_dump_bytes($v); }            // b"\xHH…" lowercase, §3.7
+    if ($tag === 'bytes')   { return __phorj_dump_bytes($v); }            // b"\xHH…" lowercase, §3.7
     if ($tag === 'decimal') { return (string)$v . "d"; }                   // §3.8 (BCMath string already fmt_decimal form)
-    if ($tag === 'set')     { return __phorge_dump_set($v, $seen, $ind, $maxDepth); }   // "Set { … }", §3.12
-    if ($tag === 'map')     { return __phorge_dump_map($v, $seen, $ind, $maxDepth); }   // "{ … }" even when empty, §3.11
+    if ($tag === 'set')     { return __phorj_dump_set($v, $seen, $ind, $maxDepth); }   // "Set { … }", §3.12
+    if ($tag === 'map')     { return __phorj_dump_map($v, $seen, $ind, $maxDepth); }   // "{ … }" even when empty, §3.11
 
     // --- untagged: runtime sniff (int/float/bool/null/str/list/instance/enum) ---
     if ($v === null)        { return "null"; }                             // BEFORE is_* (null is falsy)
     if (is_bool($v))        { return $v ? "true" : "false"; }
     if (is_int($v))         { return (string)$v; }
-    if (is_float($v))       { return __phorge_float($v); }                 // float single-source
-    if (is_string($v))      { return __phorge_dump_str($v); }              // "…" escaped+truncated, §3.6
+    if (is_float($v))       { return __phorj_float($v); }                 // float single-source
+    if (is_string($v))      { return __phorj_dump_str($v); }              // "…" escaped+truncated, §3.6
     if (is_object($v)) {
         // enum object vs class instance — distinguished by the emitted enum representation (impl-time, §3.14)
-        if (__phorge_is_enum($v)) { return __phorge_dump_enum($v, $seen, $ind, $maxDepth); }
+        if (__phorj_is_enum($v)) { return __phorj_dump_enum($v, $seen, $ind, $maxDepth); }
         $id = spl_object_id($v);
         if (isset($seen[$id])) { return "<circular>"; }                    // §4 — id gates token, never printed
         $seen[$id] = true;
         $cls    = get_class($v);
-        $fields = __phorge_reflect_of($v, 'fields');                       // SAME sorted table as Reflect, §3.13
+        $fields = __phorj_reflect_of($v, 'fields');                       // SAME sorted table as Reflect, §3.13
         if (count($fields) === 0) { unset($seen[$id]); return $cls . " {}"; }
         $pad = str_repeat("  ", $ind + 1);
         $out = $cls . " {\n";
         foreach ($fields as $name) {
-            $out .= $pad . $name . ": " . __phorge_dump_inner($v->$name, $seen, $ind + 1, $maxDepth, null) . ",\n";
+            $out .= $pad . $name . ": " . __phorj_dump_inner($v->$name, $seen, $ind + 1, $maxDepth, null) . ",\n";
         }
         unset($seen[$id]);
         return $out . str_repeat("  ", $ind) . "}";
     }
     if (is_array($v)) {                                                    // untagged array ⇒ List or non-empty Map
-        if (array_is_list($v)) { return __phorge_dump_list($v, $seen, $ind, $maxDepth); }   // [ i => … ], §3.10
-        return __phorge_dump_map($v, $seen, $ind, $maxDepth);              // { k => … }, §3.11
+        if (array_is_list($v)) { return __phorj_dump_list($v, $seen, $ind, $maxDepth); }   // [ i => … ], §3.10
+        return __phorj_dump_map($v, $seen, $ind, $maxDepth);              // { k => … }, §3.11
     }
     return "<unknown>";                                                    // unreachable (totality)
 }
 ```
 
-`__phorge_dump_list/_map/_set/_enum/_str/_bytes` are small sibling helpers, each gated under `uses_dump`
+`__phorj_dump_list/_map/_set/_enum/_str/_bytes` are small sibling helpers, each gated under `uses_dump`
 (emitted as a block). All use only tier-1 PHP (`str_repeat`, `count`, `foreach`, `ord`, `sprintf`,
 `spl_object_id`, `array_is_list`, `preg_*` core, `get_class`) — **all survive `php -n`** (no `mb_*`, no
-`json_encode` for the structural rendering — only `__phorge_float` for floats).
+`json_encode` for the structural rendering — only `__phorj_float` for floats).
 
 ### 5.4 Pinned string-escape scheme (byte-matched, both legs)
 
@@ -491,7 +491,7 @@ implement the identical map; only these five sequences are escaped, everything e
 | `\r` (0x0D) | `\r` |
 | anything else | literal (UTF-8 passes through) |
 
-Rust: a `String::with_capacity` loop over `s.chars()`. PHP: a loop over the bytes (a Phorge `Str` is
+Rust: a `String::with_capacity` loop over `s.chars()`. PHP: a loop over the bytes (a Phorj `Str` is
 valid UTF-8 → byte-level escaping of these five ASCII bytes is safe, multibyte sequences pass through
 untouched). **Do NOT use `addslashes`** (it escapes `'` `"` `\` `NUL` only — different set). This is the
 one meticulous-but-routine spot; the differential harness catches any drift immediately.
@@ -519,7 +519,7 @@ emit the elision token **`…`** (U+2026, same bytes as §5.5) *in place of the 
 recurse. A scalar at any depth always renders fully (it has no children to elide). A zero-payload enum
 variant is a scalar for this purpose (renders fully).
 
-```phorge
+```phorj
 Dump.inspect([[1, 2], [3, 4]], 1)
 ```
 ```
@@ -531,15 +531,15 @@ Dump.inspect([[1, 2], [3, 4]], 1)
 *(At `d = 0` the outer list renders; its elements are compounds at `d = 1 == maxDepth` → each elided.)*
 
 `maxDepth` is the second arg to `inspect`, threaded as a plain `int` through the native and baked into
-the PHP `__phorge_dump_depth($v, $depth, $tag)` call. **The "at-or-below" boundary (`d >= maxDepth`) and
+the PHP `__phorj_dump_depth($v, $depth, $tag)` call. **The "at-or-below" boundary (`d >= maxDepth`) and
 the "compound only" predicate must be byte-identical across legs** (named risk — §8.7). I pin
 `d >= maxDepth && is_compound(v)` as the single rule.
 
 ---
 
-## 7. Phorge API & registry
+## 7. Phorj API & registry
 
-```phorge
+```phorj
 import Core.Dump;
 
 Dump.dump(value)          // T value -> string   (unbounded depth, cycle-safe)
@@ -555,7 +555,7 @@ NativeFn {
     ret: Ty::Str,
     pure: true,
     eval: NativeEval::Reflective(dump_value),       // reads &ClassTables for field order
-    php: /* gated: emit __phorge_dump($arg [, tag]); set uses_dump */,
+    php: /* gated: emit __phorj_dump($arg [, tag]); set uses_dump */,
 },
 NativeFn {
     module: "Core.Dump", name: "inspect",
@@ -563,7 +563,7 @@ NativeFn {
     ret: Ty::Str,
     pure: true,
     eval: NativeEval::Reflective(inspect_value),
-    php: /* gated: emit __phorge_dump_depth($arg, $depth [, tag]); set uses_dump */,
+    php: /* gated: emit __phorj_dump_depth($arg, $depth [, tag]); set uses_dump */,
 },
 ```
 
@@ -579,14 +579,14 @@ a separate `Dump.colorize(string) -> string` post-pass, never in a gated example
 ## 8. Determinism risks (named, each with a single-source mitigation)
 
 1. **Instance field order** — read `ClassTables.fields` (sorted `BTreeMap`), never iterate
-   `Instance.fields` (`HashMap`). The PHP leg reads the identical `__phorge_reflect_of` static table.
+   `Instance.fields` (`HashMap`). The PHP leg reads the identical `__phorj_reflect_of` static table.
    *If a future change iterates the HashMap directly, byte-identity silently breaks.*
-2. **Float rendering** — route through `as_display`/`format!("{x}")` (Rust) and `__phorge_float` (PHP);
+2. **Float rendering** — route through `as_display`/`format!("{x}")` (Rust) and `__phorj_float` (PHP);
    a naked `(string)$float` diverges. Examples restricted to exactly-representable floats.
 3. **String escape scheme** — pin the §5.4 five-sequence map identically; do NOT reuse `php_escape`
    (escapes `$`, not `\n`) or `addslashes` (different set).
 4. **Set/Bytes/Decimal/empty-Map type erasure on the PHP leg** — the §0.2/§5.2 **static-type tag** is the
-   only correct fix; a runtime `is_array`/`is_string` sniff CANNOT recover the Phorge kind. *This is the
+   only correct fix; a runtime `is_array`/`is_string` sniff CANNOT recover the Phorj kind. *This is the
    design's central, non-obvious decision.*
 5. **List vs Map (non-empty)** — `array_is_list($v)` predicate (same as the Json helper). Empty arrays
    collide → covered by the `'map'` tag (#4).
@@ -607,10 +607,10 @@ a separate `Dump.colorize(string) -> string` post-pass, never in a gated example
 - `String`, `format!`, `str::push_str`, `core::fmt` — rendering (alloc/core).
 - `std::rc::Rc::as_ptr` — path-scoped cycle detection, identical to `eq_val_rec` (`src/value.rs:328`).
 - `f64` Display (`format!("{x}")`) via `Value::as_display` (`src/value.rs:242`) — float single-source,
-  mirrored by `__phorge_float` (`src/transpile/program.rs:312`).
+  mirrored by `__phorj_float` (`src/transpile/program.rs:312`).
 - `fmt_decimal(unscaled, scale)` (`src/value.rs:847`) — decimal single-source.
 - `ClassTables::from_program` (`src/native/mod.rs:118`) + the sorted `fields` `BTreeMap`
-  (`src/native/mod.rs:110`) — deterministic field order, shared with `__phorge_reflect_of`
+  (`src/native/mod.rs:110`) — deterministic field order, shared with `__phorj_reflect_of`
   (`src/transpile/program.rs:816`).
 - `NativeEval::Reflective` dispatch (`src/native/mod.rs:93`) — already wired in both backends.
 - `chars()` for code-point truncation.
@@ -622,7 +622,7 @@ No external crate, no `unsafe` (`#![forbid(unsafe_code)]` unaffected), no clock/
 ## 10. Effort & open questions
 
 - **Effort: medium.** `src/native/dump.rs` (two Reflective natives + the Rust renderer over the closed
-  enum, single-sourced for both backends) + the gated `__phorge_dump*` PHP helper block in
+  enum, single-sourced for both backends) + the gated `__phorj_dump*` PHP helper block in
   `emit_runtime_helpers` + the `uses_dump` flag + a `Core.Dump` arm in `emit_call` for the static-type
   tag + `examples/guide/dump.phg` (byte-identity-gated) + unit tests per `Value` kind incl. a cycle.
   No new Op, no new `NativeEval` variant, no checker/compiler surgery beyond generic-native registration.

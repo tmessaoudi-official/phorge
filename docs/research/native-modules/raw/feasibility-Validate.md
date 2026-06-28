@@ -11,12 +11,12 @@ PHP `filter_var` because it returns a typed `T?` (or `bool`) rather than `false|
 - **std-only:** Yes — no external crate; the validation rules are hand-rolled ASCII/byte logic.
 - **New VM Op:** No. Every predicate is an `Op::CallNative` (the existing `parseInt`/`parseFloat`
   precedent — same `pure: true` + `Ty::Bool`/`Ty::Optional` shape).
-- **Byte-identity strategy:** OWN the rules in Rust + a **gated `__phorge_validate_*` PHP helper**
+- **Byte-identity strategy:** OWN the rules in Rust + a **gated `__phorj_validate_*` PHP helper**
   that mirrors the Rust logic line-for-line. **Do NOT transpile to `filter_var`/`ctype_*`** — those
   disagree with each other, with Rust, and (for email/URL) across PHP versions. This is the same
-  decision already made for `Text.parseInt` (`__phorge_parse_int`, not `filter_var`/`intval`).
+  decision already made for `Text.parseInt` (`__phorj_parse_int`, not `filter_var`/`intval`).
 - **Recommendation:** **adopt-now** for `isInt` + `isIpv4` (unambiguous, fully gateable). **Defer**
-  `isEmail` to a documented Phorge-owned grammar slice, and **defer `isUrl` outright** until
+  `isEmail` to a documented Phorj-owned grammar slice, and **defer `isUrl` outright** until
   `Core.Url` exists (it does not today — the hypothesis's "reuse Core.Url" is invalid).
 - **Honest feasibility:** ~88% for the buildable subset (`isInt`/`isIpv4` + a conservative
   `isEmail`); the 12% gap is the email-grammar bikeshed and the missing `Core.Url`.
@@ -34,12 +34,12 @@ PHP `filter_var` because it returns a typed `T?` (or `bool`) rather than `false|
   Result<Value,String>)` with `pure: true`.
 - **Exact precedent located:** `Text.parseInt` (`src/native/text.rs:472`) returns
   `Ty::Optional(Box::new(Ty::Int))`, evals `s.parse::<i64>().map_or(Value::Null, Value::Int)`, and
-  transpiles to the **gated `__phorge_parse_int` helper** (`src/transpile/program.rs:396`), NOT to
+  transpiles to the **gated `__phorj_parse_int` helper** (`src/transpile/program.rs:396`), NOT to
   `filter_var`. `Text.contains`/`startsWith` return `Ty::Bool`. So both the `bool` and the `T?`
   shapes are already shipped and gated.
 - **Gating mechanism confirmed** (`src/transpile/program.rs:263 emit_runtime_helpers`, flags set in
   `src/transpile/call.rs:108`): a `uses_<helper>: bool` field on the transpiler, set when the native
-  is emitted, causes the helper `function __phorge_*` to be emitted once per file. `Core.Validate`
+  is emitted, causes the helper `function __phorj_*` to be emitted once per file. `Core.Validate`
   follows this verbatim (`uses_validate_email` / `uses_validate_ipv4`, etc.).
 
 ## 2. The determinism partition — why `filter_var` is the trap, owned rules are Tier A
@@ -59,7 +59,7 @@ Measured under the **floor** `/stack/tools/phpbrew/php/php-8.5.7/bin/php -n` (an
 | `"9223372036854775808"` (MAX+1) | false | — | false |
 
 → Transpiling `isInt` to **either** PHP builtin would silently break `run ≡ runvm ≡ PHP`.
-Mirroring Rust's `i64::from_str` in a hand-rolled `__phorge_validate_int($s)` (optional `+`/`-`,
+Mirroring Rust's `i64::from_str` in a hand-rolled `__phorj_validate_int($s)` (optional `+`/`-`,
 ASCII digits, leading zeros allowed, i64 range check) is the only byte-identical path. Verified that
 i64::MAX / MAX+1 boundaries match PHP's int range exactly.
 
@@ -83,7 +83,7 @@ construction. The cost is honesty: this validates *a* defensible email shape, no
 For each predicate, **one rule, three legs:**
 - **Interpreter + VM:** the single `NativeEval::Pure` body (shared `eval` → structural `run ≡
   runvm` by the registry's one-body-two-callers guarantee).
-- **PHP:** a gated `__phorge_validate_<x>` helper emitted by `emit_runtime_helpers`, written to
+- **PHP:** a gated `__phorj_validate_<x>` helper emitted by `emit_runtime_helpers`, written to
   reproduce the Rust logic. `isEmail` may emit a single `preg_match($pat, $s) === 1` (core PCRE
   survives `php -n`, verified). `isInt`/`isIpv4` emit pure byte/string logic (no extension).
 
@@ -91,9 +91,9 @@ For each predicate, **one rule, three legs:**
 no mbstring dependency — verified mbstring is absent under `-n`), no float formatting. Nothing in the
 trap list is reachable.
 
-## 4. Phorge API sketch
+## 4. Phorj API sketch
 
-```phorge
+```phorj
 import Core.Validate;
 
 // bool predicates (the filter_var "is it valid?" surface, but typed):
@@ -108,7 +108,7 @@ Validate.toInt(string s) -> int?        // None on invalid; the T? win over filt
 ```
 
 Worked example (the shipped `examples/guide/validate.phg`, byte-identity-gated):
-```phorge
+```phorj
 package Main;
 import Core.Console;
 import Core.Validate;
@@ -134,16 +134,16 @@ Example must use only inputs where all three legs provably agree (covered by the
 
 ```php
 // uses_validate_int
-function __phorge_validate_int($s) {
+function __phorj_validate_int($s) {
   if ($s === "") return false;
   $i = 0; $n = strlen($s);
   if ($s[0] === '+' || $s[0] === '-') { $i = 1; if ($n === 1) return false; }
   for (; $i < $n; $i++) { $c = $s[$i]; if ($c < '0' || $c > '9') return false; }
   // i64-range check mirroring Rust i64::from_str:
-  return $s === (string)(int)$s && (int)$s == $s ? __phorge_in_i64($s) : ...; // (range guard, see note)
+  return $s === (string)(int)$s && (int)$s == $s ? __phorj_in_i64($s) : ...; // (range guard, see note)
 }
 // uses_validate_ipv4
-function __phorge_validate_ipv4($s) {
+function __phorj_validate_ipv4($s) {
   $p = explode('.', $s);
   if (count($p) !== 4) return false;
   foreach ($p as $o) {
@@ -156,14 +156,14 @@ function __phorge_validate_ipv4($s) {
   return true;
 }
 // uses_validate_email — single core-PCRE call (verified stable 8.5 & 8.6-dev)
-function __phorge_validate_email($s) {
+function __phorj_validate_email($s) {
   return preg_match('/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/', $s) === 1;
 }
-// toInt reuses the existing __phorge_parse_int (already shipped).
+// toInt reuses the existing __phorj_parse_int (already shipped).
 ```
-*Note:* the i64-range edge in `__phorge_validate_int` is the one fiddly bit — simplest is to reuse
-the already-proven `__phorge_parse_int($s) !== null` pattern (it mirrors `i64::from_str` including
-range) and define `isInt` as `__phorge_parse_int($s) !== null`. That eliminates a second hand-rolled
+*Note:* the i64-range edge in `__phorj_validate_int` is the one fiddly bit — simplest is to reuse
+the already-proven `__phorj_parse_int($s) !== null` pattern (it mirrors `i64::from_str` including
+range) and define `isInt` as `__phorj_parse_int($s) !== null`. That eliminates a second hand-rolled
 range guard and reuses a tested helper. Recommended.
 
 ## 6. New VM Op needed?
@@ -182,10 +182,10 @@ triple-match change. No `Value` variant change (returns `Bool`/`Null`/`Int`, all
 ## 8. Named determinism risks (and disposition)
 
 1. **`filter_var`/`ctype_*` divergence** (MEASURED, primary trap) → avoided: own the rules, gated
-   `__phorge_*` helper. The whole point of this module.
-2. **Email grammar version-drift** → avoided: a fixed Phorge-owned ASCII regex (verified identical
+   `__phorj_*` helper. The whole point of this module.
+2. **Email grammar version-drift** → avoided: a fixed Phorj-owned ASCII regex (verified identical
    8.5/8.6-dev), never PHP's built-in email filter.
-3. **i64 range edge** → avoided: define `isInt`/`toInt` via the already-tested `__phorge_parse_int`.
+3. **i64 range edge** → avoided: define `isInt`/`toInt` via the already-tested `__phorj_parse_int`.
 4. **mbstring absence under `php -n`** → non-issue: every rule is ASCII/byte-level (validated).
 5. **Locale** → non-issue: no `strcasecmp`/locale-sensitive compare; pin ASCII char classes.
 6. **`isUrl` without `Core.Url`** → DEFERRED (Core.Url absent today; build them together later so
@@ -198,7 +198,7 @@ triple-match change. No `Value` variant change (returns `Bool`/`Null`/`Int`, all
   in `mod.rs` + 2–3 `uses_validate_*` flags and helper bodies in `transpile/program.rs` +
   `examples/guide/validate.phg` + README entry. No backend/Op/Value change. Mirrors the
   `parseInt`/`parseFloat` slice almost exactly.
-- **Recommendation:** **adopt-now** for `isInt` (alias the proven `__phorge_parse_int`), `toInt`
+- **Recommendation:** **adopt-now** for `isInt` (alias the proven `__phorj_parse_int`), `toInt`
   (literally is `Text.parseInt` re-exported under a validation name — or just point users at
   `Text.parseInt`), and `isIpv4`. Ship `isEmail` with an explicitly-documented conservative grammar
   (KNOWN_ISSUES: "not RFC 5322; validates a common ASCII shape"). **Defer `isUrl`** to the `Core.Url`
@@ -209,7 +209,7 @@ triple-match change. No `Value` variant change (returns `Bool`/`Null`/`Int`, all
 ## 10. The "better than PHP" claim — substantiated
 
 PHP `filter_var($s, FILTER_VALIDATE_INT)` returns `int|false` (and `false` is a *valid-looking*
-falsy value that collides with `0`); Phorge's `Validate.toInt(s) -> int?` returns a real `int?` that
+falsy value that collides with `0`); Phorj's `Validate.toInt(s) -> int?` returns a real `int?` that
 composes with S2 null-safety (`if (var n = Validate.toInt(x))`, `??`, `opt!`). That IS the typed-`T?`
 improvement the hypothesis claims, and it is achievable today by re-exposing the shipped
 `Text.parseInt` machinery under the validation module — no new runtime mechanism required.

@@ -6,7 +6,7 @@
 > `docs/plans/2026-06-26-developer-idea-backlog.plan.md` (Build progress section).
 
 
-**Date:** 2026-06-27 · **Binary probed:** `/stack/projects/phorge/target/release/phg` (prebuilt
+**Date:** 2026-06-27 · **Binary probed:** `/stack/projects/phorj/target/release/phg` (prebuilt
 release, never rebuilt) · **Method:** one minimal probe program per declared rule, run through
 `phg check` / `phg run` / `phg runvm` / `phg transpile`; a rule is a GAP only when a program that
 *should* be rejected instead checks/runs cleanly (or a modifier has no effect). All verdicts below
@@ -33,7 +33,7 @@ type-argument invariance** (a `Box<string>` flows into a `Box<int>` slot, then a
 string faults at runtime) — a string reaches a statically-guaranteed `int`. Equally severe and
 *more pervasive in idiomatic code*: **`throws E` is not enforced on method calls** (only free-fn
 calls), so the headline "fix to PHP's unenforced `@throws`" is silently bypassed for the entire OO
-surface — the way most real Phorge code raises errors. The **seed bug** (private/protected
+surface — the way most real Phorj code raises errors. The **seed bug** (private/protected
 constructor parsed and dropped) is confirmed and is finding #1 (§4): construction is the missing
 7th member-visibility access site.
 
@@ -93,7 +93,7 @@ access site — text/code/hint correct. Fix by propagating the `StrSeg::Interp` 
 
 ## 4. Finding #1 — the private-constructor bug (the 7th visibility access site)
 
-Phorge already routes **six** external member-access surfaces through the checker's
+Phorj already routes **six** external member-access surfaces through the checker's
 `enforce_member_vis` chokepoint (memory `member-visibility-six-access-sites`): field read, field
 write, clone-with, let-destructure, match-struct-pattern, method call — all correctly emit
 `E-FIELD-VISIBILITY` / `E-METHOD-VISIBILITY`. **Construction is the missing seventh.**
@@ -112,7 +112,7 @@ $ phg runvm private-ctor.phg → 42                        exit=0
 ```
 
 PHP itself enforces `protected __construct` (the factory-method pattern), so this is a regression
-against the very baseline Phorge claims to improve. **Fix = the 7th access site:** add
+against the very baseline Phorj claims to improve. **Fix = the 7th access site:** add
 `visibility` to the constructor AST node (parser), then gate `new C(...)` in the checker through
 the same `enforce_member_vis` scope logic, emitting `E-CTOR-VISIBILITY`. Front-end-only — no new
 `Op`, no `Value`, byte-identity spine untouched (the construction site is identical; the checker

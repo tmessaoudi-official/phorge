@@ -8,14 +8,14 @@ declaring class — including from `main` and from a different class.
 (one P3 cosmetic note on caret position).
 
 Probes live under
-`/tmp/claude-1000/-stack-projects-phorge/36037d06-83af-463e-be0a-ffeae057a42d/scratchpad/audit/`.
-Binary: `/stack/projects/phorge/target/release/phg` (pre-built, not rebuilt).
+`/tmp/claude-1000/-stack-projects-phorj/36037d06-83af-463e-be0a-ffeae057a42d/scratchpad/audit/`.
+Binary: `/stack/projects/phorj/target/release/phg` (pre-built, not rebuilt).
 
 ---
 
 ## Probe 1 — external READ from `main` → REJECTED (correct)
 
-```phorge
+```phorj
 package Main;
 import Core.Console;
 class Account { constructor(private int balance) {} }
@@ -41,7 +41,7 @@ is correct and actionable.
 
 ## Probe 2 — external WRITE from `main` → REJECTED (correct)
 
-```phorge
+```phorj
 class Account { constructor(private mutable int balance) {} }
 function main(): void {
     Account a = new Account(100);
@@ -67,7 +67,7 @@ enforced.
 
 ## Probe 3 — cross-class READ (a different class reads another's private) → REJECTED (correct)
 
-```phorge
+```phorj
 class Account { constructor(private int balance) {} }
 class Thief { function steal(Account a): int { return a.balance; } }
 function main(): void { ... Console.println("{t.steal(a)}"); }
@@ -86,7 +86,7 @@ Cross-class access from an unrelated class `Thief` is rejected with a correctly-
 
 ## Control — same-class access must SUCCEED (rules out a blanket false-positive)
 
-```phorge
+```phorj
 class Account {
     constructor(private mutable int balance) {}
     function get(): int { return this.balance; }

@@ -1,10 +1,10 @@
-//! M-Lift L4 — lifter tests. Asserts the PHP→Phorge mapping (idiomatic, never mirroring warts), the
-//! loud Tier-2 lift errors, and end-to-end that the lifted `.phg` is *valid Phorge* (it re-parses).
+//! M-Lift L4 — lifter tests. Asserts the PHP→Phorj mapping (idiomatic, never mirroring warts), the
+//! loud Tier-2 lift errors, and end-to-end that the lifted `.phg` is *valid Phorj* (it re-parses).
 
 use super::lifter::lift_source;
 use crate::parser::Parser;
 
-/// Lift PHP → Phorge source (panics on lift error — for the happy-path tests).
+/// Lift PHP → Phorj source (panics on lift error — for the happy-path tests).
 fn lift(php: &str) -> String {
     lift_source(php).expect("lift")
 }
@@ -14,7 +14,7 @@ fn lift_err(php: &str) -> String {
     lift_source(php).expect_err("expected a lift error")
 }
 
-/// The lifted output must be valid Phorge (re-lexes + re-parses without error).
+/// The lifted output must be valid Phorj (re-lexes + re-parses without error).
 fn assert_reparses(phg: &str) {
     let toks = crate::lexer::lex(phg)
         .unwrap_or_else(|e| panic!("lifted output failed to lex: {e:?}\n{phg}"));
@@ -43,14 +43,14 @@ fn lifts_untyped_function_with_no_value_return_as_void() {
 #[test]
 fn refuses_untyped_function_that_returns_a_value() {
     // C-45: no return hint but a value `return` — the type can't be inferred → loud reject (never
-    // emit a Phorge function with no return type, which would fail the checker silently).
+    // emit a Phorj function with no return type, which would fail the checker silently).
     let err = lift_err(r#"<?php function f() { return 5; }"#);
     assert!(err.contains("no return type but returns a value"), "{err}");
 }
 
 #[test]
 fn lifts_instanceof() {
-    // C-46: PHP `instanceof` → Phorge's existing `instanceof` (static class name).
+    // C-46: PHP `instanceof` → Phorj's existing `instanceof` (static class name).
     let out = lift(r#"<?php function f(Animal $x): bool { return $x instanceof Dog; }"#);
     assert!(out.contains("x instanceof Dog"), "{out}");
     assert_reparses(&out);
@@ -58,7 +58,7 @@ fn lifts_instanceof() {
 
 #[test]
 fn refuses_dynamic_instanceof() {
-    // C-46: a dynamic RHS has no Phorge equivalent — loud reject.
+    // C-46: a dynamic RHS has no Phorj equivalent — loud reject.
     let err =
         lift_err(r#"<?php function f(Animal $x, Animal $y): bool { return $x instanceof $y; }"#);
     assert!(err.contains("dynamic `instanceof"), "{err}");
@@ -79,11 +79,11 @@ fn lifts_bitwise_operators() {
     assert_reparses(&not);
 }
 
-// ── C-1: PHP string interpolation → Phorge `"{…}"` (faithful access-chain subset) ──
+// ── C-1: PHP string interpolation → Phorj `"{…}"` (faithful access-chain subset) ──
 
 #[test]
 fn lifts_simple_variable_interpolation() {
-    // C-1: `"$name"` simple syntax → Phorge `"{name}"`.
+    // C-1: `"$name"` simple syntax → Phorj `"{name}"`.
     let out = lift(r#"<?php function f(string $name): string { return "hi $name!"; }"#);
     assert!(out.contains(r#""hi {name}!""#), "{out}");
     assert_reparses(&out);
@@ -121,7 +121,7 @@ fn lifts_index_interpolation() {
 
 #[test]
 fn refuses_operator_in_interpolation() {
-    // C-1: a top-level operator inside `{$…}` is a PHP parse error AND outside Phorge's `{…}`
+    // C-1: a top-level operator inside `{$…}` is a PHP parse error AND outside Phorj's `{…}`
     // grammar — loud reject (never lift to something that won't parse).
     let e = lift_err(r#"<?php function f(int $a, int $b): int { return "{$a + $b}"; }"#);
     assert!(e.contains("access chain"), "{e}");
@@ -168,7 +168,7 @@ fn lifts_class_with_promotion_and_method() {
         out.contains("constructor(private mutable int power) {}"),
         "{out}"
     );
-    // A public, non-final PHP method lifts to an `open` Phorge method (override-by-default).
+    // A public, non-final PHP method lifts to an `open` Phorj method (override-by-default).
     assert!(out.contains("function powerOf(): int {"), "{out}");
     assert!(out.contains("return this.power;"), "{out}");
     assert_reparses(&out);
@@ -194,7 +194,7 @@ fn lifts_c_style_for_loop() {
 #[test]
 fn lifts_keyless_foreach() {
     // A-6 gave for-in element-type inference, so a keyless PHP foreach now lifts to the idiomatic
-    // Phorge `foreach (xs as x)` (printed from a Type::Infer for-in).
+    // Phorj `foreach (xs as x)` (printed from a Type::Infer for-in).
     let out = lift("<?php $xs = [1, 2, 3]; foreach ($xs as $x) { echo $x; }");
     assert!(out.contains("foreach (xs as x) {"), "{out}");
     assert_reparses(&out);

@@ -7,16 +7,16 @@
 //!   2. **`transpile` → real PHP → golden** — the transpiled PHP runs under a real `php` and must match
 //!      the committed sibling `.out` exactly.
 //!
-//! PHP gating mirrors `tests/conformance.rs`: `PHORGE_PHP=<path>` overrides the binary;
-//! `PHORGE_REQUIRE_PHP=1` turns a missing `php` into a failure (CI) rather than a skip. The refuse-gate
+//! PHP gating mirrors `tests/conformance.rs`: `PHORJ_PHP=<path>` overrides the binary;
+//! `PHORJ_REQUIRE_PHP=1` turns a missing `php` into a failure (CI) rather than a skip. The refuse-gate
 //! check runs regardless of `php` availability.
 
-use phorge::cli;
+use phorj::cli;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn php_bin() -> Option<String> {
-    let cand = std::env::var("PHORGE_PHP").unwrap_or_else(|_| "php".to_string());
+    let cand = std::env::var("PHORJ_PHP").unwrap_or_else(|_| "php".to_string());
     let ok = Command::new(&cand)
         .arg("--version")
         .output()
@@ -30,10 +30,10 @@ fn php_or_gate(label: &str) -> Option<String> {
         return Some(p);
     }
     assert!(
-        std::env::var("PHORGE_REQUIRE_PHP").as_deref() != Ok("1"),
-        "{label}: php required (PHORGE_REQUIRE_PHP=1) but not found on PATH or $PHORGE_PHP"
+        std::env::var("PHORJ_REQUIRE_PHP").as_deref() != Ok("1"),
+        "{label}: php required (PHORJ_REQUIRE_PHP=1) but not found on PATH or $PHORJ_PHP"
     );
-    eprintln!("SKIP {label}: php not found — set PHORGE_REQUIRE_PHP=1 to make this a failure");
+    eprintln!("SKIP {label}: php not found — set PHORJ_REQUIRE_PHP=1 to make this a failure");
     None
 }
 
@@ -42,7 +42,7 @@ fn run_php(php: &str, php_src: &str, label: &str) -> String {
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
         .collect();
-    let path = std::env::temp_dir().join(format!("phorge_interop_{safe}.php"));
+    let path = std::env::temp_dir().join(format!("phorj_interop_{safe}.php"));
     std::fs::write(&path, php_src).expect("write temp php");
     let out = Command::new(php)
         .args(["-n"])
@@ -58,11 +58,11 @@ fn run_php(php: &str, php_src: &str, label: &str) -> String {
     String::from_utf8(out.stdout).expect("utf-8 php stdout")
 }
 
-/// Collect single-file interop walkthroughs, **skipping project roots** (a dir with `phorge.toml`):
+/// Collect single-file interop walkthroughs, **skipping project roots** (a dir with `phorj.toml`):
 /// a project's files import each other / share ambient `.d.phg` declarations and only resolve when
 /// assembled via `loader::load`, so they are gated by `interop_projects_*` instead.
 fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
-    if dir.join("phorge.toml").is_file() {
+    if dir.join("phorj.toml").is_file() {
         return;
     }
     for entry in std::fs::read_dir(dir).expect("read_dir examples/interop") {
@@ -75,9 +75,9 @@ fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// Recursively collect every project root (a dir holding `phorge.toml`) under `dir`.
+/// Recursively collect every project root (a dir holding `phorj.toml`) under `dir`.
 fn collect_projects(dir: &Path, out: &mut Vec<PathBuf>) {
-    if dir.join("phorge.toml").is_file() {
+    if dir.join("phorj.toml").is_file() {
         out.push(dir.to_path_buf());
         return;
     }
@@ -136,7 +136,7 @@ fn interop_examples_refuse_to_run_and_match_php_golden() {
 /// backends (`E-FOREIGN-RUNTIME`), and its transpiled PHP must match the committed `expected.out`.
 #[test]
 fn interop_projects_refuse_to_run_and_match_php_golden() {
-    use phorge::loader;
+    use phorj::loader;
     let mut projects = Vec::new();
     collect_projects(Path::new("examples/interop"), &mut projects);
     projects.sort();

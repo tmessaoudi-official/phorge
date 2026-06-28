@@ -4,7 +4,7 @@ use super::*;
 fn file_natives_eval_and_emit() {
     let mut o = String::new();
     // A missing path reads as `null` (the `string?` absent case), never a fault.
-    let missing = "/nonexistent/phorge/definitely/not/here.txt";
+    let missing = "/nonexistent/phorj/definitely/not/here.txt";
     assert!(matches!(
         file_read(&[Value::Str(missing.into())], &mut o),
         Ok(Value::Null)
@@ -14,7 +14,7 @@ fn file_natives_eval_and_emit() {
         Ok(Value::Bool(false))
     ));
     // write → read round-trip through a temp file (write is unit-tested, not exampled).
-    let tmp = std::env::temp_dir().join("phorge_native_file_test.txt");
+    let tmp = std::env::temp_dir().join("phorj_native_file_test.txt");
     let p = tmp.to_string_lossy().to_string();
     let _ = std::fs::remove_file(&tmp);
     assert!(matches!(

@@ -50,7 +50,7 @@ function main(): void {
   int x = bi.get(); // int
   int y = bi.orElse(0); // int — the T-typed parameter accepts an int
 
-  var bs = new Box("phorge"); // Box<string>
+  var bs = new Box("phorj"); // Box<string>
   string s = bs.get(); // string
 
   var p = new Pair(1, "one"); // Pair<int, string> — A=int, B=string

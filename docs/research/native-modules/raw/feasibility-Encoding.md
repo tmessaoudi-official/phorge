@@ -55,7 +55,7 @@ Verified by reading `src/native/bytes.rs` and `src/native/mod.rs`:
 Verified live against `php-8.5.7 -n` (and the `php -n` posture matters — these are all PHP *core*, none
 are mbstring/ext-hash/intl, so they survive the oracle's `-n`):
 
-| Phorge native | Rust eval | PHP `php` emission (the transpile target) |
+| Phorj native | Rust eval | PHP `php` emission (the transpile target) |
 |---|---|---|
 | `Encoding.base64Encode(bytes) -> string` | hand-rolled std RFC4648 | `base64_encode({0})` |
 | `Encoding.base64Decode(string) -> bytes?` | hand-rolled strict | `(($__b=base64_decode({0}, true))===false?null:$__b)` |
@@ -111,7 +111,7 @@ is *small*.
    via PCRE `//u`; *this* module needs no such dance because none of its ops are encoding-aware.)
 6. **`urlDecode` totality.** `rawurldecode` never fails (a stray `%` is left literal); it is total →
    `string`, NOT `string?`. But a `%XX` whose bytes are invalid UTF-8 would, if we typed it `string`,
-   risk producing a non-UTF-8 `Value::Str` (Phorge `Str` is UTF-8). **Decision needed (low-risk):** either
+   risk producing a non-UTF-8 `Value::Str` (Phorj `Str` is UTF-8). **Decision needed (low-risk):** either
    (a) type `urlDecode -> string?` and return null on non-UTF-8 result (mirrors `Bytes.toString`), or
    (b) define a `urlDecodeBytes(string) -> bytes` total form and keep `urlDecode -> string?`. Recommend
    shipping `urlDecode -> string?` (null on non-UTF-8) — consistent with the existing `bytes?`/`string?`
@@ -119,14 +119,14 @@ is *small*.
 7. **No float, no clock, no RNG, no map ordering, no gzip mtime** — none of the high-severity traps in the
    prior-art digest are reachable from this module. (gzip/compression is a *different, deferred* module.)
 
-## 7. API sketch (Phorge)
+## 7. API sketch (Phorj)
 
-```phorge
+```phorj
 import Core.Encoding;
 import Core.Bytes;
 
 main() {
-    bytes data = Bytes.fromString("Hello, Phorge!");
+    bytes data = Bytes.fromString("Hello, Phorj!");
 
     string b64  = Encoding.base64Encode(data);          // "SGVsbG8sIFBob3JnZSE="
     bytes? back = Encoding.base64Decode(b64);           // bytes? — null on invalid
@@ -152,7 +152,7 @@ shipped `Core.File.read -> string?`.)
 - **Foundational:** unblocks `Core.Hash` (digests want hex output), `Core.Url` (percent-encoding shared),
   and the M6 HTTP/handler work (header/body encoding). Build this *first* in the stdlib-breadth wave.
 - **Quality gate:** `cargo test --workspace`, then
-  `PHORGE_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php PHORGE_REQUIRE_PHP=1 cargo test --workspace`
+  `PHORJ_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php PHORJ_REQUIRE_PHP=1 cargo test --workspace`
   (8.5 floor), clippy + fmt. The new `examples/guide/encoding.phg` is auto byte-identity-gated by the
   `examples/**/*.phg` glob.
 

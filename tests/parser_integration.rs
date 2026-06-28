@@ -1,6 +1,6 @@
-use phorge::ast::{Expr, Pattern};
-use phorge::lexer::lex;
-use phorge::parser::Parser;
+use phorj::ast::{Expr, Pattern};
+use phorj::lexer::lex;
+use phorj::parser::Parser;
 
 fn parse_expr(src: &str) -> Expr {
     let tokens = lex(src).expect("lex ok");

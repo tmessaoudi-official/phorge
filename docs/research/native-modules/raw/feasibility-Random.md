@@ -13,7 +13,7 @@ matched Rust `rustc -O` program.
 
 ## 1. The determinism partition — this is Tier A, not Tier B
 
-A SEEDED PRNG with a Phorge-owned algorithm is a **pure function of (seed, call sequence)**. It reads
+A SEEDED PRNG with a Phorj-owned algorithm is a **pure function of (seed, call sequence)**. It reads
 no clock, no OS entropy, no environment. It therefore belongs in the byte-identity spine exactly like
 `Core.Hash` (hand-rolled digests) and is gated by `tests/differential.rs` like every other example.
 
@@ -115,10 +115,10 @@ PHP : float(0.9999933073940572)   Rust: 0.9999933073940572   ✓ identical VALUE
 ```
 **The one trap** (the documented float KNOWN_ISSUE): PHP's *native `echo`* truncates to 14 digits
 (`echo 0.9999933073940572` → `0.99999330739406`), while Rust `{}` is shortest-round-trip. This is
-**already solved in Phorge**: every float that reaches output flows through the `__phorge_float` (Ryū)
+**already solved in Phorj**: every float that reaches output flows through the `__phorj_float` (Ryū)
 helper, NOT bare PHP echo. So `nextFloat()`'s result prints identically *as long as it goes through the
-normal Phorge float-output path* — which it does (interpolation / `Console.println` of a float both
-route through `__phorge_str`→`__phorge_float`). No special handling needed; the existing helper covers it.
+normal Phorj float-output path* — which it does (interpolation / `Console.println` of a float both
+route through `__phorj_str`→`__phorj_float`). No special handling needed; the existing helper covers it.
 Guide example should still prefer printing `nextInt` results or comparing floats, to keep the showcase
 robust.
 
@@ -131,9 +131,9 @@ must hand-emit the loop). Index draws use the §4.1 path. Byte-identical by cons
 
 ---
 
-## 5. State threading — the real design decision (no tuples in Phorge)
+## 5. State threading — the real design decision (no tuples in Phorj)
 
-A PRNG is stateful, but determinism requires the state to be **explicit and value-typed** (Phorge has
+A PRNG is stateful, but determinism requires the state to be **explicit and value-typed** (Phorj has
 no mutable-by-default and no tuple/multi-return — verified: no `Ty::Tuple`). Two shapes:
 
 **Option A — functional state-threading (state IS an i64), recommended for the core:**
@@ -147,23 +147,23 @@ Blocked by no-tuples. So the clean functional form needs an **injected value typ
 the new state and the drawn value — i.e. the API is naturally object-shaped.
 
 **Option B — injected `Rng` value type (RECOMMENDED), mirrors the Json/RoundingMode injected-type pattern:**
-`cli::inject_random_prelude` injects (gated on `import Core.Random;`) a small Phorge type whose state is
-an `int`. Because Phorge instances are now **shared-mutable** (M-mut: `Value::Instance` is shared,
+`cli::inject_random_prelude` injects (gated on `import Core.Random;`) a small Phorj type whose state is
+an `int`. Because Phorj instances are now **shared-mutable** (M-mut: `Value::Instance` is shared,
 List/Map/Set are COW), a method `rng.nextInt(lo,hi)` can mutate its own `int` state field and return the
 draw — and this is STILL deterministic (mutation of an in-program object is pure w.r.t. the seed). This
 is the most ergonomic, most PHP/`Random\Randomizer`-familiar surface and needs **zero new runtime
-machinery**: the injected type's methods are ordinary Phorge methods that call the pure stateless core
+machinery**: the injected type's methods are ordinary Phorj methods that call the pure stateless core
 natives `Random.__step(state) -> int` / bounded helpers. The injected prelude flows through `check()` as
 an ordinary class; backends see a normal instance; the transpiler emits a normal PHP class. The PRNG
-*arithmetic* lives in the native(s); the *state object* lives in injected Phorge code.
+*arithmetic* lives in the native(s); the *state object* lives in injected Phorj code.
 
 > **Recommended:** Option B (injected `Rng` class) for the public surface + a tiny stateless pure native
 > core (`Random.__step`, maybe `Random.__bound`). Mirrors `Core.Json`'s injected-enum + native-core split
 > exactly. The class fields and the `int` state are byte-identical across legs (it's just an int and a
 > method call); the arithmetic identity is the native core proven in §3–§4.
 
-### Phorge API sketch (Option B)
-```phorge
+### Phorj API sketch (Option B)
+```phorj
 import Core.Random;
 
 Rng rng = Random.seeded(42);          // injected type; state = 42 (or a splitmix-free scramble)
@@ -180,14 +180,14 @@ Stateless-functional alternative also offerable for purists:
 
 NO PHP RNG builtin is used (PHP `mt_rand`/`shuffle` use Mersenne Twister with a different seed regime —
 **non-portable, would diverge**, and `mt_srand` state is global+process-scoped). Everything transpiles to
-**Phorge-owned arithmetic + a gated runtime helper**, the established `__phorge_*` pattern:
+**Phorj-owned arithmetic + a gated runtime helper**, the established `__phorj_*` pattern:
 
 - `Random.__step` → inline PHP `^`/`<<`/`>>`/`&` matching §3, OR a gated helper
-  `__phorge_rng_step($s)` (recommend a helper, like `__phorge_div`/`__phorge_str`, so the masking
+  `__phorj_rng_step($s)` (recommend a helper, like `__phorj_div`/`__phorj_str`, so the masking
   discipline is single-sourced and grep-auditable). Uses only PHP core (`-n` safe — no extension).
-- `nextInt` → `__phorge_rng_bound($s,$lo,$hi)` (sign-clear + modulo/rejection, §4.1).
-- `nextFloat` → `(($raw_shift) / 9007199254740992.0)` then the existing `__phorge_float` on output.
-- `shuffle` → `__phorge_rng_shuffle($arr,$state)` hand-emitted Fisher–Yates (NOT `shuffle()`).
+- `nextInt` → `__phorj_rng_bound($s,$lo,$hi)` (sign-clear + modulo/rejection, §4.1).
+- `nextFloat` → `(($raw_shift) / 9007199254740992.0)` then the existing `__phorj_float` on output.
+- `shuffle` → `__phorj_rng_shuffle($arr,$state)` hand-emitted Fisher–Yates (NOT `shuffle()`).
 
 All targets are PHP **core** functions/operators that survive `php -n` (no `hash`/`mbstring`/`intl`/`bcmath`
 dependency). Verified: `& | ^ << >> %` and float `/` are all core.
@@ -198,7 +198,7 @@ dependency). Verified: `& | ^ << >> %` and float `/` are all core.
 
 Every operation is a `Op::CallNative` into the registry (the proven generic path: multi-arg, typed,
 value-returning, `List<T>` generic via `reverse`'s precedent). The injected `Rng` type is ordinary
-Phorge classes/methods — no Op. **Strongly preferred "no new Op" outcome holds.** The three coupled
+Phorj classes/methods — no Op. **Strongly preferred "no new Op" outcome holds.** The three coupled
 matches (`chunk.rs`/`vm/exec.rs`/`compiler`) are untouched.
 
 ---
@@ -226,7 +226,7 @@ matches (`chunk.rs`/`vm/exec.rs`/`compiler`) are untouched.
 4. **`+` overflow (only if xoshiro/xorshift+ chosen)** — PHP `+` of two large ints also promotes to
    float. The `+` in xoshiro256++'s output function needs masking emulation; verify before shipping the
    `+` variant. **xorshift64 avoids this entirely** (recommend shipping it first).
-5. **nextFloat echo truncation** — bare PHP echo gives 14 digits; Phorge's `__phorge_float` (Ryū) path
+5. **nextFloat echo truncation** — bare PHP echo gives 14 digits; Phorj's `__phorj_float` (Ryū) path
    fixes it. Risk only if a future code path prints a float bypassing the helper. Keep the guide example
    on integer draws / float comparisons, not raw float echo.
 6. **PHP `shuffle()`/`mt_rand()` temptation** — never transpile to them (Mersenne Twister, process-global
@@ -246,7 +246,7 @@ matches (`chunk.rs`/`vm/exec.rs`/`compiler`) are untouched.
 
 - **Effort: MEDIUM.** One `src/native/random.rs` leaf (core stateless natives) + an injected
   `Rng` prelude in `cli::inject_random_prelude` (mirrors `inject_json_prelude` / `inject_rounding_mode_prelude`)
-  + gated `__phorge_rng_*` helpers in `transpile/program.rs` + one guide example
+  + gated `__phorj_rng_*` helpers in `transpile/program.rs` + one guide example
   (`examples/guide/random.phg`, byte-identity-gated) + registry tests. No backend/Op changes, no Value
   changes. The injected-type wiring is the only non-trivial part, and it has two existing precedents.
 - **Recommendation: ADOPT-NOW.** It is a canonical Tier-A module, fully std-only, no new Op, and the

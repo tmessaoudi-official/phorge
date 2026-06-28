@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Phorge. Format follows [Keep a Changelog](https://keepachangelog.com/);
+All notable changes to Phorj. Format follows [Keep a Changelog](https://keepachangelog.com/);
 the project is pre-1.0 and unpublished, so versions track milestone progress, not a release
 cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
@@ -10,11 +10,11 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 The interop bridge's final slice (`docs/specs/2026-06-28-m8.5-s3-decl-files-foreign-catch-design.md`).
 **No new `Op`/`Value`** — foreign symbols stay PHP-target-only (quarantined from `run ≡ runvm`), so this
-is a front-end + transpiler feature; pure-Phorge spine untouched.
+is a front-end + transpiler feature; pure-Phorj spine untouched.
 
 - **Foreign-exception `catch` (S3a)** — a `declare class` now accepts an optional `extends`/`implements`
   header. A foreign PHP exception writes `declare class DivisionByZeroError implements Error { … }` —
-  `Error` is Phorge's built-in exception marker, so the class becomes catchable. It is caught by its own
+  `Error` is Phorj's built-in exception marker, so the class becomes catchable. It is caught by its own
   **global** PHP name (`catch (\DivisionByZeroError $e)`), NOT the `Error`→`\Exception` mapping, so an
   `\Error`-family class (a `\Throwable` that is not an `\Exception`) is caught correctly. The transpiler's
   catch-type emission is now foreign-aware (`php_catch_type` is a method consulting `foreign_classes`);
@@ -62,7 +62,7 @@ ASCII folding only (no mbstring under `php -n`); non-ASCII is a documented edge 
 
 ### Added — editor tooling: syntax highlighting + JetBrains/PhpStorm integration
 
-- **TextMate grammar** (`editors/vscode/syntaxes/phorge.tmLanguage.json`) — keywords, primitive +
+- **TextMate grammar** (`editors/vscode/syntaxes/phorj.tmLanguage.json`) — keywords, primitive +
   PascalCase types, strings with `{…}` interpolation and `\xHH`/`b"…"`/`r"…"` forms, numeric literals
   (hex/bin/oct/`_`/`1.50d`), comments, and `#[…]` attributes. Wired into the VS Code extension
   (`grammars`), which previously had only bracket config — `.phg` files are now highlighted.
@@ -116,7 +116,7 @@ checker front-end only; the byte-identity spine is untouched).
 
 ### Added — M8.5 S2: foreign-PHP classes (`declare class`)
 
-Foreign PHP **classes** — call a PHP library class (e.g. `DateTimeImmutable`, `PDO`) from Phorge,
+Foreign PHP **classes** — call a PHP library class (e.g. `DateTimeImmutable`, `PDO`) from Phorj,
 type-checked, transpiling to idiomatic PHP. **No new `Op`/`Value`.**
 
 - **`declare class Name { constructor(params); [static] function m(params) -> ret; [public] Type f; }`**
@@ -131,8 +131,8 @@ type-checked, transpiling to idiomatic PHP. **No new `Op`/`Value`.**
 
 ### Added — M8.5 S1: foreign-PHP interop (`declare function`)
 
-The migration bridge — call existing PHP from Phorge, type-checked, transpiling to idiomatic PHP
-(`docs/specs/2026-06-28-m8.5-interop-design.md`). `Phorge : PHP :: TypeScript : JavaScript`, and
+The migration bridge — call existing PHP from Phorj, type-checked, transpiling to idiomatic PHP
+(`docs/specs/2026-06-28-m8.5-interop-design.md`). `Phorj : PHP :: TypeScript : JavaScript`, and
 `.d.phg : .d.ts`. **No new `Op`/`Value`.**
 
 - **`declare function name(params) -> ret;`** — a bodyless signature for an existing PHP function
@@ -155,7 +155,7 @@ The human date-time view, **folded onto `Instant`** (no separate class), byte-id
 - `Instant.ofCivil(y, mo, d, h, mi, s)` builds an instant from broken-down UTC fields.
 - `year`/`month`/`day`/`dayOfWeek`/`hour`/`minute`/`second`/`millis`/`millisOfDay` accessors (UTC).
 - `toIso()` → `YYYY-MM-DDTHH:MM:SSZ` (always `Z`, second resolution). For any other layout, interpolate
-  the accessors directly — Phorge has first-class string interpolation, so a printf-style pattern is
+  the accessors directly — Phorj has first-class string interpolation, so a printf-style pattern is
   unneeded (deferred in KNOWN_ISSUES).
 
 `guide/datetimes.phg` + `conformance/stdlib/datetimes.phg`. **Design note:** the planned separate
@@ -167,7 +167,7 @@ civil view).
 ### Added — M-TIME S2: `Core.Time` civil dates
 
 `Date` — a civil calendar date (UTC, day-resolution), stored as days since 1970-01-01. Calendar math is
-Howard Hinnant's days-from-civil / civil-from-days, written in **pure Phorge** in the same injected
+Howard Hinnant's days-from-civil / civil-from-days, written in **pure Phorj** in the same injected
 prelude, so it is byte-identical `run ≡ runvm ≡ real PHP 8.5` by construction. **No new `Op`/`Value`.**
 
 - `Date.of(y, m, d)` / `Date.ofEpochDay(n)`; `year`/`month`/`day`/`epochDay`.
@@ -190,11 +190,11 @@ First slice of the time library (`docs/specs/2026-06-28-m-time-design.md`), byte
   `durationSince`, `isBefore`/`isAfter`/`compareTo`.
 - **`Duration`** — a span: `Duration.seconds`/`minutes`/`hours`/`days`/`millis`; `toMillis`/`toSeconds`/
   `toMinutes`/`toHours`/`toDays`, `plus`/`minus`/`negate`, `isZero`/`isNegative`.
-- **Architecture** — an **injected pure-Phorge prelude** (`cli::inject_time_prelude`, gated on
+- **Architecture** — an **injected pure-Phorj prelude** (`cli::inject_time_prelude`, gated on
   `import Core.Time`): because the prelude runs through the same backends *and* transpiler as user code,
   all arithmetic is byte-identical by construction with zero hand-rolled-PHP divergence. The only native
   (`src/native/time.rs`, `Core.Time`) is the **freezable clock seam** — `Time.freeze(ms)` /
-  `Time.unfreeze()` / `Time.nowMillis()`, hand-rolled identically in PHP (`__phorge_now_*`), so a frozen
+  `Time.unfreeze()` / `Time.nowMillis()`, hand-rolled identically in PHP (`__phorj_now_*`), so a frozen
   program is reproducible (the `Core.Random` determinism pattern). UTC-only (timezones are
   non-deterministic). `guide/time.phg` + `conformance/stdlib/time.phg`.
 
@@ -222,9 +222,9 @@ Six everyday `Core.List` ops, all byte-identical `run ≡ runvm ≡ real PHP`:
 - **`find(List<T>, (T) -> bool) -> T?`** — first element satisfying the predicate, or null.
 - **`any` / `all`(List<T>, (T) -> bool) -> bool`** — short-circuiting existential / universal.
 
-`find`/`any`/`all` **short-circuit identically on every backend** (the `__phorge_find/any/all` PHP
+`find`/`any`/`all` **short-circuit identically on every backend** (the `__phorj_find/any/all` PHP
 helpers `foreach` + early-`return`), so a side-effecting predicate produces identical stdout; `unique`/
-`min`/`max` get `__phorge_*` helpers too (inlining PHP `array_unique`/`min`/`max` would juggle numeric
+`min`/`max` get `__phorj_*` helpers too (inlining PHP `array_unique`/`min`/`max` would juggle numeric
 strings). Reuses the higher-order-native + generic-call machinery — no new `Op`/`Value`.
 `examples/guide/list-breadth.phg` + `conformance/collections/list-query.phg`.
 
@@ -278,7 +278,7 @@ extracted by dropping only the **outer** braces (`Text.substring(seg, 1, -1)`), 
 
 ### Added — M6 W2 extensions: router middleware + route groups
 
-The `Core.Http` `Router` gains a middleware pipeline and sub-router groups — pure Phorge over
+The `Core.Http` `Router` gains a middleware pipeline and sub-router groups — pure Phorj over
 first-class functions, **no new `Op`, no new `Value`**, byte-identical `run ≡ runvm ≡ real PHP`.
 
 - **Middleware** — `router.use(mw)` where `mw : (Request, next) -> Response`. A middleware may call
@@ -312,14 +312,14 @@ embedding the program — closing the Phase-2 "needs a source checkout" limitati
 - **`bundle/sha256.rs`** — hand-rolled FIPS-180-4 SHA-256 (std-only, same ethos as the CRC-32),
   known-vector tested; cross-checked against the host `sha256sum` on a real binary in the tests.
 - **`bundle/manifest.rs`** — the per-target sha256 manifest (tolerant line parser, `lookup`,
-  `registry_base` via `Cargo.toml` `repository` + version, `PHORGE_STUB_REGISTRY`/`PHORGE_STUB_MANIFEST`
+  `registry_base` via `Cargo.toml` `repository` + version, `PHORJ_STUB_REGISTRY`/`PHORJ_STUB_MANIFEST`
   overrides, the `phg-stub-<triple>` asset-name convention).
-- **`build.rs`** — bakes `PHORGE_BAKE_STUB_MANIFEST` into the binary (empty when unset), breaking the
+- **`build.rs`** — bakes `PHORJ_BAKE_STUB_MANIFEST` into the binary (empty when unset), breaking the
   stub↔manifest circularity so cross stubs have manifest-independent, stable hashes.
 - **`bundle/cross.rs`** — the cache-miss path is now a 3-way branch: cache hit → local `cargo-zigbuild`
   (source checkout) → **download + sha256-verify + cache** (distributed). Verify-before-cache: a
   tampered/partial download never poisons the cache. Transport is `curl` for `http(s)` (std has no TLS;
-  `PHORGE_CURL` override) and `fs::copy` for `file://`/local (the hermetic-test path).
+  `PHORJ_CURL` override) and `fs::copy` for `file://`/local (the hermetic-test path).
 - **`.github/workflows/stub-registry.yml`** — a 2-pass, secret-free CI workflow (build stubs env-unset
   → hash → bake manifest into the Linux primary → publish), complementing the existing `release.yml`
   human archives.
@@ -351,7 +351,7 @@ no new `Value`; byte-identical `run ≡ runvm ≡ real PHP`.
 
 `import Core.Http;` now also injects a **`Router`** (+ a `Route` row type): build it by chaining
 `.route(method, pattern, handler)` — handlers are ordinary first-class `(Request) -> Response`
-functions — then `router.handle(req)` matches and dispatches. Pure Phorge over the W1 model (no new
+functions — then `router.handle(req)` matches and dispatches. Pure Phorj over the W1 model (no new
 `Op`, no new `Value`, no socket — that is W3 `phg serve`); byte-identical `run ≡ runvm ≡ real PHP`.
 
 - **Path parameters** — a `{name}` pattern segment captures that path component, read by the handler
@@ -374,7 +374,7 @@ deprecation mechanism.
   + a flagship multi-package DDD project, each with committed golden output asserted byte-identical on
   the interpreter, the VM, **and** real PHP. Stronger than the example differential (which only checks
   the backends *agree*) — the golden pins the value, catching a regression where all backends drift
-  identically. Glob-discovered (incl. project roots via `phorge.toml`). Breadth covers the full stable
+  identically. Glob-discovered (incl. project roots via `phorj.toml`). Breadth covers the full stable
   language surface: condition loops + compound-assign (`lang/loops`), `foreach … as … with i`
   (`lang/foreach`), integer ranges (`lang/ranges`), `"""` text blocks + raw strings
   (`lang/text-blocks`), `type` aliases (`lang/type-aliases`), member visibility (`types/visibility`),
@@ -411,7 +411,7 @@ run≡runvm≡real PHP.
 
 ### Added — `phg lsp` language server (Item D)
 
-A Language Server over stdio so editors get live Phorge diagnostics, hover, and go-to-definition (GA
+A Language Server over stdio so editors get live Phorj diagnostics, hover, and go-to-definition (GA
 rock 2 — daily-use tooling). Design: `docs/specs/2026-06-28-lsp-design.md`. No new `Op`/`Value`; off
 the byte-identity spine. Ships with a VS Code thin client (`editors/vscode/`).
 
@@ -481,14 +481,14 @@ injected-type + value-as-first-arg patterns). Design: `docs/specs/2026-06-28-cor
   unlike PHP/PCRE backtracking. The dependency policy (`docs/specs/2026-06-27-dependency-policy.md`)
   is amended: clause 1 generalizes from "crypto" to "security-critical primitive — crypto **and**
   untrusted-input parsers (regex) where `std` has none and rolling-your-own is the anti-pattern."
-  Feature-gated `regex` (default on; OFF for `phorge-playground`, like `crypto`).
+  Feature-gated `regex` (default on; OFF for `phorj-playground`, like `crypto`).
 - **`import Core.Regex;`** → `Regex.compile(string) -> Regex` (validate once, memoized; faults on an
   invalid/unsupported pattern), `matches`/`find`(→`string?`)/`findAll`(→`List<string>`)/`findGroups`
   (→`Map<string,string>?`, named captures)/`replace`/`split`. `Regex` is a compiler-injected class
   holding the bare pattern; always Unicode (`/u`), case-sensitive.
 - **Byte-identity holds on the regular subset**: the crate's no-backref/lookaround feature set is
   exactly what PHP `preg_*` matches identically; unsupported patterns are rejected at `Regex.compile`.
-  Transpiles to gated `__phorge_regex_*` helpers (collision-free delimiter + `preg_*`); `run ≡ runvm ≡
+  Transpiles to gated `__phorj_regex_*` helpers (collision-free delimiter + `preg_*`); `run ≡ runvm ≡
   real PHP 8.5`. Showcase `examples/guide/regex.phg`.
 - **Patterns use raw strings** `r"..."` — the `{n}` quantifier would otherwise collide with `{expr}`
   string interpolation, and raw strings drop `\` double-escaping.
@@ -510,7 +510,7 @@ A canonical-form source formatter (GA rock 2 — daily-use tooling). No new `Op`
 
 ### Added — `phg test` runner + `Core.Test` assertions (M-Test)
 
-A first-class testing story so Phorge can dogfood itself (GA rock 2 — daily-use tooling). No new `Op`,
+A first-class testing story so Phorj can dogfood itself (GA rock 2 — daily-use tooling). No new `Op`,
 no new `Value`.
 
 - **`test "name" { … }` items** — a contextual `test` keyword (special only at item position before a
@@ -534,14 +534,14 @@ The final M-NUM slice rounds out `Core.Math`. All additive stdlib natives — **
 - **Integer helpers (byte-identical regardless of float display):** `sign(int) -> int` (→ PHP `<=>`),
   `clamp(int, int, int) -> int` (→ `max(lo, min(v, hi))`, never panics when `lo > hi`),
   `gcd(int, int) -> int`. `gcd` has no PHP-core builtin (gmp is absent under `php -n`), so it erases
-  to a single-sourced **`__phorge_gcd`** helper (Euclid over the magnitudes); the `i64::MIN` magnitude
+  to a single-sourced **`__phorj_gcd`** helper (Euclid over the magnitudes); the `i64::MIN` magnitude
   edge faults cleanly (EV-7).
 - **Transcendentals:** `log`/`log10`/`exp`/`sin`/`cos`/`tan(float) -> float` (→ the same-named PHP
   libm builtins) and the constants `pi()`/`e() -> float` (→ `M_PI`/`M_E`). A non-representable result
   diverges between Rust's shortest-round-trip and PHP, so the guide exercises them at their *exact*
   (IEEE-defined) values and prints real results through `numberFormat`.
 - **`numberFormat(float, int) -> string`** — non-locale `number_format`: rounded half-away-from-zero,
-  grouped by threes with `,`, `.` decimal point. Erases to a single-sourced **`__phorge_number_format`**
+  grouped by threes with `,`, `.` decimal point. Erases to a single-sourced **`__phorj_number_format`**
   helper (identical string assembly to `value::number_format`), so the PHP leg never relies on PHP's
   own `number_format` (its `-0`/locale quirks). A negative `decimals` clamps to `0` on both legs.
 
@@ -552,7 +552,7 @@ closed** (S1 decimal core → S2 division/rounding → S3 predicates/conversions
 ### Added — float predicates + numeric conversions (M-NUM S3)
 
 Rounds out the numeric surface: detect float special values and convert **explicitly** between
-`int`/`float`/`decimal` (Phorge has no implicit coercion). All additive stdlib natives — **no new
+`int`/`float`/`decimal` (Phorj has no implicit coercion). All additive stdlib natives — **no new
 `Op`, no new `Value`** (reuses the native registry, S2's `Value::Null`/optionals, and S1's
 `Value::Decimal`). Every primitive is PHP **core** (available under `php -n` — no extension):
 
@@ -571,8 +571,8 @@ Rounds out the numeric surface: detect float special values and convert **explic
   toward zero; null if the integer part is out of i64 range).
 
 The edge-safe guards are **single-sourced** in `value.rs` (`float_to_int`, `decimal_to_int` — exact
-i128-carrier math, no BCMath) and mirrored by gated PHP helpers `__phorge_float_to_int` /
-`__phorge_dec_to_int`, so the float→int range verdict and the decimal→int truncation agree byte-for-byte
+i128-carrier math, no BCMath) and mirrored by gated PHP helpers `__phorj_float_to_int` /
+`__phorj_dec_to_int`, so the float→int range verdict and the decimal→int truncation agree byte-for-byte
 across `run`/`runvm`/real PHP. `int` is documented as a pinned 64-bit signed integer (i64) in
 `docs/INVARIANTS.md`. Byte-identical `run ≡ runvm ≡ real PHP 8.5`; `examples/guide/numeric-convert.phg`.
 
@@ -598,9 +598,9 @@ both:
 The rounding kernel `value::round_div(n, d, mode)` is **single-sourced** (sign-normalise so `d > 0`,
 truncating quotient + dividend-signed remainder, a half-comparison via `|rem|` vs `d − |rem|` to avoid
 `2*rem` overflow, the seven mode rules, all `checked_*`). It is mirrored step-for-step by gated
-BCMath helpers `__phorge_dec_div`/`__phorge_dec_round` (`bcdiv`/`bcmod` truncate toward zero / take
+BCMath helpers `__phorj_dec_div`/`__phorj_dec_round` (`bcdiv`/`bcmod` truncate toward zero / take
 the dividend's sign — verified identical to Rust i128 `/`/`%`), switching on the `RoundingMode` value's
-PHP class and reusing S1's `__phorge_dec_check` for the i128 bounds fault. **No new `Op`, no new
+PHP class and reusing S1's `__phorj_dec_check` for the i128 bounds fault. **No new `Op`, no new
 `Value`** — division is a `CallNative`, `RoundingMode` rides the existing enum ops. (Transpiler-only:
 the injected enum's PHP class name is mangled `RoundingMode → RoundingMode_` to dodge PHP 8.4+'s
 built-in `RoundingMode` enum.) Byte-identical `run ≡ runvm ≡ real PHP 8.5`; `examples/guide/decimal-div.phg`;
@@ -632,9 +632,9 @@ gains three type-specialized ops `AddD`/`SubD`/`MulD` (the three coupled matches
 `Op`+`validate`, `vm/exec.rs`, `compiler` emit). Compiler gains `NumTy::Decimal`/`CTy::Decimal` so a
 decimal-valued field/map/method-result operand specializes on the VM. Transpiles to **BCMath**
 (verified available under `php -n`): a literal → a PHP string, `emit_type(decimal)` → `string`,
-arithmetic → gated `__phorge_dec_add/_sub/_mul` helpers that derive operand scales at runtime, call
+arithmetic → gated `__phorj_dec_add/_sub/_mul` helpers that derive operand scales at runtime, call
 `bcadd`/`bcsub`/`bcmul` with the rule's scale, then bounds-check the result against i128 range and
-`throw` the same fault as Rust. `Decimal.of` → a gated `__phorge_dec_of` (tier-1 PCRE). Byte-identical
+`throw` the same fault as Rust. `Decimal.of` → a gated `__phorj_dec_of` (tier-1 PCRE). Byte-identical
 `run ≡ runvm ≡ real PHP 8.5`; `examples/guide/decimals.phg`;
 `phg explain E-DECIMAL-FLOAT-MIX`/`E-DECIMAL-LITERAL`.
 
@@ -658,7 +658,7 @@ parse a base-10 float, or `None`. `permissive` defaults to **strict**: `[+-]?dig
 additionally accepts a lone leading/trailing dot (`.5`, `5.`). **Both reject `inf`/`nan`** — Rust's
 `f64::from_str` accepts them but PHP can't, and the float rendering would diverge, so rejecting keeps the
 spine byte-identical. Rust is the value source of truth (grammar validator + `f64::from_str`); gated
-`__phorge_parse_float` PHP helper mirrors it (PCRE, tier-1). `examples/guide/default-params.phg`.
+`__phorj_parse_float` PHP helper mirrors it (PCRE, tier-1). `examples/guide/default-params.phg`.
 
 ### Added — `Core.List` / `Core.Text` / `Core.Set` breadth (M4 stdlib sweep)
 
@@ -667,11 +667,11 @@ byte-identical run/runvm/real PHP 8.5, each with a guide example:
 
 - **`Core.List`**: `slice(xs, offset, len)` (PHP `array_slice`; negatives count from the end,
   out-of-range clamps to empty — the Rust kernel replicates the normalization), `indexOf(xs, x) ->
-  int?` (gated `__phorge_index_of`, mapping `array_search`'s `false` to `null`), `concat(a, b)` (PHP
+  int?` (gated `__phorj_index_of`, mapping `array_search`'s `false` to `null`), `concat(a, b)` (PHP
   `array_merge`), `first(xs)` / `last(xs) -> T?`. Each returns a fresh list (immutable). Example
   `examples/guide/list-ops.phg`.
 - **`Core.Text`**: `padLeft` / `padRight(s, width, pad)` (PHP `str_pad`), `indexOf(s, needle) -> int?`
-  (gated `__phorge_text_index_of`, from `strpos`), `substring(s, start, len)` (PHP `substr`). Byte-based
+  (gated `__phorj_text_index_of`, from `strpos`), `substring(s, start, len)` (PHP `substr`). Byte-based
   / tier-1 (no mbstring) — ASCII domain; a slice/pad that splits a multibyte char faults cleanly (EV-7)
   rather than panicking. Example `examples/guide/text-ops.phg`.
 - **`Core.Set`**: `union` / `intersection` / `difference(a, b) -> Set<T>` (PHP `array_unique(array_merge)`
@@ -684,9 +684,9 @@ byte-identical run/runvm/real PHP 8.5, each with a guide example:
 immutable update. `get(m, k) -> V?` is a **safe** lookup — the value when present, else `null` (so a
 missing key is an optional, not a fault — composes with `??`/if-let; `V` is non-optional so `null`
 unambiguously means "absent"). `set(m, k, v) -> Map<K, V>` and `remove(m, k) -> Map<K, V>` return a
-**new** map (Phorge maps are immutable), insertion-ordered like PHP `$m[$k] = $v` / `unset($m[$k])` —
+**new** map (Phorj maps are immutable), insertion-ordered like PHP `$m[$k] = $v` / `unset($m[$k])` —
 the `set` kernel reuses `value::map_set`. `get` erases inline (`($m[$k] ?? null)`); `set`/`remove` use
-gated `__phorge_map_set`/`__phorge_map_remove` helpers (PHP arrays are COW value types, so the by-value
+gated `__phorj_map_set`/`__phorj_map_remove` helpers (PHP arrays are COW value types, so the by-value
 `$m` is already a copy). Byte-identical run/runvm/real PHP; `examples/guide/map-ops.phg`. **No new
 `Op`/`Value`.**
 
@@ -708,9 +708,9 @@ IIFE `(fn($x) => $x instanceof T ? $x : null)($value)`. Byte-identical run/runvm
 
 ### Added — `Core.Convert` value conversion (M4 casting, axis 1)
 
-Explicit value conversion — Phorge has no implicit coercion, so you convert on purpose, and lossy
+Explicit value conversion — Phorj has no implicit coercion, so you convert on purpose, and lossy
 conversions are *named* (no silent `(int)`). `Convert.toString(T) -> string` (generic, reuses the
-`__phorge_str` rendering — bool→`true`/`false`, float→shortest-round-trip), `toFloat(int) -> float`
+`__phorj_str` rendering — bool→`true`/`false`, float→shortest-round-trip), `toFloat(int) -> float`
 (total widening), `truncate(float) -> int` (toward zero), `round(float) -> int` (half away from zero).
 Because UFCS ships, `Convert.toFloat(n)` ≡ `n.toFloat()` — module + method API in one. (The type
 *cast*/reinterpret is the separate `as` operator, axis 2, next slice.) Byte-identical run/runvm/real
@@ -719,12 +719,12 @@ PHP; `examples/guide/convert.phg`. **No new `Op`/`Value`.**
 ### Added — `Core.List.sort` / `sortWith` (M4 stdlib breadth)
 
 Ordering for lists, mirroring PHP `sort`/`usort`. `Core.List.sort(List<T>) -> List<T>` returns a new
-list in natural ascending order (the input is unchanged — Phorge lists are immutable): ints/floats
+list in natural ascending order (the input is unchanged — Phorj lists are immutable): ints/floats
 numeric, strings **lexicographic by byte** (`"10"` before `"9"`) — deliberately *not* PHP's
 numeric-string-juggling `<=>`, so the PHP helper dispatches to `strcmp` for strings to match Rust's
 `String` ordering. `Core.List.sortWith(List<T>, (T, T) -> int) -> List<T>` orders by a comparator
 closure (higher-order, reusing the `map`/`reduce` re-entrant machinery; a comparator fault propagates
-cleanly). Both stable (Rust `sort_by` ≡ PHP 8.0+ `usort`); gated `__phorge_sort`/`__phorge_sort_with`
+cleanly). Both stable (Rust `sort_by` ≡ PHP 8.0+ `usort`); gated `__phorj_sort`/`__phorj_sort_with`
 helpers; byte-identical run/runvm/real PHP. `examples/guide/sort.phg`. **No new `Op`/`Value`.**
 
 ### Added — `Core.Text.parseInt` (the first optional-return native)
@@ -732,7 +732,7 @@ helpers; byte-identical run/runvm/real PHP. `examples/guide/sort.phg`. **No new 
 `Core.Text.parseInt(string) -> int?` — `None` when the whole string is not a valid base-10 integer
 (no partial parse, no overflow clamp), unlike PHP's lenient `(int)`. Mirrors Rust's `i64::from_str`
 (optional sign, base-10 digits incl. leading zeros, in `i64` range, no surrounding whitespace);
-composes with `??` / `if (var n = …)`. PHP erases to a gated `__phorge_parse_int` helper whose
+composes with `??` / `if (var n = …)`. PHP erases to a gated `__phorj_parse_int` helper whose
 overflow detection matches Rust's `None` (PHP's `(int)` would silently clamp). Byte-identical
 run/runvm/real PHP (incl. `+5`/`007`/overflow). `examples/guide/parse-int.phg`.
 
@@ -750,23 +750,23 @@ through every backend as an ordinary enum.
   first position / last value (PHP assoc semantics). Strings escape to match `json_encode`'s default
   (`\/`, `\uXXXX` non-ASCII, surrogate pairs).
 - **No new `Op`/`Value`:** three `Pure` natives; the one `eval` body is shared by both Rust backends,
-  the PHP leg uses gated `__phorge_json_*` recursive helpers. Floats render via the positional
-  shortest-round-trip form (`format!("{}")`/`__phorge_float`), so `run ≡ runvm ≡ real PHP 8.5` is
+  the PHP leg uses gated `__phorj_json_*` recursive helpers. Floats render via the positional
+  shortest-round-trip form (`format!("{}")`/`__phorj_float`), so `run ≡ runvm ≡ real PHP 8.5` is
   byte-identical. `examples/guide/json.phg`.
 
 ### Added — PHP-reserved enum variant names are mangled in the transpiler
 
 A variant named after a PHP-reserved class word (`Int`/`Float`/`Bool`/`Null`/…) now transpiles to a
 mangled PHP class name (`Int` → `Int_`) at the declaration, `new`, and `instanceof` sites, instead of
-emitting an invalid `final class Int`. Transpiler-only (the backends address a variant by its Phorge
+emitting an invalid `final class Int`. Transpiler-only (the backends address a variant by its Phorj
 name), so stdout byte-identity is untouched; reusable for any enum and load-bearing for the clean
 `Core.Json` variant API. `examples/guide/enum-reserved-variants.phg`.
 
 ### Changed — `E-RESERVED-NAME` now guards the full PHP-reserved-word set (F-m)
 
 The reserved-symbol-name check (previously `var`-only) now rejects every PHP-reserved word that is a
-usable Phorge identifier but would transpile to an invalid PHP symbol — turning a latent PHP-oracle
-parse error into a clean Phorge diagnostic. **Kind-aware** (empirically verified vs PHP 8.5): a
+usable Phorj identifier but would transpile to an invalid PHP symbol — turning a latent PHP-oracle
+parse error into a clean Phorj diagnostic. **Kind-aware** (empirically verified vs PHP 8.5): a
 `function` is checked against the function-illegal set (`var`/`list`/`print`/`array`/`unset`/`empty`/
 `eval`/`echo`/`clone`/`callable`/…), a `class`/`enum`/`interface`/`trait` additionally against the
 type words (`int`/`float`/`bool`/`string`/`object`/`readonly`/…) — so a `function int()` stays legal
@@ -776,7 +776,7 @@ field / method names. `phg explain E-RESERVED-NAME`.
 ### Changed — `var` is now a contextual keyword
 
 `var` was a hard-reserved keyword, so it could not be used as an identifier — naming a parameter,
-field, or variable `var` was a parse error, and lifting PHP `$var` produced invalid Phorge. `var` is
+field, or variable `var` was a parse error, and lifting PHP `$var` produced invalid Phorj. `var` is
 now **contextual** (like `foreach`/`as`/`when`): it is the inference-binding keyword only at a
 declaration start (`var x = …`, `var [a, b] = …`, struct destructure, `if (var x = opt)`), and an
 ordinary identifier everywhere else. The change is **purely additive and backward-compatible** — every
@@ -789,7 +789,7 @@ existing program parses identically; only previously-rejected positions are now 
   **`E-RESERVED-NAME`** (PHP reserves `var` in those symbol positions — `function var(){}` / `class
   var{}` are PHP parse errors; `phg explain E-RESERVED-NAME`).
 - Front-end-only (lexer keyword table + parser dispatch + one checker guard); **no new `Op`/`Value`**,
-  byte-identical `run ≡ runvm ≡ real PHP 8.5`. Unblocks lifting PHP `$var` → Phorge `var` verbatim.
+  byte-identical `run ≡ runvm ≡ real PHP 8.5`. Unblocks lifting PHP `$var` → Phorj `var` verbatim.
   `examples/guide/contextual-var.phg`.
 
 ### Added — `this`-capture in closures (Phase 1 closures slice)
@@ -826,7 +826,7 @@ PHP array); the length is a compile-time-only guarantee.
 as a function-type parameter list demanding a following `->`, so an explicitly parenthesized function
 type in return position failed (only the parens-free right-assoc `() -> (int) -> bool` worked — both now
 parse to the same type). A `(` is now disambiguated by whether a `->` follows the `)`: with `->` it's a
-parameter list, without it it's a **grouped** type `(T)` ≡ `T` (Phorge has no tuples — `()`/`(A, B)`
+parameter list, without it it's a **grouped** type `(T)` ≡ `T` (Phorj has no tuples — `()`/`(A, B)`
 without `->` are parse errors). Parser-only; byte-identical (`examples/guide/lambdas-pipe.phg`).
 
 ### Added — or-patterns in `match` (Phase 1 operators slice)
@@ -853,7 +853,7 @@ Byte-identical `run ≡ runvm ≡ real PHP 8.5`; **no new `Op`/`Value`**.
   compile time — no `import Core.Math` needed). Both the interpreter's `**` arm and the native call the
   single-sourced `value::int_pow`/`float_pow` kernels, so the two Rust backends compute and fault
   identically. The transpiler emits PHP's native `**` (compound operands parenthesized, so `-a ** 2` is
-  `(-$a) ** 2` = `(-a)**2`, matching Phorge rather than PHP's default `**`-before-unary-minus).
+  `(-$a) ** 2` = `(-a)**2`, matching Phorj rather than PHP's default `**`-before-unary-minus).
 - **Semantics:** integer power is overflow-checked; a negative exponent faults (`negative exponent`)
   rather than widening to a float — use `float ** float` for fractional powers. `Math.ipow(int, int) ->
   int` is the named, value-level twin (`Math.pow` stays the float power). `examples/guide/operators.phg`.
@@ -861,7 +861,7 @@ Byte-identical `run ≡ runvm ≡ real PHP 8.5`; **no new `Op`/`Value`**.
 ### Changed — mandatory `new` for construction (Feature C, breaking)
 
 Every class instantiation and enum-variant construction now **requires** `new`: `new Counter()`,
-`new Some(7)`, `new Circle(2.0)`. One uniform rule (a deliberate Phorge departure — no surface
+`new Some(7)`, `new Circle(2.0)`. One uniform rule (a deliberate Phorj departure — no surface
 language `new`s a sum-type variant). Byte-identical `run ≡ runvm ≡ real PHP 8.5`; **no new
 `Op`/`Value`/backend change**.
 
@@ -889,7 +889,7 @@ language `new`s a sum-type variant). Byte-identical `run ≡ runvm ≡ real PHP 
 - **Lowering:** the interpreter evaluates non-literal statics in `eval_static_inits` (after collect,
   before `main`); the compiler emits a `SetStatic` prelude at the start of `main` (literals stay seeded
   in `static_inits`, non-literals get a `Unit` placeholder); the transpiler declares a non-literal
-  static without a PHP default and sets it in a generated `__phorge_init_statics()` called before
+  static without a PHP default and sets it in a generated `__phorj_init_statics()` called before
   `main()`. The static-init type-check moved to a post-collection checker pass (`E-STATIC-INIT-TYPE`),
   so an initializer may reference a function or another static; the literal-only `E-STATIC-INIT-CONST`
   is retired.
@@ -903,7 +903,7 @@ language `new`s a sum-type variant). Byte-identical `run ≡ runvm ≡ real PHP 
 
 - **`TYPE name = <expr>;` on an instance field** — lifts PHP's constant-expression-only property
   defaults (PHP forbids calls/`$this`/other-property reads — "Constant expression contains invalid
-  operations"). Phorge allows **any** expression (calls, closures, arithmetic, `this`/sibling reads),
+  operations"). Phorj allows **any** expression (calls, closures, arithmetic, `this`/sibling reads),
   evaluated **per-instance at construction in declaration order, after the promoted ctor params are
   bound and before the constructor body**.
 - **Declaration-order scope** — an initializer may read `this` and any **earlier-declared** field (or
@@ -933,7 +933,7 @@ language `new`s a sum-type variant). Byte-identical `run ≡ runvm ≡ real PHP 
   the CTy-operand discipline), and the transpiler emits a PHP **typed class constant**
   (`public const int MAX = 100;`, 8.3+) accessed as `ClassName::MAX` (no `$`).
 - **Inheritance** — a subclass reads an inherited constant via its own name (`Sub.MAX`), matching PHP.
-- **Visibility is enforced at the access site** (the one place Phorge checks member visibility) —
+- **Visibility is enforced at the access site** (the one place Phorj checks member visibility) —
   required because the transpiled PHP `private const` would otherwise diverge from the Rust backends.
 - New diagnostics (all `phg explain`-documented): `E-CONST-NO-INIT`, `E-CONST-NOT-LITERAL`,
   `E-CONST-MUTABLE`, `E-CONST-INIT-TYPE`, `E-CONST-CASE`, `E-CONST-VISIBILITY`,
@@ -946,7 +946,7 @@ language `new`s a sum-type variant). Byte-identical `run ≡ runvm ≡ real PHP 
 - **String concatenation with `+`** — `string + string` → `string`, type-directed with **no
   coercion** (`"x" + 1` is a compile error, killing JS's `"1" + 1` footgun). Only `+` concatenates;
   `-`/`*`/`/`/`%` stay numeric. Reuses `Op::Concat(2)` on the VM (new `CTy::Str` so a string operand
-  is recognized — no new `Op`); transpiles via a new `__phorge_add` runtime helper (`is_string ? . :
+  is recognized — no new `Op`); transpiles via a new `__phorj_add` runtime helper (`is_string ? . :
   +`, since PHP's `+` is numeric-only).
 - **`\u{HEX}` Unicode escapes** — 1–6 hex digits naming a codepoint, expanded to UTF-8 bytes at lex
   time (independent of i18n string indexing).
@@ -989,9 +989,9 @@ A free, zero-backend browser playground (`playground/`), auto-deployed to GitHub
 to `master` so the live site always runs the latest `phg`. Spec
 `docs/specs/2026-06-24-playground-wasm-design.md`, plan `docs/plans/2026-06-24-playground-wasm.plan.md`.
 
-- New `phorge-playground` **workspace member** (cdylib): thin `#[wasm_bindgen]` exports over plain,
+- New `phorj-playground` **workspace member** (cdylib): thin `#[wasm_bindgen]` exports over plain,
   native-testable `*_json` wrappers (`check`/`run`/`runvm`/`transpile`/`explain`) that bypass
-  `on_deep_stack` (no threads on wasm) and call the public pipeline directly. The core `phorge` crate
+  `on_deep_stack` (no threads on wasm) and call the public pipeline directly. The core `phorj` crate
   is unchanged — still dependency-free + `#![forbid(unsafe_code)]`; `wasm-bindgen` is a wasm32-only dep
   confined to the member. New `cli::parse_program` seam for non-aborting diagnostics. 9 native tests.
 - Browser frontend (CodeMirror 6 + a Web Worker with a runaway-program timeout): all three backends
@@ -1114,7 +1114,7 @@ across the interpreter, the VM, and transpiled PHP 8.4 (`examples/guide/inherita
 
 ### Added — method & function overloading: dynamic multiple dispatch (M-RT)
 
-Several free functions or class methods may share a name with distinct parameter signatures. Phorge
+Several free functions or class methods may share a name with distinct parameter signatures. Phorj
 overloading is **dynamic multiple dispatch**: the *runtime* types of the arguments select the
 most-specific matching overload — identically in the interpreter, the VM, and the transpiled PHP, so
 a program runs byte-identically on all three (`examples/guide/overloading.phg`). This is the
@@ -1146,7 +1146,7 @@ faults in the backends while the PHP chain would take the first match (faulting 
 Closes the M-faults exception tier. A conventional **`cause` field of type `Error?`** on an `Error`
 subtype preserves the lower-level error that triggered a higher-level one. On transpile it is routed
 into PHP's native exception chain — `parent::__construct($message, 0, $cause)` — so the generated PHP
-reports an idiomatic "caused by" via `getPrevious()`, while the Phorge backends read it back as an
+reports an idiomatic "caused by" via `getPrevious()`, while the Phorj backends read it back as an
 ordinary field. Byte-identical `run ≡ runvm ≡ real PHP` (`examples/guide/cause-chain.phg`);
 **transpiler-only — no new `Op`, no backend or checker change** (a `cause` field already round-tripped
 as a plain field; 2c adds the native-chain routing + a `?\Throwable` property type so the `Error` marker
@@ -1291,7 +1291,7 @@ function): `public` (default — cross-package), `internal` (this package's file
 
 ### Added — in-place mutation (mutation milestone, M-mut.1–.7b) — feature-complete
 
-Phorge was a pure single-assignment language (the AST had no assignment statement); the mutation
+Phorj was a pure single-assignment language (the AST had no assignment statement); the mutation
 milestone adds in-place mutation **immutable-by-default, `mutable` opt-in**, with no tracing GC. The
 locked spine (forced by the real-PHP oracle): `List`/`Map`/`Set`/`Bytes` are **copy-on-write value
 types** (can't cycle ⇒ `Rc`/`Drop` reclaims fully); `Instance` is a **shared-mutable handle**
@@ -1330,11 +1330,11 @@ and backed/static/interface/abstract property hooks.
 - New codes (all with `phg explain`): `E-INTERSECT-MEMBER` (a primitive/enum/optional/function member),
   `E-INTERSECT-MULTI-CLASS` (two or more concrete classes — uninhabited until S6 `extends`),
   `E-INTERSECT-ARITY` (collapses to one member), `E-INTERSECT-SIG` (two members share a method with
-  conflicting signatures — no class can implement both, since Phorge has no overloading **yet**), and
+  conflicting signatures — no class can implement both, since Phorj has no overloading **yet**), and
   `E-INTERSECT-NO-MEMBER` (a member access resolves on no member). `instanceof` now also accepts an
   intersection-typed operand. **Deferred** (see KNOWN_ISSUES): `instanceof` against an intersection,
   optional/function members, whole-intersection optional `(A & B)?`.
-- **Method overloading confirmed for M-RT** (sequenced next, right after S5): a Phorge-level feature
+- **Method overloading confirmed for M-RT** (sequenced next, right after S5): a Phorj-level feature
   lowered to a single dispatching PHP method (PHP forbids same-name redeclaration) — the
   TypeScript-over-JavaScript relationship the transpile contract is built for.
 
@@ -1563,7 +1563,7 @@ and backed/static/interface/abstract property hooks.
 - **Expression-position `match` now transpiles.** A `match` used as a sub-expression (operand, call
   argument, interpolation) lowers to an immediately-invoked PHP closure wrapping the *same* if-chain
   the statement form emits — one lowering, no divergence. Enclosing locals are captured by value via
-  `use(…)` (Phorge values are immutable, so by-value is exact); `$this` auto-binds in method closures.
+  `use(…)` (Phorj values are immutable, so by-value is exact); `$this` auto-binds in method closures.
   New `examples/guide/match-expr.phg` (oracle-gated).
 - **Fixed: `var x = match …` could throw `UnhandledMatchError` in transpiled PHP.** `emit_match`
   previously emitted independent `if`s plus an unconditional defensive `throw`; that only
@@ -1582,7 +1582,7 @@ and backed/static/interface/abstract property hooks.
   default string cast uses `precision=14` and switches to scientific notation for large/small
   magnitudes (`sqrt(2.0)` → `1.4142135623731`, `1e15` → `1.0E+15`, `0.00001` → `1.0E-5`), while the
   Rust backends print the shortest round-trip, always positional. The transpiler now routes every
-  float through a new **`__phorge_float`** runtime helper that reproduces Rust's `f64` Display exactly
+  float through a new **`__phorj_float`** runtime helper that reproduces Rust's `f64` Display exactly
   (shortest round-trip, positional for any magnitude, integer-valued floats drop the trailing `.0`,
   `inf`/`-inf`/`NaN` spelled the Rust way). Tier-1 PHP functions only, so it stays correct under
   `php -n`. New `examples/guide/floats.phg` round-trips irrational/large/small magnitudes through real
@@ -1614,7 +1614,7 @@ and backed/static/interface/abstract property hooks.
 
 - **Git argument-injection / arbitrary-command-execution closed.** `phg vendor` passed a
   dependency's `git` URL and `tag`/`rev` pin straight to the `git` CLI. An attacker-authored
-  `phorge.toml` could therefore inject git options (a leading `-`, e.g. `--upload-pack=…`) or a
+  `phorj.toml` could therefore inject git options (a leading `-`, e.g. `--upload-pack=…`) or a
   command-executing remote helper (`ext::sh -c '…'`). The clone now uses a `--` end-of-options
   separator and `-c protocol.ext.allow=never`, and both the URL and the pin are rejected up front if
   they start with `-` or use the `ext::`/`file::` transports. The ordinary `file://` URL scheme (used
@@ -1651,15 +1651,15 @@ and backed/static/interface/abstract property hooks.
 
 ### Packaging — manifest distributable key renamed `name` → `module` (namespace reshape, slice 1)
 
-- **`phorge.toml`'s top-level distributable is now `module = "vendor/package"`** (was `name`). The
+- **`phorj.toml`'s top-level distributable is now `module = "vendor/package"`** (was `name`). The
   *keyword* `package` names the code unit (folder=path, `Main` entry) while `module` names the
   distributable — Go's `go.mod` split — removing the `package`-keyword vs `name = "vendor/package"`
-  overload (reshape design D1). The `[require]`/`[require-dev]` dependency keys and the `phorge.lock`
+  overload (reshape design D1). The `[require]`/`[require-dev]` dependency keys and the `phorj.lock`
   `name` field are unchanged (they are *dependency coordinates*, not the project's own identity).
   Rename-only and output-preserving: the emitted PHP namespace root (`namespace_root()`) and the
   `run≡runvm≡php` byte-identity spine are untouched. This is the first slice of the
   package/namespace reshape (`docs/specs/2026-06-20-package-namespace-reshape-design.md`); the
-  example projects' `phorge.toml` files are migrated.
+  example projects' `phorj.toml` files are migrated.
 
 ### Tooling — `phg check --json` (machine-readable diagnostics, LSP foothold)
 
@@ -1706,7 +1706,7 @@ and backed/static/interface/abstract property hooks.
   parameter type (a small, call-argument-only bit of bidirectional checking in `check_args`), so a
   zero-attribute or zero-child builder call reads naturally — `el("p", [], [text(x)])`. An empty
   `[]` in a declaration initializer or `return` still requires a non-empty literal.
-- **`Html` type + `Core.Html` escape kernel (Wave 1).** The Phorge-idiomatic answer to "how do I write HTML"
+- **`Html` type + `Core.Html` escape kernel (Wave 1).** The Phorj-idiomatic answer to "how do I write HTML"
   (design: `docs/specs/2026-06-19-core-html-design.md`). `Html` is a distinct checker type
   (`Ty::Html`) that erases to PHP `string` and rides `Value::Str` at runtime — but is **not
   interchangeable with `string`**, so untrusted text cannot reach rendered HTML except through
@@ -1722,11 +1722,11 @@ and backed/static/interface/abstract property hooks.
 
 - **GitHub Actions CI (`.github/workflows/ci.yml`) — locks in M7.** A `gate` job runs the same three
   checks as the local pre-commit hook (`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`,
-  `cargo test`) on the toolchain pinned in `rust-toolchain.toml`, and sets `PHORGE_REQUIRE_PHP=1` (with
+  `cargo test`) on the toolchain pinned in `rust-toolchain.toml`, and sets `PHORJ_REQUIRE_PHP=1` (with
   `php` installed via `setup-php`) so the M7 PHP oracle in `tests/differential.rs` **fails** rather than
   skips if transpiled PHP diverges from the interpreter/VM. A `cross-build` job installs Zig +
   `cargo-zigbuild` + the four Phase-2 cross targets + `llvm-objcopy` (from `llvm-tools-preview`, via
-  `PHORGE_OBJCOPY`) and runs `tests/build.rs` for real (x86_64-musl native exec + windows-gnu PE
+  `PHORJ_OBJCOPY`) and runs `tests/build.rs` for real (x86_64-musl native exec + windows-gnu PE
   round-trip), plus an aarch64-gnu/musl compile smoke. This makes CONTRIBUTING.md's "CI runs the same
   gate" true (no workflow existed before).
 
@@ -1740,24 +1740,24 @@ byte-identity.
 - **PHP oracle (closes P0-ROOT).** `tests/differential.rs` gains `all_examples_transpile_and_match_php`
   and `all_example_projects_transpile_and_match_php`: every runnable example/project is transpiled,
   executed by a real `php`, and its stdout asserted byte-identical to the interpreter's (⇒ all three
-  backends identical, since `run ≡ runvm` is already gated). **Fails-not-skips:** `PHORGE_REQUIRE_PHP=1`
+  backends identical, since `run ≡ runvm` is already gated). **Fails-not-skips:** `PHORJ_REQUIRE_PHP=1`
   makes a missing `php` a test **failure** (CI mode); unset, it skips *loudly* (logged), never a silent
-  green. `PHORGE_PHP=<path>` overrides the binary. Examples using a not-yet-transpiled construct are
+  green. `PHORJ_PHP=<path>` overrides the binary. Examples using a not-yet-transpiled construct are
   loudly deferred (logged `DEFER`, counted), not silently passed. The two narrow self-skipping PHP
   round-trip tests in `tests/cli.rs` (and their if-let/opt!/match-optional siblings — five in all) are
   removed, subsumed by the oracle.
-- **P0-1 — integer division.** `7 / 2` now transpiles to `__phorge_div(7, 2)` (a runtime helper:
-  `is_int($a)&&is_int($b) ? intdiv : /`), matching Phorge's truncate-toward-zero integer `/`. PHP's
+- **P0-1 — integer division.** `7 / 2` now transpiles to `__phorj_div(7, 2)` (a runtime helper:
+  `is_int($a)&&is_int($b) ? intdiv : /`), matching Phorj's truncate-toward-zero integer `/`. PHP's
   always-float `/` previously made `7/2` print `3.5` instead of `3`, live in `operators.phg`.
-- **P0-4 — float modulo.** `5.5 % 2.0` transpiles to `__phorge_rem(…)` (`is_int…? % : fmod`), matching
-  Phorge's `fmod`-style float `%`. PHP's integer `%` previously printed `1` instead of `1.5`.
-- **P0-3 — bool interpolation.** An interpolated value is coerced via `__phorge_str` (`is_bool ?
+- **P0-4 — float modulo.** `5.5 % 2.0` transpiles to `__phorj_rem(…)` (`is_int…? % : fmod`), matching
+  Phorj's `fmod`-style float `%`. PHP's integer `%` previously printed `1` instead of `1.5`.
+- **P0-3 — bool interpolation.** An interpolated value is coerced via `__phorj_str` (`is_bool ?
   "true"/"false" : (string)$v`), mirroring `Value::as_display`. PHP's bool-in-string previously printed
   `1`/`` (empty) instead of `true`/`false`, live in `control-flow.phg`/`operators.phg`.
 - **P0-2 — operand grouping.** Compound operands of unary/binary ops are now parenthesized
   (`a - (b - c)` → `$a - ($b - $c)`, `!(a && b)` → `!($a && $b)`), so PHP precedence can't
   re-associate them.
-- **QW-13 — empty/reversed ranges.** Ranges transpile through `__phorge_range($a, $b, $inclusive)`,
+- **QW-13 — empty/reversed ranges.** Ranges transpile through `__phorj_range($a, $b, $inclusive)`,
   which yields `[]` for an empty/reversed range (PHP's bare `range()` descends). The KNOWN_ISSUES
   caveat is removed.
 - **P1-#9 — large ranges fault cleanly.** A range wider than the new single-sourced
@@ -1766,7 +1766,7 @@ byte-identity.
   `checked_sub` (EV-7). `value::build_range` single-sources the size-guarded materialization for both
   backends.
 
-The four P0 fixes use runtime PHP helpers (mirroring Phorge's type-driven value kernels) rather than a
+The four P0 fixes use runtime PHP helpers (mirroring Phorj's type-driven value kernels) rather than a
 transpiler-side static type resolver — no duplicated operand-type inference, no inference-completeness
 risk. `run ≡ runvm` was always correct; the bug class was php-leg-only.
 
@@ -1783,7 +1783,7 @@ risk. `run ≡ runvm` was always correct; the bug class was php-leg-only.
 - **Pipe operator `|>`.** `x |> f ≡ f(x)`, left-associative, **lowered to a plain call in the
   parser** (no new `Op`, no new backend semantics; the four dead `BinaryOp::Pipe` stubs are retired
   to `unreachable!`). `5 |> dbl |> inc` is `inc(dbl(5))`; `1 + 2 |> dbl` is `dbl(1 + 2)`.
-- **Transpile targets** (Phorge : PHP :: TypeScript : JavaScript): expression lambda → arrow fn
+- **Transpile targets** (Phorj : PHP :: TypeScript : JavaScript): expression lambda → arrow fn
   `fn($x) => …`; statement lambda → `function($x) use ($cap) { … }` (by-value `use`); named-fn ref →
   first-class callable; a lambda literal in call position → `(fn(…) => …)(args)`.
 - All byte-identical on `run`/`runvm` and round-tripped through real PHP 8.6. Example:
@@ -1793,7 +1793,7 @@ risk. `run ≡ runvm` was always correct; the bug class was php-leg-only.
 
 ### M6 slices W2–W4 — routing, the serve runtime, and `phg serve`
 
-- **W2 — static router (pure Phorge, no new feature).** A data-driven `List<Route>` table is scanned
+- **W2 — static router (pure Phorj, no new feature).** A data-driven `List<Route>` table is scanned
   linearly for an exact `(method, path)` match, yielding a `Handler` enum tag dispatched by an
   exhaustive `match` to named handler functions; a method-sensitive 404 fallback. Routing is fully
   expressible with today's enums + classes + lists + `match`, so it is byte-identical on `run`/`runvm`
@@ -1823,11 +1823,11 @@ risk. `run ≡ runvm` was always correct; the bug class was php-leg-only.
   byte-identical on `run`/`runvm` + real PHP. **Conformance** for the socket path lives in
   `tests/serve.rs` (an in-memory `FixtureTransport`, outside the byte-identity spine).
 
-### M6 slice W1 — the HTTP handler model (`handle(Request) -> Response`, pure Phorge)
+### M6 slice W1 — the HTTP handler model (`handle(Request) -> Response`, pure Phorj)
 
-- **The portable handler contract** — `Request`/`Response` are ordinary Phorge classes and
+- **The portable handler contract** — `Request`/`Response` are ordinary Phorj classes and
   `parse_request(bytes) -> Request?` / `serialize_response(Response) -> bytes` are written in pure
-  Phorge (PSR-7/15 shaped). Bodies are `bytes` (HTTP bodies are octets); the head is decoded ASCII for
+  Phorj (PSR-7/15 shaped). Bodies are `bytes` (HTTP bodies are octets); the head is decoded ASCII for
   line/`:` splitting. Headers ride as `List<string>` raw lines with a `req.header(name) -> string?`
   linear-scan accessor (the method-call API is the public surface; a typed `Header` value arrives with
   S3). No socket yet — that is W3's `phg serve`. No new `Op`, no new `Value` variant.
@@ -1840,13 +1840,13 @@ risk. `run ≡ runvm` was always correct; the bug class was php-leg-only.
   runs `handle`, and serializes the response (Content-Length recomputed from the body). Byte-identical
   on `run`/`runvm` + **real PHP**, auto-gated by the `examples/**/*.phg` glob.
 
-### CLI binary renamed `phorge` → `phg`
+### CLI binary renamed `phorj` → `phg`
 
 - The CLI binary is now **`phg`** (matches the `.phg` extension; ripgrep's model — package `ripgrep`
   ships binary `rg`). All help/usage/version output, the cross-build `--bin`/artifact/cache names,
-  release-asset naming, and docs use `phg`. The Cargo **package/lib name stays `phorge`**, as do
-  `phorge.toml`/`phorge.lock`, the `.phorge` executable section, `PHORGE_*` env vars, and the
-  `~/.cache/phorge` stub namespace.
+  release-asset naming, and docs use `phg`. The Cargo **package/lib name stays `phorj`**, as do
+  `phorj.toml`/`phorj.lock`, the `.phorj` executable section, `PHORJ_*` env vars, and the
+  `~/.cache/phorj` stub namespace.
 
 ### M6 slice W0 — the `bytes` type
 
@@ -1867,13 +1867,13 @@ risk. `run ≡ runvm` was always correct; the bug class was php-leg-only.
   `docs/specs/2026-06-18-m6-web-design.md`); bytes was pulled forward so HTTP bodies can be honest
   octets.
 
-### M5 slice S3 — git dependencies + `phorge.lock` + `phg vendor` + auto-offline
+### M5 slice S3 — git dependencies + `phorj.lock` + `phg vendor` + auto-offline
 
 - **`phg vendor`** — the only network-touching command. It clones each `[require]` git dependency
   at its pinned `tag`/`rev`, copies the dependency's source into `vendor/<vendor>/<package>/`, and
-  writes `phorge.lock` pinning the **resolved commit SHA** + an FNV-1a-64 content hash. Idempotent and
+  writes `phorj.lock` pinning the **resolved commit SHA** + an FNV-1a-64 content hash. Idempotent and
   crash-safe (stages into a temp dir, swaps atomically, touches only each dependency's own subtree).
-- **`phorge.lock`** (`src/lock.rs`) — a strict, deterministic TOML-subset lockfile (`[[package]]`
+- **`phorj.lock`** (`src/lock.rs`) — a strict, deterministic TOML-subset lockfile (`[[package]]`
   blocks: `name`, `git`, `rev`, `hash`); round-trips through its own parser.
 - **Auto-offline resolution** — `loader::load_project` merges vendored packages exactly like
   first-party library packages (mangle + resolve before any backend runs ⇒ `run` ≡ `runvm`
@@ -1882,7 +1882,7 @@ risk. `run ≡ runvm` was always correct; the bug class was php-leg-only.
   dep not vendored), `E-VENDOR-MAIN` (a vendored `package Main`), `E-DUP-DEF` (a duplicate
   `(package, name)` after the merge — previously a silent overwrite).
 - **Example** — `examples/project/withdeps/` (a project consuming a vendored `acme/strutil` library):
-  ships its committed `vendor/` + `phorge.lock`; the project-aware differential harness loads it
+  ships its committed `vendor/` + `phorj.lock`; the project-aware differential harness loads it
   offline and gates `run` ≡ `runvm`, and it round-trips through real PHP. `phg vendor` gains a
   `--help` entry, USAGE/dispatch wiring, and three `phg explain` codes.
 - **Tests** — `tests/vendor.rs` drives the real `git clone`/`checkout`/`rev-parse` path against a
@@ -1896,9 +1896,9 @@ risk. `run ≡ runvm` was always correct; the bug class was php-leg-only.
   cross-package qualified call (`convert.c_to_f(0)`), import aliasing (`import acme.label as fmt;` →
   `fmt.tag(...)`), and a same-package bare call across two files. Plus `examples/project/README.md`.
 - **Project-aware byte-identity gate** — `tests/differential.rs` now discovers every project root (a
-  directory with a `phorge.toml`) under `examples/`, loads it through `loader::load`, and asserts
+  directory with a `phorj.toml`) under `examples/`, loads it through `loader::load`, and asserts
   `run` ≡ `runvm` (and that it runs). The single-file glob is made project-aware — it stops descending
-  into any directory holding a `phorge.toml`, so project files are never run standalone (structural,
+  into any directory holding a `phorj.toml`, so project files are never run standalone (structural,
   name-independent; flat examples keep their `len() >= 3` floor). A project added later is auto-gated.
 - **Verified** — the example runs `freezing = 32F` / `boiling = 212F` byte-identically on `run`,
   `runvm`, **and real PHP 8.6** (exact integer math, chosen so PHP's float `/` agrees).
@@ -1932,7 +1932,7 @@ risk. `run ≡ runvm` was always correct; the bug class was php-leg-only.
 ### M5 slice S2b — multi-file loader + folder=path enforcement
 
 - **Project loader** (`src/loader.rs`) — resolves an entry source to one `Unit` (a single, possibly
-  multi-file-merged `Program` + the source text for diagnostics). **Project mode**: a `phorge.toml`
+  multi-file-merged `Program` + the source text for diagnostics). **Project mode**: a `phorj.toml`
   found by walking up marks the root; every `.phg` under the source root is parsed, validated against
   its location (**folder = package**, Go's model — `src/acme/util/*.phg` ⇒ `package acme.util`;
   `package Main` is folder-exempt), and all items are merged into one flat program. **Loose mode** (no
@@ -1955,7 +1955,7 @@ risk. `run ≡ runvm` was always correct; the bug class was php-leg-only.
 
 ### M5 slice S2a — project manifest + source root + project detection
 
-- **`phorge.toml` manifest** — new `src/manifest.rs` parses a minimal, std-only TOML subset into
+- **`phorj.toml` manifest** — new `src/manifest.rs` parses a minimal, std-only TOML subset into
   `Manifest { name, version, source, require, require_dev }`. The manifest speaks **Composer's
   vocabulary in an honest TOML container**: `name = "vendor/package"` (doubles as the PSR-4 namespace
   root — `acme/myapp` ⇒ `Acme\Myapp`), `[require]` / `[require-dev]` sections, dependency values as
@@ -1964,7 +1964,7 @@ risk. `run ≡ runvm` was always correct; the bug class was php-leg-only.
   only** — a `branch` pin, a missing/double pin, an unknown key/section, or an unquoted value are hard
   errors. A literal `composer.json` was rejected on purpose: the `composer` tool cannot process it, so
   the filename would be a false promise.
-- **Project detection** — `Project::detect(path)` walks up from a source file/dir for a `phorge.toml`;
+- **Project detection** — `Project::detect(path)` walks up from a source file/dir for a `phorj.toml`;
   the first one found marks the project root and resolves the source root (`root/<source>`, default
   `src`). No manifest above ⇒ `Ok(None)` (loose-script mode). Manifest presence is the sole
   project-vs-loose signal (Go's model).
@@ -2044,7 +2044,7 @@ nullable runtime). `T?` is the existing `null` value at runtime; the guarantee l
   `E-IF-LET-TYPE` on a non-optional scrutinee. Transpiles to `if (($x = E) !== null) { … }`.
 - **`opt!` checked force-unwrap** — `T?` → `T`, a clean `force-unwrap of null` fault on null (never a
   crash; `FaultKind::ForceUnwrap` parity). `E-OPT-UNWRAP` on a non-optional; the **`W-FORCE-UNWRAP`**
-  lint flags every use. Transpiles to a once-per-file `__phorge_unwrap()` helper.
+  lint flags every use. Transpiles to a once-per-file `__phorj_unwrap()` helper.
 - **`match` over `T?`** — `match opt { null => …, v => … }` is exhaustive; the binding arm narrows
   `v` to the non-null inner after a `null` arm.
 - **Warning channel (first lint)** — the checker now collects non-fatal warnings; `check()` returns
@@ -2132,7 +2132,7 @@ and a complete OSS doc set.
   (thin + fat), a magic-sniffing `section::find_section` dispatcher, and a `cross` orchestrator. The
   hand-rolled, std-only **PE/COFF**, **Mach-O 64**, and **fat/universal** readers use checked arithmetic
   (EV-7: adversarial input → `None`, never a panic) so a produced binary self-reads its own format.
-- Stub cache keyed on an FNV-1a-64 of the phg binary's own bytes (a rebuilt phorge invalidates stale
+- Stub cache keyed on an FNV-1a-64 of the phg binary's own bytes (a rebuilt phorj invalidates stale
   stubs, protecting the parity spine). Precise "missing rustup target" / "needs a source checkout"
   errors. apple/darwin targets are rejected with a clear message (macOS stub deferred to Phase 3; the
   Mach-O reader ships and is tested). `--sign` reserved for Phase 3.
@@ -2150,7 +2150,7 @@ Built standalone binaries are unchanged: they run their embedded program and ign
 ## [0.3.0] — 2026-06-16
 
 First tagged POC. Usable end-to-end on `x86_64-linux-gnu`: the full M1 language on two
-byte-identical backends (`run` interpreter + `runvm` bytecode VM), a Phorge→PHP transpiler, and
+byte-identical backends (`run` interpreter + `runvm` bytecode VM), a Phorj→PHP transpiler, and
 `phg build` producing a standalone native Linux executable. Bundles all post-M2-P3 work — the
 P3.5 hardening pass, M2 P4 (classes/enums/match/methods), Wave 4 (class-aware compiler types), P5a
 (`Rc`-shared heap), the full-coverage example set, and M2.5 Phase 1 (standalone build). Known v1
@@ -2159,10 +2159,10 @@ indexing/`Map`/`Set`/optionals/`|>`/exceptions/mutation (all M3).
 
 ### M2.5 Phase 1 — `phg build` (x86_64-linux-gnu) (2026-06-16) — **distribution**
 `phg build foo.phg` produces a standalone host executable that runs `foo.phg` on the VM with no
-Phorge install — by copying the running phg binary, embedding the program **source** in a
-`.phorge` ELF section, and self-detecting + running that payload at startup. Same section+container
+Phorj install — by copying the running phg binary, embedding the program **source** in a
+`.phorj` ELF section, and self-detecting + running that payload at startup. Same section+container
 mechanism as the cross-OS end state (design §7). See
-`docs/specs/2026-06-16-m2.5-phorge-build-design.md` + `docs/plans/2026-06-16-m2.5-phase1-build-linux-gnu.md`.
+`docs/specs/2026-06-16-m2.5-phorj-build-design.md` + `docs/plans/2026-06-16-m2.5-phase1-build-linux-gnu.md`.
 
 - **Added**
   - `src/bundle.rs` (std-only, zero new deps): a bitwise CRC-32, a versioned CRC-guarded payload
@@ -2171,7 +2171,7 @@ mechanism as the cross-OS end state (design §7). See
     produced binary, so it must stay zero-dep), and `embedded_source()` (graceful `None` on every
     malformed/tampered/absent input).
   - `cli::cmd_build` — validates the program (no broken binary is ever emitted), copies `current_exe`,
-    and shells `llvm-objcopy --add-section .phorge=…` (override via `PHORGE_OBJCOPY`).
+    and shells `llvm-objcopy --add-section .phorj=…` (override via `PHORJ_OBJCOPY`).
   - `phg build <file> [-o out]` CLI command; `main()` runs an embedded payload at startup before
     any arg parsing.
   - `tests/build.rs` — the parity spine extended to distribution: a built binary's output is
@@ -2188,14 +2188,14 @@ mechanism as the cross-OS end state (design §7). See
   notarization (rcodesign-from-Linux) = Phase 3.
 
 ### Examples — full-coverage showcase (2026-06-16) — **docs/tests**
-A living example set covering the entire runnable language surface, plus the Phorge→PHP bridge. See
+A living example set covering the entire runnable language surface, plus the Phorj→PHP bridge. See
 `docs/specs/2026-06-16-examples-coverage-design.md` + `docs/plans/2026-06-16-examples-coverage.md`.
 
 - **Added**
   - Four real-world programs (`examples/realworld/{ledger,library,shop,rpg}.phg`) and six focused
     guide programs (`examples/guide/{operators,control-flow,collections,classes,enums-match,strings}.phg`),
     each exercising a different slice of the surface; an `examples/README.md` index + coverage matrix.
-  - `examples/transpile/{demo.phg,demo.php,README.md}` — the Phorge→PHP transpile bridge (the only
+  - `examples/transpile/{demo.phg,demo.php,README.md}` — the Phorj→PHP transpile bridge (the only
     PHP-ecosystem path: output, not input), with a `tests/cli.rs::transpile_demo_matches_committed_php`
     snapshot test that fails on transpiler drift.
 - **Changed**
@@ -2363,7 +2363,7 @@ Closing the parity/no-crash contract gaps before P4 widens the surface. See
 
 ## M1 — Tree-walking interpreter + transpiler — 2026-06-15 (`9da6e56`)
 - Full pipeline: lexer → parser → type-checker → tree-walking evaluator.
-- Phorge → PHP transpiler, round-trip-verified against real PHP.
+- Phorj → PHP transpiler, round-trip-verified against real PHP.
 - CLI: `phg <run|check|parse|lex|transpile>`.
 - Language surface: static types, immutable-by-default bindings, functions, classes + constructor
   promotion, single-payload enums + exhaustive `match`, string interpolation, `List<T>` literals,

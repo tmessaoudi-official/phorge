@@ -4,7 +4,7 @@
 > `cargo clippy --all-targets` + `cargo fmt --check`) and is committed. Steps use checkbox
 > (`- [ ]`) tracking.
 
-**Goal:** Add three byte-identical (`run`≡`runvm`) ergonomics features to Phorge — list indexing
+**Goal:** Add three byte-identical (`run`≡`runvm`) ergonomics features to Phorj — list indexing
 `xs[i]`, integer ranges `a..b` / `a..=b`, and expression-`if` — per
 `docs/specs/2026-06-17-m3-slice1-s0-s1-s2-design.md` §S1.
 
@@ -335,7 +335,7 @@ it now would be untestable dead code (YAGNI). It is folded into the S2 plan. Doc
 
 - [ ] **Step 1 — example (auto byte-identity-gated by the `examples/**/*.phg` glob).**
   `examples/guide/ergonomics.phg` exercising indexing + ranges + expression-`if`:
-  ```phorge
+  ```phorj
   import std.io;
 
   function main() {
@@ -352,8 +352,8 @@ it now would be untestable dead code (YAGNI). It is folded into the S2 plan. Doc
   `cargo test --test differential all_examples` green (auto-gated).
 - [ ] **Step 3 — docs.**
   - `KNOWN_ISSUES.md`: remove "Indexing (`xs[i]`)" from "not yet implemented"; add a **Behavioral
-    quirks** note that PHP-transpiled ranges use `range()`, which (unlike Phorge) reverses for an
-    empty/descending range (`a..b`, `a>=b`) — a transpile-only caveat; the Phorge backends are
+    quirks** note that PHP-transpiled ranges use `range()`, which (unlike Phorj) reverses for an
+    empty/descending range (`a..b`, `a>=b`) — a transpile-only caveat; the Phorj backends are
     byte-identical and unaffected. (Parallel to the OOB-indexing caveat.)
   - `README.md` "Language at a glance": add indexing, ranges (`0..n`/`0..=n`), expression-`if`.
   - `FEATURES.md`: flip indexing/ranges/expression-`if` to implemented.

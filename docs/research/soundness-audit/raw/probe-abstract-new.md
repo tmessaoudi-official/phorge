@@ -5,7 +5,7 @@
 **Severity: none.**
 
 ## Probe binary
-`/stack/projects/phorge/target/release/phg` (pre-built release, not rebuilt).
+`/stack/projects/phorj/target/release/phg` (pre-built release, not rebuilt).
 
 ## Source location of the enforcing check
 `src/checker/calls.rs:619-624` raises `E-ABSTRACT-INSTANTIATE` ("cannot instantiate
@@ -35,7 +35,7 @@ exit=1
 ```
 
 Program:
-```phorge
+```phorj
 package Main;
 import Core.Console;
 abstract class A {}
@@ -58,7 +58,7 @@ exit=1
 ```
 
 Program:
-```phorge
+```phorj
 abstract class Shape { abstract function area(): int; }
 function main(): int { var s = new Shape(); return s.area(); }
 ```
@@ -75,7 +75,7 @@ exit=0
 ```
 
 Program:
-```phorge
+```phorj
 abstract class Shape { abstract function area(): int; }
 class Square extends Shape {
     constructor(public int side) {}

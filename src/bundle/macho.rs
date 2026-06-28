@@ -1,5 +1,5 @@
 //! Mach-O 64 (thin) + fat/universal section readers. macOS stub production is deferred: the reader
-//! ships and is fixture-tested now; the Mac *stub* and the `__PHORGE,__source` embed land with the
+//! ships and is fixture-tested now; the Mac *stub* and the `__PHORJ,__source` embed land with the
 //! macOS leg. std-only, checked arithmetic (EV-7). Endianness trap: thin Mach-O bodies are
 //! little-endian; fat headers are big-endian.
 
@@ -84,7 +84,7 @@ mod tests {
     use super::*;
 
     /// Minimal Mach-O 64 LE: mach_header_64 (ncmds=1) → one LC_SEGMENT_64 with one section_64
-    /// named ("__PHORGE","__source") pointing at `payload` placed after all headers.
+    /// named ("__PHORJ","__source") pointing at `payload` placed after all headers.
     fn macho_with_section(seg: &str, sect: &str, payload: &[u8]) -> Vec<u8> {
         fn name16(s: &str) -> [u8; 16] {
             let mut a = [0u8; 16];
@@ -105,7 +105,7 @@ mod tests {
                                                   // segment_command_64 header (72 bytes)
         v.extend_from_slice(&0x19u32.to_le_bytes()); // cmd LC_SEGMENT_64
         v.extend_from_slice(&seg_cmd_size.to_le_bytes()); // cmdsize
-        v.extend_from_slice(&name16("__PHORGE")); // segname
+        v.extend_from_slice(&name16("__PHORJ")); // segname
         v.extend_from_slice(&[0u8; 8 * 4]); // vmaddr,vmsize,fileoff,filesize (4 x u64)
         v.extend_from_slice(&0u32.to_le_bytes()); // maxprot
         v.extend_from_slice(&0u32.to_le_bytes()); // initprot
@@ -129,25 +129,25 @@ mod tests {
 
     #[test]
     fn macho_reader_finds_section() {
-        let img = macho_with_section("__PHORGE", "__source", b"hi-macho");
+        let img = macho_with_section("__PHORJ", "__source", b"hi-macho");
         assert_eq!(
-            macho_find_section(&img, "__PHORGE", "__source"),
+            macho_find_section(&img, "__PHORJ", "__source"),
             Some(&b"hi-macho"[..])
         );
-        assert_eq!(macho_find_section(&img, "__PHORGE", "__nope"), None);
+        assert_eq!(macho_find_section(&img, "__PHORJ", "__nope"), None);
     }
 
     #[test]
     fn macho_reader_rejects_malformed_without_panic() {
-        assert_eq!(macho_find_section(b"", "__PHORGE", "__source"), None);
+        assert_eq!(macho_find_section(b"", "__PHORJ", "__source"), None);
         // cmdsize = 0 must not infinite-loop.
-        let mut img = macho_with_section("__PHORGE", "__source", b"x");
+        let mut img = macho_with_section("__PHORJ", "__source", b"x");
         img[36..40].copy_from_slice(&0u32.to_le_bytes()); // first LC cmdsize (at off 32+4)
-        assert_eq!(macho_find_section(&img, "__PHORGE", "__source"), None);
+        assert_eq!(macho_find_section(&img, "__PHORJ", "__source"), None);
         // Wrong magic (big-endian swapped) → None, not a misparse.
-        let mut img2 = macho_with_section("__PHORGE", "__source", b"x");
+        let mut img2 = macho_with_section("__PHORJ", "__source", b"x");
         img2[0..4].copy_from_slice(&0xCFFA_EDFEu32.to_le_bytes());
-        assert_eq!(macho_find_section(&img2, "__PHORGE", "__source"), None);
+        assert_eq!(macho_find_section(&img2, "__PHORJ", "__source"), None);
     }
 
     /// Minimal fat binary: big-endian fat_header (nfat_arch=1) + one fat_arch pointing at a Mach-O slice.
@@ -170,22 +170,22 @@ mod tests {
 
     #[test]
     fn fat_reader_finds_section_in_slice() {
-        let thin = macho_with_section("__PHORGE", "__source", b"fat-payload");
+        let thin = macho_with_section("__PHORJ", "__source", b"fat-payload");
         let fat = fat_wrapping(&thin);
         assert_eq!(
-            fat_find_section(&fat, "__PHORGE", "__source"),
+            fat_find_section(&fat, "__PHORJ", "__source"),
             Some(&b"fat-payload"[..])
         );
     }
 
     #[test]
     fn fat_reader_rejects_malformed_without_panic() {
-        assert_eq!(fat_find_section(b"", "__PHORGE", "__source"), None);
+        assert_eq!(fat_find_section(b"", "__PHORJ", "__source"), None);
         // offset beyond EOF -> slice .get() returns None.
-        let thin = macho_with_section("__PHORGE", "__source", b"x");
+        let thin = macho_with_section("__PHORJ", "__source", b"x");
         let mut fat = fat_wrapping(&thin);
         let offset_at = 8 + 8; // fat_header(8) + cputype(4)+cpusubtype(4)
         fat[offset_at..offset_at + 4].copy_from_slice(&u32::MAX.to_be_bytes());
-        assert_eq!(fat_find_section(&fat, "__PHORGE", "__source"), None);
+        assert_eq!(fat_find_section(&fat, "__PHORJ", "__source"), None);
     }
 }

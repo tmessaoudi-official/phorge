@@ -1,7 +1,7 @@
-//! Conformance corpus (GA rock 3) — a **golden-output** regression net for Phorge's *stable* surface.
+//! Conformance corpus (GA rock 3) — a **golden-output** regression net for Phorj's *stable* surface.
 //!
 //! Each `conformance/**/*.phg` single-file program has a sibling `.out` holding its exact expected
-//! stdout; a directory holding a `phorge.toml` is a multi-file project whose expected output is
+//! stdout; a directory holding a `phorj.toml` is a multi-file project whose expected output is
 //! `expected.out` in the project root. The test asserts the interpreter, the VM, **and** (when a `php`
 //! is available) the transpiled PHP all produce *exactly* that golden output.
 //!
@@ -10,18 +10,18 @@
 //! value) passes `agree` but fails here, because the golden pins the *value*. The corpus enumerates the
 //! constructs listed as `stable` in `STABILITY.md`, so a stable-surface regression is caught loudly.
 //!
-//! PHP gating mirrors `tests/differential.rs`: `PHORGE_PHP=<path>` overrides the binary;
-//! `PHORGE_REQUIRE_PHP=1` turns a missing `php` into a failure (CI) rather than a skip.
+//! PHP gating mirrors `tests/differential.rs`: `PHORJ_PHP=<path>` overrides the binary;
+//! `PHORJ_REQUIRE_PHP=1` turns a missing `php` into a failure (CI) rather than a skip.
 
-use phorge::cli::{cmd_run, cmd_runvm, cmd_transpile};
-use phorge::{cli, loader};
+use phorj::cli::{cmd_run, cmd_runvm, cmd_transpile};
+use phorj::{cli, loader};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 // ── php oracle (mirrors tests/differential.rs) ────────────────────────────────────────────────
 
 fn php_bin() -> Option<String> {
-    let cand = std::env::var("PHORGE_PHP").unwrap_or_else(|_| "php".to_string());
+    let cand = std::env::var("PHORJ_PHP").unwrap_or_else(|_| "php".to_string());
     let ok = Command::new(&cand)
         .arg("--version")
         .output()
@@ -35,10 +35,10 @@ fn php_or_gate(label: &str) -> Option<String> {
         return Some(p);
     }
     assert!(
-        std::env::var("PHORGE_REQUIRE_PHP").as_deref() != Ok("1"),
-        "{label}: php required (PHORGE_REQUIRE_PHP=1) but not found on PATH or $PHORGE_PHP"
+        std::env::var("PHORJ_REQUIRE_PHP").as_deref() != Ok("1"),
+        "{label}: php required (PHORJ_REQUIRE_PHP=1) but not found on PATH or $PHORJ_PHP"
     );
-    eprintln!("SKIP {label}: php not found — set PHORGE_REQUIRE_PHP=1 to make this a failure");
+    eprintln!("SKIP {label}: php not found — set PHORJ_REQUIRE_PHP=1 to make this a failure");
     None
 }
 
@@ -69,7 +69,7 @@ fn run_php(php: &str, php_src: &str, label: &str) -> String {
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
         .collect();
-    let path = std::env::temp_dir().join(format!("phorge_conf_{safe}.php"));
+    let path = std::env::temp_dir().join(format!("phorj_conf_{safe}.php"));
     std::fs::write(&path, php_src).expect("write temp php");
     let out = Command::new(php)
         .args(php_n_args(php))
@@ -88,9 +88,9 @@ fn run_php(php: &str, php_src: &str, label: &str) -> String {
 // ── corpus discovery ──────────────────────────────────────────────────────────────────────────
 
 /// Every single-file `*.phg` under `dir`, **skipping project roots** (a directory with a
-/// `phorge.toml` is handled by the project gate). Mirrors the differential's structural exclusion.
+/// `phorj.toml` is handled by the project gate). Mirrors the differential's structural exclusion.
 fn collect_single(dir: &Path, out: &mut Vec<PathBuf>) {
-    if dir.join("phorge.toml").is_file() {
+    if dir.join("phorj.toml").is_file() {
         return;
     }
     let Ok(entries) = std::fs::read_dir(dir) else {
@@ -106,9 +106,9 @@ fn collect_single(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// Every project root (a directory holding a `phorge.toml`) under `dir`.
+/// Every project root (a directory holding a `phorj.toml`) under `dir`.
 fn collect_projects(dir: &Path, out: &mut Vec<PathBuf>) {
-    if dir.join("phorge.toml").is_file() {
+    if dir.join("phorj.toml").is_file() {
         out.push(dir.to_path_buf());
         return;
     }

@@ -41,7 +41,7 @@ pub enum CommentKind {
 pub enum StrSeg {
     /// An escape-expanded literal run.
     Lit(String),
-    /// The raw source between `{` and `}` — a Phorge expression the parser re-lexes and parses — plus
+    /// The raw source between `{` and `}` — a Phorj expression the parser re-lexes and parses — plus
     /// the **absolute byte offset** of that inner source in the original file. The parser adds this
     /// offset to every re-lexed token's `Span.start`, so an interpolated expression's nodes carry
     /// globally-unique source positions (a fresh sub-lexer would otherwise restart spans at 0, making
@@ -186,8 +186,8 @@ pub enum TokenKind {
     PlusEq,             // `+=`
     MinusEq,            // `-=`
     StarEq,             // `*=`
-    SlashEq,            // `/=`  (routes through __phorge_div on transpile, via BinaryOp::Div)
-    PercentEq,          // `%=`  (routes through __phorge_rem on transpile, via BinaryOp::Rem)
+    SlashEq,            // `/=`  (routes through __phorj_div on transpile, via BinaryOp::Div)
+    PercentEq,          // `%=`  (routes through __phorj_rem on transpile, via BinaryOp::Rem)
     PlusPlus,           // `++`  (statement form `x++` only)
     MinusMinus,         // `--`  (statement form `x--` only)
     QuestionQuestionEq, // `??=` null-coalesce-assign (three-char; longest-match ahead of `??`)

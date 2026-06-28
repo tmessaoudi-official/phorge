@@ -3,7 +3,7 @@
 // PHP-target-only (like all of examples/interop/): `phg run`/`runvm` refuse it (E-FOREIGN-RUNTIME);
 // build with `phg transpile exceptions.phg > out.php && php out.php`.
 //
-// A foreign PHP exception is described by a `declare class … implements Error` — `Error` is Phorge's
+// A foreign PHP exception is described by a `declare class … implements Error` — `Error` is Phorj's
 // built-in exception marker, so the class becomes catchable. It is caught by its own global PHP name
 // (`\DivisionByZeroError`), NOT mapped to `\Exception`, so an `\Error`-family class (a `\Throwable`
 // that is not an `\Exception`) is caught correctly. No PHP definition is emitted (PHP already has it).

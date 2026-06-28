@@ -1,6 +1,6 @@
 // Class entry points (Batch-1 D) — a program's `main` may be a class `static` method.
 //
-// Phorge's Go-style top-level `function main` still works (every other example uses it). This
+// Phorj's Go-style top-level `function main` still works (every other example uses it). This
 // example shows the Java-style alternative: a `static function main` on a class. Either form is a
 // valid entry; declaring BOTH (or two class-static `main`s) is `E-MULTIPLE-MAIN`. A static method
 // has no `this`, so it cannot read instance state — but it may construct the class and drive it,

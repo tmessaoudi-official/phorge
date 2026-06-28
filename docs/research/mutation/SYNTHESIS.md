@@ -3,7 +3,7 @@
 > Author pass: 2026-06-21. Inputs: five research tracks (`raw/semantics.md`, `raw/gc.md`,
 > `raw/byte-identity.md`, `raw/features.md`, `raw/vm-impact.md`) + a direct re-read of `src/value.rs`,
 > `src/chunk.rs`, `src/ast.rs`, `docs/INVARIANTS.md`, the GA plan, and the parity spec. Filter:
-> craftsmanship-apex; PHP is the floor; transpile contract `Phorge : PHP :: TS : JS`; the spine is
+> craftsmanship-apex; PHP is the floor; transpile contract `Phorj : PHP :: TS : JS`; the spine is
 > `run ≡ runvm ≡ real PHP`, byte-identical. Every claim graded inline.
 >
 > **Read §1 and §3-Fork-1 first.** The tracks *disagree* on the spine decision, and that disagreement
@@ -32,10 +32,10 @@ but only for the instance subset.**
 
 **Resolution under the governing philosophy: the value/handle split is FORCED, not a fork.** Invariant
 #1 (`docs/INVARIANTS.md` §1) requires byte-identity with **real PHP**, and the M7 PHP oracle
-(`PHORGE_REQUIRE_PHP=1`) *fails the build* if it diverges. A Phorge program that aliases an object and
+(`PHORJ_REQUIRE_PHP=1`) *fails the build* if it diverges. A Phorj program that aliases an object and
 mutates it must print what PHP prints. Tracks 1+2's pure-value-semantics model would print something
 PHP never prints — it is unshippable under the existing oracle. Tracks 1+2's elegance is real but it
-answers a *different* language than the one the transpile contract pins Phorge to.
+answers a *different* language than the one the transpile contract pins Phorj to.
 
 **Therefore:**
 - `List` / `Map` / `Set` / `Bytes` → **value semantics, copy-on-write via `Rc::make_mut`**. Matches PHP
@@ -63,12 +63,12 @@ shared-mutable object graphs.
 | # | Forced decision | Why it is forced | Grade |
 |---|---|---|---|
 | F1 | **`List`/`Map`/`Set`/`Bytes` = value semantics via `Rc::make_mut` COW.** | PHP arrays are COW value types (executed: `arr_copy`, `nested_arr`). `make_mut` is the exact std analog of PHP's refcount-keyed zval separation / Swift's `isKnownUniquelyReferenced`. Anything else diverges from the PHP oracle. | Verified (byte-identity §1-§2.3, vm-impact §3) |
-| F2 | **`Instance` = handle/reference semantics (shared-mutable).** | PHP objects are handles (executed: `obj_ref`, `pass_handle`, `obj_arr_alias`). Value semantics for objects would print what PHP never prints → fails `PHORGE_REQUIRE_PHP=1`. | Verified (byte-identity §1) |
+| F2 | **`Instance` = handle/reference semantics (shared-mutable).** | PHP objects are handles (executed: `obj_ref`, `pass_handle`, `obj_arr_alias`). Value semantics for objects would print what PHP never prints → fails `PHORJ_REQUIRE_PHP=1`. | Verified (byte-identity §1) |
 | F3 | **One mutation kernel in `value.rs`** (`list_set`/`list_push`/`map_set`/`set_field`), called by both backends — never hand-inlined. | Invariant #3 (arith/compare single-sourced) extended to mutation; re-inlining is the `Op::Neg` drift class. The aliasing-observability boundary is where the two backends silently drift. | Verified (INVARIANTS §3; vm-impact §7 ranks this P0) |
 | F4 | **`eq_val` must become cycle-safe** (visited `Rc::ptr_eq` set) *before* any object→object mutation ships. | Today `eq_val` recurses unguarded (`value.rs`); a cyclic `==` overflows the native Rust stack — and the VM and tree-walker overflow at *different* depths (not frame-counted), a divergent crash that breaks `agree_err`. PHP's `==` is cycle-protected. **P0 prerequisite.** | Verified (byte-identity §2.10) |
 | F5 | **No new loop opcodes.** `while`/`do-while`/C-`for` lower to existing `Jump`/`JumpIfFalse` + `SetLocal`. | The jump ops exist, are exhaustive in all three matches, and a backward target trivially passes `validate` (`target ≤ code_len`). Adding loop ops is redundant. | Verified (vm-impact §2.3; chunk.rs:350) |
 | F6 | **Local reassignment reuses `Op::SetLocal`** — zero new Op. Interpreter gains a ~6-line `assign(name,v)` that overwrites the binding in the scope where `lookup` finds it (not a child-scope shadow). | `Op::SetLocal` already exists and is wired through all three matches; the compiler already emits it to overwrite slots (`&&`/`||`, `for`-index, `match`-scrutinee). | Verified (vm-impact §0; byte-identity §2.1) |
-| F7 | **PHP `/=` and `%=` emission routes through `__phorge_div`/`__phorge_rem` helpers**, not naked PHP `$x /= e`. | M7 runtime-helper correctness model: naked PHP `/` is float-division, diverging from Phorge intdiv. Compound `/=`/`%=` desugar through the same fault-parity kernels. | Verified (vm-impact §6; transpile.rs:264-274) |
+| F7 | **PHP `/=` and `%=` emission routes through `__phorj_div`/`__phorj_rem` helpers**, not naked PHP `$x /= e`. | M7 runtime-helper correctness model: naked PHP `/` is float-division, diverging from Phorj intdiv. Compound `/=`/`%=` desugar through the same fault-parity kernels. | Verified (vm-impact §6; transpile.rs:264-274) |
 | F8 | **Loop keeps eval-once-materialize-then-iterate.** | This already gives PHP's "foreach iterates a copy" semantics for free (executed: `mut_test2` prints `1 2 3`, appended element not visited). Don't regress to live-buffer iteration. | Verified (byte-identity §2.4; interpreter.rs:297) |
 | F9 | **Defaults are per-call** (never evaluate-once). | PHP forbids non-const defaults; evaluate-once + mutable = cross-call aliasing PHP has no concept of → unmatchable. Also removes the Python mutable-default footgun (philosophy: remove surprises). | Verified (byte-identity §2.5) |
 | F10 | **Reject set, forced by prior decisions + parity:** `&` references, `foreach`-by-reference (`as &$v`), PHP string-`++`, `__clone`/`__get`/`__set`/`__destruct`, `===` on value types, mutable-evaluate-once defaults. | Each is an aliasing / non-determinism / coercion-footgun form the parity spec already rejects (Group 2/3) or that has no `make_mut`/byte-identical encoding. Capability preserved another way (per philosophy) — see §2-capabilities. | Verified (parity spec lines 165/172/176/183/229/461-462; byte-identity §3) |
@@ -93,15 +93,15 @@ shared-mutable object graphs.
 ### Fork 1 — Object aliasing model: PHP-faithful shared-mutable, or value semantics for objects too? **[GATES THE ENTIRE MILESTONE]**
 
 **Crisp statement:** PHP objects are reference types (executed: aliasing is observable). The transpile
-contract + Invariant #1 force Phorge to match that *if objects can be aliased-then-mutated at all*. But
-Tracks 1+2 argue Phorge should instead make objects *value* types (no aliasing), accept a deliberate,
+contract + Invariant #1 force Phorj to match that *if objects can be aliased-then-mutated at all*. But
+Tracks 1+2 argue Phorj should instead make objects *value* types (no aliasing), accept a deliberate,
 documented divergence from PHP object semantics, and win a GC-free language. This is the one place the
 research genuinely contradicts itself, and the answer reshapes every downstream slice.
 
 | Option | What it means | Downstream blast radius |
 |---|---|---|
 | **(A) PHP-faithful handle semantics for objects** (Tracks 3+5) | `b = a` shares the instance cell; mutation visible through both; cycles possible. Instances become `Rc<RefCell<Instance>>`-equivalent. | **Forces the cycle-collector** (one final slice). `eq_val` must go cycle-safe (F4). Per-field-read `.borrow()` cost on instances (the M2 P5a hot path must be re-benched — Invariant #11). Enables `===` identity, doubly-linked lists, observers, `static mutable` graphs. **Byte-identical with PHP by construction.** |
-| **(B) Value semantics for objects too** (Tracks 1+2) | `b = a` copies; no aliasing; no cycles; **no GC**. Objects "mutate" only via `clone with` / `inout`. | **Drops the GC entirely** — milestone is pure mutation. BUT: a Phorge program that aliases-then-mutates an object prints differently from PHP → **the M7 oracle fails** unless objects are *never* aliased-then-mutated, which the checker would have to *prevent* (a uniqueness/linearity discipline — large new checker surface, no PHP analog). Diverges from the single most-ingrained PHP mental model (`$a = $b` on an object shares). |
+| **(B) Value semantics for objects too** (Tracks 1+2) | `b = a` copies; no aliasing; no cycles; **no GC**. Objects "mutate" only via `clone with` / `inout`. | **Drops the GC entirely** — milestone is pure mutation. BUT: a Phorj program that aliases-then-mutates an object prints differently from PHP → **the M7 oracle fails** unless objects are *never* aliased-then-mutated, which the checker would have to *prevent* (a uniqueness/linearity discipline — large new checker surface, no PHP analog). Diverges from the single most-ingrained PHP mental model (`$a = $b` on an object shares). |
 | **(C) Hybrid: COW objects + immutable-default makes the divergence unobservable** (vm-impact §3 lean) | Objects are `make_mut` COW, but because mutation is opt-in and the checker forbids mutating an instance reachable through two live bindings, the COW-vs-reference difference is never observed. | Middle path: no GC, but needs the same uniqueness-tracking checker as (B), and it is *fragile* — the first hole in the uniqueness check is a silent `run ≢ PHP` divergence the oracle catches only if an example happens to alias. |
 
 **Recommendation: (A) — PHP-faithful shared-mutable objects.** Rationale under the craftsmanship-apex
@@ -109,7 +109,7 @@ lens: the apex filter is *craftsmanship*, and the load-bearing craftsmanship pro
 of the transpile contract** (Invariant #1 — the "honesty enforcer," per the locked philosophy). Option
 (B)'s elegance is purchased by either *silently diverging from the oracle* (dishonest) or *building a
 linearity checker with no PHP target* (a large, un-transpilable, un-PHP-familiar mechanism — the exact
-PL-theory-maximalism the philosophy memory flags as my recurring bias). (A) keeps `Phorge : PHP :: TS :
+PL-theory-maximalism the philosophy memory flags as my recurring bias). (A) keeps `Phorj : PHP :: TS :
 JS` literally true for objects, costs one well-understood final slice (a cycle-collector that PHP itself
 ships), and *additively* still offers `clone with` + `inout` for the value-update style Tracks 1+2 love
 — coexistence, not replacement. **The capability "value-semantics objects" is preserved as an opt-in
@@ -118,7 +118,7 @@ ships), and *additively* still offers `clone with` + `inout` for the value-updat
 the recommendation itself is a design judgment, so Speculative on the margin.]
 
 > Note for the brainstorm: Tracks 1+2 are *not wrong about the language they describe* — Hylo-style
-> mutable value semantics is sound and GC-free. They are answering "what if Phorge weren't pinned to
+> mutable value semantics is sound and GC-free. They are answering "what if Phorj weren't pinned to
 > PHP's object model?" The fork is really: **is byte-identity with PHP's object aliasing a requirement
 > or a default we may break here?** That is a developer-values question, not a technical one — exactly a
 > STOP-and-ask per the Autonomy Contract.
@@ -136,7 +136,7 @@ does `p with { age = -1 }` re-run the constructor (safe, but `with` becomes fall
 | **(C) Bypass + re-validate only declared invariants** | Total when no invariant exists; fallible only for classes with `requires`. Most "correct" but most machinery. |
 
 **Recommendation: (B) bypass**, matching PHP 8.5 `clone with` exactly (the transpile target) and C#.
-Rationale: byte-identity with the PHP 8.5 target is the cheapest-honest path; Phorge's *type* system
+Rationale: byte-identity with the PHP 8.5 target is the cheapest-honest path; Phorj's *type* system
 already prevents the common errors, and invariant-validation is a separate (deferrable) `requires`/
 refinement-types feature. Revisit if/when refinement types land. [Inferred — PHP 8.5 `clone with`
 behavior is Verified (byte-identity §2.9 ran `mut_test4`); the recommendation is design judgment.]
@@ -213,7 +213,7 @@ M-mut.1  Mutable locals + reassignment              [Tier 1 · no new Op · no G
 
 M-mut.2  Compound assign + ++/-- + ??=               [Tier 1 · pure desugar · no GC]
          └ += -= *= /= %=  (NOT .=, depends on dropped `.`);  ??=;  n++/n-- (statement form only)
-           /= %= route through __phorge_div / __phorge_rem (F7)
+           /= %= route through __phorj_div / __phorj_rem (F7)
 
 M-mut.3  Condition loops                             [Tier 1 · jumps only · no GC]
          └ while, do-while, C-for (escape hatch; for..in stays idiomatic); while-let (if-let sugar);
@@ -310,11 +310,11 @@ only if static mutable state lands this milestone. Each Op extends the **three c
 ### 6.3 How `tests/differential.rs` must extend (byte-identity §5 + vm-impact §7)
 
 The current `agree` (Ok output) + `agree_err` (FaultKind) oracle is **necessary but not sufficient** for
-mutation. Required new cases — all in the PHP-gated `examples/**/*.phg` glob (`PHORGE_REQUIRE_PHP=1`):
+mutation. Required new cases — all in the PHP-gated `examples/**/*.phg` glob (`PHORJ_REQUIRE_PHP=1`):
 
 1. **Reassignment value:** `var x = 1; x = 2; println(x)` → `2`.
 2. **Compound-assign intdiv parity:** `var x = 7; x /= 2; println(x)` → `3`, PHP-oracle-gated (routes
-   through `__phorge_div`).
+   through `__phorj_div`).
 3. **THE aliasing case (P0 catcher), TWO of them — one List, one Map:** `var a = [1,2]; var b = a;
    b[0] = 9; println(a[0]); println(b[0])` → defines COW semantics (`1` then `9`); diverges instantly if
    one backend mutates-in-place while the other clones. (Two cases per the `null-op scratch-slot` lesson.)
@@ -346,10 +346,10 @@ but these specific behaviors were not in its `mut_test*.php` set):
    compose with `clone with`, and whether Fork-2=B "bypass ctor" also bypasses hooks.) [Unverified — needs
    a `clone with` + `{ set => }` program run under `php -n`.]
 2. **`++`/`--` overflow at `PHP_INT_MAX`** — PHP silently promotes `PHP_INT_MAX + 1` to **float**;
-   Phorge's `int_add` kernel *faults* on overflow. Confirm the exact PHP output so the checker's
+   Phorj's `int_add` kernel *faults* on overflow. Confirm the exact PHP output so the checker's
    numeric-only `++` either matches (fault) or the divergence is documented in KNOWN_ISSUES. [Unverified —
    needs `$x = PHP_INT_MAX; $x++; var_dump($x)` under `php -n`.]
-3. **Compound `%=` with negative operands** — PHP `%` sign-follows-dividend; confirm Phorge `int_rem`
+3. **Compound `%=` with negative operands** — PHP `%` sign-follows-dividend; confirm Phorj `int_rem`
    already matches across `-7 %= 3` / `7 %= -3` (it should via the shared kernel, but it has not been run
    as a compound-assign through the oracle). [Unverified — needs the four sign combinations executed.]
 4. **`static mutable` initializer timing** — PHP runs a `static $n = expr;` initializer once on first

@@ -19,7 +19,7 @@
    backends. Backends/transpiler unchanged.
 5. **Natives** — `native_defaults` lookup + `NativeDefault` enum → Expr literal.
 6. **parseFloat** — `parseFloat(string, bool permissive=false) -> float?`; Rust grammar validator +
-   gated `__phorge_parse_float`. Reject inf/nan; permissive adds `.5`/`5.`. Kernel tests.
+   gated `__phorj_parse_float`. Reject inf/nan; permissive adds `.5`/`5.`. Kernel tests.
 7. **Example + docs** — `examples/guide/default-params.phg` (user-fn default + parseFloat), README,
    CHANGELOG, `phg explain` for the 3 new codes, KNOWN_ISSUES (first-class-value calls not filled).
 8. **Gate** — full PHP-8.5 oracle workspace test; clippy + fmt; release binary; commit.

@@ -3,7 +3,7 @@ use crate::types::Ty;
 use crate::value::Value;
 use std::cmp::Ordering;
 
-/// Natural total order over the scalar element types, matching the PHP `__phorge_sort` comparator
+/// Natural total order over the scalar element types, matching the PHP `__phorj_sort` comparator
 /// byte-for-byte: ints/floats/bools numerically (Rust `cmp`/`total_cmp` ≡ PHP `<=>`), strings
 /// lexicographically by byte (Rust `String` Ord ≡ PHP `strcmp` — NOT PHP's numeric-string-juggling
 /// `<=>`). A homogeneous typed list never mixes arms; a stray mix is treated as equal (total, no panic).
@@ -18,7 +18,7 @@ fn natural_cmp(a: &Value, b: &Value) -> Ordering {
 }
 
 /// `List.sort(List<T>) -> List<T>` — a new list in natural ascending order. Rust `sort_by` is stable
-/// (≡ PHP 8.0+ `usort`); returns a fresh list (Phorge lists are immutable).
+/// (≡ PHP 8.0+ `usort`); returns a fresh list (Phorj lists are immutable).
 fn list_sort(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::List(xs)] => {
@@ -132,7 +132,7 @@ fn list_drop(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 /// `indexOf(List<T>, T) -> int?` — the index of the first element equal to the needle (structural
-/// `eq_val`, like `contains`), else `null`. Erases to a gated `__phorge_index_of` (PHP `array_search`
+/// `eq_val`, like `contains`), else `null`. Erases to a gated `__phorj_index_of` (PHP `array_search`
 /// returns `false` on miss, mapped to `null`).
 fn list_index_of(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
@@ -296,9 +296,9 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(list_contains),
-            // strict `in_array` (=== ) matches Phorge's value equality for scalars + nested
+            // strict `in_array` (=== ) matches Phorj's value equality for scalars + nested
             // lists/maps; arg order is (needle, haystack) — the reverse of `contains(list, value)`.
-            // (A list of class instances would differ: PHP `===` is identity, Phorge is structural —
+            // (A list of class instances would differ: PHP `===` is identity, Phorj is structural —
             // KNOWN_ISSUES; scalar/collection element lists are byte-identical.)
             php: |a| format!("in_array({}, {}, true)", parg(a, 1), parg(a, 0)),
         },
@@ -309,7 +309,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: list(u()),
             pure: true,
             eval: NativeEval::HigherOrder(list_map),
-            // array_map(callable, array) — note the order is swapped vs Phorge's map(list, f).
+            // array_map(callable, array) — note the order is swapped vs Phorj's map(list, f).
             php: |a| format!("array_map({}, {})", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
@@ -329,7 +329,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: u(),
             pure: true,
             eval: NativeEval::HigherOrder(list_reduce),
-            // array_reduce(array, callback, initial) — initial is Phorge's 2nd arg, fn its 3rd.
+            // array_reduce(array, callback, initial) — initial is Phorj's 2nd arg, fn its 3rd.
             php: |a| {
                 format!(
                     "array_reduce({}, {}, {})",
@@ -340,7 +340,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             },
         },
         // `sort(List<T>) -> List<T>` — natural ascending (PHP `sort`, but byte-stable + string-byte
-        // order). Gated `__phorge_sort` helper (a `<=>`/`strcmp` type-dispatched `usort` over a copy).
+        // order). Gated `__phorj_sort` helper (a `<=>`/`strcmp` type-dispatched `usort` over a copy).
         NativeFn {
             module: "Core.List",
             name: "sort",
@@ -348,7 +348,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: list(t()),
             pure: true,
             eval: NativeEval::Pure(list_sort),
-            php: |a| format!("__phorge_sort({})", parg(a, 0)),
+            php: |a| format!("__phorj_sort({})", parg(a, 0)),
         },
         // `sortWith(List<T>, (T, T) -> int) -> List<T>` — comparator (PHP `usort`), higher-order.
         NativeFn {
@@ -358,7 +358,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: list(t()),
             pure: true,
             eval: NativeEval::HigherOrder(list_sort_with),
-            php: |a| format!("__phorge_sort_with({}, {})", parg(a, 0), parg(a, 1)),
+            php: |a| format!("__phorj_sort_with({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `slice(List<T>, int, int) -> List<T>` — PHP `array_slice` (offset, length; negatives count
         // from the end; out-of-range clamps to empty).
@@ -396,7 +396,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(list_drop),
             php: |a| format!("array_slice({}, max(0, {}))", parg(a, 0), parg(a, 1)),
         },
-        // `indexOf(List<T>, T) -> int?` — gated `__phorge_index_of` (PHP `array_search` strict → null).
+        // `indexOf(List<T>, T) -> int?` — gated `__phorj_index_of` (PHP `array_search` strict → null).
         NativeFn {
             module: "Core.List",
             name: "indexOf",
@@ -404,7 +404,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(Ty::Int)),
             pure: true,
             eval: NativeEval::Pure(list_index_of),
-            php: |a| format!("__phorge_index_of({}, {})", parg(a, 0), parg(a, 1)),
+            php: |a| format!("__phorj_index_of({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `concat(List<T>, List<T>) -> List<T>` — PHP `array_merge` (re-indexes sequential lists).
         NativeFn {
@@ -436,7 +436,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             php: |a| format!("({0}[count({0}) - 1] ?? null)", parg(a, 0)),
         },
         // `unique(List<T>) -> List<T>` — dedupe, keeping first occurrence + order. Value-equality
-        // (Phorge structural ≡ the `__phorge_unique` helper's strict `in_array`); NOT PHP's
+        // (Phorj structural ≡ the `__phorj_unique` helper's strict `in_array`); NOT PHP's
         // `array_unique` (which stringifies / juggles numeric strings — a parity break for `List<string>`).
         NativeFn {
             module: "Core.List",
@@ -445,11 +445,11 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: list(t()),
             pure: true,
             eval: NativeEval::Pure(list_unique),
-            php: |a| format!("__phorge_unique({})", parg(a, 0)),
+            php: |a| format!("__phorj_unique({})", parg(a, 0)),
         },
         // `min(List<T>) -> T?` / `max(List<T>) -> T?` — null for an empty list. Uses the `natural_cmp`
         // byte-order (strings via `strcmp`, not PHP's numeric-string-juggling `min`/`max`), so the
-        // `__phorge_min`/`_max` helpers match the Rust backends exactly.
+        // `__phorj_min`/`_max` helpers match the Rust backends exactly.
         NativeFn {
             module: "Core.List",
             name: "min",
@@ -457,7 +457,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(t())),
             pure: true,
             eval: NativeEval::Pure(list_min),
-            php: |a| format!("__phorge_min({})", parg(a, 0)),
+            php: |a| format!("__phorj_min({})", parg(a, 0)),
         },
         NativeFn {
             module: "Core.List",
@@ -466,11 +466,11 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(t())),
             pure: true,
             eval: NativeEval::Pure(list_max),
-            php: |a| format!("__phorge_max({})", parg(a, 0)),
+            php: |a| format!("__phorj_max({})", parg(a, 0)),
         },
         // `find(List<T>, (T) -> bool) -> T?` — the first element satisfying the predicate, or null.
         // `any` / `all` — short-circuiting existential / universal quantifiers. All three
-        // SHORT-CIRCUIT identically on every backend (the `__phorge_find/any/all` helpers `foreach`
+        // SHORT-CIRCUIT identically on every backend (the `__phorj_find/any/all` helpers `foreach`
         // + early-`return`), so a side-effecting predicate produces byte-identical stdout.
         NativeFn {
             module: "Core.List",
@@ -479,7 +479,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(t())),
             pure: true,
             eval: NativeEval::HigherOrder(list_find),
-            php: |a| format!("__phorge_find({}, {})", parg(a, 0), parg(a, 1)),
+            php: |a| format!("__phorj_find({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
             module: "Core.List",
@@ -488,7 +488,7 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::HigherOrder(list_any),
-            php: |a| format!("__phorge_any({}, {})", parg(a, 0), parg(a, 1)),
+            php: |a| format!("__phorj_any({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
             module: "Core.List",
@@ -497,12 +497,12 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::HigherOrder(list_all),
-            php: |a| format!("__phorge_all({}, {})", parg(a, 0), parg(a, 1)),
+            php: |a| format!("__phorj_all({}, {})", parg(a, 0), parg(a, 1)),
         },
     ]
 }
 
-/// `unique` — first-occurrence-order dedupe by Phorge value-equality.
+/// `unique` — first-occurrence-order dedupe by Phorj value-equality.
 fn list_unique(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::List(xs)] => {

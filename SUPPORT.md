@@ -1,6 +1,6 @@
 # Support
 
-Thanks for using Phorge! Here is where to go for help.
+Thanks for using Phorj! Here is where to go for help.
 
 ## Questions & usage help
 
@@ -14,11 +14,11 @@ Thanks for using Phorge! Here is where to go for help.
 ## Reporting a bug
 
 Open an issue with the **Bug report** template. A minimal `.phg` program that reproduces the problem,
-the command you ran, the phorge version (`phg --version`), and your platform make a fix far faster.
+the command you ran, the phorj version (`phg --version`), and your platform make a fix far faster.
 
 ## Requesting a feature
 
-Open an issue with the **Feature request** template. Note that Phorge is pre-1.0 with a deliberate
+Open an issue with the **Feature request** template. Note that Phorj is pre-1.0 with a deliberate
 roadmap ([ROADMAP.md](ROADMAP.md)) — many language features are *planned* rather than missing by
 accident, so it's worth checking the roadmap first.
 
@@ -29,5 +29,5 @@ reporting.
 
 ## Response expectations
 
-Phorge is maintained by a single developer in their own time. Issues and discussions are read, but
+Phorj is maintained by a single developer in their own time. Issues and discussions are read, but
 responses may take a while. Clear, reproducible reports are prioritized.

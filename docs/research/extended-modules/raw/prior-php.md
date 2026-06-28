@@ -1,7 +1,7 @@
 # Concurrency Prior-Art for the Byte-Identity Lens — PHP
 
 **Stage 1 research.** Catalogue PHP's concurrency / async / reactive models, judge each by output
-determinism, and map each onto Phorge's hard constraints: a single-threaded `Rc`-shared heap
+determinism, and map each onto Phorj's hard constraints: a single-threaded `Rc`-shared heap
 (`Value` is **not** `Send`/`Sync`), zero external crates, a three-leg byte-identity spine
 (`run` ≡ `runvm` ≡ transpiled PHP under `php -n` 8.5), and a per-feature Tier-A (gated) /
 Tier-B (quarantined, fixture-tested) admission.
@@ -33,7 +33,7 @@ fresh interpreter, runs top-to-bottom, dies. Concurrency in PHP is therefore *bo
 distinguishable families, in rough order of how native they are:
 
 1. **Fibers** (8.1 core) — stackful, cooperative, *explicitly* scheduled coroutines. Present under
-   `php -n`. This is the one that matters most for Phorge.
+   `php -n`. This is the one that matters most for Phorj.
 2. **Generators-as-coroutines** (5.5 core, `yield`) — stackless cooperative coroutines; the
    pre-Fiber way to write a scheduler. Core, present under `php -n`.
 3. **Userland event loops** — ReactPHP, Amp/AMPHP, Revolt. Pure-PHP libraries (Composer packages)
@@ -45,7 +45,7 @@ distinguishable families, in rough order of how native they are:
    fan-out, not in-process threads.
 5. **True parallel threads** — `ext-parallel` (the modern one, ZTS-only), `pthreads` (dead,
    removed in 8.0), Swoole/OpenSwoole (full coroutine+event-loop extensions). **All extensions,
-   all absent under `php -n`.** All map to the **hard-no** column for Phorge (shared-mutable OS
+   all absent under `php -n`.** All map to the **hard-no** column for Phorj (shared-mutable OS
    threads; non-deterministic preemption; no `php -n` target).
 
 The byte-identity question for each is: **is its OUTPUT a deterministic function of the program
@@ -90,14 +90,14 @@ deterministic.**
 This is the crux: **cooperative scheduling is deterministic; the I/O readiness that usually drives
 real event loops is not.** Separate the two and the deterministic half is Tier-A-eligible.
 
-### Mapping onto Phorge
+### Mapping onto Phorj
 
-Phorge's `Value` is `Rc`-shared and **not `Send`** → a single OS thread is forced anyway, which is
+Phorj's `Value` is `Rc`-shared and **not `Send`** → a single OS thread is forced anyway, which is
 *exactly* the fiber execution model. There is no impedance mismatch: cooperative single-thread is
-both what Phorge can do and what PHP Fibers do.
+both what Phorj can do and what PHP Fibers do.
 
 - **Rust leg feasibility (std-only):** Rust has no stackful-coroutine primitive in std (no
-  `Fiber`). But Phorge does **not** need stackful coroutines to match this — it needs *its
+  `Fiber`). But Phorj does **not** need stackful coroutines to match this — it needs *its
   scheduler's output* to match PHP's. Two std-only implementation routes for the Rust legs:
   1. **Re-entrant VM drive** (already proven): the VM's `call_closure_value` + `run_until` push a
      frame and drive the shared `exec_op` re-entrantly (the higher-order-natives mechanism,
@@ -105,14 +105,14 @@ both what Phorge can do and what PHP Fibers do.
      (each task a `Value::Closure`) needs **no** stackful suspension at the Rust level — the
      scheduler is an ordinary native loop that invokes closures in a deterministic order. The
      "suspend point" is modeled as *the closure returning a continuation value* (a state machine in
-     Phorge), not a stack switch. **This is the recommended shape.**
+     Phorj), not a stack switch. **This is the recommended shape.**
   2. **Thread-as-fiber** (rejected): you *could* implement stackful fibers on the Rust side with OS
      threads + channels parked at suspend points, but `Value` is not `Send`, so a `Value` cannot
      cross the thread boundary. Dead on arrival. Correct, because it confirms the cooperative-
      closure model is the only viable one.
-- **PHP leg target:** a Phorge cooperative scheduler transpiles to **either** a fixed-order loop
+- **PHP leg target:** a Phorj cooperative scheduler transpiles to **either** a fixed-order loop
   invoking the task closures (if tasks are closure-shaped, the simplest and most byte-stable), **or**
-  to real PHP `Fiber` objects with a Phorge-emitted deterministic scheduler loop. The *output* is
+  to real PHP `Fiber` objects with a Phorj-emitted deterministic scheduler loop. The *output* is
   what's gated, not the mechanism — same reframing as M6's `handle(Request)`: the socket glue is
   runtime, only the value-level contract round-trips. A pure-closure scheduler is the lower-risk
   PHP target (no Fiber emission needed); Fibers become an invisible engine optimization later.
@@ -151,11 +151,11 @@ Same shape as Fibers — cooperative, explicit, single-thread — but **stackles
 from the generator's *own* top frame, not from a nested call. Output determinism is identical to
 Fibers: fully deterministic unless the trampoline's resume order is driven by non-deterministic I/O.
 
-### Mapping onto Phorge
+### Mapping onto Phorj
 
-This is the **closest analogue to a Phorge lazy iterator / stream**. Phorge has no `yield` today.
+This is the **closest analogue to a Phorj lazy iterator / stream**. Phorj has no `yield` today.
 A `yield`-style generator maps to:
-- **Rust legs:** a lazy iterator is most naturally a *Phorge-level state machine* (a struct holding
+- **Rust legs:** a lazy iterator is most naturally a *Phorj-level state machine* (a struct holding
   the resumption state) advanced by a `.next()` native — again no Rust stackful coroutine needed,
   std-only trivially. Or: eagerly materialize into a `List` if the sequence is finite and pure
   (loses laziness but is byte-trivial — the M3 range `0..n` precedent already does this).
@@ -195,11 +195,11 @@ and **wall-clock timers**. This is **irredeemably non-deterministic** for byte-i
 which sockets become readable, and when timers fire relative to each other, depends on the OS, the
 network, and the clock — none reproducible across the three legs.
 
-### Mapping onto Phorge
+### Mapping onto Phorj
 
 - The **callback/promise/`async`-`await` *programming model*** is borrowable and Tier-A — *if* the
-  underlying scheduler is Phorge's deterministic cooperative driver (§1), not a real-I/O event loop.
-  i.e. Phorge can offer `async`/`await` ergonomics that *look* like Amp, lowered to a deterministic
+  underlying scheduler is Phorj's deterministic cooperative driver (§1), not a real-I/O event loop.
+  i.e. Phorj can offer `async`/`await` ergonomics that *look* like Amp, lowered to a deterministic
   scheduler.
 - The **real-I/O event loop itself is Tier-B** (the live-concurrency escape): a `phg serve`-style
   loop over real sockets/timers is non-gated, fixture-tested, transpiled to PHP that uses
@@ -240,7 +240,7 @@ the project's stated "mbstring/PHPUnit/gmp/APCu ABSENT" line but was not directl
 
 **(a) True shared-mutable-state OS threads (`ext-parallel`, `pthreads`, Swoole coroutine-with-shared-
 state):** preemptively or opaquely scheduled, shared memory, data races. Output ordering between
-threads is **non-deterministic by construction.** Maps to Phorge's **HARD NO**: `Value` is not
+threads is **non-deterministic by construction.** Maps to Phorj's **HARD NO**: `Value` is not
 `Send`, there is no `php -n` target, and the output isn't reproducible across legs. *Explicitly
 rejected by the developer.* No Tier even applies — it cannot be a feature.
 
@@ -289,7 +289,7 @@ operators over a fixed source (`map`/`filter`/`scan`/`take`) are **deterministic
 ### Determinism split
 
 - **Pull-based deterministic streams** (a lazy sequence + pure operators, resolved on demand): this
-  is just §2's generator with a combinator API. **Deterministic, Tier-A.** Maps to a Phorge
+  is just §2's generator with a combinator API. **Deterministic, Tier-A.** Maps to a Phorj
   `Stream<T>` with `map`/`filter`/`take`/`fold` — lowering to either eager `List` ops (finite) or a
   lazy state machine; the PHP leg is `array_map`/`array_filter` (finite) or a `Generator` pipeline.
 - **Push-based / time-driven reactive** (`interval`, `debounce`, hot observables over real events):
@@ -332,12 +332,12 @@ home for socket-driven scheduling.
 
 ---
 
-## 7. Summary table — every model, its determinism, its Phorge home
+## 7. Summary table — every model, its determinism, its Phorj home
 
-| # | PHP model | `php -n`? | Scheduling | Output determinism | Phorge mapping | New VM Op? |
+| # | PHP model | `php -n`? | Scheduling | Output determinism | Phorj mapping | New VM Op? |
 |---|---|---|---|---|---|---|
 | 1 | **Fibers** (8.1) | ✅ present | cooperative, explicit, 1-thread | **deterministic** unless resume order is I/O-driven | **Tier-A** cooperative scheduler over closure tasks (re-entrant VM drive, already shipped); Tier-B if timer/socket-driven | **No** (closure-task scheduler = `CallNative` + re-entrant `run_until`) |
-| 2 | **Generators** `yield` (5.5) | ✅ present | cooperative, stackless | **deterministic** (pure finite/lazy seq) | **Tier-A** `Stream<T>`/generator as Phorge state machine → PHP `Generator`; or eager `List` (finite) | **No** (state machine in Phorge; or new `yield` desugar — front-end only) |
+| 2 | **Generators** `yield` (5.5) | ✅ present | cooperative, stackless | **deterministic** (pure finite/lazy seq) | **Tier-A** `Stream<T>`/generator as Phorj state machine → PHP `Generator`; or eager `List` (finite) | **No** (state machine in Phorj; or new `yield` desugar — front-end only) |
 | 3 | **ReactPHP/Amp/Revolt** | ❌ Composer | event loop over real I/O+timers | **non-deterministic** (real I/O) | ergonomics (promise/`async`-`await`) **Tier-A** over deterministic driver; real loop **Tier-B** | No (sugar lowers to scheduler) |
 | 4a | **`ext-parallel`/`pthreads`/Swoole threads** | ❌ ext | preemptive, shared mem | **non-deterministic** | **HARD NO** (`Value` not `Send`, no target, rejected) | — |
 | 4b | **`proc_open`/`popen` fan-out** | ✅ core | OS subprocess | non-det completion; **det with ordered merge** | `parallelMap`/fork-join **Tier-A** (seq today, ordered merge); raw spawn **Tier-B** | **No** (`List.map`-shaped native) |

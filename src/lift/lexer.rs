@@ -6,7 +6,7 @@
 //! keywords from identifiers (both arrive as [`PTok::Ident`]) and consumes the stream.
 
 /// A PHP token (Tier-1 subset). Keywords are not pre-classified — they arrive as [`PTok::Ident`]
-/// and the parser matches the string, mirroring how Phorge's own lexer hands `match`/`if`/… to its
+/// and the parser matches the string, mirroring how Phorj's own lexer hands `match`/`if`/… to its
 /// parser. Variables carry their name **without** the leading `$`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PTok {
@@ -60,7 +60,7 @@ pub enum PTok {
     Inc,
     /// `--` decrement.
     Dec,
-    /// Compound assignments `+= -= *= /= %= .= ??=` (Tier-1: Phorge supports these natively, so they
+    /// Compound assignments `+= -= *= /= %= .= ??=` (Tier-1: Phorj supports these natively, so they
     /// round-trip). The variant names mirror the operator.
     PlusEq,
     MinusEq,

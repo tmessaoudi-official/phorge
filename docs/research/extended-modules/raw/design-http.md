@@ -7,7 +7,7 @@ side), confronting the TLS wall head-on.
 
 **Grounding (all [Verified] against the live tree this session):**
 - `src/serve.rs` already exists (M6 W3): a `Transport` trait + `TcpTransport` + an in-memory test
-  transport, with the server driven by a single Phorge entry `respond(bytes) -> bytes` (`SERVE_ENTRY`).
+  transport, with the server driven by a single Phorj entry `respond(bytes) -> bytes` (`SERVE_ENTRY`).
   Sockets + wall-clock live here, deliberately **outside** `tests/differential.rs`; conformance is in
   `tests/serve.rs` over a deterministic in-memory transport. *This is the exact quarantine shape Part B
   must mirror.*
@@ -34,7 +34,7 @@ side), confronting the TLS wall head-on.
 
 ### A.0 Tier verdict: **Tier A (gated, byte-identical) — high confidence**
 
-Every type here is *pure Phorge data + pure functions* over `bytes`/`string`/`int`/`Map`. No clock, no
+Every type here is *pure Phorj data + pure functions* over `bytes`/`string`/`int`/`Map`. No clock, no
 random, no socket, no env. The result of constructing a `JsonResponse(...)` and serializing it to wire
 bytes is a deterministic function of the program text. **It is byte-identical on `run`/`runvm`/real PHP
 by construction**, exactly like the W1 `Response` that already ships. There is nothing impure to
@@ -55,7 +55,7 @@ The locked M6 decision is **"one public API / evolving engine"** (Shape A; a nat
      `Response` whose PHP emission is heavier. A factory keeps the wire-format folder monomorphic and
      the PHP output flat.
   2. PHP's own ecosystem (Symfony `JsonResponse extends Response`, Laravel) *does* subclass — but those
-     frameworks have a mutable `Response` and an autoloader. Phorge's `Response` is **immutable** and
+     frameworks have a mutable `Response` and an autoloader. Phorj's `Response` is **immutable** and
      emitted as a single-file namespaced class; factory functions transpile to plain PHP functions that
      `return new Response(...)`, which is lighter and keeps the byte-identity spine trivial.
   3. `StreamResponse` is the one genuine shape divergence (a *body producer* rather than a fixed body) —
@@ -71,7 +71,7 @@ W1's `Response` is `constructor(public int status, public bytes body, public Lis
 I keep it and add only what the factories need, **as pure methods** (no new fields beyond a typed
 header carrier, which is the sanctioned "later invisible optimization"):
 
-```phorge
+```phorj
 package Main;            // (in examples; library form is package Http when M5-packaged)
 import Core.Bytes;
 import Core.Text;
@@ -95,7 +95,7 @@ class Response {
 helpers that need byte-exact escaping/encoding folded into a single native (so the three legs cannot
 drift on, e.g., JSON spacing or percent-encoding):
 
-```phorge
+```phorj
 import Core.Http;
 
 // --- the "hierarchy" as factories, each -> Response ---
@@ -111,7 +111,7 @@ Request? Http.parseRequest(bytes raw)
 bytes    Http.serializeResponse(Response resp)                   // re-computes Content-Length
 ```
 
-**Why some factories take a native and others are pure Phorge:** `Http.json` and `Http.html` are the
+**Why some factories take a native and others are pure Phorj:** `Http.json` and `Http.html` are the
 two where the *exact bytes* depend on an encoder whose spacing/escaping must be identical across legs.
 - `Http.json(status, value: Json)` reuses the **already-shipped `Core.Json.stringify`** (PHP-faithful
   Int/Float emission, `c58ea80`) for the body, then sets `Content-Type: application/json`. Byte-identity
@@ -119,7 +119,7 @@ two where the *exact bytes* depend on an encoder whose spacing/escaping must be 
 - `Http.html(status, body: Html)` reuses the shipped **`Core.Html`** newtype + pinned
   `htmlspecialchars(ENT_QUOTES)` escaping (already byte-identical). The body is `Html.render(body)` →
   `bytes`.
-- `Http.text`/`redirect`/`notFound`/`ok` are *thin* and could be pure Phorge, **but** I recommend
+- `Http.text`/`redirect`/`notFound`/`ok` are *thin* and could be pure Phorj, **but** I recommend
   implementing them as natives too, for one reason: a single native single-sources the **exact header
   line spelling** (`Content-Type: text/plain; charset=utf-8`) so a future edit can't make the
   interpreter and the transpiler disagree on a space or a casing. (This is the same single-sourcing
@@ -158,7 +158,7 @@ A streaming response is a *body producer* (a function the server pulls chunks fr
   fixed list — see the concurrency digest's "lazy pull-based `Stream<T>`"). Because the source is fixed
   and the producer is pure, the *concatenation of all chunks* is a deterministic value — it reduces to
   `Http.bytes(status, Bytes.concat(...chunks))` for the differential. Ship it as:
-  ```phorge
+  ```phorj
   Response Http.stream(int status, List<bytes> chunks)        // Tier A: finite, deterministic
   ```
   Byte-identity: the gated semantics is "the wire body is the ordered concatenation of `chunks`"; all
@@ -230,7 +230,7 @@ ext. All three reach the same real endpoint when a fixture wants them to; none i
 
 ### B.2 API sketch — `Core.Http.Client`
 
-```phorge
+```phorj
 import Core.Http.Client;       // a Tier-B leaf; pure:false natives
 
 // Result is a Response (reusing Part A's value) or null on transport failure (composes with ?? / if-let).

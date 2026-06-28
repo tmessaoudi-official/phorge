@@ -21,7 +21,7 @@ so a single feature touches fewer, smaller, well-named files. The byte-identity 
 
 Rationale (`docs/research/decomposition/SYNTHESIS.md`): every production compiler (rustc, Go, TS,
 Clang, GCC, nanopass) files by phase; the only by-construct example (Roslyn) only works because C# has
-no exhaustive match (runtime-default dispatch). By-construct as a *backbone* would surrender Phorge's
+no exhaustive match (runtime-default dispatch). By-construct as a *backbone* would surrender Phorj's
 #1 safety net (compile-time exhaustive `match`). The thin-dispatcher *technique* — move arm bodies out
 while the `match` head stays whole in one file — preserves exhaustiveness and is applied **selectively**
 where a phase's arm bodies are large and cleanly construct-shaped (e.g. `compiler/{binary,call,match}.rs`
@@ -31,7 +31,7 @@ model and stay.
 ## 3. Hard invariants (every wave must preserve these)
 
 1. **Byte-identity spine** — gate every step with the full differential incl. PHP oracle:
-   `PHORGE_PHP=/stack/tools/phpbrew/php/php-8.4.22/bin/php PHORGE_REQUIRE_PHP=1 cargo test`
+   `PHORJ_PHP=/stack/tools/phpbrew/php/php-8.4.22/bin/php PHORJ_REQUIRE_PHP=1 cargo test`
    (8.4 floor — the local php-master 8.6 is too permissive; see memory `php-transpile-floor-84`).
 2. **Exhaustiveness stays compile-checked** — the three coupled `Op` matches
    (`vm::exec_op`, `chunk::validate`, `compiler::stack_effect`) and every backend `Expr`/`Stmt`/
@@ -86,7 +86,7 @@ data/registry whale (`ast`, `native`): split by concept with the central table/w
 ## 6. Verification
 
 TDD-for-refactor = the differential harness already IS the test. Per wave: `cargo build` →
-`cargo clippy --all-targets` → `cargo fmt --check` → full `cargo test` with `PHORGE_REQUIRE_PHP=1` on
+`cargo clippy --all-targets` → `cargo fmt --check` → full `cargo test` with `PHORJ_REQUIRE_PHP=1` on
 the 8.4 floor → commit. Plus the per-milestone exhaustiveness smoke check (§3.2) once after the coupled
 backends are split. Release binary rebuilt at the end (memory `build-binary-after-each-feature`).
 

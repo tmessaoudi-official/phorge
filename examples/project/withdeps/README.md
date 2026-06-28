@@ -2,14 +2,14 @@
 
 This project depends on an external library package, `acme/strutil`, fetched as a **git dependency**
 and **vendored** for offline, deterministic builds. It is the companion showcase for M5 S3
-(git deps + `phorge.lock` + `phg vendor` + auto-offline).
+(git deps + `phorj.lock` + `phg vendor` + auto-offline).
 
 ## Layout
 
 ```
 withdeps/
-├── phorge.toml                     # module + [require] git dependency
-├── phorge.lock                     # resolved commit SHA + content hash (generated)
+├── phorj.toml                     # module + [require] git dependency
+├── phorj.lock                     # resolved commit SHA + content hash (generated)
 ├── src/
 │   └── main.phg                    # package Main — imports & calls Acme.Strutil
 └── vendor/                         # committed offline dependency tree (generated)
@@ -30,29 +30,29 @@ All three print the same two lines — the vendored dependency is consumed exact
 package:
 
 ```
-== Phorge deps ==
+== Phorj deps ==
 vendored offline!
 ```
 
 ## How dependencies work (Go's vendoring model, Composer's vocabulary)
 
-`phorge.toml` declares the dependency under `[require]`, pinned to a tag or rev — **never a moving
+`phorj.toml` declares the dependency under `[require]`, pinned to a tag or rev — **never a moving
 branch** (determinism):
 
 ```toml
 [require]
-"acme/strutil" = { git = "https://github.com/phorge-lang/example-strutil.phg", tag = "v0.1.0" }
+"acme/strutil" = { git = "https://github.com/phorj-lang/example-strutil.phg", tag = "v0.1.0" }
 ```
 
 `phg vendor` is the **only** command that touches the network. It clones each dependency at its
-pin, copies the dependency's source into `vendor/<vendor>/<package>/`, and writes `phorge.lock`
+pin, copies the dependency's source into `vendor/<vendor>/<package>/`, and writes `phorj.lock`
 pinning the **resolved commit SHA** plus a content hash:
 
 ```sh
-phg vendor            # fetch [require] deps into vendor/ + (re)write phorge.lock
+phg vendor            # fetch [require] deps into vendor/ + (re)write phorj.lock
 ```
 
-`vendor/` and `phorge.lock` are then **committed**. At run time `phg run`/`runvm`/`transpile`
+`vendor/` and `phorj.lock` are then **committed**. At run time `phg run`/`runvm`/`transpile`
 resolve dependencies **entirely offline** from the committed `vendor/` — they never fetch. This is
 what keeps every example (this one included) byte-identical on both backends and reproducible with
 zero network, the same determinism rule that defers URL/network features to M6.
@@ -61,7 +61,7 @@ zero network, the same determinism rule that defers URL/network features to M6.
 
 - **Illustrative dependency.** `acme/strutil`'s source is committed under `vendor/` (Go's vendoring
   model). The `git` URL is a documented coordinate; its source is right here, so the example runs
-  with no network. `rev` and `hash` in `phorge.lock` are the real values for the vendored source.
+  with no network. `rev` and `hash` in `phorj.lock` are the real values for the vendored source.
 - **A dependency is a library:** it exports dotted packages (here `package Acme.Strutil;`), never
   `package Main` — that is reserved for the consuming program's entry.
 - **Transpiled PHP:** the vendored package becomes a `namespace Acme\Strutil { … }` block in the

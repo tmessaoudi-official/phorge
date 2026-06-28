@@ -25,7 +25,7 @@ fn encode_scalars() {
     assert_eq!(enc(&jnode("Bool", vec![Value::Bool(false)])), "false");
     assert_eq!(enc(&jnode("Int", vec![Value::Int(42)])), "42");
     assert_eq!(enc(&jnode("Int", vec![Value::Int(-7)])), "-7");
-    // Integral float renders without a trailing `.0` (Rust `{}` / __phorge_float).
+    // Integral float renders without a trailing `.0` (Rust `{}` / __phorj_float).
     assert_eq!(enc(&jnode("Float", vec![Value::Float(42.0)])), "42");
     assert_eq!(enc(&jnode("Float", vec![Value::Float(3.5)])), "3.5");
 }
@@ -62,8 +62,8 @@ fn parse_structures_and_roundtrip() {
     assert_eq!(roundtrip("[1,2,3]").unwrap(), "[1,2,3]");
     assert_eq!(roundtrip(" [ 1 , 2 ] ").unwrap(), "[1,2]"); // whitespace skipped
     assert_eq!(
-        roundtrip("{\"name\":\"phorge\",\"n\":2}").unwrap(),
-        "{\"name\":\"phorge\",\"n\":2}"
+        roundtrip("{\"name\":\"phorj\",\"n\":2}").unwrap(),
+        "{\"name\":\"phorj\",\"n\":2}"
     );
     assert_eq!(
         roundtrip("{\"a\":[true,null],\"b\":{\"c\":1}}").unwrap(),
@@ -106,10 +106,10 @@ fn parse_malformed_is_none() {
 
 #[test]
 fn pretty_matches_json_pretty_print_layout() {
-    // {"name":"phorge","nums":[1,2],"meta":{"ok":true,"empty":[]}} pretty-printed (verified vs PHP).
-    let v = parse_json("{\"name\":\"phorge\",\"nums\":[1,2],\"meta\":{\"ok\":true,\"empty\":[]}}")
+    // {"name":"phorj","nums":[1,2],"meta":{"ok":true,"empty":[]}} pretty-printed (verified vs PHP).
+    let v = parse_json("{\"name\":\"phorj\",\"nums\":[1,2],\"meta\":{\"ok\":true,\"empty\":[]}}")
         .unwrap();
-    let expected = "{\n    \"name\": \"phorge\",\n    \"nums\": [\n        1,\n        2\n    ],\n    \"meta\": {\n        \"ok\": true,\n        \"empty\": []\n    }\n}";
+    let expected = "{\n    \"name\": \"phorj\",\n    \"nums\": [\n        1,\n        2\n    ],\n    \"meta\": {\n        \"ok\": true,\n        \"empty\": []\n    }\n}";
     assert_eq!(pretty(&v), expected);
 }
 

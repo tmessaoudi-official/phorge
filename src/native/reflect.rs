@@ -10,14 +10,14 @@
 //! **`kind` is the coarse, PHP-reproducible type tag** (the developer's "parent type" idea). It
 //! returns exactly what the PHP backend can still see *after erasure*, so it is byte-identical for
 //! every input: `List`/`Map`/`Set` all collapse to `"array"`, `bytes` to `"string"`, instances and
-//! enum variants to `"object"`, a closure to `"callable"`. The finer Phorge distinctions
+//! enum variants to `"object"`, a closure to `"callable"`. The finer Phorj distinctions
 //! (Map-vs-Set, the enum/class name) are the job of `typeName`/`className`, which are resolved from
 //! the static type at compile time and never consult PHP's erased runtime (see the spec).
 //!
-//! Erasure: `kind` emits the gated `__phorge_kind($x)` helper (defined once in
+//! Erasure: `kind` emits the gated `__phorj_kind($x)` helper (defined once in
 //! `transpile::program::emit_runtime_helpers`). A native's `php` closure can't set the transpiler's
 //! `uses_*` flag, so `emit_member_call` special-cases `Core.Reflect.kind` to set `uses_reflect_kind`
-//! before emitting — the established gated-helper pattern (`__phorge_str`/`__phorge_div`/…).
+//! before emitting — the established gated-helper pattern (`__phorj_str`/`__phorj_div`/…).
 
 use super::*;
 use crate::types::Ty;
@@ -27,7 +27,7 @@ use std::rc::Rc;
 
 /// Look up the sorted name list for `args[0]`'s class in a [`ClassTables`] map, as a `List<string>`.
 /// A non-class value (scalar, collection, enum variant, closure) has no entry → the empty list (PHP
-/// agrees: `__phorge_reflect_of` returns `[]` for a non-object / unknown class).
+/// agrees: `__phorj_reflect_of` returns `[]` for a non-object / unknown class).
 fn reflect_class_list(args: &[Value], table: &BTreeMap<String, Vec<String>>) -> Value {
     let names = match args {
         [Value::Instance(i)] => table.get(&i.class).cloned().unwrap_or_default(),
@@ -61,7 +61,7 @@ fn reflect_fields(args: &[Value], t: &ClassTables) -> Result<Value, String> {
     Ok(reflect_class_list(args, &t.fields))
 }
 
-/// `Reflect.kind(x) -> string` — the coarse, erasure-stable type tag. Mirrors the `__phorge_kind`
+/// `Reflect.kind(x) -> string` — the coarse, erasure-stable type tag. Mirrors the `__phorj_kind`
 /// PHP helper exactly (which checks `is_callable` before `is_object`, since a PHP closure is both).
 fn reflect_kind(args: &[Value], _: &mut String) -> Result<Value, String> {
     let kind = match args {
@@ -103,7 +103,7 @@ fn reflect_class_name(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
-/// `Reflect.typeName(x) -> string` — the PRECISE Phorge type name. **Resolved at compile time by
+/// `Reflect.typeName(x) -> string` — the PRECISE Phorj type name. **Resolved at compile time by
 /// `x`'s static type** (a checker pass, `checker::reflect`), so all three backends emit the *same*
 /// answer and PHP's erasure is never consulted: a value type → a baked string literal
 /// (`"int"`/`"List"`/`"Map"`/`"bytes"`/enum name/…), an object → the runtime `className`, an optional
@@ -149,7 +149,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             // `emit_member_call` sets `uses_reflect_kind` before calling this (the gated-helper pattern);
             // the helper is defined once in `emit_runtime_helpers`. `looks_like_global_call` adds the
             // leading `\` in namespaced mode.
-            php: |a| format!("__phorge_kind({})", parg(a, 0)),
+            php: |a| format!("__phorj_kind({})", parg(a, 0)),
         },
         NativeFn {
             module: "Core.Reflect",
@@ -158,10 +158,10 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(Ty::String)),
             pure: true,
             eval: NativeEval::Pure(reflect_class_name),
-            // Gated `__phorge_class_name` helper (set in `emit_member_call`): single-evaluates its
+            // Gated `__phorj_class_name` helper (set in `emit_member_call`): single-evaluates its
             // argument (an inline `is_object($x) ? get_class($x) : null` would double-evaluate a
             // side-effecting argument) and excludes closures, matching the Rust arm.
-            php: |a| format!("__phorge_class_name({})", parg(a, 0)),
+            php: |a| format!("__phorj_class_name({})", parg(a, 0)),
         },
         NativeFn {
             module: "Core.Reflect",
@@ -172,7 +172,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             // eval/php is dead/defensive (see `reflect_type_name`). `php` can only be coarse.
             pure: true,
             eval: NativeEval::Pure(reflect_type_name),
-            php: |a| format!("__phorge_kind({})", parg(a, 0)),
+            php: |a| format!("__phorj_kind({})", parg(a, 0)),
         },
         NativeFn {
             module: "Core.Reflect",
@@ -181,9 +181,9 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             ret: Ty::List(Box::new(Ty::String)),
             pure: true,
             // Needs the static class hierarchy (Reflective). `emit_member_call` sets
-            // `uses_reflect_tables`; the `__phorge_reflect_of` helper + table are emitted once.
+            // `uses_reflect_tables`; the `__phorj_reflect_of` helper + table are emitted once.
             eval: NativeEval::Reflective(reflect_interfaces),
-            php: |a| format!("__phorge_reflect_of({}, \"interfaces\")", parg(a, 0)),
+            php: |a| format!("__phorj_reflect_of({}, \"interfaces\")", parg(a, 0)),
         },
         NativeFn {
             module: "Core.Reflect",
@@ -192,7 +192,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             ret: Ty::List(Box::new(Ty::String)),
             pure: true,
             eval: NativeEval::Reflective(reflect_parents),
-            php: |a| format!("__phorge_reflect_of({}, \"parents\")", parg(a, 0)),
+            php: |a| format!("__phorj_reflect_of({}, \"parents\")", parg(a, 0)),
         },
         NativeFn {
             module: "Core.Reflect",
@@ -201,7 +201,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             ret: Ty::List(Box::new(Ty::String)),
             pure: true,
             eval: NativeEval::Reflective(reflect_methods),
-            php: |a| format!("__phorge_reflect_of({}, \"methods\")", parg(a, 0)),
+            php: |a| format!("__phorj_reflect_of({}, \"methods\")", parg(a, 0)),
         },
         NativeFn {
             module: "Core.Reflect",
@@ -210,7 +210,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             ret: Ty::List(Box::new(Ty::String)),
             pure: true,
             eval: NativeEval::Reflective(reflect_fields),
-            php: |a| format!("__phorge_reflect_of({}, \"fields\")", parg(a, 0)),
+            php: |a| format!("__phorj_reflect_of({}, \"fields\")", parg(a, 0)),
         },
     ]
 }

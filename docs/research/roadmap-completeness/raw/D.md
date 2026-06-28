@@ -2,7 +2,7 @@
 
 **Track summary.** This track does no fresh research: it reads `KNOWN_ISSUES.md` in full and promotes
 every documented deferral/limitation that is a real roadmap candidate into the consolidated gap list,
-with a proposed milestone. Phorge's deferrals are almost all *deliberate scope boundaries* — out-of-scope
+with a proposed milestone. Phorj's deferrals are almost all *deliberate scope boundaries* — out-of-scope
 constructs reject cleanly (type/parse error, non-zero exit) and never panic, which is itself the
 philosophy working as intended. After cross-checking against `MILESTONES.md`/`ROADMAP.md`/`FEATURES.md`,
 several KNOWN_ISSUES headings are already **superseded** (the file lags reality): the **Mutation
@@ -44,7 +44,7 @@ remove a surprise or close a `run`↔`runvm`/PHP divergence; a handful are hones
 | D-cycle-collector | Cycle collector (leaked `a.next=b; b.next=a`) | port | ok | defer | M11-GC / v2 | L |
 | D-identity-eq | Identity `===` (`Rc::ptr_eq`) | port | ok | defer | M11 | S |
 | D-nested-place-store | Nested place-stores (`this.f[i]=e`, indexed field target) | port | strong | adopt | M-mut-followup | M |
-| D-member-visibility | Member-level `private`/`protected` enforced by Phorge backends | port | ok | defer | M-RT / M11 | M |
+| D-member-visibility | Member-level `private`/`protected` enforced by Phorj backends | port | ok | defer | M-RT / M11 | M |
 | D-vis-on-alias-import | Visibility keyword on `type` alias / `import` re-export | port | weak | reject | — | S |
 | D-core-list-hof-done | `core.list` map/filter/reduce | port | strong | adopt | M11 (SHIPPED M-RT S7b — verify) | — |
 | D-core-json | `core.json` (dynamic `Any`/`Json` type) | port | strong | adopt | M11 | L |
@@ -92,7 +92,7 @@ Slice 1.1 follow-up.
 
 **D-generic-result-operand — make a generic result a numeric operand.** This is a *verified*
 `run`↔`runvm` divergence (`id(7)+1` prints `8` on the interpreter, errors on the VM) — exactly the class
-of surprise Phorge exists to eliminate, and the GA roadmap's keystone M10 is where reified generic result
+of surprise Phorj exists to eliminate, and the GA roadmap's keystone M10 is where reified generic result
 types belong. Highest-value adopt: it removes an inconsistency between two backends that are contractually
 byte-identical.
 
@@ -123,7 +123,7 @@ generic-native path. All are bread-and-butter PHP (`json_decode`, `foreach ($m a
 `array_intersect`) — strong fits, adopt in M11.
 
 **D-html-url-css-script — context-aware escaping.** `Core.Html` escapes text + attribute values but is
-explicitly *unsafe* for URL/CSS/`<script>` contexts. Phorge's whole HTML pitch is "XSS-safe by
+explicitly *unsafe* for URL/CSS/`<script>` contexts. Phorj's whole HTML pitch is "XSS-safe by
 construction"; leaving these contexts unescaped is a security surprise. Adopt a follow-up wave adding
 context-specific escapers (URL-encode, CSS, JSON-in-script) — strong fit with the provably-safe philosophy.
 
@@ -134,7 +134,7 @@ Front-end-only fix (sub-lexer position threading), squarely in the fault-reporti
 **D-transpile-php-builtin — `package Main` fn-name/PHP-builtin collisions.** A `package Main` function
 named `serialize`/`strlen`/`header` transpiles to a global PHP fn and fails to redeclare — a real
 transpile-target footgun the M8 hardening slot should catch with a checker warning/error (e.g.
-`W-PHP-BUILTIN-NAME`). Small, high-value: it turns a confusing PHP-side failure into a clear Phorge-side
+`W-PHP-BUILTIN-NAME`). Small, high-value: it turns a confusing PHP-side failure into a clear Phorj-side
 diagnostic. Adopt.
 
 **D-build-transitive-deps — transitive dependency resolution.** `phg vendor` fetches only the direct
@@ -231,7 +231,7 @@ and reject cleanly today; none is beyond-PHP `new`.
   generalizing to `return`/decl-init is the same bidirectional-inference completeness that defers
   D-empty-list-generic — co-locate at M10.
 - **D-map-bool-int-key-coerce — reject (caveat).** PHP arrays coerce integer-like string keys and
-  `bool` keys to `int`; Phorge keeps them distinct (`KNOWN_ISSUES.md:233-235`, :246-248). The Phorge
+  `bool` keys to `int`; Phorj keeps them distinct (`KNOWN_ISSUES.md:233-235`, :246-248). The Phorj
   behavior is *more* correct (no silent key collapse — same class as D-float-key); the `run`↔`runvm`
   spine is always byte-identical. Documented caveat, not a gap. Reject cleanly.
 

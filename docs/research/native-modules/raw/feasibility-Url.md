@@ -2,7 +2,7 @@
 
 **Verdict (one line):** Adopt the **pure, deterministic subset** now — percent-encode/decode + query
 build/parse — as a Tier A native module that erases to PHP core `rawurlencode`/`rawurldecode` and a
-hand-owned query codec. **Split off `Url.parse(s) -> Url?`** into a Phorge-owned RFC-3986 parser
+hand-owned query codec. **Split off `Url.parse(s) -> Url?`** into a Phorj-owned RFC-3986 parser
 (NOT PHP `parse_url`) — feasible but materially harder and the determinism-risk locus. Build it as a
 second slice. Feasibility overall **~80%**; the encode/query core is ~95%, the full `parse`+`build`
 round-trip is ~65%.
@@ -43,7 +43,7 @@ every native. This module never touches the M6 `Transport` quarantine — it is 
 of the web story (the impure half is `Core.Http`, already Tier B / deferred).
 
 The one ordering decision (below): `Url.buildQuery(Map)` must emit keys in the Map's **insertion
-order** (Phorge `Value::Map` is an insertion-ordered `Rc<Vec>`), which both Rust and PHP
+order** (Phorj `Value::Map` is an insertion-ordered `Rc<Vec>`), which both Rust and PHP
 `http_build_query` honor identically — so **do NOT sort** (the prior-art "sorted keys" suggestion is
 *wrong* for byte-identity against `http_build_query`; see §6).
 
@@ -67,23 +67,23 @@ The spine is `run == runvm == real-PHP-8.5`. Strategy differs per function group
   matches. Pin this in a test.
 - **`Url.decode(s) -> string?`** returns `None` on malformed input (a `%` not followed by two hex
   digits, or producing invalid UTF-8). PHP `rawurldecode` is *lenient* (passes a bad `%` through), so a
-  strict Phorge decoder would diverge from a raw PHP `rawurldecode` mapping. **Resolution:** emit a
-  gated `__phorge_url_decode` helper that mirrors the Rust strictness (return `null` on a bad `%xx`),
+  strict Phorj decoder would diverge from a raw PHP `rawurldecode` mapping. **Resolution:** emit a
+  gated `__phorj_url_decode` helper that mirrors the Rust strictness (return `null` on a bad `%xx`),
   not a bare `rawurldecode`. This is the same "own-the-rules, gated helper" precedent as
-  `__phorge_parse_int` / `__phorge_parse_float`.
+  `__phorj_parse_int` / `__phorj_parse_float`.
 
 ### Group 2 — query codec (`Url.buildQuery` / `Url.parseQuery`)
 - **`buildQuery(Map<string,string>) -> string`:** join `rawurlencode(k)=rawurlencode(v)` with `&`,
   in Map insertion order. Map to PHP `http_build_query($m, '', '&', PHP_QUERY_RFC3986)` — the RFC3986
   flag makes PHP use `rawurlencode` (space→`%20`, matching our codec) instead of the default
   `urlencode` (space→`+`). **Verified `http_build_query` preserves insertion order, does NOT sort**
-  (`http_build_query(["b"=>"2","a"=>"1"])` → `b=2&a=1`). So Phorge must also preserve insertion order —
+  (`http_build_query(["b"=>"2","a"=>"1"])` → `b=2&a=1`). So Phorj must also preserve insertion order —
   the prior-art "sorted-by-key" guidance contradicts the PHP oracle and would break byte-identity.
 - **`parseQuery(string) -> Map<string,string>`:** split on `&`, then `split_once('=')`, rawurldecode
   each side. **Trap — repeated keys:** PHP `parse_str("a=1&a=2", $r)` keeps **last wins** (`a=2`); a
-  Phorge insertion-ordered Map with last-write-wins on duplicate keys matches *only if* `build_map`
+  Phorj insertion-ordered Map with last-write-wins on duplicate keys matches *only if* `build_map`
   overwrites. Verify `value::build_map` dedup semantics; if it keeps first or appends, own a helper and
-  emit `__phorge_parse_query` (do NOT map to bare `parse_str`, which also does PHP array-bracket magic
+  emit `__phorj_parse_query` (do NOT map to bare `parse_str`, which also does PHP array-bracket magic
   `a[]=1` that we must NOT replicate). **Recommendation: own `parseQuery` with a gated helper**, since
   `parse_str`'s bracket/`.`→`_` mangling is a divergence minefield.
 
@@ -91,12 +91,12 @@ The spine is `run == runvm == real-PHP-8.5`. Strategy differs per function group
 - **Do NOT transpile to `parse_url`.** `parse_url` is a C parser with version-specific edge behavior:
   it returns `false` (not an array) on "seriously malformed" input (verified `parse_url("http://:80")`
   → `bool(false)`), omits absent keys entirely, returns `port` as an **int** while others are strings,
-  and its definition of malformed has shifted across PHP releases. Mapping a Phorge `Url?` struct onto
+  and its definition of malformed has shifted across PHP releases. Mapping a Phorj `Url?` struct onto
   this is a latent cross-version break (same class as the `filter_var` version-drift trap).
-- **Strategy:** own a Phorge RFC-3986 scanner in the `eval`, returning an injected `Url` struct (or
-  `None`), and **emit a gated `__phorge_url_parse` PHP helper that re-implements the same scanner** —
+- **Strategy:** own a Phorj RFC-3986 scanner in the `eval`, returning an injected `Url` struct (or
+  `None`), and **emit a gated `__phorj_url_parse` PHP helper that re-implements the same scanner** —
   NOT a `parse_url` call. The helper is pure string ops (`strpos`/`substr`/`explode`), all PHP core,
-  all `php -n`-safe. This makes the parser *Phorge-owned on all three legs* — the only way to guarantee
+  all `php -n`-safe. This makes the parser *Phorj-owned on all three legs* — the only way to guarantee
   byte-identity for a non-trivial parser (the same conclusion the prior art reaches for regex and
   `filter_var`).
 
@@ -104,24 +104,24 @@ The spine is `run == runvm == real-PHP-8.5`. Strategy differs per function group
 
 ## 4. Exact PHP transpile targets
 
-| Phorge native | PHP transpile target (`php -n`-safe) | Notes |
+| Phorj native | PHP transpile target (`php -n`-safe) | Notes |
 |---|---|---|
 | `Url.encode(s)` | `rawurlencode({s})` | core; unreserved `A-Za-z0-9-_.~`, uppercase hex, space→`%20` |
-| `Url.decode(s)` | `__phorge_url_decode({s})` (gated helper) | strict: `null` on bad `%xx` / invalid UTF-8 (NOT bare `rawurldecode`, which is lenient) |
+| `Url.decode(s)` | `__phorj_url_decode({s})` (gated helper) | strict: `null` on bad `%xx` / invalid UTF-8 (NOT bare `rawurldecode`, which is lenient) |
 | `Url.buildQuery(m)` | `http_build_query({m}, '', '&', PHP_QUERY_RFC3986)` | RFC3986 flag = rawurlencode semantics; insertion order preserved (no sort) |
-| `Url.parseQuery(s)` | `__phorge_parse_query({s})` (gated helper) | own it — avoid `parse_str` bracket/`.` mangling; last-wins on dup keys |
-| `Url.parse(s)` | `__phorge_url_parse({s})` (gated helper) | own RFC-3986 scanner; NOT `parse_url` (version-drift + `false`-return trap) |
-| `Url.build(url)` | `__phorge_url_build({url})` (gated helper) | reassemble `scheme://user:pass@host:port/path?query#frag`, omitting absent parts |
+| `Url.parseQuery(s)` | `__phorj_parse_query({s})` (gated helper) | own it — avoid `parse_str` bracket/`.` mangling; last-wins on dup keys |
+| `Url.parse(s)` | `__phorj_url_parse({s})` (gated helper) | own RFC-3986 scanner; NOT `parse_url` (version-drift + `false`-return trap) |
+| `Url.build(url)` | `__phorj_url_build({url})` (gated helper) | reassemble `scheme://user:pass@host:port/path?query#frag`, omitting absent parts |
 
 Gated helpers follow the existing `uses_* bool + emit_runtime_helpers` mechanism (precedent
-`__phorge_parse_int`, `__phorge_text_index_of`, `__phorge_json_*`). The Rust `eval` is the source of
+`__phorj_parse_int`, `__phorj_text_index_of`, `__phorj_json_*`). The Rust `eval` is the source of
 truth; each helper is written to match it byte-for-byte and is covered by the example differential.
 
 ---
 
-## 5. Phorge API sketch
+## 5. Phorj API sketch
 
-```phorge
+```phorj
 import Core.Url;
 
 // --- percent codec (slice 1) ---
@@ -129,8 +129,8 @@ string e = Url.encode("a b/c");          // "a%20b%2Fc"
 string? d = Url.decode("a%20b%2Fc");     // Some("a b/c"); None on bad %xx
 
 // --- query codec (slice 1) ---
-Map<string, string> q = ["name" => "Ada", "lang" => "phorge"];
-string qs = Url.buildQuery(q);           // "name=Ada&lang=phorge"  (insertion order)
+Map<string, string> q = ["name" => "Ada", "lang" => "phorj"];
+string qs = Url.buildQuery(q);           // "name=Ada&lang=phorj"  (insertion order)
 Map<string, string> back = Url.parseQuery("a=1&b=&c=2");  // {a:"1", b:"", c:"2"}
 
 // --- component parse/build (slice 2, injected Url struct) ---
@@ -143,10 +143,10 @@ string rebuilt = Url.build(url);              // round-trips
 ```
 
 **`Url` struct shape** (injected-type pattern, like `Json`/`RoundingMode`): inject an enum/struct AST
-when `Core.Url` is imported. Recommended as a **single-variant struct-enum** (Phorge has no free-standing
+when `Core.Url` is imported. Recommended as a **single-variant struct-enum** (Phorj has no free-standing
 struct type, but `enum`/class works):
 
-```phorge
+```phorj
 class Url {
     public string scheme;
     public string host;
@@ -185,10 +185,10 @@ For slice 2, the injected-type prelude (`cli::inject_url_prelude`, gated on `imp
 2. **Hex case** — `%2F` (upper) not `%2f`. Rust `{:02X}` and PHP `rawurlencode` both upper; decode must
    accept both cases on input. Pin in a test.
 3. **`http_build_query` does NOT sort** — preserves insertion order. Prior-art "sorted keys" is wrong;
-   Phorge Map insertion order must match. [Verified: `["b"=>"2","a"=>"1"]`→`b=2&a=1`.]
+   Phorj Map insertion order must match. [Verified: `["b"=>"2","a"=>"1"]`→`b=2&a=1`.]
 4. **`parse_url` returns `false` on malformed + omits absent keys + int port** — do NOT transpile to it;
    own the parser. [Verified: `parse_url("http://:80")`→`bool(false)`.]
-5. **`rawurldecode` is lenient; a strict Phorge decoder diverges** — own `Url.decode` with a gated
+5. **`rawurldecode` is lenient; a strict Phorj decoder diverges** — own `Url.decode` with a gated
    helper that returns `null` on bad `%xx` (matches the Rust `eval`). [Verified: `rawurldecode` passes
    bad `%` through.]
 6. **`parse_str` array-bracket / `.`→`_` mangling** — `a[]=1` and `a.b=1` get magic in PHP; we must NOT

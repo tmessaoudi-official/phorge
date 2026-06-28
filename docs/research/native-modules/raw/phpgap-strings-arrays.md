@@ -1,16 +1,16 @@
-# STAGE 3 — PHP string + array + iterable stdlib gaps, and the better Phorge port
+# STAGE 3 — PHP string + array + iterable stdlib gaps, and the better Phorj port
 
 Area: PHP string functions (`sprintf`, `str_*`, char-ops), array functions (`array_*`), iterable
 helpers, sorting, and JSON edge cases — **stdlib/library capability gaps only** (language-level syntax
 gaps are tracked in `docs/specs/2026-06-21-php-parity-and-beyond.md` and are out of scope here).
 
-Lens applied throughout: **Phorge : PHP :: TypeScript : JS** — typed, deterministic, null-safe,
+Lens applied throughout: **Phorj : PHP :: TypeScript : JS** — typed, deterministic, null-safe,
 total. Every gap is classified Tier A (pure/deterministic → byte-identity-gateable, ships as a
 `Core.*` native) or Tier B (impure → quarantined). Confidence graded high/medium/low.
 
 ---
 
-## 0. Current Phorge inventory (verified by reading the source)
+## 0. Current Phorj inventory (verified by reading the source)
 
 `src/native/text.rs` — **Core.Text**: `len`, `upper`, `lower`, `trim`, `contains`, `split`,
 `splitOnce`, `join`, `replace`, `startsWith`, `endsWith`, `repeat`, `parseInt`, `parseFloat`,
@@ -30,7 +30,7 @@ total. Every gap is classified Tier A (pure/deterministic → byte-identity-gate
 `src/native/json.rs` — **Core.Json**: `parse`, `stringify`, `stringifyPretty` (injected `Json` enum).
 
 Mechanisms reused below (no reinvention): `(module,name)` registry entry per native;
-`NativeEval::{Pure,HigherOrder}`; gated runtime helpers (`__phorge_*`, `uses_*` bool +
+`NativeEval::{Pure,HigherOrder}`; gated runtime helpers (`__phorj_*`, `uses_*` bool +
 `emit_runtime_helpers`) when a PHP one-liner can't express the exact semantics; generic native path
 (`Ty::Param`) erased before backends; `Op::CallNative` (no new Op needed for any gap below).
 
@@ -43,8 +43,8 @@ upgrade is **null-safe optional returns** (PHP returns `false`/`""`/`-1` sentine
 checked formatting** (PHP `sprintf` is stringly-typed and silently coerces).
 
 ### A1. `sprintf`/`printf` — checked formatted output  **[GAP — high value]**
-PHP: `sprintf("%05.2f %s", 3.1, "x")`. Phorge has only string interpolation (`"{x}"`) + the new
-`number_format`-shaped need. **Phorge has NO equivalent for width/precision/zero-pad/radix/sign
+PHP: `sprintf("%05.2f %s", 3.1, "x")`. Phorj has only string interpolation (`"{x}"`) + the new
+`number_format`-shaped need. **Phorj has NO equivalent for width/precision/zero-pad/radix/sign
 formatting.**
 
 Better port — a **checked, typed format native** rather than PHP's runtime-coerced varargs:
@@ -52,7 +52,7 @@ Better port — a **checked, typed format native** rather than PHP's runtime-coe
 // Core.Text
 Text.format(string template, List<FormatArg> args) -> string   // value-level varargs via a list
 ```
-But the genuinely better, Phorge-idiomatic design is **typed per-kind formatters** that compose with
+But the genuinely better, Phorj-idiomatic design is **typed per-kind formatters** that compose with
 interpolation, avoiding a stringly format-string DSL entirely:
 ```
 Int.toRadix(int n, int base) -> string          // base 2..36, lower-hex; PHP base_convert/dechex
@@ -70,14 +70,14 @@ native.
   coercing) on mismatch. Specifiers limited to the deterministic subset: `%s %d %x %X %o %b %f %e
   %05d %-10s %+d %%`. Locale specifiers (`%'`) excluded.
 - **Determinism:** all pure integer/float→string. Float formatting must route through the existing
-  `__phorge_float` (Ryū) discipline OR PHP `number_format`/`sprintf("%.*f")` — **and the two must be
+  `__phorj_float` (Ryū) discipline OR PHP `number_format`/`sprintf("%.*f")` — **and the two must be
   pinned to agree**: PHP `sprintf("%f")` uses C `printf` rounding (round-half-to-even on most libc),
   Rust `format!("{:.2}")` also rounds half-to-even, so `%.Nf` IS byte-identical for finite values —
   *verify the half-way rounding on the 8.5 floor*. **`%g`/`%e` are a determinism trap** (PHP's `%e`
   uses a min-2-digit exponent `1.0e+1`, Rust `{:e}` uses `1e1`) → if `%e` ships, emit via a gated
   helper that normalizes to PHP's exponent form, never Rust's.
 - **Transpile target:** `Int.toHex`→`dechex`, `toRadix`→`base_convert($n,10,$base)` (lowercase, PHP
-  matches), `Float.fixed`→`number_format($x,$d,'.','')`, `Text.format`→a gated `__phorge_format`
+  matches), `Float.fixed`→`number_format($x,$d,'.','')`, `Text.format`→a gated `__phorj_format`
   helper that re-implements the checked subset in PHP (NOT raw `sprintf`, whose coercion differs from
   the checked semantics).
 - Tier A. **Recommend: adopt-now** for the typed formatters (`Int.toHex/toRadix`, `Float.fixed`,
@@ -86,15 +86,15 @@ native.
   oracle check on PHP 8.5).
 
 ### A2. `number_format` (non-locale) **[GAP — already roadmapped M-text S1 / M-NUM]**
-PHP `number_format(1234567.891, 2, '.', ',')` → `"1,234,567.89"`. No Phorge equivalent.
+PHP `number_format(1234567.891, 2, '.', ',')` → `"1,234,567.89"`. No Phorj equivalent.
 Better port: `Float.fixedGrouped(float, int decimals, string point, string sep) -> string` (above) —
 **explicit separators, no implicit locale** (PHP's locale-aware variant is non-deterministic across
-environments; Phorge forces explicit args = deterministic). Tier A. Transpile:
+environments; Phorj forces explicit args = deterministic). Tier A. Transpile:
 `number_format($x,$d,$point,$sep)`. **Recommend: adopt-now.** Confidence high. *(Note: for money use
 the `decimal` primitive's own formatter — float grouping is for display only.)*
 
 ### A3. Case helpers: `ucfirst`, `lcfirst`, `ucwords`, `strtolower`/`strtoupper` (have upper/lower)  **[GAP]**
-PHP `ucfirst`/`ucwords`/`lcfirst`. Phorge has `upper`/`lower` only.
+PHP `ucfirst`/`ucwords`/`lcfirst`. Phorj has `upper`/`lower` only.
 Better port (ASCII, documented like the rest of Core.Text):
 ```
 Text.capitalize(string) -> string     // ucfirst (first byte to upper)
@@ -118,7 +118,7 @@ Tier A. Transpile: `strrev`/`substr_count`/`str_word_count`. **adopt-now.** Conf
 `split_whitespace().count()` for ASCII; punctuation handling differs, document or restrict).
 
 ### A5. `trim` variants: `ltrim`, `rtrim`, and char-set trimming  **[GAP — partial]**
-Phorge `trim` strips ASCII+unicode whitespace both sides. PHP `ltrim`/`rtrim` and the optional
+Phorj `trim` strips ASCII+unicode whitespace both sides. PHP `ltrim`/`rtrim` and the optional
 `$characters` charset are missing.
 Better port:
 ```
@@ -137,7 +137,7 @@ Confidence: high (the gap), medium→needs-verification (the existing-`trim` div
 must-check).
 
 ### A6. `str_replace` array form, `strtr`, `preg_*`-free replacement  **[GAP — partial]**
-Phorge `replace(subject, from, to)` does single-pair replace. PHP `str_replace([..],[..],$s)` (paired
+Phorj `replace(subject, from, to)` does single-pair replace. PHP `str_replace([..],[..],$s)` (paired
 arrays) and `strtr($s, $map)` (longest-match, single-pass) are missing.
 Better port:
 ```
@@ -147,7 +147,7 @@ Text.replaceN(string subject, string from, string to, int limit) -> string   // 
 Why better than PHP: `strtr` with an array does **longest-key-first single-pass** (no cascade
 surprise where output of one replace feeds the next); exposing it as a `Map` makes the contract
 typed and explicit. **Determinism note:** PHP `strtr` iteration over the replacement array is
-key-length-ordered, deterministic — but a `Map` literal in Phorge is insertion-ordered. Pin the
+key-length-ordered, deterministic — but a `Map` literal in Phorj is insertion-ordered. Pin the
 native to **longest-key-first** (sort keys by length desc, ties by byte order) and write the gated
 PHP helper to match (don't trust raw `strtr` to honor the same tie-break across PHP versions — verify
 on 8.5). Tier A. **adopt-later** (needs the longest-match contract pinned + oracle-verified).
@@ -182,8 +182,8 @@ Better: `uniqueBy` (TS/Lodash `uniqBy`) has no PHP equivalent and is the common 
 `array_unique` and the Map/Set insertion-order rep). Tier A. Transpile: `unique`→
 `array_values(array_unique($xs, SORT_REGULAR))` — **determinism trap: PHP `array_unique` default
 flag `SORT_STRING` stringifies for comparison** (so `[1,"1"]` dedupes), `SORT_REGULAR` uses loose
-`==`. Phorge equality is structural/strict. **Pin to a gated `__phorge_unique` helper using strict
-`===` comparison** so it matches Phorge's `eq_val`, NOT raw `array_unique`. **adopt-now.**
+`==`. Phorj equality is structural/strict. **Pin to a gated `__phorj_unique` helper using strict
+`===` comparison** so it matches Phorj's `eq_val`, NOT raw `array_unique`. **adopt-now.**
 Confidence: high (with the gated-helper note).
 
 ### L2. `array_flip`, `array_combine`, `array_fill`, `array_pad`, `array_fill_keys`  **[GAP]**
@@ -195,7 +195,7 @@ Map.flip(Map<K,V>) -> Map<V,K>                           // array_flip (V must b
 ```
 Better: `Map.flip` is typed so a non-hashable value flip is a **compile error** (PHP `array_flip`
 warns + drops at runtime). Tier A. `fill`→`array_fill`, `pad`→`array_pad`, `flip`→a gated helper
-(PHP `array_flip` only accepts int/string values; Phorge's HKey subset matches → bare `array_flip`
+(PHP `array_flip` only accepts int/string values; Phorj's HKey subset matches → bare `array_flip`
 works for the valid subset). **adopt-now** for fill/pad; **adopt-later** for flip (gated on Map value
 hashability check). Confidence high.
 
@@ -219,7 +219,7 @@ Better: `groupBy` is a genuine upgrade — PHP has no native (everyone hand-roll
 `indexBy`/`groupBy` are HigherOrder natives over the existing closure invoker. `pluck`/`array_column`
 needs runtime field access on instances → defer until a clean reflective story (Core.Reflect exists
 but field-by-name read on an arbitrary instance is heavier). Tier A. `groupBy`/`indexBy`: gated
-`__phorge_group_by` PHP helper (a `foreach` accumulator — PHP has no builtin). **adopt-now**
+`__phorj_group_by` PHP helper (a `foreach` accumulator — PHP has no builtin). **adopt-now**
 (groupBy/indexBy — high value), **defer** (pluck — needs reflection). Confidence high
 (group/index), medium (pluck).
 
@@ -231,12 +231,12 @@ List.intersect(List<T>, List<T>) -> List<T>              // array_intersect
 ```
 Better: order-preserving (PHP `array_diff` preserves keys → `array_values` re-index). Tier A.
 **Determinism trap:** PHP `array_diff` compares via **string cast** (`(string)$a === (string)$b`),
-so `[1]` vs `["1"]` are "equal" — Phorge must use strict `eq_val`. Gated `__phorge_diff` helper using
+so `[1]` vs `["1"]` are "equal" — Phorj must use strict `eq_val`. Gated `__phorj_diff` helper using
 `===`. **adopt-now.** Confidence high (with gated-helper note). *(If the user already has
 `Core.Set`, list-diff is a convenience; Set is the typed answer for true set algebra.)*
 
 ### L6. `array_search`/`in_array` with predicate; `find`/`findIndex`/`any`/`all`  **[GAP — TS upgrade]**
-Phorge has `contains`/`indexOf` (value equality). The predicate forms (TS `find`/`some`/`every`) are
+Phorj has `contains`/`indexOf` (value equality). The predicate forms (TS `find`/`some`/`every`) are
 the better port and have weak PHP equivalents (`array_filter`+head, or hand-rolled loops):
 ```
 List.find(List<T>, (T) -> bool) -> T?                    // first match or null  (TS find)
@@ -247,7 +247,7 @@ List.count(List<T>, (T) -> bool) -> int                  // count matching
 ```
 Better: PHP has NO native `some`/`every`/`find` — these are the daily TS idioms a migrant expects.
 HigherOrder natives, optional/`bool` returns (null-safe). Tier A. Transpile: gated helpers (PHP
-lacks builtins) — `__phorge_any`/`__phorge_all` (`foreach` short-circuit), `find`→`array_filter`+
+lacks builtins) — `__phorj_any`/`__phorj_all` (`foreach` short-circuit), `find`→`array_filter`+
 head won't short-circuit, so a gated `foreach` helper is both more correct and faster. **adopt-now.**
 Confidence high.
 
@@ -260,7 +260,7 @@ Map.mapValues(Map<K,V>, (V) -> W) -> Map<K,W>            // HigherOrder
 Map.filter(Map<K,V>, (K,V) -> bool) -> Map<K,V>          // HigherOrder
 Map.merge(Map<K,V>, Map<K,V>) -> Map<K,V>                // array_merge / + operator (right-wins)
 ```
-**Design blocker (medium):** `entries` needs a 2-tuple. Phorge has no tuple primitive; options:
+**Design blocker (medium):** `entries` needs a 2-tuple. Phorj has no tuple primitive; options:
 (a) inject a `Pair<A,B>` stdlib type (injected-type pattern like `Json`), or (b) return
 `List<List<V>>` heterogeneous — rejected (loses typing). **Recommend the injected `Pair<K,V>`** —
 reusable across `entries`/zip/etc. `mapValues`/`filter`/`merge` need no tuple and are immediately
@@ -285,19 +285,19 @@ Better: none of takeWhile/dropWhile/zip/flatMap exist in PHP — pure TS/FP wins
 Confidence high.
 
 ### L9. Sorting breadth: `sortBy` (key projection), `sortDesc`, stable-by-key  **[GAP — partial]**
-Phorge has `sort` (natural) + `sortWith` (comparator). The ergonomic gap:
+Phorj has `sort` (natural) + `sortWith` (comparator). The ergonomic gap:
 ```
 List.sortBy(List<T>, (T) -> K) -> List<T>                // sort by projected key (Schwartzian); TS/Lodash
 List.sortDesc(List<T>) -> List<T>                        // natural descending
 ```
 Better: `sortBy` avoids the comparator boilerplate (PHP `usort` always needs the full `<=>` lambda).
 HigherOrder, stable (matches the existing `sort`'s stability note). Tier A. `sortBy`→a gated helper
-projecting then `usort` (or `array_multisort`); `sortDesc`→`__phorge_sort` + `array_reverse`.
+projecting then `usort` (or `array_multisort`); `sortDesc`→`__phorj_sort` + `array_reverse`.
 **adopt-now.** Confidence high. *(Sort stability/NaN-ordering is already roadmapped J-sort-stability
 M11 — this is the ergonomic layer above it.)*
 
 ### L10. `range()` for lists  **[mostly covered — language `a..b` exists]**
-Phorge has `a..b`/`a..=b` integer ranges (S1). PHP `range('a','z')` (char range) and float-step range
+Phorj has `a..b`/`a..=b` integer ranges (S1). PHP `range('a','z')` (char range) and float-step range
 are not covered, but are niche. `List.range(int start, int end, int step)` could fill the stepped
 case. Tier A. **defer** (the `..` syntax covers the 95% case). Confidence high (low priority).
 
@@ -309,27 +309,27 @@ case. Tier A. **defer** (the `..` syntax covers the 95% case). Confidence high (
 `Core.Json` already does parse/stringify/stringifyPretty over an injected `Json` enum. The remaining
 **edge-case parity gaps** vs PHP `json_encode`/`json_decode`:
 - **Big integers:** PHP `json_decode` with `JSON_BIGINT_AS_STRING`; without it, ints > PHP_INT_MAX
-  become floats. Phorge `Json.Int` is i64 → an input `1e400`-ish or `>i64` integer must fault or
+  become floats. Phorj `Json.Int` is i64 → an input `1e400`-ish or `>i64` integer must fault or
   clamp deterministically (verify current behavior — likely already faults on parse; document).
 - **Float rendering:** `json_encode(0.1)` → PHP uses `serialize_precision=-1` (shortest round-trip,
-  Ryū-like since PHP 7.1). Phorge must pin its float→JSON to the **same shortest round-trip** (the
-  `__phorge_float` Ryū path) — already noted in memory as a divergence risk for irrational floats.
+  Ryū-like since PHP 7.1). Phorj must pin its float→JSON to the **same shortest round-trip** (the
+  `__phorj_float` Ryū path) — already noted in memory as a divergence risk for irrational floats.
   **Finding: confirm `Json.stringify(0.1)` is byte-identical to PHP 8.5 `json_encode(0.1)` on the
   oracle; the M-NUM memory flags float-extremes divergence from native `json_encode`.**
 - **`JSON_UNESCAPED_SLASHES` / `JSON_UNESCAPED_UNICODE`:** PHP escapes `/` → `\/` and non-ASCII →
-  `\uXXXX` by *default*. Phorge must pick a fixed escaping policy and pin the PHP flags to match
+  `\uXXXX` by *default*. Phorj must pick a fixed escaping policy and pin the PHP flags to match
   (e.g. always pass `JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE` for predictable UTF-8, OR match
   PHP defaults exactly — **pick one and document; this is a determinism gate**).
 - **Key ordering / duplicate keys:** PHP `json_decode` last-key-wins on duplicates; object→assoc
-  array preserves insertion order. Phorge's insertion-ordered Map matches — verify dup-key policy.
-- **NaN/Inf:** `json_encode(NAN)` errors in PHP. Phorge `Json` has no NaN node → already safe; ensure
+  array preserves insertion order. Phorj's insertion-ordered Map matches — verify dup-key policy.
+- **NaN/Inf:** `json_encode(NAN)` errors in PHP. Phorj `Json` has no NaN node → already safe; ensure
   a float NaN passed to stringify faults cleanly (EV-7), not emits `nan`.
 - Tier A. **Recommend: adopt-now an explicit JSON-edge-case conformance audit** (not new natives —
   pinning the existing ones' flags + a differential fixture set of edge inputs). Confidence: medium
   (needs oracle runs to confirm each pin).
 
 ### J2. `array_map` with index / `List.mapIndexed` / `forEach`-with-index  **[GAP — small]**
-PHP `array_map` can take the key via a second array; TS `map((x,i)=>...)`. Phorge `List.map` is
+PHP `array_map` can take the key via a second array; TS `map((x,i)=>...)`. Phorj `List.map` is
 value-only.
 ```
 List.mapIndexed(List<T>, (int, T) -> U) -> List<U>       // HigherOrder, index passed
@@ -348,7 +348,7 @@ Within strings/arrays/iterables, almost everything is pure. The Tier B members a
   adopt-later)**; reject the unseeded one from the spine.
 - **`natsort`/`natcasesort` with locale**, locale-aware `sort` (`SORT_LOCALE_STRING`), locale
   `strcoll`, `setlocale`-dependent case folding — **Tier B** (locale is environment state →
-  non-deterministic). Phorge should expose only the explicit byte/ASCII orderings (already does).
+  non-deterministic). Phorj should expose only the explicit byte/ASCII orderings (already does).
   **Reject locale-dependent sorting from the spine; document the ASCII/byte contract.**
 - **`mb_*` (multibyte)** — not impure, but depends on the mbstring extension which `php -n` does NOT
   load (the oracle runs `php -n`). So a Unicode-aware `Text` layer **cannot transpile to `mb_*`** and
@@ -387,7 +387,7 @@ REJECT (from the byte-identity spine):
 
 1. **The recurring determinism trap is PHP's LOOSE comparison defaults** — `array_unique`
    (SORT_STRING), `array_diff` ((string) cast), `in_array` (loose `==`). Every list-membership/dedupe
-   native MUST transpile to a **gated `__phorge_*` helper using strict `===`** to match Phorge's
+   native MUST transpile to a **gated `__phorj_*` helper using strict `===`** to match Phorj's
    structural `eq_val`, never the bare PHP builtin. This is the single most important correctness note
    for this area.
 2. **The `Pair<K,V>` injected type is the unlock** for `Map.entries`/`zip`/`fromEntries` — one
@@ -396,7 +396,7 @@ REJECT (from the byte-identity spine):
 3. **`Text.trim`'s Unicode-vs-ASCII whitespace divergence is a likely live correctness bug** — Rust
    `trim()` strips all Unicode WS, PHP `trim()` strips 6 ASCII chars. Must verify the current transpile
    and pin to the ASCII set on both sides. (Graded: must-verify.)
-4. **Typed formatters beat `sprintf`** — the Phorge upgrade is per-kind compile-checked formatters
+4. **Typed formatters beat `sprintf`** — the Phorj upgrade is per-kind compile-checked formatters
    (`Int.toHex`, `Float.fixed`), not a stringly format-string DSL; ship those first, a checked-subset
    `Text.format` only if muscle-memory demand justifies it.
 5. **No new `Op` anywhere in this area** — every gap is a `Op::CallNative` native (Pure or

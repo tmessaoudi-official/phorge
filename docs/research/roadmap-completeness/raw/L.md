@@ -24,7 +24,7 @@ library grows coherently instead of ad hoc. The single biggest unlock is **`List
 transform completeness** — it's where a PHP dev's muscle memory lives (`count`, `in_array`, `usort`,
 `array_unique`, `array_slice`, `array_column`) and every piece maps to a tier-1 PHP builtin and is
 deterministic, so it is pure ADOPT. The deferrals cluster around features that break the determinism
-spine (true randomness, wall-clock time, network) or need a type-system primitive Phorge lacks (`Json`
+spine (true randomness, wall-clock time, network) or need a type-system primitive Phorj lacks (`Json`
 needs `Any`/`mixed`; lazy iterators need a `Seq`/generator protocol).
 
 ## Gap table
@@ -70,7 +70,7 @@ wants to stop. Cheap, high-leverage, do it first.
 
 **L-list-query / L-list-slice / L-list-sort / L-list-ho-extra** — A PHP developer reaches for `count()`,
 `in_array()`, `array_slice()`, `array_unique()`, `usort()`, `array_column()`, and now (8.4) `array_find`/
-`array_any`/`array_all` constantly; today Phorge's `List` has only `reverse`/`sum`/`map`/`filter`/
+`array_any`/`array_all` constantly; today Phorj's `List` has only `reverse`/`sum`/`map`/`filter`/
 `reduce`. Every one of these maps to a tier-1 PHP builtin (`count`, `in_array`, `array_slice`,
 `array_unique`, `usort`/`array_multisort`, `array_search`, `array_merge`, `array_find`, `array_some`),
 is fully deterministic, and reuses the exact generic + `NativeEval::HigherOrder` machinery already
@@ -85,7 +85,7 @@ algebra. A safe `get(map, key) -> V?` and `getOr(map, key, default) -> V` close 
 maps (compose with S2 `??`); `Map.empty()`/`Map.of(entries)` removes the documented "no empty map
 literal" wart by giving a builder. `Set.union`/`intersection`/`difference` are the obvious completions
 already flagged as follow-ups in KNOWN_ISSUES. All map cleanly to PHP (`$m[$k] ?? null`,
-`array_intersect_key`/`array_diff`/`array_merge`, COW arrays match Phorge's value-type COW for Map/Set).
+`array_intersect_key`/`array_diff`/`array_merge`, COW arrays match Phorj's value-type COW for Map/Set).
 Strong fit, generics machinery already present.
 
 **L-iteration-protocol** — The most glaring everyday gap: there is `for (x in list)` but no
@@ -94,12 +94,12 @@ half-usable. It maps directly to PHP `foreach ($m as $k => $v)`. Determinism is 
 `Value::Map`/`Set` are already insertion-ordered `Vec`s (risk R1 was pre-paid exactly for this). Needs
 a small parser + checker + backend addition (destructuring loop binding) but no new collection rep.
 
-**L-convert** — Phorge can build strings via interpolation but has **no string→number parse** and no
+**L-convert** — Phorj can build strings via interpolation but has **no string→number parse** and no
 explicit `toString`. `Int.parse("42") -> int?` / `Float.parse -> float?` (optional return on bad input —
 the craftsmanship-correct contrast to PHP's silent `(int)"abc" == 0` footgun) and an explicit
 `toString` are foundational and used in every CLI/web program. Maps to PHP `filter_var(_,
 FILTER_VALIDATE_INT)` / `is_numeric`+cast / `strval`. This is exactly a "removes a surprise, never
-capability" feature — Phorge gives the *safe* parse PHP never had.
+capability" feature — Phorj gives the *safe* parse PHP never had.
 
 **L-text-breadth** — `startsWith`/`endsWith`/`indexOf`/`slice`/`substring`/`padStart`/`padEnd`/`repeat`/
 `chars`/`reverse` are daily-driver string ops, all tier-1 PHP (`str_starts_with`, `str_ends_with`,

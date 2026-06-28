@@ -6,7 +6,7 @@
 
 ## 1. Motivation
 
-Today a runtime fault in Phorge is a single bare string (`Err(format!("cannot index {}", …))`) —
+Today a runtime fault in Phorj is a single bare string (`Err(format!("cannot index {}", …))`) —
 no call stack, no source caret, and the line is available only on the VM. For a language whose pitch
 is *legible and provably-correct*, the uncaught-fault experience should be state-of-the-art: a real
 **call stack** (function frames with `file:line`), a **source caret** at the failing line, rendered
@@ -14,7 +14,7 @@ beautifully in **two contexts** — the **CLI** (`phg run`/`runvm`) and the **we
 browser dev-error page).
 
 A companion concern the developer raised — "a broken class in a route I haven't exercised hides until
-that file runs" — is **already solved** and is not part of this slice: Phorge's loader merges every
+that file runs" — is **already solved** and is not part of this slice: Phorj's loader merges every
 `.phg` (first-party + vendored) and type-checks the whole program before `main()`, so such errors fail
 up front (shipped as the `phg check` scope summary, `4ffc0d5`).
 
@@ -110,7 +110,7 @@ prints.
 When a served handler hits an **uncaught** fault, `phg serve --dev` returns an HTML **debug page** (the
 Whoops/Ignition equivalent): fault kind + message, each frame with a **source excerpt**, and the M6
 **request context** (method, path, headers from the `Request`). It is rendered by a **Rust** function
-in the serve runtime — *not* the Phorge `Core.Html` module (that is user-space) — but it **reuses
+in the serve runtime — *not* the Phorj `Core.Html` module (that is user-space) — but it **reuses
 Core.Html's pinned escaping discipline** (the `htmlspecialchars(ENT_QUOTES)`-equivalent 5-char table)
 so every interpolated value (message, source, header) is **XSS-safe by construction**.
 

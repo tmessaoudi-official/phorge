@@ -86,11 +86,11 @@ pub(crate) fn process_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(Ty::String)),
             pure: false,
             // `getenv` returns `false` when unset → coerce to `null`. The arg is single-evaluated via
-            // an assignment-expression temp (`$__phorge_env`), which Phorge variables never collide with.
+            // an assignment-expression temp (`$__phorj_env`), which Phorj variables never collide with.
             eval: NativeEval::Pure(env_get),
             php: |a| {
                 format!(
-                    "(($__phorge_env = getenv({})) === false ? null : $__phorge_env)",
+                    "(($__phorj_env = getenv({})) === false ? null : $__phorj_env)",
                     parg(a, 0)
                 )
             },

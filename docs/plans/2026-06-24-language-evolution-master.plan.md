@@ -3,8 +3,8 @@
 > **For a fresh session:** all design ambiguities are resolved (item-by-item with the developer,
 > 2026-06-24). Build straight from this. Specs hold full detail; this file is the authoritative
 > sequence + the resolved decisions. Each slice ships green + byte-identical
-> (`run ≡ runvm ≡ real PHP 8.5`, oracle: `PHORGE_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php
-> PHORGE_REQUIRE_PHP=1 cargo test --workspace`) with a guide example, gate per commit.
+> (`run ≡ runvm ≡ real PHP 8.5`, oracle: `PHORJ_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php
+> PHORJ_REQUIRE_PHP=1 cargo test --workspace`) with a guide example, gate per commit.
 
 **Specs:** ergonomics perimeter `docs/specs/2026-06-24-language-ergonomics-perimeter-design.md`;
 introspection/process `docs/specs/2026-06-24-introspection-strings-process-design.md`.
@@ -45,7 +45,7 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
 
 ### Phase 1 — Ergonomics perimeter (spec: ergonomics-perimeter; 7 slices)
 1. **String — ✅ DONE** (`a0a3c95` + `614b07c`). `+` concat (typed; `string+int` = error; reuses
-   `Op::Concat(2)` via new `CTy::Str`; `__phorge_add` PHP helper), `\u{HEX}` escapes (lex→UTF-8),
+   `Op::Concat(2)` via new `CTy::Str`; `__phorj_add` PHP helper), `\u{HEX}` escapes (lex→UTF-8),
    literal braces `\{`/`\}` + raw strings `r"…"`/`r#"…"#` (lexer-side interpolation split —
    `TokenKind::Str` → `StrSeg::{Lit,Interp}` segments). `examples/guide/strings-ext.phg`.
 2. **Operators/patterns** — **PARTIAL.**
@@ -147,13 +147,13 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
 - **Static field initializers — EAGER, no config (decided 2026-06-24).** Feature B-static evaluates
   static expression initializers **once at program start, in declaration order, before `main`** —
   matching the existing Rust static-init model (interpreter/VM already seed statics eagerly at startup;
-  PHP via a generated `__phorge_init_statics()` called before `main()`). **Lazy `??=`-on-first-access
+  PHP via a generated `__phorj_init_statics()` called before `main()`). **Lazy `??=`-on-first-access
   was rejected** (re-architects every `GetStatic`, leans harder on eval-order parity). **Runtime
   env/`.ini` configuration was rejected as architecturally unsound**: the transpiled PHP runs with no
-  Phorge runtime, so a runtime knob can't reach it → byte-identity would break in production,
+  Phorj runtime, so a runtime knob can't reach it → byte-identity would break in production,
   undetectable by the local gate; it also imports PHP's most-criticized misfeature (server-`.ini`-
-  dependent semantics) against Phorge's "remove surprises" thesis. **The legitimate form of
-  configurability is COMPILE-TIME** — a `phorge.toml [language]` table / editions, resolved once and
+  dependent semantics) against Phorj's "remove surprises" thesis. **The legitimate form of
+  configurability is COMPILE-TIME** — a `phorj.toml [language]` table / editions, resolved once and
   baked identically into all three backends *and* the emitted PHP (the Rust-editions / `tsconfig`
   model). Deferred to **M13 (editions, post-1.0)**, where static-init mode can become one documented
   edition flag. **General principle for all future feature-flagging:** a language flag may be
@@ -187,7 +187,7 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
 - **Mandatory `new` — EVERYWHERE (decided 2026-06-24).** `new ClassName(...)` AND `new Variant(...)`
   for enum-variant construction (`new Some(7)`, `new Circle(2.0)`). The developer chose uniformity ("a
   clean `new` everywhere") over my Option-1 rec (classes only) — accepted trade-off: no surface language
-  `new`s a sum-type variant, so it's a deliberate Phorge departure for one-rule simplicity. `new` is
+  `new`s a sum-type variant, so it's a deliberate Phorj departure for one-rule simplicity. `new` is
   currently a reserved-but-unhandled token. Breaking codemod (`Name(...)` → `new Name(...)` for every
   class + enum-variant construction; needs the checker's type tables to tell construction from a plain
   call). Lists/maps/sets/closures/primitives are literals/native — unaffected. Own design+plan pass.
@@ -205,7 +205,7 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
   const-of-const **deferred** (literal-only v1); interface constants **deferred** (classes-only v1).
 - **Expression field initializers — instance + static (decided 2026-06-24).** Lifts PHP's
   constant-expression-only restriction on property defaults (verified: PHP forbids call/method/closure/
-  static-read/`$this` in a default — "Constant expression contains invalid operations"). Phorge allows
+  static-read/`$this` in a default — "Constant expression contains invalid operations"). Phorj allows
   ARBITRARY expressions + closures in field initializers, lowered to valid PHP: **instance** fields →
   a constructor prelude (per-construction, declaration order); **static** fields → a one-time guarded
   init in PHP (the harder case — developer chose to include statics). An initializer **may read `this`
@@ -241,7 +241,7 @@ introspection/process `docs/specs/2026-06-24-introspection-strings-process-desig
 - Interpreter: eval init; struct → read instance fields, declare binders; list → length-check, run else
   (propagate its Signal) or declare element binders.
 - Transpiler: struct → `$d = <init>; $x = $d->x; …`; list → `$d = <init>; if (count($d) !== N) { <else> }
-  [$a,$b] = $d;`. Deterministic `$__phorge_d{N}` temp (a `tmp` counter on the Transpiler).
+  [$a,$b] = $d;`. Deterministic `$__phorj_d{N}` temp (a `tmp` counter on the Transpiler).
 - Coupled-match discipline: extend every exhaustive `Stmt` match (`cargo check` enumerates them).
 
 **Decisions Log (2026-06-24):**

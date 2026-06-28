@@ -2,12 +2,12 @@
 
 ## Track summary
 
-A 1.0 language is judged as much by its *surrounding tooling* as by its grammar. Phorge already
+A 1.0 language is judged as much by its *surrounding tooling* as by its grammar. Phorj already
 ships a remarkably mature CLI for a pre-1.0, single-developer, zero-dependency project: `run`,
 `runvm`, `check` (with `--json` machine-readable diagnostics — explicitly an LSP seam), `transpile`,
 `parse`, `lex`, `disasm`, `bench` (with `--vs-php` and a `/proc` memory sampler), `build` (standalone
 executables, cross-OS), `serve` (with a `--dev` HTML error page), `vendor` (offline, lockfile-pinned
-git deps), and `explain` (diagnostic-code dictionary). The GA roadmap (`docs/plans/2026-06-19-phorge-ga-roadmap.plan.md`,
+git deps), and `explain` (diagnostic-code dictionary). The GA roadmap (`docs/plans/2026-06-19-phorj-ga-roadmap.plan.md`,
 **M12**) has *already scheduled* the headline DX multipliers — **LSP** (on the `--json` seam),
 **TextMate/tree-sitter grammar**, **REPL**, a **language-reference doc**, **lexer/parser fuzzing**,
 and **release automation + SHA-256 checksums**. So this track's job is not to re-discover those;
@@ -19,12 +19,12 @@ The genuinely-missing tooling, ranked by how much a PHP developer would expect i
 a **formatter** (`phg fmt` — PHP has `php-cs-fixer`/`pint`; this is table-stakes and trivially
 PHP-legible), a **test framework + coverage** (PHPUnit/Pest are central to PHP culture — its
 absence is the single biggest ecosystem gap), a **project scaffolder** (`phg new`/`init` —
-Composer/`symfony new` analogue, and Phorge's *mandatory* package model makes hand-writing
-`phorge.toml` + folder layout a real friction), a **`phg add`/dependency resolver** (the consume
+Composer/`symfony new` analogue, and Phorj's *mandatory* package model makes hand-writing
+`phorj.toml` + folder layout a real friction), a **`phg add`/dependency resolver** (the consume
 side of `phg vendor` — `composer require`), a **package registry + `phg publish`** (Packagist
 analogue — the long-pole ecosystem item), a **docs extractor** (`phg doc` — phpDocumentor), a
 **docs *site*** (the project has excellent in-repo markdown but no rendered site), a **web
-playground** (compile-in-browser — Phorge's three-backend determinism + zero-dep Rust core make a
+playground** (compile-in-browser — Phorj's three-backend determinism + zero-dep Rust core make a
 WASM playground unusually clean to build and an outstanding adoption lever), a **debugger** (Xdebug
 analogue — the heaviest lift, defer), a **standalone profiler** (`bench` covers micro-benchmarking
 but not per-call-site flame profiling), a **JetBrains/PhpStorm plugin** (the developer explicitly
@@ -82,17 +82,17 @@ convention-discovered `*_test.phg` / `test*` function set run by `phg test`, tra
 or a thin runner — recognizable to any PHP developer. Strong fit: it makes code *provably* safer,
 the core promise.
 
-**F-scaffold — Project scaffolder `phg new` / `phg init` (M11, S).** Phorge's package model is
-*mandatory* (`package Main`, `phorge.toml`, strict folder=path) — stricter than PHP by choice — which
+**F-scaffold — Project scaffolder `phg new` / `phg init` (M11, S).** Phorj's package model is
+*mandatory* (`package Main`, `phorj.toml`, strict folder=path) — stricter than PHP by choice — which
 means a new project currently requires hand-writing a manifest and the correct directory layout from
-memory. A `phg new <name>` (fresh tree) / `phg init` (in-place) that emits a valid `phorge.toml`,
+memory. A `phg new <name>` (fresh tree) / `phg init` (in-place) that emits a valid `phorj.toml`,
 `src/` root, and a runnable `package Main` removes real onboarding friction that the strictness
 *creates*. Direct analogue: `composer init` / `symfony new`. Tiny effort, high first-five-minutes
 payoff; strong fit.
 
 **F-add — Dependency add/resolve `phg add` (M11, M).** `phg vendor` already does the *fetch +
 lock + vendor* half; what is missing is the ergonomic *consume* half — `phg add acme/strutil@1.2`
-that edits `[require]` in `phorge.toml` and triggers a vendor pass. This is `composer require`, the
+that edits `[require]` in `phorj.toml` and triggers a vendor pass. This is `composer require`, the
 single most-used Composer verb. It is sequenced with M11 because it pairs naturally with transitive
 dependency resolution (a current KNOWN_ISSUE deferral) — adding a dep should walk its own
 `[require]`. Strong fit: it is pure ergonomics over an already-shipped, already-offline-safe
@@ -114,7 +114,7 @@ planned for M12. Can be a static-site generator over the existing markdown + `ph
 medium effort, mostly content/CI wiring.
 
 **F-playground — Web playground (compile-in-browser, WASM) (M12, M).** This is the strongest
-*beyond-PHP* adoption lever in the track. Phorge's zero-external-dependency, std-only Rust core
+*beyond-PHP* adoption lever in the track. Phorj's zero-external-dependency, std-only Rust core
 compiles to WASM cleanly, and its three-backend determinism means a browser playground can show
 `run` output, the bytecode `disasm`, *and* the transpiled PHP side-by-side — a uniquely compelling
 "try it / see the PHP it becomes" demo (the TypeScript-playground relationship made literal). Strong
@@ -125,7 +125,7 @@ and transpiler follow).
 
 **F-citemplates — `phg`-aware CI templates (M12, S).** Distinct from the repo's *own* CI
 (`.github/workflows/ci.yml`, already shipped in M9): a *publishable* reusable GitHub Action / workflow
-template (`phorge/setup-phg` + a `phg check && phg test && phg fmt --check` job) so downstream Phorge
+template (`phorj/setup-phg` + a `phg check && phg test && phg fmt --check` job) so downstream Phorj
 projects get CI in one line. Analogue: `shivammathur/setup-php`. Small effort, real ecosystem
 multiplier, `ok` fit (ecosystem infra rather than a language feature). Worth shipping with GA so the
 first external projects have a paved path.
@@ -151,15 +151,15 @@ favors them: each is a tool a PHP/Go/Rust dev reaches for on day one, none touch
 | F-watch | Watch mode `phg run/check --watch` | new | strong | adopt | M12 | S |
 | F-completions | Shell completions `phg completions bash\|zsh\|fish` | port | strong | adopt | M12 | S |
 | F-installer | One-line installer / version manager (`phgup`, rustup analogue) | new | ok | defer | GA-M12+/v1.1 | M |
-| F-toolchain-pin | `phorge`-version field in `phorge.toml` (toolchain pin) | port | strong | adopt | M11 | S |
-| F-migrate | PHP → Phorge migration tool `phg migrate` | port | ok | defer | M8 (already planned) | L |
+| F-toolchain-pin | `phorj`-version field in `phorj.toml` (toolchain pin) | port | strong | adopt | M11 | S |
+| F-migrate | PHP → Phorj migration tool `phg migrate` | port | ok | defer | M8 (already planned) | L |
 
 **Rationale (new items):**
 
 - **F-lint — `phg lint [--fix]` (M12, M).** Distinct from F-fmt (whitespace) and from `phg check`
   (type errors). PHP's static-analysis layer (PHPStan/Psalm/`pint` lint rules) catches dead code,
   unused locals, unreachable arms, redundant casts, and shadowed bindings *that still type-check*.
-  Phorge already has a **warning channel** (`check()` returns `Ok(warnings)`, e.g. `W-FORCE-UNWRAP`),
+  Phorj already has a **warning channel** (`check()` returns `Ok(warnings)`, e.g. `W-FORCE-UNWRAP`),
   so a lint surface is a natural extension of an existing seam — and `--fix` (mechanical rewrites via
   the same AST-pretty-printer F-fmt builds) is pure front-end, spine-safe. Strong fit: removes a class
   of latent bugs without removing capability; a PHP dev expects it.
@@ -181,15 +181,15 @@ favors them: each is a tool a PHP/Go/Rust dev reaches for on day one, none touch
   feature) and deferred past 1.0 because it depends on F-release's artifact pipeline existing first
   and on hosted download infra — pair it with the registry/distribution wave.
 
-- **F-toolchain-pin — `phorge` version in `phorge.toml` (M11, S).** Reproducibility: Go's `go 1.22`
+- **F-toolchain-pin — `phorj` version in `phorj.toml` (M11, S).** Reproducibility: Go's `go 1.22`
   directive and Rust's `rust-version` field let a project declare the minimum/expected toolchain.
-  Phorge's manifest already parses `[require]`/`name`; adding a `phorge = "1.0"` field and a startup
+  Phorj's manifest already parses `[require]`/`name`; adding a `phorj = "1.0"` field and a startup
   check is tiny and pays off the moment the language has more than one released version (i.e. at GA).
   Strong fit — it makes a project's build *provably* reproducible, the core promise, in a form a
   Composer/`go.mod` user recognizes immediately. Sequence with M11 (manifest/stdlib completion).
 
-- **F-migrate — `phg migrate` PHP→Phorge (M8, L).** The inverse of the transpiler — import PHP and
-  infer static types. **Already scheduled** (FEATURES.md "PHP → Phorge migration 🔲 M8"; ROADMAP M8 of
+- **F-migrate — `phg migrate` PHP→Phorj (M8, L).** The inverse of the transpiler — import PHP and
+  infer static types. **Already scheduled** (FEATURES.md "PHP → Phorj migration 🔲 M8"; ROADMAP M8 of
   the historical ecosystem numbering); the original track-F list omitted it as a *tooling* item, so
   it is added here for completeness with its existing slot. `ok` fit (heavy, inference-hard, but a
   direct adoption on-ramp for existing PHP codebases — the strongest "upgrade your PHP" story). Defer

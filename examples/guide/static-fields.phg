@@ -2,7 +2,7 @@ package Main;
 import Core.Console;
 
 // M-mut.7 — `static` class fields: program-lifetime state that belongs to the class, not to any one
-// instance. Accessed as `ClassName.field` (Phorge uses `.` everywhere, not `::`). A static field is
+// instance. Accessed as `ClassName.field` (Phorj uses `.` everywhere, not `::`). A static field is
 // immutable by default; `static mutable` opts into reassignment. Static initializers are literal
 // constants, evaluated once at program start.
 

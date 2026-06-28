@@ -2,7 +2,7 @@
 //! (RustCrypto `argon2`), admitted under `docs/specs/2026-06-27-dependency-policy.md` (the
 //! audited-crypto-only exception to `std`-only). Rationale: secure password hashing demands a *vetted*
 //! implementation ("never roll your own crypto"), `std` ships none, and the capability must be NATIVE
-//! to Phorge's Rust backends — never delegated to the PHP transpile target. The `php` closures emit
+//! to Phorj's Rust backends — never delegated to the PHP transpile target. The `php` closures emit
 //! `password_hash`/`password_verify` as a **peer** target; because both sides speak the standard PHC
 //! string (`$argon2id$…`), a hash made by either backend verifies in the other.
 //!

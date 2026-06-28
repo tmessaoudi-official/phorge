@@ -1,6 +1,6 @@
 cff-version: 1.2.0
-message: "If you use Phorge in your research or work, please cite it as below."
-title: "Phorge"
+message: "If you use Phorj in your research or work, please cite it as below."
+title: "Phorj"
 abstract: >-
   A small, statically-typed, PHP-inspired programming language implemented in Rust (std-only,
   zero external crates). Runs on two byte-identical backends — a tree-walking interpreter and a
@@ -10,8 +10,8 @@ authors:
   - family-names: "Messaoudi"
     given-names: "Takieddine"
     alias: "tmessaoudi-official"
-repository-code: "https://github.com/tmessaoudi-official/phorge"
-url: "https://github.com/tmessaoudi-official/phorge"
+repository-code: "https://github.com/tmessaoudi-official/phorj"
+url: "https://github.com/tmessaoudi-official/phorj"
 license:
   - MIT
   - Apache-2.0

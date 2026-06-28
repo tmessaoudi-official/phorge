@@ -9,10 +9,10 @@
 new `Value` variant + a *silent* `***`). Instead: a `Secret<T>` value simply **isn't a string and has
 no display**, so any attempt to print/interpolate it is a clean **compile error** — the strongest,
 loudest guarantee, and it falls out of the type system for free. `.expose()` is the sole read path; a
-`W-SECRET` lint nudges when an exposed plaintext flows to a sink. Most Phorge-idiomatic (loud > silent;
+`W-SECRET` lint nudges when an exposed plaintext flows to a sink. Most Phorj-idiomatic (loud > silent;
 no new `Op`/`Value`).
 
-Decided after an implementation discovery reopened the earlier "displays as `***`" wording: Phorge's
+Decided after an implementation discovery reopened the earlier "displays as `***`" wording: Phorj's
 display path (`as_display`) renders only primitives, so a class-typed `Secret` is already unprintable —
 no `***` machinery is needed or wanted.
 
@@ -21,7 +21,7 @@ no `***` machinery is needed or wanted.
 `Secret<T>` is a compiler-injected generic class (reusing generics-all + methods + visibility +
 construction wholesale — the `Box<T>` machinery):
 
-```phorge
+```phorj
 class Secret<T> {
   constructor(private T value) {}
   function expose(): T { return this.value; }

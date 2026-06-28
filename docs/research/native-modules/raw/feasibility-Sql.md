@@ -4,8 +4,8 @@
 The hypothesis holds and is *stronger* than stated: the pure half of "DB" is not merely feasible — it
 needs **zero native functions, zero PHP runtime helpers, and zero new VM `Op`** if the builder emits a
 **parameterized statement** (`{sql: string, params: List}`) rather than inlining escaped literals.
-The entire module can ship as **injected Phorge classes** (the `Json`/`RoundingMode` injected-type
-pattern, `cli::inject_*_prelude`) whose methods are written in ordinary Phorge over already-shipped
+The entire module can ship as **injected Phorj classes** (the `Json`/`RoundingMode` injected-type
+pattern, `cli::inject_*_prelude`) whose methods are written in ordinary Phorj over already-shipped
 `Core.Text`/`Core.List` ops. Byte-identity is then *free by construction* — there is no Rust-vs-PHP
 escaping path to diverge.
 
@@ -30,15 +30,15 @@ placeholders) plus a `List` of bind values.** A `string` and a `List<Value>` are
 `Value` enum and already round-trip byte-identically across all three legs (every shipped example
 proves this). There is **no float formatting, no escaping, no locale, no clock, no RNG, no map
 iteration** anywhere on the build path. The single ordering concern (placeholder order must match bind
-order) is handled by Phorge's insertion-ordered `List` — the builder appends to the SQL and the bind
+order) is handled by Phorj's insertion-ordered `List` — the builder appends to the SQL and the bind
 list in lockstep.
 
 ---
 
-## 2. std-only feasibility — TRIVIAL (it's all Phorge string building)
+## 2. std-only feasibility — TRIVIAL (it's all Phorj string building)
 
 The builder is `String` concatenation and `Vec` appends. Rust std APIs relied on: **none beyond what
-already ships** — because the recommended implementation writes the builder *in Phorge*, not Rust. The
+already ships** — because the recommended implementation writes the builder *in Phorj*, not Rust. The
 methods use `Core.Text` (`Text.join`, already shipped) and `Core.List` (`append`/spread) and ordinary
 `+` string concat. If any helper must be a native (it need not), it is a `Pure(fn(&[Value], &mut
 String))` over `Value::Str`/`Value::List` — the same shape as every `text.rs` body (`String::push_str`,
@@ -50,7 +50,7 @@ String))` over `Value::Str`/`Value::List` — the same shape as every `text.rs` 
 
 | Concern | Where it lives | Tier |
 |---|---|---|
-| `select/from/where/join/orderBy/limit` → SQL template `string` | builder methods (pure Phorge) | **A** |
+| `select/from/where/join/orderBy/limit` → SQL template `string` | builder methods (pure Phorj) | **A** |
 | bind values collected into `List` | builder state | **A** |
 | identifier quoting (`"col"` / `` `col` ``) | pure deterministic string transform | **A** |
 | **opening a connection / executing** | `Core.Db` — `pure: false`, M6 `Transport` quarantine | **B (separate module, out of scope)** |
@@ -72,7 +72,7 @@ Two sub-concerns, both deterministic:
 
 - **Placeholder dialect.** Pin **`?` positional placeholders** (PDO default, ANSI, MySQL/SQLite/pgsql
   all accept via PDO emulation; `:name` named placeholders are a v2 add). Pinned identically in all
-  three legs because it is a literal `"?"` the Phorge code writes. No divergence surface.
+  three legs because it is a literal `"?"` the Phorj code writes. No divergence surface.
 - **Identifier quoting.** Pin **ANSI double-quotes** `"ident"` with `"` → `""` doubling as the default
   (portable to pgsql/sqlite/ANSI MySQL; a `.dialect(MySql)` backtick variant is a clean v2 enum knob).
   This is `Text.replace(id, "\"", "\"\"")` wrapped in quotes — pure, no PHP `quote_identifier`, no
@@ -81,13 +81,13 @@ Two sub-concerns, both deterministic:
 
 **Result: byte-identity is free.** The differential harness globs `examples/sql/*.phg`; the example
 prints `query.sql()` and `Debug.dump(query.params())` (or a hand-rolled join) and all three legs emit
-identical bytes because they all ran the same Phorge string code.
+identical bytes because they all ran the same Phorj string code.
 
 ---
 
 ## 5. Exact PHP transpile target
 
-Because the builder is **injected Phorge classes**, the transpiler emits the classes' methods as
+Because the builder is **injected Phorj classes**, the transpiler emits the classes' methods as
 ordinary PHP — `string` concatenation with `.`, `array` appends, a `Text.join` → `implode`. **There is
 no SQL-specific PHP builtin in the emission at all.** Specifically:
 
@@ -106,9 +106,9 @@ non-deterministic anyway). Parameterization sidesteps it entirely.
 
 ---
 
-## 6. Phorge API sketch (parameterized, chained, injected classes)
+## 6. Phorj API sketch (parameterized, chained, injected classes)
 
-```phorge
+```phorj
 import Core.Sql;
 import Core.Console;
 
@@ -128,9 +128,9 @@ fn main() -> void {
 }
 ```
 
-Injected prelude (sketch — pure Phorge, no natives):
+Injected prelude (sketch — pure Phorj, no natives):
 
-```phorge
+```phorj
 class Query {
     private List<string> cols;
     private string table;
@@ -163,7 +163,7 @@ Notes on the sketch vs. current language surface (each is a real check before bu
 
 ## 7. New VM Op needed? — NO
 
-The builder is injected Phorge classes + (optionally) `Pure` natives → `Op::CallNative` at most. **No
+The builder is injected Phorj classes + (optionally) `Pure` natives → `Op::CallNative` at most. **No
 new `Op`.** This avoids the three-coupled-match cost (`chunk.rs` validate, `vm/exec.rs` exec_op,
 `compiler` stack_effect) entirely. Confirmed against the registry model in `src/native/mod.rs`
 (every recent module — Json, Decimal, Convert — added zero Ops).
@@ -178,7 +178,7 @@ new `Op`.** This avoids the three-coupled-match cost (`chunk.rs` validate, `vm/e
    non-deterministic. Parameterization is the only Tier-A path.
 2. **Bind-order vs placeholder-order skew** — controlled: append SQL fragment and bind value in the
    same method call; `List` is insertion-ordered (`Rc<Vec>`), identical on all legs.
-3. **Identifier-quote dialect drift** — controlled: pin ANSI `"` + `""`-doubling literally in Phorge;
+3. **Identifier-quote dialect drift** — controlled: pin ANSI `"` + `""`-doubling literally in Phorj;
    no driver call. Backtick/`[ ]` dialects are a v2 enum, still pure.
 4. **Heterogeneous bind list typing** — the real *language* gap, not a determinism risk: `List` has no
    `Any`/union element today for `[18, true, "x"]`. Same wall that historically deferred `core.json`;

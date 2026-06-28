@@ -17,7 +17,7 @@ initializers add none either (they lower to existing constructor / assignment op
 
 ---
 
-## Verified PHP baseline (why this is a Phorge-over-PHP win)
+## Verified PHP baseline (why this is a Phorj-over-PHP win)
 
 PHP property defaults must be **constant expressions** (probed on PHP 8.5):
 
@@ -26,7 +26,7 @@ PHP property defaults must be **constant expressions** (probed on PHP 8.5):
 | literal, `const`-arithmetic (`self::A + self::B`), `new D()`, enum case | ✅ allowed |
 | static-property read, function/method call, **closure**, `$this`, variable | ❌ "Constant expression contains invalid operations" |
 
-So a computed/closure/stateful default forces you into the constructor in PHP. Phorge removes that
+So a computed/closure/stateful default forces you into the constructor in PHP. Phorj removes that
 papercut by lowering arbitrary initializers to valid PHP (the TS-over-JS move).
 
 ---
@@ -41,7 +41,7 @@ private const string TAG = "x";
 ```
 
 ### Semantics (all developer-confirmed)
-- **Type** explicit (Phorge mandates types). **Initializer** required; a compile-time **literal or
+- **Type** explicit (Phorj mandates types). **Initializer** required; a compile-time **literal or
   const-expression** (literals, other in-scope consts, `+`/`*`/… on them — reuses/extends
   `value::const_literal`). `E-CONST-NO-INIT` / `E-CONST-NOT-LITERAL`.
 - **Immutable always.** `const mutable` → `E-CONST-MUTABLE`. Reassigning `C.MAX = …` → `E-CONST-REASSIGN`.
@@ -50,7 +50,7 @@ private const string TAG = "x";
 - **Visibility:** member-level `public` (default) / `private` / `protected`, enforced by the existing
   member-visibility lattice.
 - **Inherited:** a subclass accesses an inherited const via its **own** name (`Child.MAX` when `MAX`
-  is on `Parent`) — matches PHP + Phorge's static/method inheritance.
+  is on `Parent`) — matches PHP + Phorj's static/method inheritance.
 - **Deferred (v1):** const-referencing-non-literal-const-expr beyond simple arithmetic; **interface
   constants** (classes only).
 
@@ -93,7 +93,7 @@ class Task {
   declaration order → identical field values.
 - **Static fields:** evaluated **once** (first class use), in declaration order among statics. PHP has
   no runtime static-property default, so the transpiler emits a **one-time guarded initializer**
-  (a static `__phorge_init` run once per class, or a `??=`-guarded lazy set) — the harder case the
+  (a static `__phorj_init` run once per class, or a `??=`-guarded lazy set) — the harder case the
   developer chose to include. Rust backends evaluate static initializers once at program start
   (extending the existing `static_inits` path, which today only handles literals).
 - **Byte-identity:** guaranteed by a single shared declaration-order evaluation contract honored by all

@@ -1,4 +1,4 @@
-# Stage 3 — PHP runtime / type / reflection / serialization capabilities vs Phorge
+# Stage 3 — PHP runtime / type / reflection / serialization capabilities vs Phorj
 
 **Area:** PHP runtime/type/reflection/serialization stdlib capabilities
 (`serialize`, `var_export`, `gettype`/`settype`, `get_object_vars`, closure binding,
@@ -33,15 +33,15 @@ prelude, the gated-helper transpile path) are all **verified against source** th
 
 Every candidate below is first partitioned Tier A (pure → byte-identity-gateable, ships in
 `differential.rs`) vs Tier B (impure → quarantined). Almost everything in *this* area is Tier A,
-because runtime/type/reflection/serialization over Phorge's **closed `Value` enum** is a pure function
+because runtime/type/reflection/serialization over Phorj's **closed `Value` enum** is a pure function
 of the value + the program's `ClassTables`. The classic PHP determinism traps in this area
 (`spl_object_id`, `var_dump` `#3` object ids, `serialize`'s address-free-but-format-leaky output, float
-`echo` 14-digit vs Rust 17-digit) are avoidable *by construction* because Phorge owns the format and
+`echo` 14-digit vs Rust 17-digit) are avoidable *by construction* because Phorj owns the format and
 never prints a pointer.
 
 ---
 
-## FINDING 1 — `serialize()` / `unserialize()` → **`Core.Serde` (Phorge-owned binary-stable codec)**
+## FINDING 1 — `serialize()` / `unserialize()` → **`Core.Serde` (Phorj-owned binary-stable codec)**
 
 **PHP capability:** `serialize($v)` → a self-describing string; `unserialize($s)` → value. Round-trips
 arrays, scalars, and objects (calling `__sleep`/`__wakeup`/`Serializable`/`__serialize`).
@@ -49,13 +49,13 @@ arrays, scalars, and objects (calling `__sleep`/`__wakeup`/`Serializable`/`__ser
 object-injection vector (POP-chain gadgets), the format embeds private property names with NUL bytes,
 and it is PHP-version-fragile.
 
-**Does Phorge have an equivalent?** **No.** `Core.Json` covers the *interchange* case for the
+**Does Phorj have an equivalent?** **No.** `Core.Json` covers the *interchange* case for the
 JSON-shaped subset, but cannot round-trip a typed `Instance`/`Enum`/`Set`/`Decimal`/`bytes` back to the
-same Phorge type (JSON has no class tag, no decimal, no byte type, no set).
+same Phorj type (JSON has no class tag, no decimal, no byte type, no set).
 
-**The BETTER port — `Core.Serde`** (Phorge : PHP :: a typed, capability-free codec : `unserialize`):
+**The BETTER port — `Core.Serde`** (Phorj : PHP :: a typed, capability-free codec : `unserialize`):
 
-```phorge
+```phorj
 import Core.Serde;
 
 Serde.encode(value) -> bytes               // deterministic, self-describing, version-tagged
@@ -75,10 +75,10 @@ Why it is better than PHP's `serialize`:
 
 **Tier:** **A** (encode is pure; decode is pure over `ClassTables`). **No new Op** —
 `NativeEval::Reflective` (decode needs the class table to rebuild `Instance`s), `Op::CallNative`.
-**Transpile target:** a **gated runtime helper** `__phorge_serde_encode/decode($v)` (the `uses_*` /
+**Transpile target:** a **gated runtime helper** `__phorj_serde_encode/decode($v)` (the `uses_*` /
 `emit_runtime_helpers` mechanism — NOT PHP `serialize`, whose format we are explicitly rejecting).
-The PHP helper reproduces Phorge's own format byte-for-byte; cross-version-stable because *we* own it.
-**Determinism risk:** float fields inside an instance — must use the same `__phorge_float` (Ryū) the
+The PHP helper reproduces Phorj's own format byte-for-byte; cross-version-stable because *we* own it.
+**Determinism risk:** float fields inside an instance — must use the same `__phorj_float` (Ryū) the
 rest of the spine uses, else Rust-17-digit vs PHP-14-digit diverges (the standing float trap). **Risk:**
 `Result<SerdeError,T>` needs generic enums (already shipping per CLAUDE.md) for the typed-error surface.
 **Recommendation: adopt-later** — high value but should land after `Core.Debug` (shares the
@@ -94,24 +94,24 @@ silently bypassed — flagged as the one real correctness subtlety).
 **PHP capability:** `var_export($v, true)` → a string of *valid PHP source* that re-creates the value.
 Used for config-cache generation and golden-file tests.
 
-**Does Phorge have an equivalent?** **No**, but `Core.Debug` is already designed
+**Does Phorj have an equivalent?** **No**, but `Core.Debug` is already designed
 (`docs/research/native-modules/raw/feasibility-Dump.md`, ADOPT-NOW) as the var_dump/print_r analog.
 `var_export` is the **re-parseable sibling** and should be a *mode of the same module*, not a new one:
 
-```phorge
+```phorj
 import Core.Debug;
 Debug.dump(value) -> string         // human tree (already designed)
 Debug.inspect(value, int) -> string // depth-capped (already designed)
-Debug.export(value) -> string       // NEW: valid *Phorge* literal source, re-parseable
+Debug.export(value) -> string       // NEW: valid *Phorj* literal source, re-parseable
 ```
 
-Why it is better than PHP's `var_export`: it emits **Phorge** literal syntax (`[k => v]`, `Some(3)`,
-`19.99d`, `b"…"`) — typed and round-trippable through Phorge's own parser, whereas PHP's `var_export`
+Why it is better than PHP's `var_export`: it emits **Phorj** literal syntax (`[k => v]`, `Some(3)`,
+`19.99d`, `b"…"`) — typed and round-trippable through Phorj's own parser, whereas PHP's `var_export`
 can't represent a closure (`fatal error`) and renders objects in a non-re-parseable
-`\Foo::__set_state(...)` form that needs a magic static. Phorge's closures dump as an opaque
+`\Foo::__set_state(...)` form that needs a magic static. Phorj's closures dump as an opaque
 `<closure>` token (deterministic, never source).
 **Tier A**, no new Op, same `Value`-walk + `eq_val_rec` cyclic guard as `Debug.dump`. **Transpile:**
-gated `__phorge_export` helper. **Recommendation: adopt-now** — it is one extra renderer arm on a
+gated `__phorj_export` helper. **Recommendation: adopt-now** — it is one extra renderer arm on a
 module already greenlit; ship it inside the Debug module rather than as a separate feature.
 **Confidence: high.**
 
@@ -122,9 +122,9 @@ module already greenlit; ship it inside the Debug module rather than as a separa
 **PHP capability:** `gettype($v)` (coarse: "integer"/"double"/"string"/"array"/"object"/"boolean"/
 "NULL"); `get_debug_type($v)` (8.0+, the *good* one: precise class/`int`/`float`/`string`/`array` etc.).
 
-**Does Phorge have an equivalent?** **YES — fully.** `Core.Reflect.kind(x) -> string` is the
+**Does Phorj have an equivalent?** **YES — fully.** `Core.Reflect.kind(x) -> string` is the
 erasure-stable coarse tag (`src/native/reflect.rs:141`); `Core.Reflect.typeName` is the precise static
-type (the `get_debug_type` analog), resolved in a checker pass. Phorge's version is strictly **better
+type (the `get_debug_type` analog), resolved in a checker pass. Phorj's version is strictly **better
 than `gettype`**: it never returns the legacy/misleading `"double"` for a float or `"NULL"` string
 (it returns honest `"float"`), and `typeName` distinguishes Map/Set/the concrete class — which
 `gettype` collapses to `"array"`/`"object"`. **No gap.** **Recommendation: reject** (already shipped).
@@ -138,15 +138,15 @@ than `gettype`**: it never returns the legacy/misleading `"double"` for a float 
 `"float"`/`"string"`/`"bool"`/`"array"`/`"null"`). It is the antithesis of static typing — a runtime
 type-punning footgun.
 
-**Does Phorge have an equivalent?** Yes, the *correct* one: **`Core.Convert`** already ships
+**Does Phorj have an equivalent?** Yes, the *correct* one: **`Core.Convert`** already ships
 `toString`/`toFloat`/`toInt`(`-> int?`, null on non-parseable)/`truncate`/`round`/decimal bridges
 (`src/native/convert.rs`). These are **pure, value-returning, null-safe conversions** — the upgrade
 over `settype`'s in-place mutation + silent lossy coercion (`settype("12abc","integer")` → `12`
-silently; Phorge `Convert.toInt("12abc")` → `null`, forcing the caller to handle it). **No native gap.**
+silently; Phorj `Convert.toInt("12abc")` → `null`, forcing the caller to handle it). **No native gap.**
 A small breadth follow-up: `Convert.toBool(string) -> bool?` and `Convert.parseInt(string, int radix)
 -> int?` round out the parse surface (currently only `toInt` base-10). **Tier A**, no new Op.
 **Recommendation: defer** the two breadth natives to M4 (stdlib charter); `settype` itself is **reject**
-(its mutate-in-place semantics violate the type discipline — a non-goal, by Phorge's philosophy).
+(its mutate-in-place semantics violate the type discipline — a non-goal, by Phorj's philosophy).
 **Confidence: high.**
 
 ---
@@ -156,11 +156,11 @@ A small breadth follow-up: `Convert.toBool(string) -> bool?` and `Convert.parseI
 **PHP capability:** `get_object_vars($obj)` → an assoc array of *accessible* property name→value pairs
 (visibility-scoped). The dynamic-introspection workhorse (ORMs, serializers, `compact`/`extract`).
 
-**Does Phorge have an equivalent?** **Partially.** `Core.Reflect.fields(x) -> List<string>` returns
+**Does Phorj have an equivalent?** **Partially.** `Core.Reflect.fields(x) -> List<string>` returns
 field *names* (sorted, including inherited/promoted; `src/native/reflect.rs`). It does **not** return
 the *values*. The value-side gap is real:
 
-```phorge
+```phorj
 import Core.Reflect;
 Reflect.fields(x) -> List<string>            // names only — EXISTS
 Reflect.entries(x) -> Map<string, T>         // NEW: name -> current value (public fields only)
@@ -168,7 +168,7 @@ Reflect.entries(x) -> Map<string, T>         // NEW: name -> current value (publ
 
 Why a value-returning `entries` is the right port (and better than `get_object_vars`):
 - **Visibility-honest** — only `public` fields appear (PHP's `get_object_vars` leaks private props when
-  called from inside the class scope, a context-dependent footgun; Phorge fixes the scope to "external"
+  called from inside the class scope, a context-dependent footgun; Phorj fixes the scope to "external"
   for determinism — verified the 6-access-site visibility model exists, memory
   `[[member-visibility-six-access-sites]]`).
 - **Typed** — returns a `Map<string, T>` not an untyped assoc array.
@@ -177,8 +177,8 @@ Why a value-returning `entries` is the right port (and better than `get_object_v
 **Tier A**, **no new Op** — `NativeEval::Reflective` already has the field-name list; the value side is a
 runtime `Instance.fields` read (a `RefCell::borrow`, the same read path the dumper uses). The result is
 a `Value::Map` built via `value::build_map`. **Transpile:** the existing
-`__phorge_reflect_*` emitted-table mechanism + a `get_object_vars`-like helper restricted to public
-props. **Determinism risk:** none beyond the float-field trap (use `__phorge_float`).
+`__phorj_reflect_*` emitted-table mechanism + a `get_object_vars`-like helper restricted to public
+props. **Determinism risk:** none beyond the float-field trap (use `__phorj_float`).
 **Recommendation: adopt-later** (rides the same `Value`-walk as `Core.Debug`/`Core.Serde`; build them as
 a cluster). **Confidence: high** on mechanism, **medium** on whether `entries` should be on `Core.Reflect`
 or a new `Core.Object` leaf (a naming call).
@@ -191,7 +191,7 @@ or a new `Core.Object` leaf (a naming call).
 `$c->bindTo(...)` (rebind `$this` and visibility scope); `Closure::fromCallable('strlen')`;
 first-class-callable `strlen(...)`.
 
-**Does Phorge have an equivalent?**
+**Does Phorj have an equivalent?**
 - **First-class callables: YES** — `Value::Closure(ClosureData::Named)` and lambda values already ship
   (M3 S3, CLAUDE.md), transpiled to PHP `f(...)`. No gap.
 - **`is_callable` predicate: small gap** — there is no native that *tests at runtime* whether a value is
@@ -201,7 +201,7 @@ first-class-callable `strlen(...)`.
   `"callable"`, verified `src/native/reflect.rs`). **Tier A, no new Op, trivial.** Arguably redundant
   with `kind`; **recommendation: defer** (a one-line convenience).
 - **`Closure::bind` / `bindTo`: deliberately rejected.** Rebinding `$this` and reaching into private
-  scope is a runtime encapsulation-breaker. Phorge's closures capture `this` *at creation*
+  scope is a runtime encapsulation-breaker. Phorj's closures capture `this` *at creation*
   (`this_capture` in `ClosureData::Tree`, verified) and the checker **rejects a lambda that touches
   `this` in a free context** (`E-LAMBDA-THIS`, per CLAUDE.md). Re-binding scope at runtime is
   incompatible with the static visibility model and the `Value`-isn't-`Send` single-threaded heap.
@@ -215,7 +215,7 @@ first-class-callable `strlen(...)`.
 **PHP capability:** `yield`/`yield from` generators; `Iterator`/`IteratorAggregate`/`Traversable`
 interfaces so `foreach` works over user objects; `iterator_to_array`.
 
-**Does Phorge have an equivalent?** **No**, and this is **out of scope for this stdlib sweep** — it is
+**Does Phorj have an equivalent?** **No**, and this is **out of scope for this stdlib sweep** — it is
 **language work**: `A-iterators` (Iterator protocol, adopt, milestone **M11**) and `A-generators`
 (`yield`, **defer to M6**, deep effort) are both tracked in the parity spec. A `Seq<T>` lazy-sequence
 variant (`L-lazy-seq`) is **rejected** there (fights the eager byte-identity spine — a lazy generator's
@@ -236,7 +236,7 @@ native gap).
 **PHP capability:** backed enums (`enum Status: string`) with the auto-generated `Status::cases()`
 (all variants), `Status::from($v)` (throws on miss), `Status::tryFrom($v)` (`?Status`).
 
-**Does Phorge have an equivalent?** `Value::Enum` ships; generic enums ship; but **backed enums +
+**Does Phorj have an equivalent?** `Value::Enum` ships; generic enums ship; but **backed enums +
 `cases`/`from`/`tryFrom` are tracked as `A-backed-enums` (adopt, M-RT) — language work** (parser/checker
 must recognise the backing type and synthesize the three statics). The runtime support is the *easy*
 part. Where this area *does* contribute: the synthesized `from`/`tryFrom` lookup and `cases()` list are
@@ -255,7 +255,7 @@ table; the enum-cases table is a sibling of the existing `ClassTables` reflectiv
 `JSON_PRETTY_PRINT`/`JSON_UNESCAPED_SLASHES`/`JSON_UNESCAPED_UNICODE`/`JSON_THROW_ON_ERROR`;
 the `JsonSerializable::jsonSerialize()` hook for custom encoding.
 
-**Does Phorge have an equivalent?** `Core.Json` ships `parse`/`stringify`/`stringifyPretty`
+**Does Phorj have an equivalent?** `Core.Json` ships `parse`/`stringify`/`stringifyPretty`
 (`src/native/json.rs`) over an injected `Json` enum — covering the encode/decode/pretty cases. Gaps:
 - **`JsonSerializable` hook** — there is no way for a user *class* to define its own JSON shape; today
   you must build the `Json` enum by hand. Better port: a **marker interface `Core.Json.Serializable`
@@ -277,10 +277,10 @@ the `JsonSerializable::jsonSerialize()` hook for custom encoding.
 **PHP capability:** `spl_object_hash`/`spl_object_id` (identity); `==` (loose) vs `===` (strict);
 `hash()` of a value for cache keys.
 
-**Does Phorge have an equivalent?** Structural equality ships (`value::eq_val` / `eq_val_rec`, the
+**Does Phorj have an equivalent?** Structural equality ships (`value::eq_val` / `eq_val_rec`, the
 cyclic-safe one, verified). **`spl_object_id`/`spl_object_hash` are deliberately rejected** — they leak
 identity/addresses (the #1 determinism trap the brief names) and have no deterministic byte-identical
-analog. There is no *capability* gap here that should be a native: Phorge has no `==`/`===` ambiguity
+analog. There is no *capability* gap here that should be a native: Phorj has no `==`/`===` ambiguity
 (one structural `==`, no loose coercion — a deliberate upgrade over PHP's notorious loose `==`). The one
 useful sliver — a **stable content hash of a value** for cache keys — belongs to the already-spiked
 `Core.Hash` module (`feasibility-Hash.md`, hand-rolled crc32/sha256), applied to `Serde.encode(v)`
@@ -292,10 +292,10 @@ needed.** **Recommendation: reject** (as a standalone) — note the `Serde`+`Has
 
 ## Summary table
 
-| PHP capability | Phorge has it? | Better port | Tier | Recommend |
+| PHP capability | Phorj has it? | Better port | Tier | Recommend |
 |---|---|---|---|---|
 | `serialize`/`unserialize` | no | `Core.Serde` (capability-free typed codec) | A | adopt-later |
-| `var_export` | no | `Core.Debug.export` (re-parseable Phorge literals) | A | adopt-now |
+| `var_export` | no | `Core.Debug.export` (re-parseable Phorj literals) | A | adopt-now |
 | `gettype`/`get_debug_type` | **yes** (`Reflect.kind`/`typeName`) | — | A | reject (shipped) |
 | `settype` | yes (`Core.Convert`, better) | `Convert.toBool`/`parseInt` breadth | A | defer (settype itself: reject) |
 | `get_object_vars` | partial (names only) | `Reflect.entries -> Map<string,T>` (public, typed) | A | adopt-later |
@@ -314,15 +314,15 @@ needed.** **Recommendation: reject** (as a standalone) — note the `Serde`+`Has
 1. **The value-walk cluster.** `Core.Debug` (dump/inspect/export), `Core.Serde` (encode/decode), and
    `Reflect.entries` all walk the closed `Value` enum + reuse `eq_val_rec`'s cyclic visited-set + the
    `ClassTables` field order. They should be **designed and built as one cluster** to single-source the
-   walk skeleton and the float-rendering (`__phorge_float`) discipline. This is the single biggest
+   walk skeleton and the float-rendering (`__phorj_float`) discipline. This is the single biggest
    leverage point in this area.
-2. **Determinism is free here by construction** — Phorge's closed `Value`, address-free reps, and
+2. **Determinism is free here by construction** — Phorj's closed `Value`, address-free reps, and
    insertion-ordered Map/Set mean none of these need quarantine. The only recurring trap is **float
    field rendering** (Rust 17-digit vs PHP 14-digit `echo`) — every renderer/codec MUST route floats
-   through the existing `__phorge_float` (Ryū) gated helper.
-3. **What Phorge deliberately rejects is a feature, not a gap:** `settype` (mutate-type), `Closure::bind`
+   through the existing `__phorj_float` (Ryū) gated helper.
+3. **What Phorj deliberately rejects is a feature, not a gap:** `settype` (mutate-type), `Closure::bind`
    (scope-break), `spl_object_id` (identity leak), loose `==`. Each is a documented PHP footgun the
-   static/deterministic model closes by construction — the Phorge:PHP :: TS:JS upgrade lens.
+   static/deterministic model closes by construction — the Phorj:PHP :: TS:JS upgrade lens.
 4. **Two items are language-gated, not native gaps** (generators, iterator protocol, backed-enum
    statics) — flagged so the consumer routes them to M6/M11/M-RT, not the stdlib charter, but noting the
    reflective-table mechanism this module owns is the implementation substrate for the enum statics.

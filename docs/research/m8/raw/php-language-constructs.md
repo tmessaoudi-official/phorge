@@ -1,10 +1,10 @@
-# PHP Language Constructs — Exhaustive Inventory & Phorge Mapping
+# PHP Language Constructs — Exhaustive Inventory & Phorj Mapping
 
 > **Scope.** Every *language* construct (syntactic/semantic feature) of PHP from the PHP 3/4 era through 8.6 (in-dev), **excluding** anything deprecated or removed as of 8.5/8.6 (those are noted in §0 as excluded). Library functions are out of scope except where they were once language-level (e.g. `create_function`, `each`).
-> **Target.** Phorge: statically-typed, immutable-by-default, VM-compiled + PHP-transpiled. The "Phorge mapping" column states the equivalent Phorge surface (today or roadmapped).
+> **Target.** Phorj: statically-typed, immutable-by-default, VM-compiled + PHP-transpiled. The "Phorj mapping" column states the equivalent Phorj surface (today or roadmapped).
 >
-> **Buckets:** ✅ Phorge has ≥ (equal or richer) · 🔶 partial · 🔲 roadmapped:`<milestone>` · ❌ reject-by-design (dynamic/unsafe, no idiomatic safe analogue).
-> **Verdict:** BETTER (Phorge safer/richer) · SAME · SAME+syntax (same semantics, different/nicer syntax) · WORSE→reject (PHP feature has no safe place in Phorge).
+> **Buckets:** ✅ Phorj has ≥ (equal or richer) · 🔶 partial · 🔲 roadmapped:`<milestone>` · ❌ reject-by-design (dynamic/unsafe, no idiomatic safe analogue).
+> **Verdict:** BETTER (Phorj safer/richer) · SAME · SAME+syntax (same semantics, different/nicer syntax) · WORSE→reject (PHP feature has no safe place in Phorj).
 >
 > **Sources verified** (see §10): php.net manual (type declarations, generators, goto, control structures, migration84/85.deprecated), wiki.php.net RFCs (pipe-operator-v3, throw_expression, new_in_initializers, first_class_callable, deprecate-backtick-operator-v2), php.watch version pages.
 
@@ -21,7 +21,7 @@ These are noted for completeness and explicitly **excluded** from the mapping ta
 | `case 1;` (semicolon-terminated case) | **Deprecated 8.5** | Must use `case 1:`. |
 | `create_function()` | **Removed 8.0** (dep. 7.2) | String-eval closure factory. Was ❌ (eval-based). |
 | `each()` | **Removed 8.0** (dep. 7.2) | Internal-pointer iterator. |
-| Implicitly-nullable params `f(T $a = null)` | **Deprecated 8.4** | Must write `?T`/`T\|null`. Phorge requires explicit `T?` already. |
+| Implicitly-nullable params `f(T $a = null)` | **Deprecated 8.4** | Must write `?T`/`T\|null`. Phorj requires explicit `T?` already. |
 | `0 ** -negative` / `pow(0,-n)` | **Deprecated 8.4** | Division-by-zero; use `fpow`. |
 | class named exactly `_` | **Deprecated 8.4** | Reserved for future use. |
 | `trigger_error(…, E_USER_ERROR)` | **Deprecated 8.4** | Library, listed for completeness. |
@@ -33,11 +33,11 @@ These are noted for completeness and explicitly **excluded** from the mapping ta
 
 ## §1. Control flow
 
-| Construct | First ver | Phorge mapping | Bucket | Verdict |
+| Construct | First ver | Phorj mapping | Bucket | Verdict |
 |---|---|---|---|---|
 | `if` / `elseif` / `else` | PHP 3 | `if`/`else if`/`else` statement | ✅ | SAME |
 | `switch` (+ fall-through) | PHP 3 | `match` (exhaustive, no fall-through) | 🔶 | BETTER — exhaustive, no implicit fall-through |
-| `match` expression (arms, no fall-through, strict `===`) | 8.0 | `match` over enums/`T?` exhaustive | ✅ | SAME+syntax — Phorge `match` predates value-level union breadth |
+| `match` expression (arms, no fall-through, strict `===`) | 8.0 | `match` over enums/`T?` exhaustive | ✅ | SAME+syntax — Phorj `match` predates value-level union breadth |
 | `while` | PHP 3 | `while` loop | ✅ | SAME |
 | `do`…`while` | PHP 3 | (none) — `while` only | 🔲 roadmapped:M3 | SAME (gap: post-test loop not yet) |
 | `for (init; cond; step)` | PHP 3 | `for (int i in a..b)` range form | 🔶 | BETTER — range loop is bounds-safe, no manual step bugs |
@@ -58,7 +58,7 @@ These are noted for completeness and explicitly **excluded** from the mapping ta
 
 ## §2. Operators (ALL)
 
-| Construct | First ver | Phorge mapping | Bucket | Verdict |
+| Construct | First ver | Phorj mapping | Bucket | Verdict |
 |---|---|---|---|---|
 | Arithmetic `+ - * / %` | PHP 3 | same, **checked** overflow | ✅ | BETTER — checked arithmetic, faults not silent wrap/inf |
 | Exponentiation `**` | 5.6 | (none yet) | 🔲 roadmapped:M3 | SAME (use repeated mul / stdlib `math.pow`) |
@@ -89,7 +89,7 @@ These are noted for completeness and explicitly **excluded** from the mapping ta
 
 ## §3. Declarations
 
-| Construct | First ver | Phorge mapping | Bucket | Verdict |
+| Construct | First ver | Phorj mapping | Bucket | Verdict |
 |---|---|---|---|---|
 | `function f(...)` | PHP 3 | `fn f(...)` declaration | ✅ | SAME+syntax |
 | Default params `f($x = 1)` | PHP 3 | (none yet) | 🔲 roadmapped:M3 | SAME |
@@ -117,11 +117,11 @@ These are noted for completeness and explicitly **excluded** from the mapping ta
 
 ## §4. Expressions / literals
 
-| Construct | First ver | Phorge mapping | Bucket | Verdict |
+| Construct | First ver | Phorj mapping | Bucket | Verdict |
 |---|---|---|---|---|
 | Closures `function() use($x){}` | 5.3 | (none yet) | 🔲 roadmapped:Track A/S3 | SAME |
 | `use (&$x)` by-ref capture | 5.3 | (none) | ❌ reject-by-design | WORSE→reject — closure-over-reference mutation |
-| `static function()` closures | 5.4 | (none yet — Phorge closures will be `this`-free by default) | 🔲 roadmapped:Track A/S3 | SAME |
+| `static function()` closures | 5.4 | (none yet — Phorj closures will be `this`-free by default) | 🔲 roadmapped:Track A/S3 | SAME |
 | Arrow fn `fn($x) => $x+1` | 7.4 | (none yet) | 🔲 roadmapped:Track A/S3 | SAME |
 | Generators `yield`, `yield k=>v`, `yield from` | 5.5 / 7.0 | (none) | 🔲 roadmapped:M3+ | SAME (lazy seqs; later milestone) |
 | `list($a,$b)=…` / `[$a,$b]=…` destructuring (+ keyed, nested) | 5.0 / 7.1 | (none yet) | 🔲 roadmapped:M3 | SAME (with tuples/Map) |
@@ -142,14 +142,14 @@ These are noted for completeness and explicitly **excluded** from the mapping ta
 | Spread `...$xs` in call | 5.6 | (none yet) | 🔲 roadmapped:M3 | SAME |
 | Spread `...$xs` in array literal | 7.4 | (none yet) | 🔲 roadmapped:M3 | SAME |
 | String-keyed spread in array (8.1) | 8.1 | (none — needs Map) | 🔲 roadmapped:M3 | SAME |
-| Range literal — *not native PHP* (PHP uses `range()`) | — | `a..b` / `a..=b` integer ranges | ✅ | BETTER — Phorge has native ranges, PHP only `range()` fn |
+| Range literal — *not native PHP* (PHP uses `range()`) | — | `a..b` / `a..=b` integer ranges | ✅ | BETTER — Phorj has native ranges, PHP only `range()` fn |
 | Bytes literal — *not native PHP* (`string` is bytes) | — | `b"…"` (`\xHH`) bytes primitive | ✅ | BETTER — distinct bytes type vs PHP byte-string conflation |
 
 ---
 
 ## §5. Variable / scope semantics
 
-| Construct | First ver | Phorge mapping | Bucket | Verdict |
+| Construct | First ver | Phorj mapping | Bucket | Verdict |
 |---|---|---|---|---|
 | Variable variables `$$x`, `${$name}` | PHP 3/4 | (none) | ❌ reject-by-design | WORSE→reject — name computed at runtime, un-analyzable |
 | References `$a = &$b` | PHP 4 | (none) — value semantics | ❌ reject-by-design | WORSE→reject — aliasing breaks immutability + static reasoning |
@@ -165,7 +165,7 @@ These are noted for completeness and explicitly **excluded** from the mapping ta
 
 ## §6. Type-system constructs
 
-| Construct | First ver | Phorge mapping | Bucket | Verdict |
+| Construct | First ver | Phorj mapping | Bucket | Verdict |
 |---|---|---|---|---|
 | Scalar type decls `int float string bool` | 7.0 | mandatory scalar types | ✅ | BETTER — mandatory + strict always |
 | Nullable `?T` | 7.1 | optional `T?` (`Ty::Optional`) | ✅ | BETTER — compile-time non-null guarantee on non-optional `T` |
@@ -185,28 +185,28 @@ These are noted for completeness and explicitly **excluded** from the mapping ta
 | Typed class constants | 8.3 | typed consts already | ✅ | SAME |
 | Property hooks `get`/`set` | 8.4 | (none) — fields are plain immutable reads | 🔲 roadmapped:M3 (accessors) | SAME — partial: computed reads via methods |
 | Asymmetric visibility `private(set)` | 8.4 | (none) — fields write-once at construction | ✅ | BETTER — write-once subsumes private-set |
-| Generics `<T>` — *not native PHP* (docblock only) | — | (none — no type variable) | 🔲 roadmapped:M3+ | SAME (PHP lacks real generics; Phorge plans them) |
+| Generics `<T>` — *not native PHP* (docblock only) | — | (none — no type variable) | 🔲 roadmapped:M3+ | SAME (PHP lacks real generics; Phorj plans them) |
 
 ---
 
 ## §7. Attributes
 
-| Construct | First ver | Phorge mapping | Bucket | Verdict |
+| Construct | First ver | Phorj mapping | Bucket | Verdict |
 |---|---|---|---|---|
 | Attribute syntax `#[Attr(args)]` | 8.0 | (none) | 🔲 roadmapped:M3+ | SAME — no metadata-attribute system yet |
 | Built-in `#[Attribute]` | 8.0 | (none) | 🔲 roadmapped:M3+ | SAME |
 | `#[Override]` | 8.3 | (none — needs inheritance) | 🔲 roadmapped:M3 S5 | SAME |
 | `#[ReturnTypeWillChange]` | 8.1 | (none) | 🔲 roadmapped:M3+ | SAME (compat shim, low priority) |
-| `#[AllowDynamicProperties]` | 8.2 | (none) | ❌ reject-by-design | WORSE→reject — re-enables dynamic props, anti-Phorge |
+| `#[AllowDynamicProperties]` | 8.2 | (none) | ❌ reject-by-design | WORSE→reject — re-enables dynamic props, anti-Phorj |
 | `#[SensitiveParameter]` | 8.2 | (none) | 🔲 roadmapped:M3+ | SAME |
-| `#[Deprecated]` | 8.4 | lint channel (`W-*` warnings) | 🔶 | SAME — Phorge has a warning channel, not attributes yet |
+| `#[Deprecated]` | 8.4 | lint channel (`W-*` warnings) | 🔶 | SAME — Phorj has a warning channel, not attributes yet |
 | `#[NoDiscard]` (8.5) | 8.5 | (none) | 🔲 roadmapped:M3+ | SAME |
 
 ---
 
 ## §8. ❌ reject-by-design — consolidated list (every dynamic/unsafe construct)
 
-These have **no safe analogue** in Phorge and are rejected as a design choice (each defeats either immutability, static reasoning, or determinism):
+These have **no safe analogue** in Phorj and are rejected as a design choice (each defeats either immutability, static reasoning, or determinism):
 
 1. `foreach (… as &$v)` — by-reference iteration mutation.
 2. `goto` / labels — arbitrary control-flow jumps.
@@ -231,7 +231,7 @@ These have **no safe analogue** in Phorge and are rejected as a design choice (e
 21. Variable function/method dispatch `$fn()` / `$obj->$m()` — dynamic string-named dispatch.
 22. `mixed` type — dynamic any, defeats static typing.
 23. `object` catch-all type — untyped object.
-24. `#[AllowDynamicProperties]` — re-enables dynamic properties (anti-Phorge).
+24. `#[AllowDynamicProperties]` — re-enables dynamic properties (anti-Phorj).
 
 ---
 

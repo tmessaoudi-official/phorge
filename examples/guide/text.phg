@@ -10,7 +10,7 @@ import Core.Text;
 // nest string literals inside `{…}` (same constraint as guide/strings.phg).
 
 function main(): void {
-    string greeting = "Hello, Phorge";
+    string greeting = "Hello, Phorj";
 
     int n = Text.length(greeting);
     string up = Text.upper(greeting);
@@ -19,28 +19,28 @@ function main(): void {
     Console.println("len = {n}, upper = {up}, lower = {down}, trimmed = {padded}");
 
     // `contains` returns a bool; render it through an expression-`if` so the output is a string.
-    string has = if (Text.contains(greeting, "Phorge")) { "yes" } else { "no" };
-    Console.println("contains 'Phorge' = {has}");
+    string has = if (Text.contains(greeting, "Phorj")) { "yes" } else { "no" };
+    Console.println("contains 'Phorj' = {has}");
 
     // split → List<string>, then join with a different separator (the inverse op).
     List<string> parts = Text.split("a,b,c", ",");
     string rejoined = Text.join(parts, " - ");
     Console.println("rejoined = {rejoined}");
 
-    string swapped = Text.replace(greeting, "Phorge", "World");
+    string swapped = Text.replace(greeting, "Phorj", "World");
     Console.println("replaced = {swapped}");
 
     // P3.2 byte-safe subset: prefix/suffix tests (→ str_starts_with/str_ends_with) and repeat
     // (→ str_repeat). Bool results render via expression-`if` (PHP echoes a bool as 1/"").
     string sw = if (Text.startsWith(greeting, "Hello")) { "yes" } else { "no" };
-    string ew = if (Text.endsWith(greeting, "Phorge")) { "yes" } else { "no" };
+    string ew = if (Text.endsWith(greeting, "Phorj")) { "yes" } else { "no" };
     string bar = Text.repeat("=", 5);
-    Console.println("startsWith 'Hello' = {sw}, endsWith 'Phorge' = {ew}, bar = {bar}");
+    Console.println("startsWith 'Hello' = {sw}, endsWith 'Phorj' = {ew}, bar = {bar}");
 
     // M4 breadth (ASCII): reverse (→ strrev), and case-insensitive compare/contains
     // (→ strcasecmp/stripos). Non-ASCII is a documented edge (no mbstring under `php -n`).
-    string rev = Text.reverse("phorge");
-    bool sameCi = Text.equalsIgnoreCase("PHORGE", "phorge");
-    bool hasCi = Text.containsIgnoreCase("Hello, Phorge", "phorge");
+    string rev = Text.reverse("phorj");
+    bool sameCi = Text.equalsIgnoreCase("PHORJ", "phorj");
+    bool hasCi = Text.containsIgnoreCase("Hello, Phorj", "phorj");
     Console.println("reverse = {rev}, equalsIgnoreCase = {sameCi}, containsIgnoreCase = {hasCi}");
 }

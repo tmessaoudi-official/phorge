@@ -8,7 +8,7 @@ package Main;
 
 import Core.Console;
 
-// `open` is required to allow extension (Phorge classes are final by default).
+// `open` is required to allow extension (Phorj classes are final by default).
 open class Shape {
     static function describe(int sides) -> string {
         return "a polygon with {sides} sides";

@@ -4,7 +4,7 @@
 with two parameters of the same name, MUST be rejected. (Each is a name that silently shadows itself —
 a "declared but not enforced" uniqueness rule.)
 
-Binary: `/stack/projects/phorge/target/release/phg` (prebuilt release, not rebuilt).
+Binary: `/stack/projects/phorj/target/release/phg` (prebuilt release, not rebuilt).
 Probes under `$TMP/audit/` (scratchpad only — no repo files modified).
 
 ## Summary of verdicts

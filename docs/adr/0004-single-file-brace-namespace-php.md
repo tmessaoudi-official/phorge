@@ -8,9 +8,9 @@
 ## Context
 
 The conventional multi-file PHP target is PSR-4: one class per file, autoloaded by directory. But
-**PSR-4 autoloads classes, not free functions**, and Phorge is **function-heavy** (a `package` is a
+**PSR-4 autoloads classes, not free functions**, and Phorj is **function-heavy** (a `package` is a
 bag of functions, not exclusively classes). A faithful multi-file PSR-4 emission therefore cannot
-autoload most of what Phorge emits.
+autoload most of what Phorj emits.
 
 ## Decision
 
@@ -29,8 +29,8 @@ global namespace from inside a `namespace` block.
 
 ## Alternatives rejected
 
-- **Multi-file PSR-4 emission** — cannot autoload free functions, which are the bulk of Phorge code.
+- **Multi-file PSR-4 emission** — cannot autoload free functions, which are the bulk of Phorj code.
 - **Literal `composer.json`** — a file the `composer` tool **cannot actually process** (no Packagist,
-  no autoloader Phorge uses); shipping it would be a false promise. The manifest instead borrows
+  no autoloader Phorj uses); shipping it would be a false promise. The manifest instead borrows
   Composer's *vocabulary* (`[require]`/`vendor/package`) inside an honest TOML container (see
   [ADR-0005](0005-offline-only-vendor.md)).

@@ -31,7 +31,7 @@ for object IDs) — ship them, do not advertise them as secure.
 All four algorithms are pure integer/bit arithmetic over `&[u8]`. Rust std provides
 everything: `u32`/`u64` `wrapping_*` ops, `rotate_left`, `to_be_bytes`, slicing. **Zero
 crates.** This matches the project's existing hand-rolled-primitive precedent
-(`__phorge_float` Ryū, the ELF/PE readers in `bundle/`).
+(`__phorj_float` Ryū, the ELF/PE readers in `bundle/`).
 
 - **crc32 (IEEE 802.3, reflected, poly 0xEDB88320):** ~25 LOC. Build the 256-entry table
   at runtime with a `OnceLock<[u32;256]>` (or `const fn`), then a byte loop:
@@ -83,7 +83,7 @@ Exact `php` mapping closures (the `NativeFn.php` field, `parg(a,0)` = first arg 
 | `Hash.sha1(bytes) -> string` | `Value::Str` (40 hex) | `sha1({0})` |
 | `Hash.sha256(bytes) -> string` | `Value::Str` (64 hex) | `hash('sha256', {0})` |
 
-Because Phorge `bytes` erases to a PHP `string` (PHP strings ARE byte arrays — see
+Because Phorj `bytes` erases to a PHP `string` (PHP strings ARE byte arrays — see
 `Core.Bytes` identity mappings), the arg passes through directly. No runtime helper
 needed; static-typed mappings suffice.
 
@@ -101,9 +101,9 @@ project is 64-bit-only by its own CI contract.)
 
 ---
 
-## 4. Phorge API sketch
+## 4. Phorj API sketch
 
-```phorge
+```phorj
 import Core.Hash;
 import Core.Bytes;
 

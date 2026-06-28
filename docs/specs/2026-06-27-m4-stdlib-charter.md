@@ -4,7 +4,7 @@
 > shared by the 18 shipped native modules — and **binding** on all new stdlib (M-Test, M-text,
 > breadth, M-NUM). Written charter-first (2026-06-27) so new modules don't mint inconsistent APIs that
 > later need a breaking codemod. Mechanizable rules are enforced by `src/native/tests.rs` guards;
-> the rest are reviewed per module. See [[philosophy-of-phorge]]: legible, surprise-free PHP upgrade.
+> the rest are reviewed per module. See [[philosophy-of-phorj]]: legible, surprise-free PHP upgrade.
 
 ## Rule 1 — Naming
 - **Modules:** `Core.<PascalCase>` (`Core.Text`, `Core.List`, `Core.Json`). `Core` is reserved.

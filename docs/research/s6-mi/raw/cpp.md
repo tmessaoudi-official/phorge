@@ -1,8 +1,8 @@
-# C++ Multiple Inheritance — Research for Phorge S6
+# C++ Multiple Inheritance — Research for Phorj S6
 
 > Research target: extract the C++ MI object model, the diamond problem, name-resolution
 > semantics, constructor ordering, and the footguns — then synthesise what is worth stealing
-> for Phorge, whose transpile target (PHP 8.4) is **single-inheritance + interfaces + traits**.
+> for Phorj, whose transpile target (PHP 8.4) is **single-inheritance + interfaces + traits**.
 > Sources: C++ standard semantics (`[class.derived]`, `[class.mi]`, `[class.member.lookup]`,
 > `[class.base.init]`), the Itanium C++ ABI (the de-facto layout/vtable spec on Linux/macOS),
 > and Stroustrup's design rationale (*The Design and Evolution of C++*, §12).
@@ -147,7 +147,7 @@ c.A::f();     // OK — explicit disambiguation
 c.B::f();     // OK
 ```
 
-This is the single most important takeaway for Phorge. C++ refuses to invent a resolution order
+This is the single most important takeaway for Phorj. C++ refuses to invent a resolution order
 (contrast Python's C3 MRO, which *does* linearise and silently pick). The C++ stance —
 **ambiguity is an error, you disambiguate by naming the source explicitly** — is:
 
@@ -177,7 +177,7 @@ class C {
 - `as` **aliases** the other one under a new name (and may also change visibility).
 
 So C++'s "ambiguity = error, disambiguate explicitly" maps **directly** onto PHP's
-`insteadof` / `as`. That is the bridge for Phorge.
+`insteadof` / `as`. That is the bridge for Phorj.
 
 ---
 
@@ -205,8 +205,8 @@ Two specific surprises:
   class that "also" initialises it is silently skipped. So where a shared virtual base gets its
   arguments depends on the *complete* object type, not the local class — non-obvious and fragile.
 
-For Phorge: the *principle* worth keeping is a **single, deterministic, documented init order**.
-The *mechanism* (most-derived-constructs-virtual-base) is a diamond-state artifact Phorge should
+For Phorj: the *principle* worth keeping is a **single, deterministic, documented init order**.
+The *mechanism* (most-derived-constructs-virtual-base) is a diamond-state artifact Phorj should
 avoid needing at all (see §6).
 
 ---
@@ -238,16 +238,16 @@ line PHP draws (single class inheritance + many interfaces + traits for code reu
 
 ---
 
-## 6. Synthesis for Phorge
+## 6. Synthesis for Phorj
 
-### Phorge's constraints (the lens)
+### Phorj's constraints (the lens)
 
-- Three backends must stay **byte-identical**: tree-walking interpreter, stack VM, Phorge→PHP
+- Three backends must stay **byte-identical**: tree-walking interpreter, stack VM, Phorj→PHP
   transpiler. Anything chosen must reproduce **identically** across all three.
 - Transpile target **PHP 8.4** is **strictly single-inheritance** for classes, with **interfaces**
   (many, interface-MI is allowed) and **traits** (`use A, B;`, conflict = fatal error unless
   `insteadof`/`as`).
-- Phorge's heap is `Rc`-shared and (pre-mutation milestone) immutable + acyclic; object model is
+- Phorj's heap is `Rc`-shared and (pre-mutation milestone) immutable + acyclic; object model is
   value-native. There is **no C++-style raw pointer / offset layout** — fields are looked up by
   name/slot, not by base-subobject offset.
 
@@ -257,7 +257,7 @@ line PHP draws (single class inheritance + many interfaces + traits for code reu
    - **front-end-only** — resolution happens entirely in the checker; once a member is resolved to a
      single concrete target, the three backends see one unambiguous call. **No runtime divergence
      possible**, because the backends never observe the conflict — they observe the *resolution*.
-   - **deterministic without an MRO** — Phorge does **not** need to implement (and triple-implement,
+   - **deterministic without an MRO** — Phorj does **not** need to implement (and triple-implement,
      and keep byte-identical) a C3 linearisation. "Error unless explicitly named" needs *zero*
      runtime algorithm.
    - **already PHP-native** — it lowers cleanly to PHP trait `insteadof` / `as` (§3 parallel).
@@ -265,33 +265,33 @@ line PHP draws (single class inheritance + many interfaces + traits for code reu
 2. **A single, documented, deterministic initialization order (§4).** Worth keeping the *principle*
    (one fixed order, reverse on teardown), not C++'s diamond-specific machinery.
 
-3. **MI of *interface* is free and good.** Phorge already has this (S2 interfaces + `implements`,
+3. **MI of *interface* is free and good.** Phorj already has this (S2 interfaces + `implements`,
    S5 intersections). Keep leaning on it; it transpiles 1:1 to PHP `interface`/`implements`.
 
 ### Which C++ MI idea is a TRAP (avoid)
 
 1. **Shared mutable diamond state via `virtual` bases.** This requires runtime offset indirection
    and "most-derived constructs the base" — concepts with **no PHP target** and no clean mapping to
-   Phorge's value-native, name/slot-addressed object model. Reproducing vbase-offset semantics
+   Phorj's value-native, name/slot-addressed object model. Reproducing vbase-offset semantics
    identically across interp + VM + PHP is not feasible. **Do not model state-MI.**
-2. **Per-base `virtual`/non-virtual choice.** A low-level, viral, layout-coupled knob. Phorge should
+2. **Per-base `virtual`/non-virtual choice.** A low-level, viral, layout-coupled knob. Phorj should
    not expose a "is this base shared or duplicated?" decision at all.
 3. **`this`-pointer adjustment / multiple vptrs / thunks.** Pure C++-ABI artifacts; irrelevant and
-   un-transpilable. Phorge resolves members by name, so there is nothing to adjust.
-4. **Initializer-list-order-ignored surprise.** If Phorge ever has init lists, make written order =
+   un-transpilable. Phorj resolves members by name, so there is nothing to adjust.
+4. **Initializer-list-order-ignored surprise.** If Phorj ever has init lists, make written order =
    actual order (no silent reorder).
 
 ### Can the C++ model be reproduced identically across interp + VM + PHP?
 
 **The state/layout half: no.** Multiple base subobjects, vptrs, `this`-adjustment, and virtual-base
 offsets are C++-ABI machinery with no PHP analogue and no value-native mapping. Trying to mirror it
-would create exactly the run↔runvm↔PHP divergence Phorge's spine forbids.
+would create exactly the run↔runvm↔PHP divergence Phorj's spine forbids.
 
 **The name-resolution half: yes, cleanly and completely.** Because it is a **front-end** decision:
 the checker detects a name present in two trait/mixin sources, **errors** unless the program
 disambiguates (`insteadof`-equivalent to pick a winner, `as`-equivalent to alias the other), and
 **rewrites the AST to a single concrete target before any backend runs** — the identical discipline
-Phorge already uses for `type` aliases, generic erasure, and `html"…"` lowering. After that rewrite:
+Phorj already uses for `type` aliases, generic erasure, and `html"…"` lowering. After that rewrite:
 - the **interpreter** dispatches to one method,
 - the **VM** compiles one call target,
 - the **transpiler** emits a PHP `use T { Winner::m insteadof Other; Other::m as alias; }` block.
@@ -301,7 +301,7 @@ something to test for. This is the same reason interface-MI and intersection typ
 
 ### The concrete recommendation: `parent-as` / explicit-source qualification → PHP `as`
 
-C++'s `obj.Base::member` (name the source) maps directly onto a Phorge syntax that names the
+C++'s `obj.Base::member` (name the source) maps directly onto a Phorj syntax that names the
 trait/mixin source and lowers to PHP trait aliasing. A sketch:
 
 - **Conflict policy:** a method-name collision across two mixed-in sources is `E-MIXIN-CONFLICT`
@@ -312,7 +312,7 @@ trait/mixin source and lowers to PHP trait aliasing. A sketch:
   name (`B.f` analog) lowers to the aliased PHP method `g`. This is the literal `parent-as.member`
   bridge the brief asks about.
 
-This gives Phorge **C++'s explicit-disambiguation ergonomics** with **PHP traits as the lowering
+This gives Phorj **C++'s explicit-disambiguation ergonomics** with **PHP traits as the lowering
 target** and **zero runtime/spine risk**, because the whole mechanism is erased to a single concrete
 PHP construct in the front end.
 
@@ -321,6 +321,6 @@ PHP construct in the front end.
 Steal the **discipline** (ambiguity = error + explicit source qualification; deterministic init
 order; interface-MI). Reject the **machinery** (virtual bases, shared duplicated state, vptr/offset
 layout, per-base virtual choice). The stealable half is exactly the half that lives in the front end
-and lowers to PHP traits — i.e. the half that is byte-identity-safe by construction. Phorge's MI
+and lowers to PHP traits — i.e. the half that is byte-identity-safe by construction. Phorj's MI
 story should be **traits/mixins with explicit conflict resolution**, *not* C++-style state MI —
 which is the same conclusion PHP, Java, Go, and Rust all reached.

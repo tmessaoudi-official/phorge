@@ -1,6 +1,6 @@
 # Design — Cooperative async/await + deterministic single-threaded scheduler
 
-**Stage 2 — DESIGN.** The gated-concurrency foundation for Phorge: `Core.Async`, a deterministic
+**Stage 2 — DESIGN.** The gated-concurrency foundation for Phorj: `Core.Async`, a deterministic
 single-threaded cooperative scheduler that stays byte-identical across `run` (tree-walker), `runvm`
 (bytecode VM), and the transpiled PHP run under real `php -n` 8.5.
 
@@ -18,7 +18,7 @@ by construction and reuses machinery that already ships).
 
 ## 1. The byte-identity argument (why this is Tier A at all)
 
-Phorge's three legs are byte-identical only when *evaluation order is a total order fixed by the
+Phorj's three legs are byte-identical only when *evaluation order is a total order fixed by the
 language, not by a runtime.* The entire concurrency design is therefore built on one principle:
 
 > **Resolution order is a language rule, not a scheduler artifact.**
@@ -43,7 +43,7 @@ Given those two, the scheduler is a **pure function of the program text**: same 
 same resolution order, on all three legs. The PHP leg implements the *same* FIFO + logical-heap rule
 in a small emitted runtime (PHP `SplQueue` + a sorted array as the timer heap — both verified present
 under `php -n` 8.5), driving PHP 8.1 `Fiber`s (verified present under `php -n` 8.5). The Rust legs
-drive Phorge coroutines via the **already-shipped** re-entrant `call_closure_value` / `run_until`
+drive Phorj coroutines via the **already-shipped** re-entrant `call_closure_value` / `run_until`
 (`src/vm/closure.rs`) — no second interpreter, the parity analogue of the tree-walker's
 `call_closure`.
 
@@ -56,7 +56,7 @@ logical tick reproducible on every leg, not a millisecond.
 
 ---
 
-## 2. Surface syntax (Phorge)
+## 2. Surface syntax (Phorj)
 
 Two layers. **Layer 1 is a native library** (`Core.Async`, ships first, zero new syntax). **Layer 2
 is `async`/`await` sugar** (front-end-only desugaring to Layer 1, ships second). Layer 1 alone is a
@@ -64,7 +64,7 @@ complete, usable, gated foundation; Layer 2 is ergonomic polish.
 
 ### 2.1 Layer 1 — `Core.Async` library (no new syntax, ships first)
 
-```phorge
+```phorj
 package Main;
 import Core.Async;
 import Core.Console;
@@ -90,7 +90,7 @@ function work(int n) -> int {
 
 Channels (CSP, single-threaded ⇒ `Rc<RefCell>` sound):
 
-```phorge
+```phorj
 Channel<int> ch = Async.channel();     // unbounded; bounded variant Async.channel(cap)
 Async.spawn(fn() -> int { Async.send(ch, 7); return 0; });   // send is a yield point if bounded+full
 int v = Async.recv(ch);                // recv is a yield point if empty; resumes when a value arrives
@@ -98,7 +98,7 @@ int v = Async.recv(ch);                // recv is a yield point if empty; resume
 
 Structured fork-join (the single best primitive lifted from Go — no dangling tasks, clean PHP target):
 
-```phorge
+```phorj
 // group runs all tasks, returns results in submission order, fail-fast on first fault
 // (first-in-submission-order fault wins under the fixed scheduler).
 Result<List<int>, Fault> r = Async.group([
@@ -109,7 +109,7 @@ Result<List<int>, Fault> r = Async.group([
 
 Pure data-parallelism (essentially free today — semantically identical to `List.map`):
 
-```phorge
+```phorj
 // INPUT-ORDER-PRESERVING merge. Ships sequentially now (byte-identical to List.map);
 // physical Rust-thread parallelism is a LATER invisible optimization that preserves output.
 List<int> doubled = Async.parallelMap([1, 2, 3], fn(int x) -> int { return x * 2; });
@@ -117,7 +117,7 @@ List<int> doubled = Async.parallelMap([1, 2, 3], fn(int x) -> int { return x * 2
 
 `select` — **deliberate divergence from Go: first-ready in SOURCE ORDER, not random** (so it is gated):
 
-```phorge
+```phorj
 // Each arm is (channel, handler). When several are ready, the FIRST in source order fires.
 // A `default` arm makes the select non-blocking and fully deterministic.
 int picked = Async.select([
@@ -128,7 +128,7 @@ int picked = Async.select([
 
 Cancellation (structural, not clock-based):
 
-```phorge
+```phorj
 Context ctx = Async.context();
 Async.spawn(fn() -> int { if (ctx.done()) { return 0; } return loop_work(ctx); });
 ctx.cancel();    // sets a flag + closes the done-channel; resumption checks are explicit
@@ -136,7 +136,7 @@ ctx.cancel();    // sets a flag + closes the done-channel; resumption checks are
 
 ### 2.2 Layer 2 — `async` / `await` sugar (front-end-only, ships second)
 
-```phorge
+```phorj
 async function fetchBoth() -> List<int> {
     Future<int> a = fetch(1);          // calling an async fn returns a Future (does not block)
     Future<int> b = fetch(2);
@@ -186,7 +186,7 @@ function of spawn order, which is a function of the source. No wall clock, no OS
 
 ### 3.2 Rust legs (`run` + `runvm`)
 
-A Phorge coroutine is a closure value (`Value::Closure`). "Running until it suspends" maps onto the
+A Phorj coroutine is a closure value (`Value::Closure`). "Running until it suspends" maps onto the
 **already-shipped re-entrant drive**:
 
 - **Interpreter (`run`)**: a coroutine runs via `call_closure`. Suspension = the coroutine calls the
@@ -206,8 +206,8 @@ backend's `ClosureInvoker`), so the loop logic lives once and both legs call clo
 
 ### 3.3 PHP leg (transpile target)
 
-Emitted, gated behind `uses_async` (like the existing `uses_* + __phorge_*` helper pattern). A small
-**emitted runtime** (`__phorge_scheduler`) implements the §3.1 loop using:
+Emitted, gated behind `uses_async` (like the existing `uses_* + __phorj_*` helper pattern). A small
+**emitted runtime** (`__phorj_scheduler`) implements the §3.1 loop using:
 
 - `ready` → `SplQueue` (verified under `php -n`).
 - `timers` → a plain PHP array sorted by `(deadline, seq)` on insert, or a small binary-heap class
@@ -227,10 +227,10 @@ Two candidate mechanisms for "a coroutine pauses and the scheduler resumes it":
 
 - **(A) Stackful** (Rust legs use a re-entrant native frame; PHP uses a real `Fiber`). The
   coroutine's Rust call stack is *not* unwound; the scheduler is one frame up and resumes by
-  returning into it. **Problem on the Rust legs:** Phorge has no stackful coroutine primitive in std
-  (no `generator`/`async` Rust feature on stable for *Phorge* values), and `run_until` returns a
+  returning into it. **Problem on the Rust legs:** Phorj has no stackful coroutine primitive in std
+  (no `generator`/`async` Rust feature on stable for *Phorj* values), and `run_until` returns a
   *value*, it does not leave a resumable suspended Rust frame. A genuine mid-expression suspend would
-  need a Phorge-level CPS transform or a saved VM frame snapshot.
+  need a Phorj-level CPS transform or a saved VM frame snapshot.
 
 - **(B) Trampolined / CPS-at-await-boundaries** (recommended for v1). A coroutine is driven to its
   *next await boundary*, at which point it returns a continuation descriptor (which channel/timer it
@@ -239,12 +239,12 @@ Two candidate mechanisms for "a coroutine pauses and the scheduler resumes it":
   completion and get a value) — the value just happens to be a "suspended" marker carrying the
   resume closure. **`async`/`await` Layer 2 then becomes a front-end CPS lowering** (split an
   `async fn` body at each `await` into continuation closures), exactly like Rust's own async
-  state-machine lowering but emitted as Phorge closures — no new VM Op needed.
+  state-machine lowering but emitted as Phorj closures — no new VM Op needed.
 
 **Recommendation: (B) for v1** — it reuses shipped machinery on the Rust legs and maps cleanly to
 Fibers on PHP (a Fiber *is* the trampolined-suspend made native; the PHP leg can be stackful while
 the Rust legs are CPS, because both produce the same *resolution order* — the byte-identity invariant
-is about order, not mechanism). **(A) (saved VM frame snapshots / a true Phorge fiber)** is a later
+is about order, not mechanism). **(A) (saved VM frame snapshots / a true Phorj fiber)** is a later
 optimization (M6+) that preserves output. This split (Rust = CPS, PHP = Fiber, same order) is the
 single most important decision in the design and the biggest open question (O1).
 
@@ -345,16 +345,16 @@ feasibility to ~88%.
 `spawn`/`all` and the scheduler (emitted once, gated by `uses_async`):
 
 ```php
-// __phorge runtime (emitted), php -n 8.5 — Fiber + SplQueue + custom stable timer heap
-final class __PhorgeScheduler {
+// __phorj runtime (emitted), php -n 8.5 — Fiber + SplQueue + custom stable timer heap
+final class __PhorjScheduler {
     private SplQueue $ready;            // microtask FIFO
     private array $timers = [];         // [ [deadline, seq, Fiber, resumeVal], ... ] kept sorted
     private int $nowLogical = 0;
     private int $nextSeq = 0;
     public function __construct() { $this->ready = new SplQueue(); }
 
-    public function spawn(Closure $task): __PhorgeFuture {
-        $fut = new __PhorgeFuture();
+    public function spawn(Closure $task): __PhorjFuture {
+        $fut = new __PhorjFuture();
         $fib = new Fiber(function () use ($task, $fut) { $fut->resolve($task()); });
         $this->ready->enqueue([$fib, null]);
         return $fut;
@@ -386,7 +386,7 @@ final class __PhorgeScheduler {
 `Async.all([a,b])` → collect each future's resolved value **in argument order** (`array_map` over the
 task list after `run()`), regardless of completion order. `Async.parallelMap` → sequential
 `array_map` (parallelism is a Rust-side optimization the PHP leg never needs). `Channel` → an emitted
-`__PhorgeChannel` class wrapping `SplQueue` + FIFO waiter lists, `send`/`recv` calling
+`__PhorjChannel` class wrapping `SplQueue` + FIFO waiter lists, `send`/`recv` calling
 `Fiber::suspend`/scheduler-resume. `Context.cancel()` → set a `bool` flag + mark a done-channel
 closed. All erase to **core-only** PHP (no mbstring/BCMath needed) — verified `Fiber`/`SplQueue`
 present under `php -n`.

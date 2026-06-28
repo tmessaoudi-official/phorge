@@ -8,7 +8,7 @@ shipped as a globbed `.phg`.
 
 This program faults two calls deep:
 
-```phorge
+```phorj
 package Main;
 
 function f() -> int {

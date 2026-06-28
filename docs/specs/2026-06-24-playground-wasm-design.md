@@ -1,13 +1,13 @@
-# Phorge Playground (WASM) — Design
+# Phorj Playground (WASM) — Design
 
 **Date:** 2026-06-24
 **Status:** Approved (brainstorming gate passed) — pending spec review → implementation plan
-**Topic:** A free, zero-backend, browser-based Phorge playground that runs all three backends live and
+**Topic:** A free, zero-backend, browser-based Phorj playground that runs all three backends live and
 auto-deploys the latest `phg` on every `master` push.
 
 ## Goal
 
-A single static web page where a visitor edits Phorge source and immediately sees:
+A single static web page where a visitor edits Phorj source and immediately sees:
 
 - `run` (tree-walking interpreter) output,
 - `runvm` (bytecode VM) output,
@@ -36,13 +36,13 @@ This makes `wasm32-unknown-unknown` a near-perfect target:
 - **Trivial "always latest"** — CI recompiles the lib to wasm on every push; the page *is* the lib.
 
 A server-side `phg run` service was rejected: it needs process isolation, timeouts, and resource caps
-for arbitrary code, free tiers sleep/cost money, and it discards Phorge's portability advantage.
+for arbitrary code, free tiers sleep/cost money, and it discards Phorj's portability advantage.
 
 ## The php-wasm linchpin (3-way execution)
 
 `seanmorris/php-wasm` (MIT, the most active in-browser PHP project) ships a browser `php-wasm` package
-that **defaults to PHP 8.4** — an exact match to Phorge's transpile floor — and runtime-loads extensions
-only on demand. Phorge's transpile is **tier-1 only** (runs under `php -n`, no ini extensions), so the
+that **defaults to PHP 8.4** — an exact match to Phorj's transpile floor — and runtime-loads extensions
+only on demand. Phorj's transpile is **tier-1 only** (runs under `php -n`, no ini extensions), so the
 default no-extension php-wasm environment matches the oracle's environment. It is CDN-distributable
 (jsDelivr), so a fully static site can load it at runtime.
 
@@ -51,16 +51,16 @@ compare its stdout to the two Rust backends.
 
 ## Crate layout — workspace, isolated playground crate
 
-Convert the single crate into a Cargo **workspace**; the root `phorge` crate (lib + `phg` bin) is
+Convert the single crate into a Cargo **workspace**; the root `phorj` crate (lib + `phg` bin) is
 **unchanged** and stays zero-dependency / `forbid(unsafe)`. A new `playground/` member is the only place
 `wasm-bindgen` appears.
 
 ```
-phorge/
+phorj/
 ├── Cargo.toml                       # + [workspace] members = ["playground"] ; root package unchanged
 ├── src/…                            # core — untouched, zero-dep, #![forbid(unsafe_code)]
 ├── playground/
-│   ├── Cargo.toml                   # [lib] crate-type=["cdylib"]; deps: phorge { path = ".." } + wasm-bindgen
+│   ├── Cargo.toml                   # [lib] crate-type=["cdylib"]; deps: phorj { path = ".." } + wasm-bindgen
 │   ├── src/lib.rs                   # #[wasm_bindgen] exports → JSON strings
 │   └── web/
 │       ├── index.html
@@ -77,7 +77,7 @@ code without affecting the core crate's invariant. The core crate's existing tes
 ## WASM API (the `#[wasm_bindgen]` surface)
 
 Each function takes the source string and returns a **JSON string** (parsed in JS). They never panic on
-user error — a Phorge fault or checker error is captured into the JSON, not thrown. (The lib functions
+user error — a Phorj fault or checker error is captured into the JSON, not thrown. (The lib functions
 already return `Result`; the wrappers map `Err`/fault into the JSON shape.)
 
 ```

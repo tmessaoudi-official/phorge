@@ -2,8 +2,8 @@ package Main;
 import Core.Console;
 
 // A self-contained program built into a standalone executable with `phg build`.
-// The produced binary embeds this source (in a CRC-guarded `.phorge` object-file
-// section) and runs it on the bytecode VM at startup — no Phorge install needed.
+// The produced binary embeds this source (in a CRC-guarded `.phorj` object-file
+// section) and runs it on the bytecode VM at startup — no Phorj install needed.
 
 function fib(int n): int {
     if (n < 2) {
@@ -13,7 +13,7 @@ function fib(int n): int {
 }
 
 function main(): void {
-    Console.println("phorge standalone build");
+    Console.println("phorj standalone build");
     for (int i in 0..10) {
         Console.println("fib({i}) = {fib(i)}");
     }

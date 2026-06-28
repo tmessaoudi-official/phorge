@@ -1,13 +1,13 @@
-# PHP Web Ecosystem — Prior Art for Phorge M6 (Web/HTTP Capability)
+# PHP Web Ecosystem — Prior Art for Phorj M6 (Web/HTTP Capability)
 
 **Research date:** 2026-06-18
-**Purpose:** Map the stock-PHP web ecosystem so Phorge's web handler model transpiles
+**Purpose:** Map the stock-PHP web ecosystem so Phorj's web handler model transpiles
 faithfully to *idiomatic, stock* PHP 8.x (no Swoole / ReactPHP / Composer extensions).
-**Transpile contract:** Phorge : PHP :: TypeScript : JavaScript.
+**Transpile contract:** Phorj : PHP :: TypeScript : JavaScript.
 
 Each section captures: API shape, type signatures, what makes it composable/extensible,
 the **pure (Request→Response value transform) vs I/O (socket, superglobal read)** split,
-and the cleanest minimal subset Phorge could target. An **ADVERSARIAL** subsection flags
+and the cleanest minimal subset Phorj could target. An **ADVERSARIAL** subsection flags
 every friction point for a statically-typed, immutable-by-default, no-generics-yet language.
 
 ---
@@ -24,7 +24,7 @@ php -S localhost:8000 -t public/       # set document root
 php -S 0.0.0.0:8000 router.php         # all interfaces + router script
 ```
 
-### Execution model (the load-bearing fact for Phorge)
+### Execution model (the load-bearing fact for Phorj)
 - **Request-per-invocation**: each HTTP request re-runs PHP fresh. *No state persists
   between requests* in the language layer (PHP's shared-nothing model). This is exactly
   the model a transpiled stateless handler wants — there is no long-lived process to manage.
@@ -56,23 +56,23 @@ index is returned; unreliable when the URI contains a dot like `.json`).
 
 ### Pure vs I/O
 - **I/O (everything here)**: binding the socket, accepting connections, reading the request
-  line, writing the response. This is the part Phorge's `phg serve` runtime *owns* and
+  line, writing the response. This is the part Phorj's `phg serve` runtime *owns* and
   quarantines from determinism — it is not part of the byte-identical spine.
 - The **router script body** is the only "pure-ish" surface: given the already-parsed request
-  (superglobals), produce output. That is where a transpiled Phorge handler lives.
+  (superglobals), produce output. That is where a transpiled Phorj handler lives.
 
-### Cleanest minimal subset for Phorge
+### Cleanest minimal subset for Phorj
 `phg serve <file>` = launch `php -S host:port router.php` where `router.php` is the
-**transpiled** Phorge program acting as a front-controller: read request from superglobals →
+**transpiled** Phorj program acting as a front-controller: read request from superglobals →
 call the user's `handle(Request): Response` → emit headers + body. The dev server itself is
-PHP's; Phorge only generates the router script. Native `phg serve` (Rust `std::net`) is
+PHP's; Phorj only generates the router script. Native `phg serve` (Rust `std::net`) is
 the *interpreter/VM* side; the *transpile* side is literally this router.php.
 
 ### ADVERSARIAL friction
 - **None at the language level** — this is pure tooling/codegen. The friction is *philosophical*:
   the request-per-invocation, shared-nothing model means "no global mutable server state"
-  maps cleanly onto Phorge's immutable-by-default stance. Good fit.
-- Single-threaded blocking means any Phorge example that does blocking I/O (file read) stalls
+  maps cleanly onto Phorj's immutable-by-default stance. Good fit.
+- Single-threaded blocking means any Phorj example that does blocking I/O (file read) stalls
   the server — acceptable for dev, must be documented.
 
 ---
@@ -109,15 +109,15 @@ that a value is a string vs an array (e.g. `?a[]=1&a[]=2` makes `$_GET['a']` an 
 - **`header()`/`http_response_code()`/`echo`** = I/O side-effects performed at the *edge*.
 - The clean architecture: a **pure** `handle(Request): Response` core, sandwiched by an
   **impure adapter** that (a) builds `Request` from superglobals and (b) walks `Response` →
-  `header()` + `echo`. This is precisely the 3-layer decomposition in Phorge's M6 direction
+  `header()` + `echo`. This is precisely the 3-layer decomposition in Phorj's M6 direction
   memory (pure handler / runtime / PHP transpile).
 
-### Cleanest minimal subset for Phorge
+### Cleanest minimal subset for Phorj
 A transpiled handler should **never** emit raw superglobal reads or bare `echo` in user code.
 Instead the generated front-controller does, once:
 ```php
 $req = Request::fromGlobals();          // adapter: reads $_SERVER/$_GET/php://input
-$res = handle($req);                    // pure Phorge-transpiled function
+$res = handle($req);                    // pure Phorj-transpiled function
 http_response_code($res->status);
 foreach ($res->headers as $k => $v) header("$k: $v");
 echo $res->body;
@@ -125,17 +125,17 @@ echo $res->body;
 User code stays in the pure middle.
 
 ### ADVERSARIAL friction
-- **Untyped string-maps**: `$_GET` is `array<string, string|array>`. Phorge has no `array`/`Map`
+- **Untyped string-maps**: `$_GET` is `array<string, string|array>`. Phorj has no `array`/`Map`
   type yet and no generics. Exposing `getQueryParams()` requires *some* map type. Workaround
   candidates: (a) a built-in opaque `StringMap` value type with `get(key): string?` (leans on
   S2 optionals — a missing key is `null`); (b) defer to M-when-generics-land.
 - **string vs array values**: `?a[]=1` makes a value an array — a `Map<string,string>` model
-  *loses* this. PHP-fidelity vs Phorge-simplicity tension. Likely acceptable to model values
+  *loses* this. PHP-fidelity vs Phorj-simplicity tension. Likely acceptable to model values
   as `string?` and document that array-valued params are out of scope until generics.
 - **`header()` ordering rule** ("before any output") is a runtime invariant invisible to the
   type system — the pure-core/impure-edge split *naturally* enforces it (body is built as a
-  value, emitted last), which is a point *in Phorge's favor*.
-- **Stringly-typed status codes / methods**: `REQUEST_METHOD` is a string; Phorge would want
+  value, emitted last), which is a point *in Phorj's favor*.
+- **Stringly-typed status codes / methods**: `REQUEST_METHOD` is a string; Phorj would want
   an `enum Method { Get, Post, ... }` but must transpile to/from PHP strings.
 
 ---
@@ -241,41 +241,41 @@ __toString(): string
 ### Pure vs I/O
 - **Pure (value transforms)**: *everything* on Message/Request/ServerRequest/Response/Uri.
   `withHeader`, `withStatus`, `withAttribute` are pure functions producing new values. This is
-  the entire point and is **exactly Phorge's immutable-by-default model**.
+  the entire point and is **exactly Phorj's immutable-by-default model**.
 - **I/O**: only `StreamInterface` (wraps a socket/file/`php://input`). The body is the I/O
   escape hatch; the envelope (headers/status/uri/attributes) is pure.
 
-### Cleanest minimal subset for Phorge
-Phorge does NOT need the full PSR-7 surface. The faithful minimal kernel:
+### Cleanest minimal subset for Phorj
+Phorj does NOT need the full PSR-7 surface. The faithful minimal kernel:
 - `Request`: `method: string` (or enum), `path: string`, `query: Map<string,string>` (or
   `queryParam(k): string?`), `header(k): string?`, `body: string`.
 - `Response`: `status: int`, `headers: Map<string,string>`, `body: string`, with
   `withStatus(int): Response`, `withHeader(string,string): Response`, `withBody(string): Response`.
-- Drop `StreamInterface` entirely — model body as an eager `string` (Phorge has no streams and
+- Drop `StreamInterface` entirely — model body as an eager `string` (Phorj has no streams and
   the dev server reads the whole body anyway). This is the single biggest *simplification* that
   stays PHP-faithful (a stock handler usually `echo`s a string).
 - Drop `UriInterface` to a parsed `path` + `query` map. Skip `getUploadedFiles`/multipart for M6.
 
 ### ADVERSARIAL friction
-- **`withHeader(): static` returning a NEW instance** — *aligns* with Phorge immutability, BUT
-  Phorge classes are currently value-native and immutable already; the `with*` pattern needs a
-  cheap "copy with one field changed" idiom. Phorge has no record-update syntax (`{ ...r, status }`).
+- **`withHeader(): static` returning a NEW instance** — *aligns* with Phorj immutability, BUT
+  Phorj classes are currently value-native and immutable already; the `with*` pattern needs a
+  cheap "copy with one field changed" idiom. Phorj has no record-update syntax (`{ ...r, status }`).
   Friction: each `withX` must be a hand-written method that constructs a new instance copying all
   fields. Tolerable at small field counts; a future `with`-expression would help.
-- **`getQueryParams(): array` / `getHeaders(): string[][]`** — needs a **Map type**. Phorge has
+- **`getQueryParams(): array` / `getHeaders(): string[][]`** — needs a **Map type**. Phorj has
   no `Map`/`array` type and **no generics yet**. This is the hard blocker for full PSR-7 fidelity.
   `string[][]` (map of header-name → list-of-values) is doubly-generic. Minimal subset sidesteps
   it with accessor methods (`header(k): string?`) instead of exposing the raw map.
 - **`getParsedBody(): null|array|object`** — a union of three types incl. untyped `array`/`object`.
-  Phorge has no union types and no `Any`/dynamic type (`Ty` has no type variable — same blocker
+  Phorj has no union types and no `Any`/dynamic type (`Ty` has no type variable — same blocker
   that defers `core.json`). Model body as `string` and let the user parse it once `core.json` lands.
-- **`getAttribute($name): mixed`** — `mixed`/`Any` has no Phorge equivalent. Route params (the main
+- **`getAttribute($name): mixed`** — `mixed`/`Any` has no Phorj equivalent. Route params (the main
   use of attributes) should be passed as an explicit typed argument to the handler instead.
-- **`StreamInterface` mutability** — Phorge has no streams and no mutable-resource concept;
-  dropping it is *cleaner* for Phorge and still PHP-faithful for the common echo-a-string case.
+- **`StreamInterface` mutability** — Phorj has no streams and no mutable-resource concept;
+  dropping it is *cleaner* for Phorj and still PHP-faithful for the common echo-a-string case.
 - **Case-insensitive header retrieval with original-case preservation** — a runtime contract
   (`getHeader` matches case-insensitively but preserves stored case). Hard to encode in types;
-  becomes a runtime-library obligation of the Phorge `Request`/`Response` impl.
+  becomes a runtime-library obligation of the Phorj `Request`/`Response` impl.
 
 ---
 
@@ -316,28 +316,28 @@ interface MiddlewareInterface {
 - The only I/O is at the very edge (the server adapter that builds the first Request and emits
   the final Response — §2).
 
-### Cleanest minimal subset for Phorge
-- `Handler = fn(Request): Response` — Phorge needs **first-class function values / lambdas** to
+### Cleanest minimal subset for Phorj
+- `Handler = fn(Request): Response` — Phorj needs **first-class function values / lambdas** to
   express this directly (Track A / S3, currently NEXT but not yet built).
 - `Middleware = fn(Request, next: fn(Request): Response): Response`.
 - A pipeline builder: fold a list of middleware around a terminal handler.
 - This is the *most composable* and the *most aligned* abstraction — but it is **gated on S3
   lambdas**. Until then, the OO form (a `Handler` class with a `handle` method, a `Middleware`
-  class with a `process` method taking a handler instance) is expressible *today* with Phorge
+  class with a `process` method taking a handler instance) is expressible *today* with Phorj
   classes + methods (M2 P4c).
 
 ### ADVERSARIAL friction
 - **First-class functions / higher-order types** — `process(Request, Handler): Response` where
-  `Handler` is "anything with a `handle` method." Phorge has no function type and no lambdas yet
+  `Handler` is "anything with a `handle` method." Phorj has no function type and no lambdas yet
   (S3). Expressible only via the **OO form** (interface-like class + method) until S3. The closure
   form (`fn($req, $handler) => ...`) is strictly post-S3.
-- **No interfaces / structural typing** — PSR-15 leans on `interface`. Does Phorge have
+- **No interfaces / structural typing** — PSR-15 leans on `interface`. Does Phorj have
   interfaces? (M1 surface is classes + enums + methods + `this`; interfaces unverified in the
   language surface — likely absent.) Without interfaces, "any handler" must be a concrete base
   class or a function value. Flag: middleware composition wants either interfaces OR first-class
-  functions; Phorge has neither in shipped form → **OO-with-concrete-base-class is the only
+  functions; Phorj has neither in shipped form → **OO-with-concrete-base-class is the only
   expressible path right now**, and it is clumsy.
-- **Recursion/nesting depth** — a deep middleware stack nests `handle` calls; Phorge has a
+- **Recursion/nesting depth** — a deep middleware stack nests `handle` calls; Phorj has a
   `MAX_CALL_DEPTH` guard (Wave 0). Deep pipelines are fine at realistic depths but the limit
   exists.
 - **Generics absence** doesn't bite here — the pipeline is monomorphic over the concrete
@@ -347,7 +347,7 @@ interface MiddlewareInterface {
 
 ## 5. Slim & Laravel — Routing + Request/Response (high-level)
 
-### Slim 4 (minimal, PSR-7/PSR-15 native — closest to a Phorge target)
+### Slim 4 (minimal, PSR-7/PSR-15 native — closest to a Phorj target)
 Route definition by HTTP verb; placeholders in `{}`; handler is a callable returning a Response:
 ```php
 $app->get('/users/{id}', function ($request, $response, array $args) {
@@ -383,7 +383,7 @@ Route::get('/posts/{post}/comments/{comment}', function (string $postId, string 
 - **Response**: return a string, array, or model → Laravel auto-converts arrays/models to **JSON**.
   Or `response()->json([...], 201)`. "Convention over configuration."
 - Heavy use of facades, DI container, Eloquent models — *none* of which are stock-PHP-faithful or
-  Phorge-expressible. Laravel is useful as a **routing-ergonomics reference** (param binding,
+  Phorj-expressible. Laravel is useful as a **routing-ergonomics reference** (param binding,
   return-a-value-becomes-JSON), not as a transpile target.
 
 ### Pure vs I/O
@@ -392,7 +392,7 @@ Route::get('/posts/{post}/comments/{comment}', function (string $postId, string 
 - **Handler invocation** is pure (`Request → Response`).
 - **I/O** lives only in the framework's edge (read superglobals, emit response) — §2.
 
-### Cleanest minimal subset for Phorge
+### Cleanest minimal subset for Phorj
 - A **router** as a pure value transform: register `(Method, pattern) → Handler`; `dispatch(req)`
   returns the matched handler + a `params` map (or a 404 Response). Pattern matching on `{id}`
   segments is a small pure string algorithm — no generics needed if `params` is `Map<string,string>`
@@ -411,22 +411,22 @@ Route::get('/posts/{post}/comments/{comment}', function (string $postId, string 
   Pre-S3, registration must take a handler *object* (concrete class instance), which is verbose.
 - **Variadic / heterogeneous handler signatures** — Laravel binds route params positionally with
   per-route arity (`function($postId, $commentId)`). A statically-typed language can't express
-  "N string args where N depends on the route string" — Phorge must use the **map/args** style,
+  "N string args where N depends on the route string" — Phorj must use the **map/args** style,
   not positional binding.
 - **Auto-JSON of arbitrary return** — Laravel returning a model/array → JSON needs a dynamic/`Any`
-  type and reflection. Not Phorge-expressible until generics + `core.json`. Keep handlers
+  type and reflection. Not Phorj-expressible until generics + `core.json`. Keep handlers
   returning explicit `Response`.
 - **Slim passing in a mutable-feeling `$response` to write into** — `$response->getBody()->write()`
-  mutates a stream. Phorge has no streams; the faithful Phorge form is `Response.withBody(str)` /
+  mutates a stream. Phorj has no streams; the faithful Phorj form is `Response.withBody(str)` /
   building a Response value, which is *more* immutable than Slim. Minor transpile-shape mismatch:
-  Phorge emits "construct/return a Response value," Slim idiom is "write into the given one." Both
-  are valid stock PHP; Phorge's is closer to PSR-7's pure intent.
+  Phorj emits "construct/return a Response value," Slim idiom is "write into the given one." Both
+  are valid stock PHP; Phorj's is closer to PSR-7's pure intent.
 
 ---
 
 ## Cross-cutting synthesis (for the design doc)
 
-**The clean architecture all five sources converge on** (and which matches Phorge's M6
+**The clean architecture all five sources converge on** (and which matches Phorj's M6
 3-layer memory: pure handler / `phg serve` runtime / PHP transpile):
 
 ```
@@ -436,13 +436,13 @@ Route::get('/posts/{post}/comments/{comment}', function (string $postId, string 
         ↓
 [ pure router (method,path → handler,params) ]        (deterministic, byte-identity-gated)
         ↓
-[ pure handler: Request → Response ]                  (the user's Phorge code)
+[ pure handler: Request → Response ]                  (the user's Phorj code)
         ↓
 [ I/O edge: Response → http_response_code + header + echo ]   (impure, runtime owned)
 ```
 
 The **pure core (middleware + router + handler over immutable Request/Response values)** is
-fully deterministic and byte-identity-testable on Phorge's `run`/`runvm` spine. The **I/O edges**
+fully deterministic and byte-identity-testable on Phorj's `run`/`runvm` spine. The **I/O edges**
 are quarantined into the `phg serve` runtime (native: Rust `std::net`; transpile: the
 generated `router.php` front-controller using superglobals + `header`/`echo`). This is the
 determinism-quarantine boundary M6 already chose.

@@ -209,7 +209,7 @@ fn cmd_transpile_rejects_ill_typed() {
 }
 
 #[test]
-fn cmd_lift_emits_annotated_phorge_draft() {
+fn cmd_lift_emits_annotated_phorj_draft() {
     let phg =
         cmd_lift("<?php function add(int $a, int $b): int { return $a + $b; }").expect("lift");
     // The banner makes the review-required contract visible in the file.
@@ -220,7 +220,7 @@ fn cmd_lift_emits_annotated_phorge_draft() {
 
 #[test]
 fn cmd_lift_refuses_outside_tier1_loudly() {
-    // An `array` type has no faithful Phorge form yet — a clear lift error, not a guess.
+    // An `array` type has no faithful Phorj form yet — a clear lift error, not a guess.
     let err = cmd_lift("<?php function f(array $xs): void {}").unwrap_err();
     assert!(err.contains("`array` type"), "{err}");
 }

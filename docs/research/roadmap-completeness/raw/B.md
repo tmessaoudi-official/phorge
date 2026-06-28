@@ -3,8 +3,8 @@
 ## Track summary
 
 Track B asks the hard question: which TypeScript-over-JavaScript-class capabilities actually
-*justify* Phorge as an upgrade of PHP, judged against the philosophy (a pragmatic, legible,
-provably-correct upgrade whose apex filter is **craftsmanship**, not raw power)? Phorge already has
+*justify* Phorj as an upgrade of PHP, judged against the philosophy (a pragmatic, legible,
+provably-correct upgrade whose apex filter is **craftsmanship**, not raw power)? Phorj already has
 the rare-for-PHP foundation that makes most of these feasible: full ADT enums + exhaustive `match`,
 erased generics (free fns, methods, classes), unions `A|B`, intersections `A&B`, `instanceof`
 smart-cast, optionals `T?` with a compile-time non-null guarantee, first-class functions/closures,
@@ -64,7 +64,7 @@ shipped features at once.
 
 ## Rationale for each ADOPT
 
-**B-genenums — generic enums `enum Result<T,E>` / `Option<T>`.** Phorge has erased generics for free
+**B-genenums — generic enums `enum Result<T,E>` / `Option<T>`.** Phorj has erased generics for free
 functions, methods, and classes, and full payload ADT enums — but the type-parameter list is
 explicitly *not* a feature of enums yet (KNOWN_ISSUES, "Generic *enums* are not supported"). This is
 the single highest-leverage unlock in the track: it is the prerequisite under `Result<T,E>`, a true
@@ -122,11 +122,11 @@ already relaxed for primitive-union scrutinees. Strong fit, small effort.
 **B-list-destr — list/array destructuring + spread.** `[a, b, ...rest] = xs` and call-site
 `f(...args)` are pure desugaring to indexed binds / list-concat — binds, not mutation, so it fits the
 immutable model — and emit idiomatic PHP `[$a, $b] = …` / `...$args`. This is technically a PHP
-*port* (PHP has `[$a,$b]=`), but it is a beyond-PHP-quality win because Phorge can make it
+*port* (PHP has `[$a,$b]=`), but it is a beyond-PHP-quality win because Phorj can make it
 type-checked and exhaustiveness-aware. Pairs with variadics.
 
 **B-derive — derive-style compile-time attributes (`Eq`/`Show`/`Ord`/`Default`).** The native-fit
-metaprogramming model for Phorge: an inert `#[...]` passthrough channel plus a **closed** set of
+metaprogramming model for Phorj: an inert `#[...]` passthrough channel plus a **closed** set of
 compile-time derives that synthesize ordinary methods (field-wise `==`, a `toString`/display from
 fields, lexicographic `<=>`, a default constructor) into the AST *before any backend* — exactly the
 `erase_generics`/`resolve_html`/alias-expansion discipline already in the checker. Generated code is
@@ -168,7 +168,7 @@ this is the "provably-correct upgrade" promise made concrete, and a PHP dev comi
 - **B-derive-json / B-persistent / B-comptime (defer):** ride later stdlib (`core.json` needs a
   dynamic `Json`/`Any` type) or post-GA work; principled, not missing.
 - **B-refinement / B-units / B-typestate / B-tco / B-reactive / B-active-pat / B-gadts / B-effects /
-  B-macros / B-variance (reject):** PL-theory maximalism — each either needs a solver/runtime Phorge
+  B-macros / B-variance (reject):** PL-theory maximalism — each either needs a solver/runtime Phorj
   refuses to build, has no legible PHP target, introduces non-determinism, or overruns the
   surprise budget for a PHP audience. Newtypes (adopt) cover the *pragmatic* slice of refinement;
   closed derive (adopt) covers the pragmatic slice of macros; green threads (defer) cover concurrency.
@@ -203,7 +203,7 @@ type params — `KNOWN_ISSUES` "Generic *enums* are not supported"). Removed: 0.
 
 Rationale for the new rows:
 
-- **B-iter-protocol (adopt, port).** PHP *has* `Iterator`/`IteratorAggregate`; Phorge can only iterate
+- **B-iter-protocol (adopt, port).** PHP *has* `Iterator`/`IteratorAggregate`; Phorj can only iterate
   built-in `List` (and, once `B-foreach-coll` lands, `Map`/`Set`/`Range`). A user type implementing a
   small `Iterator` interface (`next`/`hasNext`, or yielding a `List`) so `for (x in myColl)` works on
   user collections is a real **port we lack**, not a beyond-PHP luxury. Strong fit: it transpiles to a
@@ -222,19 +222,19 @@ Rationale for the new rows:
 - **B-tuples (defer, new).** Anonymous product types `(int, string)` give cheap multi-return and the
   pair-binding form that `B-foreach-coll`'s `for ((k, v) in m)` needs. PHP has no tuple type — it maps
   to a positional array `[a, b]` (idiomatic, deterministic), so *ok* (not strong) fit: a PHP dev reads
-  `[$a, $b] = …` but the named-field `class`/record is often the more legible Phorge form. Defer: it is
+  `[$a, $b] = …` but the named-field `class`/record is often the more legible Phorj form. Defer: it is
   the substrate under `B-foreach-coll` pair-binding and `B-list-destr`; ship those with a minimal
   2-tuple form rather than a full general tuple type up front (surprise-budget discipline). Not a miss
   to delay, but a genuine gap the first pass omitted entirely.
 
 - **B-labeled-break (adopt, port).** PHP has `break N;` / `continue N;` (numeric-level loop control);
-  Phorge's surface (per `FEATURES.md`) has `for…in` and condition loops but no documented `break`/
+  Phorj's surface (per `FEATURES.md`) has `for…in` and condition loops but no documented `break`/
   `continue` at all — a real **port we lack**. A bare `break`/`continue` (and optionally a labeled form
   lowering to PHP's `break N;`) is basic, legible control flow a PHP dev expects. Front-end, no runtime
   surprise, idiomatic PHP target. Strong fit, small.
 
 - **B-sealed (adopt, new).** A `sealed`/closed class hierarchy lets the checker prove a `match` over a
-  *class* hierarchy exhaustive — the class-side dual of the enum exhaustiveness Phorge already enforces,
+  *class* hierarchy exhaustive — the class-side dual of the enum exhaustiveness Phorj already enforces,
   and the missing piece that makes union/`instanceof` matching *provably total* over a fixed subclass
   set. Strong fit with the "provably-correct upgrade" promise; lowers to plain PHP classes (the sealing
   is a compile-time-only check, erased — the `Core.Html`/erase-before-backends precedent). Sequenced

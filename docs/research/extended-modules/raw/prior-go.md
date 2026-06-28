@@ -1,7 +1,7 @@
 # Concurrency Prior-Art — Go (goroutines, channels, CSP, scheduler, sync, errgroup)
 
 **Lens:** Go's concurrency model, catalogued for what is **deterministic** vs **irredeemably
-non-deterministic**, then mapped onto Phorge's hard reality: a single-threaded `Rc`-shared heap
+non-deterministic**, then mapped onto Phorj's hard reality: a single-threaded `Rc`-shared heap
 (`Value` is **not** `Send`/`Sync`), three backends that must produce **byte-identical** stdout for
 gated features, and a `php -n` transpile floor where **Fibers / PCRE / hash / BCMath are PRESENT**
 but pthreads / pcntl-fork / ext-parallel / Swoole are **ABSENT**. Confidence is graded per claim.
@@ -10,9 +10,9 @@ but pthreads / pcntl-fork / ext-parallel / Swoole are **ABSENT**. Confidence is 
 
 ## 0. The framing, restated for this lens
 
-Go is the *wrong shape* for Phorge in its native form, but it is the *richest possible source* of
+Go is the *wrong shape* for Phorj in its native form, but it is the *richest possible source* of
 ideas because Go's entire value proposition is "make concurrency legible." Go's primitives split
-cleanly along the exact axis Phorge cares about:
+cleanly along the exact axis Phorj cares about:
 
 - **Deterministic-by-construction** (cooperative yield points, ordered fan-out merges, pure
   pipelines) → candidate **Tier A** (byte-identity-gated, transpiled to PHP, in `differential.rs`).
@@ -47,11 +47,11 @@ writing to stdout produce interleaving that depends on the OS scheduler, core co
 wall-clock timing. `go test -race` exists precisely because Go *cannot* give you deterministic
 interleaving for free.
 
-**Phorge mapping.** The *physical* GMP scheduler is **rejected** (no `Send`/`Sync` heap, no `php -n`
+**Phorj mapping.** The *physical* GMP scheduler is **rejected** (no `Send`/`Sync` heap, no `php -n`
 target, non-deterministic output). But the *cooperative core* — a scheduler that runs runnable tasks
 to their next **explicit yield point** in a **fixed, deterministic order** — is exactly buildable and
 exactly what we keep. The key reframe: **Go's preemption is the part that destroys determinism;
-cooperative yield is the part that preserves it.** Phorge adopts the latter only.
+cooperative yield is the part that preserves it.** Phorj adopts the latter only.
 *Confidence: high.*
 
 ### 1.2 Channels (CSP)
@@ -68,7 +68,7 @@ are Go's *primary* synchronization mechanism ("share memory by communicating").
 - A **closed channel** drains remaining buffered values FIFO then yields the zero value; `range`
   stops on close. Deterministic given a deterministic fill order.
 
-**Phorge mapping.** Channels are *value-level* objects — a `Value::Channel(Rc<RefCell<VecDeque>>)`
+**Phorj mapping.** Channels are *value-level* objects — a `Value::Channel(Rc<RefCell<VecDeque>>)`
 fits the existing `Rc`-shared heap perfectly (single-threaded ⇒ `RefCell` is sound, no `Send`
 needed). A send/recv is a **yield point**: if a recv blocks on an empty channel, the current task
 parks and the scheduler runs the next runnable task **in deterministic spawn order**. The merge
@@ -90,7 +90,7 @@ ops; proceeds on whichever is ready.
 simultaneously ready, Go chooses **uniformly at random** (deliberately, to prevent starvation). This
 is *intentional non-determinism baked into the language semantics.*
 
-**Phorge mapping.** Two options:
+**Phorj mapping.** Two options:
 - **Tier A, with a determinism rule:** when multiple cases are ready, pick the **first in source
   order** (not random). This is a *deliberate divergence from Go* that buys determinism. Legible
   ("top case wins ties"), transpilable (the PHP scheduler applies the same first-in-source rule). The
@@ -112,9 +112,9 @@ many actor systems already use ordered selection).
 - **WaitGroup** is a *join barrier*: spawn N tasks, `Wait()` until all done. The barrier itself is
   deterministic; the *order results become available* is the same merge-order question as channels.
 
-**Phorge mapping.** `Mutex`/`atomic`/`Cond` are **not needed** and should be **rejected as
+**Phorj mapping.** `Mutex`/`atomic`/`Cond` are **not needed** and should be **rejected as
 user-facing API** — exposing them would be a lie (they protect against a hazard the model forbids).
-This is *itself a Phorge selling point over PHP/Go*: "you cannot have a data race, so there is no lock
+This is *itself a Phorj selling point over PHP/Go*: "you cannot have a data race, so there is no lock
 to forget." **WaitGroup-as-join survives** but is better expressed as the structured `errgroup` /
 `parallelMap` form below (§1.7, §2.2) rather than the raw `Add`/`Done` counter. *Confidence: high.*
 
@@ -128,7 +128,7 @@ returns a channel closed on cancel/timeout; `context.WithTimeout`/`WithCancel`/`
 - **Deadline/timeout** (`WithTimeout`): **non-deterministic** — driven by the wall clock. Same class
   as `time.After`.
 
-**Phorge mapping.** A **cancellation token** (`Context` with explicit `cancel()` and a `done()`
+**Phorj mapping.** A **cancellation token** (`Context` with explicit `cancel()` and a `done()`
 check) is **Tier A** — purely structural, transpiles to a small PHP class holding a bool + a closed
 channel/flag. **Timeout-based cancellation is Tier B** (wall-clock) — quarantine it the way
 `Core.Process` is quarantined. Recommend: ship the explicit-cancel `Context` in Tier A now; defer the
@@ -139,7 +139,7 @@ deadline variant to the Tier-B live-concurrency escape. *Confidence: high.*
 **Determinism.** *Zero* — all wall-clock-driven. `time.After`, `time.Tick`, `time.Sleep` are the
 purest non-determinism in Go's concurrency surface.
 
-**Phorge mapping.** **Tier B, always** — the same class as a clock/random native. A *virtual* /
+**Phorj mapping.** **Tier B, always** — the same class as a clock/random native. A *virtual* /
 *simulated* clock (the scheduler advances a logical time counter; `sleep(d)` parks the task and the
 scheduler resumes it when logical-time reaches the deadline, choosing ties by task-id) **is**
 deterministic and is a known technique (Tokio's `time::pause`, discrete-event simulators). That
@@ -157,14 +157,14 @@ concurrently, fail fast" pattern.
 under real parallelism — **non-deterministic in Go**, but **deterministic under a fixed scheduler
 order** (first-in-spawn-order error wins).
 
-**Phorge mapping.** **This is the single best primitive to lift.** It is *structured* (no dangling
+**Phorj mapping.** **This is the single best primitive to lift.** It is *structured* (no dangling
 goroutines), it has a clean PHP target, and under the deterministic scheduler "first error =
 lowest-task-id error" is a stable, legible rule. It is essentially `parallelMap` + early-exit. **Tier
 A.** *Confidence: high.*
 
 ---
 
-## 2. The two concrete Tier-A shapes Phorge should adopt from Go
+## 2. The two concrete Tier-A shapes Phorj should adopt from Go
 
 ### 2.1 `async`/`await` cooperative coroutines (the goroutine core, made deterministic)
 
@@ -172,9 +172,9 @@ The locked decision (a) is "cooperative async/await over a DETERMINISTIC single-
 PHP 8.1 Fibers." Go's contribution here is **the ergonomics and the channel vocabulary**, not the
 runtime.
 
-**Phorge-syntax API sketch** (illustrative; final syntax is a design decision):
+**Phorj-syntax API sketch** (illustrative; final syntax is a design decision):
 
-```phorge
+```phorj
 package Main;
 import Core.Console;
 import Core.Async;          // the scheduler + spawn/channel surface
@@ -209,7 +209,7 @@ project brief). A `Channel` is a PHP class over `SplQueue`; the scheduler is a h
 holding `Fiber` objects in a task-id-ordered array; `send`/`recv`/`await` call `Fiber::suspend()`,
 and the loop `->resume()`s the next runnable fiber by the same lowest-id rule. **No Composer package**
 (`amphp`/`ReactPHP` are absent under `php -n`) — this is a hand-rolled ~150-line PHP runtime helper,
-emitted as a gated `__phorge_async_*` prelude exactly like the existing `__phorge_div`/`uses_*`
+emitted as a gated `__phorj_async_*` prelude exactly like the existing `__phorj_div`/`uses_*`
 helpers. *Confidence: medium-high (Fiber suspend/resume in a hand loop is well-trodden; the parity
 obligation between the Rust green-thread loop and the PHP Fiber loop is the work).*
 
@@ -235,9 +235,9 @@ question. *Confidence: medium.*
 This is the *cleanest* Tier-A win and barely needs Go at all (it's `errgroup` + `map`), but Go's
 `errgroup` is the right *shape*.
 
-**Phorge-syntax API sketch:**
+**Phorj-syntax API sketch:**
 
-```phorge
+```phorj
 import Core.Async;
 // Apply a SIDE-EFFECT-FREE fn to each element; merge results in INPUT ORDER.
 var results = Async.parallelMap(xs, fn(int x) => expensive_pure(x));
@@ -282,7 +282,7 @@ slice.** *Confidence: medium.*
 | Go construct | Verdict | Reason |
 |---|---|---|
 | GMP preemptive scheduler / real OS-thread multiplexing | **Reject** | Non-deterministic interleaving; `Value` not `Send`/`Sync`; no `php -n` target |
-| `sync.Mutex` / `RWMutex` / `Cond` / `sync/atomic` | **Reject (as API)** | Guard against a hazard the cooperative single-thread model forbids; exposing them is a lie. *Phorge selling point: no data races possible.* |
+| `sync.Mutex` / `RWMutex` / `Cond` / `sync/atomic` | **Reject (as API)** | Guard against a hazard the cooperative single-thread model forbids; exposing them is a lie. *Phorj selling point: no data races possible.* |
 | Random-tie `select` | **Reject** | Intentional non-determinism by spec; replaced by source-order tie-break |
 | `time.After` / `Ticker` / wall-clock timeouts | **Tier B** | Wall-clock ⇒ non-deterministic (virtual-clock variant is a future Tier-A enhancement) |
 | `runtime.NumGoroutine` / `GOMAXPROCS` / scheduler introspection | **Reject** | Exposes physical scheduling state that doesn't exist in the model |
@@ -293,7 +293,7 @@ slice.** *Confidence: medium.*
 
 ## 4. Tier recommendations (per-feature, as instructed)
 
-| Feature (from Go) | Phorge form | Tier | Determinism basis | New Op? |
+| Feature (from Go) | Phorj form | Tier | Determinism basis | New Op? |
 |---|---|---|---|---|
 | Goroutine core → coroutines | `Async.spawn` + cooperative scheduler | **A** | Fixed lowest-id runnable order; explicit yields only | None (1 new `NativeEval`) — *spike-gated* |
 | Channels (SPSC) | `Channel<T>` send/recv/close/range | **A** | FIFO + deterministic scheduler order | None likely |
@@ -308,7 +308,7 @@ slice.** *Confidence: medium.*
 
 ---
 
-## 5. Reuse map onto existing Phorge mechanisms
+## 5. Reuse map onto existing Phorj mechanisms
 
 - **Native registry** (`src/native/mod.rs`, `(module,name)`): a new `Core.Async` leaf
   (`src/native/async.rs`) holds `spawn`/`channel`/`send`/`recv`/`select`/`group`/`parallelMap` as
@@ -329,8 +329,8 @@ slice.** *Confidence: medium.*
   thread makes `RefCell` sound. No tracing GC concern (acyclic + `Rc`/`Drop`, per the M2 invariant)
   *unless* a channel can hold a closure that captures the channel — a potential cycle worth a note,
   but deferred (the immutable-heap assumption is being relaxed in M-mut anyway).
-- **Transpile helpers**: a gated `__phorge_async_*` PHP prelude (Fiber scheduler + `Channel` class),
-  emitted under a `uses_async` flag like the existing `__phorge_div`/`uses_*` helpers.
+- **Transpile helpers**: a gated `__phorj_async_*` PHP prelude (Fiber scheduler + `Channel` class),
+  emitted under a `uses_async` flag like the existing `__phorj_div`/`uses_*` helpers.
 
 ---
 
@@ -345,7 +345,7 @@ slice.** *Confidence: medium.*
    interleaving fixture (deterministic golden, asserted on all three legs) must exist *before* the
    feature is declared gated.
 3. **`select` tie-break divergence from Go** — confirm the source-order rule is acceptable (it is a
-   *deliberate* legibility-over-Go-fidelity choice, consistent with the Phorge philosophy of removing
+   *deliberate* legibility-over-Go-fidelity choice, consistent with the Phorj philosophy of removing
    surprises).
 4. **Virtual clock** as a *future* Tier-A deterministic enhancement (deferred; Tokio `time::pause`
    precedent) vs wall-clock timers staying Tier B (now).
@@ -356,8 +356,8 @@ slice.** *Confidence: medium.*
 
 ## 7. Bottom line
 
-Go gives Phorge the **vocabulary and ergonomics** of legible concurrency — goroutines, channels,
-`select`, `errgroup`, structured fork-join — while Phorge **swaps the runtime** from Go's
+Go gives Phorj the **vocabulary and ergonomics** of legible concurrency — goroutines, channels,
+`select`, `errgroup`, structured fork-join — while Phorj **swaps the runtime** from Go's
 preemptive-parallel GMP scheduler to a **deterministic single-threaded cooperative scheduler**
 (Fibers on PHP, a re-entrant frame loop on the Rust legs). The split is clean and principled:
 **keep cooperative yield + ordered fan-out + pure data-parallelism (Tier A, byte-identical), reject

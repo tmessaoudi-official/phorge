@@ -6,8 +6,8 @@
 the single-inheritance framing with **explicit-resolution multiple inheritance**, the model the research
 (below) found to be the only one both spine-safe and idiomatic on a PHP target.
 
-Phorge is a statically-typed PHP-inspired language in Rust with three backends that must stay
-**byte-identical** — tree-walking interpreter (`run`), stack bytecode VM (`runvm`), and a Phorge→PHP
+Phorj is a statically-typed PHP-inspired language in Rust with three backends that must stay
+**byte-identical** — tree-walking interpreter (`run`), stack bytecode VM (`runvm`), and a Phorj→PHP
 transpiler whose output runs under real PHP 8.4. That byte-identical spine is the non-negotiable
 constraint every decision below is measured against.
 

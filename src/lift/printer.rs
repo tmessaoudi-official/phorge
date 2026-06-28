@@ -1,11 +1,11 @@
-//! M-Lift L3 — a Phorge AST → `.phg` source **pretty-printer**, the inverse of what the transpiler
+//! M-Lift L3 — a Phorj AST → `.phg` source **pretty-printer**, the inverse of what the transpiler
 //! does for PHP. Scoped to the **subset the L4 lifter emits** (functions/classes/enums + the Tier-1
 //! statement and expression set); any node outside that subset returns a clear `Err` rather than
 //! guessing at syntax. (Growing this into a full `phg fmt` is a later, independent expansion.)
 //!
 //! Correctness discipline: strings are escaped (incl. `{`/`}` → `\{`/`\}`, since a bare `{` opens a
-//! Phorge interpolation) and binary/unary expressions are parenthesized **only where precedence or
-//! associativity requires it** (C-5/6) — `~a`, `a + b * c`, `(a + b) * c` — mirroring the Phorge
+//! Phorj interpolation) and binary/unary expressions are parenthesized **only where precedence or
+//! associativity requires it** (C-5/6) — `~a`, `a + b * c`, `(a + b) * c` — mirroring the Phorj
 //! parser's binding-power table so the printed text re-parses to the *same* AST. The round-trip
 //! tests assert that fixed point directly.
 
@@ -14,7 +14,7 @@ use crate::ast::{
     Param, Pattern, Program, Stmt, StrPart, Type, UnaryOp,
 };
 
-/// Print a whole Phorge program to `.phg` source. `Err` if it contains a node outside the lift subset.
+/// Print a whole Phorj program to `.phg` source. `Err` if it contains a node outside the lift subset.
 pub fn print_program(p: &Program) -> Result<String, String> {
     let mut pr = Printer {
         out: String::new(),
@@ -721,7 +721,7 @@ const PREC_UNARY: u8 = 80;
 /// Ranges (`a..b`) bind looser than every binary operator (operands are full binaries).
 const PREC_RANGE: u8 = 0;
 
-/// Binding power of a binary operator — mirrors the Phorge parser's `infix_op` table exactly
+/// Binding power of a binary operator — mirrors the Phorj parser's `infix_op` table exactly
 /// (`src/parser/exprs.rs`); higher binds tighter. The shared source of truth for re-parse fidelity.
 fn bin_prec(op: BinaryOp) -> u8 {
     match op {
@@ -786,7 +786,7 @@ fn unary_op(op: UnaryOp) -> &'static str {
     }
 }
 
-/// Escape a string literal's contents for a Phorge double-quoted string. `{`/`}` become `\{`/`\}`
+/// Escape a string literal's contents for a Phorj double-quoted string. `{`/`}` become `\{`/`\}`
 /// because a bare `{` opens an interpolation.
 fn escape_str(s: &str) -> String {
     let mut out = String::with_capacity(s.len());

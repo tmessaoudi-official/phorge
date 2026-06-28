@@ -1,9 +1,9 @@
 package Main;
 
-// M6 W4 — the served application: the full pure-Phorge web pipe `phg serve` runs.
+// M6 W4 — the served application: the full pure-Phorj web pipe `phg serve` runs.
 //
 // `phg serve server.phg` binds a socket and calls ONE entry per request — `respond(bytes) -> bytes`
-// — which parses (W1), routes (W2), and serializes (W1), all in pure Phorge. The runtime
+// — which parses (W1), routes (W2), and serializes (W1), all in pure Phorj. The runtime
 // (src/serve.rs) is the thinnest possible glue: bytes in → one call → bytes out; it knows nothing
 // about Request/Response. The same `handle(Request) -> Response` is the portable value unit that
 // transpiles to PHP and runs under `php -S` via the front-controller in server.php (see README).
@@ -96,7 +96,7 @@ function matchRoute(string method, string path): Handler {
 }
 
 function handleHome(Request req): Response {
-  return new Response(200, Bytes.fromString("Phorge web — home"), ["Content-Type: text/plain"]);
+  return new Response(200, Bytes.fromString("Phorj web — home"), ["Content-Type: text/plain"]);
 }
 
 function handleGreet(Request req): Response {
@@ -153,7 +153,7 @@ function main(): void {
   // Exercise the served pipe on five canned requests: a hit per route, an unknown path (404), a
   // method mismatch (404), and a malformed buffer (400) — deterministic, no socket, no File.
   summarize(b"GET / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
-  summarize(b"GET /greet HTTP/1.1\x0d\x0aHost: phorge.dev\x0d\x0a\x0d\x0a");
+  summarize(b"GET /greet HTTP/1.1\x0d\x0aHost: phorj.dev\x0d\x0a\x0d\x0a");
   summarize(b"GET /health HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
   summarize(b"GET /missing HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
   summarize(b"garbage with no terminator");

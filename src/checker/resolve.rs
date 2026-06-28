@@ -89,7 +89,7 @@ impl Checker {
                     );
                 }
                 // D2: a method declared by two members with differing signatures can be satisfied by no
-                // class (Phorge has no overloading — a class has exactly one `foo`), so the intersection
+                // class (Phorj has no overloading — a class has exactly one `foo`), so the intersection
                 // is uninhabited. Reject it here, where it is honest about *why*.
                 let mut method_sigs: HashMap<String, (Vec<Ty>, Ty)> = HashMap::new();
                 let mut sig_conflict: Option<String> = None;
@@ -133,7 +133,7 @@ impl Checker {
                             "intersection members declare method `{m}` with conflicting signatures — no class could implement both"
                         ),
                         "E-INTERSECT-SIG",
-                        Some("a method shared across intersection members must have identical parameter and return types (Phorge has no overloading)".into()),
+                        Some("a method shared across intersection members must have identical parameter and return types (Phorj has no overloading)".into()),
                     );
                 }
                 let norm = Ty::intersection_of(resolved);

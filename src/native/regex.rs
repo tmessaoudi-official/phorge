@@ -184,7 +184,7 @@ fn regex_split(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// The `Core.Regex` registry entries. `Regex` is the compiler-injected class
 /// (`cli::inject_regex_prelude`) — referenced as a bare `Ty::Named`; the type resolves because a call
 /// to any of these natives requires `import Core.Regex;`, which triggers the injection before the
-/// checker runs. The `php` emitters reference the `__phorge_regex_*` runtime helpers
+/// checker runs. The `php` emitters reference the `__phorj_regex_*` runtime helpers
 /// (`transpile/program.rs`); the injected `Regex` class transpiles to a PHP class with a public
 /// `$pattern` (the bare pattern), so a global helper can build the `/u`-delimited form.
 pub(crate) fn regex_natives() -> Vec<NativeFn> {
@@ -214,7 +214,7 @@ pub(crate) fn regex_natives() -> Vec<NativeFn> {
             ret: Ty::Bool,
             pure: true,
             eval: NativeEval::Pure(regex_matches),
-            php: |a| format!("__phorge_regex_matches({}, {})", parg(a, 0), parg(a, 1)),
+            php: |a| format!("__phorj_regex_matches({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
             module: "Core.Regex",
@@ -223,7 +223,7 @@ pub(crate) fn regex_natives() -> Vec<NativeFn> {
             ret: opt_str(),
             pure: true,
             eval: NativeEval::Pure(regex_find),
-            php: |a| format!("__phorge_regex_find({}, {})", parg(a, 0), parg(a, 1)),
+            php: |a| format!("__phorj_regex_find({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
             module: "Core.Regex",
@@ -232,7 +232,7 @@ pub(crate) fn regex_natives() -> Vec<NativeFn> {
             ret: list_str(),
             pure: true,
             eval: NativeEval::Pure(regex_find_all),
-            php: |a| format!("__phorge_regex_find_all({}, {})", parg(a, 0), parg(a, 1)),
+            php: |a| format!("__phorj_regex_find_all({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
             module: "Core.Regex",
@@ -241,7 +241,7 @@ pub(crate) fn regex_natives() -> Vec<NativeFn> {
             ret: opt_map(),
             pure: true,
             eval: NativeEval::Pure(regex_find_groups),
-            php: |a| format!("__phorge_regex_find_groups({}, {})", parg(a, 0), parg(a, 1)),
+            php: |a| format!("__phorj_regex_find_groups({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
             module: "Core.Regex",
@@ -252,7 +252,7 @@ pub(crate) fn regex_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(regex_replace),
             php: |a| {
                 format!(
-                    "__phorge_regex_replace({}, {}, {})",
+                    "__phorj_regex_replace({}, {}, {})",
                     parg(a, 0),
                     parg(a, 1),
                     parg(a, 2)
@@ -266,7 +266,7 @@ pub(crate) fn regex_natives() -> Vec<NativeFn> {
             ret: list_str(),
             pure: true,
             eval: NativeEval::Pure(regex_split),
-            php: |a| format!("__phorge_regex_split({}, {})", parg(a, 0), parg(a, 1)),
+            php: |a| format!("__phorj_regex_split({}, {})", parg(a, 0), parg(a, 1)),
         },
     ]
 }

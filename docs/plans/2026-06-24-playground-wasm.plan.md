@@ -1,11 +1,11 @@
-# Phorge Playground (WASM) — Implementation Plan
+# Phorj Playground (WASM) — Implementation Plan
 
 **Goal:** A zero-backend browser playground (run/runvm/transpiled-PHP-executed, 3-way agreement),
 auto-deployed to GitHub Pages with the latest `phg` on every `master` push.
 
 **Spec:** `docs/specs/2026-06-24-playground-wasm-design.md`
 
-**Architecture:** Cargo workspace; core `phorge` crate untouched (zero-dep, forbid-unsafe). New
+**Architecture:** Cargo workspace; core `phorj` crate untouched (zero-dep, forbid-unsafe). New
 `playground/` cdylib member depends on the lib + wasm-bindgen (wasm-only target dep). Wrapper logic in
 plain `*_json(&str) -> String` functions (native-testable) wrapped by thin `#[wasm_bindgen]` exports
 gated to `wasm32`. The wrappers **bypass `on_deep_stack`** (uses `std::thread`, unavailable on wasm)

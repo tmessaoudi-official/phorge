@@ -438,12 +438,12 @@ pub const FAULT_INT_OVERFLOW: &str = "integer overflow";
 pub const FAULT_NEGATIVE_SHIFT: &str = "bit shift by negative number";
 /// Canonical fault body for a `decimal` `+ - *` (or scale-alignment) whose exact result leaves
 /// `i128` range (M-NUM S1). Byte-identical across both Rust backends AND the emitted BCMath PHP (the
-/// `__phorge_dec_*` helper bounds-checks its result against i128 range and throws the same body).
+/// `__phorj_dec_*` helper bounds-checks its result against i128 range and throws the same body).
 pub const FAULT_DECIMAL_OVERFLOW: &str = "decimal overflow";
 /// Canonical fault body for `Decimal.div` with a zero divisor (M-NUM S2). Distinct from the integer
 /// `FAULT_DIV_ZERO` body so the message is decimal-specific, but it still *contains* the substring
 /// `"division by zero"`, so the differential harness classifies it as `FaultKind::DivZero` (run≡runvm
-/// parity); the emitted PHP `__phorge_dec_div` helper throws the same body.
+/// parity); the emitted PHP `__phorj_dec_div` helper throws the same body.
 pub const FAULT_DECIMAL_DIV_ZERO: &str = "decimal division by zero";
 /// Canonical fault body for a negative `scale` argument to `Decimal.div`/`Decimal.round` (M-NUM S2).
 /// A scale is the count of fractional digits, so it must be `>= 0`; the PHP helpers throw the same.
@@ -454,7 +454,7 @@ pub const FAULT_DECIMAL_MOD_ZERO: &str = "decimal modulo by zero";
 /// Canonical fault body for a bare `decimal / decimal` whose quotient does not terminate
 /// (2026-06-27 exact-or-fault `/`): the fraction in lowest terms has a denominator with a prime
 /// factor other than 2 or 5 (e.g. `1d / 3d`). Use `Decimal.div(a, b, scale, mode)` for a rounded
-/// quotient instead. The emitted PHP `__phorge_dec_div_exact` throws the same body.
+/// quotient instead. The emitted PHP `__phorj_dec_div_exact` throws the same body.
 pub const FAULT_DECIMAL_NONTERMINATING: &str = "decimal division is not exact";
 /// Canonical fault body for `int ** int` with a negative exponent. A negative exponent yields a
 /// fractional result, which cannot be the typed `int` the `**` operator promises — so it faults
@@ -515,7 +515,7 @@ pub fn int_intdiv(a: i64, b: i64) -> Result<i64, String> {
 /// `i64::MIN` is exactly `-2^63`). A value `v` with `LOWER <= v.trunc() < UPPER` casts losslessly via
 /// `as i64`; anything else (incl. NaN/±∞, which fail the comparisons) returns `None`. This avoids
 /// PHP's surprising `(int)NAN == 0`. Single-sourced so `run`/`runvm` agree; mirrored by the PHP
-/// `__phorge_float_to_int` helper (which uses the same `9.2233720368547758E18` literal).
+/// `__phorj_float_to_int` helper (which uses the same `9.2233720368547758E18` literal).
 pub fn float_to_int(v: f64) -> Option<i64> {
     const UPPER: f64 = 9_223_372_036_854_775_808.0; // 2^63 — exclusive upper bound
     const LOWER: f64 = -UPPER; // i64::MIN as f64 (exact)
@@ -531,7 +531,7 @@ pub fn float_to_int(v: f64) -> Option<i64> {
 /// i64 range (`3.0 → 3`, `3.9 → None`, NaN/±∞ → None). Unlike [`float_to_int`] (truncate, used by
 /// `Convert.toInt`), this never drops a fraction silently — the `as` operator's "no silent loss"
 /// rule. `v.fract() == 0.0` is false for NaN/∞, so the finite+range guard in [`float_to_int`] runs
-/// only for a genuinely integral value. Mirrored by the PHP `__phorge_float_to_int_exact` helper.
+/// only for a genuinely integral value. Mirrored by the PHP `__phorj_float_to_int_exact` helper.
 pub fn float_to_int_exact(v: f64) -> Option<i64> {
     if v.fract() == 0.0 {
         float_to_int(v)
@@ -543,7 +543,7 @@ pub fn float_to_int_exact(v: f64) -> Option<i64> {
 /// `Math.numberFormat(value, decimals)` (M-NUM S4): a non-locale `number_format` — `value` rounded
 /// half-away-from-zero to `decimals` places, grouped with `,` every three integer digits and a `.`
 /// decimal point. **Digit-string rounding** (2026-06-27): it rounds the *shortest-round-trip decimal
-/// string* of `value` (`format!("{value}")`, which the PHP `__phorge_float` helper reproduces
+/// string* of `value` (`format!("{value}")`, which the PHP `__phorj_float` helper reproduces
 /// byte-for-byte) digit-by-digit with carry — NOT `(value * 10^d).round()`. That removes the previous
 /// `.5`-boundary divergence (Rust `f64::round` had no pre-rounding, PHP `round` did): both legs now
 /// round the *intended* decimal identically (`numberFormat(0.285, 2) == "0.29"` on all three backends).
@@ -675,7 +675,7 @@ pub fn float_div(a: f64, b: f64) -> Result<f64, String> {
     Ok(a / b)
 }
 /// Float remainder. A **zero divisor faults** (`FAULT_MOD_ZERO`), like int `%0` (PHP `fmod` would
-/// return `NAN`; the emitted PHP routes through `__phorge_rem`, which throws to agree).
+/// return `NAN`; the emitted PHP routes through `__phorj_rem`, which throws to agree).
 pub fn float_rem(a: f64, b: f64) -> Result<f64, String> {
     if b == 0.0 {
         return Err(FAULT_MOD_ZERO.to_string());
@@ -796,7 +796,7 @@ fn u128_gcd(mut a: u128, mut b: u128) -> u128 {
 /// Algorithm: reduce `a/b` to lowest terms `p/q·10^(sb-sa)`; if `q` (after stripping factors of 2 and
 /// 5) is not 1 the decimal repeats → fault; otherwise the exact unscaled is `p·2^(m-i)·5^(m-j)` at
 /// scale derived from `max(i,j)` and the `10^(sb-sa)` factor, then trailing zeros are stripped to the
-/// canonical minimal form. The emitted PHP `__phorge_dec_div_exact` (bcdiv + exactness check + strip)
+/// canonical minimal form. The emitted PHP `__phorj_dec_div_exact` (bcdiv + exactness check + strip)
 /// mirrors this byte-for-byte.
 pub fn decimal_div_exact(a: &Value, b: &Value) -> Result<Value, String> {
     let ovf = || FAULT_DECIMAL_OVERFLOW.to_string();
@@ -919,7 +919,7 @@ impl RoundMode {
 }
 
 /// Round the exact rational `n / d` to an integer under `mode` (M-NUM S2) — the single-sourced
-/// rounding primitive both backends call and the PHP `__phorge_dec_div`/`_round` helpers replicate
+/// rounding primitive both backends call and the PHP `__phorj_dec_div`/`_round` helpers replicate
 /// step-for-step. The caller guarantees `d != 0` (a zero divisor is the `FAULT_DECIMAL_DIV_ZERO`
 /// fault, checked before this). Any `checked_*` overflow ⇒ [`FAULT_DECIMAL_OVERFLOW`].
 ///
@@ -1002,7 +1002,7 @@ pub fn round_div(n: i128, d: i128, mode: RoundMode) -> Result<i128, String> {
 /// fractional digits under `mode`. Computes `N = a.unscaled * 10^(b.scale + scale)` and
 /// `D = b.unscaled * 10^a.scale` (both checked), then `round_div(N, D, mode)` at `scale`.
 /// `b == 0` ⇒ [`FAULT_DECIMAL_DIV_ZERO`]; `scale < 0` ⇒ [`FAULT_DECIMAL_SCALE`]; any i128 overflow ⇒
-/// [`FAULT_DECIMAL_OVERFLOW`]. Mirrored by the PHP `__phorge_dec_div` helper.
+/// [`FAULT_DECIMAL_OVERFLOW`]. Mirrored by the PHP `__phorj_dec_div` helper.
 pub fn decimal_div(a: &Value, b: &Value, scale: i64, mode: RoundMode) -> Result<Value, String> {
     let (au, sa) = dec_parts(a).ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
     let (bu, sb) = dec_parts(b).ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
@@ -1026,7 +1026,7 @@ pub fn decimal_div(a: &Value, b: &Value, scale: i64, mode: RoundMode) -> Result<
 /// `Decimal.round(d, scale, mode)` (M-NUM S2): re-scale `d` to exactly `scale` fractional digits.
 /// Scaling up (`scale >= d.scale`) is exact (`unscaled * 10^Δ`, checked, no rounding); scaling down
 /// rounds via `round_div(unscaled, 10^Δ, mode)`. `scale < 0` ⇒ [`FAULT_DECIMAL_SCALE`]; overflow ⇒
-/// [`FAULT_DECIMAL_OVERFLOW`]. Mirrored by the PHP `__phorge_dec_round` helper.
+/// [`FAULT_DECIMAL_OVERFLOW`]. Mirrored by the PHP `__phorj_dec_round` helper.
 pub fn decimal_round(d: &Value, scale: i64, mode: RoundMode) -> Result<Value, String> {
     let (du, sd) = dec_parts(d).ok_or_else(|| FAULT_DECIMAL_OVERFLOW.to_string())?;
     let out_scale = scale_u8(scale)?;
@@ -1048,7 +1048,7 @@ pub fn decimal_round(d: &Value, scale: i64, mode: RoundMode) -> Result<Value, St
 /// (drop the fraction), or `None` if that integer part is outside the i64 range. Computed exactly on
 /// the i128 carrier — `unscaled / 10^scale` truncates toward zero (i128 `/` rounds toward zero, like
 /// PHP `intdiv`/`bcdiv`), then `i64::try_from` range-checks. No string parsing, no BCMath. Single-
-/// sourced; mirrored by the PHP `__phorge_dec_to_int` helper (which splits the carrier string before
+/// sourced; mirrored by the PHP `__phorj_dec_to_int` helper (which splits the carrier string before
 /// the dot). A non-decimal value is checker-unreachable (handled defensively as `None`).
 pub fn decimal_to_int(d: &Value) -> Option<i64> {
     let (unscaled, scale) = match d {
@@ -1064,7 +1064,7 @@ pub fn decimal_to_int(d: &Value) -> Option<i64> {
 /// `decimal as int` (M4 as-matrix) — **exact-or-null**: `Some(i)` only when the decimal has a zero
 /// fractional part and the integer is in i64 range (`3.00d → 3`, `3.50d → None`). Unlike
 /// [`decimal_to_int`] (truncate, used by `Convert.decimalToInt`), it never drops a fraction silently
-/// — the `as` "no silent loss" rule. Mirrored by the PHP `__phorge_dec_to_int_exact` helper.
+/// — the `as` "no silent loss" rule. Mirrored by the PHP `__phorj_dec_to_int_exact` helper.
 pub fn decimal_to_int_exact(d: &Value) -> Option<i64> {
     let (unscaled, scale) = match d {
         Value::Decimal { unscaled, scale } => (*unscaled, *scale),
@@ -1143,7 +1143,7 @@ pub fn fmt_decimal(unscaled: i128, scale: u8) -> String {
 /// digits with an optional single fractional part (`12`, `12.34`, `.5`, `-0.50`); NO exponent, NO
 /// underscores (a runtime string is exact, unlike a source literal), NO surrounding whitespace. The
 /// scale is the count of fractional digits (trailing zeros preserved). Shared by the interpreter, the
-/// VM, and mirrored by the PHP `__phorge_dec_of` PCRE helper.
+/// VM, and mirrored by the PHP `__phorj_dec_of` PCRE helper.
 pub fn decimal_of(s: &str) -> Option<(i128, u8)> {
     let bytes = s.as_bytes();
     if bytes.is_empty() {

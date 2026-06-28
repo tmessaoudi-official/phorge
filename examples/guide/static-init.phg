@@ -2,8 +2,8 @@ package Main;
 import Core.Console;
 
 // Feature B-static — runtime static-field initializers. PHP static property defaults must be constant
-// expressions; Phorge lifts that: a `static` field may be initialized by ANY expression, evaluated
-// ONCE at program start, in declaration order, before `main`. Lowered to a PHP `__phorge_init_statics`
+// expressions; Phorj lifts that: a `static` field may be initialized by ANY expression, evaluated
+// ONCE at program start, in declaration order, before `main`. Lowered to a PHP `__phorj_init_statics`
 // run once before `main()`. (A literal static still works and stays a plain PHP static default.)
 
 function seed(): int {

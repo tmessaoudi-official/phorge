@@ -42,11 +42,11 @@ pub fn help_text() -> String {
          parse      print the AST\n  \
          lex        print the token stream\n  \
          transpile  emit PHP\n  \
-         lift       PHP -> a Phorge draft (review required; inverse of transpile)\n  \
+         lift       PHP -> a Phorj draft (review required; inverse of transpile)\n  \
          disasm     print the compiled bytecode\n  \
          bench      benchmark run vs runvm (time + memory)\n  \
          build      compile to a standalone executable (-o <out>)\n  \
-         vendor     fetch [require] git deps into an offline vendor/ (writes phorge.lock)\n  \
+         vendor     fetch [require] git deps into an offline vendor/ (writes phorj.lock)\n  \
          serve      serve the program over HTTP (calls respond(bytes) -> bytes per request)\n  \
          test       discover and run `test` blocks (under tests/, or a given file/dir)\n  \
          fmt        format source to canonical form (--check for CI; - for stdin)\n  \
@@ -111,7 +111,7 @@ pub fn help_for(cmd: &str) -> String {
                         phg transpile src.phg\n"
         }
         "lift" => {
-            "lift — read PHP, emit a Phorge **draft** (the inverse of transpile). Best-effort and\n       \
+            "lift — read PHP, emit a Phorj **draft** (the inverse of transpile). Best-effort and\n       \
                    REVIEW-REQUIRED: the output is a scaffold a human checks, prefixed `// lifted\n       \
                    (verify)`. Anything outside the Tier-1 subset (e.g. an `array` type, a backed enum,\n       \
                    string interpolation) is refused with a clear `lift …` error rather than guessed.\n\n\
@@ -147,7 +147,7 @@ pub fn help_for(cmd: &str) -> String {
         "test" => {
             "test — discover and run `test \"name\" { … }` blocks on the interpreter.\n\n\
                    With no path, runs every `*.phg` under the project's `tests/` directory (the\n\
-                   project root is the nearest ancestor holding a `phorge.toml`, else the current\n\
+                   project root is the nearest ancestor holding a `phorj.toml`, else the current\n\
                    directory). With a path, runs that file, or every `*.phg` under that directory.\n\
                    Each test runs independently; a failing assertion (or any fault) is reported with\n\
                    its message and the test keeps going. Exit 0 iff every test passed, else 1.\n\n\
@@ -158,7 +158,7 @@ pub fn help_for(cmd: &str) -> String {
                    phg test tests/\n"
         }
         "fmt" => {
-            "fmt — format Phorge source to canonical form (comment-preserving, meaning-preserving).\n\n\
+            "fmt — format Phorj source to canonical form (comment-preserving, meaning-preserving).\n\n\
                   Prints from the parsed AST, so formatting never changes what the program means\n\
                   (parse(fmt(x)) == parse(x)); it is idempotent, and an unparseable file is left\n\
                   untouched (its diagnostic is reported, exit 2). v1 is tidy + comment-safe (canonical\n\
@@ -186,10 +186,10 @@ pub fn help_for(cmd: &str) -> String {
         "vendor" => {
             "vendor — fetch the project's `[require]` git dependencies into an offline `vendor/`.\n\n\
                      Clones each dependency at its pinned tag/rev, copies its source into\n\
-                     `vendor/<vendor>/<package>/`, and writes `phorge.lock` (resolved SHA + content\n\
+                     `vendor/<vendor>/<package>/`, and writes `phorj.lock` (resolved SHA + content\n\
                      hash). This is the only command that touches the network; commit `vendor/` +\n\
-                     `phorge.lock` so `run`/`check`/`transpile` resolve fully offline.\n\n\
-                     usage:\n  phg vendor [project-dir | phorge.toml]   (defaults to .)\n\n\
+                     `phorj.lock` so `run`/`check`/`transpile` resolve fully offline.\n\n\
+                     usage:\n  phg vendor [project-dir | phorj.toml]   (defaults to .)\n\n\
                      examples:\n  \
                      phg vendor\n  \
                      phg vendor path/to/project\n"
@@ -198,7 +198,7 @@ pub fn help_for(cmd: &str) -> String {
             "serve — serve the program over HTTP/1.1.\n\n\
                     The program must define `respond(bytes) -> bytes`: the runtime frames each\n\
                     incoming request, calls `respond` (where the program's own `parse_request` /\n\
-                    router / `serialize_response` live — all pure Phorge), and writes the bytes back\n\
+                    router / `serialize_response` live — all pure Phorj), and writes the bytes back\n\
                     (`Connection: close`, one request per connection). A request fault degrades to a\n\
                     500; a malformed request is the program's concern (→ a 400 from `respond`).\n\n\
                     Concurrency (--workers, M6 W3): each request is handled on its own worker thread\n\
@@ -223,17 +223,17 @@ pub fn help_for(cmd: &str) -> String {
     format!("{}\n{body}", version_line())
 }
 
-/// `vendor [project-dir | phorge.toml]`: fetch the project's `[require]` git dependencies into an
-/// offline `vendor/` tree and (re)write `phorge.lock`. `arg` is a directory or a manifest path
-/// (default `.`); the project root is found by walking up to a `phorge.toml`. The only network-
+/// `vendor [project-dir | phorj.toml]`: fetch the project's `[require]` git dependencies into an
+/// offline `vendor/` tree and (re)write `phorj.lock`. `arg` is a directory or a manifest path
+/// (default `.`); the project root is found by walking up to a `phorj.toml`. The only network-
 /// touching command — see [`crate::vendor`].
 pub fn cmd_vendor(arg: &str) -> Result<String, String> {
     let start = std::path::Path::new(arg);
     match crate::manifest::Project::detect(start)? {
         Some(project) => crate::vendor::vendor(&project),
         None => Err(format!(
-            "no phorge.toml found at or above `{arg}` — `phg vendor` requires a project \
-             (add a phorge.toml with a [require] section)"
+            "no phorj.toml found at or above `{arg}` — `phg vendor` requires a project \
+             (add a phorj.toml with a [require] section)"
         )),
     }
 }
@@ -619,7 +619,7 @@ class Router {
 /// The `phg serve` bridge: the runtime's `respond(bytes) -> bytes` entry, synthesized to wrap a
 /// user-defined `handle(Request) -> Response` (closes Batch-1 C). Injected only when `Core.Http` is
 /// imported, a `handle` exists, and the user hasn't written their own `respond`. A malformed request
-/// (parse returns null) becomes a 400 — HTTP policy lives here in Phorge, not in the Rust runtime.
+/// (parse returns null) becomes a 400 — HTTP policy lives here in Phorj, not in the Rust runtime.
 const HTTP_RESPOND_BRIDGE: &str = r#"
 function respond(bytes raw): bytes {
   if (var req = Request.parse(raw)) {
@@ -695,7 +695,7 @@ fn inject_http_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
 /// The opaque compiled-`Regex` value model, injected when a program imports `Core.Regex` (Fork A,
 /// `docs/specs/2026-06-28-core-regex-design.md`). A `Regex` value is built only by `Regex.compile`
 /// (which validates via the `regex` crate); the `pattern` field is the **bare** pattern. It is public
-/// so the transpiled `__phorge_regex_*` global helpers can read `$re->pattern` to build the
+/// so the transpiled `__phorj_regex_*` global helpers can read `$re->pattern` to build the
 /// `/u`-delimited PHP `preg_*` form. Mirrors [`inject_json_prelude`]: a no-op unless `Core.Regex` is
 /// imported and no `Regex` class is already declared.
 const REGEX_PRELUDE: &str = "class Regex { constructor(public string pattern) {} }";
@@ -772,13 +772,13 @@ fn inject_secret_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
     }
 }
 
-/// The `Core.Time` value model (M-TIME, `docs/specs/2026-06-28-m-time-design.md`): the pure-Phorge
+/// The `Core.Time` value model (M-TIME, `docs/specs/2026-06-28-m-time-design.md`): the pure-Phorj
 /// `Instant`, `Duration`, `Date`, and `DateTime` classes. Because the prelude is run through the same
 /// backends and transpiler as user code, all calendar and formatting math is byte-identical by
 /// construction; the only native is the clock seam (the `Core.Time` module in `src/native/time.rs`).
 /// The model is UTC-only because timezones are non-deterministic and would break the byte-identity
 /// spine. Calendar math uses Hinnant's truncating-division-safe civil/day conversions, which port
-/// verbatim since Phorge int division truncates toward zero (PHP `intdiv`).
+/// verbatim since Phorj int division truncates toward zero (PHP `intdiv`).
 const TIME_PRELUDE: &str = r#"
 class Duration {
   constructor(public int ms) {}
@@ -800,7 +800,7 @@ class Duration {
 }
 class Date {
   constructor(public int epochDay) {}
-  // Howard Hinnant's days-from-civil / civil-from-days (truncating-division safe; Phorge int `/` is
+  // Howard Hinnant's days-from-civil / civil-from-days (truncating-division safe; Phorj int `/` is
   // truncate-toward-zero = PHP intdiv). `daysFromCivil`/`civil`/`pad2` are low-level building blocks
   // reused by `DateTime`; the everyday API is `of`/`year`/`month`/`day`/`addDays`/`toString`.
   static function daysFromCivil(int y, int m, int d) -> int {
@@ -899,7 +899,7 @@ class Instant {
   function second() -> int { return (this.millisOfDay() / 1000) % 60; }
   function millis() -> int { return this.millisOfDay() % 1000; }
   // ISO-8601 UTC: `YYYY-MM-DDTHH:MM:SSZ` (always `Z`; second-resolution, sub-second dropped). For any
-  // other layout, interpolate the accessors directly (Phorge has first-class string interpolation).
+  // other layout, interpolate the accessors directly (Phorj has first-class string interpolation).
   function toIso() -> string {
     List<int> c = Date.civil(this.toDate().epochDay);
     string date = "{Date.pad4(c[0])}-{Date.pad2(c[1])}-{Date.pad2(c[2])}";
@@ -1187,7 +1187,7 @@ pub fn serve_program(
 /// Build a standalone executable for the host from `src`. `input_path` names the source (used to
 /// derive the default output name); `out_path` overrides it. Validates the program first (never emits
 /// a broken binary), then delegates to `bundle::cross::build_host`, which reuses this phg binary as
-/// the stub and embeds `src` as a `.phorge` section. Returns a one-line success message.
+/// the stub and embeds `src` as a `.phorj` section. Returns a one-line success message.
 pub fn cmd_build(input_path: &str, src: &str, out_path: Option<&str>) -> Result<String, String> {
     cmd_check(src)?; // validate; emit nothing on failure
     let out = match out_path {
@@ -1221,14 +1221,14 @@ pub fn cmd_lex(src: &str) -> Result<String, String> {
     Ok(out)
 }
 
-/// `lift`: read PHP source, emit a Phorge **draft** (the inverse of `transpile`). Best-effort and
+/// `lift`: read PHP source, emit a Phorj **draft** (the inverse of `transpile`). Best-effort and
 /// review-required — the output is prefixed with a `// lifted (verify)` banner so the contract is
 /// visible in the file itself. Anything outside the Tier-1 lift subset is a clear `lift …` error
 /// (never a silent guess). No `on_deep_stack`: the lift parser has its own depth guard.
 pub fn cmd_lift(src: &str) -> Result<String, String> {
-    let phorge = crate::lift::lifter::lift_source(src)?;
+    let phorj = crate::lift::lifter::lift_source(src)?;
     Ok(format!(
-        "// lifted (verify) — a best-effort PHP->Phorge draft; review before trusting it.\n{phorge}"
+        "// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.\n{phorj}"
     ))
 }
 

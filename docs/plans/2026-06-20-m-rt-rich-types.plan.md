@@ -1,6 +1,6 @@
 # M-RT — Rich Types Milestone Plan
 
-> TypeScript-grade type system for Phorge, mapped to PHP 8.0/8.1 natives. Built slice by slice,
+> TypeScript-grade type system for Phorj, mapped to PHP 8.0/8.1 natives. Built slice by slice,
 > each an independent green commit with a byte-identical (`run ≡ runvm ≡ real PHP ≥8.6`) example.
 > Full design: `docs/specs/2026-06-20-m-rt-rich-types-design.md`. Approved plan mirror:
 > `~/.claude/plans/misty-honking-lynx.md`.
@@ -228,7 +228,7 @@
   - **D2 (method conflict):** a method shared by two members with differing signatures (return OR params)
     ⇒ no single class method can conform to both (no overloading + exact-match) ⇒ **intersection is
     uninhabited**. Developer's `foo(int)->string` vs `foo(string)->string` "overloading" case is ALSO
-    uninhabited *here* precisely because Phorge lacks overloading. My rec: **require agreement — reject
+    uninhabited *here* precisely because Phorj lacks overloading. My rec: **require agreement — reject
     as `E-INTERSECT-SIG`** (revised from first-member-wins). Would become legal iff overloading/variance
     is ever added. Unresolved.
   - **ON RESUME: re-ask D1 & D2 via AskUserQuestion** incorporating the above, then (D3=autonomous)
@@ -302,7 +302,7 @@ See the approved plan (`~/.claude/plans/misty-honking-lynx.md`) and the design s
       match (~1111, treat like `List`). (Index already emits `$o[$i]` — map-correct.)
 - [ ] `examples/guide/maps.phg` (lookup table; incl. an `intMap[k] + 1` line to gate F7) + README
       index/matrix; FEATURES/KNOWN_ISSUES (empty-map + Set-deferral + missing-key fault)/CHANGELOG/CLAUDE.md.
-- [ ] gate (`cargo test` w/ `PHORGE_REQUIRE_PHP=1`, clippy, fmt) — `maps.phg` byte-identical
+- [ ] gate (`cargo test` w/ `PHORJ_REQUIRE_PHP=1`, clippy, fmt) — `maps.phg` byte-identical
       run≡runvm≡PHP — then commit.
 
 ## S1 task checklist
@@ -318,4 +318,4 @@ See the approved plan (`~/.claude/plans/misty-honking-lynx.md`) and the design s
 - [ ] `transpile.rs`: emit `$x instanceof Name`; remove the `is` rejection
 - [ ] `examples/guide/instanceof.phg` + `examples/README.md` entry
 - [ ] `KNOWN_ISSUES.md` / `FEATURES.md` / `CHANGELOG.md` updates
-- [ ] gate (`cargo test` w/ `PHORGE_REQUIRE_PHP=1`, clippy, fmt) + commit
+- [ ] gate (`cargo test` w/ `PHORJ_REQUIRE_PHP=1`, clippy, fmt) + commit

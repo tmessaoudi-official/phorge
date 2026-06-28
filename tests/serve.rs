@@ -8,12 +8,12 @@
 use std::collections::VecDeque;
 use std::rc::Rc;
 
-use phorge::interpreter::call_named;
-use phorge::serve::{serve, Transport};
-use phorge::value::Value;
+use phorj::interpreter::call_named;
+use phorj::serve::{serve, Transport};
+use phorj::value::Value;
 
 /// A small but complete serve program: W1-style parse/serialize + a 2-route dispatch + the single
-/// `respond(bytes) -> bytes` entry (malformed → 400, all in pure Phorge). `main` keeps it a valid
+/// `respond(bytes) -> bytes` entry (malformed → 400, all in pure Phorj). `main` keeps it a valid
 /// `package Main` entry, but the tests call `respond`/`serve`, never `main`.
 const SERVE_PROGRAM: &str = r#"
 package Main;
@@ -128,8 +128,8 @@ impl Transport for FixtureTransport {
     }
 }
 
-fn program() -> phorge::ast::Program {
-    phorge::cli::parse_checked_program(SERVE_PROGRAM).expect("serve program type-checks")
+fn program() -> phorj::ast::Program {
+    phorj::cli::parse_checked_program(SERVE_PROGRAM).expect("serve program type-checks")
 }
 
 /// Build the exact raw HTTP/1.1 response the program emits (the serializer always recomputes
@@ -180,7 +180,7 @@ fn serves_known_unknown_and_malformed() {
 #[test]
 fn core_http_handle_is_servable_via_injected_respond_bridge() {
     // The program has no `respond` of its own — the Core.Http injection supplies it, wrapping `handle`.
-    let prog = phorge::cli::parse_checked_program(HTTP_HANDLE_PROGRAM)
+    let prog = phorj::cli::parse_checked_program(HTTP_HANDLE_PROGRAM)
         .expect("Core.Http handle program type-checks");
     let get_root = b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec();
     let get_missing = b"GET /missing HTTP/1.1\r\nHost: localhost\r\n\r\n".to_vec();
@@ -217,8 +217,8 @@ impl Transport for ScriptedTransport {
 }
 
 /// Type-check an inline program for the degradation tests below.
-fn checked(src: &str) -> phorge::ast::Program {
-    phorge::cli::parse_checked_program(src).expect("program type-checks")
+fn checked(src: &str) -> phorj::ast::Program {
+    phorj::cli::parse_checked_program(src).expect("program type-checks")
 }
 
 /// B3: a per-connection `recv` error (client reset, transient accept) is logged and skipped — the
@@ -311,7 +311,7 @@ fn unknown_entry_reports_cleanly() {
 
 #[test]
 fn tcp_smoke() {
-    use phorge::serve::TcpTransport;
+    use phorj::serve::TcpTransport;
     use std::io::{Read, Write};
     use std::net::TcpStream;
 
@@ -338,7 +338,7 @@ fn tcp_smoke() {
 /// port. Robust by construction (asserts correctness of all responses, not flaky wall-clock overlap).
 #[test]
 fn pool_serves_concurrent_connections() {
-    use phorge::serve::serve_pool;
+    use phorj::serve::serve_pool;
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
 

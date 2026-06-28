@@ -1,10 +1,10 @@
-# Concurrency Prior-Art for Phorge — Reactive/FRP + Actor Model
+# Concurrency Prior-Art for Phorj — Reactive/FRP + Actor Model
 
 **Stage 1 research.** Lens: Reactive/FRP (ReactiveX/Rx operators, observables, backpressure,
 schedulers) and the actor model (Erlang/Elixir BEAM, message-passing, supervision) — read through
-Phorge's reality: a single-threaded `Rc`-shared heap (`Value` is NOT `Send`/`Sync`), three backends
+Phorj's reality: a single-threaded `Rc`-shared heap (`Value` is NOT `Send`/`Sync`), three backends
 that must produce byte-identical stdout for *gated* features (interpreter `run`, bytecode VM `runvm`,
-Phorge→PHP transpile under real `php -n` 8.5), and a Tier-A (gated, byte-identical) / Tier-B
+Phorj→PHP transpile under real `php -n` 8.5), and a Tier-A (gated, byte-identical) / Tier-B
 (`pure:false`, quarantined out of `differential.rs`, fixture-tested) model that already exists for
 `Core.Process`/`Core.Env`.
 
@@ -32,7 +32,7 @@ Verified environment facts (this session):
 
 ## 0. The lens, restated as a determinism axis
 
-The entire concurrency design space, viewed through Phorge, collapses onto **one question per model**:
+The entire concurrency design space, viewed through Phorj, collapses onto **one question per model**:
 *does the model's observable OUTPUT depend only on the program text + inputs, or also on a
 non-reproducible scheduling/timing/IO decision?*
 
@@ -53,7 +53,7 @@ Three buckets used throughout:
 - **Q (Quarantinable)** — non-deterministic *only* at the I/O boundary; the *logic* is deterministic if
   the events are supplied as data. Tier-B with a replay/fixture seam (the `Transport`/`HigherOrder`
   pattern generalizes here).
-- **R (Rejected for Phorge)** — non-determinism is intrinsic to the programming model's semantics
+- **R (Rejected for Phorj)** — non-determinism is intrinsic to the programming model's semantics
   (preemption, shared-mutable threads, real-time). No `php -n` target, not `Send`, not reproducible.
 
 ---
@@ -81,7 +81,7 @@ virtual-time scheduler with a logical clock — both eliminate the OS scheduler 
 order-deterministic. NON-DETERMINISTIC the moment a real-thread scheduler or a real-time source (`interval`,
 network) is introduced.
 
-**Maps onto Phorge — bucket D (the pure operator layer) + Q (live sources).** The Rx *operator algebra over
+**Maps onto Phorj — bucket D (the pure operator layer) + Q (live sources).** The Rx *operator algebra over
 a finite, eagerly-known sequence* is just transformations on a `List<T>` with a fixed traversal order —
 already byte-identical, already half-shipped (`Core.List.map/filter/reduce` are exactly `map`/`filter`/`scan`
 restricted to a materialized list). A **pull-based lazy `Stream<T>`** (cold observable, single
@@ -90,7 +90,7 @@ synchronous consumer, immediate scheduler) is the deterministic Tier-A sweet spo
 single-threaded depth-first, with **no Scheduler choice exposed** (the scheduler is implicitly `immediate`).
 That is byte-identical by construction on all three legs.
 
-- **Phorge-syntax sketch (Tier-A, gated):**
+- **Phorj-syntax sketch (Tier-A, gated):**
   ```
   import Core.Stream;
   // cold, pull-based, synchronous — a lazy List with operators
@@ -115,9 +115,9 @@ That is byte-identical by construction on all three legs.
   log (see A.4) or R.
 
 **Sharpest takeaway from Rx:** the operator algebra and the *timing/concurrency* are **already
-architecturally separated** in Rx (operators vs Scheduler). Phorge can adopt the operator algebra wholesale
+architecturally separated** in Rx (operators vs Scheduler). Phorj can adopt the operator algebra wholesale
 into Tier-A by *hard-wiring the immediate scheduler* and *forbidding live sources in the gated subset* —
-the exact split Rx already drew, with Phorge simply declining to expose the non-deterministic schedulers in
+the exact split Rx already drew, with Phorj simply declining to expose the non-deterministic schedulers in
 the byte-identical tier. The TestScheduler/virtual-time idea is the bridge: a **logical-time scheduler is
 itself a deterministic Tier-A construct** (see A.3).
 
@@ -137,13 +137,13 @@ program logic is *pure*; the runtime is the only impure part.
 `reduce(messages, init, update)`. Non-determinism lives entirely in *where the message sequence comes from*
 (clicks, timers, HTTP) — pushed to the runtime edge.
 
-**Maps onto Phorge — bucket D (the update fold) is a perfect fit.** The Elm `update : Msg -> Model ->
+**Maps onto Phorj — bucket D (the update fold) is a perfect fit.** The Elm `update : Msg -> Model ->
 Model` *pure reducer* is byte-identical by construction: given a fixed `List<Msg>`, folding it is the
-existing `Core.List.reduce`. This is arguably the **most Phorge-idiomatic concurrency model in the entire
+existing `Core.List.reduce`. This is arguably the **most Phorj-idiomatic concurrency model in the entire
 survey**: it isolates all non-determinism behind a data boundary (the message list / `Cmd`), leaving a pure
 core that the three legs trivially agree on.
 
-- **Phorge-syntax sketch (Tier-A core, gated):**
+- **Phorj-syntax sketch (Tier-A core, gated):**
   ```
   // The pure heart: deterministic, byte-identical.
   function update(Msg msg, State s) -> State { match msg { ... } }
@@ -155,7 +155,7 @@ core that the three legs trivially agree on.
   thing in `differential.rs`.
 - CONFIDENCE: **high** that the pure-reducer core is Tier-A; the edge driver is standard Tier-B.
 
-**Takeaway:** FRP's Behavior/Event distinction is overkill for Phorge's first cut, but **TEA's
+**Takeaway:** FRP's Behavior/Event distinction is overkill for Phorj's first cut, but **TEA's
 "pure reducer + effects-at-the-edge" decomposition IS the recommended shape for any deterministic
 reactive feature.** It is the same decomposition `serve.rs` already uses (`respond(bytes)->bytes` pure,
 `Transport` impure).
@@ -170,7 +170,7 @@ ties broken by a **stable insertion order**, advancing logical time to that dead
 **Output determinism.** FULLY DETERMINISTIC — the entire point. Two runs with the same program produce the
 same logical-time interleaving because there is no real clock and ties are broken deterministically.
 
-**Maps onto Phorge — bucket D, and this is the keystone for cooperative async (see B.1/B.3).** A
+**Maps onto Phorj — bucket D, and this is the keystone for cooperative async (see B.1/B.3).** A
 **single-threaded cooperative scheduler over a logical clock** is byte-identical across all three legs
 *provided the task-ordering rule is identical in all three*. The ordering rule must be a pure function of
 (enqueue order, logical deadlines) — e.g. a min-heap keyed on `(deadline, insertion_seq)`. PHP can
@@ -185,7 +185,7 @@ ambiguity). The Rust legs share one scheduler kernel (like the value kernels).
   deadline is wall-clock and determinism is gone → that task source is Tier-B. The clean line is: **logical
   timers + cooperative yields = Tier-A; real timers + real I/O completions = Tier-B.**
 
-**Takeaway:** virtual time is what lets "async/await" be Tier-A at all. Phorge should adopt a logical-time
+**Takeaway:** virtual time is what lets "async/await" be Tier-A at all. Phorj should adopt a logical-time
 single-threaded scheduler as the substrate; async/await (B.1) and reactive `interval`/`delay` (A.1) then
 ride it deterministically, with real time/IO as the Tier-B escape.
 
@@ -200,7 +200,7 @@ fact disappears** — the consumer pulls exactly when ready, the producer is a c
 pulled. Backpressure is fundamentally a *concurrency* artifact (producer and consumer on different
 threads); remove the concurrency and it reduces to ordinary lazy evaluation.
 
-**Maps onto Phorge — bucket D, and mostly a non-problem.** A pull-based `Stream<T>` (A.1) with a lazy
+**Maps onto Phorj — bucket D, and mostly a non-problem.** A pull-based `Stream<T>` (A.1) with a lazy
 producer (a generator-shaped closure or a Fiber that yields) *is* the backpressure-free model. There is
 **nothing to design** for the gated tier: demand = a synchronous pull. Only a *live, push-based* Tier-B
 source (a real socket firing faster than processed) needs a real buffer/drop policy — and that lives in the
@@ -209,7 +209,7 @@ Tier-B I/O layer, fixture-tested.
 - CONFIDENCE: **high** that backpressure is a non-issue in the single-threaded deterministic core. It is a
   property the constraint *gives us for free*, not a feature to build.
 
-**Takeaway:** Phorge's single-threaded `Rc` heap, usually framed as a limitation, is here an *advantage* —
+**Takeaway:** Phorj's single-threaded `Rc` heap, usually framed as a limitation, is here an *advantage* —
 the entire Reactive-Streams demand protocol is unnecessary because pull-based lazy streams have no
 producer/consumer race.
 
@@ -236,10 +236,10 @@ scheduler with a deterministic message-delivery order is a valid actor runtime**
 deterministic. Many actor libraries ship exactly such a scheduler for testing (Akka TestKit, CAF
 deterministic scheduler, Pony's deterministic test mode).
 
-**Maps onto Phorge — bucket D is achievable, and the share-nothing discipline is a GIFT to the `Rc` heap.**
+**Maps onto Phorj — bucket D is achievable, and the share-nothing discipline is a GIFT to the `Rc` heap.**
 The actor model's *defining constraint* — no shared mutable state, communicate only by message — is
 **precisely what makes single-threaded determinism natural** and sidesteps the `Value: !Send` wall: actors
-never share a `Value`, they send *copies/owned values* through a mailbox. Phorge can implement a
+never share a `Value`, they send *copies/owned values* through a mailbox. Phorj can implement a
 **single-threaded, cooperative, deterministic actor runtime**:
 
 - One scheduler (the A.3 logical-time scheduler), a run-queue of actors with pending mail.
@@ -249,9 +249,9 @@ never share a `Value`, they send *copies/owned values* through a mailbox. Phorge
 - Delivery order = a **deterministic rule**: process the run-queue in FIFO of "became-runnable" order,
   each actor draining its mailbox to quiescence (or one message per turn — a fixed policy). For a fixed
   program with no real-time inputs, the global interleaving is then a pure function of send order.
-- `receive`/behavior = a `match` over the message type (Phorge already has match-over-union + enums).
+- `receive`/behavior = a `match` over the message type (Phorj already has match-over-union + enums).
 
-- **Phorge-syntax sketch (Tier-A cooperative actors, gated):**
+- **Phorj-syntax sketch (Tier-A cooperative actors, gated):**
   ```
   import Core.Actor;
   enum Msg { Inc(int), Get(Actor) }
@@ -290,7 +290,7 @@ never share a `Value`, they send *copies/owned values* through a mailbox. Phorge
 
 - **What is Tier-B / rejected:**
   - **Preemptive scheduling** (BEAM reduction-counting) → R: non-deterministic interleaving, no `php -n`
-    target, and Phorge's `exec_op` has no preemption point. Cooperative run-to-completion is the gated
+    target, and Phorj's `exec_op` has no preemption point. Cooperative run-to-completion is the gated
     substitute.
   - **Distributed actors / real message passing over sockets** → Q (Tier-B): the *transport* is a real
     socket (`serve.rs` `Transport` pattern), non-deterministic arrival; fixture-tested with a replay log.
@@ -313,21 +313,21 @@ don't defensively code; isolate failure and restart from a known-good state.
 deterministic; a restart driven by a transient (network blip) is not. Restart *ordering* under a
 deterministic scheduler is reproducible.
 
-**Maps onto Phorge — bucket D for the supervision *logic*, given Phorge's existing fault model.** Phorge
+**Maps onto Phorj — bucket D for the supervision *logic*, given Phorj's existing fault model.** Phorj
 already has a typed fault/`throws`/`Result` error model (M-faults Slice 2, CLOSED) with byte-identical
 fault traces across backends. A supervisor is just: run a child behavior; if it faults, apply a restart
 strategy (a `match` on the strategy + a restart counter). Because faults are already deterministic and
 byte-identical, **supervision-tree restart behavior is byte-identical** as long as it rides the
 deterministic scheduler (B.1) and the crash is deterministic.
 
-- **Phorge fit:** layer on top of `Core.Actor` once B.1 exists. A `Supervisor` is an actor whose children
+- **Phorj fit:** layer on top of `Core.Actor` once B.1 exists. A `Supervisor` is an actor whose children
   are actors; restart strategies are an enum. CONFIDENCE: **medium** (depends entirely on B.1 landing
   first; the restart logic itself is trivial and deterministic).
 - **Tier-B caveat:** restart-intensity limits that use *wall-clock windows* ("max 3 restarts in 5
   seconds") are non-deterministic → use *logical* time (count restarts per N scheduler ticks) to stay
   Tier-A, or push the wall-clock window to Tier-B.
 
-**Takeaway:** supervision is a *cheap, deterministic add-on* to a cooperative actor runtime because Phorge
+**Takeaway:** supervision is a *cheap, deterministic add-on* to a cooperative actor runtime because Phorj
 already owns a byte-identical fault model — but it is strictly downstream of B.1 and should not be designed
 before it.
 
@@ -344,7 +344,7 @@ I/O* ⇒ non-deterministic.
 **Output determinism.** DETERMINISTIC over logical/resolved awaits with a deterministic ready-queue
 (exactly A.3). NON-DETERMINISTIC over real I/O.
 
-**Maps onto Phorge — bucket D core, and PHP Fibers are the transpile target (VERIFIED present under
+**Maps onto Phorj — bucket D core, and PHP Fibers are the transpile target (VERIFIED present under
 `php -n`).** This is the developer's locked "cooperative async/await over a DETERMINISTIC single-threaded
 scheduler → PHP 8.1 Fibers" decision, and the prior-art confirms it is sound:
 - **Rust legs:** a single-threaded scheduler (A.3) + suspendable user functions. The cleanest std-only
@@ -353,10 +353,10 @@ scheduler → PHP 8.1 Fibers" decision, and the prior-art confirms it is sound:
   `call_closure_value`/`run_until` — i.e. CPS or a state-machine'd task, where each `await` is a native
   that yields control back to the `Actor.run`-style driver. The VM does NOT need stackful coroutines:
   `run_until` already supports nested re-entrant frames; a task is a closure the scheduler resumes.
-  CONFIDENCE: **medium** — needs a spike to confirm a Phorge `async fn` can be *lowered to a
+  CONFIDENCE: **medium** — needs a spike to confirm a Phorj `async fn` can be *lowered to a
   resumable form the existing invoker can step*; the alternative (a real new `Op` for suspend/resume) is
   the fallback if CPS lowering is too invasive (then it costs the 3 coupled matches).
-- **PHP leg:** PHP 8.1 `Fiber` (core, present under `php -n` [Verified]) is the natural target — a Phorge
+- **PHP leg:** PHP 8.1 `Fiber` (core, present under `php -n` [Verified]) is the natural target — a Phorj
   `async fn` transpiles to a fiber, `await` to `Fiber::suspend`, the scheduler to a `Fiber::resume` loop.
   This is the ONE place Fibers pay off and they are available.
 - **Byte-identity argument.** Over logical timers + resolved values + a deterministic ready-queue, the
@@ -382,14 +382,14 @@ and the mapped function is pure, the output is identical whether the work ran se
 This is the developer's locked decision ("(b) PURE data-parallelism … all legs sequential today =
 byte-identical, with Rust-side physical parallelism as a LATER optimization that must preserve output").
 
-**Maps onto Phorge — bucket D, and it is essentially FREE today.** `parallelMap(list, pureFn)` is, *as a
+**Maps onto Phorj — bucket D, and it is essentially FREE today.** `parallelMap(list, pureFn)` is, *as a
 semantics*, identical to `Core.List.map` — the only difference is an *implementation* freedom to run the
 maps concurrently. Today all three legs run it sequentially ⇒ byte-identical with `map`. The "parallel" is
 a **promise about referential transparency**, enforced by: the mapped function must be pure (no impure
-native, no `this`-mutation — Phorge can check "calls no `pure:false` native" statically, reusing the same
+native, no `this`-mutation — Phorj can check "calls no `pure:false` native" statically, reusing the same
 `uses_impure_native` analysis at the type level).
 
-- **Phorge-syntax sketch (Tier-A, gated):**
+- **Phorj-syntax sketch (Tier-A, gated):**
   ```
   import Core.Parallel;
   var squared = Core.Parallel.map([1,2,3,4], fn(int x) => x * x);  // [1,4,9,16], order preserved
@@ -418,7 +418,7 @@ cloning).
 
 ### C.1 The determinism verdict table
 
-| Model | Scheduling | Output determinism | Phorge bucket | New `Op`? | Transpile target | Confidence |
+| Model | Scheduling | Output determinism | Phorj bucket | New `Op`? | Transpile target | Confidence |
 |---|---|---|---|---|---|---|
 | Rx operator algebra over eager list | immediate | deterministic | **A** (D) | no (HigherOrder) | `array_map/filter/reduce` | high |
 | Lazy pull `Stream<T>` (cold) | immediate/pull | deterministic | **A** (D) | no | generator / chained array fns | high |
@@ -453,9 +453,9 @@ suspend/resume `Op` as the named fallback if CPS-lowering `await` proves too inv
 
 ### C.3 The `Rc`-heap constraint is an ASSET here, not just a limitation
 
-The recurring surprise across the survey: Phorge's "limitations" are *gifts* for deterministic concurrency.
+The recurring surprise across the survey: Phorj's "limitations" are *gifts* for deterministic concurrency.
 - `Value: !Send` forbids shared-state threads — which is exactly what the actor model and pure-parallelism
-  *also* forbid. Phorge is structurally pushed toward the deterministic, message-passing/share-nothing
+  *also* forbid. Phorj is structurally pushed toward the deterministic, message-passing/share-nothing
   designs, which are *also* the byte-identical ones.
 - Single-threaded forces cooperative scheduling — which is exactly the deterministic kind.
 - Backpressure (a multi-threaded artifact) disappears entirely in pull-based single-threaded streams.

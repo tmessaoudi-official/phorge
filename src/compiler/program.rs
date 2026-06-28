@@ -237,7 +237,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
     // Feature B-static: a static whose initializer is NOT a compile-time literal gets a `Unit`
     // placeholder in `static_inits` and a `(slot, init expr)` entry here; a `SetStatic` prelude is
     // emitted at the start of `main` (declaration order) to evaluate it once before any user code —
-    // matching the interpreter's `eval_static_inits` and the transpiler's `__phorge_init_statics`.
+    // matching the interpreter's `eval_static_inits` and the transpiler's `__phorj_init_statics`.
     let mut static_runtime_inits: Vec<(usize, &Expr)> = Vec::new();
     for c in &class_decls {
         for m in &c.members {
@@ -307,7 +307,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
     // Synthetic methods for property hooks (M-mut.7b). Each hook's `get` becomes a 0-arg method
     // `<name>$get` whose body returns the get expression; each `set` a 1-arg method `<name>$set`
     // whose body is the set block. Owned here so `methods_to_compile` can borrow them alongside the
-    // real `ClassMember::Method`s. `$` is illegal in a Phorge identifier, so these never collide.
+    // real `ClassMember::Method`s. `$` is illegal in a Phorj identifier, so these never collide.
     let mut hook_methods: Vec<(usize, FunctionDecl)> = Vec::new();
     for (ci, c) in class_decls.iter().enumerate() {
         // Own hooks plus (M-RT S8 T4) each `use`d trait's hooks, all registered under THIS class's `ci`

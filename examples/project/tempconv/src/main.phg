@@ -1,6 +1,6 @@
 package Main;
 
-// A multi-file Phorge project (M5). Every file declares a `package`; the runnable entry is the
+// A multi-file Phorj project (M5). Every file declares a `package`; the runnable entry is the
 // reserved `package Main`. Library code lives in dotted packages whose folder must match the path
 // (folder = path): `Acme.Convert` is `src/Acme/Convert/`, `Acme.Label` is `src/Acme/Label/`.
 //

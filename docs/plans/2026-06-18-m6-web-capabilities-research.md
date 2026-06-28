@@ -30,9 +30,9 @@
   8 consecutive clean cycles, 3 angles) before the spec is written — matches the "perfect design" bar.
 - [2026-06-18] CONVERGED (research → design, 3C 8/8 at cycle 11). Locked design findings:
   - The **portable unit is `handle(Request) -> Response` at the VALUE level**, not raw bytes (PSR-7/15
-    insight: handler portable, SAPI bridge not). Parsing wire-bytes→Request is *runtime glue* (Phorge
+    insight: handler portable, SAPI bridge not). Parsing wire-bytes→Request is *runtime glue* (Phorj
     socket-side vs PHP superglobal-side) — NOT transpiled 1:1; only `handle` round-trips.
-  - **Request/Response shape (recommended): Shape A — pure-Phorge classes** (in `package Main` for the
+  - **Request/Response shape (recommended): Shape A — pure-Phorj classes** (in `package Main` for the
     spike; a `core.http` *library* awaits the M5 cross-package-types follow-up, E-PKG-TYPE). Headers as
     `List<Header>` + `header(k):string?` linear scan (no Map surface until S4); composes with S2 `??`.
     Needs ZERO new language features — M1 classes + S1 list/range + S2 optionals + `core.text`.
@@ -54,13 +54,13 @@
   resolved to one-API / evolving-engine (Shape B's native map is a later invisible optimization, §3a);
   (2) scope = **pure handler + static exact-match router** (W1–W2); path params→S4, middleware→S3 are
   "the rest"; (3) **`bytes` pulled forward as its own first slice W0** (developer choice) — PHP transpile
-  trivial, design is Phorge-side literal + UTF-8 interop; (4) **spike now, before Track A**. Build order:
+  trivial, design is Phorj-side literal + UTF-8 interop; (4) **spike now, before Track A**. Build order:
   W0 bytes → W1 handler → W2 router → W3 `src/serve.rs`+Transport → W4 `phg serve` CLI + PHP bridge +
   docs. No code until the build-gate "go".
 
 ## The dominating constraint — determinism
 
-Phorge's correctness spine is the **byte-identical differential harness** (`run` ≡ `runvm`, every
+Phorj's correctness spine is the **byte-identical differential harness** (`run` ≡ `runvm`, every
 program). A web server is the most anti-deterministic feature possible (sockets, ports, concurrency,
 client timing). This is the *same reason* URL/network was deferred to M6 (CLAUDE.md: "network is
 non-deterministic → breaks the byte-identical spine; determinism, not the dependency, gates examples").
@@ -73,7 +73,7 @@ non-deterministic → breaks the byte-identical spine; determinism, not the depe
 |---|---|---|---|---|
 | **1. Handler model** | `Request`/`Response` value types + `fn(Request) -> Response` contract | **Yes** | language/stdlib (`core.http`) | byte-identical differential (golden Request→Response), run≡runvm≡PHP |
 | **2. Server runtime** | bind socket, accept loop, route, dispatch | **No** | CLI/tooling (`phg serve`) — *not* a language feature | integration (`tests/serve.rs`, outside the spine) |
-| **3. Transpile target** | Phorge web app → idiomatic PHP | n/a | transpiler | real-PHP round-trip |
+| **3. Transpile target** | Phorj web app → idiomatic PHP | n/a | transpiler | real-PHP round-trip |
 
 Layer 1 is pure + testable; Layer 2 is the dirty I/O shell that never touches `differential.rs` —
 exactly how `phg build` (tested in `tests/build.rs`, outside the spine) coexists with the pure core
@@ -103,7 +103,7 @@ request-per-invocation model (superglobals + echo); `php -S` is Layer 2 wrapping
   `Result`-style total alternative (fits the immutable ethos better; cf. existing `T?`/`opt!` null work)?
 - **Lambdas/closures (Track A)** — needed for a router/middleware DSL (`app.get("/p", handler)`); not
   needed for a single top-level `handler(Request)->Response`. Decides feasibility of the router shape.
-- **String/bytes** — request bodies are bytes, not just UTF-8 strings. Does Phorge need a `bytes` type?
+- **String/bytes** — request bodies are bytes, not just UTF-8 strings. Does Phorj need a `bytes` type?
   Current `string` is UTF-8; HTTP bodies/headers are octets. Real gap to research.
 
 ### B. Web design space (research each, pros/cons, PHP-target fidelity, determinism, extensibility)
@@ -119,7 +119,7 @@ request-per-invocation model (superglobals + echo); `php -S` is Layer 2 wrapping
   runtime (uncolored `spawn` + channels on the VM's reified frames). Decouple: simple blocking server
   for the spike, couple to green threads at M6. HTTP/1.1 parsing (keep-alive, chunked, content-length)
   std-only. Graceful shutdown, ephemeral-port binding for tests.
-- **Transpile contract (Phorge:PHP::TS:JS):** handler → PHP superglobals + echo? `phg serve` →
+- **Transpile contract (Phorj:PHP::TS:JS):** handler → PHP superglobals + echo? `phg serve` →
   `php -S` dev server? Production → FPM? What does `phg transpile` emit for a web app, and does it run
   under stock PHP? (No Swoole/ReactPHP — those aren't core PHP.)
 - **Determinism quarantine** (test boundary): confirm the layered recommendation above; define exactly

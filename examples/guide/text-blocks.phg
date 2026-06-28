@@ -18,7 +18,7 @@ function main(): void {
         Dear {name},
           you have {unread} unread message(s).
         Regards,
-        The Phorge Team
+        The Phorj Team
         """;
     Console.println(letter);
 

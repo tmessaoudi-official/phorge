@@ -1,6 +1,6 @@
 // Member visibility — `public` / `private` / `protected` on fields and methods (Wave 1.1).
 //
-// Phorge enforces member visibility in the TYPE-CHECKER, not only in the transpiled PHP — so all
+// Phorj enforces member visibility in the TYPE-CHECKER, not only in the transpiled PHP — so all
 // three backends (interpreter, VM, real PHP) agree: an out-of-scope access is a compile error, never
 // a runtime divergence.
 //   • public    — readable / callable from anywhere (the default for an un-annotated member)

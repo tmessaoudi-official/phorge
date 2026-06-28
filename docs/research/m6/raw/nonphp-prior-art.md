@@ -1,8 +1,8 @@
 # M6 Web Capabilities — Non-PHP Prior Art Survey
 
 > Purpose: survey the best non-PHP std-lib HTTP server designs to steal the right abstractions
-> for Phorge's `phg serve` + a typed `handler(Request) -> Response` model.
-> Lens: Phorge today is immutable-by-default, no Map/Set, no closures/lambdas yet (Track A),
+> for Phorj's `phg serve` + a typed `handler(Request) -> Response` model.
+> Lens: Phorj today is immutable-by-default, no Map/Set, no closures/lambdas yet (Track A),
 > no exceptions, `#![forbid(unsafe_code)]`, std-only/zero-dep, UTF-8 strings, byte-identical
 > `run`/`runvm` spine, green-threads (uncolored `spawn` + channels) planned for M6.
 > Date: 2026-06-18. All claims sourced to authoritative docs (see Sources per section).
@@ -92,7 +92,7 @@ func Serve(l net.Listener, handler Handler) error
 **One goroutine per connection.** Handlers run concurrently; shared state must be guarded
 (`sync.Mutex`). The goroutine model is what makes the blocking-looking `ServeHTTP` actually scale —
 the runtime multiplexes goroutines onto OS threads. **This is the single most important lesson for
-Phorge:** the *handler API stays blocking and simple* while the *runtime* provides cheap concurrency.
+Phorj:** the *handler API stays blocking and simple* while the *runtime* provides cheap concurrency.
 
 ### Middleware = handler wrapping (no framework needed)
 
@@ -109,7 +109,7 @@ func (lh *loggingHandler) ServeHTTP(w ResponseWriter, r *Request) {
 }
 ```
 Middleware composability comes *for free* from the interface: any `Handler -> Handler` function
-chains. **This requires closures / first-class functions** — Phorge does not have these yet.
+chains. **This requires closures / first-class functions** — Phorj does not have these yet.
 
 **Sources:** [pkg.go.dev/net/http](https://pkg.go.dev/net/http) · [Routing Enhancements for Go 1.22](https://go.dev/blog/routing-enhancements) · [go.dev/src/net/http/server.go](https://go.dev/src/net/http/server.go)
 
@@ -146,13 +146,13 @@ Deno.serve({ port, hostname, onListen, signal }, handler)
 
 `Deno.serve` itself has **no router**. You match inside the handler, conventionally with the
 web-standard `URLPattern` API (`/users/:id` → named params). Routing is pure user code over the
-single handler — exactly the "raw handler + optional router layer" stratification Phorge wants.
+single handler — exactly the "raw handler + optional router layer" stratification Phorj wants.
 
 ### Streaming bodies
 
 Response body can be a `ReadableStream` (e.g. emit a chunk per second). Request body is also a
 stream (`req.body`). **Caveat:** the response stream is *cancelled* when the client disconnects —
-write() then errors. Streaming needs an async/stream abstraction Phorge lacks today.
+write() then errors. Streaming needs an async/stream abstraction Phorj lacks today.
 
 ### Concurrency
 
@@ -211,7 +211,7 @@ Event-loop, async; `server.pendingRequests` counter. Same single-thread+async fa
 Bun's pitch is throughput (~2.5× Node on their bench) via a fast native runtime, not a threading
 model difference.
 
-**Key takeaway for Phorge:** Bun proves the *declarative routes table* can sit on top of the pure
+**Key takeaway for Phorj:** Bun proves the *declarative routes table* can sit on top of the pure
 `fetch(req) -> Response` core. A static-Response route (`"/status": Response("OK")`) needs **no
 closures** — it's just a value in a map. Function routes and per-method objects need closures + a
 Map type. The static-route subset is shippable before Track A.
@@ -222,7 +222,7 @@ Map type. The static-route subset is shippable before Track A.
 
 ## 4. Rust std-only TCP server — proves zero-dependency feasibility (~40 lines)
 
-**Why it matters:** Phorge's runtime is Rust, std-only, zero-dep, `forbid(unsafe)`. This is the
+**Why it matters:** Phorj's runtime is Rust, std-only, zero-dep, `forbid(unsafe)`. This is the
 *exact* template for how `phg serve`'s Rust host implementation reads sockets and writes HTTP/1.1
 by hand. The Rust Book's final project does it in **~40 lines** for the socket+parse+response layer.
 
@@ -275,7 +275,7 @@ Response wire format: `status-line CRLF` + `headers CRLF` + blank `CRLF` + body.
 - **Keep-alive**: not handled (connection closes per request). HTTP/1.1 defaults to persistent
   connections; a real server must honor `Connection: keep-alive` / `close`.
 - **Errors**: `.unwrap()` everywhere — production must degrade gracefully.
-- **Bodies are octets**, not text — Phorge's UTF-8 `string` cannot model arbitrary request bodies
+- **Bodies are octets**, not text — Phorj's UTF-8 `string` cannot model arbitrary request bodies
   (binary uploads). Need a bytes type or `string`-as-UTF-8-only contract with a documented limit.
 
 ### Concurrency: bounded thread pool (NOT unbounded spawn)
@@ -349,8 +349,8 @@ immutable language. Node is the cautionary contrast, not a model to copy.
 ### The three-layer stratification (raw → pure handler → router+middleware)
 
 1. **Raw socket** (Rust-book layer): `TcpListener` + hand-written HTTP/1.1. This is the **Rust host
-   implementation** of `phg serve`, invisible to Phorge users.
-2. **Pure handler `fn(Request) -> Response`** (Deno layer): the **public Phorge default**. A single
+   implementation** of `phg serve`, invisible to Phorj users.
+2. **Pure handler `fn(Request) -> Response`** (Deno layer): the **public Phorj default**. A single
    top-level function, return an immutable `Response`. No closures, no Map, no streams required.
 3. **Router + middleware** (Go/Bun layer): a `ServeMux`-style router and `Handler -> Handler`
    middleware chains, OR Bun's declarative `routes` table. **Requires closures + a Map type** for
@@ -359,9 +359,9 @@ immutable language. Node is the cautionary contrast, not a model to copy.
 
 ---
 
-## 7. Adversarial feasibility — what Phorge can ship TODAY vs. what's blocked
+## 7. Adversarial feasibility — what Phorj can ship TODAY vs. what's blocked
 
-Phorge constraints checked against each shape:
+Phorj constraints checked against each shape:
 
 | Shape | Closures? | Map/Set? | Streams/async? | Bytes (non-UTF8)? | Feasible NOW? |
 |---|---|---|---|---|---|
@@ -372,7 +372,7 @@ Phorge constraints checked against each shape:
 | **`ResponseWriter`/`res` mutation model** (Go/Node) | No | No | implies streaming | yes | Possible but **rejected** — fights immutability, needs mutable handle + ordering rules |
 | **Streaming bodies** (Deno/Bun ReadableStream, SSE) | Yes | — | **Yes — needs an async/stream abstraction** | yes | Blocked — defer past M6 spike |
 
-### Ranking — how soon Phorge could ship each API shape
+### Ranking — how soon Phorj could ship each API shape
 
 1. **Pure top-level `handler(Request) -> Response`, whole-body-buffered, return immutable
    `Response`** — shippable in the M6 spike with **zero new language features**. Request is a
@@ -386,7 +386,7 @@ Phorge constraints checked against each shape:
 4. **Streaming / SSE / chunked bodies / keep-alive niceties** — gated on an async or
    generator/stream abstraction; **defer beyond the M6 spike**.
 
-### Determinism quarantine (Phorge's byte-identical `run`/`runvm` spine)
+### Determinism quarantine (Phorj's byte-identical `run`/`runvm` spine)
 
 A live server is inherently non-deterministic (network, timing, client identity) — it **cannot** be
 a byte-identity-gated example. The handler *function itself* IS deterministic and testable:
@@ -401,7 +401,7 @@ on `run`/`runvm` — exactly the Deno/Bun `server.fetch(request)` test seam. The
 
 - **Public default = pure `handler(Request) -> Response`** (Deno's shape). Immutable, return-based,
   testable, transpiles cleanly to a PHP `function(array $req): array`. Reject the Go/Node mutation
-  (`ResponseWriter`/`res.end`) model — it fights Phorge's immutability and adds ordering hazards.
+  (`ResponseWriter`/`res.end`) model — it fights Phorj's immutability and adds ordering hazards.
 - **Layer routing on top, never into the core.** Ship the pure handler first; add a Bun-style
   declarative routes *table* (as a typed list initially, Map later) and Go-style middleware once
   Track A closures land. The router should itself be expressible as a handler (Go's "mux is a

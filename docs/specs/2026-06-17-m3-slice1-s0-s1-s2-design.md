@@ -1,4 +1,4 @@
-# Phorge M3 Slice 1 — S0 (DX) · S1 (ergonomics) · S2 (null-safety) — Implementation Design
+# Phorj M3 Slice 1 — S0 (DX) · S1 (ergonomics) · S2 (null-safety) — Implementation Design
 
 > Implementation-level refinement of slices **S0, S1, S2** from the M3 roadmap
 > (`docs/specs/2026-06-17-m3-language-roadmap-design.md`). Fixes grammar deltas, token/AST/`Op`
@@ -75,8 +75,8 @@ PHP's native nullable model.
 - **Semantics:** interpreter + `Op::Index` already clone the element with a **bounds-checked** fault on
   out-of-range (D-L8 — clean runtime error, never PHP's null+warning). Confirm both backends emit the
   identical fault message.
-- **Transpile:** `$xs[$i]` (PHP). PHP's silent-null OOB differs from Phorge's checked fault — acceptable:
-  Phorge guarantees the index is valid by the time it runs, and the differential harness compares only
+- **Transpile:** `$xs[$i]` (PHP). PHP's silent-null OOB differs from Phorj's checked fault — acceptable:
+  Phorj guarantees the index is valid by the time it runs, and the differential harness compares only
   programs that don't fault. (Document in KNOWN_ISSUES.)
 - **Tests:** `xs[0]` reads; OOB faults identically on both backends; non-int index type-errors; transpile snapshot.
 
@@ -168,7 +168,7 @@ value — the PHP-way (D-L9). The *guarantee* lives in the checker: a non-option
   located; never a crash). Lowers to null-test + a fault op (reuse the `MatchFail`-style fault path, or a
   generic `Op::Fault(msg)` if none exists — confirm in `vm.rs`; prefer reusing the existing fault channel,
   no new `Op`).
-- **Transpile:** a tiny runtime helper `__phorge_unwrap($v, 'name', line)` that `throw`s on null, else returns
+- **Transpile:** a tiny runtime helper `__phorj_unwrap($v, 'name', line)` that `throw`s on null, else returns
   `$v` (emitted once per file when `!` is used).
 - **Tests:** `opt!` returns the value when present; faults **identically on both backends** when null
   (FaultKind parity — memory `error-parity-faultkind`); lint fires; transpile round-trips under real PHP.

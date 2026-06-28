@@ -228,7 +228,7 @@ impl fmt::Display for Diagnostic {
 }
 
 /// JSON-escape a string per RFC 8259 (std-only — no serde): the two mandatory escapes (`"`, `\`),
-/// the common control shorthands, and a `\uXXXX` fallback for any other C0 control char. Phorge
+/// the common control shorthands, and a `\uXXXX` fallback for any other C0 control char. Phorj
 /// strings are valid UTF-8, so non-ASCII passes through unescaped (legal in JSON).
 fn json_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);

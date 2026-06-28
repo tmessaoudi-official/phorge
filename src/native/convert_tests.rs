@@ -173,10 +173,10 @@ fn convert_natives_registered_and_emit() {
         let a: Vec<String> = args.iter().map(|s| (*s).to_string()).collect();
         (crate::native::registry()[i].php)(&a)
     };
-    assert_eq!(php("toInt", &["$f"]), "__phorge_float_to_int($f)");
+    assert_eq!(php("toInt", &["$f"]), "__phorj_float_to_int($f)");
     assert_eq!(php("intToDecimal", &["$i"]), "(string)($i)");
     assert_eq!(php("decimalToFloat", &["$d"]), "(float)($d)");
-    assert_eq!(php("decimalToInt", &["$d"]), "__phorge_dec_to_int($d)");
+    assert_eq!(php("decimalToInt", &["$d"]), "__phorj_dec_to_int($d)");
 }
 
 #[test]
@@ -210,11 +210,11 @@ fn convert_exact_int_is_integral_or_null() {
     };
     assert_eq!(
         php("floatToIntExact", &["$f"]),
-        "__phorge_float_to_int_exact($f)"
+        "__phorj_float_to_int_exact($f)"
     );
     assert_eq!(
         php("decimalToIntExact", &["$d"]),
-        "__phorge_dec_to_int_exact($d)"
+        "__phorj_dec_to_int_exact($d)"
     );
 }
 

@@ -18,7 +18,7 @@
 
 ## Decisions Log (cont.)
 - [2026-06-26] SUPERSEDES the "retire `var`" framing after research (Hack, Haxe, re-read
-  `philosophy-of-phorge`). Corrections: (a) syntax familiarity is only *light* — craftsmanship is the
+  `philosophy-of-phorj`). Corrections: (a) syntax familiarity is only *light* — craftsmanship is the
   apex filter; my `let`-false-friend argument was over-weighted; (b) tenet 4 ("never remove a good
   feature") rules OUT the keyless synthesis AND `let`=immutable (both drop the inferred-mutable
   capability + add an immutable/mutable inference asymmetry). (c) The actual bug is *a hard-reserved
@@ -33,7 +33,7 @@
   migrate. F2 (if-let marker) is MOOT — `if (var x = opt)` is kept verbatim.
 - [2026-06-26] Verified PHP-8.5 scope rule (empirical, `php -r`): `var` is legal in PHP as a **variable,
   parameter, property, and method name**, but a **parse error as a free-function or class name**. So
-  Phorge will allow `var` as a value identifier (local/param/field/property) and as a **method name**,
+  Phorj will allow `var` as a value identifier (local/param/field/property) and as a **method name**,
   and REJECT it as a free-function / class / enum / interface / type-alias name (those transpile to
   PHP symbol positions where `var` is reserved). This mirrors PHP's own tolerance exactly.
 
@@ -53,7 +53,7 @@
 - cycle 4 — RESET: F-l (VERIFIED cross-language: PHP reserves `var` for free-function & class names →
   reject `var` there with `E-RESERVED-NAME`; allow value/param/field/property/method).
 - cycle 5 — RESET: F-m (VERIFIED: no PHP-reserved-word guard exists today; `list`/`print`/`clone`/etc.
-  are already usable Phorge identifiers that would transpile to invalid PHP — a PRE-EXISTING, broader
+  are already usable Phorj identifiers that would transpile to invalid PHP — a PRE-EXISTING, broader
   latent hazard. Out of scope here; note in KNOWN_ISSUES as a future general reserved-name guard).
 - cycle 6 — clean (1/8): re-scan — no currently-valid program changes parse (every `var`-as-keyword
   position is preserved); byte-identity spine untouched (front-end only; `var`-the-value is just a name).
@@ -90,13 +90,13 @@ literally named `var`, parenthesize or assign via a temp (documented). The infer
 2. Guard: reject `var` as free-function / class / enum / interface / type-alias / type-pattern name →
    `E-RESERVED-NAME` (+ `phg explain`) (F-k, F-l).
 3. Lift printer: confirm it emits a value named `var` safely, including the decl form `mutable var var`
-   (F-f); add a lift round-trip case (PHP `$var` → Phorge `var`).
+   (F-f); add a lift round-trip case (PHP `$var` → Phorj `var`).
 4. Example + docs: a guide example using `var` as a parameter/field/local (byte-identity-gated on
    run/runvm/PHP); `examples/README.md` entry; KNOWN_ISSUES note for the pre-existing general
    reserved-word hazard (F-m); CHANGELOG; CLAUDE.md (developer applies — classifier-blocked).
 5. Tests: parser (contextual cases incl. F-a/F-b), checker (`E-RESERVED-NAME`), lift round-trip,
    differential (the new example). Run the full gate
-   (`PHORGE_PHP=…/php-8.5.7 PHORGE_REQUIRE_PHP=1 cargo test --workspace` + clippy + fmt).
+   (`PHORJ_PHP=…/php-8.5.7 PHORJ_REQUIRE_PHP=1 cargo test --workspace` + clippy + fmt).
 
 **Acceptance:** every existing test passes unchanged (additive); `var` usable as param/local/field/
 property/method; rejected as fn/class/type with a clear code; `examples/**` byte-identical on all three

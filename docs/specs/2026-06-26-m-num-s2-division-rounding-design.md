@@ -8,7 +8,7 @@ Exact, explicitly-rounded decimal division. Bare `decimal / decimal` is a **comp
 (`E-DECIMAL-DIV`, hint → `Decimal.div`); division and re-scaling go through two natives with an
 explicit target scale + rounding mode:
 
-```phorge
+```phorj
 import Core.Decimal;
 decimal unit = Decimal.div(10.00d, 3d, 2, RoundingMode.HalfEven);   // 3.33
 decimal cents = Decimal.round(2.345d, 2, RoundingMode.HalfUp);      // 2.35
@@ -59,10 +59,10 @@ where `N = ua * 10^(sb + scale)`, `D = ub * 10^sa` (both `checked_mul`/`checked_
 - `scale <  sd` ⇒ `round_div(ud, 10^(sd − scale), mode)` at `scale`.
 
 ## Transpile (BCMath helpers)
-`Decimal.div`/`Decimal.round` ⇒ gated `__phorge_dec_div`/`__phorge_dec_round` helpers. They compute `N`,
+`Decimal.div`/`Decimal.round` ⇒ gated `__phorj_dec_div`/`__phorj_dec_round` helpers. They compute `N`,
 `D` with `bcmul`/(10^k via `bcpow` or string), then `round_div` via `bcdiv($N,$D,0)` (q, trunc-to-zero ✓)
 + `bcmod($N,$D)` (rem ✓) + `bccomp(|rem|, bcsub($d,|rem|))` for the half-decision, switching on `$mode`
-exactly as the Rust table. Result i128-bounds-checked (reuse S1's `__phorge_dec_check`) ⇒ identical
+exactly as the Rust table. Result i128-bounds-checked (reuse S1's `__phorj_dec_check`) ⇒ identical
 overflow fault; explicit `"decimal division by zero"` / `"decimal scale out of range"` throws.
 
 ## Checker

@@ -1,8 +1,8 @@
-// M8.5 S2 interop — calling an existing PHP class from Phorge via `declare class`.
+// M8.5 S2 interop — calling an existing PHP class from Phorj via `declare class`.
 //
 // PHP-target-only (like all of examples/interop/): `phg run`/`runvm` refuse it (E-FOREIGN-RUNTIME);
 // build with `phg transpile classes.phg > out.php && php out.php`. The `declare class` describes PHP's
-// built-in DateTimeImmutable so Phorge type-checks construction, instance methods, and static methods;
+// built-in DateTimeImmutable so Phorj type-checks construction, instance methods, and static methods;
 // it emits no PHP class definition and references take the global form (`new \DateTimeImmutable`,
 // `$d->format(...)`, `\DateTimeImmutable::createFromFormat(...)`).
 package Main;

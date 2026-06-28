@@ -1,21 +1,21 @@
 # PHP-Fidelity & Divergence Audit
 
-> Goal (developer, 2026-06-25): go through **every** way Phorge diverges from PHP **with no solid
-> reason** and challenge each one; and ensure **both** directions (Phorge→PHP transpile AND
-> PHP→Phorge lift) use **real, idiomatic language features** of the target. Flagship: the transpiler
+> Goal (developer, 2026-06-25): go through **every** way Phorj diverges from PHP **with no solid
+> reason** and challenge each one; and ensure **both** directions (Phorj→PHP transpile AND
+> PHP→Phorj lift) use **real, idiomatic language features** of the target. Flagship: the transpiler
 > emits PHP *concatenation* where PHP *interpolation* exists — "this shows we don't master PHP."
 > Process: detect all findings, then walk them **one-by-one via AskUserQuestion**, challenging each,
 > showing a running **Finding i / N** counter.
 
 ## Philosophy anchor
-Phorge : PHP :: TypeScript : JavaScript. **Familiarity-first**; PHP is the FLOOR not the ceiling;
+Phorj : PHP :: TypeScript : JavaScript. **Familiarity-first**; PHP is the FLOOR not the ceiling;
 remove *surprises* never *capability*. A divergence from BOTH PHP and TS without a capability/safety
 reason is a suspected wart (often a Rust-ism leaking from the implementation language into the surface).
 
 ## Categories
-- **A** — Phorge surface-syntax divergence from PHP/TS with no capability reason.
-- **B** — Transpile fidelity: Phorge→PHP emits non-idiomatic PHP where a native PHP ≤8.5 feature exists.
-- **C** — Lift fidelity: PHP→Phorge over-rejects or emits non-idiomatic Phorge.
+- **A** — Phorj surface-syntax divergence from PHP/TS with no capability reason.
+- **B** — Transpile fidelity: Phorj→PHP emits non-idiomatic PHP where a native PHP ≤8.5 feature exists.
+- **C** — Lift fidelity: PHP→Phorj over-rejects or emits non-idiomatic Phorj.
 
 ## Decision states
 `pending` (not yet reviewed) · `ADOPT` (agreed to change) · `KEEP` (challenged, justified, no change) ·
@@ -26,7 +26,7 @@ reason is a suspected wart (often a Rust-ism leaking from the implementation lan
 ## Findings register
 
 ### A-1 — return type `->` vs `:`  [VERIFIED · pending]
-- **Phorge now:** `function f() -> T` (Rust-style arrow). Also used for method/lambda returns and
+- **Phorj now:** `function f() -> T` (Rust-style arrow). Also used for method/lambda returns and
   function types `(int) -> int`.
 - **PHP / TS:** both `function f(): T` (colon). `->` is *also* PHP's member-access operator → false friend.
 - **Proposed:** declared returns → `: T` (PHP+TS); function *types* → `=> T` (TS fat-arrow, since `:`
@@ -36,17 +36,17 @@ reason is a suspected wart (often a Rust-ism leaking from the implementation lan
 - **Severity:** high (every function/method).
 
 ### B-1 — string interpolation → concatenation  [VERIFIED · pending]
-- **PHP emitted now:** Phorge `"Hello, {w}!"` → PHP `"Hello, " . $w . "!"` (concat); `println`'s
+- **PHP emitted now:** Phorj `"Hello, {w}!"` → PHP `"Hello, " . $w . "!"` (concat); `println`'s
   newline is concatenated too (`. "\n"`). [Verified: `phg transpile`]
 - **PHP idiomatic:** `"Hello, {$w}!"` (PHP supports `{$var}` interpolation natively; works under `php -n`).
-- **Reducible?** Yes — emit a PHP interpolated string from a Phorge interpolated string literal.
+- **Reducible?** Yes — emit a PHP interpolated string from a Phorj interpolated string literal.
 - **Severity:** high (every interpolated string — extremely visible, the developer's flagship).
 
 <!-- discovery agents (A/B/C sweeps) will append A-2.., B-2.., C-1.. here -->
 
 ### B-2 — `Console.println` newline concatenated  [VERIFIED · pending]
-- **PHP now:** `echo "Hello, Phorge!" . "\n";` (newline appended via concat). [src/native/mod.rs ~254]
-- **PHP idiomatic:** `echo "Hello, Phorge!\n";` (embed `\n`). Cleanest fix rides on B-1 (build one
+- **PHP now:** `echo "Hello, Phorj!" . "\n";` (newline appended via concat). [src/native/mod.rs ~254]
+- **PHP idiomatic:** `echo "Hello, Phorj!\n";` (embed `\n`). Cleanest fix rides on B-1 (build one
   interpolated/embedded string).
 - **Reducible?** Yes. **Severity:** high visibility (every `println`), but cosmetic (output identical).
 
@@ -62,36 +62,36 @@ reason is a suspected wart (often a Rust-ism leaking from the implementation lan
   `intdiv(9,5)=1`). Confirmed by `tempconv`'s green namespaced integer-division oracle. No action.
 
 > Agent B also confirmed already-idiomatic / irreducible (no action): native `match`/ternary/`clone`/
-> `?? throw` (Track 1), `array_values(array_filter)` (key reindex), `__phorge_float` (Ryū, irreducible),
-> `__phorge_range` (PHP `range()` descends — semantic mismatch), `array_reduce` arg-order, `\xHH` bytes.
+> `?? throw` (Track 1), `array_values(array_filter)` (key reindex), `__phorj_float` (Ryū, irreducible),
+> `__phorj_range` (PHP `range()` descends — semantic mismatch), `array_reduce` arg-order, `\xHH` bytes.
 
 ### A-6 — `in` iteration keyword (false friend)  [pending · HIGH]
-- **Phorge now:** `for (string w in list)` (iterates values). [examples/*.phg]
+- **Phorj now:** `for (string w in list)` (iterates values). [examples/*.phg]
 - **PHP:** `foreach ($xs as $x)` (`as`). **TS:** `for (const x of arr)` (`of`). **JS `for…in` iterates
-  KEYS** → Phorge's `in` is a genuine false friend for the TS/JS-familiar audience.
+  KEYS** → Phorj's `in` is a genuine false friend for the TS/JS-familiar audience.
 - **Justified?** NO — naming choice, no capability reason. Candidates: `as` (PHP) or `of` (TS).
 - **Severity:** high (every loop).
 
 ### A-3 — parameter syntax: type-first, no sigil  [pending · MEDIUM]
-- **Phorge now:** `function f(int age, string name)`. **PHP:** `(int $age, string $name)`.
+- **Phorj now:** `function f(int age, string name)`. **PHP:** `(int $age, string $name)`.
   **TS:** `(age: int, name: string)`.
 - **Justified?** PARTIAL — type-first + no sigil is unambiguous and Go/Rust-like, but matches neither
   model language's *order*. Dropping `$` aligns with TS (A-4, considered justified). Debatable: order.
 - **Severity:** medium (every signature). *Note: deeply coupled to A-1/A-4 — decide as a set.*
 
 ### A-7 — interpolation delimiter `{w}` vs `{$w}`/`${w}`  [pending · LOW]
-- **Phorge now:** `"hello {w}"`. **PHP:** `"hello {$w}"` / `"$w"`. **TS:** `` `hello ${w}` ``.
+- **Phorj now:** `"hello {w}"`. **PHP:** `"hello {$w}"` / `"$w"`. **TS:** `` `hello ${w}` ``.
 - **Justified?** PARTIAL — `{w}` is clean (sigil-free, consistent with A-4) but matches neither exactly.
   Relevant to the B-1 transpile fix (the source delimiter maps to PHP `{$w}`).
 - **Severity:** low (dialect choice; consistent internally).
 
 ### A-46 — `++`/`--` statement-only (no expression form)  [pending · LOW]
-- **Phorge now:** `x++;` legal as a statement; `y = x++` rejected. PHP/TS allow both.
+- **Phorj now:** `x++;` legal as a statement; `y = x++` rejected. PHP/TS allow both.
 - **Justified?** YES (removes side-effect-in-expression footgun) — but it *is* a divergence; confirm KEEP.
 - **Severity:** low.
 
 ### A-50 — single string form (all interpolate)  [pending · LOW]
-- **Phorge now:** only `"…"` (always interpolation-capable); no `'…'` literal form. PHP uses `'…'` for
+- **Phorj now:** only `"…"` (always interpolation-capable); no `'…'` literal form. PHP uses `'…'` for
   non-interpolated. **Justified?** PARTIAL (grammar simplicity) — confirm KEEP or add `'…'`.
 - **Severity:** low.
 
@@ -110,21 +110,21 @@ reason is a suspected wart (often a Rust-ism leaking from the implementation lan
 
 ### C-1 — lift over-rejects string interpolation  [pending · HIGH]
 - **Lift now:** rejects PHP `"Hello, $name"` / `"{$name}"` as `"string interpolation is Tier-2"`
-  [parser.rs:881] — even though **Phorge supports interpolation** `"{name}"`. The lift lexer already
+  [parser.rs:881] — even though **Phorj supports interpolation** `"{name}"`. The lift lexer already
   detects it (`InterpStr`); only the parser gates it. Mirror of B-1 on the ↑ side.
-- **Target:** map PHP interpolation → Phorge `"{name}"`. **Severity:** high (very common PHP).
+- **Target:** map PHP interpolation → Phorj `"{name}"`. **Severity:** high (very common PHP).
 
 ### C-45 — lift emits untyped return silently  [pending · MEDIUM]
-- **Lift now:** a PHP fn with no `: T` → Phorge fn with `ret: None` [lifter.rs:125]; parses but FAILS
-  Phorge's checker downstream (Tier-1 requires explicit returns). Silent invalid output.
-- **Target:** reject loudly (Tier-2) or warn. **Severity:** medium (produces non-compiling Phorge).
+- **Lift now:** a PHP fn with no `: T` → Phorj fn with `ret: None` [lifter.rs:125]; parses but FAILS
+  Phorj's checker downstream (Tier-1 requires explicit returns). Silent invalid output.
+- **Target:** reject loudly (Tier-2) or warn. **Severity:** medium (produces non-compiling Phorj).
 
 ### C-46 — lift doesn't handle `instanceof`  [pending · MEDIUM]
-- **Lift now:** PHP `$x instanceof C` not lexed/lifted — Phorge SUPPORTS `instanceof` (M-RT S1).
+- **Lift now:** PHP `$x instanceof C` not lexed/lifted — Phorj SUPPORTS `instanceof` (M-RT S1).
   Straightforward Tier-1 add. **Severity:** medium (feature gap).
 
 ### C-47 — lift doesn't handle bitwise operators  [pending · MEDIUM]
-- **Lift now:** `& | ^ ~ << >>` rejected as unsupported chars [lexer.rs:349] — Phorge SUPPORTS them
+- **Lift now:** `& | ^ ~ << >>` rejected as unsupported chars [lexer.rs:349] — Phorj SUPPORTS them
   (primitives sweep). Tier-1 add (lexer+parser+lifter). **Severity:** medium (feature gap).
 
 ### C-5/C-6 — printer over-parenthesizes / unary as pseudo-call  [pending · LOW]
@@ -198,7 +198,7 @@ the 2 rejected B-10/C-38 are NOT in the queue — challenge any from the appendi
   collision; consistent with `clone … with`). Conditional counting still uses a normal `mutable int n`.
 
 - [2026-06-25] **A-3 = KEEP.** Type-first params `(int name)` stay: it's PHP-minus-sigil (PHP is
-  type-first), internally consistent with Phorge locals (`string x`) and fields (`int x`), and pairs
+  type-first), internally consistent with Phorj locals (`string x`) and fields (`int x`), and pairs
   with the PHP-style `:` return (`(int name): string` ≡ PHP without `$`). Rejected full TS name-first
   flip (`name: int`) — bigger codemod, trades PHP-closeness; the modern-consensus readability argument
   was weighed and lost to PHP-familiarity + zero churn.
@@ -214,7 +214,7 @@ the 2 rejected B-10/C-38 are NOT in the queue — challenge any from the appendi
   literal `%` would be misread as a format spec (corruption risk), more verbose, not more readable —
   `printf` is reserved for a possible future `Console.printf`/format-string feature only.
 
-- [2026-06-25] **C-1 = ADOPT (faithful subset).** Lift maps PHP interpolation → Phorge `"{…}"` for
+- [2026-06-25] **C-1 = ADOPT (faithful subset).** Lift maps PHP interpolation → Phorj `"{…}"` for
   var/`->prop`/`->method()`/`[index]` chains; keeps the loud Tier-2 rejection for the risky tail
   (legacy `"${name}"` — deprecated PHP 8.2 — and complex holes). Honors lift's never-guess contract;
   round-trip-gated per the B-1 coverage discipline. ("Try everything" rejected: a silent wrong guess is
@@ -226,15 +226,15 @@ the 2 rejected B-10/C-38 are NOT in the queue — challenge any from the appendi
   both rejected — reintroduce/retain the `$` sigil. Zero churn (already shipped). Three tools: `{w}`
   hole · `\{` literal · `r"…"` raw.
 
-- [2026-06-25] **C-46 = ADOPT.** Lift translates PHP `$x instanceof C` → Phorge's existing
-  `x instanceof C` (M-RT S1); dynamic-RHS `instanceof $var` rejected loudly. (Clarified: Phorge already
+- [2026-06-25] **C-46 = ADOPT.** Lift translates PHP `$x instanceof C` → Phorj's existing
+  `x instanceof C` (M-RT S1); dynamic-RHS `instanceof $var` rejected loudly. (Clarified: Phorj already
   HAS `instanceof`; this is purely lift coverage.)
 - [2026-06-25] **A-61 (new) = KEEP `instanceof`.** Rename to camelCase `instanceOf` REJECTED — every
-  reference language (PHP/JS/TS/Java) uses lowercase `instanceof`, and all Phorge keywords are
+  reference language (PHP/JS/TS/Java) uses lowercase `instanceof`, and all Phorj keywords are
   lowercase; `instanceOf` would diverge from the universal convention and be the lone camelCase keyword.
 
 - [2026-06-25] **C-47 = ADOPT.** Add bitwise `& | ^ ~ << >>` to lift (lexer + parser at PHP precedence
-  + 1:1 mapping to Phorge's existing bitwise ops).
+  + 1:1 mapping to Phorj's existing bitwise ops).
 
 - [2026-06-25] **C-45 = ADOPT (void-or-reject).** Lift: PHP fn with no return hint + no value-returning
   `return` → emit `: void` (provable from body, not a guess); has a value `return` but no type → reject
@@ -308,18 +308,18 @@ A-61 (`instanceof` lowercase).
   - ✅ **C-45 IMPLEMENTED 2026-06-26** (`lift_ret` + `body_has_value_return` in lifter.rs): a PHP fn/
     method with no return hint → `void` when the body never returns a value (provable), else loud
     Tier-2 reject. Replaces the old silent non-compiling `ret: None`. Lift tests green.
-  - ✅ **C-46 IMPLEMENTED 2026-06-26**: lift PHP `value instanceof ClassName` → Phorge `instanceof`
+  - ✅ **C-46 IMPLEMENTED 2026-06-26**: lift PHP `value instanceof ClassName` → Phorj `instanceof`
     (M-RT S1). New `PhpExpr::InstanceOf`; handled at the postfix level (non-associative); dynamic
-    `instanceof $var` rejected loudly. Printer + Phorge backend already had `instanceof`.
+    `instanceof $var` rejected loudly. Printer + Phorj backend already had `instanceof`.
   - ✅ **C-47 IMPLEMENTED 2026-06-26**: lift bitwise `& | ^ ~ << >>`. New `PhpBinOp::{BitAnd,BitOr,
     BitXor,Shl,Shr}` + `PhpUnOp::BitNot` + lexer tokens (`Amp/Bar/Caret/Tilde/Shl/Shr`); `infix_op`
     renumbered to the full PHP-8 table (bitwise/shift levels inserted, prior ops keep relative order);
     1:1 lifter mapping. The lift printer already covered all of these.
-  - ✅ **C-1 IMPLEMENTED 2026-06-26** (`4ecb6c0`): lift PHP double-quoted interpolation → Phorge
+  - ✅ **C-1 IMPLEMENTED 2026-06-26** (`4ecb6c0`): lift PHP double-quoted interpolation → Phorj
     `"{…}"` holes, restricted to PHP's actual grammar (a `$`-rooted access chain, verified against
     8.5). `PhpExpr::Interp` + `parse_interp` (escape decode, quote-aware brace scan, simple/complex
     forms) reusing `parse_postfix` + an access-chain validator; operators/`${…}`/bareword subscripts
-    rejected loudly. Round-trip gate proves lifted Phorge ≡ original PHP on run/runvm/real-PHP.
+    rejected loudly. Round-trip gate proves lifted Phorj ≡ original PHP on run/runvm/real-PHP.
   - ✅ **C-5/6 IMPLEMENTED 2026-06-26** (`423aab3`): lift printer is now precedence-aware (minimal
     parens) — `prec_of`/`bin_prec` mirror `src/parser/exprs.rs`; `operand()` is associativity-aware;
     `postfix_operand()` parenthesizes a non-atomic receiver; prefix unary is bare (`~a`), nested
@@ -327,7 +327,7 @@ A-61 (`instanceof` lowercase).
 
 **ALL THREE STREAMS COMPLETE** (Stream 2 ✓, Stream 3 ✓, Stream 1 = A-1/A-6/A-62 ✓). The only
 remaining audit item is **A-46** (expr `++`/`--`), deliberately PARKED pending a scope decision
-(D-A46) — see `~/.claude/projects/-stack-projects-phorge/overnight-blockers-2026-06-26.md`.
+(D-A46) — see `~/.claude/projects/-stack-projects-phorj/overnight-blockers-2026-06-26.md`.
 
 STATUS: **PHP-fidelity & divergence audit COMPLETE** (15/16 findings shipped; A-46 parked with full
 design). 6 commits on 2026-06-26 (`4ecb6c0`→`bcc8476`), all green + byte-identical on

@@ -1,18 +1,18 @@
-# Prior-Art Sweep — Go stdlib lens for Phorge native modules
+# Prior-Art Sweep — Go stdlib lens for Phorj native modules
 
 **Lens:** Go's standard library (`net/url`, `net/http`, `database/sql`, `fmt %#v`/`spew`, `crypto/*`,
 `encoding/*`, `math/rand`, `time`, `regexp`, `strconv`, `sort`, `unicode`).
-**Goal:** enumerate the std-library / well-known-library *capabilities* that are candidates for a Phorge
+**Goal:** enumerate the std-library / well-known-library *capabilities* that are candidates for a Phorj
 `Core.*` native module, classify each on the **determinism partition** (Tier A = pure / byte-identity-gateable
 vs Tier B = impure / quarantined behind the M6 `Transport` trait), and call out determinism traps and the
 exact PHP transpile targets (under `php -n`, PHP 8.5 floor).
 
-Confidence is graded per capability. "Std Rust API" = the `std` surface the Phorge native body would lean
+Confidence is graded per capability. "Std Rust API" = the `std` surface the Phorj native body would lean
 on (no external crates — `[dependencies]` is empty).
 
 ---
 
-## 0. What Phorge already ships (baseline, so we don't propose duplicates)
+## 0. What Phorj already ships (baseline, so we don't propose duplicates)
 
 Registry modules present today (`src/native/`): `Core.Console`, `Core.Bytes`, `Core.Convert`,
 `Core.Decimal`, `Core.Env`, `Core.File`, `Core.Html`, `Core.Json`, `Core.List`, `Core.Map`, `Core.Math`,
@@ -29,30 +29,30 @@ http/sql cluster. Those are what this sweep enumerates.
 **Go shape:** `fmt.Sprintf("%#v", x)` (Go-syntax repr), `%+v` (field names), `spew.Sdump` (deep, with
 pointers/addresses). PHP analogues: `var_dump`, `var_export`, `print_r`.
 
-**Phorge proposal — `Core.Debug`:**
+**Phorj proposal — `Core.Debug`:**
 ```
 import Core.Debug;
-Console.println(Debug.dump(value));      // dump(T) -> string   (deterministic, Phorge-defined format)
+Console.println(Debug.dump(value));      // dump(T) -> string   (deterministic, Phorj-defined format)
 Console.println(Debug.inspect(value));   // alias / compact one-line form
 ```
 API sketch — a generic `dump<T>(T x) -> string` (erased generic, like `id<T>`), returning a
-**Phorge-defined deterministic textual format** — NOT PHP's `var_dump` (which leaks `#object-id` and is
+**Phorj-defined deterministic textual format** — NOT PHP's `var_dump` (which leaks `#object-id` and is
 not stable across runs). Recurse over the closed `Value` enum: `Int`→`5`, `Float`→Ryū-canonical (reuse
-`__phorge_float`), `Str`→quoted+escaped, `Bool`, `Null`→`null`, `List`→`[a, b]`, `Map`→`{k: v}`
+`__phorj_float`), `Str`→quoted+escaped, `Bool`, `Null`→`null`, `List`→`[a, b]`, `Map`→`{k: v}`
 (insertion order — already preserved in `Value::Map`), `Set`→`{a, b}`, `Instance`→`ClassName { field: v }`
 (fields in declaration order via the checker's class table, NOT runtime hash order), `Enum`→`Variant(payload)`,
 `Bytes`→`b"\xNN…"`, `Decimal`→`1.50d`, `Closure`→`<closure>` (no address!).
 
-**Purity: PURE** — *if and only if* the format is Phorge-defined and address-free. This is the single
-most important design call: Go's `%p`/`spew` print pointer addresses (non-deterministic). Phorge must
+**Purity: PURE** — *if and only if* the format is Phorj-defined and address-free. This is the single
+most important design call: Go's `%p`/`spew` print pointer addresses (non-deterministic). Phorj must
 **never** print an address or object id. With that rule it is fully byte-identity-gateable.
 
 **Determinism traps (named):**
 - **Object identity / addresses** — must be omitted entirely (no `Closure@0x…`, no `#1` object ids).
-- **Map/Set iteration order** — already solved: Phorge's `Value::Map`/`Set` are insertion-ordered
+- **Map/Set iteration order** — already solved: Phorj's `Value::Map`/`Set` are insertion-ordered
   `Rc<Vec<…>>` (Map discipline R1). Use that order, never a `HashMap` walk.
 - **Struct field order** — use the *declaration order* from the checker's class table, not runtime order.
-- **Float formatting** — reuse the existing Ryū `__phorge_float` helper so Rust backends and PHP agree
+- **Float formatting** — reuse the existing Ryū `__phorj_float` helper so Rust backends and PHP agree
   (PHP `echo`'s 14-digit default would diverge — this is the documented irrational-float issue).
 - **Circular references** — `Value::eq_val_rec` already maintains a visited-set; reuse the same pattern
   in the dumper so a self-referential `Instance` (possible since M-mut introduced shared-mutable
@@ -61,10 +61,10 @@ most important design call: Go's `%p`/`spew` print pointer addresses (non-determ
 **Std Rust API:** none beyond `String` formatting; pure walk over `Value`.
 
 **PHP transpile target:** **not** `var_dump` (non-deterministic, wrong format). Emit a gated runtime
-helper `__phorge_dump($x)` (the `uses_dump` bool + `emit_runtime_helpers` pattern) that reproduces the
-exact Phorge format in PHP — a recursive switch on `gettype`/`is_*` with `instanceof` for objects and
+helper `__phorj_dump($x)` (the `uses_dump` bool + `emit_runtime_helpers` pattern) that reproduces the
+exact Phorj format in PHP — a recursive switch on `gettype`/`is_*` with `instanceof` for objects and
 `(array)$obj` for field extraction in declaration order. This is the correct call because no PHP builtin
-matches the Phorge format byte-for-byte.
+matches the Phorj format byte-for-byte.
 
 **Confidence: HIGH** (mechanism fully understood; the only design risk is nailing the format spec, which
 is a one-time decision). **Recommend: SHIP EARLY — highest value-per-effort, no new Op, pure.**
@@ -77,7 +77,7 @@ is a one-time decision). **Recommend: SHIP EARLY — highest value-per-effort, n
 `url.Values` (map) with `.Get/.Set/.Encode()`, `url.QueryEscape`/`QueryUnescape`,
 `url.PathEscape`/`PathUnescape`.
 
-**Phorge proposal — `Core.Url`:**
+**Phorj proposal — `Core.Url`:**
 ```
 import Core.Url;
 Url Url.parse(string s) -> Url?              // null on malformed
@@ -88,16 +88,16 @@ Map<string,string> Url.parseQuery(string q)  // a=1&b=2 -> {a:1, b:2}
 string Url.buildQuery(Map<string,string> m)  // sorted-by-key for determinism
 ```
 `Url` is an **injected type** (`cli::inject_*_prelude` pattern, like `Core.Json`'s `Json` enum) — a
-Phorge class with `scheme/host/port?/path/query/fragment` fields, gated on `import Core.Url`. `parse`
+Phorj class with `scheme/host/port?/path/query/fragment` fields, gated on `import Core.Url`. `parse`
 returns `Url?`.
 
 **Purity: PURE.** Parsing/encoding is a deterministic string transform.
 
 **Determinism traps:**
 - **Query map ordering** — `buildQuery` must **sort by key** (Go's `url.Values.Encode()` does exactly
-  this: "sorted by key"). Phorge `Map` is insertion-ordered, but a *built* query from a map literal
+  this: "sorted by key"). Phorj `Map` is insertion-ordered, but a *built* query from a map literal
   should canonicalize so two equal maps produce identical bytes. Decision needed: sort-by-key (Go) vs
-  preserve-insertion (Phorge Map default). **Recommend sort-by-key** to match Go and guarantee stability.
+  preserve-insertion (Phorj Map default). **Recommend sort-by-key** to match Go and guarantee stability.
 - **Percent-encoding case** — `%2F` vs `%2f`: pick uppercase hex (RFC 3986 / Go convention) and pin it,
   because PHP's `rawurlencode` already produces uppercase — they must agree.
 - **Reserved-char set** — `urlencode` (PHP, `+` for space, form style) vs `rawurlencode` (PHP, `%20`,
@@ -108,13 +108,13 @@ returns `Url?`.
 percent codec (trivial — hex of bytes).
 
 **PHP transpile target:** `Url.encode` → `rawurlencode($s)`; `decode` → `rawurldecode` (but bad-`%XX`
-detection needs a helper to return null — PHP's `rawurldecode` is lenient, so a `__phorge_urldecode`
+detection needs a helper to return null — PHP's `rawurldecode` is lenient, so a `__phorj_urldecode`
 gated helper validating `%[0-9A-Fa-f]{2}` is safer for the `string?` contract). `parseQuery` →
-`parse_str($q, $out)` (but `parse_str` mangles keys with `[]`/dots — a `__phorge_parse_query` helper
+`parse_str($q, $out)` (but `parse_str` mangles keys with `[]`/dots — a `__phorj_parse_query` helper
 splitting on `&`/`=` is more faithful and deterministic). `buildQuery` → `http_build_query` with
 `ksort` first (or a helper) — note `http_build_query` uses `urlencode` (+) form by default, so a helper
 is again the byte-safe path. `parse`/`build` → `parse_url` is **partial** (no rebuild, drops empty
-components) → emit a `__phorge_url_*` helper set.
+components) → emit a `__phorj_url_*` helper set.
 
 **Confidence: HIGH** on the codec, **MEDIUM** on the build/parse-url round-trip (PHP's `parse_url` quirks
 mean a helper is mandatory, not a thin map). **Recommend: SHIP — pure, high-value, no new Op.**
@@ -126,7 +126,7 @@ mean a helper is mandatory, not a thin map). **Recommend: SHIP — pure, high-va
 **Go shape:** `base64.StdEncoding.EncodeToString(b)`, `.DecodeString(s) ([]byte, error)`,
 `base64.URLEncoding`, `base64.RawStdEncoding` (no padding); `hex.EncodeToString`, `hex.DecodeString`.
 
-**Phorge proposal — `Core.Encoding`:**
+**Phorj proposal — `Core.Encoding`:**
 ```
 import Core.Encoding;
 string Encoding.base64Encode(bytes b) -> string
@@ -165,7 +165,7 @@ guard it for the `bytes?` contract). All in PHP **core** (no ext) — safe under
 **Go shape:** `sha256.Sum256(b) [32]byte`, `md5.Sum`, `sha1.Sum`, `crc32.ChecksumIEEE(b) uint32`,
 `fnv.New64a()`. PHP: `hash('sha256', $s)`, `md5`, `sha1`, `crc32`.
 
-**Phorge proposal — `Core.Hash`:**
+**Phorj proposal — `Core.Hash`:**
 ```
 import Core.Hash;
 string Hash.sha256(bytes b) -> string     // 64-hex lowercase
@@ -187,7 +187,7 @@ for content-addressing; document "not for security" prominently;** defer HMAC/bc
 crypto module that transpiles to PHP `password_hash`/`hash_hmac` and is fixture-tested, never hand-rolled.
 
 **Determinism traps:** none for the digest itself (deterministic by definition). Trap is *endianness* in
-crc32/fnv output→int conversion — pin the byte order. crc32 is u32; map to `i64` (Phorge has no unsigned).
+crc32/fnv output→int conversion — pin the byte order. crc32 is u32; map to `i64` (Phorj has no unsigned).
 
 **Std Rust API:** none — hand-roll the digest loops (sha256/crc32 are standard public algorithms).
 `fnv1a_64` already exists in `src/bundle/cross.rs` — **reuse it**.
@@ -210,13 +210,13 @@ this needs a one-line verification test like the BCMath-under-`-n` lesson).
 `crypto/rand.Read` — secure, non-deterministic. PHP: `mt_rand`/`mt_srand` (seedable, deterministic
 sequence), `random_int` (CSPRNG, non-deterministic).
 
-**Phorge proposal — `Core.Random` (SEEDED only, Tier A):**
+**Phorj proposal — `Core.Random` (SEEDED only, Tier A):**
 ```
 import Core.Random;
 Rng Random.seeded(int seed) -> Rng           // injected Rng type, holds state
-int Rng.nextInt(Rng r, int n) -> int         // [0, n)  — but Rng is immutable in Phorge!
+int Rng.nextInt(Rng r, int n) -> int         // [0, n)  — but Rng is immutable in Phorj!
 ```
-**This is the hard one.** Phorge's heap is immutable+acyclic by default; a PRNG is inherently *stateful*.
+**This is the hard one.** Phorj's heap is immutable+acyclic by default; a PRNG is inherently *stateful*.
 Two viable shapes:
 - **(a) Explicit state-threading (functional):** `Random.next(int state) -> (int, int)` returning
   `(value, newState)` — pure, byte-identity-gateable, but awkward ergonomics.
@@ -230,8 +230,8 @@ Tier B** (non-deterministic → quarantined, transpiles to PHP `random_int`, fix
 **Determinism traps (the central risk):**
 - **The PRNG algorithm must be byte-identical to its PHP transpile.** This is the killer: PHP's `mt_rand`
   is a *specific* Mersenne-Twister variant; matching it bit-for-bit in Rust is fragile. **Recommend:
-  Phorge defines its OWN documented PRNG** (a simple xorshift64 or PCG), hand-rolled identically in the
-  Rust backends AND emitted as a `__phorge_rng_*` PHP helper — do NOT delegate to PHP's `mt_rand`
+  Phorj defines its OWN documented PRNG** (a simple xorshift64 or PCG), hand-rolled identically in the
+  Rust backends AND emitted as a `__phorj_rng_*` PHP helper — do NOT delegate to PHP's `mt_rand`
   (different algorithm → divergence). Then `seed → sequence` is identical across all three legs.
 - **Float generation** — `nextFloat` must use the same mantissa-construction on both sides (reuse the
   bit-pattern approach, not a divide that rounds differently). Or restrict to int output initially.
@@ -239,11 +239,11 @@ Tier B** (non-deterministic → quarantined, transpiles to PHP `random_int`, fix
 
 **Std Rust API:** none — define the PRNG with plain integer arithmetic (`wrapping_mul`, `^`, `>>`).
 
-**PHP transpile target:** a gated `__phorge_rng_next($state)` helper implementing the *same* xorshift —
+**PHP transpile target:** a gated `__phorj_rng_next($state)` helper implementing the *same* xorshift —
 NOT `mt_rand`. Seeded-random is the textbook case where the runtime-helper approach (not a builtin map)
 is mandatory.
 
-**Confidence: MEDIUM** (feasible and Tier A, but only with a *Phorge-defined* PRNG; the temptation to map
+**Confidence: MEDIUM** (feasible and Tier A, but only with a *Phorj-defined* PRNG; the temptation to map
 to `mt_rand` is the trap). **Recommend: ship a documented xorshift `Core.Random` with explicit seed;
 defer secure random to Tier B.**
 
@@ -255,7 +255,7 @@ defer secure random to Tier B.**
 query *building* is usually a third-party builder (squirrel) — pure string assembly with placeholder
 binding.
 
-**Phorge — SPLIT cleanly on the partition:**
+**Phorj — SPLIT cleanly on the partition:**
 - **Tier A — `Core.Sql` query BUILDER (pure):** the prompt explicitly lists "a typed SQL query BUILDER
   (escaping/binding)" as Tier A feasible.
   ```
@@ -294,7 +294,7 @@ PDO calls.
 **Go shape:** `csv.NewReader(r).ReadAll() ([][]string, error)`, `csv.NewWriter(w).WriteAll(rows)`.
 Pure transform between text and `[][]string`.
 
-**Phorge proposal — `Core.Csv`:**
+**Phorj proposal — `Core.Csv`:**
 ```
 import Core.Csv;
 List<List<string>> Csv.parse(string s) -> List<List<string>>?   // null on malformed quoting
@@ -313,7 +313,7 @@ string Csv.format(List<List<string>> rows) -> string
 **Std Rust API:** none — hand-roll a small state machine (in-quote / escaped-quote / field-end).
 
 **PHP transpile target:** PHP's `str_getcsv`/`fputcsv` work on file handles and have locale/escape quirks
-(the `escape` parameter is deprecated-ish in 8.4+ and changes behavior). **Recommend a `__phorge_csv_*`
+(the `escape` parameter is deprecated-ish in 8.4+ and changes behavior). **Recommend a `__phorj_csv_*`
 helper** implementing the exact RFC-4180 state machine in PHP rather than `str_getcsv`, to guarantee
 byte-identity (PHP's CSV functions have well-known edge-case divergences). This is a runtime-helper case.
 
@@ -327,7 +327,7 @@ byte-identity (PHP's CSV functions have well-known edge-case divergences). This 
 **Go shape:** `time.Now()` (impure!), `time.Parse(layout, s)`, `t.Format(layout)`, `t.Add(d)`,
 `t.Sub`, `time.Duration`, `t.Unix()`. PHP: `DateTime`, `date()`, `strtotime`, `DateInterval`.
 
-**Phorge — SPLIT on the partition (the prompt lists "date ARITHMETIC/format/parse" as Tier A, but `now()`
+**Phorj — SPLIT on the partition (the prompt lists "date ARITHMETIC/format/parse" as Tier A, but `now()`
 is the canonical Tier B example):**
 - **Tier A — `Core.Time` arithmetic/format/parse (PURE):**
   ```
@@ -364,7 +364,7 @@ hand-rolled, well-known public formulas). **Do NOT use `std::time` for the pure 
 calendar breakdown; implement the date math directly.
 
 **PHP transpile target (Tier A):** `format`/`parse` → `gmdate($fmt, $unix)` / a `DateTime::createFromFormat`
-in UTC, but locale/TZ quirks mean a `__phorge_time_*` helper computing civil-from-epoch in pure PHP
+in UTC, but locale/TZ quirks mean a `__phorj_time_*` helper computing civil-from-epoch in pure PHP
 integer math is the byte-safe choice. `addSeconds`/`diff` → plain integer arithmetic (trivially identical).
 `now()` (Tier B) → `time()`.
 
@@ -401,7 +401,7 @@ M6 Transport-quarantined.**
 
 **Go shape:** no stdlib validator; PHP `filter_var($v, FILTER_VALIDATE_EMAIL|URL|INT|IP)`.
 
-**Phorge proposal — `Core.Validate`:**
+**Phorj proposal — `Core.Validate`:**
 ```
 import Core.Validate;
 bool Validate.isEmail(string s) -> bool
@@ -418,14 +418,14 @@ int? Validate.toInt(string s) -> int?     // parse-or-null
   email/URL validators are notoriously idiosyncratic (their own grammar, not strict RFC). **This is the
   trap:** a hand-rolled Rust validator and PHP's `filter_var` will disagree on edge cases. **Recommend:
   ship only the *unambiguous* predicates** (`isInt`, `isIpv4` — well-defined) and **defer email/URL**
-  validation, OR define them via a `__phorge_validate_*` helper that does NOT delegate to `filter_var`
+  validation, OR define them via a `__phorj_validate_*` helper that does NOT delegate to `filter_var`
   (so both legs run the same explicit grammar). Email/URL "validation" is a swamp; the integer/IP subset
   is clean.
 - **No regex engine** — without `Core.Regex` (see §11), complex validators are hand-written state machines.
 
 **Std Rust API:** none (string predicates).
 
-**PHP transpile target:** `isInt` → a `__phorge_is_int` helper (PHP `is_numeric`/`ctype_digit` have sign
+**PHP transpile target:** `isInt` → a `__phorj_is_int` helper (PHP `is_numeric`/`ctype_digit` have sign
 quirks); `isIpv4` → `filter_var($s, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false` (well-defined, safe).
 Email/URL deferred.
 
@@ -439,7 +439,7 @@ email/URL until a pinned grammar is agreed.**
 **Go shape:** `regexp.MustCompile(pat)`, `re.MatchString`, `re.FindAllStringSubmatch`, `re.ReplaceAllString`.
 PHP: `preg_match`/`preg_replace` (PCRE — **core**, survives `php -n`).
 
-**Phorge proposal — `Core.Regex`:**
+**Phorj proposal — `Core.Regex`:**
 ```
 import Core.Regex;
 bool        Regex.matches(string pat, string s) -> bool
@@ -450,14 +450,14 @@ List<string> Regex.split(string pat, string s) -> List<string>
 
 **Purity: PURE** (a regex match is a deterministic function of pattern+input).
 
-**THE central trap (and a hard decision):** **Phorge has no regex engine and zero deps.** Two paths:
+**THE central trap (and a hard decision):** **Phorj has no regex engine and zero deps.** Two paths:
 - **(a) Hand-roll a regex engine** — large (a real NFA/backtracker is a milestone of its own), and matching
   PCRE semantics bit-for-bit (the transpile target) is *extremely* hard (backreferences, lookaround,
   Unicode classes, greedy/lazy edge cases). **High risk of run↔PHP divergence.** Effectively infeasible to
   match PCRE exactly by hand.
-- **(b) Define a *restricted, Phorge-specified* regex dialect** (a documented subset — literals, `.`, `*`,
+- **(b) Define a *restricted, Phorj-specified* regex dialect** (a documented subset — literals, `.`, `*`,
   `+`, `?`, `[]`, `|`, anchors, groups; NO backrefs/lookaround) implemented identically as a small NFA in
-  Rust AND as a `__phorge_regex_*` helper in PHP (the helper itself an NFA in PHP, NOT `preg_*`). Then both
+  Rust AND as a `__phorj_regex_*` helper in PHP (the helper itself an NFA in PHP, NOT `preg_*`). Then both
   legs run the *same* engine → byte-identical. This is the only byte-identity-safe route, but it's a
   substantial build.
 - **(c) Map directly to PCRE (`preg_*`)** — easy transpile, but then the Rust backends have nothing to run
@@ -479,7 +479,7 @@ restricted dialect with a shared engine; flag the PCRE-divergence trap explicitl
 ## 12. strconv / parsing — Go `strconv`
 
 Already mostly covered by `Core.Text.parseInt/parseFloat` and `Core.Convert`. Go `strconv.Quote` /
-`Atoi` / `FormatFloat` map to existing Phorge surface. **Gap spotted:** number *formatting with options*
+`Atoi` / `FormatFloat` map to existing Phorj surface. **Gap spotted:** number *formatting with options*
 (thousands separators, fixed precision) — Go `strconv.FormatFloat(f,'f',2,64)`, PHP `number_format`. This
 is already flagged in M-NUM-S4 (`number_format`). **Pure**, no new module needed — extend `Core.Math`/
 `Core.Text`. Determinism trap: `number_format`'s locale (thousands/decimal separator) — pin to `.`/`,`
@@ -500,7 +500,7 @@ HIGH. Recommend: extend `Core.List` with sort/unique/indexOf — reuses the High
 
 ## 14. encoding/json — already DONE (`Core.Json`), noted for completeness
 
-Go `encoding/json` ≈ Phorge `Core.Json` (parse/stringify, injected `Json` enum). Float-extreme divergence
+Go `encoding/json` ≈ Phorj `Core.Json` (parse/stringify, injected `Json` enum). Float-extreme divergence
 from native `json_encode` already in KNOWN_ISSUES. No action.
 
 ---
@@ -509,14 +509,14 @@ from native `json_encode` already in KNOWN_ISSUES. No action.
 
 | Capability            | Module           | Tier | Pure? | New Op? | PHP target (under `php -n`)            | Confidence |
 |-----------------------|------------------|------|-------|---------|----------------------------------------|------------|
-| pretty-print/dump     | `Core.Debug`     | A    | yes   | no      | `__phorge_dump` helper (NOT var_dump)  | HIGH       |
-| URL parse/build/query | `Core.Url`       | A    | yes   | no      | rawurlencode + `__phorge_url_*` helpers| HIGH/MED   |
+| pretty-print/dump     | `Core.Debug`     | A    | yes   | no      | `__phorj_dump` helper (NOT var_dump)  | HIGH       |
+| URL parse/build/query | `Core.Url`       | A    | yes   | no      | rawurlencode + `__phorj_url_*` helpers| HIGH/MED   |
 | base64/hex            | `Core.Encoding`  | A    | yes   | no      | base64_encode/bin2hex (+strict guards) | HIGH       |
 | content hashing       | `Core.Hash`      | A    | yes   | no      | hash()/sha1/md5/crc32 (core)           | HIGH       |
-| seeded random         | `Core.Random`    | A    | yes*  | no      | `__phorge_rng` helper (NOT mt_rand)    | MEDIUM     |
+| seeded random         | `Core.Random`    | A    | yes*  | no      | `__phorj_rng` helper (NOT mt_rand)    | MEDIUM     |
 | SQL query builder     | `Core.Sql`       | A    | yes   | no      | pure string/array assembly             | HIGH       |
-| CSV                   | `Core.Csv`       | A    | yes   | no      | `__phorge_csv_*` helper (NOT str_getcsv)| HIGH/MED  |
-| time arithmetic/fmt   | `Core.Time`      | A    | yes   | no      | `__phorge_time_*` integer helpers (UTC)| MEDIUM     |
+| CSV                   | `Core.Csv`       | A    | yes   | no      | `__phorj_csv_*` helper (NOT str_getcsv)| HIGH/MED  |
+| time arithmetic/fmt   | `Core.Time`      | A    | yes   | no      | `__phorj_time_*` integer helpers (UTC)| MEDIUM     |
 | number_format         | extend `Core.Math`| A   | yes   | no      | number_format (pinned separators)      | HIGH       |
 | list sort/unique      | extend `Core.List`| A   | yes   | no      | usort (stable ≥8.0)                     | HIGH       |
 | int/IP validate       | `Core.Validate`  | A    | yes   | no      | FILTER_VALIDATE_IP / helper            | MEDIUM     |
@@ -527,7 +527,7 @@ from native `json_encode` already in KNOWN_ISSUES. No action.
 | **live SQL/DB**       | (M6 Transport)   | B    | no    | no      | PDO — fixture-tested                   | DEFER      |
 | **time.now()**        | `Core.Time` (B)  | B    | no    | no      | time() — fixture-tested (like Env)     | DEFER/B    |
 
-\* seeded-random is pure ONLY with a Phorge-defined PRNG (xorshift), never PHP `mt_rand`.
+\* seeded-random is pure ONLY with a Phorj-defined PRNG (xorshift), never PHP `mt_rand`.
 \** regex is pure but engine-sized; the trap is matching PCRE — solve with a shared restricted-dialect NFA.
 
 ## Cross-cutting findings (the load-bearing insights)
@@ -536,7 +536,7 @@ from native `json_encode` already in KNOWN_ISSUES. No action.
    seeded-random, time-format, and regex, the *easy* transpile (var_dump / parse_str / str_getcsv /
    mt_rand / date / preg_*) is exactly the WRONG choice — PHP's builtins have their own (often
    locale/version-dependent) semantics that won't byte-match a Rust impl. The correct pattern for all of
-   these is the **gated runtime-helper** (`uses_* bool` + `emit_runtime_helpers`), where Phorge *defines*
+   these is the **gated runtime-helper** (`uses_* bool` + `emit_runtime_helpers`), where Phorj *defines*
    the format and emits the same algorithm into PHP. This is the dominant design conclusion of the sweep.
 
 2. **Most candidates need NO new Op** — they're `Op::CallNative` natives or injected types

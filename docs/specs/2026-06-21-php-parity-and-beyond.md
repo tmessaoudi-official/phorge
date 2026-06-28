@@ -6,7 +6,7 @@ feeds into `ROADMAP.md` / `docs/MILESTONES.md` / `docs/specs/` so gaps stop bein
 
 ## 1. Purpose & the philosophy lens
 
-This is the **definitive gap audit** of Phorge against (a) PHP 8.0–8.4 parity, (b) beyond-PHP
+This is the **definitive gap audit** of Phorj against (a) PHP 8.0–8.4 parity, (b) beyond-PHP
 "upgrade" capability, (c) developer-experience / tooling / ecosystem maturity expected of a 1.0
 language, and (d) the cross-cutting correctness, security, stdlib, numerics, i18n, testing, perf,
 build/deploy, observability, docs, governance, and competitive-positioning surfaces. It replaces the
@@ -14,9 +14,9 @@ earlier Track-A/B-only `php-parity-and-beyond.md` with the merged output of **20
 V)**, each independently completeness-critic'd against the shipped state (`FEATURES.md`,
 `KNOWN_ISSUES.md`, `docs/MILESTONES.md`, `ROADMAP.md`, `src/`).
 
-Every candidate is judged by the **Phorge philosophy** — *a pragmatic, legible, provably-correct
+Every candidate is judged by the **Phorj philosophy** — *a pragmatic, legible, provably-correct
 upgrade of PHP; the relationship TypeScript has to JavaScript.* Familiarity-first IS the adoption
-strategy. Phorge removes **surprises**, never **capability**. Every feature must map to idiomatic PHP
+strategy. Phorj removes **surprises**, never **capability**. Every feature must map to idiomatic PHP
 (PHP-absent features are compile-time-only and erased before the backends, preserving the
 `run ≡ runvm ≡ real PHP` byte-identity spine). The filter is **"what is the most PHP-familiar, legible,
 pragmatic form of this?"** — not "what is the most powerful?". PL-theory maximalism that doesn't earn
@@ -309,7 +309,7 @@ cross-listing noted. The canonical ID is kept; the duplicate IDs from other trac
 | C-new | C,F | `phg new` project scaffolder | port | strong | adopt | M5/M7 / M11 | S | F-scaffold |
 | C-init-config | C,F | `phg init` (manifest + .gitignore in-place) | port | ok | adopt | M5/M7 | S | F-scaffold |
 | F-add | F | `phg add` dependency add/resolve (consume side of vendor) | port | strong | adopt | M11 | M | — |
-| F-toolchain-pin | F,S | `phorge` version field in `phorge.toml` | port | strong | adopt | M11 | S | S-msrv-policy(rel) |
+| F-toolchain-pin | F,S | `phorj` version field in `phorj.toml` | port | strong | adopt | M11 | S | S-msrv-policy(rel) |
 | C-unused-import | C,H,F | Unused-import lint (`W-UNUSED-IMPORT`) | new | strong | adopt | M3/M8 warning channel | S | H-unused-binding-warn, F-lint |
 | C-unused-local | C,H,F | Unused-local / unreachable-code lint | new | strong | adopt | M3/M8 | M | H-unused-binding-warn, F-lint |
 | C-api-didyoumean | C | "did you mean" for stdlib/native APIs | port | strong | adopt | M3/M8 | S | — |
@@ -363,21 +363,21 @@ cross-listing noted. The canonical ID is kept; the duplicate IDs from other trac
 
 | ID | Track | Title | Kind | Fit | Rec | Milestone | Effort | Cross-listed |
 |----|-------|-------|------|-----|-----|-----------|--------|--------------|
-| E-importer-stageA | E,F | PHP→Phorge importer Stage A (round-trip own emitted PHP) | port | strong | adopt | M8 | L | F-migrate |
-| E-importer-stageB | E | PHP→Phorge importer Stage B (idiomatic typed PHP 8) | port | strong | adopt | M8 | L | — |
+| E-importer-stageA | E,F | PHP→Phorj importer Stage A (round-trip own emitted PHP) | port | strong | adopt | M8 | L | F-migrate |
+| E-importer-stageB | E | PHP→Phorj importer Stage B (idiomatic typed PHP 8) | port | strong | adopt | M8 | L | — |
 | E-decl-files | E | Declaration-file equivalent (`.d.phg`/stub) for untyped deps | new | strong | adopt | new M8.5 (interop) | L | — |
 | E-call-composer | E | Call a Composer/PHP library (transpile-time only) | new | strong | adopt | M8.5 | M | — |
 | E-migration-report | E | Importer migration report (BETTER/SAME/REJECT verdicts) | new | strong | adopt | M8 | M | — |
 | E-incremental-codemod | E,V | Directory-at-a-time codemod CLI (`phg import ./legacy`) | new | strong | adopt | M8 | M | V-incremental-adoption, V-kotlin-interop-posture |
-| E-namespace-fqn-interop | E | Map PHP namespace/use ↔ Phorge package | map | strong | adopt | M8 | M | E-psr4-autoload-bridge(defer) |
+| E-namespace-fqn-interop | E | Map PHP namespace/use ↔ Phorj package | map | strong | adopt | M8 | M | E-psr4-autoload-bridge(defer) |
 | E-strict-types-gate | E | `declare(strict_types=1)` as import-eligibility gate | map | strong | adopt | M8 | S | — |
 | E-phpdoc-harvest | E | Harvest PHPDoc `@param`/`@return`/`@template` on import | port | strong | adopt | M8 Stage B | M | — |
-| E-firstclass-callable-import | E | Map PHP first-class callable → Phorge fn value | map | strong | adopt | M8 Stage B | S | — |
+| E-firstclass-callable-import | E | Map PHP first-class callable → Phorj fn value | map | strong | adopt | M8 Stage B | S | — |
 | E-php-version-target | E | `--php-target=8.1\|8.2\|8.3\|8.4` transpile floor | port | strong | adopt | M9/M12 | S | — |
 | E-mixed-project | E | Mixed `.php`+`.phg` in one project (`allowJs` analogue) | new | ok | defer | M8.5 | L | — |
 | E-raw-php-escape | E | Raw-PHP escape hatch (`php"…"`, transpile-only) | new | ok | defer | M8.5 | M | — |
 | E-union-to-enum | E | PHP `T\|U` import mapping (revisit now unions ship) | map | strong | defer | M8 | M | — |
-| E-composer-manifest-bridge | E | `phorge.toml` ↔ `composer.json` interop | map | ok | defer | M8.5 | M | — |
+| E-composer-manifest-bridge | E | `phorj.toml` ↔ `composer.json` interop | map | ok | defer | M8.5 | M | — |
 | E-stub-distribution | E | Stub ecosystem repo + `phg stub get` (DefinitelyTyped) | new | ok | defer | post-M8.5 | L | — |
 | E-importer-stageC | E | Importer of dynamic PHP (eval/var-vars/`__call`) | omit | weak | **reject** | — | — | — |
 | E-php-ffi | E | Live PHP-engine FFI / embed PHP in the VM | omit | weak | **reject** | — | — | — |
@@ -389,11 +389,11 @@ cross-listing noted. The canonical ID is kept; the duplicate IDs from other trac
 |----|-------|-------|------|-----|-----|-----------|--------|--------------|
 | R-langref | R | Formal language reference doc | port | strong | adopt | M12 | L | — |
 | R-tour | R | Guided tour / "the book" | new | strong | adopt | M12 | L | V-onboarding-first-hour |
-| R-migration | R,V | PHP→Phorge migration guide (human, concept-mapping) | new | strong | adopt | M12 | M | V-incremental-adoption(doc) |
-| R-transpile-contract-doc | R | "How Phorge maps to PHP" per-construct reference | new | strong | adopt | M12 | M | — |
+| R-migration | R,V | PHP→Phorj migration guide (human, concept-mapping) | new | strong | adopt | M12 | M | V-incremental-adoption(doc) |
+| R-transpile-contract-doc | R | "How Phorj maps to PHP" per-construct reference | new | strong | adopt | M12 | M | — |
 | R-explain-coverage | R | `phg explain` completeness + enforcement test | port | strong | adopt | M9 | S | — |
 | R-stdlib-apidoc | R,L | Generated `Core.*` API reference (from registry) | new | strong | adopt | M11 | M | L-stdlib-apidoc |
-| R-doc-comments | R | Phorge doc-comment syntax (`/** */`) + checker awareness | port | strong | adopt | M11 | M | — |
+| R-doc-comments | R | Phorj doc-comment syntax (`/** */`) + checker awareness | port | strong | adopt | M11 | M | — |
 | R-getting-started | R,V | 5-minute getting-started page | new | strong | adopt | M12 | S | V-onboarding-first-hour |
 | R-grammar-ref | R,S | Published formal grammar (EBNF) | port | ok | adopt | M12 | M | S-frozen-grammar |
 | R-cheatsheet | R | One-page syntax cheat sheet | new | strong | adopt | M12 | S | — |
@@ -409,12 +409,12 @@ cross-listing noted. The canonical ID is kept; the duplicate IDs from other trac
 | S-version-provenance | S | Embed git SHA + build metadata in `phg --version` | port | ok | adopt | GA-M12 | S | — |
 | S-zerodep-promise | S | Zero-runtime-dependency framed as a stability promise | map | strong | adopt | GA-M12 | S | — |
 | S-msrv-policy | S | Documented MSRV + bump policy | port | ok | adopt | GA-M12 | S | F-toolchain-pin |
-| S-version-binary-contract | S | `.phorge` container/bytecode compatibility contract | port | ok | adopt | GA-M12 | S | — |
+| S-version-binary-contract | S | `.phorj` container/bytecode compatibility contract | port | ok | adopt | GA-M12 | S | — |
 | V-differentiation-vs-php8 | V | Differentiation thesis vs PHP 8.x (+ perf-honesty clause) | new | strong | adopt | GA | S | V-perf-honesty-vs-php |
 | V-killer-app-domain | V | Named flagship domain (typed web backends) | new | strong | adopt | GA | M | — |
 | V-error-suppression-stance | V | Explicit "no `@`/`any`/authored-`mixed`" stance | new | strong | adopt | GA | S | — |
 | V-gleam-error-quality | V | Error-quality as a measured commitment (golden corpus) | new | strong | adopt | M12 | M | — |
-| V-naming-branding | V | Resolve the "Phorge" name collision (defer to pre-GA) | new | strong | defer | pre-GA | S | — |
+| V-naming-branding | V | Resolve the "Phorj" name collision (defer to pre-GA) | new | strong | defer | pre-GA | S | — |
 | S-editions | S,V | Rust-style editions mechanism (policy now, build post-1.0) | new | strong | defer | new M13 (post-1.0) | L | V-editions-stability |
 | S-rfc-process | S,V | Lightweight RFC / governance-evolution process | port | ok | defer | post-1.0 | M | V-community-governance, S-governance-evolution |
 | S-stdlib-stability-tiers | S | Per-API stability tiers (stable/experimental/internal) | new | ok | defer | M11 | M | — |
@@ -565,7 +565,7 @@ idiomatic PHP, and most are front-end-only (zero byte-identity risk).
 Each fails the philosophy: it adds a *surprise*, breaks the byte-identity/determinism spine, has no
 idiomatic PHP target, or is PL-theory maximalism that doesn't earn its budget.
 
-**Dynamic-PHP footguns (defeat static checking — the exact surprise Phorge removes):**
+**Dynamic-PHP footguns (defeat static checking — the exact surprise Phorj removes):**
 A-magic-dynamic (`__get`/`__set`/`__call`), A-compact-extract (`compact`/`extract`/`$$x`),
 A-func-static (function-`static` + `global`), A-isset-empty (truthiness predicates),
 A-references (`&$x` aliasing — contradicts the value/handle split), A-cast-ops (`(int)` coercion),
@@ -599,11 +599,11 @@ P-pkg-registry (M5 chose git+vendor+offline — ADR-0005), P-faas (vendor glue),
 (multi-line maintenance contradicts "latest only"), E-php-ffi (drags the dynamic PHP runtime in),
 E-importer-stageC (dynamic PHP is un-importable into a closed no-`eval` language),
 E-gradual-checkjs (gradual typing punches a hole in the static spine — decl-files + import is the
-Phorge answer), R-versioned-docs / R-i18n-docs / R-video-tutorials (premature for a pre-1.0 single-dev
+Phorj answer), R-versioned-docs / R-i18n-docs / R-video-tutorials (premature for a pre-1.0 single-dev
 project).
 
 **Clean-rejected corners (parser/purism for a form already expressible):**
-D-whole-union-optional (`(A|B)?` — `T?` covers it), D-float-key / D-map-bool-int-key-coerce (Phorge's
+D-whole-union-optional (`(A|B)?` — `T?` covers it), D-float-key / D-map-bool-int-key-coerce (Phorj's
 distinct-keys behaviour is *more* correct), N-rational / N-percent (userland on `decimal`),
 D-vis-on-alias-import (aliases are file-local + erased), B-active-pat (obscure for a PHP audience —
 guards deliver the practical subset).
@@ -622,7 +622,7 @@ scattered rows:
    (D-generic-result-operand) is the matching *backend* keystone (M10). Both ride `erase_generics`.
 3. **Narrowing completeness is the "provably-correct upgrade" made concrete (B, H, J, V).** Else-branch
    flow narrowing + union exhaustiveness + equality refinement + sealed hierarchies are one coherent
-   programme that turns Phorge's type system from "checks types" into "proves totality" — the defining
+   programme that turns Phorj's type system from "checks types" into "proves totality" — the defining
    TS capability a migrant expects. Pair with H-return-totality.
 4. **The stdlib must become a *product*, not an accretion (A, G, L, R, V).** A written charter
    (naming, subject-first arg-order, optional-for-absence vs fault-for-programmer-error, determinism
@@ -643,13 +643,13 @@ scattered rows:
    clients → doc-gen into one box; it must be *sequenced* (fmt first, it de-risks the AST-printer the
    LSP rename/fix later needs). The `phg test` runner is the biggest missing ecosystem table-stake.
 8. **Governance/stability is cheap docs, GA-blocking, and a genuine PHP *upgrade* (R, S, V).** Semver +
-   breaking-change definition + a *frozen conformance corpus* (Phorge can state BC *provably* via the
+   breaking-change definition + a *frozen conformance corpus* (Phorj can state BC *provably* via the
    byte-identity spine — PHP can't) + stable diagnostic codes + a zero-dep promise + an honest
    differentiation-vs-PHP-8.4 statement (don't claim speed). Editions are the long-term jewel but the
    *policy* (not the implementation) is the GA sliver; build editions post-1.0.
 9. **Incremental adoption is the whole thesis and is currently implicit (E, V).** The TypeScript-beat-
    Hack lesson: the import direction (`.d.phg` decl-files, codemod, migration report, mixed projects)
-   and the Phorge→PHP deploy direction (generated front-controller, PHAR, `--php-target` floor) must be
+   and the Phorj→PHP deploy direction (generated front-controller, PHAR, `--php-target` floor) must be
    first-class, tested, documented workflows — not aspirational single bullets.
 10. **A cluster of KNOWN_ISSUES "deferred corners" are really one mechanism each (D, H, J).** The union
     follow-ups (flow-narrow, common-member, nested-type-pattern), the mutation corners (nested

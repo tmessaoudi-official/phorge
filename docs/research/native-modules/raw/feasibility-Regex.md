@@ -9,7 +9,7 @@ Verdict up front: **adopt-later as a DOCUMENTED, NARROW, REGULAR-ONLY subset (Ti
 
 ## 1. The decisive constraint (read this first)
 
-Phorge has **three legs that must produce byte-identical stdout**: the tree-walking interpreter
+Phorj has **three legs that must produce byte-identical stdout**: the tree-walking interpreter
 (`run`), the bytecode VM (`runvm`), and the PHP transpile output run under real `php -n`
 (`tests/differential.rs`). For every other Core.* module the Rust legs share a single value-kernel
 (`NativeEval::Pure`) and the PHP leg erases to a core builtin — and the two implementations are
@@ -41,9 +41,9 @@ sweep (PHP, Python, Go) independently flagged this same wall:
   via a shared restricted-dialect NFA across all three legs."*
 
 The Go digest names the **only viable strategy**: do NOT transpile to `preg_*` at all. Define a
-**Phorge-owned regular-language dialect** (strictly regular — no backtracking-only features), implement
+**Phorj-owned regular-language dialect** (strictly regular — no backtracking-only features), implement
 it once in Rust (the shared NFA kernel, used by both Rust legs), and **emit the SAME hand-rolled
-matcher as a `__phorge_regex_*` runtime helper in PHP** — *not* `preg_match`. The PHP leg then runs OUR
+matcher as a `__phorj_regex_*` runtime helper in PHP** — *not* `preg_match`. The PHP leg then runs OUR
 algorithm, byte-for-byte identical to the Rust algorithm by construction, instead of libpcre2. PCRE
 becomes irrelevant to correctness; it is at most a *non-gated convenience escape hatch* (see §6).
 
@@ -76,7 +76,7 @@ single well-defined answer that both legs reproduce:
 
 Supported:
 - Literals (ASCII bytes), `.` (any byte except `\n` — pin this), escaped metas `\. \* \+ \? \( \) \[ \] \{ \} \| \\ \^ \$ \/`.
-- Character classes `[abc]`, ranges `[a-z]`, negation `[^…]`, and a *fixed, Phorge-defined* set of
+- Character classes `[abc]`, ranges `[a-z]`, negation `[^…]`, and a *fixed, Phorj-defined* set of
   shorthands: `\d` = `[0-9]`, `\w` = `[0-9A-Za-z_]`, `\s` = `[ \t\n\r\f\v]`, plus `\D \W \S`. **These
   are pinned to ASCII** (NOT PCRE's Unicode-aware versions) and documented as such.
 - Quantifiers `*` `+` `?` and counted `{n}` `{n,}` `{n,m}` — **greedy only** (no lazy `*?`, no
@@ -103,9 +103,9 @@ by construction.
    leftmost-longest captures). Lives behind `NativeEval::Pure`, so the interpreter and VM call the
    *same* function — `run≡runvm` is automatic (the value-kernel discipline, already proven for every
    other native). No new VM `Op` needed (it is `Op::CallNative`).
-2. **Port the SAME algorithm to a PHP runtime helper** `__phorge_regex_match/_replace/_split`, gated by
-   `uses_regex` exactly like `__phorge_div` / `__phorge_float` (`emit_runtime_helpers`,
-   `src/transpile/program.rs:263`). The `php:` closure for the native emits `__phorge_regex_match(...)`,
+2. **Port the SAME algorithm to a PHP runtime helper** `__phorj_regex_match/_replace/_split`, gated by
+   `uses_regex` exactly like `__phorj_div` / `__phorj_float` (`emit_runtime_helpers`,
+   `src/transpile/program.rs:263`). The `php:` closure for the native emits `__phorj_regex_match(...)`,
    **NOT** `preg_match(...)`. The PHP helper is pure PHP-core string/array ops (no PCRE, no mbstring) so
    it survives `php -n`.
 3. **Differential gate**: an `examples/guide/regex.phg` exercising each supported construct on
@@ -128,7 +128,7 @@ one.
 
 ## 5. PHP transpile target (exact)
 
-- **NOT `preg_*`.** Target = gated `__phorge_regex_*(string $pattern, string $subject, …)` PHP helpers
+- **NOT `preg_*`.** Target = gated `__phorj_regex_*(string $pattern, string $subject, …)` PHP helpers
   emitting our own matcher (PHP-core only: `strlen`, `substr`, array ops; ASCII byte indexing; no
   `mb_*`, no `preg_*`). Gated by a `uses_regex` flag mirroring `uses_div`/`uses_str`
   (`src/transpile/program.rs`). Confirmed available under `php -n`: only PHP-core functions used.
@@ -150,9 +150,9 @@ any construct beyond the subset. **This is dangerous and should be gated behind 
 
 ---
 
-## 7. Phorge API sketch (Tier A subset)
+## 7. Phorj API sketch (Tier A subset)
 
-```phorge
+```phorj
 import Core.Regex;
 
 // bool — does the pattern match anywhere in the subject?
@@ -179,7 +179,7 @@ Unicode-folded.
 
 Native registry shape (one `NativeFn` per fn in `src/native/regex.rs`, mirroring `text.rs`): `params`
 typed `[String, String]`, `ret` `Bool`/`Optional(List<String>)`/`List<String>`, `pure: true`,
-`eval: NativeEval::Pure(regex_*)`, `php:` emitting the gated `__phorge_regex_*` helper.
+`eval: NativeEval::Pure(regex_*)`, `php:` emitting the gated `__phorj_regex_*` helper.
 
 ---
 

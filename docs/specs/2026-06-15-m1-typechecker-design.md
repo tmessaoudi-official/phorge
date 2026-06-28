@@ -1,9 +1,9 @@
-# Phorge M1 — Type-Checker Design
+# Phorj M1 — Type-Checker Design
 
 - **Date:** 2026-06-15
 - **Status:** Design approved — ready for implementation planning (Plan 4)
 - **Scope:** M1 Plan 4 of the 6-plan roadmap (lexer ✓ → parser-expr ✓ → parser-stmt/decl ✓ → **type-checker** → evaluator → integration)
-- **Parent spec:** `docs/specs/2026-06-15-phorge-language-design.md` (§3 type system is the contract)
+- **Parent spec:** `docs/specs/2026-06-15-phorj-language-design.md` (§3 type system is the contract)
 
 ---
 

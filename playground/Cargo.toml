@@ -1,10 +1,10 @@
 [package]
-name = "phorge-playground"
+name = "phorj-playground"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.74"
 publish = false
-description = "WASM bindings exposing the Phorge pipeline (run / runvm / transpile / check) to a browser playground."
+description = "WASM bindings exposing the Phorj pipeline (run / runvm / transpile / check) to a browser playground."
 
 [lib]
 # `cdylib` for the wasm artifact; `rlib` so the wrapper logic can be unit-tested on the native target
@@ -15,7 +15,7 @@ crate-type = ["cdylib", "rlib"]
 # `default-features = false` keeps the audited-crypto crate (argon2) out of the WASM build — the
 # playground stays tiny + browser-safe. `Core.Crypto` is simply absent there (a program importing it
 # gets an unknown-module error in the playground); every other native is unaffected.
-phorge = { path = "..", default-features = false }
+phorj = { path = "..", default-features = false }
 # JSON assembly for the wrapper return values. Pulled only into this member, never the core crate.
 serde_json = "1"
 

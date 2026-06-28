@@ -2,7 +2,7 @@ name: CI
 
 # Locks in the M7 correctness closure. The `gate` job runs the SAME three checks as the local
 # pre-commit hook (scripts/git-hooks/pre-commit) — fmt + clippy(-D warnings) + the full test
-# suite — and additionally sets PHORGE_REQUIRE_PHP=1 so the PHP oracle in tests/differential.rs
+# suite — and additionally sets PHORJ_REQUIRE_PHP=1 so the PHP oracle in tests/differential.rs
 # FAILS (never silently skips) if transpiled PHP diverges from the interpreter/VM. The
 # `cross-build` job exercises `phg build --target` parity across the four Phase-2 cross targets.
 
@@ -57,12 +57,12 @@ jobs:
       - name: cargo clippy --workspace --all-targets -- -D warnings
         run: cargo clippy --workspace --all-targets -- -D warnings
 
-      # PHORGE_REQUIRE_PHP=1 turns a missing or non-working php into a test FAILURE — this is the
+      # PHORJ_REQUIRE_PHP=1 turns a missing or non-working php into a test FAILURE — this is the
       # enforcement CI adds on top of the local hook (which runs the oracle only when php happens
       # to be on PATH). This line is what "locks in" M7. --workspace also gates the playground crate.
       - name: cargo test (PHP oracle enforced)
         env:
-          PHORGE_REQUIRE_PHP: '1'
+          PHORJ_REQUIRE_PHP: '1'
         run: cargo test --workspace
 
   oracle-nightly:
@@ -85,7 +85,7 @@ jobs:
           extensions: bcmath
       - name: cargo test --test differential (PHP oracle, 8.6-dev)
         env:
-          PHORGE_REQUIRE_PHP: '1'
+          PHORJ_REQUIRE_PHP: '1'
         run: cargo test --test differential
 
   cross-build:
@@ -105,15 +105,15 @@ jobs:
           aarch64-unknown-linux-musl
           x86_64-pc-windows-gnu
 
-      # llvm-objcopy embeds the `.phorge` section into the cross-built stub (src/bundle/cross.rs).
-      # The toolchain's llvm-tools-preview ships a version-matched copy; PHORGE_OBJCOPY points the
+      # llvm-objcopy embeds the `.phorj` section into the cross-built stub (src/bundle/cross.rs).
+      # The toolchain's llvm-tools-preview ships a version-matched copy; PHORJ_OBJCOPY points the
       # build at it (the binary is not on PATH under that name otherwise).
       - name: Install llvm-objcopy (llvm-tools-preview)
         run: |
           rustup component add llvm-tools-preview
           OBJ="$(find "$(rustc --print sysroot)" -name 'llvm-objcopy' | head -n1)"
           test -n "$OBJ" || { echo "llvm-objcopy not found in sysroot"; exit 1; }
-          echo "PHORGE_OBJCOPY=$OBJ" >> "$GITHUB_ENV"
+          echo "PHORJ_OBJCOPY=$OBJ" >> "$GITHUB_ENV"
 
       # Zig is the cross-linker cargo-zigbuild drives. Installed directly from the official, pinned
       # STABLE release rather than a setup action: the mirror-based actions default to an *ephemeral*

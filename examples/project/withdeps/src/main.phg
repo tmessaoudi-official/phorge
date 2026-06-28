@@ -1,13 +1,13 @@
 package Main;
 
-// A project that depends on a vendored git library, `acme/strutil` (declared in phorge.toml's
-// [require], fetched by `phg vendor` into vendor/, pinned by phorge.lock). The dependency is
+// A project that depends on a vendored git library, `acme/strutil` (declared in phorj.toml's
+// [require], fetched by `phg vendor` into vendor/, pinned by phorj.lock). The dependency is
 // consumed exactly like a first-party package: import it, then call through its leaf qualifier.
 import Core.Console;
 import Acme.Strutil;
 
 function main(): void {
   // Qualified calls into the vendored dependency (leaf-qualified, exactly like core.*).
-  Console.println(Strutil.banner("Phorge deps"));
+  Console.println(Strutil.banner("Phorj deps"));
   Console.println(Strutil.shout("vendored offline"));
 }

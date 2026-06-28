@@ -12,7 +12,7 @@
 >   most one** class; two or more classes → `E-INTERSECT-MULTI-CLASS`; a primitive/enum/optional/function
 >   member → `E-INTERSECT-MEMBER`.
 > - **D2 = require-agreement, `E-INTERSECT-SIG`** (NOT first-member-wins). Two members declaring a shared
->   method with differing signatures cannot both be satisfied by one class (Phorge has no overloading
+>   method with differing signatures cannot both be satisfied by one class (Phorj has no overloading
 >   *yet*), so the intersection is uninhabited and is rejected at the type site. **Overloading is now
 >   confirmed for M-RT, sequenced immediately after S5** (lowers to one dispatching PHP method); when it
 >   lands, this rule is revisited.
@@ -33,7 +33,7 @@ backends run on the concrete instance; the annotation gates the checker and the 
 
 ## 2. The interface-only constraint (the central semantic decision)
 
-A value's runtime identity in Phorge today is its class plus the interfaces that class implements
+A value's runtime identity in Phorj today is its class plus the interfaces that class implements
 (there is no class `extends` until S6, so no class is a subtype of another class). Therefore:
 
 - `I & J` (two interfaces) is **inhabitable** — a class can `implement I, J`.

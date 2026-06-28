@@ -6,7 +6,7 @@ high-level shape on 2026-06-22). Plan: `docs/plans/2026-06-22-error-model-slice2
 
 ## 1. Goal & principle
 
-Phorge gets a **three-tier error model** under one enforced-failure principle — *a value-carrying
+Phorj gets a **three-tier error model** under one enforced-failure principle — *a value-carrying
 failure path is always visible in the type system, and a "bug" failure always crashes loudly*. The three
 tiers, from most-PHP-familiar to most-functional to uncatchable:
 
@@ -22,14 +22,14 @@ tiers, from most-PHP-familiar to most-functional to uncatchable:
    `try/catch` — the explicit fix to Java's "everything is checked" mistake.
 
 Both checked tiers (1, 2) are typed, checker-enforced, and `?`-composable. **Hard invariant:**
-`run ≡ runvm ≡ real PHP`, byte-identical, preserved at every commit (`PHORGE_REQUIRE_PHP=1`).
+`run ≡ runvm ≡ real PHP`, byte-identical, preserved at every commit (`PHORJ_REQUIRE_PHP=1`).
 
 `throw` / `panic` / `todo` / `unreachable` are **`never`-typed** — they complete the totality story
 (a function ending in `throw`/`panic` satisfies return-on-all-paths for free).
 
 ## 2. Surface syntax (Section A)
 
-```phorge
+```phorj
 package Main;
 import Core.Console;
 
@@ -151,7 +151,7 @@ every user `catch` (panics are uncatchable, by design).
 - core `Error` → a PHP class `extends \Exception`; `.message()` → `getMessage()`.
 - **`?` in a `throws` context → just the bare call** (PHP propagates exceptions automatically:
   `parsePort(s)?` ⇒ `parsePort($s)`). `?` in a `Result` context → a generated early-return-on-`Err`
-  helper (`__phorge_try`), analogous to the existing `__phorge_div`/`__phorge_str` runtime helpers.
+  helper (`__phorj_try`), analogous to the existing `__phorj_div`/`__phorj_str` runtime helpers.
 - `panic` / `todo` / `unreachable` → `throw new \RuntimeException(…)` / `\LogicException(…)`; `assert` →
   a guarded throw (tier-1-only PHP, no ini-loaded extensions per the transpile policy).
 
@@ -166,7 +166,7 @@ every `catch` terminate (and `finally` doesn't fall through).
   `catch` binding + smart-cast + coverage. Each code self-documents via `phg explain`.
 - **Differential (the spine):** caught-exception **control flow** byte-identical on run/runvm/real-PHP
   (the value after a catch, the path taken, `finally` ordering); `?` propagation (throws + Result);
-  panics via `agree_err` + a new `FaultKind::Panic`. Run under `PHORGE_REQUIRE_PHP=1`.
+  panics via `agree_err` + a new `FaultKind::Panic`. Run under `PHORJ_REQUIRE_PHP=1`.
 - **Examples** (examples-ship-with-features): caught exceptions / `Result` produce normal `Ok` output, so
   they're runnable + byte-identity-gated — `examples/guide/errors.phg` (`throws`/`try`/`catch`/`finally`
   + `?`) and `examples/guide/result.phg` (`Result` + `?`). **Panics can't be runnable examples** (every

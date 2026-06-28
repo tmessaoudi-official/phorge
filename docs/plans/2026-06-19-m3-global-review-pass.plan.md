@@ -1,4 +1,4 @@
-# M3 Global Phorge Review Pass — Plan
+# M3 Global Phorj Review Pass — Plan
 
 > The "pure review pass" (Option 4) the developer queued **before** the M3 S3 sprint:
 > *"after Track A, do a pure review pass, then decide next."* Track A (M3 S3 lambdas +
@@ -55,13 +55,13 @@ native/loader/manifest/lock/vendor/bundle/serve/cli/mem/value/chunk/ast), `docs/
 ## Execution Results (2026-06-19, post-compact)
 All 7 stages executed autonomously (user: "Run autonomously to the end"). ~40 subagents across 5 lenses.
 Reports on disk:
-1. /sleuth → `~/.claude/projects/-stack-projects-phorge/sleuth/2026-06-19-1355.md` (29 findings: 8H/10M/11L)
+1. /sleuth → `~/.claude/projects/-stack-projects-phorj/sleuth/2026-06-19-1355.md` (29 findings: 8H/10M/11L)
 2+5. /inspect --vision (stages 2+5 collapsed — `--vision` runs health+vision in one pass) →
-   `~/.claude/projects/-stack-projects-phorge/inspections/2026-06-19-1419.md` (health 0 P0/22 P1/36 P2/20 P3; 91 vision proposals)
-3. /gaps → `~/.claude/projects/-stack-projects-phorge/gaps/2026-06-19-1430.md` (37 gaps: 6 Now/14 Soon/12 Later; 4 unblocked-now)
-4. /forge → `~/.claude/projects/-stack-projects-phorge/forge/2026-06-19-1445.md` (15 findings: 3 Unjustified/12 Questionable)
-6. /aggregate-findings → raw slices in `~/.claude/projects/-stack-projects-phorge/review-aggregate-raw/` (13 cross-pass themes, 50 ranked, 20 quick wins)
-7. **FINAL DELIVERABLE** → `~/.claude/projects/-stack-projects-phorge/REVIEW-2026-06-19.md` (4 P0, master priority list, forward roadmap)
+   `~/.claude/projects/-stack-projects-phorj/inspections/2026-06-19-1419.md` (health 0 P0/22 P1/36 P2/20 P3; 91 vision proposals)
+3. /gaps → `~/.claude/projects/-stack-projects-phorj/gaps/2026-06-19-1430.md` (37 gaps: 6 Now/14 Soon/12 Later; 4 unblocked-now)
+4. /forge → `~/.claude/projects/-stack-projects-phorj/forge/2026-06-19-1445.md` (15 findings: 3 Unjustified/12 Questionable)
+6. /aggregate-findings → raw slices in `~/.claude/projects/-stack-projects-phorj/review-aggregate-raw/` (13 cross-pass themes, 50 ranked, 20 quick wins)
+7. **FINAL DELIVERABLE** → `~/.claude/projects/-stack-projects-phorj/REVIEW-2026-06-19.md` (4 P0, master priority list, forward roadmap)
 
 Pruning vs the original plan (all benign, noted for the record):
 - Agents F(shell)/I(docker) dropped from /sleuth & /inspect (N/A to a Rust language repo); E(concurrency)/F(persistence)/I(UX) dropped from /forge (single-thread is Chesterton-justified, no persistence, no frontend).

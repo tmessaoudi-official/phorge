@@ -3,22 +3,22 @@
 use crate::bundle::{encode_container, section::ELF_PE_SECTION};
 use std::path::PathBuf;
 
-/// Copy `stub` to `out` with the phorge payload added as the ELF/PE `.phorge` section, then mark it
+/// Copy `stub` to `out` with the phorj payload added as the ELF/PE `.phorj` section, then mark it
 /// executable on unix. `--set-section-flags noload,readonly` is applied on **both** ELF and PE: it is
 /// *required* on PE/COFF — without it, `llvm-objcopy --add-section` writes a section header with **zero
 /// raw data**, so the program would never be found (verified by
 /// `tests/build.rs::cross_windows_section_round_trips`; the earlier "skip flags on PE" attempt was the
-/// bug). It is the proven Phase-1 behavior on ELF. (Mach-O embedding — `__PHORGE,__source` — needs its
+/// bug). It is the proven Phase-1 behavior on ELF. (Mach-O embedding — `__PHORJ,__source` — needs its
 /// own handling and lands with macOS support.)
 pub(crate) fn embed_section(
     stub: &std::path::Path,
     out: &std::path::Path,
     src: &str,
 ) -> Result<(), String> {
-    let payload = std::env::temp_dir().join(format!("phorge-build-{}.bin", std::process::id()));
+    let payload = std::env::temp_dir().join(format!("phorj-build-{}.bin", std::process::id()));
     std::fs::write(&payload, encode_container(src.as_bytes()))
         .map_err(|e| format!("cannot write payload: {e}"))?;
-    let objcopy = std::env::var("PHORGE_OBJCOPY").unwrap_or_else(|_| "llvm-objcopy".into());
+    let objcopy = std::env::var("PHORJ_OBJCOPY").unwrap_or_else(|_| "llvm-objcopy".into());
     let status = std::process::Command::new(&objcopy)
         .args([
             "--add-section",
@@ -99,15 +99,15 @@ pub(crate) fn host_triple() -> Option<String> {
         .find_map(|l| l.strip_prefix("host: ").map(|t| t.trim().to_string()))
 }
 
-/// Reject apple/darwin targets in Phase 2: `embed_section` writes only the ELF/PE `.phorge` section,
-/// but a Mac binary self-reads via `__PHORGE,__source` — embedding into a Mac stub would silently
+/// Reject apple/darwin targets in Phase 2: `embed_section` writes only the ELF/PE `.phorj` section,
+/// but a Mac binary self-reads via `__PHORJ,__source` — embedding into a Mac stub would silently
 /// yield a binary that can't find its source (INVARIANTS #1). Reject rather than emit a broken
 /// artifact (F7 / design §6, §8).
 fn reject_if_macos(target: &str) -> Result<(), String> {
     if target.contains("apple") || target.contains("darwin") {
         return Err(format!(
             "target '{target}': macOS stub production is deferred — Phase 2 builds Linux + Windows \
-             only (the Mach-O reader ships, but the Mac stub + `__PHORGE,__source` embed do not). \
+             only (the Mach-O reader ships, but the Mac stub + `__PHORJ,__source` embed do not). \
              See design §8."
         ));
     }
@@ -165,20 +165,19 @@ pub fn build_all(input_path: &str, src: &str, _out_path: Option<&str>) -> Result
     Ok(report)
 }
 
-/// Cross-compile a phorge stub for `target` via cargo-zigbuild, caching it under the phorge-hash key.
+/// Cross-compile a phorj stub for `target` via cargo-zigbuild, caching it under the phorj-hash key.
 /// The stub is a phg binary with NO embedded section (embedded_source -> None -> normal CLI).
 pub(crate) fn build_stub(target: &str) -> Result<std::path::PathBuf, String> {
-    let phorge = std::env::current_exe().map_err(|e| format!("cannot locate phg binary: {e}"))?;
-    let phorge_bytes =
-        std::fs::read(&phorge).map_err(|e| format!("cannot read phg binary: {e}"))?;
-    let dir = cache_dir(&phorge_bytes)
+    let phorj = std::env::current_exe().map_err(|e| format!("cannot locate phg binary: {e}"))?;
+    let phorj_bytes = std::fs::read(&phorj).map_err(|e| format!("cannot read phg binary: {e}"))?;
+    let dir = cache_dir(&phorj_bytes)
         .ok_or_else(|| "cannot resolve cache dir (no HOME/XDG_CACHE_HOME)".to_string())?;
     let cached = dir.join(target).join(output_name("phg", target));
     if cached.is_file() {
         return Ok(cached);
     }
     // Cache miss → a 3-way branch (Phase 3a). A source checkout cross-builds locally; a distributed
-    // (sourceless) phorge downloads a prebuilt, sha256-verified stub from the release registry.
+    // (sourceless) phorj downloads a prebuilt, sha256-verified stub from the release registry.
     if std::path::Path::new("Cargo.toml").is_file() {
         build_stub_local(target, &cached)
     } else {
@@ -186,7 +185,7 @@ pub(crate) fn build_stub(target: &str) -> Result<std::path::PathBuf, String> {
     }
 }
 
-/// Cross-compile the stub from a phorge source checkout via `cargo-zigbuild` (Phase 2, unchanged), then
+/// Cross-compile the stub from a phorj source checkout via `cargo-zigbuild` (Phase 2, unchanged), then
 /// cache it. Reached only when a `Cargo.toml` is present.
 fn build_stub_local(target: &str, cached: &std::path::Path) -> Result<std::path::PathBuf, String> {
     // --cap-lints=warn so target-specific lints don't trip the deny gate; --bin phg pins the one
@@ -224,8 +223,8 @@ fn build_stub_local(target: &str, cached: &std::path::Path) -> Result<std::path:
 /// Download a prebuilt stub for `target` from the release registry, verify its SHA-256 against the
 /// baked manifest, and cache it (Phase 3a). The hash is checked on the *temp* file before it is moved
 /// into the cache, so a corrupt/tampered/partial download never poisons the cache. Reached only on a
-/// distributed (sourceless) phorge. `pub` so `tests/registry.rs` can drive the client hermetically
-/// (fixture registry via `PHORGE_STUB_REGISTRY`, fixture manifest via `PHORGE_STUB_MANIFEST`).
+/// distributed (sourceless) phorj. `pub` so `tests/registry.rs` can drive the client hermetically
+/// (fixture registry via `PHORJ_STUB_REGISTRY`, fixture manifest via `PHORJ_STUB_MANIFEST`).
 pub fn download_stub(target: &str, cached: &std::path::Path) -> Result<std::path::PathBuf, String> {
     use crate::bundle::{manifest, sha256};
 
@@ -233,14 +232,14 @@ pub fn download_stub(target: &str, cached: &std::path::Path) -> Result<std::path
     let expected = manifest.lookup(target).ok_or_else(|| {
         format!(
             "no prebuilt stub for '{target}' in phg v{} — cross-building from this host needs a \
-             phorge source checkout",
+             phorj source checkout",
             env!("CARGO_PKG_VERSION")
         )
     })?;
     let base = manifest::registry_base().ok_or_else(|| {
         format!(
-            "no stub registry configured for '{target}' — set PHORGE_STUB_REGISTRY, or build from a \
-             phorge source checkout"
+            "no stub registry configured for '{target}' — set PHORJ_STUB_REGISTRY, or build from a \
+             phorj source checkout"
         )
     })?;
     let url = format!("{base}{}", manifest::asset_name(target));
@@ -278,7 +277,7 @@ pub fn download_stub(target: &str, cached: &std::path::Path) -> Result<std::path
 }
 
 /// Fetch `url` into `dest`. `http(s)://` shells out to `curl` (std has no TLS — a host-tool exemption
-/// like zig/objcopy; `PHORGE_CURL` overrides the binary); `file://` or a bare local path is a
+/// like zig/objcopy; `PHORJ_CURL` overrides the binary); `file://` or a bare local path is a
 /// `std::fs::copy` (the hermetic-test path — a fixture-dir registry needs no network or curl).
 fn fetch(url: &str, dest: &std::path::Path) -> Result<(), String> {
     if let Some(local) = url.strip_prefix("file://").or_else(|| {
@@ -295,7 +294,7 @@ fn fetch(url: &str, dest: &std::path::Path) -> Result<(), String> {
         return Ok(());
     }
 
-    let curl = std::env::var("PHORGE_CURL").unwrap_or_else(|_| "curl".into());
+    let curl = std::env::var("PHORJ_CURL").unwrap_or_else(|_| "curl".into());
     let status = std::process::Command::new(&curl)
         .args(["-fSL", "--proto", "=https,http", "-o"])
         .arg(dest)
@@ -304,7 +303,7 @@ fn fetch(url: &str, dest: &std::path::Path) -> Result<(), String> {
         .map_err(|e| {
             format!(
                 "cannot run '{curl}' — needed to download prebuilt stubs; install curl, or build \
-                 from a phorge source checkout ({e})"
+                 from a phorj source checkout ({e})"
             )
         })?;
     if !status.success() {
@@ -323,16 +322,16 @@ pub fn fnv1a_64(bytes: &[u8]) -> u64 {
     hash
 }
 
-/// `${XDG_CACHE_HOME:-$HOME/.cache}/phorge/stubs/<fnv-of-phorge>` — keyed on the host phorge bytes so
-/// a rebuilt phorge invalidates stale cross-stubs (design B-6/P2-3: the parity-spine guard).
-pub fn cache_dir(phorge_bytes: &[u8]) -> Option<PathBuf> {
+/// `${XDG_CACHE_HOME:-$HOME/.cache}/phorj/stubs/<fnv-of-phorj>` — keyed on the host phorj bytes so
+/// a rebuilt phorj invalidates stale cross-stubs (design B-6/P2-3: the parity-spine guard).
+pub fn cache_dir(phorj_bytes: &[u8]) -> Option<PathBuf> {
     let base = std::env::var_os("XDG_CACHE_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))?;
     Some(
-        base.join("phorge")
+        base.join("phorj")
             .join("stubs")
-            .join(format!("{:016x}", fnv1a_64(phorge_bytes))),
+            .join(format!("{:016x}", fnv1a_64(phorj_bytes))),
     )
 }
 
@@ -348,16 +347,16 @@ mod tests {
     }
 
     #[test]
-    fn cache_dir_layout_includes_phorge_hash() {
-        std::env::set_var("XDG_CACHE_HOME", "/tmp/phorge-cache-test");
-        let dir = cache_dir(b"phorge-bytes").expect("cache dir");
+    fn cache_dir_layout_includes_phorj_hash() {
+        std::env::set_var("XDG_CACHE_HOME", "/tmp/phorj-cache-test");
+        let dir = cache_dir(b"phorj-bytes").expect("cache dir");
         let s = dir.to_string_lossy();
         assert!(
-            s.starts_with("/tmp/phorge-cache-test/phorge/stubs/"),
+            s.starts_with("/tmp/phorj-cache-test/phorj/stubs/"),
             "got {s}"
         );
         assert!(
-            s.ends_with(&format!("{:016x}", fnv1a_64(b"phorge-bytes"))),
+            s.ends_with(&format!("{:016x}", fnv1a_64(b"phorj-bytes"))),
             "got {s}"
         );
         std::env::remove_var("XDG_CACHE_HOME");

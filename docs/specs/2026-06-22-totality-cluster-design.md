@@ -97,7 +97,7 @@ never returns at runtime (it diverges), so the `: never` hint matches semantics.
 
 Turning on `E-MISSING-RETURN` may surface existing typed functions that fall off the end — in shipped
 examples or the inline test programs. Each is either a real latent bug (fix it: add the return) or a
-`terminates` coverage gap (fix the engine). The full gate (`PHORGE_REQUIRE_PHP=1 cargo test` +
+`terminates` coverage gap (fix the engine). The full gate (`PHORJ_REQUIRE_PHP=1 cargo test` +
 `all_examples_match_between_backends`) is the scan; every failure is triaged in-slice.
 
 ## Example

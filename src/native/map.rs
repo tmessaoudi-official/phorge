@@ -49,7 +49,7 @@ fn map_get(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("Map.get expects (Map<K, V>, K)".into()),
     }
 }
-/// `set(Map<K, V>, K, V) -> Map<K, V>` — a NEW map with `key` mapped to `v` (Phorge maps are
+/// `set(Map<K, V>, K, V) -> Map<K, V>` — a NEW map with `key` mapped to `v` (Phorj maps are
 /// immutable; this is a functional update, COW). Insertion-ordered like PHP `$m[$k] = $v`: an existing
 /// key keeps its position and takes the new value, a fresh key appends. Reuses the `value::map_set`
 /// kernel on a clone, so it matches the M-mut element-set semantics.
@@ -209,11 +209,11 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             ret: map(),
             pure: true,
             eval: NativeEval::Pure(map_set_native),
-            // Gated `__phorge_map_set($m, $k, $v)` — a copy-then-assign (PHP arrays are COW value
+            // Gated `__phorj_map_set($m, $k, $v)` — a copy-then-assign (PHP arrays are COW value
             // types, so `$m` inside the helper is already a copy → a new map, caller untouched).
             php: |a| {
                 format!(
-                    "__phorge_map_set({}, {}, {})",
+                    "__phorj_map_set({}, {}, {})",
                     parg(a, 0),
                     parg(a, 1),
                     parg(a, 2)
@@ -227,7 +227,7 @@ pub(crate) fn map_natives() -> Vec<NativeFn> {
             ret: map(),
             pure: true,
             eval: NativeEval::Pure(map_remove),
-            php: |a| format!("__phorge_map_remove({}, {})", parg(a, 0), parg(a, 1)),
+            php: |a| format!("__phorj_map_remove({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `getOr` — safe access with a fallback (never faults / returns the default for an absent key).
         NativeFn {

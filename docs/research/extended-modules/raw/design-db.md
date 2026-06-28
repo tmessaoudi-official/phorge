@@ -60,17 +60,17 @@ the gated spine, and quarantines only the irreducibly-live step.
 
 ---
 
-## 3. Phorge-syntax API sketch
+## 3. Phorj-syntax API sketch
 
 The builder (#6, Tier-A, gated) and execution (this slice, Tier-B, quarantined) compose:
 
-```phorge
+```phorj
 package Main;
 import Core.Console;
 import Core.Db;          // <- pure:false; importing this quarantines the program
 import Core.Sql;         // <- pure builder (slice #6, gated)
 
-// --- value types (all are ordinary Phorge classes; see §4) ---
+// --- value types (all are ordinary Phorj classes; see §4) ---
 // class Connection  { ... }      opaque handle wrapper
 // class Statement   { ... }      a prepared statement bound to a connection
 // class Row         { fields: Map<string, string?> ... }
@@ -116,7 +116,7 @@ function main() -> void {
 | `Core.Db.close` | `(Connection)` | `void` |
 | `Core.Db.transaction` | `(Connection, (Connection) -> bool)` | `bool` (HigherOrder; commit if the closure returns true, else rollback) |
 
-`Connection`/`Query`/`Row`/`ResultSet` are **ordinary Phorge classes** (the public surface — Shape-A
+`Connection`/`Query`/`Row`/`ResultSet` are **ordinary Phorj classes** (the public surface — Shape-A
 style, mirroring M6 W1's `Request`/`Response`), defined in a small injected prelude (the `Core.Json`
 injected-type precedent: inject the AST before `check`, gated on the import). They carry no special
 runtime machinery on the gated path — see §4 for how the *opaque handle* lives inside `Connection`.
@@ -133,7 +133,7 @@ non-deterministic, non-`Clone`-friendly object into the value model that the byt
 assumes is pure data.
 
 **Decision: do NOT add a `Resource` variant.** Instead, `Connection` is a normal `Value::Instance`
-(an ordinary Phorge class) whose fields carry an *opaque token*, not a live handle:
+(an ordinary Phorj class) whose fields carry an *opaque token*, not a live handle:
 
 - **PHP leg (the only leg that connects):** the transpiler emits `Connection` as a thin PHP class
   wrapping a real `\PDO`. `Db.connect` → `new \PDO($dsn, $user, $pass)` stored in the instance. This
@@ -258,8 +258,8 @@ they constrain how `tests/db.rs` is written, not the language.
 1. **Fixture backend choice:** in-memory canned-result `DbBackend` (zero deps, fully deterministic,
    but doesn't exercise real SQL) **vs** a live non-TLS `/stack` docker Postgres (real SQL, but needs
    the container up and a seed/reset step in CI)? Recommend **both**: canned for the gated-builder
-   unit layer, docker-Postgres for an opt-in integration tier (`PHORGE_DB_DSN` env gate, skipped when
-   unset — like `PHORGE_REQUIRE_PHP`).
+   unit layer, docker-Postgres for an opt-in integration tier (`PHORJ_DB_DSN` env gate, skipped when
+   unset — like `PHORJ_REQUIRE_PHP`).
 2. **Connection lifecycle:** explicit `Db.close` only (sketched), or also a scope-bound
    `Db.withConnection(dsn, fn)` that guarantees close on the PHP leg via `finally`? The latter is more
    idiomatic and avoids leaked handles; the former is simpler. Recommend adding `withConnection` as

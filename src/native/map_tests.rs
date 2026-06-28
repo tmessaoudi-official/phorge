@@ -121,9 +121,9 @@ fn map_get_set_remove_eval_and_emit() {
     assert_eq!(php("get", &["$m", "$k"]), "($m[$k] ?? null)");
     assert_eq!(
         php("set", &["$m", "$k", "$v"]),
-        "__phorge_map_set($m, $k, $v)"
+        "__phorj_map_set($m, $k, $v)"
     );
-    assert_eq!(php("remove", &["$m", "$k"]), "__phorge_map_remove($m, $k)");
+    assert_eq!(php("remove", &["$m", "$k"]), "__phorj_map_remove($m, $k)");
     assert_eq!(
         registry()[index_of("Core.Map", "get").unwrap()].ret,
         Ty::Optional(Box::new(Ty::Param("V".into())))

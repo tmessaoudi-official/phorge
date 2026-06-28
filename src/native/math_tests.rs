@@ -235,7 +235,7 @@ fn math_s4_breadth_eval_and_emit() {
         php("clamp", &["$v", "$lo", "$hi"]),
         "max($lo, min($v, $hi))"
     );
-    assert_eq!(php("gcd", &["$a", "$b"]), "__phorge_gcd($a, $b)");
+    assert_eq!(php("gcd", &["$a", "$b"]), "__phorj_gcd($a, $b)");
     assert_eq!(php("log", &["$x"]), "log($x)");
     assert_eq!(php("log10", &["$x"]), "log10($x)");
     assert_eq!(php("exp", &["$x"]), "exp($x)");
@@ -246,6 +246,6 @@ fn math_s4_breadth_eval_and_emit() {
     assert_eq!(php("e", &[]), "M_E");
     assert_eq!(
         php("numberFormat", &["$v", "$d"]),
-        "__phorge_number_format($v, $d)"
+        "__phorj_number_format($v, $d)"
     );
 }

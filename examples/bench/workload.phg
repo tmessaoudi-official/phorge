@@ -16,7 +16,7 @@ class Cell {
 }
 
 // Heap pressure: at recursion depth d, d `Cell`s are simultaneously live — each frame keeps its
-// `c` alive across the recursive call — so peak resident memory scales with `n`. Phorge is
+// `c` alive across the recursive call — so peak resident memory scales with `n`. Phorj is
 // immutable (no accumulator mutation), so the running sum is threaded through the return value.
 // Depth stays well under MAX_CALL_DEPTH (4096).
 function allocateChain(int n): int {

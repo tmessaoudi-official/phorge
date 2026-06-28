@@ -1,6 +1,6 @@
-# Phorge Invariants
+# Phorj Invariants
 
-The load-bearing rules that keep Phorge correct. Each is non-obvious, easy to break with a
+The load-bearing rules that keep Phorj correct. Each is non-obvious, easy to break with a
 plausible-looking change, and enforced somewhere concrete. Read this before touching the backends,
 the value kernels, or the `Op` set. (Companion to `docs/ARCHITECTURE.md` for the layout, and the
 frozen design records in `docs/specs/`.)
@@ -22,7 +22,7 @@ central correctness contract.
   before execution — otherwise the distribution layer silently drifts off the spine while the
   differential suite (which never builds a binary) stays green.
   - **Cross-targets (Phase 2):** the surface now spans cross-built binaries. The stub-cache key is the
-    **FNV-1a-64 of the running phg binary's bytes**, so a rebuilt phorge ⇒ cache miss ⇒ fresh stub —
+    **FNV-1a-64 of the running phg binary's bytes**, so a rebuilt phorj ⇒ cache miss ⇒ fresh stub —
     a stale stub can never embed your source into an *old* VM. Cross-parity is gated by
     `cross_musl_binary_matches_runvm` (native exec) and `cross_windows_section_round_trips` (PE section
     round-trip). The object-file section readers (ELF/PE/Mach-O/fat) honor **EV-7**: every offset uses
@@ -43,7 +43,7 @@ kernels (`float_*`), and `compare_ord` live **once**, in `src/value.rs`. Both ba
   body string is a parity-affecting change.
 
 **`int` is a fixed 64-bit signed integer (`i64`), pinned by design.** Unlike PHP's `int`, whose width
-is platform-dependent (32-bit on a 32-bit build, 64-bit elsewhere), Phorge's `int` is **always** `i64`
+is platform-dependent (32-bit on a 32-bit build, 64-bit elsewhere), Phorj's `int` is **always** `i64`
 on every target — the backends all carry `Value::Int(i64)` and the transpile floor (PHP 8.5) is 64-bit
 in practice, so the width never varies. `int` arithmetic that would leave the `i64` range is a **checked
 fault** (`FAULT_INT_OVERFLOW`, EV-7 — never a silent wrap, unlike PHP which auto-promotes an overflowing

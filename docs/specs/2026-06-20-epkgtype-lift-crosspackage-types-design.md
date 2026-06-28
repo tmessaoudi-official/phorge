@@ -12,7 +12,7 @@
 and another package may **use that type** — retiring the `E-PKG-TYPE` rejection (`loader.rs:277`). The
 consumer references it through the **adopted `import type`** mechanism:
 
-```phorge
+```phorj
 // src/acme/geometry/point.phg
 package acme.geometry;
 class Point { constructor(public int x, public int y) {} function sumXY() -> int { return this.x + this.y; } }

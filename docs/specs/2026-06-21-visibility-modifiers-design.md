@@ -6,13 +6,13 @@
 
 ## 1. Motivation
 
-Today every top-level declaration in Phorge is implicitly visible everywhere it can be reached —
+Today every top-level declaration in Phorj is implicitly visible everywhere it can be reached —
 within its file, across its package's files, and (when `public`-by-mangling) cross-package. There is
 no way to mark a declaration as an implementation detail. This feature adds **declaration-level
 visibility**: a way to say "this helper is private to this file" or "this type is internal to this
 package, not part of its public surface."
 
-This is the *declaration* analog of member visibility, and it follows Phorge's established
+This is the *declaration* analog of member visibility, and it follows Phorj's established
 strictest-sensible-default tradition (the "nothing in the wind" namespace decision; explicit imports
 even for the stdlib): a declaration marked private leaks **nothing**, not even to sibling files,
 unless explicitly widened.
@@ -38,7 +38,7 @@ Applies to **all top-level declarations**: `class`, `enum`, `interface`, and fre
 
 A prefix keyword immediately before the declaration keyword:
 
-```phorge
+```phorj
 class Public { }            // default: public (cross-package)
 public class AlsoPublic { } // explicit public — allowed, identical to the above
 internal class Shared { }   // package-scoped
@@ -110,12 +110,12 @@ simply rides on the AST, unread by any backend.
 
 ## 4. Single-file / loose mode
 
-`-e`, stdin, and any single `.phg` with no `phorge.toml` run through `load_loose_src`, which performs
+`-e`, stdin, and any single `.phg` with no `phorj.toml` run through `load_loose_src`, which performs
 no Pass-2 resolution. There, everything is one file, so `private`/`internal` are **no-ops** (there is
 no "outside"). The keywords still parse and are accepted (forward-compatible). Consequently:
 
 - all single-file `examples/guide/*.phg` stay byte-identical (the field is erased/unread);
-- only `examples/project/*` (which have a `phorge.toml`) receive enforcement.
+- only `examples/project/*` (which have a `phorj.toml`) receive enforcement.
 
 ## 5. Diagnostics
 
@@ -140,7 +140,7 @@ codes. Both codes get `phg explain` entries (`cli.rs`).
 ## 7. Relationship to existing member modifiers
 
 This feature is **orthogonal** to the existing `Modifier::{Public,Private,Protected}` (ast.rs), which
-are *class-member* visibility (fields/methods) and are currently **not** Phorge-enforced — only PHP
+are *class-member* visibility (fields/methods) and are currently **not** Phorj-enforced — only PHP
 enforces them after transpile (per `KNOWN_ISSUES.md`). Declaration visibility is a **new axis**,
 carried as the dedicated `Visibility` field on each top-level decl and enforced in the loader. The two
 are deliberately not conflated: a `private class` with a `public` method is coherent (the class is
@@ -168,7 +168,7 @@ TDD throughout; the byte-identity spine is the correctness gate.
   enforcement across files and packages; two diagnostics; one example project.
 - **Out of scope (deferred):** a file-scoped opt-in *stronger* than `private` (already maximal);
   visibility on individual `import` re-exports; making member-level `Modifier` visibility
-  Phorge-enforced (a separate pre-existing gap, tracked in KNOWN_ISSUES); a visibility keyword *on*
+  Phorj-enforced (a separate pre-existing gap, tracked in KNOWN_ISSUES); a visibility keyword *on*
   type aliases (`private type X = …`). Note: type aliases are expanded by the checker, which runs
   *after* the loader, so an alias could in principle launder a reference to an `internal`/`private`
   type past the loader's check — this aliasing-as-visibility-bypass case is flagged as a follow-up to

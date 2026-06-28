@@ -23,7 +23,7 @@ Deferred to **M-NUM-2**: `BigInt`, arbitrary-precision decimal, composite `Money
   decimal?` (`Core.Decimal`), exact `+ - *` (single-sourced `value::decimal_add/sub/mul`, mixed
   `decimal⊕int` widen, scale rules, `"decimal overflow"` fault), numeric scale-insensitive
   compare/eq, unary `-`, scale-padded render. Three VM ops `AddD/SubD/MulD`; `NumTy::Decimal`/
-  `CTy::Decimal`; BCMath transpile via gated `__phorge_dec_add/_sub/_mul/_of` (i128-bounds-checked).
+  `CTy::Decimal`; BCMath transpile via gated `__phorj_dec_add/_sub/_mul/_of` (i128-bounds-checked).
   `E-DECIMAL-FLOAT-MIX` rejects a float mix. `examples/guide/decimals.phg` byte-identical
   run≡runvm≡real PHP 8.5; 1151 workspace tests green, clippy + fmt clean.
 - **S1 — decimal primitive core (original spec):** `Ty::Decimal`/`Value::Decimal{i128,u8}`; `1.50d` literal lex
@@ -32,7 +32,7 @@ Deferred to **M-NUM-2**: `BigInt`, arbitrary-precision decimal, composite `Money
 - **S2 — division + rounding: ✅ COMPLETE (`1a2774d`).** Bare `decimal /`/`%` → `E-DECIMAL-DIV`;
   `Decimal.div(a,b,scale,mode)` + `Decimal.round(d,scale,mode)` natives; injected 7-mode `RoundingMode`
   enum; single-sourced `value::round_div` (trunc-toward-zero q/rem, all 7 modes, checked i128); BCMath
-  `__phorge_dec_div`/`_round` (PHP-8.4 builtin-`RoundingMode` collision dodged via `RoundingMode_`
+  `__phorj_dec_div`/`_round` (PHP-8.4 builtin-`RoundingMode` collision dodged via `RoundingMode_`
   mangle); div-by-zero / scale-out-of-range / overflow faults. `examples/guide/decimal-div.phg`
   byte-identical run≡runvm≡PHP 8.5. **CI fix (`63ba3f7`):** decimal transpile emits BCMath, which the
   `php -n` oracle disables (shared ext) → CI red on S1; harness now loads it via `-d extension=bcmath`
@@ -47,10 +47,10 @@ Deferred to **M-NUM-2**: `BigInt`, arbitrary-precision decimal, composite `Money
 - **S4 — math breadth + number_format: ✅ COMPLETE (closes M-NUM).** `Core.Math` gains `sign`/`clamp`/
   `gcd` (int), `log`/`log10`/`exp`/`sin`/`cos`/`tan`/`pi`/`e` (float), and `numberFormat(float, int) ->
   string`. **No new `Op`, no new `Value`** — all `Op::CallNative`. `sign` → PHP `<=>`; `clamp` →
-  `max(lo, min(v, hi))` (never panics on lo>hi); `gcd` → single-sourced `__phorge_gcd` (Euclid; gmp is
+  `max(lo, min(v, hi))` (never panics on lo>hi); `gcd` → single-sourced `__phorj_gcd` (Euclid; gmp is
   absent under `php -n`; `i64::MIN` magnitude faults EV-7); transcendentals → libm builtins (exercised
   at exact IEEE points + via `numberFormat`); `pi`/`e` → `M_PI`/`M_E`. `numberFormat` → single-sourced
-  `__phorge_number_format` helper mirroring `value::number_format` (round half-away, group by threes,
+  `__phorj_number_format` helper mirroring `value::number_format` (round half-away, group by threes,
   `-0`→`0`, negative `decimals` clamps to 0) — NOT PHP's `number_format` (dodges its locale/`-0` quirks);
   only the `.5`-boundary rounding primitive is a divergence axis (examples keep off it). Kernel
   single-sourced in `value::number_format`; unit-tested in `math_s4_breadth_eval_and_emit`.
@@ -80,8 +80,8 @@ Build order (follow the compiler's non-exhaustive errors after step 1):
 7. **Compiler:** `NumTy::Decimal`, `CTy::Decimal`, `resolve_cty`, `ctype`, `num_ty`, literal `emit_const`,
    binary-op emit chooses `AddD/SubD/MulD` when either operand is decimal.
 8. **Interpreter:** literal eval + arithmetic dispatch calling the value.rs kernels (mixed decimal/int).
-9. **Transpiler:** literal→PHP string; `emit_type(decimal)`→`string`; arithmetic→gated `__phorge_dec_*`
-   helpers (runtime scale derivation + BCMath + i128 bounds-check fault); `Decimal.of`→`__phorge_dec_of`.
+9. **Transpiler:** literal→PHP string; `emit_type(decimal)`→`string`; arithmetic→gated `__phorj_dec_*`
+   helpers (runtime scale derivation + BCMath + i128 bounds-check fault); `Decimal.of`→`__phorj_dec_of`.
 10. **Native:** `Decimal.of(string)->decimal?` in the registry.
 11. **Tests/example:** failing checker+parser tests first (TDD); make `examples/guide/decimals.phg`
     byte-identical run≡runvm≡PHP-8.5; KNOWN_ISSUES overflow-fault note; README + CHANGELOG; commit green.
@@ -89,5 +89,5 @@ Build order (follow the compiler's non-exhaustive errors after step 1):
 ## Byte-identity strategy (the spine)
 i128-fixed-point Rust ops and BCMath agree on exact decimal arithmetic while in range. The ONLY
 divergence risk is i128 overflow (Rust faults; BCMath would keep going) — closed by emitting a
-bounds-checked PHP helper that faults identically. Same discipline as `__phorge_div`/`__phorge_rem`.
+bounds-checked PHP helper that faults identically. Same discipline as `__phorj_div`/`__phorj_rem`.
 Every S* example is gated by `tests/differential.rs` (run≡runvm≡real PHP 8.5).

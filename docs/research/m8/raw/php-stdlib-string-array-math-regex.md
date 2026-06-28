@@ -1,28 +1,28 @@
-# PHP Standard Library → Phorge Mapping (Strings · Arrays · Math · PCRE)
+# PHP Standard Library → Phorj Mapping (Strings · Arrays · Math · PCRE)
 
 > Research date: 2026-06-18. Inventory of the four major PHP stdlib function families,
-> mapped to Phorge with a 3-way honest bucket. Sources: php.net function references
+> mapped to Phorj with a 3-way honest bucket. Sources: php.net function references
 > (cited at the end). Deprecation status confirmed against php.net + php.watch.
 
 ## Buckets
 
-- **✅ core.\*** — Phorge already has it, OR it is a clean pure-Phorge native to build
+- **✅ core.\*** — Phorj already has it, OR it is a clean pure-Phorj native to build
   (no missing language feature). Gives the `core.<module>.<name>` target.
-- **🔲 M3-blocked** — needs a language feature Phorge lacks today: **Map/Set** (assoc
-  arrays — M3), **mutation** (in-place — Phorge is immutable, idiom is return-new),
+- **🔲 M3-blocked** — needs a language feature Phorj lacks today: **Map/Set** (assoc
+  arrays — M3), **mutation** (in-place — Phorj is immutable, idiom is return-new),
   **closures/generics** (Track A — `map`/`filter`/`reduce`/`usort`). Blocker named per row.
 - **❌ out-of-scope** — relies on dynamic typing, references (`&`), locale/intl C libraries,
   PHP-specific runtime (symbol table, internal array pointer), or has no static immutable
   equivalent. Deprecated/removed functions are also parked here (noted).
 
-### Phorge today (existing natives, for reference)
+### Phorj today (existing natives, for reference)
 
 - `core.text`: `len` `upper` `lower` `trim` `contains` `split` `split_once` `join` `replace`
 - `core.math`: `sqrt` `pow` `floor` `ceil` `abs` `min` `max`
 - `core.bytes`: `from_string` `to_string` `len` `find` `concat` `slice`
 - `core.list`: **PLANNED** — `map`/`filter`/`reduce` (needs closures, Track A)
 
-### Phorge constraints recap
+### Phorj constraints recap
 
 - Statically typed; **immutable** (no in-place mutation — `array_push`/`sort`/`splice` have
   no mutable target; idiom = return a new value).
@@ -37,9 +37,9 @@
 
 ## 1. STRINGS
 
-| Function | Family | Phorge target | Bucket | Note |
+| Function | Family | Phorj target | Bucket | Note |
 |---|---|---|---|---|
-| `strlen` | string | `core.text.len` | ✅ | EXISTS. PHP = byte length; Phorge `len` is UTF-8 chars — semantic difference, document it. Byte length = `core.bytes.len(bytes.from_string(s))`. |
+| `strlen` | string | `core.text.len` | ✅ | EXISTS. PHP = byte length; Phorj `len` is UTF-8 chars — semantic difference, document it. Byte length = `core.bytes.len(bytes.from_string(s))`. |
 | `substr` | string | `core.text.substr` | ✅ | Clean native: `substr(string, int, int?) -> string`. Negative offsets need a decision (PHP supports them). |
 | `strpos` | string | `core.text.index_of` | ✅ | `index_of(string, string) -> int?` (returns null not `false`; aligns with S2 optionals). |
 | `stripos` | string | `core.text.index_of_ci` | ✅ | Case-insensitive variant. ASCII-fold trivial; full-Unicode fold larger. |
@@ -111,7 +111,7 @@
 | `levenshtein` | string | `core.text.levenshtein` | ✅ | Pure DP algo → `int`. Clean native. |
 | `soundex` | string | `core.text.soundex` | ✅ | Pure algo → `string`. Clean native (ASCII/English only — document). |
 | `metaphone` | string | `core.text.metaphone` | ✅ | Pure algo → `string`. Clean native (larger ruleset). |
-| `crc32` | string | `core.bytes.crc32` / `core.hash` | ✅ | Pure checksum (Phorge already has FNV/CRC machinery in `bundle`). Clean native. |
+| `crc32` | string | `core.bytes.crc32` / `core.hash` | ✅ | Pure checksum (Phorj already has FNV/CRC machinery in `bundle`). Clean native. |
 | `md5` / `sha1` / `crypt` | string | `core.hash.*` | ✅ | Pure hash algos implementable in std Rust (no crate). Real work but feasible; lower priority. `crypt` (DES/blowfish) is larger. |
 | `md5_file` / `sha1_file` | string | `core.hash.*_file` | 🔲 | Needs file IO (M6). |
 | `str_increment` / `str_decrement` (8.3) | string | `core.text.increment` / `decrement` | ✅ | Alphanumeric "odometer" increment. Pure algo. Clean native (niche). |
@@ -128,7 +128,7 @@
 | `crypt` (dup) | string | (above) | ✅ | Covered. |
 | `echo` / `print` | string | `core.console.println` / `print` | ✅ | **EXISTS** (`console.println`). Language-level output. |
 | `hebrev` (dup) | string | (above) | ❌ | Covered. |
-| `mb_*` cluster (mbstring) | string | `core.text.*` (multibyte by default) | ✅/🔲 | **Important:** Phorge `core.text` is **UTF-8-native already**, so `mb_strlen`/`mb_substr`/`mb_strtoupper`/`mb_strpos`/`mb_str_split` are simply the **default behavior** of the `core.text` rows above — Phorge does not need a separate `mb_*` namespace. `mb_convert_encoding` / `mb_detect_encoding` (arbitrary encodings) → 🔲/❌ (encoding tables; non-UTF-8 → `core.bytes`). `mb_convert_case` = `upper`/`lower`/`title_case`. This is a **structural win**: the PHP `str_*` vs `mb_*` split collapses into one correct UTF-8 family. |
+| `mb_*` cluster (mbstring) | string | `core.text.*` (multibyte by default) | ✅/🔲 | **Important:** Phorj `core.text` is **UTF-8-native already**, so `mb_strlen`/`mb_substr`/`mb_strtoupper`/`mb_strpos`/`mb_str_split` are simply the **default behavior** of the `core.text` rows above — Phorj does not need a separate `mb_*` namespace. `mb_convert_encoding` / `mb_detect_encoding` (arbitrary encodings) → 🔲/❌ (encoding tables; non-UTF-8 → `core.bytes`). `mb_convert_case` = `upper`/`lower`/`title_case`. This is a **structural win**: the PHP `str_*` vs `mb_*` split collapses into one correct UTF-8 family. |
 
 **STRINGS count: ~95 distinct functions surveyed (excl. duplicate listing rows).**
 - ✅ core.* (have or clean native): **~62** (incl. the whole `mb_*` cluster folded into `core.text`)
@@ -141,14 +141,14 @@
 
 > **Two systemic blockers dominate this family:**
 > 1. **Mutation** — `array_push`/`pop`/`shift`/`unshift`/`splice` + all in-place sorts mutate by
->    reference. Phorge is immutable: the idiom is **return a new List**. So these map to ✅
+>    reference. Phorj is immutable: the idiom is **return a new List**. So these map to ✅
 >    *return-new* natives where the element type is uniform (`List<T>`), but the PHP signature
 >    (mutate `&$array`) does not. They are listed ✅ with a "(return-new)" note when the
 >    operation is expressible on `List<T>`, and 🔲 when they also need closures or Map.
 > 2. **Associative arrays** — PHP arrays are ordered maps. Anything keyed (`array_keys`,
 >    `array_flip`, `ksort`, `array_column`, `array_combine`, `*_assoc`, `*_key`) **needs Map** (M3).
 
-| Function | Family | Phorge target | Bucket | Note |
+| Function | Family | Phorj target | Bucket | Note |
 |---|---|---|---|---|
 | `count` / `sizeof` | array | `core.list.len` | ✅ | Clean native: `len(List<T>) -> int`. |
 | `array_map` | array | `core.list.map` | 🔲 | **PLANNED.** Needs **closures** (Track A) + generics `<T,U>`. |
@@ -190,11 +190,11 @@
 | `array_product` | array | `core.list.product` | ✅ | Same shape as `sum`. Clean native. |
 | `array_count_values` | array | — | 🔲 | Returns value→count **Map**. |
 | `array_change_key_case` | array | — | 🔲 | **Needs Map** (key transform). |
-| `array_is_list` | array | — | ❌ | In Phorge every `List<T>` is always a list — this PHP introspection is meaningless (always true). N/A. |
+| `array_is_list` | array | — | ❌ | In Phorj every `List<T>` is always a list — this PHP introspection is meaningless (always true). N/A. |
 | `array_key_first` / `array_key_last` | array | `core.list` (≈ `0` / `len-1`) | 🔲 | For Map → 🔲; for List the "key" is just the index, so degenerate. |
 | `array_rand` | array | — | ❌ | RNG + nondeterministic (breaks differential spine). Defer to a seeded `core.random`. |
 | `array_multisort` | array | — | 🔲 | Multi-array sort by reference — needs mutation + closures + multi-array coupling. |
-| `sort` / `rsort` | array | `core.list.sort` / `sort_desc` | ✅ | Return-new sort of `List<T>` where `T: Ord` (int/float/string). Clean native (PHP mutates by ref; Phorge returns new). |
+| `sort` / `rsort` | array | `core.list.sort` / `sort_desc` | ✅ | Return-new sort of `List<T>` where `T: Ord` (int/float/string). Clean native (PHP mutates by ref; Phorj returns new). |
 | `asort` / `arsort` / `ksort` / `krsort` | array | — | 🔲 | Key-association-preserving sorts — **need Map**. |
 | `usort` / `uasort` / `uksort` | array | `core.list.sort_by` | 🔲 | Custom comparator — **needs closures** (Track A). |
 | `natsort` / `natcasesort` | array | `core.list.sort_natural` | ✅ | Natural-order value sort (return-new). Pure comparator → clean native. (PHP's key-preservation → Map 🔲 for that aspect.) |
@@ -231,7 +231,7 @@
 > with no Map/closure/mutation. Most are clean `core.math` natives. The only ❌ are the
 > arbitrary-precision C extensions (GMP/BCMath) and RNG (nondeterminism breaks the spine).
 
-| Function | Family | Phorge target | Bucket | Note |
+| Function | Family | Phorj target | Bucket | Note |
 |---|---|---|---|---|
 | `abs` | math | `core.math.abs` | ✅ | **EXISTS** (int). Add float overload. |
 | `ceil` | math | `core.math.ceil` | ✅ | **EXISTS.** |
@@ -242,7 +242,7 @@
 | `fpow` (8.3) | math | `core.math.fpow` | ✅ | IEEE-754 float pow. Clean native. |
 | `min` | math | `core.math.min` | ✅ | **EXISTS** (int, 2-arg). Variadic + float + List form → extend. |
 | `max` | math | `core.math.max` | ✅ | **EXISTS.** |
-| `clamp` (8.6) | math | `core.math.clamp` | ✅ | **NEW in PHP 8.6.** `clamp(value, min, max)`. Trivial pure native. (PHP throws ValueError if min>max / NaN — Phorge → fault.) |
+| `clamp` (8.6) | math | `core.math.clamp` | ✅ | **NEW in PHP 8.6.** `clamp(value, min, max)`. Trivial pure native. (PHP throws ValueError if min>max / NaN — Phorj → fault.) |
 | `intdiv` | math | `core.math.intdiv` | ✅ | Clean native (int division; div-by-zero → fault, parity with existing arith faults). |
 | `fmod` | math | `core.math.fmod` | ✅ | Float remainder. Clean native. |
 | `fdiv` (8.0) | math | `core.math.fdiv` | ✅ | IEEE-754 division (inf/nan instead of fault). Clean native. |
@@ -280,10 +280,10 @@
 ## 4. PCRE / REGEX
 
 > **⚠ DESIGN PROBLEM, not a trivial native.** Rust's standard library has **no regex engine**
-> (the `regex` crate is forbidden by Phorge's zero-external-crate rule). A `core.regex` module
+> (the `regex` crate is forbidden by Phorj's zero-external-crate rule). A `core.regex` module
 > therefore requires implementing a regex engine in pure `std` Rust — realistically a
 > backtracking or Thompson-NFA matcher over UTF-8 — which is **substantial, security-sensitive
-> work** (ReDoS/catastrophic-backtracking must be bounded; Phorge already enforces depth limits
+> work** (ReDoS/catastrophic-backtracking must be bounded; Phorj already enforces depth limits
 > via `MAX_*_DEPTH`, so a step-bounded NFA fits the existing safety posture). The PHP↔PCRE
 > transpile mapping is clean (`core.regex.match` → `preg_match`), but the **engine is the cost**.
 > Recommended design: a **Thompson NFA / Pike VM** (linear-time, no catastrophic backtracking)
@@ -291,7 +291,7 @@
 > anchors, groups, common escapes) — explicitly NOT full PCRE (no backreferences/lookaround in v1,
 > since those force backtracking). All the functions below depend on this single engine.
 
-| Function | Family | Phorge target | Bucket | Note |
+| Function | Family | Phorj target | Bucket | Note |
 |---|---|---|---|---|
 | `preg_match` | pcre | `core.regex.match` | ✅* | *Bucket ✅ as a clean native **once the engine exists** — the engine is the gating work, not the binding. Returns capture groups as `List<string>?` (assoc named groups → Map 🔲). |
 | `preg_match_all` | pcre | `core.regex.match_all` | ✅* | Returns `List<List<string>>`. Same engine dependency. |
@@ -302,11 +302,11 @@
 | `preg_grep` | pcre | `core.regex.grep` | ✅* | Filter a `List<string>` by pattern → `List<string>`. (Note: arguably needs closures only if predicate-driven; the pattern form is engine-only.) |
 | `preg_quote` | pcre | `core.regex.quote` | ✅ | **No engine needed** — pure meta-char escaper (= `core.text.quote_meta`). Shippable immediately, independent of the engine. |
 | `preg_filter` | pcre | `core.regex.filter` | ✅* | `preg_replace` that returns only matched subjects. Engine-dependent. |
-| `preg_last_error` / `preg_last_error_msg` | pcre | — | ❌ | Global last-error state (stateful) — replaced by Phorge faults / `Result`-style returns; no global error register. |
+| `preg_last_error` / `preg_last_error_msg` | pcre | — | ❌ | Global last-error state (stateful) — replaced by Phorj faults / `Result`-style returns; no global error register. |
 
 > **Deprecation note:** the PCRE **`/e` (eval) modifier** for `preg_replace` was **deprecated in
 > PHP 5.5 and removed in PHP 7.0** — it executed the replacement as PHP code; `preg_replace_callback`
-> is the replacement. Not applicable to Phorge (no eval). No current `preg_*` *function* is deprecated.
+> is the replacement. Not applicable to Phorj (no eval). No current `preg_*` *function* is deprecated.
 
 **PCRE count: 11 functions surveyed.**
 - ✅ core.* (1 immediately shippable: `preg_quote`; 6 gated on the regex engine): **7**
@@ -346,7 +346,7 @@
    `similar_text` percent-by-ref. (A small ergonomics feature, not a full milestone.)
 4. **File IO (M6).** `fprintf` / `vfprintf`, `md5_file` / `sha1_file`.
 
-### Functions Phorge ALREADY covers (today, no new work)
+### Functions Phorj ALREADY covers (today, no new work)
 
 - `core.text`: `len` (`strlen`/`mb_strlen`), `upper` (`strtoupper`/`mb_strtoupper`),
   `lower` (`strtolower`), `trim` (`trim`), `contains` (`str_contains`), `split` (`explode`),
@@ -358,7 +358,7 @@
 
 ### Structural wins worth flagging
 
-- **The PHP `str_*` vs `mb_*` split disappears in Phorge.** `core.text` is UTF-8-native, so the
+- **The PHP `str_*` vs `mb_*` split disappears in Phorj.** `core.text` is UTF-8-native, so the
   ~15 `mb_*` multibyte twins are simply the default behavior of the single `core.text` family —
   no parallel namespace, no encoding-flag footguns. (Only non-UTF-8 conversion goes to `core.bytes`.)
 - **Optionals replace PHP's `false`-on-failure sentinel.** `strpos`/`array_search` return `int?`,

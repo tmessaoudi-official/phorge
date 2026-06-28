@@ -11,7 +11,7 @@
 
 ## Decision rule I applied to every fork
 
-Per [[philosophy-of-phorge]] and the project thesis (Phorge : PHP :: TypeScript : JavaScript): I picked
+Per [[philosophy-of-phorj]] and the project thesis (Phorj : PHP :: TypeScript : JavaScript): I picked
 the **most PHP-familiar, most legible, most pragmatic** option that preserves the byte-identity spine
 (`run ≡ runvm ≡ real PHP 8.5`) and adds no new `Op`/`Value` unless genuinely required. When two options
 were close, I favored the one that removes a surprise without removing capability.
@@ -133,11 +133,11 @@ seam design spec. Then await developer review of the two specs before building R
 ### F-006 — Core.Reflect (Phase 2 Slice 1) is BLOCKED on a real byte-identity-vs-erasure tension — NOT shipped
 - **Slice / context:** Phase 2 Slice 1 (introspection). The spec says the reflect natives "erase to PHP
   `get_class`/`class_implements`/`class_parents`/`class_uses`/`gettype`" and are byte-identity-gated.
-- **The blocker (verified by reading the transpiler erasure model):** PHP **erases** Phorge's finer type
+- **The blocker (verified by reading the transpiler erasure model):** PHP **erases** Phorj's finer type
   distinctions, so several reflect natives **cannot** be byte-identical run≡runvm≡real PHP for arbitrary
   inputs — a spine break in *user* code, not just examples:
   - `typeName(x)`: `bytes` → PHP `string`; `List`/`Map`/`Set` all → PHP `array` (PHP cannot tell them
-    apart to return `"List"`/`"Map"`/`"Set"`); enum variants → generated PHP classes (name ≠ Phorge enum
+    apart to return `"List"`/`"Map"`/`"Set"`); enum variants → generated PHP classes (name ≠ Phorj enum
     name). So `typeName(aMap)` = `"Map"` on Rust backends, unreproducible in PHP.
   - `className(x)`: salvageable for **class instances** (`get_class` matches a `package Main` class name)
     + `null` for non-objects — but the **enum** case depends on enum PHP erasure (unverified) and the

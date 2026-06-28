@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Turn an uncaught Phorge runtime fault into a state-of-the-art report — a call stack with per-frame `file:line` and a source caret — rendered identically across `run`/`runvm`, in both the CLI and (dev-mode) a `phg serve` browser error page.
+**Goal:** Turn an uncaught Phorj runtime fault into a state-of-the-art report — a call stack with per-frame `file:line` and a source caret — rendered identically across `run`/`runvm`, in both the CLI and (dev-mode) a `phg serve` browser error page.
 
 **Architecture:** A `Frame` carries `{function, file, line, col}`; `Diagnostic` gains `frames: Vec<Frame>` (this *is* the spec's `Fault` — realized as Diagnostic-plus-frames to avoid changing the `Result<String, Diagnostic>` return type everywhere). The VM walks its live `frames` at the fault arm; the interpreter keeps a `trace_stack` popped on success only (so an error leaves it intact to snapshot). The loader tags each function with its origin file and keeps a source map on `Unit` for carets. Two renderers consume the frames: `Diagnostic::render` (CLI) and a Rust HTML renderer in `serve.rs` (web, dev-only, reusing `Core.Html`'s escape table).
 
@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Toolchain: `export PATH=/stack/tools/cargo/bin:$PATH`. Gate before every commit: `PHORGE_REQUIRE_PHP=1 cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`. The pre-commit hook re-runs all three.
+- Toolchain: `export PATH=/stack/tools/cargo/bin:$PATH`. Gate before every commit: `PHORJ_REQUIRE_PHP=1 cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`. The pre-commit hook re-runs all three.
 - **No new `Op`, no `Value` change, no change to program stdout.** `FaultKind` classification is preserved — the M7 PHP oracle must stay green. Traces are on the fault/stderr path only.
 - **`run`-trace ≡ `runvm`-trace** is an enforced invariant (Task 5's differential assertion), not an aspiration.
 - Web error page is **dev-mode only** (`phg serve --dev`); production returns a bare generic 500 with no trace/source/message leak.
@@ -107,7 +107,7 @@ Append `render_frames()` to the end of the string built by `render(&self, src)`.
 - [ ] **Step 5: Full gate + commit.**
 
 ```bash
-export PATH=/stack/tools/cargo/bin:$PATH && PHORGE_REQUIRE_PHP=1 cargo test 2>&1 | tail -3 && cargo clippy --all-targets -- -D warnings && cargo fmt --check
+export PATH=/stack/tools/cargo/bin:$PATH && PHORJ_REQUIRE_PHP=1 cargo test 2>&1 | tail -3 && cargo clippy --all-targets -- -D warnings && cargo fmt --check
 git add src/diagnostic.rs && git commit -m "feat(diagnostic): Frame + frames field + CLI stack-trace render"
 ```
 
@@ -177,7 +177,7 @@ Note the top frame's `ip` was already incremented (`self.frames[fr].ip += 1` bef
 - [ ] **Step 5: Full gate + commit.**
 
 ```bash
-export PATH=/stack/tools/cargo/bin:$PATH && PHORGE_REQUIRE_PHP=1 cargo test 2>&1 | tail -3 && cargo clippy --all-targets -- -D warnings && cargo fmt --check
+export PATH=/stack/tools/cargo/bin:$PATH && PHORJ_REQUIRE_PHP=1 cargo test 2>&1 | tail -3 && cargo clippy --all-targets -- -D warnings && cargo fmt --check
 git add src/vm.rs src/chunk.rs src/compiler.rs && git commit -m "feat(vm): attach call-stack frames to a runtime fault"
 ```
 
@@ -239,7 +239,7 @@ match interp.run_call("main", &names, &main.body, vec![], None) {
 - [ ] **Step 5: Full gate + commit.**
 
 ```bash
-export PATH=/stack/tools/cargo/bin:$PATH && PHORGE_REQUIRE_PHP=1 cargo test 2>&1 | tail -3 && cargo clippy --all-targets -- -D warnings && cargo fmt --check
+export PATH=/stack/tools/cargo/bin:$PATH && PHORJ_REQUIRE_PHP=1 cargo test 2>&1 | tail -3 && cargo clippy --all-targets -- -D warnings && cargo fmt --check
 git add src/interpreter.rs && git commit -m "feat(interpreter): trace_stack — call-stack frames on a fault (parity with VM)"
 ```
 
@@ -261,7 +261,7 @@ git add src/interpreter.rs && git commit -m "feat(interpreter): trace_stack — 
 #[test]
 fn unit_records_fn_files_and_sources() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write("src/main.phg", "package Main;\nfunction main() {}");
     tmp.write("src/acme/util/u.phg", "package acme.util;\nfunction parse() {}");
     let u = load(&entry).unwrap();
@@ -279,7 +279,7 @@ fn unit_records_fn_files_and_sources() {
 - [ ] **Step 5: Full gate + commit.**
 
 ```bash
-export PATH=/stack/tools/cargo/bin:$PATH && PHORGE_REQUIRE_PHP=1 cargo test 2>&1 | tail -3 && cargo clippy --all-targets -- -D warnings && cargo fmt --check
+export PATH=/stack/tools/cargo/bin:$PATH && PHORJ_REQUIRE_PHP=1 cargo test 2>&1 | tail -3 && cargo clippy --all-targets -- -D warnings && cargo fmt --check
 git add src/loader.rs src/main.rs src/vm.rs src/interpreter.rs && git commit -m "feat(loader): per-function file attribution + source map for traces"
 ```
 
@@ -322,7 +322,7 @@ fn run_and_runvm_traces_are_identical() {
 - [ ] **Step 5: Full gate + commit.**
 
 ```bash
-export PATH=/stack/tools/cargo/bin:$PATH && PHORGE_REQUIRE_PHP=1 cargo test 2>&1 | tail -3 && cargo clippy --all-targets -- -D warnings && cargo fmt --check
+export PATH=/stack/tools/cargo/bin:$PATH && PHORJ_REQUIRE_PHP=1 cargo test 2>&1 | tail -3 && cargo clippy --all-targets -- -D warnings && cargo fmt --check
 git add tests/differential.rs src/ && git commit -m "test(differential): enforce run≡runvm stack-trace parity"
 ```
 
@@ -372,7 +372,7 @@ fn production_fault_is_bare_500_no_leak() {
 - [ ] **Step 5: Full gate + commit.**
 
 ```bash
-export PATH=/stack/tools/cargo/bin:$PATH && PHORGE_REQUIRE_PHP=1 cargo test 2>&1 | tail -3 && cargo clippy --all-targets -- -D warnings && cargo fmt --check
+export PATH=/stack/tools/cargo/bin:$PATH && PHORJ_REQUIRE_PHP=1 cargo test 2>&1 | tail -3 && cargo clippy --all-targets -- -D warnings && cargo fmt --check
 git add src/serve.rs src/main.rs && git commit -m "feat(serve): dev-mode HTML error page (phg serve --dev); prod stays bare 500"
 ```
 
@@ -394,7 +394,7 @@ git add src/serve.rs src/main.rs && git commit -m "feat(serve): dev-mode HTML er
 - [ ] **Step 5: Full gate + commit.**
 
 ```bash
-export PATH=/stack/tools/cargo/bin:$PATH && PHORGE_REQUIRE_PHP=1 cargo test 2>&1 | tail -3 && cargo clippy --all-targets -- -D warnings && cargo fmt --check
+export PATH=/stack/tools/cargo/bin:$PATH && PHORJ_REQUIRE_PHP=1 cargo test 2>&1 | tail -3 && cargo clippy --all-targets -- -D warnings && cargo fmt --check
 git add src/ && git commit -m "feat(cli): color the stack trace (NO_COLOR/TTY-aware) + caret wiring"
 ```
 
@@ -423,7 +423,7 @@ git add src/ && git commit -m "feat(cli): color the stack trace (NO_COLOR/TTY-aw
 - §5 CLI renderer → Task 1 (frames) + Task 7 (color/caret). ✓
 - §6 web dev page → Task 6. ✓
 - §7 production safety → Task 6 (dev/prod split + `production_fault_is_bare_500_no_leak` test). ✓
-- §8 oracle safety → every task ends on the `PHORGE_REQUIRE_PHP=1` gate; FaultKind untouched. ✓
+- §8 oracle safety → every task ends on the `PHORJ_REQUIRE_PHP=1` gate; FaultKind untouched. ✓
 - §9 testing → Tasks 1-8 (unit goldens, differential parity, web snapshot, example README). ✓
 - §10 scope → no try/catch here (Slice 2). ✓
 

@@ -14,7 +14,7 @@ impl Transpiler {
     /// `match (subject) { … }` string, or `None` if any arm is a variant/type/struct pattern, carries
     /// a guard, or a catch-all isn't the last arm — those keep the `instanceof` `emit_match` path.
     ///
-    /// Strict equality: PHP `match` compares arm values with `===`, exactly mirroring Phorge's literal
+    /// Strict equality: PHP `match` compares arm values with `===`, exactly mirroring Phorj's literal
     /// patterns (`classify_pattern` already emits `=== <lit>`), so the branch taken is byte-identical.
     /// A bare-binding catch-all is assigned *inside the subject* (`match ($x = E)`), so the `default`
     /// arm body can reference it while `E` is evaluated once — and this works in both statement and
@@ -28,7 +28,7 @@ impl Transpiler {
     ) -> Result<Option<String>, String> {
         // Eligibility scan (no emission): every arm is a literal, except at most one *trailing*
         // catch-all. A guard, or a catch-all that isn't last (which would let later arms run under
-        // PHP's position-independent `default` — diverging from Phorge's first-match-wins), bails out.
+        // PHP's position-independent `default` — diverging from Phorj's first-match-wins), bails out.
         let mut catch_all_binding: Option<&str> = None;
         for (i, arm) in arms.iter().enumerate() {
             if arm.guard.is_some() {
@@ -109,7 +109,7 @@ impl Transpiler {
     /// Statement-position matches keep the `if/elseif` chain (`emit_match`): PHP `if` is a statement
     /// and `match` is an expression, so each position uses PHP's natural construct. Returns `None`
     /// only when an unguarded catch-all isn't the last arm — PHP's `default` is position-independent,
-    /// so a non-terminal catch-all would diverge from Phorge's first-match-wins (caller keeps the IIFE).
+    /// so a non-terminal catch-all would diverge from Phorj's first-match-wins (caller keeps the IIFE).
     pub(super) fn try_match_true(
         &mut self,
         scrutinee: &Expr,

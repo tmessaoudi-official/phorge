@@ -15,7 +15,7 @@ print path (`Debug.dump`) does not exist. Tier stays **A**.
 1. **String + List ARE byte-identical primitives — the spine claim is true.**
    - `Value::as_display` (`src/value.rs:241-255`): `Int(n) => n.to_string()` (matches PHP `(string)int`),
      `Bool(b) => b.to_string()` → `"true"/"false"`, `Str(s) => s.clone()`. A printed **bool** is
-     reconciled across legs by the `__phorge_str` runtime helper
+     reconciled across legs by the `__phorj_str` runtime helper
      (`src/transpile/program.rs:295-301`: `if (is_bool($v)) return $v ? "true" : "false";`), so a
      bound `true`/`false` rendered into output is identical run/runvm/PHP. **No float on the build
      path** (binds carried, not formatted) — the spike's risk #5 is correctly N/A.
@@ -23,7 +23,7 @@ print path (`Debug.dump`) does not exist. Tier stays **A**.
      str_replace(search, replace, subject)` (`src/native/text.rs:345-350`) — both PHP **core**,
      survive `php -n`. Identifier quoting `'"' . str_replace('"','""',$id) . '"'` is core-only.
      **§5 `php -n` safety holds.** No PDO, no mbstring, no ext on the build path. Confirmed.
-   - Placeholder `?` and ANSI `"ident"` are literal strings the Phorge code writes → identical by
+   - Placeholder `?` and ANSI `"ident"` are literal strings the Phorj code writes → identical by
      construction. **No escaping divergence surface (risk #1) — genuinely eliminated.** Agreed.
 
 2. **REFUTATION 1 (P0 — blocks the public API as sketched): `[18, true]` does not type-check.**
@@ -52,7 +52,7 @@ print path (`Debug.dump`) does not exist. Tier stays **A**.
    multi-method builder class.** Every injected prelude that ships is a single **enum** with no
    method bodies — `JSON_PRELUDE` (`src/cli/mod.rs:294`) and `ROUNDING_MODE_PRELUDE`
    (`src/cli/mod.rs:338`). The spike proposes injecting an entire `Query`/`Sql` **class pair with
-   chained `from`/`where`/`orderBy`/`limit`/`build` method bodies written in Phorge**. That is a
+   chained `from`/`where`/`orderBy`/`limit`/`build` method bodies written in Phorj**. That is a
    materially larger and unproven prelude (clone-with semantics, private-field reads, cross-package
    `List<string>` fields, a `match` over a `Bind` enum inside `build()` to render placeholders). It
    may well work — but "copy of `inject_json_prelude`" (§9) understates it by an order of magnitude.
@@ -75,7 +75,7 @@ I actively hunted the named hazards; none breaks the spine **on the build path**
 - **`php -n` missing ext:** the build path is `implode`/`str_replace`/`.`/array ops — all core.
   Holds. (The trap would be the rejected `PDO::quote` inline design; correctly rejected.)
 - **One byte of PHP drift:** the transpiled methods are ordinary string concat + array append; a
-  printed `int`/`bool`/`string` is reconciled by `__phorge_str`. No SQL-specific PHP builtin emitted.
+  printed `int`/`bool`/`string` is reconciled by `__phorj_str`. No SQL-specific PHP builtin emitted.
   Holds.
 
 ## Net assessment

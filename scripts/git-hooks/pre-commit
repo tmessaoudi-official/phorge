@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Phorge pre-commit gate (M2 P3.5 Wave 0, Task 0.5). Tracked in-repo and wired up with
+# Phorj pre-commit gate (M2 P3.5 Wave 0, Task 0.5). Tracked in-repo and wired up with
 #   git config core.hooksPath scripts/git-hooks
 # Zero external dependencies — just the cargo toolchain. Blocks a commit unless formatting,
 # clippy (all lints denied, matching Cargo.toml), and the full test suite all pass.

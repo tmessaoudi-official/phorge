@@ -6,7 +6,7 @@ function greet(string who): string {
 }
 
 function main(): void {
-    string name = "Phorge";
+    string name = "Phorj";
     int n = 3;
     float pi = 3.14;
     Console.println("name = {name}, n = {n}, pi = {pi}");

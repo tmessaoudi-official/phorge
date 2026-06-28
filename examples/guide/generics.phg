@@ -38,7 +38,7 @@ function lastOfTwo<T>(T a, T b): T {
 function main(): void {
   // `identity` reused at three different concrete types — one definition, no duplication.
   int n = identity(7);
-  string s = identity("phorge");
+  string s = identity("phorj");
   bool flag = identity(true);
 
   // `firstOr` over a non-empty `List<int>` → `T = int`, returns the first element.

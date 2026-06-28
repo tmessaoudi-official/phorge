@@ -1,6 +1,6 @@
 # Probe: cannot extend a final (non-`open`) class — final-by-default (M-RT S6)
 
-**Rule:** Phorge is final-by-default. A class must be declared `open` to be extended;
+**Rule:** Phorj is final-by-default. A class must be declared `open` to be extended;
 `class B extends A {}` where `A` is not `open` MUST be rejected.
 
 **Verdict: ENFORCED — not a gap.**
@@ -9,7 +9,7 @@
 
 `$TMP/final-extend.phg`:
 
-```phorge
+```phorj
 package Main;
 
 import Core.Console;
@@ -35,7 +35,7 @@ function main(): void {
 Command + output:
 
 ```
-$ /stack/projects/phorge/target/release/phg check $TMP/final-extend.phg
+$ /stack/projects/phorj/target/release/phg check $TMP/final-extend.phg
 type error at 11:1: class `B` cannot extend `A`, which is not `open`
 class B extends A {
 ^
@@ -43,7 +43,7 @@ class B extends A {
   hint: mark the parent `open class A` to allow extension
 exit=1
 
-$ /stack/projects/phorge/target/release/phg run $TMP/final-extend.phg
+$ /stack/projects/phorj/target/release/phg run $TMP/final-extend.phg
 type error at 11:1: class `B` cannot extend `A`, which is not `open`
 class B extends A {
 ^
@@ -60,11 +60,11 @@ accurate hint. Both `check` and `run` fail (the checker runs ahead of both backe
 `$TMP/final-extend-ok.phg` (same as Probe 1 but `open class A`, plus `b.who2()`):
 
 ```
-$ /stack/projects/phorge/target/release/phg check $TMP/final-extend-ok.phg
+$ /stack/projects/phorj/target/release/phg check $TMP/final-extend-ok.phg
 OK (type-checks clean)
 exit=0
 
-$ /stack/projects/phorge/target/release/phg run $TMP/final-extend-ok.phg
+$ /stack/projects/phorj/target/release/phg run $TMP/final-extend-ok.phg
 A
 B
 exit=0

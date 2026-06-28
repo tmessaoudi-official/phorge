@@ -1,9 +1,9 @@
 # Prior Art: How Real Compilers Organize Source (the PHASE × CONSTRUCT axis)
 
-Research for the Phorge decomposition milestone. Question: a compiler is a 2-D grid —
+Research for the Phorj decomposition milestone. Question: a compiler is a 2-D grid —
 **PHASE** axis (lex / parse / check / compile / vm / transpile) × **CONSTRUCT** axis
 (`for` / `while` / `if` / `match` / `class` / `trait`). You can only cheaply file source
-along ONE axis. Phorge is by-phase today (one whale file per phase); the developer's
+along ONE axis. Phorj is by-phase today (one whale file per phase); the developer's
 vision is by-construct. Hard constraint: Rust's exhaustive `match` is the safety net (a
 forgotten enum arm fails to compile) and a single `match` cannot be split across files.
 
@@ -34,7 +34,7 @@ Mapping (the article confirms this mapping explicitly when prompted):
   constructs requires modifying all phases. By compilation phase (columns): Adding new
   phases requires touching every node type. This mirrors the OOP/FP divide perfectly."]
 
-**Decisive consequence for Phorge:** Rust `enum` + exhaustive `match` is the *canonical
+**Decisive consequence for Phorj:** Rust `enum` + exhaustive `match` is the *canonical
 FP/column-oriented* tool. It makes **adding a phase (column) cheap and adding a construct
 (row) the expensive, all-files-touched operation** — and it makes the *expensive* one
 **safe** (forgetting a construct in a new phase fails to compile). The developer's
@@ -46,7 +46,7 @@ structurally *against*. That tension is the whole milestone. [Inferred]
 > compilers written in object oriented languages use the visitor pattern."
 > [Verified — WebSearch synthesis of the expression-problem sources]
 
-Phorge's reality matches: the AST (constructs) is comparatively stable; phases/features
+Phorj's reality matches: the AST (constructs) is comparatively stable; phases/features
 (operations) churn. That favours keeping the **column-cheap** (by-phase) organisation and
 attacking the *whale-file* problem a different way (sub-splitting), rather than flipping to
 the row-cheap axis the language fights.
@@ -101,11 +101,11 @@ No package is named for a language construct. [Verified]
 the TypeScript-Compiler-Notes]
 
 - The checker is *one* ~tens-of-thousands-of-lines file. It is the canonical **whale file**
-  — the exact thing Phorge wants to avoid — yet the most successful TS compiler keeps it
+  — the exact thing Phorj wants to avoid — yet the most successful TS compiler keeps it
   monolithic. [Verified]
 - Internally it is `checkExpression` → big **`switch` on `node.kind` (SyntaxKind)** with a
   case per construct, recursing through the tree. So *within* the phase-file the structure
-  is "one switch, arm-per-construct" — i.e. the same shape as Phorge's per-phase `match`.
+  is "one switch, arm-per-construct" — i.e. the same shape as Phorj's per-phase `match`.
   [Verified]
 - **Lesson:** TS chose by-phase + one-big-switch and simply *tolerates the whale*. It
   proves by-phase scales to a world-class compiler; it does NOT prove the whale is pleasant.
@@ -116,7 +116,7 @@ the TypeScript-Compiler-Notes]
 [Verified — github.com/dotnet/roslyn `src/Compilers/CSharp/Portable/Binder/`]
 
 This is the single strongest piece of prior art for the developer's vision. Roslyn's
-**binder** phase (syntax → bound tree, the rough analogue of Phorge's checker) is **one
+**binder** phase (syntax → bound tree, the rough analogue of Phorj's checker) is **one
 `partial class Binder` split across many files by construct/feature**:
 `Binder_Expressions.cs`, `Binder_Invocation.cs`, `Binder_Deconstruct.cs`,
 `Binder_Attributes.cs`, `Binder_Statements.cs`, etc. [Verified]
@@ -127,14 +127,14 @@ This is the single strongest piece of prior art for the developer's vision. Rosl
 - This is **exactly the thin-dispatcher pattern** (§2): the central `BindExpression` switch
   dispatches to `BindInvocationExpression` / `BindDeconstruction` / … which live in the
   per-construct file. [Inferred from the file naming + binder structure]
-- **Caveat that matters for Phorge:** C# has no exhaustive-match guarantee. Roslyn's switch
+- **Caveat that matters for Phorj:** C# has no exhaustive-match guarantee. Roslyn's switch
   has a `default` that throws at *runtime* (`ExceptionUtilities.UnexpectedValue`). So
   Roslyn pays the by-construct ergonomics with the *loss of compile-time exhaustiveness* —
-  precisely the safety net Phorge must NOT give up. [Inferred — Roslyn idiom; C# has no
+  precisely the safety net Phorj must NOT give up. [Inferred — Roslyn idiom; C# has no
   enum-exhaustiveness]
 
 **Verdict: by-construct filing within a phase is real and production-proven (Roslyn) — but
-the languages that do it (C#) lack Rust's exhaustive `match`, so they don't face Phorge's
+the languages that do it (C#) lack Rust's exhaustive `match`, so they don't face Phorj's
 hard constraint. The split is enabled by `partial class`, which Rust approximates with
 multiple `impl` blocks (§3).**
 
@@ -167,7 +167,7 @@ the Sarkar education paper https://www.cs.tufts.edu/comp/150FP/archive/kent-dybv
   unchanged arms" feature mitigates the by-phase tax (you don't re-type every construct in
   every pass) — but a *pass* is still the unit of a file, never a *construct*. It does
   **not** give "one file for `for`, one file for `while`." [Verified/Inferred]
-- **Transferable idea for Phorge:** nanopass's real lesson isn't the axis — it's that the
+- **Transferable idea for Phorj:** nanopass's real lesson isn't the axis — it's that the
   whale dies by being cut into **more, smaller phases** (sub-phases), each independently
   understandable, with codegen'd traversal removing the boilerplate. That is the
   by-phase-subsplit recommendation (§4), validated at commercial scale.
@@ -246,7 +246,7 @@ and the Rust Book ch. 7.5]
 - **Free functions with explicit state vs methods:** the alternative is `fn check_for(f:
   &For, cx: &mut CheckCtx)` free functions taking the context explicitly, instead of
   `impl Checker` methods. "This avoids visibility issues and provides clearer separation of
-  concerns, though it's less idiomatic Rust." [Verified] For Phorge this is attractive: a
+  concerns, though it's less idiomatic Rust." [Verified] For Phorj this is attractive: a
   `CheckCtx` struct (the data) + free per-construct functions (the code) sidesteps the
   `pub(crate)`-everything problem AND is the natural fit for the thin-dispatcher (the arm
   calls a free fn). It's also closest to rustc's `walk_*` free-function style. [Inferred]
@@ -259,7 +259,7 @@ and the Rust Book ch. 7.5]
 
 ---
 
-## 4. Evidence-based recommendation for Phorge
+## 4. Evidence-based recommendation for Phorj
 
 **Recommendation: by-phase-subsplit as the default, with a thin-dispatcher (per-phase
 dispatcher + free per-construct functions) applied selectively where a phase's match arms
@@ -269,17 +269,17 @@ are genuinely large and construct-shaped. Reject the literal "one file holds all
 ### Why (cited):
 1. **Every production compiler files by phase** — rustc, Go, TypeScript, Clang, GCC, and
    even nanopass (phases taken to the extreme). [Verified, §1] By-phase is the proven
-   scaling axis. Phorge keeping by-phase keeps the language's grain (Rust enum+match is
+   scaling axis. Phorj keeping by-phase keeps the language's grain (Rust enum+match is
    column-cheap, §0) and keeps exhaustiveness *effortless*.
 2. **The whale is killed by sub-phase splitting, not axis-flipping.** rustc cuts typeck into
    `collect`/`coherence`/`check`/`regionck`/`writeback`; nanopass cuts monoliths into 50+
    single-task passes and *proves* the maintainability win is the cut, not the axis.
-   [Verified, §1a/§1f] Phorge's `checker.rs` (~9.7k) is the typeck whale — the prior-art
+   [Verified, §1a/§1f] Phorj's `checker.rs` (~9.7k) is the typeck whale — the prior-art
    move is to split it into cohesion sub-modules (collect/resolve/check-bodies/erase/
    coherence-style passes), each still by-phase, each with intact exhaustive matches.
 3. **The by-construct axis costs exhaustiveness in every language that adopts it.** Roslyn
    and Clang get per-construct files only because C#/C++ have no exhaustive match; their
-   dispatch `default`s throw at runtime. [Inferred, §1d/§1e] Phorge's #1 stated constraint
+   dispatch `default`s throw at runtime. [Inferred, §1d/§1e] Phorj's #1 stated constraint
    is to keep the compile-time safety net — so the *pure* by-construct organisation those
    compilers use is off the table; only the **thin-dispatcher** preserves it.
 4. **The thin-dispatcher gives the by-construct *feel* without losing safety** — the match
@@ -311,7 +311,7 @@ src/
   sub-splitting moves *helpers/arm-bodies*, never the match head. [Inferred — direct
   application of the constraint]
 - Byte-identity spine is unaffected: this is pure code movement; `tests/differential.rs`
-  gates that nothing changed behaviour. [Speculative — depends on Phorge test wiring]
+  gates that nothing changed behaviour. [Speculative — depends on Phorj test wiring]
 
 ### What to reject:
 - **Pure by-construct ("`for.rs` owns lex+parse+check+compile+vm+transpile for `for`").**

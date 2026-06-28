@@ -2,7 +2,7 @@ package Main;
 import Core.Console;
 
 // This program is also in the byte-identity sweep. `phg transpile` turns it into
-// runnable PHP 8.x — the only Phorge↔PHP-ecosystem path (output, not input).
+// runnable PHP 8.x — the only Phorj↔PHP-ecosystem path (output, not input).
 
 enum Shape {
     Circle(float r),

@@ -1,17 +1,17 @@
 //! `phg vendor` — fetch `[require]` git dependencies into an offline `vendor/` tree.
 //!
-//! This is the **only** part of Phorge that touches the network, and it runs **only** on an explicit
+//! This is the **only** part of Phorj that touches the network, and it runs **only** on an explicit
 //! `phg vendor` (never on `run`/`check`/`transpile` — those resolve offline from the committed
 //! `vendor/`). For each dependency it: `git clone`s the repo, checks out the pinned `tag`/`rev`,
 //! resolves that to a full commit SHA, reads the dependency's own manifest to find its source root,
 //! and copies that source subtree into `vendor/<vendor>/<package>/` (the dep's coordinate — so each
 //! dependency owns one subtree, making re-vendoring idempotent without a blanket wipe). It then
-//! writes `phorge.lock` pinning every dependency to its resolved SHA + an FNV-1a-64 content hash.
+//! writes `phorj.lock` pinning every dependency to its resolved SHA + an FNV-1a-64 content hash.
 //!
 //! **Layout (M5-10 / O-7):** `vendor/<vendor>/<package>/` is each dependency's own mini source root;
 //! files inside keep their internal package directory structure (`package acme.strutil` ⇒
 //! `…/acme/strutil/x.phg`). folder=path is validated against the per-dependency root at load time
-//! ([`crate::loader`]). There is deliberately **no nested `phorge.toml`** under `vendor/` — a vendored
+//! ([`crate::loader`]). There is deliberately **no nested `phorj.toml`** under `vendor/` — a vendored
 //! tree is a flat package forest, so the project-aware test harness never mistakes a dependency for a
 //! standalone project.
 //!
@@ -27,7 +27,7 @@ use crate::bundle::cross::fnv1a_64;
 use crate::lock::{Lock, LockEntry};
 use crate::manifest::{validate_path_component, Manifest, Pin, Project};
 
-/// Vendor every `[require]` dependency of `project` and (re)write `phorge.lock`. Returns a short
+/// Vendor every `[require]` dependency of `project` and (re)write `phorj.lock`. Returns a short
 /// human-readable summary. Network access happens here and nowhere else.
 ///
 /// `[require-dev]` is parsed but not vendored in this slice (dev-only dependency vendoring is an M5
@@ -47,7 +47,7 @@ pub fn vendor(project: &Project) -> Result<String, String> {
             Pin::Rev(r) => r,
         };
         // Security boundary (GA blocker B1): a `git`/`pin` value from an attacker-authored
-        // `phorge.toml` reaches the `git` CLI. Reject anything that would be read as a git option
+        // `phorj.toml` reaches the `git` CLI. Reject anything that would be read as a git option
         // (leading `-`) or a command-executing remote helper (`ext::`/`file::`) before it is passed.
         validate_git_arg("dependency git URL", &dep.git)?;
         validate_git_arg("dependency pin", pin)?;
@@ -88,7 +88,7 @@ pub fn vendor(project: &Project) -> Result<String, String> {
         // Copy the dependency's `.phg` source tree into `vendor/<name>/` via a staging dir, then
         // swap atomically — idempotent and crash-safe, touching only this dependency's own subtree.
         let dest = vendor_root.join(&dep.name);
-        let staging = dest.with_extension("phorge-staging");
+        let staging = dest.with_extension("phorj-staging");
         remove_tree(&staging)?;
         let copied = copy_phg_tree(&dep_src, &staging)?;
         if copied == 0 {
@@ -303,7 +303,7 @@ fn unique_temp_dir(dep_name: &str) -> PathBuf {
         .map(|c| if c.is_alphanumeric() { c } else { '_' })
         .collect();
     std::env::temp_dir().join(format!(
-        "phorge_vendor_{}_{unique}_{safe}",
+        "phorj_vendor_{}_{unique}_{safe}",
         std::process::id()
     ))
 }

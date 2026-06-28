@@ -241,7 +241,7 @@ fn valid_float(s: &str, permissive: bool) -> bool {
 }
 /// `parseFloat(string, bool permissive = false) -> float?` — parse a base-10 float, or `None` when the
 /// string fails the grammar (see [`valid_float`]). Rust's `f64::from_str` is the value source of truth
-/// (run on the validator-accepted slice); the gated PHP helper `__phorge_parse_float` mirrors the
+/// (run on the validator-accepted slice); the gated PHP helper `__phorj_parse_float` mirrors the
 /// grammar + cast. The `permissive` flag has a default of `false` (M4 default parameters), so
 /// `parseFloat(s)` is strict and `parseFloat(s, true)` is lax.
 fn text_parse_float(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -284,7 +284,7 @@ fn text_substring(args: &[Value], _: &mut String) -> Result<Value, String> {
 
 /// The `Core.Text` registry entries (M3 Track B Wave 2). NOTE the PHP arg order: `explode`/`implode`
 /// take the separator first, and `str_replace` is `(search, replace, subject)` — the `php` closures
-/// reorder accordingly so the erasure matches Phorge's `(subject, …)` argument order.
+/// reorder accordingly so the erasure matches Phorj's `(subject, …)` argument order.
 pub(crate) fn text_natives() -> Vec<NativeFn> {
     let s = || Ty::String;
     vec![
@@ -435,9 +435,9 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             php: |a| format!("str_repeat({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `parseInt(string) -> int?` — None on a non-integer (the first optional-return native). PHP
-        // erases to the gated `__phorge_parse_int` helper (set in `transpile/call.rs`), which mirrors
+        // erases to the gated `__phorj_parse_int` helper (set in `transpile/call.rs`), which mirrors
         // Rust's `i64::from_str` exactly: optional sign, base-10 digits (leading zeros OK), in i64
-        // range, no surrounding whitespace; anything else is `null` (Phorge `None`).
+        // range, no surrounding whitespace; anything else is `null` (Phorj `None`).
         NativeFn {
             module: "Core.Text",
             name: "parseInt",
@@ -445,7 +445,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(Ty::Int)),
             pure: true,
             eval: NativeEval::Pure(text_parse_int),
-            php: |a| format!("__phorge_parse_int({})", parg(a, 0)),
+            php: |a| format!("__phorj_parse_int({})", parg(a, 0)),
         },
         // `parseBool(string) -> bool?` (M4 `string as bool`) — strict `"true"`/`"false"` only; never
         // PHP truthiness. Arrow-IIFE PHP carrier = single-eval of the operand.
@@ -465,7 +465,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
         },
         // `parseFloat(string, bool permissive = false) -> float?` — the motivating native for M4
         // default parameters (the `permissive` flag defaults to strict). Rejects inf/nan in both
-        // modes; permissive also accepts a lone leading/trailing dot. Gated `__phorge_parse_float`.
+        // modes; permissive also accepts a lone leading/trailing dot. Gated `__phorj_parse_float`.
         NativeFn {
             module: "Core.Text",
             name: "parseFloat",
@@ -473,7 +473,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(Ty::Float)),
             pure: true,
             eval: NativeEval::Pure(text_parse_float),
-            php: |a| format!("__phorge_parse_float({}, {})", parg(a, 0), parg(a, 1)),
+            php: |a| format!("__phorj_parse_float({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `padLeft`/`padRight(string, int, string) -> string` — PHP `str_pad` (byte-based, no mbstring).
         NativeFn {
@@ -509,7 +509,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
                 )
             },
         },
-        // `indexOf(string, string) -> int?` — gated `__phorge_text_index_of` (PHP `strpos` → null).
+        // `indexOf(string, string) -> int?` — gated `__phorj_text_index_of` (PHP `strpos` → null).
         NativeFn {
             module: "Core.Text",
             name: "indexOf",
@@ -517,7 +517,7 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(Ty::Int)),
             pure: true,
             eval: NativeEval::Pure(text_index_of),
-            php: |a| format!("__phorge_text_index_of({}, {})", parg(a, 0), parg(a, 1)),
+            php: |a| format!("__phorj_text_index_of({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `substring(string, int, int) -> string` — PHP `substr` (byte-indexed; negatives from end).
         NativeFn {
@@ -543,7 +543,7 @@ fn text_parse_int(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 
 /// `parseBool(string) -> bool?` (M4 as-matrix S3, the `string as bool` kernel) — **strict**: only the
-/// literals `"true"`/`"false"` parse; anything else (incl. `"1"`, `"yes"`, `""`) is `null`. Phorge
+/// literals `"true"`/`"false"` parse; anything else (incl. `"1"`, `"yes"`, `""`) is `null`. Phorj
 /// deliberately does NOT inherit PHP's `(bool)"0" == false` / `(bool)"false" == true` truthiness — the
 /// #1 string-cast footgun. The PHP carrier is an arrow-IIFE matching this exactly.
 fn text_parse_bool(args: &[Value], _: &mut String) -> Result<Value, String> {

@@ -1,4 +1,4 @@
-# Prior-Art Sweep — Python stdlib lens (for Phorge `Core.*` native modules)
+# Prior-Art Sweep — Python stdlib lens (for Phorj `Core.*` native modules)
 
 **Lens:** Python standard library (`urllib`, `http.client`, `sqlite3`/DB-API 2.0, `pprint`/`reprlib`,
 `hashlib`, `secrets`/`random`, `csv`, `datetime`, `re`, plus high-value adjacents: `base64`,
@@ -11,15 +11,15 @@
 - **Tier B (impure → quarantined behind M6 `Transport`, fixture-tested OUTSIDE differential.rs):**
   network, DB connection, filesystem writes, `time.time()`/`datetime.now()`, OS entropy.
 
-Phorge already ships the relevant skeleton: `src/native/{math,text,convert,decimal,bytes,file,json,
+Phorj already ships the relevant skeleton: `src/native/{math,text,convert,decimal,bytes,file,json,
 list,map,set,html,reflect,process}.rs`, each a `(module,name)`-keyed table with `eval`
 (shared interpreter+VM), a `php` transpile closure, and a `pure: bool`. New pure modules are purely
 additive (no new `Op`, `Op::CallNative` path). The gated runtime-helper mechanism
-(`__phorge_*` + `uses_*` flags + `emit_runtime_helpers`) is the escape hatch when a single PHP builtin
-won't match Phorge semantics byte-for-byte — and it is the *dominant* tool for this batch, because
+(`__phorj_*` + `uses_*` flags + `emit_runtime_helpers`) is the escape hatch when a single PHP builtin
+won't match Phorj semantics byte-for-byte — and it is the *dominant* tool for this batch, because
 Python and PHP disagree constantly on edge cases (hex casing, base64 padding, urlencode space, date
-parsing). **The safe default for every capability below is: define Phorge's exact semantics in the Rust
-`eval`, then emit a `__phorge_*` PHP helper that reproduces it — never trust a bare PHP builtin to
+parsing). **The safe default for every capability below is: define Phorj's exact semantics in the Rust
+`eval`, then emit a `__phorj_*` PHP helper that reproduces it — never trust a bare PHP builtin to
 match the Rust kernel unless verified.**
 
 ---
@@ -30,34 +30,34 @@ match the Rust kernel unless verified.**
 **Python shape:** `pprint.pformat(obj, indent, width)`, `repr(obj)`, `reprlib.repr` (depth/length
 caps). Produces a stable, human-readable, deterministic-by-design rendering of nested structures.
 
-**Phorge API sketch:**
+**Phorj API sketch:**
 ```
 import Core.Debug;
 Console.println(Debug.dump(value));          // -> string, multi-line, indented
 Console.println(Debug.inspect(value));        // -> string, single-line compact (repr-like)
 ```
-**Determinism:** Tier A **iff** the format is *Phorge-defined* and contains **NO** addresses /
+**Determinism:** Tier A **iff** the format is *Phorj-defined* and contains **NO** addresses /
 object-ids / pointer values (the #1 Python `repr` trap: default `object.__repr__` prints
-`<Foo at 0x7f…>`). Phorge's Value enum is closed and ordered: `Map`/`Set` are already
+`<Foo at 0x7f…>`). Phorj's Value enum is closed and ordered: `Map`/`Set` are already
 **insertion-ordered `Rc<Vec<…>>`** (per the project's R1 decision — verified in `value.rs`), so
 iteration order is stable and gateable, unlike Python `set`/pre-3.7 `dict`. Render: `Int`/`Float`
-(Ryū via the existing `__phorge_float`), `Bool` (`true`/`false`), `Str` (quoted+escaped), `Bytes`
+(Ryū via the existing `__phorj_float`), `Bool` (`true`/`false`), `Str` (quoted+escaped), `Bytes`
 (`b"\xHH…"`), `Decimal` (`1.50d`), `Null` (`null`), `List`/`Map`/`Set`/`Instance`/`Enum` recursively.
 **Reuse `value::eq_val_rec`'s `visited: Vec<(*const Instance,…)>` cycle-set pattern** for circular-ref
 guard once mutation lands (M-mut shipped `Instance` shared-mutable → cycles ARE possible) — print
 `<cycle>` instead of looping.
 **Transpile target:** NOT `var_export`/`print_r` (PHP renders objects with class FQNs + `[private]`
-markers + no Ryū float fidelity — guaranteed divergence). Emit a dedicated `__phorge_dump($v,$indent)`
-recursive helper that mirrors the Rust kernel exactly (this is precisely the `__phorge_str` pattern,
+markers + no Ryū float fidelity — guaranteed divergence). Emit a dedicated `__phorj_dump($v,$indent)`
+recursive helper that mirrors the Rust kernel exactly (this is precisely the `__phorj_str` pattern,
 one level up). **Risk:** float formatting must route through the SAME Ryū-equivalent helper both sides
-(already solved — `__phorge_float`). **Confidence: HIGH.**
+(already solved — `__phorj_float`). **Confidence: HIGH.**
 
 ### 2. URL parse / build / query (`urllib.parse`) — **Tier A, HIGH value**
 **Python shape:** `urlsplit(s) -> SplitResult(scheme,netloc,path,query,fragment)`, `urlunsplit`,
 `parse_qs`/`parse_qsl` (query → dict/list), `urlencode(dict)`, `quote`/`unquote` (percent-encoding),
 `quote_plus`/`unquote_plus` (space↔`+`).
 
-**Phorge API sketch:**
+**Phorj API sketch:**
 ```
 import Core.Url;
 Url url = Url.parse("https://h:8080/a/b?x=1&y=2#f");  // -> a Url struct/class
@@ -69,15 +69,15 @@ string plus  = Url.encodeForm("a b"); // "a+b"
 ```
 **Determinism:** fully pure → Tier A. Best modeled with the **injected-type pattern**
 (`cli::inject_*_prelude`) for a `Url` result type, OR return a `Map<string,string>` for the query and
-plain fields for parse (simpler, no injected type needed for v1). `parseQuery` ordering: Phorge `Map`
+plain fields for parse (simpler, no injected type needed for v1). `parseQuery` ordering: Phorj `Map`
 is insertion-ordered → gateable; Python `parse_qs` returns lists for repeated keys (decide:
 last-wins like PHP `parse_str`, or list — recommend **list of pairs** `List<(string,string)>` to be
-lossless, but Phorge has no tuples yet → use `List<KeyVal>` injected type, or two parallel lists).
+lossless, but Phorj has no tuples yet → use `List<KeyVal>` injected type, or two parallel lists).
 **Transpile traps (named):**
 - PHP `urlencode` encodes space as `+`; `rawurlencode` as `%20`. Python `quote` → `%20`,
   `quote_plus` → `+`. Map `Url.encode`→`rawurlencode`, `Url.encodeForm`→`urlencode`. **Pin which.**
 - PHP `parse_url` is lenient and returns `false`/missing keys inconsistently; Python `urlsplit`
-  never fails. **Prefer a `__phorge_url_parse` helper** for byte-identity rather than `parse_url`.
+  never fails. **Prefer a `__phorj_url_parse` helper** for byte-identity rather than `parse_url`.
 - Percent-encoding case: Python uppercases hex (`%2F`); PHP `rawurlencode` also uppercases — verify,
   but pin via helper if any doubt. **Confidence: HIGH.**
 
@@ -85,7 +85,7 @@ lossless, but Phorge has no tuples yet → use `List<KeyVal>` injected type, or 
 **Python shape:** `base64.b64encode/b64decode(bytes)`, `urlsafe_b64encode` (`+/`→`-_`),
 `binascii.hexlify`/`unhexlify`, `base64.b32encode`.
 
-**Phorge API sketch (operates on the existing `bytes` primitive — strong fit):**
+**Phorj API sketch (operates on the existing `bytes` primitive — strong fit):**
 ```
 import Core.Encoding;
 string b64 = Encoding.base64Encode(bytes);
@@ -101,14 +101,14 @@ string u   = Encoding.base64UrlEncode(bytes);
   in the Rust kernel and emit `bin2hex`. `dechex`/`sprintf('%X')` would diverge — avoid.
 - **base64 padding & urlsafe alphabet:** PHP `base64_encode` always pads with `=`; for urlsafe emit
   `strtr(base64_encode($b),'+/','-_')` and decide on padding (Python urlsafe keeps `=`). Pin behavior;
-  if mismatch risk, use a `__phorge_b64` helper.
-- **Invalid-input handling:** Phorge returns `bytes?` (`null`); PHP `base64_decode($s,true)` returns
+  if mismatch risk, use a `__phorj_b64` helper.
+- **Invalid-input handling:** Phorj returns `bytes?` (`null`); PHP `base64_decode($s,true)` returns
   `false` on bad input → map `false`→`null`. **Confidence: HIGH.**
 
 ### 4. Hashing (`hashlib`) — **Tier A (digests), HIGH value**; HMAC = Tier A but care
 **Python shape:** `hashlib.md5/sha1/sha256(bytes).hexdigest()`, `hmac.new(key,msg,sha256)`.
 
-**Phorge API sketch:**
+**Phorj API sketch:**
 ```
 import Core.Hash;
 string h = Hash.sha256Hex(bytes);   // 64 lowercase hex chars
@@ -129,7 +129,7 @@ are not used for password comparison in the language runtime). **Transpile targe
 $b)`, `md5($b)`, `sha1($b)`, `sprintf('%08x',crc32($b))`, `hash_hmac('sha256',$m,$k)` — **but `hash()`
 needs the `hash` extension which is compiled-in by default (verify under `php -n`!).** If `hash` is
 absent under `-n`, md5/sha1/crc32 have dedicated core functions (`md5`,`sha1`,`crc32`) but **sha256
-has no core function** → either require the extension or ship a `__phorge_sha256` PHP helper (slow but
+has no core function** → either require the extension or ship a `__phorj_sha256` PHP helper (slow but
 deterministic). **This is the single biggest transpile risk in this batch — `php -n` likely lacks a
 sha256 builtin. Confidence: HIGH for md5/sha1/crc32, MEDIUM for sha256/hmac (pending `php -n` probe).**
 
@@ -138,7 +138,7 @@ sha256 builtin. Confidence: HIGH for md5/sha1/crc32, MEDIUM for sha256/hmac (pen
 `randint`/`choice`/`shuffle` (module-global, seedable); `secrets.token_bytes` (OS entropy, NOT
 reproducible).
 
-**Phorge API sketch:**
+**Phorj API sketch:**
 ```
 import Core.Random;
 Random rng = Random.seeded(42);           // explicit-seed PRNG (Tier A)
@@ -149,11 +149,11 @@ List<T> sh = rng.shuffle(list);
 // Tier B (M6 Transport-quarantined):
 bytes b = Random.systemBytes(16);          // OS entropy — NOT gateable
 ```
-**Determinism:** **seeded PRNG with a Phorge-defined algorithm is Tier A** — but ONLY if the
+**Determinism:** **seeded PRNG with a Phorj-defined algorithm is Tier A** — but ONLY if the
 algorithm is identical in Rust and PHP. Do **NOT** use `random.Random`/Mersenne or PHP `mt_rand`
 (MT seeding differs across PHP versions and from any Rust impl → guaranteed divergence). **Define a
 small, fully-specified PRNG (e.g. SplitMix64 or PCG32) in the Rust kernel and re-implement the exact
-integer arithmetic in a `__phorge_rng_*` PHP helper** using 64-bit ops (PHP ints are 64-bit on the CI
+integer arithmetic in a `__phorj_rng_*` PHP helper** using 64-bit ops (PHP ints are 64-bit on the CI
 platform — verify, and watch overflow: PHP has no wrapping u64, must mask with `& 0xFFFFFFFFFFFFFFFF`
 and use `gmp`/manual — **this is a real trap**). `rng.float()` in `[0,1)` from the integer state must
 use the SAME bit-extraction both sides. **System entropy is Tier B** — quarantine. **Confidence:
@@ -165,7 +165,7 @@ named risk).
 **Python shape:** `sqlite3.connect()` → `cursor.execute(sql, params)` (parameter binding `?`/`:name`).
 DB-API 2.0 is the std interface.
 
-**Phorge API sketch:**
+**Phorj API sketch:**
 ```
 import Core.Sql;
 // Tier A — pure query BUILDER (escaping/binding, no I/O):
@@ -180,9 +180,9 @@ Connection c = Sql.connect(dsn);    // NOT gateable
 **Determinism:** **the query BUILDER is pure → Tier A** (this is explicitly in the prompt's feasible
 list — "a typed SQL query BUILDER (escaping/binding)"). It produces deterministic SQL strings + a
 binding list; no DB needed. The **connection/execution is Tier B**, quarantined behind M6 `Transport`.
-**Transpile target for the builder:** the builder is pure Phorge logic over strings/lists — it likely
-needs NO natives at all beyond string ops Phorge already has; `quoteString`/`quoteIdent` could be small
-natives (`__phorge_sql_quote`). **Trap:** SQL escaping is dialect-specific (`'`→`''` for strings is
+**Transpile target for the builder:** the builder is pure Phorj logic over strings/lists — it likely
+needs NO natives at all beyond string ops Phorj already has; `quoteString`/`quoteIdent` could be small
+natives (`__phorj_sql_quote`). **Trap:** SQL escaping is dialect-specific (`'`→`''` for strings is
 ANSI; identifier quoting `"`/backtick/`[]` differs by engine) — pin a single dialect (recommend ANSI +
 optional MySQL backtick mode) and gate it. **Confidence: HIGH for builder, the connection is out of
 scope until M6.**
@@ -191,7 +191,7 @@ scope until M6.**
 **Python shape:** `csv.reader(lines, delimiter, quotechar)`, `csv.writer(...).writerow`. RFC-4180-ish
 quoting (double-quote escaping, embedded newlines/commas).
 
-**Phorge API sketch:**
+**Phorj API sketch:**
 ```
 import Core.Csv;
 List<List<string>> rows = Csv.parse(text);                 // default ',' delim, '"' quote
@@ -202,7 +202,7 @@ List<List<string>> rows2 = Csv.parseWith(text, ';', '"');
 escaped `""`, embedded delimiters/newlines). **Transpile traps (named):**
 - PHP `str_getcsv`/`fgetcsv` exist but have quirky escape semantics (the `escape` char `\` causes
   long-standing surprises, **deprecated/changed in PHP 8.4+** — Rule 9 deprecation flag!). **Do NOT
-  rely on `str_getcsv` for byte-identity** — emit `__phorge_csv_parse`/`__phorge_csv_write` helpers
+  rely on `str_getcsv` for byte-identity** — emit `__phorj_csv_parse`/`__phorj_csv_write` helpers
   that mirror the Rust state machine exactly. This avoids the PHP 8.4 escape-default change entirely.
 - Line-ending normalization (CRLF vs LF) must be pinned identically both sides.
 **Confidence: HIGH** (with the explicit decision to use helpers, not `str_getcsv`).
@@ -211,7 +211,7 @@ escaped `""`, embedded delimiters/newlines). **Transpile traps (named):**
 **Python shape:** `datetime(y,m,d,h,m,s)`, `timedelta`, `.strftime`/`strptime`, `date.today()`/
 `datetime.now()` (clock), `time.time()` (epoch).
 
-**Phorge API sketch:**
+**Phorj API sketch:**
 ```
 import Core.Time;
 // Tier A — pure arithmetic/format/parse:
@@ -231,8 +231,8 @@ gateable set** (those are the classic determinism traps — Python `strftime('%a
   across environments, and **`php -n` resets it** → may emit warnings / default to UTC). **MUST pass
   explicit UTC** (`gmdate()` not `date()`, or `DateTimeImmutable` with explicit `new DateTimeZone('UTC')`).
 - Python and PHP strftime/`date()` use **different format-specifier alphabets** (`%Y` vs `Y`,
-  `%m` vs `m`). Phorge should pick ONE (recommend `strftime`-style `%Y` since it's the prompt's lens)
-  and **translate to PHP's `date()` letters in the transpile helper** (`__phorge_time_format`).
+  `%m` vs `m`). Phorj should pick ONE (recommend `strftime`-style `%Y` since it's the prompt's lens)
+  and **translate to PHP's `date()` letters in the transpile helper** (`__phorj_time_format`).
 - Leap-year / month-length arithmetic: hand-roll in Rust (std has no date type), mirror in a PHP helper
   rather than trusting `DateTime` modify-string parsing. **Confidence: MEDIUM** (calendar arithmetic is
   fiddly; the timezone-default trap is the #1 named risk and is fully avoidable with `gmdate`/explicit UTC).
@@ -252,7 +252,7 @@ M6 direction in CLAUDE.md).
 **Python shape:** no single module — idioms via `re` (email/URL regex), `int()`/`float()` with
 try/except, `ipaddress.ip_address(s)`. PHP's `filter_var` is the closer analog (the project is
 PHP-targeted).
-**Phorge API sketch:**
+**Phorj API sketch:**
 ```
 import Core.Validate;
 bool ok    = Validate.isEmail(s);
@@ -263,7 +263,7 @@ string san = Validate.trimAll(s);
 **Determinism:** pure → Tier A. **Transpile:** PHP `filter_var($s, FILTER_VALIDATE_EMAIL)` exists but
 the `filter` extension may be absent under `php -n` (**named risk**) and its email regex is RFC-5322-ish
 and notoriously divergent from any hand-rolled check → **prefer hand-rolled validators with a
-`__phorge_validate_*` helper** to guarantee byte-identity. `toInt`/`toFloat` already partly exist
+`__phorj_validate_*` helper** to guarantee byte-identity. `toInt`/`toFloat` already partly exist
 (`Text.parseInt`/`parseFloat`, `Core.Convert`). **Confidence: MEDIUM** (regex-equivalence is the trap —
 avoid by defining simple, explicit grammars, not full RFC parsers).
 
@@ -275,7 +275,7 @@ engine** (the `regex` crate is forbidden by zero-dep). Hand-rolling a regex engi
 PCRE has hundreds of edge cases (backreferences, lookahead, Unicode property classes, greedy/lazy
 nuances) — **getting Rust to match PCRE exactly is effectively infeasible at reasonable cost.**
 **Recommendation: DEFER regex** (or ship only a tiny, explicitly-non-PCRE glob/wildcard matcher with
-Phorge-defined semantics so there's nothing to diverge from). If full regex is wanted later, the only
+Phorj-defined semantics so there's nothing to diverge from). If full regex is wanted later, the only
 byte-identity-safe path is to make it **transpile-only / PHP-PCRE-backed and run-backend = a hand-rolled
 subset**, which violates the spine. **Named trap: there is no std-only Rust regex; PCRE-parity is the
 killer.** **Confidence: HIGH that regex should be deferred/scoped-down.**
@@ -283,13 +283,13 @@ killer.** **Confidence: HIGH that regex should be deferred/scoped-down.**
 ### 12. UUID (`uuid`) — **SPLIT: v4=Tier B (entropy), v5/v3=Tier A (namespaced hash)**
 **Python shape:** `uuid.uuid4()` (random), `uuid.uuid5(ns, name)` (sha1-based, deterministic).
 **Determinism:** `uuid4` needs entropy → Tier B. **`uuid5`/`uuid3` are pure deterministic hashes →
-Tier A** (depend on the sha1/md5 kernel from §4). **Phorge API:** `Uuid.v5(namespace, name) -> string`.
+Tier A** (depend on the sha1/md5 kernel from §4). **Phorj API:** `Uuid.v5(namespace, name) -> string`.
 **Transpile:** compose from the hash helpers; format with the version/variant bit-twiddling in a
-`__phorge_uuid5` helper. **Confidence: MEDIUM** (depends on hash kernel landing first; v4 deferred).
+`__phorj_uuid5` helper. **Confidence: MEDIUM** (depends on hash kernel landing first; v4 deferred).
 
 ### 13. Text wrapping / templating (`textwrap`, `string.Template`) — **Tier A, LOW-MEDIUM value**
 `textwrap.fill`/`wrap`/`dedent`/`indent`, `string.Template.substitute`. All pure → Tier A, hand-rollable.
-Phorge already has `Core.Text` (`split`/`join`/`trim`/`repeat`/etc.) and `Core.Html`. Adds: `Text.wrap`,
+Phorj already has `Core.Text` (`split`/`join`/`trim`/`repeat`/etc.) and `Core.Html`. Adds: `Text.wrap`,
 `Text.dedent`, `Text.pad`. **Transpile:** `wordwrap()` (core), `str_pad()` (core). **Confidence: HIGH.**
 
 ### 14. Statistics (`statistics`) — **Tier A, LOW value**
@@ -301,13 +301,13 @@ values. **Confidence: MEDIUM** (float-echo divergence is a pre-existing, documen
 ---
 
 ## DETERMINISM TRAPS — consolidated (named, with the surface they hit)
-1. **Object addresses / ids** — Python default `repr` prints `0x…`; any dumper MUST be Phorge-defined,
+1. **Object addresses / ids** — Python default `repr` prints `0x…`; any dumper MUST be Phorj-defined,
    address-free. (Hits: var-dump §1, uuid, anything reflecting identity.)
 2. **Clock** — `time.time()`, `datetime.now()`, `date.today()` → Tier B. Only EXPLICIT instants are
    gateable. (Hits: time §8, uuid v1.)
 3. **OS entropy / RNG** — `secrets`, `os.urandom`, `random` *without* explicit seed, `uuid4` → Tier B.
    Seeded PRNG is Tier A only if the algorithm is identical both sides. (Hits: random §5, uuid §12.)
-4. **Set / dict iteration order** — Python `set` is unordered; pre-3.7 dict unordered. Phorge `Map`/`Set`
+4. **Set / dict iteration order** — Python `set` is unordered; pre-3.7 dict unordered. Phorj `Map`/`Set`
    are **insertion-ordered `Rc<Vec>`** (verified) → safe, but any dumper/CSV/JSON must rely on that order
    and never re-sort via a hashmap. (Hits: var-dump §1, csv §7, sql §6.)
 5. **Locale** — `strftime('%a'/'%b'/'%A')`, `LC_TIME`, `LC_NUMERIC` (decimal comma!), `strtolower` on
@@ -316,7 +316,7 @@ values. **Confidence: MEDIUM** (float-echo divergence is a pre-existing, documen
    explicit `DateTimeZone('UTC')`. (Hits: time §8 — the single most dangerous one.)
 7. **Float rendering divergence** — PHP `echo`/`json_encode` emit ~14 sig-digits, NOT Ryū → any
    irrational/non-exactly-representable float diverges from the Rust backends (already KNOWN_ISSUE).
-   Route ALL float output through `__phorge_float` (Ryū). (Hits: stats §14, hash-of-float, json.)
+   Route ALL float output through `__phorj_float` (Ryū). (Hits: stats §14, hash-of-float, json.)
 8. **Hex casing** — `bin2hex`/`hexlify` lowercase vs `dechex`/`sprintf('%X')` upper. Pin lowercase.
 9. **base64 padding & urlsafe alphabet** — `=` padding, `+/` vs `-_`. Pin explicitly. (§3.)
 10. **u64 overflow in a seeded PRNG** — Rust wraps, PHP int overflow promotes to float / needs manual
@@ -325,13 +325,13 @@ values. **Confidence: MEDIUM** (float-echo divergence is a pre-existing, documen
     must be zeroed for byte-identity. (Future `Core.Compress`.)
 12. **`php -n` missing extensions** — `hash` (sha256!), `filter`, `mbstring`, `curl`, `intl`, possibly
     `ctype` are absent or uncertain under `-n`. Every transpile target MUST be a CORE function or a
-    `__phorge_*` helper. **Probe `php -n` for `hash`/`filter`/`ctype` before relying on them.** (§4,§10.)
+    `__phorj_*` helper. **Probe `php -n` for `hash`/`filter`/`ctype` before relying on them.** (§4,§10.)
 
 ## STD-RUST APIs RELIED ON (all std-only, zero-crate — verified the dep list is empty)
 - `str`/`String`/`char` (UTF-8 iteration), `[u8]`/`Vec<u8>` (bytes) — text/url/base64/csv/hash input.
 - `u8`/`u32`/`u64`/`i64`/`i128` wrapping & checked arithmetic — hashing, PRNG, hex, base64, decimal.
 - Manual byte/bit ops — base64 (6-bit groups), hex (nibbles), sha256/md5 (FIPS spec), crc32 (table).
-- `core::fmt` / existing Ryū `__phorge_float` — pretty-print & stats float rendering.
+- `core::fmt` / existing Ryū `__phorj_float` — pretty-print & stats float rendering.
 - NO `std::time::SystemTime`, NO `std::net`, NO `getrandom`/`/dev/urandom` in the Tier-A set — those
   belong only to Tier B (M6 Transport).
 - Reuse `value::eq_val_rec`'s `Vec<(*const Instance,…)>` cycle-set for the dumper's circular guard.
@@ -349,8 +349,8 @@ values. **Confidence: MEDIUM** (float-echo divergence is a pre-existing, documen
 10. **DEFER:** regex (no std engine, PCRE-parity infeasible), HTTP (Tier B/M6), uuid4/system-random
     (Tier B), full statistics (float-echo trap), compression (gzip mtime trap).
 
-## NOTABLE-FOR-PHORGE SUMMARY
-- The dominant porting tactic is **define-in-Rust-kernel + `__phorge_*` PHP helper**, NOT trusting PHP
+## NOTABLE-FOR-PHORJ SUMMARY
+- The dominant porting tactic is **define-in-Rust-kernel + `__phorj_*` PHP helper**, NOT trusting PHP
   builtins — because Python↔PHP↔Rust disagree on exactly the edge cases (hex case, b64 padding, date
   specifiers, csv escaping, urlencode space) that byte-identity gating will catch.
 - Most capabilities need **no new `Op`** (pure `Op::CallNative`), so they ship like existing modules.

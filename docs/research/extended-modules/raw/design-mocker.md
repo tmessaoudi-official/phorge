@@ -5,7 +5,7 @@
 > expectations (`timesCalled` / `calledWith`). Sibling to the `phg test` runner and the seeded Faker.
 >
 > **Verdict: Tier A — front-end codegen (AST synthesis), zero backend changes, no new `Op`/`Value`.**
-> Byte-identical by construction because a mock is *ordinary Phorge code* the front end injects before
+> Byte-identical by construction because a mock is *ordinary Phorj code* the front end injects before
 > any backend runs — the same discipline as the `Json`/`RoundingMode` injected-type preludes
 > (`cli::inject_json_prelude`). Confidence: **medium** (the mechanism is proven; the open design
 > tension is the configuration ergonomics under an immutable heap — see §8).
@@ -27,7 +27,7 @@ So the mock is not built by reflecting at runtime. It is built by **codegen at c
 > `implements` it, and injects that class into the program's AST **before the checker runs** — exactly
 > like `inject_json_prelude`.
 
-From that point the synthesized class is *indistinguishable from hand-written Phorge*. It type-checks
+From that point the synthesized class is *indistinguishable from hand-written Phorj*. It type-checks
 (the checker proves it implements the interface — `E-IFACE-UNIMPL`/`E-IFACE-SIG` are free coverage),
 runs on the interpreter, compiles to bytecode for the VM, and transpiles to a plain PHP `class`. All
 three legs execute the **same generated source**, so byte-identity is guaranteed the same way it is for
@@ -47,7 +47,7 @@ AST directly rather than going through the lossy name-level native surface.
 
 For an interface
 
-```phorge
+```phorj
 interface Clock {
     function now() -> int;
     function tick(int by) -> int;
@@ -72,10 +72,10 @@ This is the one real design constraint and is addressed in §5/§8.
 
 ## 3. The synthesized class (codegen target)
 
-For the `Clock` interface above, the mocker generates this Phorge source and injects it as a
+For the `Clock` interface above, the mocker generates this Phorj source and injects it as a
 `ClassDecl`:
 
-```phorge
+```phorj
 class Clock$Mock implements Clock {
     // The ordered call log: each entry "method|arg0,arg1,..." (a deterministic string key).
     mutable List<string> __calls = [];
@@ -141,7 +141,7 @@ no new mechanism on the PHP side, only generated-instead-of-handwritten source.
 
 ## 4. The public API surface (`Core.Test.Mock`)
 
-```phorge
+```phorj
 import Core.Test;            // the test module (assertions + runner live here too)
 
 // Construction: a generic free function, T inferred-from-annotation (NOT a runtime type arg).
@@ -169,7 +169,7 @@ the calls to plain constructions. By `check_and_expand` time the program is mock
 
 ## 5. The mutable-state problem (and its resolution)
 
-The mock records calls — it **mutates**. Phorge's heap is `Rc`-shared with `Instance` being
+The mock records calls — it **mutates**. Phorj's heap is `Rc`-shared with `Instance` being
 **shared-mutable** (the Mutation milestone, [[mutation-milestone]]: `List/Map/Set` are COW,
 `Instance` fields are mutable in place). So a mock instance *can* accumulate state:
 `this.__calls = List.append(this.__calls, key)` reassigns a `mutable` field — the COW list is rebuilt
@@ -204,7 +204,7 @@ Recommend shipping (1) now; (3) is a clean follow-up (the closure machinery exis
 
 | Concern | Why it's byte-identical |
 |---|---|
-| The mock class | Generated *Phorge source* injected pre-checker; runs as an ordinary class on all 3 legs. |
+| The mock class | Generated *Phorj source* injected pre-checker; runs as an ordinary class on all 3 legs. |
 | Call log | Ordered `List<string>`, appended in call order; rendered via existing byte-identical natives. |
 | Canned returns | Plain `Map` lookups with `??` defaults — existing byte-identical ops. |
 | Verification | Pure folds over the ordered log (`timesCalled`/`calledWith`). |
@@ -244,7 +244,7 @@ cluster and generics.
 **Deferred:**
 - **Mocking a concrete (`open`/`abstract`) class** — synthesize a *subclass* overriding methods. Harder:
   must call (or stub) the parent constructor, decide which methods to override vs inherit, and respect
-  `final`. Phorge is final-by-default, so most classes can't be subclassed at all — interface-only is
+  `final`. Phorj is final-by-default, so most classes can't be subclassed at all — interface-only is
   the natural v1 boundary and matches how PHP mock frameworks behave best. Recommend deferring class
   mocking until there's demand; gate it on `open`/`abstract` (a `final` class → `E-MOCK-FINAL`).
 - **Programmable stubs** (`returnsWith(name, closure)`) — additive, S3 lambdas exist; ship after v1.
@@ -264,7 +264,7 @@ cluster and generics.
    could leak. *Mitigation:* never render the returns map; only look up by key. (Invariant 8.)
 2. **Arg stringification divergence** — the recorded `method(args)` key must stringify each arg through
    a *byte-identical* native (`Convert.toString`/`Text.join`), never a Rust `Debug`/PHP `var_export`
-   that could differ. *Mitigation:* the codegen emits the stringification as Phorge calls, so all three
+   that could differ. *Mitigation:* the codegen emits the stringification as Phorj calls, so all three
    legs use the same path.
 3. **`$` mangling collision** — the synthetic class/field names (`Clock$Mock`, `__calls`) must mangle to
    valid, collision-free PHP identifiers. *Mitigation:* reuse the proven property-hook/`php_variant_name`

@@ -1,18 +1,18 @@
 # Governance
 
-This document describes how decisions are made in Phorge. It is intentionally lightweight and will
+This document describes how decisions are made in Phorj. It is intentionally lightweight and will
 grow as the project does.
 
 ## Current model: single maintainer (BDFL)
 
-Phorge is currently led by its original author, **Takieddine Messaoudi**
+Phorj is currently led by its original author, **Takieddine Messaoudi**
 ([@tmessaoudi-official](https://github.com/tmessaoudi-official)), who has final say on design, scope,
 and what gets merged. This is the right model for a pre-1.0, single-developer project: it keeps the
 language coherent while the core is still being shaped.
 
 ## How decisions are recorded
 
-Phorge does **not** keep a separate `adr/` tree. Architectural and language decisions live in two
+Phorj does **not** keep a separate `adr/` tree. Architectural and language decisions live in two
 durable places, and new decisions extend the relevant one:
 
 - **`docs/specs/`** — frozen design documents, each with a numbered **Decisions Log** (e.g. the VM

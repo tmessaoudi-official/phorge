@@ -8,7 +8,7 @@
 
 ## 1. The dominating constraint — determinism
 
-Phorge's correctness spine is the **byte-identical differential harness** (`run` ≡ `runvm`, every
+Phorj's correctness spine is the **byte-identical differential harness** (`run` ≡ `runvm`, every
 program; `tests/differential.rs`). A web server is the most anti-deterministic feature possible
 (sockets, ports, concurrency, client timing). **The whole design exists to quarantine that
 non-determinism so the spine survives** — the same rule that defers URL/network features to M6.
@@ -19,10 +19,10 @@ The single insight that organizes everything (PSR-7/PSR-15, confirmed against Go
 Deno/Bun `serve`): **the handler is portable; the SAPI bridge is not.**
 
 - `handle(Request) -> Response` is a pure function of immutable values. It is the **only** thing that
-  is transpiled 1:1 and byte-identity-tested. It runs unchanged on the Phorge VM and (transpiled) on
+  is transpiled 1:1 and byte-identity-tested. It runs unchanged on the Phorj VM and (transpiled) on
   PHP.
 - Turning raw wire-bytes into a `Request` is **runtime glue**, and it differs per host:
-  - **Phorge socket side:** `phg serve` reads raw HTTP/1.1 bytes and builds a `Request`.
+  - **Phorj socket side:** `phg serve` reads raw HTTP/1.1 bytes and builds a `Request`.
   - **PHP side:** the generated front-controller builds a `Request` from superglobals
     (`$_SERVER`/`$_GET`/`php://input`).
   The two bridges are *not* transpiled into each other — only `handle` is. A **conformance test**
@@ -32,12 +32,12 @@ This is why we reject a `handle_raw(string) -> string` shape (parsing-in-the-han
 PHP to reconstruct raw bytes from superglobals — lossy and un-idiomatic. The value-level handler is
 the PSR-15 contract and the only shape that transpiles to *idiomatic* stock PHP.
 
-## 3. Request / Response shape — Shape A (recommended): pure-Phorge classes
+## 3. Request / Response shape — Shape A (recommended): pure-Phorj classes
 
-Three candidate shapes were evaluated (see `docs/research/m6/raw/phorge-fit.md` §2). **Recommendation:
-Shape A** — `Request`/`Response` are ordinary Phorge `class`es, parser/serializer written in Phorge.
+Three candidate shapes were evaluated (see `docs/research/m6/raw/phorj-fit.md` §2). **Recommendation:
+Shape A** — `Request`/`Response` are ordinary Phorj `class`es, parser/serializer written in Phorj.
 
-```phorge
+```phorj
 package Main;            // spike: types live in package Main (see §8 — E-PKG-TYPE blocks a core.http library today)
 import core.console;
 import core.text;
@@ -55,7 +55,7 @@ class Request {
 
 class Response {
   Response(int status, string body, List<Header> headers) {}
-  // immutable copy-on-write, PSR-7 style — fits Phorge's immutable-by-default model
+  // immutable copy-on-write, PSR-7 style — fits Phorj's immutable-by-default model
   function withHeader(string name, string value) -> Response { /* return new Response(...) */ }
 }
 
@@ -68,8 +68,8 @@ function handle(Request req) -> Response {
 - **Needs ZERO new language features** — verified: M1 classes/methods/ctor-promotion (P4b/P4c, in the
   spine), S1 list literals + indexing + ranges, S2 optionals (`string?` + `??`), and `core.text`
   (`split`/`trim`/`contains`/`join`) are *sufficient* to write the parser, the linear header scan, and
-  the serializer in pure Phorge.
-- **Maximal determinism + showcase:** the entire handler model + parser + serializer are *Phorge code*,
+  the serializer in pure Phorj.
+- **Maximal determinism + showcase:** the entire handler model + parser + serializer are *Phorj code*,
   glob-gated by `tests/differential.rs`, run byte-identically on both backends, and transpile to PHP
   for free. It dogfoods the language.
 - **No new `Op`, no new `Value` variant** (the fit analysis confirms `Op::CallNative` is the generic
@@ -80,8 +80,8 @@ ergonomics, not correctness); the types live in `package Main` until cross-packa
 bodies are UTF-8 `string` and examples stay ASCII (the `core.text`↔PHP round-trip constraint).
 
 *Rejected:* **Shape B** (native-backed `core.http` accessors — `http.method(req)`, etc.) works as a
-real stdlib module today but makes the parser Rust (not a Phorge showcase) and needs awkward
-`Value::Instance` construction from Rust; **Shape C** (hybrid native parser → Phorge class) carries the
+real stdlib module today but makes the parser Rust (not a Phorj showcase) and needs awkward
+`Value::Instance` construction from Rust; **Shape C** (hybrid native parser → Phorj class) carries the
 same construction awkwardness.
 
 ### 3a. "Why choose? — can we do both?" — resolved: one API, evolving engine
@@ -95,7 +95,7 @@ swapped in later, invisibly, behind that same API once Map (S4) makes it worthwh
 had that A lacks — "works as a `core.http` *library* today" — is the E-PKG-TYPE limit the cross-package
 -types follow-up removes. So "both" is a migration path under a stable API, not a fork.
 
-## 4. Runtime glue — `phg serve` (Phorge side) and `php -S` (PHP side)
+## 4. Runtime glue — `phg serve` (Phorj side) and `php -S` (PHP side)
 
 ### 4a. `phg serve <file> [--port N]`
 A new CLI command modeled on `vendor`/`build` (`src/main.rs` dispatch block + `src/cli.rs` help arm).
@@ -132,7 +132,7 @@ pub trait Transport {
 
 | Layer | Where | In the byte-identity spine? |
 |---|---|---|
-| `handle(Request)->Response`, parse, serialize | Phorge code (`examples/`) | **Yes** — glob-gated, run≡runvm≡PHP |
+| `handle(Request)->Response`, parse, serialize | Phorj code (`examples/`) | **Yes** — glob-gated, run≡runvm≡PHP |
 | `Transport` real socket loop | `src/serve.rs` | **No** — `tests/serve.rs`, skip-aware |
 | `phg serve` CLI | `src/main.rs` + `src/cli.rs` | tooling, not language |
 | PHP front-controller | serve README | round-trip-documented |
@@ -202,7 +202,7 @@ exact-match router added to the spike; Shape A is the one API; spike lands befor
 
 Two-part, mirroring `examples/build/` + `examples/cli/`:
 1. **`examples/web/handler.phg`** (or `examples/project/webapp/`) — defines `Request`/`Response`, a
-   Phorge `parse_request(string) -> Request?` and `serialize(Response) -> string`, a `handle`, and a
+   Phorj `parse_request(string) -> Request?` and `serialize(Response) -> string`, a `handle`, and a
    `main()` that feeds a **committed fixture request** through `handle` and prints the serialized
    response. Auto byte-identity-gated by the glob; ASCII bodies; PHP round-tripped.
 2. **`examples/web/README.md`** — the live-server walkthrough: `phg serve handler.phg`, a `curl`
@@ -216,13 +216,13 @@ Two-part, mirroring `examples/build/` + `examples/cli/`:
   `b"…"` literal in the lexer, `string`↔`bytes` interop (`bytes(s)`, `string(b) -> string?` with UTF-8
   validation), transpile to PHP string (trivial — PHP strings are byte arrays). *Acceptance:* a
   byte-identity-gated `examples/guide/bytes.phg`; round-trips through real PHP.
-- **W1 — handler model in Phorge** (in-spine, pure, Shape A): `Request`/`Response`/`Header` classes,
+- **W1 — handler model in Phorj** (in-spine, pure, Shape A): `Request`/`Response`/`Header` classes,
   `parse_request`/`serialize` (bodies are `bytes`), a `handle`, `examples/web/handler.phg` + fixture.
   *Acceptance:* runs byte-identically on `run`/`runvm` + real PHP; auto-gated by the glob.
 - **W2 — static router** (in-spine): an exact-match `(method, path) -> namedHandler` dispatch, pure and
   testable. *Acceptance:* a routed example, glob-gated; path params + middleware explicitly deferred
   (S4/S3) and noted.
-- **W3 — `src/serve.rs` + `Transport`**: the non-transpiled Phorge runtime entry `__serve(bytes) ->
+- **W3 — `src/serve.rs` + `Transport`**: the non-transpiled Phorj runtime entry `__serve(bytes) ->
   bytes` (parse→route→`handle`→serialize); the VM "call named fn with arg" entry path. *Acceptance:*
   fixture `Transport` unit test + the dual-bridge conformance test (`tests/serve.rs`/unit).
 - **W4 — `phg serve` CLI + PHP bridge + docs**: dispatch block, `--port`, blocking loop,
@@ -237,13 +237,13 @@ later green-thread executor (M6) or the S3 middleware/S4 param layers.
 
 ## 11. Design-lock decisions (RESOLVED 2026-06-18)
 
-1. **Request/Response shape:** **Shape A** (pure-Phorge classes) as the one public API. Shape B's native
+1. **Request/Response shape:** **Shape A** (pure-Phorj classes) as the one public API. Shape B's native
    engine is a later invisible optimization behind the same `req.header(k)` surface — not a second API
    (see §3a). *Developer asked "do both?" → resolved to one-API-evolving-engine.*
 2. **Spike scope:** **both** the pure handler **and** a **static exact-match router** (W1–W2). Path
    params (S4 Map) and middleware/closure routes (S3 lambdas) are "the rest" — they layer on later with
    no handler-contract change.
 3. **`bytes`:** **pulled forward as its own slice W0** (developer choice), built before the serve
-   runtime. PHP transpile is trivial (PHP strings are byte arrays); the design is Phorge-side (literal
+   runtime. PHP transpile is trivial (PHP strings are byte arrays); the design is Phorj-side (literal
    + UTF-8 interop).
 4. **Milestone placement:** **spike now, before Track A** (matches "Option 1 — spike now").

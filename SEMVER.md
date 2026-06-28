@@ -1,6 +1,6 @@
 # Versioning & compatibility policy
 
-Phorge follows [Semantic Versioning](https://semver.org/) **with an explicit pre-1.0 contract**. The
+Phorj follows [Semantic Versioning](https://semver.org/) **with an explicit pre-1.0 contract**. The
 current series is `0.x` (the binary reports `phg --version`).
 
 ## Pre-1.0 (the `0.x` series) — *may break, always documented*
@@ -36,9 +36,9 @@ A construct in the **experimental** tier is exempt from this freeze even after 1
 be removed in a minor release (with a CHANGELOG note), and graduates to **stable** only when its design
 has settled. The **deprecated** tier may be removed in the next **MAJOR**.
 
-## What "compatible" means for Phorge
+## What "compatible" means for Phorj
 
-Phorge's defining invariant is that the three backends — the tree-walking interpreter (`run`), the
+Phorj's defining invariant is that the three backends — the tree-walking interpreter (`run`), the
 bytecode VM (`runvm`), and the transpiled PHP — produce **byte-identical** output for every program.
 Compatibility is therefore about *observable program behavior*, not internal representation: the `Op`
 set, the bytecode format, the AST, and the emitted-PHP *shape* are all implementation details that may

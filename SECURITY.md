@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Phorge is pre-1.0 and developed by a single maintainer. Only the latest tagged release and the
+Phorj is pre-1.0 and developed by a single maintainer. Only the latest tagged release and the
 `master` branch receive fixes.
 
 | Version | Supported |
@@ -24,7 +24,7 @@ acknowledgement within a reasonable time; fixes are coordinated before public di
 
 ## Threat model & hardening notes
 
-Phorge is a language toolchain, so the relevant attack surface is **untrusted input**:
+Phorj is a language toolchain, so the relevant attack surface is **untrusted input**:
 
 - **Untrusted source programs.** The lexer, parser, and type-checker must reject malformed or
   adversarial programs cleanly (a diagnostic + non-zero exit), never with a panic, infinite loop, or
@@ -35,7 +35,7 @@ Phorge is a language toolchain, so the relevant attack surface is **untrusted in
   lookup with checked arithmetic on every offset** — malformed or hostile headers return `None`, never
   an overflow panic or out-of-bounds read (invariant **EV-7**). `#![forbid(unsafe_code)]` is set
   crate-wide.
-- **No third-party runtime dependencies.** Phorge links zero external crates, which removes the
+- **No third-party runtime dependencies.** Phorj links zero external crates, which removes the
   supply-chain surface for the runtime (see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)).
 - **`phg vendor` (supply chain).** This is the only command that touches the network, and it runs
   only on an explicit `phg vendor`. A dependency's `git`/`tag`/`rev` is passed to `git` behind a `--`

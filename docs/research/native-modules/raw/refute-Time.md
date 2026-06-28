@@ -34,7 +34,7 @@ needs floor for the calendar; `diff` must match `intdiv`'s trunc). The spike con
 
 **Refutes** the claim that "`diffDays` … with `div_euclid`" is byte-identical. It is not, against the
 spike's own `intdiv` transpile target. Fix: `diffDays` must use the SAME rounding on both legs —
-either emit a `__phorge_intdiv`-style trunc on the Rust side for `diff`, or floor on both (a PHP
+either emit a `__phorj_intdiv`-style trunc on the Rust side for `diff`, or floor on both (a PHP
 helper, not bare `intdiv`). This is a real design decision the spike left contradictory, not a typo.
 
 ---
@@ -60,7 +60,7 @@ blind spot it warns about elsewhere, reproduced in its own test plan. The differ
 `toUnix` with a 1- or 2-digit year, or this is invisible.
 
 Fix options: reject `year < 100` in the native (documented edge), or replicate PHP's pivot in BOTH the
-Rust kernel and a `__phorge_gmmktime` helper. Either is fine — but the spike's "direct
+Rust kernel and a `__phorj_gmmktime` helper. Either is fine — but the spike's "direct
 `gmmktime` map" is **not** byte-identical as written.
 
 ---
@@ -92,7 +92,7 @@ gmdate("Q", 0) = "Q"     # unknown -> literal passthrough
 gmdate("S", 0) = "st"     # S = ordinal suffix, a REAL gmdate letter, NOT in the pinned table
 ```
 For a *literal* format string the compile-time letter check catches this. But the spike *recommends*
-the **dynamic-format `__phorge_gmdate` runtime helper** (§8) "for ergonomics." A runtime helper that
+the **dynamic-format `__phorj_gmdate` runtime helper** (§8) "for ergonomics." A runtime helper that
 validates against the pinned set will **reject** `"S"` while a naive `gmdate($f,$e)` transpile would
 **accept** it — and worse, if the helper ever falls back to bare `gmdate` for an unrecognized letter,
 the Rust renderer (which has no `S`/`Q` arm) and PHP diverge. The dynamic-format path is the 70%-risk

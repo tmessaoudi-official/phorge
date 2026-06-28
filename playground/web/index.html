@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Phorge Playground</title>
-  <meta name="description" content="Run Phorge in your browser — interpreter, bytecode VM, and transpiled-PHP, all three live and byte-identical." />
+  <title>Phorj Playground</title>
+  <meta name="description" content="Run Phorj in your browser — interpreter, bytecode VM, and transpiled-PHP, all three live and byte-identical." />
   <link rel="stylesheet" href="./style.css" />
   <!-- Example programs (generated from examples/guide/*.phg by gen_examples.py). -->
   <script src="./examples.js" defer></script>
 </head>
 <body>
   <header>
-    <h1>Phorge Playground</h1>
+    <h1>Phorj Playground</h1>
     <div class="toolbar">
       <label>Example
         <select id="examples" title="Load a guide example"></select>
@@ -21,7 +21,7 @@
         <input type="checkbox" id="php-toggle" checked /> Run PHP
       </label>
       <button id="share" title="Copy a shareable link (source encoded in the URL)">🔗 Share</button>
-      <button id="lift" title="Treat the editor contents as PHP and lift them to a Phorge draft (best-effort — review the result)">⬆ Lift PHP</button>
+      <button id="lift" title="Treat the editor contents as PHP and lift them to a Phorj draft (best-effort — review the result)">⬆ Lift PHP</button>
       <span id="version" class="version"></span>
     </div>
   </header>
@@ -52,9 +52,9 @@
   </div>
 
   <footer>
-    <span>Phorge runs entirely in your browser — interpreter + bytecode VM (Rust → WASM) and the
+    <span>Phorj runs entirely in your browser — interpreter + bytecode VM (Rust → WASM) and the
       transpiled PHP (php-wasm). Nothing is sent to a server.</span>
-    <a href="https://github.com/tmessaoudi-official/phorge" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/tmessaoudi-official/phorj" target="_blank" rel="noopener">GitHub</a>
   </footer>
 
   <script type="module" src="./main.js"></script>

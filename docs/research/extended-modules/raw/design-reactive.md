@@ -29,7 +29,7 @@ construction"* and *"Backpressure … a non-problem … reduces to ordinary lazy
 
 ## 1. The byte-identity argument (why A1 is Tier A)
 
-Phorge's correctness spine is the three-leg byte-identity in `tests/differential.rs`: interpreter
+Phorj's correctness spine is the three-leg byte-identity in `tests/differential.rs`: interpreter
 `run` ≡ VM `runvm` ≡ transpiled PHP under `php -n` 8.5. A feature is Tier A iff its output is a pure
 function of the program text, computed in a fixed total order on all three legs.
 
@@ -73,7 +73,7 @@ the shipped `examples/guide/streams.phg`.
 
 ---
 
-## 2. Phorge-syntax API sketch (A1)
+## 2. Phorj-syntax API sketch (A1)
 
 `Core.Stream` is a thin **fluent façade** whose values are ordinary `List<T>` carried inside a
 one-field wrapper class `Stream<T>` (so the dot-chain reads fluently), OR — the recommended,
@@ -82,7 +82,7 @@ UFCS (`x.f(a) ≡ f(x, a)`, already shipped, `[ufcs-and-interpolation-span-fix]`
 fluent feel with **zero new class machinery and zero new Value** — a `Stream` *is* a `List` at
 runtime. This is the design I recommend; the wrapper-class variant is in §6 (Open Questions).
 
-```phorge
+```phorj
 package Main;
 
 import Core.Console;
@@ -148,23 +148,23 @@ unifier** (`check_generic_call`, M-RT S7b-1) — the registry `Ty::Param` never 
 Because `Stream<T>` *is* a `List<T>` (= PHP sequential array) and each operator is a list transform,
 each native erases to a **PHP core builtin** (all present under `php -n`):
 
-| Phorge op | PHP erasure (core only) |
+| Phorj op | PHP erasure (core only) |
 |---|---|
 | `Stream.from(xs)` / `of_list` | `{xs}` (identity) |
-| `Stream.range(a,b)` | `range({a}, {b}-1)` (or reuse the existing `__phorge_range` helper that already backs `a..b`) |
+| `Stream.range(a,b)` | `range({a}, {b}-1)` (or reuse the existing `__phorj_range` helper that already backs `a..b`) |
 | `.map(f)` | `array_map({f}, {xs})` |
 | `.filter(p)` | `array_values(array_filter({xs}, {p}))` |
 | `.take(n)` | `array_slice({xs}, 0, {n})` |
 | `.drop(n)` | `array_slice({xs}, {n})` |
 | `.concat`/`.merge(ys)` | `array_merge({xs}, {ys})` |
 | `.distinct()` | `array_values(array_unique({xs}, SORT_REGULAR))` |
-| `.fold(init,f)` | `array_reduce({xs}, {f}, {init})` (note: reduce-init is Phorge's 2nd arg; arg-order trap per `[higher-order-natives-reentrant-vm]`) |
+| `.fold(init,f)` | `array_reduce({xs}, {f}, {init})` (note: reduce-init is Phorj's 2nd arg; arg-order trap per `[higher-order-natives-reentrant-vm]`) |
 | `.count()` | `count({xs})` |
-| `.zip` / `.scan` / `.flatMap` / `takeWhile` / `dropWhile` | small **gated runtime helpers** (`__phorge_zip`, `__phorge_scan`, …) emitted once when used — the established pattern for ops without a clean single-builtin target (`[php-leg-outside-correctness-loop]`: prefer a helper over fragile static-type-dependent emission) |
+| `.zip` / `.scan` / `.flatMap` / `takeWhile` / `dropWhile` | small **gated runtime helpers** (`__phorj_zip`, `__phorj_scan`, …) emitted once when used — the established pattern for ops without a clean single-builtin target (`[php-leg-outside-correctness-loop]`: prefer a helper over fragile static-type-dependent emission) |
 
 No `mb_*`, no extension, no Composer. The helpers are pure PHP loops over arrays — trivially
 byte-identical to the Rust kernels. **Recommendation:** implement the non-builtin ops (`zip`, `scan`,
-`flatMap`, `takeWhile`, `dropWhile`, `distinct`) as gated `__phorge_*` helpers rather than chasing a
+`flatMap`, `takeWhile`, `dropWhile`, `distinct`) as gated `__phorj_*` helpers rather than chasing a
 clever builtin composition — the helper is the documented safe fallback and removes byte-identity risk.
 
 ---
@@ -242,7 +242,7 @@ trait (the locked quarantine pattern). **Out of scope for the A1 slice; design o
 ## 8. Effort
 
 - **A1 (recommended slice):** **small–medium.** A new `src/native/stream.rs` leaf (~mirrors
-  `list.rs`'s HigherOrder entries), ~12 registry entries, ~5 `__phorge_*` PHP helpers, a `Stream<T>`
+  `list.rs`'s HigherOrder entries), ~12 registry entries, ~5 `__phorj_*` PHP helpers, a `Stream<T>`
   checker alias-or-wrapper, one `examples/guide/streams.phg`, README + coverage-matrix entry. No
   backend/Op/Value change. Reuses generic-native unifier, `ClosureInvoker`, UFCS. Realistically a
   single focused session.

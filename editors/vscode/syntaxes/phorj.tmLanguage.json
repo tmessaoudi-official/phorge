@@ -1,0 +1,109 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Phorj",
+  "scopeName": "source.phorj",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#attributes" },
+    { "include": "#declarations" },
+    { "include": "#keywords" },
+    { "include": "#constants" },
+    { "include": "#types" },
+    { "include": "#numbers" },
+    { "include": "#functions" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        { "name": "comment.line.double-slash.phorj", "match": "//.*$" },
+        { "name": "comment.block.phorj", "begin": "/\\*", "end": "\\*/" }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.raw.phorj",
+          "begin": "\\b(b|r)?\"",
+          "end": "\"",
+          "patterns": [
+            { "name": "constant.character.escape.phorj", "match": "\\\\(x[0-9A-Fa-f]{2}|[nrt0\\\\\"{}])" },
+            {
+              "name": "meta.embedded.interpolation.phorj",
+              "begin": "\\{",
+              "end": "\\}",
+              "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.phorj" } },
+              "endCaptures": { "0": { "name": "punctuation.section.interpolation.end.phorj" } },
+              "patterns": [
+                { "include": "#keywords" },
+                { "include": "#constants" },
+                { "include": "#numbers" },
+                { "include": "#strings" },
+                { "include": "#functions" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "attributes": {
+      "name": "meta.attribute.phorj",
+      "begin": "#\\[",
+      "end": "\\]",
+      "patterns": [
+        { "name": "entity.name.tag.attribute.phorj", "match": "\\b[A-Z][A-Za-z0-9_]*\\b" },
+        { "include": "#strings" }
+      ]
+    },
+    "declarations": {
+      "patterns": [
+        {
+          "match": "\\b(declare)\\s+(function|class)\\b",
+          "captures": {
+            "1": { "name": "keyword.other.declare.phorj" },
+            "2": { "name": "keyword.declaration.phorj" }
+          }
+        },
+        { "name": "keyword.declaration.phorj", "match": "\\b(package|import|function|class|enum|interface|trait|type|declare)\\b" }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        { "name": "keyword.control.phorj", "match": "\\b(return|if|else|for|while|do|match|throw|try|catch|finally|break|continue|in)\\b" },
+        { "name": "storage.modifier.phorj", "match": "\\b(var|mutable|static|const|open|abstract|public|private|protected|internal|use|extends|implements)\\b" },
+        { "name": "keyword.operator.word.phorj", "match": "\\b(new|instanceof|as)\\b" },
+        { "name": "keyword.other.phorj", "match": "\\b(test)\\b" }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        { "name": "constant.language.phorj", "match": "\\b(true|false|null)\\b" },
+        { "name": "variable.language.this.phorj", "match": "\\b(this)\\b" }
+      ]
+    },
+    "types": {
+      "patterns": [
+        { "name": "support.type.primitive.phorj", "match": "\\b(int|float|string|bool|bytes|void|decimal|never|Empty)\\b" },
+        { "name": "entity.name.type.phorj", "match": "\\b[A-Z][A-Za-z0-9_]*\\b" }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        { "name": "constant.numeric.hex.phorj", "match": "\\b0[xX][0-9A-Fa-f_]+\\b" },
+        { "name": "constant.numeric.bin.phorj", "match": "\\b0[bB][01_]+\\b" },
+        { "name": "constant.numeric.oct.phorj", "match": "\\b0[oO][0-7_]+\\b" },
+        { "name": "constant.numeric.decimal.phorj", "match": "\\b[0-9][0-9_]*(\\.[0-9_]+)?([eE][+-]?[0-9_]+)?d?\\b" }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        { "name": "entity.name.function.phorj", "match": "\\b([a-z_][A-Za-z0-9_]*)\\s*(?=\\()" }
+      ]
+    },
+    "operators": {
+      "name": "keyword.operator.phorj",
+      "match": "(\\|>|\\?\\?|\\?\\.|->|=>|\\.\\.=?|==|!=|<=|>=|&&|\\|\\||[-+*/%<>=!&|^~?:.])"
+    }
+  }
+}

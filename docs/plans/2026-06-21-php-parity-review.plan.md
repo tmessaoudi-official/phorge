@@ -2,16 +2,16 @@
 
 > Status: **METHODOLOGY LOCKED — not yet executed.** Created 2026-06-21, right after M-RT S5 shipped
 > (`e73cab9`). The developer paused the overloading slice to first run a comprehensive
-> Phorge-vs-PHP (and beyond-PHP) feature review. **Overloading design resumes AFTER this review.**
+> Phorj-vs-PHP (and beyond-PHP) feature review. **Overloading design resumes AFTER this review.**
 > Plan-location sentinel: `repo`.
 
 ## Why (developer intent, verbatim-faithful)
 
-The S5 work surfaced the "Phorge : PHP :: TypeScript : JavaScript" contract, which made the developer
-ask: *"what else did we miss that we could do better in Phorge, or forgot to implement but exists in
+The S5 work surfaced the "Phorj : PHP :: TypeScript : JavaScript" contract, which made the developer
+ask: *"what else did we miss that we could do better in Phorj, or forgot to implement but exists in
 PHP? … do more research on the internet about other PHP features (spaceship operator `<=>`, etc.)…
 think about attributes — it's a very powerful PHP feature; what other languages use similar to
-attributes? … what can we add in Phorge that is NOT in PHP but has high ROI? … cover everything, do
+attributes? … what can we add in Phorj that is NOT in PHP but has high ROI? … cover everything, do
 extensive research maybe many times, each time covering more ground and learning what it missed."*
 
 ## Locked decisions (this session, via ask-human)
@@ -23,9 +23,9 @@ extensive research maybe many times, each time covering more ground and learning
 - **Scope = options 1+2+3 combined**: the matrix covers *everything* (all ~50 shipped + ~22 gap +
   beyond-PHP ideas), and we review it (batched).
 - **Per-feature row format** (developer spec, expanded):
-  `| Feature | In PHP? — how | In Phorge? — how | Same/different impl | Verdict | ROI | Notes |`
-  Verdict ∈ {Phorge-already-better · adopt · defer · reject}. Each row states explicitly:
-  exists-in-PHP? exists-in-Phorge? implemented-differently?
+  `| Feature | In PHP? — how | In Phorj? — how | Same/different impl | Verdict | ROI | Notes |`
+  Verdict ∈ {Phorj-already-better · adopt · defer · reject}. Each row states explicitly:
+  exists-in-PHP? exists-in-Phorj? implemented-differently?
 
 ## Deliverable
 
@@ -49,9 +49,9 @@ source of truth; updated as verdicts are made and features ship).
    new feature with the version it landed.
 4. **Attributes deep-dive** — PHP `#[Attr]` (syntax, reflection, real uses) **+ cross-language
    analogues**: Rust attributes/derive macros, C#/Java annotations, Python/TypeScript decorators,
-   Kotlin annotations, Swift property wrappers/macros. Distil the best design for a Phorge attribute
+   Kotlin annotations, Swift property wrappers/macros. Distil the best design for a Phorj attribute
    system + how it would transpile (PHP `#[...]` is the natural target).
-5. **Beyond-PHP, high-ROI** — features NO PHP version has that would give Phorge an edge, surveyed
+5. **Beyond-PHP, high-ROI** — features NO PHP version has that would give Phorj an edge, surveyed
    from modern langs (Rust, Swift, Kotlin, TS, Scala 3, Gleam, Roc, OCaml): `match` guards,
    refinement/newtype-with-invariants, `const fn`/compile-time eval, effect/exception tracking in
    types, exhaustive-everything, ownership-lite/borrow hints, pattern-binding everywhere, pipeline
@@ -105,7 +105,7 @@ Final: write/refresh `docs/specs/2026-06-21-php-parity-and-beyond.md`.
   *"this language should be equal or better than PHP."*)
 - Current surface = ~37 language + ~13 tooling features (FEATURES.md). PHP-gap ≈ 22 (7 roadmapped,
   15 unplanned). See the count breakdown the developer was given this session.
-- Backends correctness spine: `run ≡ runvm ≡ real PHP` (PHP oracle, `PHORGE_REQUIRE_PHP=1`). Any
+- Backends correctness spine: `run ≡ runvm ≡ real PHP` (PHP oracle, `PHORJ_REQUIRE_PHP=1`). Any
   adopted feature must ship byte-identical + a guide example (the "examples ship with features" rule).
 - Toolchain: `export PATH=/stack/tools/cargo/bin:$PATH`; for the gate also put `/stack/tools/zig` on
-  PATH (cross-build tests) and `PHORGE_PHP=/stack/tools/phpbrew/php/php-master/bin/php`.
+  PATH (cross-build tests) and `PHORJ_PHP=/stack/tools/phpbrew/php/php-master/bin/php`.

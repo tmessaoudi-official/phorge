@@ -1,7 +1,7 @@
 # Probe: cannot reassign a `const` local / class constant
 
 ## Rule under test
-Immutable bindings must not be reassignable. In Phorge this splits into two surfaces:
+Immutable bindings must not be reassignable. In Phorj this splits into two surfaces:
 1. **Locals are immutable by default** (there is *no* `const` local keyword — immutability IS the
    default; only a `mutable`-declared local may be reassigned).
 2. **Class `const` members** are compile-time constants and must never be reassigned.

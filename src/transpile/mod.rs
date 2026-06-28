@@ -1,4 +1,4 @@
-//! Phorge → PHP transpiler. Walks the untyped AST (the same AST the evaluator walks)
+//! Phorj → PHP transpiler. Walks the untyped AST (the same AST the evaluator walks)
 //! and emits runnable PHP 8.x source. Entry point: [`emit`].
 use crate::ast::*;
 use crate::dispatch::ParamKind;
@@ -19,7 +19,7 @@ pub fn emit(program: &Program) -> Result<String, String> {
 
 /// A statically-resolved operand "kind" used by the transpiler's T6 specialization to pick a native
 /// PHP operator over a runtime helper. Deliberately scalar-only — the cases where PHP's loose
-/// semantics diverge from Phorge's (`+` concat-vs-add, `/` int-vs-float, interpolation display).
+/// semantics diverge from Phorj's (`+` concat-vs-add, `/` int-vs-float, interpolation display).
 /// Anything the resolver cannot pin down is [`OpKind::Other`], which routes to the existing helper
 /// (the safe fallback), so a wrong guess can never happen — only "known" or "fall back".
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -27,7 +27,7 @@ enum OpKind {
     Str,
     Int,
     Float,
-    /// `decimal` (M-NUM S1). A decimal operand routes `+ - *` to the `__phorge_dec_*` BCMath helpers
+    /// `decimal` (M-NUM S1). A decimal operand routes `+ - *` to the `__phorj_dec_*` BCMath helpers
     /// (exact + i128-bounds-checked), and a decimal value erases to a PHP `string` for display.
     Decimal,
     Bool,
@@ -150,7 +150,7 @@ struct Transpiler {
     /// Scoped operand-type environment (T6), parallel to `locals` (pushed/popped together). Maps a
     /// local/param/loop-var name to its scalar [`OpKind`] **where statically known** — so `+`, `/`,
     /// `%`, and interpolation can emit native PHP operators (`.`/`+`/`intdiv`/`fmod`/direct casts)
-    /// instead of the `__phorge_add`/`_div`/`_rem`/`_str` runtime helpers. A name absent here resolves
+    /// instead of the `__phorj_add`/`_div`/`_rem`/`_str` runtime helpers. A name absent here resolves
     /// to [`OpKind::Other`] → the helper is emitted as a safe fallback (never a byte-identity risk).
     local_kinds: Vec<HashMap<String, OpKind>>,
     cur_class_fields: Option<HashSet<String>>,
@@ -178,25 +178,25 @@ struct Transpiler {
     /// locals-first heuristic; the import map is the authority.
     imports: HashMap<String, String>,
     /// Set when `/`, `%`, an interpolation, or a range is emitted — each defines a once-per-file
-    /// runtime helper (M7) that reproduces Phorge's type-driven semantics under PHP's looser rules:
-    /// `__phorge_div` (int `/` ⇒ `intdiv`), `__phorge_rem` (float `%` ⇒ `fmod`), `__phorge_str`
-    /// (bool ⇒ `"true"/"false"`), `__phorge_range` (empty/reversed ⇒ `[]`, never descending).
+    /// runtime helper (M7) that reproduces Phorj's type-driven semantics under PHP's looser rules:
+    /// `__phorj_div` (int `/` ⇒ `intdiv`), `__phorj_rem` (float `%` ⇒ `fmod`), `__phorj_str`
+    /// (bool ⇒ `"true"/"false"`), `__phorj_range` (empty/reversed ⇒ `[]`, never descending).
     uses_div: bool,
     uses_rem: bool,
-    /// `__phorge_add` — `+` overloaded for string concat (`is_string` ⇒ `.`, else `+`).
+    /// `__phorj_add` — `+` overloaded for string concat (`is_string` ⇒ `.`, else `+`).
     uses_add: bool,
     uses_str: bool,
-    /// Set when an interpolation hole is statically a `float` and emits `__phorge_float` directly
-    /// (T6) — so the shortest-round-trip float formatter is defined even when `__phorge_str` (its
+    /// Set when an interpolation hole is statically a `float` and emits `__phorj_float` directly
+    /// (T6) — so the shortest-round-trip float formatter is defined even when `__phorj_str` (its
     /// usual host) is never emitted because every other hole's kind was resolved natively.
     uses_float: bool,
     uses_range: bool,
-    /// Set when `Reflect.kind(x)` is emitted — defines the `__phorge_kind` runtime helper once per
+    /// Set when `Reflect.kind(x)` is emitted — defines the `__phorj_kind` runtime helper once per
     /// file. A native's `php` closure can't set a `uses_*` flag (it has no `&mut self`), so
     /// `emit_member_call` special-cases this one native to set the flag before emitting (the
     /// established gated-helper pattern). The helper reproduces the coarse, erasure-stable type tag.
     uses_reflect_kind: bool,
-    /// Set when `Reflect.className(x)` is emitted — defines the `__phorge_class_name` helper once per
+    /// Set when `Reflect.className(x)` is emitted — defines the `__phorj_class_name` helper once per
     /// file (single-evaluates its argument; excludes closures). Same gated-helper rationale as
     /// `uses_reflect_kind`.
     uses_reflect_class_name: bool,
@@ -209,33 +209,33 @@ struct Transpiler {
     /// `if`-chain selects the same body the backends' `select_overload` does. Built once in `emit`.
     class_implements: std::collections::BTreeMap<String, Vec<String>>,
     /// Static class hierarchy for the reflection enumeration natives — emitted as the PHP
-    /// `__phorge_reflect_of` static table when `uses_reflect_tables` is set, byte-identical to the
+    /// `__phorj_reflect_of` static table when `uses_reflect_tables` is set, byte-identical to the
     /// `ClassTables` the Rust backends read (M-Reflect Tier-2).
     class_tables: crate::native::ClassTables,
     /// Set when a `Core.Reflect.interfaces`/`parents`/… call is emitted — defines the
-    /// `__phorge_reflect_of($v, $kind)` helper + its static table once per file.
+    /// `__phorj_reflect_of($v, $kind)` helper + its static table once per file.
     uses_reflect_tables: bool,
     /// Set when `Core.Json.stringify` / `stringifyPretty` / `parse` is emitted — each defines its
-    /// `__phorge_json_*` recursive helper once per file (the gated-helper pattern, set in
+    /// `__phorj_json_*` recursive helper once per file (the gated-helper pattern, set in
     /// `emit_member_call` because a native's `php` closure has no `&mut self`). The helpers walk the
     /// injected `Json` enum's PHP class hierarchy (mangled variant classes `Int_`/`Bool_`/…) so the
-    /// PHP leg matches `run`/`runvm` byte-for-byte; floats route through `__phorge_float` (positional,
+    /// PHP leg matches `run`/`runvm` byte-for-byte; floats route through `__phorj_float` (positional,
     /// not native json's scientific), so `uses_float` is implied by an encode.
     uses_json_encode: bool,
     uses_json_pretty: bool,
     uses_json_decode: bool,
-    /// Set when `Core.Text.parseInt` is emitted — defines `__phorge_parse_int` once per file. The
+    /// Set when `Core.Text.parseInt` is emitted — defines `__phorj_parse_int` once per file. The
     /// helper mirrors Rust's `i64::from_str` (optional sign, base-10 digits, i64 range, no surrounding
-    /// whitespace) and returns `null` (Phorge `None`) otherwise — including on i64 overflow, which
+    /// whitespace) and returns `null` (Phorj `None`) otherwise — including on i64 overflow, which
     /// PHP's `(int)` cast would silently clamp.
     uses_text_parse_int: bool,
-    /// Set when `Core.List.sort` / `sortWith` is emitted — defines the matching `__phorge_sort*`
-    /// helper once per file. Both copy the list before `usort` (Phorge lists are immutable); `sort`
+    /// Set when `Core.List.sort` / `sortWith` is emitted — defines the matching `__phorj_sort*`
+    /// helper once per file. Both copy the list before `usort` (Phorj lists are immutable); `sort`
     /// uses a `<=>`/`strcmp` type-dispatched comparator (string by byte, NOT PHP's numeric-string
     /// `<=>`) to match Rust's natural order, `sortWith` defers to the user closure.
     uses_list_sort: bool,
     uses_list_sort_with: bool,
-    /// Set when the matching `Core.List` breadth op is emitted — each defines a `__phorge_*` helper
+    /// Set when the matching `Core.List` breadth op is emitted — each defines a `__phorj_*` helper
     /// once per file (List breadth slice). They exist instead of inlining PHP `min`/`max`/`array_unique`
     /// because those juggle numeric strings, diverging from the Rust backends' byte-order; `find`/`any`/
     /// `all` short-circuit (`foreach` + early `return`) to match the Rust short-circuit on a
@@ -246,81 +246,81 @@ struct Transpiler {
     uses_list_find: bool,
     uses_list_any: bool,
     uses_list_all: bool,
-    /// Set when `Core.Map.set` / `remove` is emitted — defines the matching `__phorge_map_set` /
-    /// `__phorge_map_remove` helper once per file. Both produce a NEW map (Phorge maps are immutable);
+    /// Set when `Core.Map.set` / `remove` is emitted — defines the matching `__phorj_map_set` /
+    /// `__phorj_map_remove` helper once per file. Both produce a NEW map (Phorj maps are immutable);
     /// PHP arrays are COW value types, so the helper's by-value `$m` is already a copy.
     uses_map_set: bool,
     uses_map_remove: bool,
-    /// Set when `Core.List.indexOf` is emitted — defines `__phorge_index_of`, which maps PHP
+    /// Set when `Core.List.indexOf` is emitted — defines `__phorj_index_of`, which maps PHP
     /// `array_search`'s `false`-on-miss to `null` (the `int?` return).
     uses_list_index_of: bool,
-    /// Set when `Core.Text.indexOf` is emitted — defines `__phorge_text_index_of`, mapping PHP
+    /// Set when `Core.Text.indexOf` is emitted — defines `__phorj_text_index_of`, mapping PHP
     /// `strpos`'s `false`-on-miss to `null` (the `int?` return).
     uses_text_index_of: bool,
-    /// Set when `Core.Text.parseFloat` is emitted — defines `__phorge_parse_float`, which gates the
+    /// Set when `Core.Text.parseFloat` is emitted — defines `__phorj_parse_float`, which gates the
     /// float grammar (strict / permissive, rejecting inf/nan) then casts, mirroring the Rust kernel.
     uses_text_parse_float: bool,
     /// Set when a `decimal` `+`/`-`/`*` (or `Decimal.of`) is emitted — each defines its BCMath
-    /// `__phorge_dec_*` helper once per file (M-NUM S1). The helpers derive operand scales at runtime,
+    /// `__phorj_dec_*` helper once per file (M-NUM S1). The helpers derive operand scales at runtime,
     /// compute the result scale (add/sub = max, mul = sum), call `bcadd`/`bcsub`/`bcmul`, then
     /// bounds-check the result against i128 range and `throw` the same `decimal overflow` fault as the
     /// Rust kernels — so the PHP leg matches `run`/`runvm` byte-for-byte (incl. the overflow fault).
     uses_dec_add: bool,
     uses_dec_sub: bool,
     uses_dec_mul: bool,
-    /// Set when bare `decimal % decimal` is emitted — defines `__phorge_dec_rem` (`bcmod` at
+    /// Set when bare `decimal % decimal` is emitted — defines `__phorj_dec_rem` (`bcmod` at
     /// `max(scales)`; a zero divisor throws, matching the Rust `decimal_rem` fault).
     uses_dec_rem: bool,
-    /// Set when bare `decimal / decimal` is emitted — defines `__phorge_dec_div_exact` (bcdiv +
+    /// Set when bare `decimal / decimal` is emitted — defines `__phorj_dec_div_exact` (bcdiv +
     /// exactness check + trailing-zero strip; non-terminating / zero divisor throws, matching the
     /// Rust `decimal_div_exact` fault boundary byte-for-byte).
     uses_dec_div_exact: bool,
-    /// Set when `Decimal.of(s)` is emitted — defines `__phorge_dec_of`, validating the literal grammar
+    /// Set when `Decimal.of(s)` is emitted — defines `__phorj_dec_of`, validating the literal grammar
     /// (a tier-1 PCRE — NOT mbstring) + i128 range, returning the normalized decimal string or `null`.
     uses_dec_of: bool,
-    /// Set when `Decimal.div`/`Decimal.round` are emitted (M-NUM S2) — define `__phorge_dec_div` /
-    /// `__phorge_dec_round`, replicating the Rust `round_div` rounding kernel via BCMath
+    /// Set when `Decimal.div`/`Decimal.round` are emitted (M-NUM S2) — define `__phorj_dec_div` /
+    /// `__phorj_dec_round`, replicating the Rust `round_div` rounding kernel via BCMath
     /// (`bcdiv`/`bcmod`/`bccomp` truncate-toward-zero, dividend-signed remainder — verified identical
     /// to Rust i128 `/`/`%`), switching on the `RoundingMode` enum's PHP form, and reusing
-    /// `__phorge_dec_check` for the i128 overflow fault. Both gate the shared `__phorge_round_div`.
+    /// `__phorj_dec_check` for the i128 overflow fault. Both gate the shared `__phorj_round_div`.
     uses_dec_div: bool,
     uses_dec_round: bool,
-    /// Set when `Convert.toInt(float)` is emitted (M-NUM S3) — defines `__phorge_float_to_int`,
+    /// Set when `Convert.toInt(float)` is emitted (M-NUM S3) — defines `__phorj_float_to_int`,
     /// returning `null` on NaN/±∞/out-of-i64-range else the truncated int, with the edge-safe float
     /// bounds that agree with Rust `value::float_to_int` (avoids PHP's `(int)NAN == 0`).
     uses_float_to_int: bool,
-    /// Set when `Convert.decimalToInt(decimal)` is emitted (M-NUM S3) — defines `__phorge_dec_to_int`,
+    /// Set when `Convert.decimalToInt(decimal)` is emitted (M-NUM S3) — defines `__phorj_dec_to_int`,
     /// truncating the carrier string toward zero (split before the dot) and range-checking i64, else
     /// `null`. Mirrors Rust `value::decimal_to_int`.
     uses_dec_to_int: bool,
     /// Set when `Convert.floatToIntExact(float)` is emitted (M4 as-matrix `float as int`) — defines
-    /// `__phorge_float_to_int_exact`: the integral-or-null kernel (`3.0→3`, `3.9→null`). Mirrors Rust
+    /// `__phorj_float_to_int_exact`: the integral-or-null kernel (`3.0→3`, `3.9→null`). Mirrors Rust
     /// `value::float_to_int_exact`.
     uses_float_to_int_exact: bool,
     /// Set when `Convert.decimalToIntExact(decimal)` is emitted (M4 as-matrix `decimal as int`) —
-    /// defines `__phorge_dec_to_int_exact`: integral-or-null over the carrier string. Mirrors Rust
+    /// defines `__phorj_dec_to_int_exact`: integral-or-null over the carrier string. Mirrors Rust
     /// `value::decimal_to_int_exact`.
     uses_dec_to_int_exact: bool,
-    /// Set when `Math.gcd(int, int)` is emitted (M-NUM S4) — defines `__phorge_gcd` (Euclid over the
+    /// Set when `Math.gcd(int, int)` is emitted (M-NUM S4) — defines `__phorj_gcd` (Euclid over the
     /// magnitudes), since gmp is absent under `php -n`. Mirrors the Rust `math_gcd` native body.
     uses_math_gcd: bool,
     /// Set when `Math.numberFormat(float, int)` is emitted (M-NUM S4) — defines
-    /// `__phorge_number_format`, assembling the grouped string byte-for-byte like `value::number_format`
+    /// `__phorj_number_format`, assembling the grouped string byte-for-byte like `value::number_format`
     /// (so the PHP leg never relies on PHP's own `number_format` and its `-0`/locale quirks).
     uses_math_number_format: bool,
-    /// Set when any `Core.Random` native is emitted (2026-06-27) — defines the `__phorge_rng_*`
+    /// Set when any `Core.Random` native is emitted (2026-06-27) — defines the `__phorj_rng_*`
     /// helpers: a process-global state plus a hand-rolled xorshift64 byte-identical to the Rust kernel
     /// (so a seeded sequence matches `run`/`runvm`). `>>` is masked for logical shift; `GOLDEN` is the
     /// signed-i64 reinterpretation of the unsigned constant.
     uses_rng: bool,
     /// Set when any `Core.Regex` native is emitted (Fork A, 2026-06-28) — defines the
-    /// `__phorge_regex_*` helpers + the `__phorge_regex_delim` delimiter picker. The injected `Regex`
+    /// `__phorj_regex_*` helpers + the `__phorj_regex_delim` delimiter picker. The injected `Regex`
     /// class holds the bare pattern; each helper builds a collision-free `~…~u` PCRE form and calls the
     /// matching `preg_*`. Byte-identical to the `regex`-crate backends on the regular subset (the
     /// engine's no-backref/lookaround set ≡ what PCRE matches identically); `\d\w\s` Unicode-vs-ASCII
     /// is the one documented edge (KNOWN_ISSUES), so shipped examples keep ASCII subjects.
     uses_regex: bool,
-    /// Set when any `Core.Time` native is emitted (M-TIME, 2026-06-28) — defines the `__phorge_now_*`
+    /// Set when any `Core.Time` native is emitted (M-TIME, 2026-06-28) — defines the `__phorj_now_*`
     /// helpers: a freezable process-global clock (`static $frozen`) hand-rolled to match the Rust kernel
     /// (`src/native/time.rs`). A *frozen* program is byte-identical on `run`/`runvm`/transpiled PHP; an
     /// unfrozen `nowMillis()` reads the wall clock on each backend and is documented non-gated.
@@ -333,9 +333,9 @@ struct Transpiler {
     /// (byte-identical to pre-S6b output). The multi-parent classes themselves are emitted via
     /// `emit_multi_class` (a class that `implements`+`use`s), not listed here.
     decomposed: BTreeSet<String>,
-    /// Monotonic counter for the hidden `$__phorge_d{N}` temporary that a let-destructuring spills its
-    /// initializer into (Phase 1 slice 5). The name never collides with a user local (`$__phorge_` is
-    /// not a writable Phorge identifier) and the value is immaterial to stdout, so any deterministic
+    /// Monotonic counter for the hidden `$__phorj_d{N}` temporary that a let-destructuring spills its
+    /// initializer into (Phase 1 slice 5). The name never collides with a user local (`$__phorj_` is
+    /// not a writable Phorj identifier) and the value is immaterial to stdout, so any deterministic
     /// sequence is byte-identity-safe.
     tmp: usize,
 }
@@ -368,7 +368,7 @@ fn last_segment(name: &str) -> &str {
 /// rejects them as a class name *even inside a namespace* (verified vs PHP 8.5). An enum variant
 /// transpiles to `final class <Variant> extends <Enum>`, so a variant named after one of these would
 /// be a parse error. We mangle such a variant's PHP class name by appending `_` (`Int`→`Int_`). This
-/// is **transpiler-only**: `run`/`runvm` address a variant by its Phorge name (`EnumVal.variant`),
+/// is **transpiler-only**: `run`/`runvm` address a variant by its Phorj name (`EnumVal.variant`),
 /// never a PHP class name, so program stdout is unaffected. Comparison is case-insensitive (PHP class
 /// names are). (`array`/`callable`/`list`/`enum` are NOT reserved as class names — left untouched.)
 fn php_variant_name(variant: &str) -> String {
@@ -385,7 +385,7 @@ fn php_variant_name(variant: &str) -> String {
     }
 }
 
-/// Property names PHP's `\Exception` already declares (M-faults 2b). A Phorge `Error` subtype
+/// Property names PHP's `\Exception` already declares (M-faults 2b). A Phorj `Error` subtype
 /// transpiles to `extends \Exception`, so a promoted/declared field with one of these names would be
 /// a typed redeclaration of an inherited untyped property — a PHP fatal — and must be emitted untyped.
 fn exception_reserved(name: &str) -> bool {
@@ -396,7 +396,7 @@ fn exception_reserved(name: &str) -> bool {
 /// 2c to recognize a conventional `cause` field whose value feeds PHP's native exception chain. A
 /// type literally named `Error` in PHP would resolve to the unrelated *engine* `Error` class, so an
 /// `Error`-typed cause must be emitted as `?\Throwable` (the type of `\Exception::$previous`), which
-/// accepts every Phorge `Error` (each transpiles to `extends \Exception`).
+/// accepts every Phorj `Error` (each transpiles to `extends \Exception`).
 fn is_error_marker_type(ty: &Type) -> bool {
     match ty {
         Type::Named { name, .. } => last_segment(name) == "Error",
@@ -419,11 +419,11 @@ fn php_type_ref(name: &str) -> String {
     }
 }
 
-/// Mangle a PHP-reserved **class/enum** name that a Phorge type name would collide with. The only
+/// Mangle a PHP-reserved **class/enum** name that a Phorj type name would collide with. The only
 /// case today is `RoundingMode`: PHP 8.4+ ships a built-in `enum RoundingMode`, so the injected M-NUM
 /// S2 enum (`abstract class RoundingMode` + its variant subclasses) would otherwise fatal with
 /// "cannot extend enum RoundingMode". Append `_` (`RoundingMode` → `RoundingMode_`), transpiler-only:
-/// `run`/`runvm` address the enum by its Phorge name (`EnumVal.ty`), never a PHP class name, so
+/// `run`/`runvm` address the enum by its Phorj name (`EnumVal.ty`), never a PHP class name, so
 /// program stdout is unaffected. Distinct from [`php_variant_name`] (which mangles reserved *variant*
 /// names like `Int`); the enum *type* name and its variant names mangle independently.
 fn php_class_name(name: &str) -> String {
@@ -564,7 +564,7 @@ impl Transpiler {
     }
     /// Render a `catch` clause's type for PHP (M-faults 2b): a single class/interface via `php_type_ref`
     /// (FQN if cross-package), a union `A | B` as PHP 8's `A | B`. The built-in `Error` base maps to
-    /// `\Exception` (a Phorge `Error` subtype transpiled to `extends \Exception`, and PHP's own `Error`
+    /// `\Exception` (a Phorj `Error` subtype transpiled to `extends \Exception`, and PHP's own `Error`
     /// is a *different* engine class — so `catch (Error e)` must catch `\Exception`, not PHP `\Error`).
     /// M8.5 S3a: a **foreign** exception class (`declare class … implements Error`) is caught by its own
     /// global PHP name (`\DivisionByZeroError`) — NOT the `Error`→`\Exception` mapping — so a foreign
@@ -676,7 +676,7 @@ impl Transpiler {
                     } else if l == OpKind::Decimal || r == OpKind::Decimal {
                         // `decimal ⊕ {decimal,int}` stays decimal (M-NUM S1); the PHP carrier is a
                         // string, but the operand *kind* is `Decimal` so a nested `(a * b) + c`
-                        // routes every level through the `__phorge_dec_*` helpers.
+                        // routes every level through the `__phorj_dec_*` helpers.
                         OpKind::Decimal
                     } else if l == OpKind::Float || r == OpKind::Float {
                         OpKind::Float
@@ -744,7 +744,7 @@ impl Transpiler {
                 OpKind::Class(c) => self.lookup_field_kind(&c, name),
                 _ => OpKind::Other,
             },
-            // A call result (T6c): a constructor `ClassName(...)` (Phorge `new` is unwrapped to a
+            // A call result (T6c): a constructor `ClassName(...)` (Phorj `new` is unwrapped to a
             // `Call`) yields an instance of that class (so `mk().x` resolves); a free-function call
             // resolves to its declared return kind; a method call `obj.m(...)` resolves to the
             // method's return kind on `obj`'s class (+ inherited).

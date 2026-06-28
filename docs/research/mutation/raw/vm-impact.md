@@ -6,7 +6,7 @@ Research basis: read of `src/value.rs`, `src/ast.rs`, `src/chunk.rs`, `src/vm.rs
 (`docs/plans/2026-06-21-ga-direction-and-autonomy.plan.md`). External: Rust std `Rc` docs,
 Crafting Interpreters, CPython/Swift/Lua GC literature. Every claim graded inline.
 
-Governing filter: craftsmanship-apex; PHP is the floor; transpile contract Phorge:PHP :: TS:JS;
+Governing filter: craftsmanship-apex; PHP is the floor; transpile contract Phorj:PHP :: TS:JS;
 `run ≡ runvm ≡ real PHP` byte-identical is the spine; additive power coexists.
 
 ---
@@ -191,7 +191,7 @@ pointers to the same allocation, then make_mut will clone the inner value… clo
   PHP array semantics for free.** *[Verified: PHP array COW is documented behavior; make_mut COW is
   the precise structural match.]*
 - **Cost: a write to a list/map shared by N holders costs one clone of that container.** For
-  immutable-by-default Phorge this is rare (mutation is opt-in), and it is the *same* cost PHP pays.
+  immutable-by-default Phorj this is rare (mutation is opt-in), and it is the *same* cost PHP pays.
   *[Inferred.]*
 - **GC: `make_mut` cannot create a cycle for value types** (List/Map/Set hold values, and writing a
   value into them via COW doesn't alias back). Cycles are only possible if a `mutable` field of an
@@ -301,11 +301,11 @@ required differential cases (see §6).
 The transpiler already emits `$x = expr;` for `VarDecl` (transpile.rs:639) and `foreach`/`if`
 (transpile.rs:648-697). Mutation maps **1:1 to PHP**, which is the whole transpile-contract bet:
 
-| Phorge | PHP emission | Notes |
+| Phorj | PHP emission | Notes |
 |---|---|---|
 | `x = e;` | `$x = e;` | reuses the existing `$name = …` path; just stop emitting a *fresh* `declare` |
-| `x += e;` | `$x += e;` | direct; but `/`-family must route through `__phorge_div`/`__phorge_rem` runtime helpers (transpile.rs:264-274) → `$x = __phorge_div($x, e);` to preserve intdiv/fmod parity |
-| `o.f = e;` | `$o->f = e;` | needs the field `public` (the W1 gotcha: PHP enforces `private`, Phorge backends don't — already in KNOWN_ISSUES) |
+| `x += e;` | `$x += e;` | direct; but `/`-family must route through `__phorj_div`/`__phorj_rem` runtime helpers (transpile.rs:264-274) → `$x = __phorj_div($x, e);` to preserve intdiv/fmod parity |
+| `o.f = e;` | `$o->f = e;` | needs the field `public` (the W1 gotcha: PHP enforces `private`, Phorj backends don't — already in KNOWN_ISSUES) |
 | `xs[i] = e;` | `$xs[$i] = e;` | PHP array COW = `make_mut` COW → byte-identical |
 | `m[k] = e;` | `$m[$k] = e;` | insertion-order preserved both sides |
 | `x++;` | `$x++;` | but reject PHP string-increment — checker restricts `++` to numeric (spec 143) |
@@ -313,10 +313,10 @@ The transpiler already emits `$x = expr;` for `VarDecl` (transpile.rs:639) and `
 | `??=` | `$x ??= e;` (PHP 7.4+) | direct |
 
 **Transpiler parity traps (from the existing KNOWN_ISSUES discipline):**
-1. **Compound `/=` and `%=`** can't emit naked `$x /= e` — they must go through `__phorge_div`/
-   `__phorge_rem` or PHP float-division diverges from Phorge intdiv. *[Verified: transpile.rs:264-274
+1. **Compound `/=` and `%=`** can't emit naked `$x /= e` — they must go through `__phorj_div`/
+   `__phorj_rem` or PHP float-division diverges from Phorj intdiv. *[Verified: transpile.rs:264-274
    shows the existing div/rem helpers + the M7 memory "transpile correctness uses RUNTIME HELPERS."]*
-2. **Float compound-assign display** still routes through `__phorge_str`/`__phorge_float`
+2. **Float compound-assign display** still routes through `__phorj_str`/`__phorj_float`
    (transpile.rs:283-310) only at *print* time, not assign time — assign is pure value, so no trap
    there. *[Verified.]*
 3. **`-n` ini extensions**: any new compound-assign helper must be tier-1 PHP only (no mbstring) —
@@ -344,7 +344,7 @@ The transpiler already emits `$x = expr;` for `VarDecl` (transpile.rs:639) and `
 
 1. **Reassignment value test:** `var x = 1; x = 2; Console.println(x);` → `agree` "2".
 2. **Compound-assign + intdiv parity:** `var x = 7; x /= 2; println(x);` → `agree` "3" AND the PHP
-   oracle must agree (routes through `__phorge_div`). The PHP-oracle glob already gates `examples/`
+   oracle must agree (routes through `__phorj_div`). The PHP-oracle glob already gates `examples/`
    (differential.rs project-aware glob) — ship `examples/guide/mutation.phg`.
 3. **THE aliasing case (the P0 catcher):** for List/Map (COW), `var a = [1,2]; var b = a; b[0] = 9;
    println(a[0]); println(b[0]);` must produce identical output on run/runvm/PHP — and that output
@@ -373,7 +373,7 @@ the M2 P5a 634ms workload is the baseline). *[Verified: INVARIANTS §11 + the P5
 2. **`SetField`/`SetIndex` value logic single-sourced in value.rs** — INVARIANTS §3 forbids
    per-backend re-inlining; a `map_set`/`list_set` kernel is mandatory, not optional.
 3. **Every new Op extends all three matches in one commit** — INVARIANTS §5, compile-error-enforced.
-4. **The PHP `/=`/`%=` emission routes through `__phorge_div`/`__phorge_rem`** — forced by the M7
+4. **The PHP `/=`/`%=` emission routes through `__phorj_div`/`__phorj_rem`** — forced by the M7
    runtime-helper correctness model (memory) and transpile.rs:264-274; a naked PHP `/=` diverges.
 5. **Reassignment reuses `Op::SetLocal`** — the op exists; inventing a parallel op would be waste.
 6. **GC, if needed at all, is scoped to the mutable-instance cyclic subset** — forced by

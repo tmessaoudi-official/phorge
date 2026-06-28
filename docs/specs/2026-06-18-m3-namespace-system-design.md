@@ -1,4 +1,4 @@
-# Phorge — Namespace / Package System — Design
+# Phorj — Namespace / Package System — Design
 
 > Brainstorm + design, 2026-06-18. Trigger: developer wants **everything in a namespace** — "nothing
 > in the wind" — as the **default** behavior, with **meaningful, not bloated** names. Supersedes the
@@ -20,7 +20,7 @@ plating**, and the cheapest moment to adopt it is **before** the `NativeModule` 
 
 Rejected: `System.out.println` (Java). It models stdout as an **object** (`System` class → `out`
 field → `println` method); **PHP has no object analog** (idiomatic PHP is `echo`), so it breaks the
-transpile contract **D-L9 (Phorge : PHP :: TypeScript : JavaScript)**. It also collides with Phorge's
+transpile contract **D-L9 (Phorj : PHP :: TypeScript : JavaScript)**. It also collides with Phorj's
 existing `Expr::Member` (instance field/method) semantics.
 
 Adopted: **module-qualified functions** (Go `fmt.Println`, Python `os.path.join`, Rust `std::io`).
@@ -52,10 +52,10 @@ costs the PHP target **nothing**.
 
 ## 4. PHP emission (transpile contract)
 
-Dotted Phorge path → PHP `\`-namespace, each segment PascalCased:
+Dotted Phorj path → PHP `\`-namespace, each segment PascalCased:
 
 ```
-Phorge                         PHP
+Phorj                         PHP
 import core.console;           (front-end only — no emission)
 core.console.println(x)        echo $x . "\n";          // console.* erase to PHP I/O builtins
 core.math.sqrt(n)              sqrt($n)                  // core.* erase to PHP's flat global builtins

@@ -1,8 +1,8 @@
-# Road to Phorge 1.0 (GA) — Milestone Plan
+# Road to Phorj 1.0 (GA) — Milestone Plan
 
 > Consolidates the 2026-06-19 global review (`/sleuth + /inspect + /gaps + /forge + /inspect --vision`,
 > ~40 agents, 5 lenses) into a sequenced path to a stable GA release. Source of every finding:
-> `~/.claude/projects/-stack-projects-phorge/REVIEW-2026-06-19.md` (master code state: master `687a7bd`,
+> `~/.claude/projects/-stack-projects-phorj/REVIEW-2026-06-19.md` (master code state: master `687a7bd`,
 > docs `0b83e97`, 452 tests green, clippy+fmt clean). Every finding ID (P0-*, S-xx, I-xx, G-xx, forge-xx,
 > V*) is mapped to exactly one milestone below or to **Deferred past 1.0** with a reason — nothing dropped.
 
@@ -14,17 +14,17 @@
 - [2026-06-19] AGREED: **M10 generics (`Ty::Var` + erasure-first) is the keystone unblock** — one type-system primitive gates `core.list`, `core.json`, `Map`/`Set`/tuples, router path-params, and function-type variance.
 - [2026-06-19] AGREED: the report-only review findings now become the **GA backlog**; this file is the working tracker, executed milestone-by-milestone.
 - [2026-06-19] AGREED: **spec M7 first, then build** (developer chose the spec-driven path for the first milestone) — write a detailed M7 implementation spec/plan (PHP-oracle design, CI-`php` availability strategy, per-P0-fix test list, divergence-class regression matrix) for review BEFORE writing code. Next action after compact = author the M7 spec.
-- [2026-06-19] PROPOSED (spec, awaiting approval): fix P0-1/P0-3/P0-4 via **runtime PHP helpers** (`__phorge_div`/`__phorge_rem`/`__phorge_str`) that inspect operand types at PHP-runtime, mirroring Phorge's type-driven value kernels — chosen over a transpiler-side static type resolver because it eliminates a duplicated operand-type resolver (the M9 single-sourcing concern) *and* the inference-completeness regression risk, and ties each helper 1:1 to a `value.rs` kernel / `as_display`. P0-2 stays a syntactic precedence-parens fix. Spec: `docs/specs/2026-06-19-m7-correctness-closure-design.md`.
+- [2026-06-19] PROPOSED (spec, awaiting approval): fix P0-1/P0-3/P0-4 via **runtime PHP helpers** (`__phorj_div`/`__phorj_rem`/`__phorj_str`) that inspect operand types at PHP-runtime, mirroring Phorj's type-driven value kernels — chosen over a transpiler-side static type resolver because it eliminates a duplicated operand-type resolver (the M9 single-sourcing concern) *and* the inference-completeness regression risk, and ties each helper 1:1 to a `value.rs` kernel / `as_display`. P0-2 stays a syntactic precedence-parens fix. Spec: `docs/specs/2026-06-19-m7-correctness-closure-design.md`.
 
 ---
 
-## Phorge 1.0 GA — Definition & Exit Criteria
+## Phorj 1.0 GA — Definition & Exit Criteria
 
-1.0 / GA means Phorge is a **trustworthy, stable, fully-documented** language: all three backends are
+1.0 / GA means Phorj is a **trustworthy, stable, fully-documented** language: all three backends are
 provably byte-identical and enforced in CI, no open silent-correctness or security issues, the type
 system supports the committed 1.0 stdlib, and the language surface carries a semver stability promise.
 
-- [ ] **3-backend byte-identity enforced in CI** — `run ≡ runvm ≡ php` over the full `examples/**/*.phg` glob, `PHORGE_REQUIRE_PHP=1` (fails, not skips). *(M7, M9)*
+- [ ] **3-backend byte-identity enforced in CI** — `run ≡ runvm ≡ php` over the full `examples/**/*.phg` glob, `PHORJ_REQUIRE_PHP=1` (fails, not skips). *(M7, M9)*
 - [ ] **Zero open P0/P1 correctness findings** — all P0-1…4 + P0-ROOT closed, every divergence class has a regression test. *(M7)*
 - [ ] **Zero open P0/P1 security findings** — vendor arg-injection, path-traversal, lockfile tamper, serve DoS all closed. *(M8)*
 - [ ] **CI green on every push** — GitHub Actions mirrors the local gate (fmt + clippy + test) + a PHP job + a zig cross-build job. *(M9)*
@@ -42,13 +42,13 @@ system supports the committed 1.0 stdlib, and the language surface carries a sem
 **Goal:** Make all three backends provably byte-identical in CI by closing the PHP loop and fixing every silent transpiler→PHP divergence.
 
 **Exit criteria**
-- [x] `php`-gated 3-way oracle runs over the example glob **+ projects**; `PHORGE_REQUIRE_PHP=1` **fails** when `php` absent (verified both directions); unset skips loudly. Self-skip `cli.rs` PHP tests removed (5, not 2 — undercounted in the spec).
-- [x] P0-1…4 fixed: `__phorge_div`/intdiv, precedence-wrap parens, `__phorge_str` bool-coercion, `__phorge_rem`/fmod (runtime helpers, not static inference).
+- [x] `php`-gated 3-way oracle runs over the example glob **+ projects**; `PHORJ_REQUIRE_PHP=1` **fails** when `php` absent (verified both directions); unset skips loudly. Self-skip `cli.rs` PHP tests removed (5, not 2 — undercounted in the spec).
+- [x] P0-1…4 fixed: `__phorj_div`/intdiv, precedence-wrap parens, `__phorj_str` bool-coercion, `__phorj_rem`/fmod (runtime helpers, not static inference).
 - [x] Divergence classes with dedicated tests: int-div trunc (`m7_int_division_truncates_toward_zero`), `i64::MIN / -1` (`m7_int_min_div_neg_one_faults_identically`), large-range (`m7_large_range_faults_identically`), OOB index (existing), bytes boundaries (oracle over `bytes.phg`), empty/reversed range (oracle + `s1_ranges`). Float-formatting / neg-zero remain governed by the existing exactly-representable-floats KNOWN_ISSUE (oracle-covered via examples; no separate test — low-value edge).
 - [x] Large-range fault folded in (clean `run≡runvm` fault `"range too large"`, not exit-101) with `agree_err` + `FaultKind::RangeTooLarge`; `value::build_range` single-sources the size-guarded materialization.
 - [x] Zero known *silent* divergences across all three backends — every transpilable example is php-executed; remaining transpiler gaps (literal/expr `match`, `is`) are *loudly deferred* to M11, not silent.
 
-**Status (M7):** ✅ **COMPLETE** — implemented this session on top of `8c6fbb2`; ~453 tests green (differential 43 incl. 2 oracle + 4 M7 regression tests), clippy + fmt clean, oracle green over all examples/projects under `PHORGE_REQUIRE_PHP=1`. Spec: `docs/specs/2026-06-19-m7-correctness-closure-design.md`. Carry-forward: P1-#12/#13 (PHP-builtin-collision / private-field) → M8; CI that *sets* `PHORGE_REQUIRE_PHP=1` → M9; literal/expr `match` + `is` transpile → M11.
+**Status (M7):** ✅ **COMPLETE** — implemented this session on top of `8c6fbb2`; ~453 tests green (differential 43 incl. 2 oracle + 4 M7 regression tests), clippy + fmt clean, oracle green over all examples/projects under `PHORJ_REQUIRE_PHP=1`. Spec: `docs/specs/2026-06-19-m7-correctness-closure-design.md`. Carry-forward: P1-#12/#13 (PHP-builtin-collision / private-field) → M8; CI that *sets* `PHORJ_REQUIRE_PHP=1` → M9; literal/expr `match` + `is` transpile → M11.
 
 **Findings included**
 
@@ -76,8 +76,8 @@ M8) because it is a `run≡runvm` value-correctness divergence and needs the sam
 **Exit criteria**
 - [ ] `phg vendor` git invocations are `--`-separated, scheme-allowlisted, and reject `-`-leading refs.
 - [ ] Dependency `name` validated against `^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$` at parse + post-join `starts_with(vendor_root)` assertion.
-- [ ] Lockfile content-hash **verified on load** (`E-VENDOR-TAMPERED`); re-vendor validates against existing `phorge.lock`.
-- [ ] A `write_atomic` (temp-then-rename) helper applied uniformly to `phorge.lock`, `phg build` output, vendor swap, and the cross-stub cache.
+- [ ] Lockfile content-hash **verified on load** (`E-VENDOR-TAMPERED`); re-vendor validates against existing `phorj.lock`.
+- [ ] A `write_atomic` (temp-then-rename) helper applied uniformly to `phorj.lock`, `phg build` output, vendor swap, and the cross-stub cache.
 - [ ] `phg serve` survives a handler panic (`catch_unwind` → 500), has a read timeout, and handles malformed/absent `Content-Length` as 400.
 - [ ] Systemic transpile-safety lint ships: `W-PHP-BUILTIN-SHADOW` + `W-PHP-FIELD-VISIBILITY` on the existing warning channel.
 - [ ] Symlink-escape closed across manifest `source` / vendor copy / project walk; git-env fully isolated.
@@ -96,7 +96,7 @@ M8) because it is a `run≡runvm` value-correctness divergence and needs the sam
 | P2-#28 / S-12 | Malformed/absent `Content-Length` silently framed as 0 → truncated body | `src/serve.rs:163-173` | Quick |
 | P2-#29 / I-14 / S-05 | `phg serve` slowloris: no read timeout | `src/serve.rs:133-160` | Quick |
 | P2-#36 / I-11 / I-12 | `manifest source`/vendor copy/project walk follow symlinks → escape root | `src/manifest.rs:116-120,193`, `src/vendor.rs:152-185`, `src/loader.rs:642-659` | Quick |
-| P2-#39 / S-19 / VG-3 | Re-vendor never validates against existing `phorge.lock` | `src/vendor.rs:34-112` | Quick |
+| P2-#39 / S-19 / VG-3 | Re-vendor never validates against existing `phorj.lock` | `src/vendor.rs:34-112` | Quick |
 | P2-#40 / VG-3 | Lockfile content hash write-only; loader never verifies (`E-VENDOR-TAMPERED`) | `src/vendor.rs`, `src/loader.rs` | Quick |
 | P2-#41 / S-20 | Vendor git-env isolation incomplete (`GIT_CONFIG_*`, `GIT_CEILING_DIRECTORIES`, …) | `src/vendor.rs:121-147` | Quick |
 | Theme / S-10/S-11 / VJ-§3 | Non-atomic state writes → `write_atomic` helper (lock/build/vendor/stub-cache) | (cross-cutting) | Quick-Med |
@@ -116,19 +116,19 @@ wrong numbers, they produce PHP fatals.
 **Goal:** Make the project safe to evolve and honest to read — CI enforcement, the descriptor table that dissolves the 3-coupled-match, single-sourced parity surfaces, and a full doc-SSOT sync.
 
 **Exit criteria**
-- [x] GitHub Actions CI exists: fmt + clippy + test, a PHP job (`PHORGE_REQUIRE_PHP=1`, fails not skips), a zig cross-build job; pin read from `rust-toolchain.toml`. — `.github/workflows/ci.yml` (`gate` + `cross-build` jobs); the encoded gate verified green locally (453 tests, oracle enforced, fmt+clippy clean) before commit. *(Observed green on a real GitHub run pending first push.)*
+- [x] GitHub Actions CI exists: fmt + clippy + test, a PHP job (`PHORJ_REQUIRE_PHP=1`, fails not skips), a zig cross-build job; pin read from `rust-toolchain.toml`. — `.github/workflows/ci.yml` (`gate` + `cross-build` jobs); the encoded gate verified green locally (453 tests, oracle enforced, fmt+clippy clean) before commit. *(Observed green on a real GitHub run pending first push.)*
 - [x] ADRs written for the 5 load-bearing decisions (no shared run↔VM IR; erasure-not-monomorphization; Rc-not-GC; single-file brace-namespace PHP; offline-only vendor). — `docs/adr/0001…0005` (Nygard format, Status: Accepted, immutable + spec back-links) + `docs/adr/README.md` index; `ARCHITECTURE.md` "Decision records" policy updated to make `docs/adr/` canonical for the decision (specs stay canonical for the exploration).
 - [x] `chunk::validate` is **exhaustive** (no `_ => None` fall-through) — every `Op` enumerated; a new variant is a compile error until its EV-7 bound is declared (+ regression tests; INVARIANTS #5 updated). **Re-scoped:** the `Op::meta()`/`OpInfo` descriptor table was investigated and **dropped as unmotivated** — `exec_op` (the interpreter loop) cannot be tabled, and `stack_effect` was *already* exhaustive + state-dependent, so 2 of the 3 matches were never silently coupled. Only `validate` had the hole; closing it exhaustively delivers the EV-7 safety the table was meant to provide, without the indirection.
 - [ ] Single-sourced: runtime fault strings (`faults`/`FaultMsg`), lambda capture-filter (`is_capturable`), native call-head resolution (`resolve_call_head`).
 - [ ] Interpreter runtime faults carry a source line (`Cell<Span>` through eval); fault body unchanged so the oracle stays green.
-- [x] Doc-SSOT sync complete: MILESTONES.md = human SSOT (added first-class M5/M6/M7 entries + M8–M12 GA-roadmap pointer + reconciled the superseded ecosystem numbering; removed a floating "today" count); CLI table gained `serve`/`vendor` (`d19d409`). Verified already-clean: pipe `|>` documented in FEATURES.md; no stale `phorge <cmd>` invocations in docs; no INVARIANTS "coming" notes; the hard `332` test-count was fixed in M7.
+- [x] Doc-SSOT sync complete: MILESTONES.md = human SSOT (added first-class M5/M6/M7 entries + M8–M12 GA-roadmap pointer + reconciled the superseded ecosystem numbering; removed a floating "today" count); CLI table gained `serve`/`vendor` (`d19d409`). Verified already-clean: pipe `|>` documented in FEATURES.md; no stale `phorj <cmd>` invocations in docs; no INVARIANTS "coming" notes; the hard `332` test-count was fixed in M7.
 - [ ] `phg explain` known-codes list derived from `explain_text` (no omissions).
 
 **Findings included**
 
 | ID | Finding | file:line | Effort |
 |----|---------|-----------|--------|
-| Theme / I-07/I-29 / VB2/VJ-§1 / forge-H1 / G-19 / P1-#20 | ✅ **DONE** — CI added (`.github/workflows/ci.yml`); `PHORGE_REQUIRE_PHP=1` enforces the oracle (fails, not skips); CONTRIBUTING claim now true | `.github/workflows/ci.yml`, `CONTRIBUTING.md` | Quick |
+| Theme / I-07/I-29 / VB2/VJ-§1 / forge-H1 / G-19 / P1-#20 | ✅ **DONE** — CI added (`.github/workflows/ci.yml`); `PHORJ_REQUIRE_PHP=1` enforces the oracle (fails, not skips); CONTRIBUTING claim now true | `.github/workflows/ci.yml`, `CONTRIBUTING.md` | Quick |
 | QW-15 / P1-#16 / forge-A2/C2/C6/D3 / I-36 | ✅ **DONE** — `validate` now exhaustive (no `_ => None`); a new index Op can't skip its EV-7 check | `src/chunk.rs` | Quick |
 | Theme / I-36/I-20 / VC-§7/VE-C2 / forge-A1/A2/D7/G1/B1/D3/C6 / S-24 | ⊘ **DROPPED (re-scoped)** — `Op::meta()`/`OpInfo` table unmotivated: `exec_op` can't be tabled, `stack_effect` already exhaustive; the EV-7 win is the exhaustive `validate` above | `src/{vm,compiler,chunk}.rs` | Low-Med |
 | Theme / I-10 / forge-A1/B1 / P1-#22 | Fault strings hand-written twice + capture-filter duplicated 3-way | `src/interpreter.rs` ↔ `src/vm.rs`; `interpreter.rs:415-417` ↔ `transpile.rs:621-623` | Med |
@@ -137,9 +137,9 @@ wrong numbers, they produce PHP fatals.
 | Theme / I-09 / S-08/S-17/S-29 / G-33/G-34/G-35/G-36/G-37 / P1-#21 | Systemic doc SSOT divergence (M5/M6 status, CLI table, ARCHITECTURE modules) | `README.md`, `ROADMAP.md`, `docs/MILESTONES.md`, `docs/ARCHITECTURE.md` | Med |
 | QW-7 / S-08 / I-09 / G-33/G-34 | `|>` pipe listed "not yet supported"/"planned" but shipped | `examples/README.md:92-93`, `ROADMAP.md:55`, `VISION.md:46` | Quick |
 | QW-14 / S-29 / I-26 | INVARIANTS.md calls shipped P4 ops "coming" | `docs/INVARIANTS.md:53` | Quick |
-| QW-5 / I-06 / P1-#19 | Stale committed `phorge.lock` header (`phorge vendor` → `phg vendor`) | `examples/project/withdeps/phorge.lock:1` | Quick |
+| QW-5 / I-06 / P1-#19 | Stale committed `phorj.lock` header (`phorj vendor` → `phg vendor`) | `examples/project/withdeps/phorj.lock:1` | Quick |
 | QW-6 / S-18 / I-21 | CLAUDE.md test baseline stale (332 → 452) | `CLAUDE.md:31` | Quick |
-| QW-9 / I-44 / I-23 | Manifest comments / rustdoc say `phorge serve`/`phorge <cmd>`; binary is `phg` | `examples/web/{handler,router}.phg`, `tests/{examples,cli}.rs` | Quick |
+| QW-9 / I-44 / I-23 | Manifest comments / rustdoc say `phorj serve`/`phorj <cmd>`; binary is `phg` | `examples/web/{handler,router}.phg`, `tests/{examples,cli}.rs` | Quick |
 | QW-8 / S-07 / P1-#23 | `phg explain` known-codes omits `E-SHADOW-IMPORT` | `src/cli.rs:293` | Quick |
 | P1-#17 / S-02 | `manifest.rs` silently accepts duplicate keys (last-wins) vs "strict TOML" | `src/manifest.rs:106-127,281-306` | Quick |
 | P1-#20 / I-07 | CONTRIBUTING claims server-side CI exists (fixed by the CI job above) | `CONTRIBUTING.md:31` | Quick |
@@ -255,7 +255,7 @@ for the 1.0 bar, re-scope: exceptions + traits are 1.0 candidates; mutation+GC m
 | P2-#44 / I-27/I-28/I-29 | No lexer/parser fuzzing/property testing; native `php` mappings never executed | `tests/` (new fuzz harness) | Med |
 | Deferred-half / VJ-§2a | M2.5 Phase 3 unblocked half: SHA-256 checksums + release automation | release pipeline | Med |
 | P3-#46 / S-22 | `parse_shorthand` truncates git URL when tag contains `@` | `src/manifest.rs:314-325` | Quick |
-| P3-#47 / S-27 | `Project::detect` innermost-`phorge.toml`-wins; no nested-project warning | `src/manifest.rs:180-205` | Quick |
+| P3-#47 / S-27 | `Project::detect` innermost-`phorj.toml`-wins; no nested-project warning | `src/manifest.rs:180-205` | Quick |
 | P3-#48 / S-28 | Lexer column counts bytes not chars → off-by-one column on multi-byte input | `src/lexer.rs:37-47` | Quick |
 | P3-#49 / S-26/S-21 | `hash_tree` lossy `to_string_lossy`; `unique_temp_dir` collides on sanitizing names | `src/vendor.rs:190-203,244-250` | Quick |
 | P3-#50 / forge-B2 | Compiler `Result<_, String>` for checker-proven-impossible conditions leaks AST via `{e:?}` | `src/compiler.rs:792-860` | Med |

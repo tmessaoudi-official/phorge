@@ -7,8 +7,8 @@
 
 ## Context
 
-The transpile contract is **D-L9: Phorge is to PHP what TypeScript is to JavaScript** — every
-feature transpiles to idiomatic PHP. PHP has **no native runtime generics**. Phorge plans
+The transpile contract is **D-L9: Phorj is to PHP what TypeScript is to JavaScript** — every
+feature transpiles to idiomatic PHP. PHP has **no native runtime generics**. Phorj plans
 user-defined generics (`class Box<T>`, `function first<T>(…)`, optional bounds `T: Comparable`) at
 S4.5, gated on the `Ty::Var` keystone (M10).
 

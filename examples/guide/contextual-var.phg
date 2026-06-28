@@ -25,7 +25,7 @@ class Holder {
 
 function main(): void {
     // `var name = …` is still the inference keyword (here `label` is inferred `string`).
-    var label = tagged("phorge");
+    var label = tagged("phorj");
     Console.println(label);
 
     // `var` as a mutable local value name: declared with its type, then reassigned.

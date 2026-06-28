@@ -2,7 +2,7 @@
 
 ## Track summary
 
-Phorge's distribution story is unusually strong for a pre-1.0 language: `phg build` already
+Phorj's distribution story is unusually strong for a pre-1.0 language: `phg build` already
 produces standalone native executables (host `x86_64-linux-gnu` plus cross-compiled
 `x86_64-musl`, `aarch64-{gnu,musl}`, and `x86_64-pc-windows-gnu` via cargo-zigbuild + a zig
 linker), with hand-rolled std-only ELF/PE/Mach-O section readers, a CRC-guarded versioned
@@ -49,9 +49,9 @@ adapters) are `defer` or `reject` on the philosophy lens.
 
 **P-stub-registry** — This is the one explicitly *designed* but unbuilt deliverable in the whole
 track (`docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`, decisions P3-1..P3-8). Today a
-*distributed* (sourceless) phorge can only host-build; `--target`/`--all` error with "needs a source
+*distributed* (sourceless) phorj can only host-build; `--target`/`--all` error with "needs a source
 checkout." The design is complete and 100% verifiable without any secrets: a hand-rolled std SHA-256
-(`bundle/sha256.rs`), a baked-manifest seam (`build.rs` + `PHORGE_BAKE_STUB_MANIFEST` breaking the
+(`bundle/sha256.rs`), a baked-manifest seam (`build.rs` + `PHORJ_BAKE_STUB_MANIFEST` breaking the
 stub↔manifest fixpoint), a `download_stub` third branch in `cross.rs`, and a 2-pass `release.yml`.
 It closes the distribution loop and is squarely on-philosophy (zero new runtime deps, verify-before-
 cache protects the parity spine). High effort but fully spec'd — the highest-leverage item here.
@@ -72,7 +72,7 @@ and the program's exit value through the `main()` self-detect hook). Strong fit 
 script reads `$argv` and `exit()`s.
 
 **P-phar** — PHAR is *the* canonical PHP single-file distribution format; a PHP dev's mental model of
-"ship the whole app as one file you can `php app.phar`" is PHAR, not a native binary. Phorge already
+"ship the whole app as one file you can `php app.phar`" is PHAR, not a native binary. Phorj already
 transpiles to PHP and M5 emits brace-namespaced output; wrapping that output in a PHAR stub
 (`phg package --phar` or a `transpile` flag) gives PHP-shops a deploy artifact they already know how
 to run, sign, and put behind a web server. Strong fit, directly idiomatic-PHP, complements (does not
@@ -114,7 +114,7 @@ fit, no surprise budget spent.
   maintainer has no signing certs and no Mac SDK; signing code would be unverifiable scaffolding
   (decision P3-1). Correctly `defer`.
 - **P-frankenphp / P-faas** — FrankenPHP and RoadRunner worker mode are *runtime* targets for the
-  transpiled PHP, not Phorge features; they `map` onto the existing transpile output and a thin
+  transpiled PHP, not Phorj features; they `map` onto the existing transpile output and a thin
   worker-mode front-controller (defer), while bespoke FaaS adapters are vendor-specific glue that
   doesn't earn its keep on the philosophy lens (reject — a PHP dev deploys to FaaS via a standard
   PHP runtime image, not a language feature).

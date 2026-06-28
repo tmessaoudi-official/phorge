@@ -1,6 +1,6 @@
 # Stability tiers
 
-Phorge's public surface is split into three tiers. The policy attached to each tier — and what changes
+Phorj's public surface is split into three tiers. The policy attached to each tier — and what changes
 are allowed when — is defined in [`SEMVER.md`](SEMVER.md).
 
 - **stable** — intended to last. In `0.x` it may still change, but only with a documented `### Breaking`
@@ -70,7 +70,7 @@ are allowed when — is defined in [`SEMVER.md`](SEMVER.md).
 `lex`, plus the source forms (`<file>`, `-`/stdin, `-e`/`--eval`, `--`) and `-h`/`-v`.
 
 ### experimental
-`lift` (PHP → Phorge draft — *review required*, inherently lossy), `serve` (HTTP; M6 in progress),
+`lift` (PHP → Phorj draft — *review required*, inherently lossy), `serve` (HTTP; M6 in progress),
 `vendor` (git dependencies; transitive deps deferred), `lsp` (language server; the query layer is
 growing).
 

@@ -84,4 +84,4 @@ default + opt-in permissive) as the native that motivated the feature. Byte-iden
 - **Both reject `inf`/`nan`** — Rust's `f64::from_str` accepts them but PHP can't match, and the float
   rendering would diverge; rejecting keeps the spine byte-identical.
 - Rust is the source of truth (a grammar validator, then `f64::from_str` on the validated slice);
-  gated PHP helper `__phorge_parse_float($s, $permissive)` written to match it exactly.
+  gated PHP helper `__phorj_parse_float($s, $permissive)` written to match it exactly.

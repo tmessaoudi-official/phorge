@@ -3,7 +3,7 @@
 A **seeded** pseudo-random generator. The same seed always replays the same stream, so a program is
 reproducible — handy for tests, simulations, and shuffles you want to repeat.
 
-```phorge
+```phorj
 import Core.Random;
 
 Random.seed(n: int) -> void                 // reset the generator to a deterministic state
@@ -30,7 +30,7 @@ Because the seed is fixed (`2026`), those rolls are the same on every run and on
 
 Like every other example, `dice.phg` is **byte-identity-gated** (2026-06-27): the interpreter, the
 bytecode VM, **and the transpiled PHP** print exactly the same bytes (`tests/differential.rs`). The
-transpiler hand-rolls the **same** `xorshift64` as the Rust kernel (`__phorge_rng_*` helpers) instead
+transpiler hand-rolls the **same** `xorshift64` as the Rust kernel (`__phorj_rng_*` helpers) instead
 of PHP's Mersenne-Twister, so a seeded sequence reproduces identically everywhere — reproducibility
 survives transpile. (Earlier this module was quarantined because it emitted `mt_srand`/`mt_rand`, whose
 sequence couldn't match; that divergence is gone.)
@@ -44,5 +44,5 @@ sequence couldn't match; that divergence is gone.)
   value masked to a non-negative `int` (`< 2^63`). The PHP emission masks the `>> 7` (PHP `>>` is
   arithmetic, Rust's `u64 >>` is logical) and writes `GOLDEN` as its signed-i64 reinterpretation.
 - **Bounds.** `intBetween(lo, hi)` is inclusive on both ends; `hi < lo` is a fault.
-- **Transpiled PHP.** `seed` → `__phorge_rng_seed`; `next` → `__phorge_rng_next()`; `intBetween` →
-  `__phorge_rng_int_between(lo, hi)` — all over a shared by-reference function-static state.
+- **Transpiled PHP.** `seed` → `__phorj_rng_seed`; `next` → `__phorj_rng_next()`; `intBetween` →
+  `__phorj_rng_int_between(lo, hi)` — all over a shared by-reference function-static state.

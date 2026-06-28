@@ -5,7 +5,7 @@
 // rejected at `Regex.compile` (they would force backtracking — the ReDoS hazard the engine avoids).
 //
 // Patterns use RAW strings (`r"..."`): no `\` double-escaping, and — crucially — the `{n}` quantifier
-// does NOT collide with Phorge's `{expr}` string interpolation. Always write regex patterns raw.
+// does NOT collide with Phorj's `{expr}` string interpolation. Always write regex patterns raw.
 //
 // Subjects here are ASCII: `\d` / `\w` / `\s` are Unicode-aware on the Rust backends but ASCII-only in
 // transpiled PCRE (no UCP), so ASCII keeps the three backends identical (see KNOWN_ISSUES).

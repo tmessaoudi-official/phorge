@@ -12,8 +12,8 @@
 
 ## 0. What W1 delivers
 
-A pure, byte-identity-gated **HTTP handler model written in Phorge**: a `Request`/`Response` pair, a
-`parse_request` and `serialize` written in Phorge, a sample `handle`, and an
+A pure, byte-identity-gated **HTTP handler model written in Phorj**: a `Request`/`Response` pair, a
+`parse_request` and `serialize` written in Phorj, a sample `handle`, and an
 `examples/web/handler.phg` that feeds a committed-as-`b"…"` fixture request through the whole pipe and
 prints a readable ASCII summary. Runs byte-identically on `run`/`runvm` and round-trips through real
 PHP. **No socket** (that is W3); W1 is the portable `handle(Request)->Response` value contract only.
@@ -23,7 +23,7 @@ PHP. **No socket** (that is W3); W1 is the portable `handle(Request)->Response` 
 §3's sketch built `Request(… List<Header> headers)` in the parser. **That is not buildable on today's
 language:**
 
-- Phorge is **immutable-by-default** — reassignment / field writes are M3-deferred (`FEATURES.md`:
+- Phorj is **immutable-by-default** — reassignment / field writes are M3-deferred (`FEATURES.md`:
   "Mutation 🔲 M3"). No mutable accumulator.
 - **`core.list` is deferred** (needs S3 lambdas or `List<T>` generics) — no `append`, no `map`.
 - **`text.split` is the only producer of a dynamically-sized list**, and it yields `List<string>`.
@@ -62,7 +62,7 @@ raw `bytes` slice. The handler decodes the body on demand via `bytes.to_string(r
 
 ## 3. The shapes (HONEST-LITE)
 
-```phorge
+```phorj
 package Main;                 // E-PKG-TYPE blocks a core.http library today (parent §8)
 import core.console;
 import core.bytes;
@@ -104,7 +104,7 @@ longer" — not possible without mutation/`core.list`. For the spike, `withHeade
 or (b) supported only for a **fixed small arity** via nested literals. Recommend **(a) drop `withHeader`
 for W1**; document it as arriving with `core.list` (S3). The handler builds headers in one literal.
 
-## 4. parse_request / serialize (Phorge, in-spine)
+## 4. parse_request / serialize (Phorj, in-spine)
 
 ```
 function parse_request(bytes raw) -> Request? {
@@ -142,7 +142,7 @@ function serialize(Response resp) -> bytes {
 `match` is over enums, not ints — so `reason_phrase(int) -> string` is a **nested expression-`if`**
 (each `else` arm is itself a single expression-`if`):
 
-```phorge
+```phorj
 function reason_phrase(int s) -> string {
   return if (s == 200) { "OK" }
     else if (s == 201) { "Created" }
@@ -159,7 +159,7 @@ function reason_phrase(int s) -> string {
 
 - **Fixture as an in-source `b"…"` literal**, NOT a committed file — `\x0d\x0a` for CRLF dodges git
   autocrlf/editor normalization entirely and dogfoots W0:
-  ```phorge
+  ```phorj
   bytes raw = b"GET /hi HTTP/1.1\x0d\x0aHost: localhost\x0d\x0aAccept: text/plain\x0d\x0a\x0d\x0abody!";
   ```
 - `main()` parses it, calls `handle`, serializes, and prints a **readable ASCII summary** (method, path,
@@ -197,7 +197,7 @@ function reason_phrase(int s) -> string {
 - **No new `Op`** — handler/parser/serializer are classes/methods/`for`/recursion/optionals/`core.*`;
   `bytes.find` is `Op::CallNative`. The three-match `Op` coupling is untouched.
 - **No new `Value` variant** — `Value::Instance` (classes), `Value::List`, `Value::Bytes` all exist.
-- **Byte-identity spine** — the whole pipe is glob-gated Phorge; run≡runvm by construction (shared
+- **Byte-identity spine** — the whole pipe is glob-gated Phorj; run≡runvm by construction (shared
   kernels), PHP round-trip kept ASCII-clean.
 - **`#![forbid(unsafe_code)]`, std-only** — `bytes.find` is safe slice search.
 ```

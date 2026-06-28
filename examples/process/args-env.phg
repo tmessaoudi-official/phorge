@@ -24,7 +24,7 @@ function main(): void {
 
     // A single environment variable, or null if unset — composes with `??` like any optional.
     Console.println("HOME = {Env.get(\"HOME\") ?? \"<unset>\"}");
-    Console.println("PHORGE_DEMO = {Env.get(\"PHORGE_DEMO\") ?? \"<unset>\"}");
+    Console.println("PHORJ_DEMO = {Env.get(\"PHORJ_DEMO\") ?? \"<unset>\"}");
 
     // Every environment variable, sorted by key (a stable order; OS iteration order is not).
     var env = Env.all();

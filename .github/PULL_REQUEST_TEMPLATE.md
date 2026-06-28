@@ -1,4 +1,4 @@
-<!-- Thanks for contributing to Phorge! Please read CONTRIBUTING.md first. -->
+<!-- Thanks for contributing to Phorj! Please read CONTRIBUTING.md first. -->
 
 ## What & why
 

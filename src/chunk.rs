@@ -278,7 +278,7 @@ pub enum Op {
 /// thrown `Value` is stashed in `Vm::pending_throw` / `Interp::pending_throw` and this token is
 /// returned; the run loop / `CallNative` site recognises it and rebuilds the throw (M-faults 2b).
 /// Not a valid source identifier, so it can never collide with a real fault message.
-pub const THROW_SENTINEL: &str = "__phorge_throw__";
+pub const THROW_SENTINEL: &str = "__phorj_throw__";
 
 /// A unit of compiled bytecode: instructions, a constant pool, and a per-instruction
 /// source-line table (for runtime-error reporting).

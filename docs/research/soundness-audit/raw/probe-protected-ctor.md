@@ -12,7 +12,7 @@ semantics at all.
 
 Program (`$TMP/protected-ctor.phg`):
 
-```phorge
+```phorj
 package Main;
 import Core.Console;
 
@@ -30,11 +30,11 @@ function main(): int {
 Command + output:
 
 ```
-$ /stack/projects/phorge/target/release/phg check protected-ctor.phg
+$ /stack/projects/phorj/target/release/phg check protected-ctor.phg
 OK (type-checks clean)
 exit=0
 
-$ /stack/projects/phorge/target/release/phg run protected-ctor.phg
+$ /stack/projects/phorj/target/release/phg run protected-ctor.phg
 7
 exit=0
 ```
@@ -46,7 +46,7 @@ no effect.** (Should be rejected with a visibility error.)
 
 Program (`$TMP/protected-ctor-subclass.phg`):
 
-```phorge
+```phorj
 package Main;
 import Core.Console;
 
@@ -71,18 +71,18 @@ function main(): int {
 Command + output:
 
 ```
-$ /stack/projects/phorge/target/release/phg check protected-ctor-subclass.phg
+$ /stack/projects/phorj/target/release/phg check protected-ctor-subclass.phg
 OK (type-checks clean)
 exit=0
 
-$ /stack/projects/phorge/target/release/phg run protected-ctor-subclass.phg
+$ /stack/projects/phorj/target/release/phg run protected-ctor-subclass.phg
 20
 42
 exit=0
 ```
 
 Both the legitimate subclass construction (`20`) **and** the illegitimate external construction
-(`42`) succeed. There is no enforcement boundary at all — Phorge cannot distinguish "subclass
+(`42`) succeed. There is no enforcement boundary at all — Phorj cannot distinguish "subclass
 access" from "external access" for constructors because the visibility is discarded at parse time.
 
 ## Root cause (confirmed in source)
@@ -122,7 +122,7 @@ is suggested by the example/visibility machinery) is silently ignored, letting p
 (external construction of a hierarchy-restricted type) through. For a language whose pitch is a
 *provably-correct* upgrade of PHP this is worse than a missing feature — `protected constructor`
 *looks* enforced and is not. PHP itself enforces `protected __construct` (factory-method pattern),
-so this is a regression against the very baseline Phorge claims to improve.
+so this is a regression against the very baseline Phorj claims to improve.
 
 ## Concrete fix
 

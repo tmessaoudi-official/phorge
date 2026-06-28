@@ -1,6 +1,6 @@
 # Track 1 — Mutation Semantics: value vs reference, and the cycle/GC consequence
 
-> Research deliverable for the Phorge mutation + GC milestone. Question: when Phorge gains
+> Research deliverable for the Phorj mutation + GC milestone. Question: when Phorj gains
 > mutation, should a mutable value have **value semantics** (copy-on-write / place-based, like PHP
 > arrays and Rust structs) or **reference semantics** (shared-mutable aliasing, like PHP objects and
 > Java)? The crucial downstream consequence is which choice forces a **tracing GC** (cycles possible)
@@ -88,7 +88,7 @@ honors that commitment; reference semantics would *reverse* it.
    is a *researched, named discipline* with a soundness proof: in its pure form "references are
    second-class… variables can never share mutable state" → no aliasing → no cycles
    [Verified: arxiv 2106.12678, "Native Implementation of Mutable Value Semantics"; scattered-thoughts
-   summary]. Phorge's `Rc<immutable interior>` + copy-on-write at the write boundary IS the native
+   summary]. Phorj's `Rc<immutable interior>` + copy-on-write at the write boundary IS the native
    implementation strategy that paper describes [Verified: JOT 2022 "Implementation Strategies for
    Mutable Value Semantics" enumerates exactly the COW-via-uniqueness-check approach Swift uses with
    `isKnownUniquelyReferenced`, which maps 1:1 to Rust `Rc::make_mut` / `Rc::get_mut`].
@@ -104,12 +104,12 @@ honors that commitment; reference semantics would *reverse* it.
    [Inferred — from Invariant #1 + the documented `__destruct` removal rationale.]
 
 3. **It matches the half of PHP that already has value semantics, and PHP 8.5 supplies the object
-   transpile target.** PHP arrays are COW value types [Verified]. So Phorge `List`/`Map`/`Set`
+   transpile target.** PHP arrays are COW value types [Verified]. So Phorj `List`/`Map`/`Set`
    mutation transpiles **1:1** to PHP array mutation — byte-identical for free. For objects, PHP 8.5
    ships **`clone $o with ['field' => v]`** — a first-class functional-update construct that "respects
    all visibility rules and type constraints" [Verified: wiki.php.net/rfc/clone_with; PHP 8.5 stable].
-   So Phorge object "mutation" of immutable fields lowers to idiomatic, *modern* PHP, not a hand-rolled
-   wither-method emulation. The transpile contract (Phorge:PHP :: TS:JS) is satisfied *more* cleanly by
+   So Phorj object "mutation" of immutable fields lowers to idiomatic, *modern* PHP, not a hand-rolled
+   wither-method emulation. The transpile contract (Phorj:PHP :: TS:JS) is satisfied *more* cleanly by
    value semantics than the project's own prior "clone-with later" note assumed.
 
 4. **It composes with everything already shipped, additively.** Immutable-by-default + `mutable`
@@ -130,7 +130,7 @@ honors that commitment; reference semantics would *reverse* it.
 ## 4. The one honest tension — and why it still resolves to Model V
 
 PHP objects ARE reference types. A PHP developer's mental model of `$a = $b;` on an object is "they
-now share." Phorge giving objects *value* semantics is a **conceptual divergence from PHP** — and the
+now share." Phorj giving objects *value* semantics is a **conceptual divergence from PHP** — and the
 GA philosophy prizes familiarity-as-on-ramp.
 
 **Resolution (per the philosophy's own ordering — craftsmanship is apex, familiarity is the on-ramp,
@@ -164,7 +164,7 @@ property of the value).** [Speculative→Inferred, grounded in the Rust/Swift pr
   `List<T>`, generics — all already shipped).
 - Swift: `let` / `var` — same; the binding decides, `struct` types are uniformly value types.
   [Verified.]
-- Concretely for Phorge: `mutable` lives on `Stmt::VarDecl` (and later on a `mutable` ctor-param /
+- Concretely for Phorj: `mutable` lives on `Stmt::VarDecl` (and later on a `mutable` ctor-param /
   field modifier — note `ast::Modifier` already has the *slot* for this, currently
   `Public/Private/Protected/Const/Final`, `src/ast.rs:491-498`). The *type* annotation
   (`Type::Named`, etc.) is untouched — Invariant #9 (AST untyped, backends re-derive) stays intact, and
@@ -195,7 +195,7 @@ modifier. Default immutable; `mutable` opts a field into in-place write. [Inferr
     the callee gets a copy, mutates it, and the copy is written back at return. No alias survives the
     call → no cycle. This is the craftsmanship-correct way to offer "pass something to be modified"
     without reopening the heap. Transpiles to PHP `&$param` *only as a lowering detail* (PHP `&` is the
-    mechanical target for write-back), while Phorge-level semantics stay copy-in/copy-out.
+    mechanical target for write-back), while Phorj-level semantics stay copy-in/copy-out.
     [Inferred — semantics from Swift, lowering from PHP's by-ref param.]
   - Net: offer `inout` (Swift-shaped, value-safe) and keep `&` rejected. The capability "function
     modifies its argument" is preserved; the aliasing footgun is not.

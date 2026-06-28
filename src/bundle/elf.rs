@@ -66,17 +66,17 @@ mod tests {
     fn elf_reader_finds_added_section() {
         // Use the compiled test binary itself as a real ELF64 to objcopy into.
         let exe = std::env::current_exe().expect("current_exe");
-        let tmp = std::env::temp_dir().join("phorge_bundle_reader_test");
-        let payload = std::env::temp_dir().join("phorge_bundle_reader_payload");
+        let tmp = std::env::temp_dir().join("phorj_bundle_reader_test");
+        let payload = std::env::temp_dir().join("phorj_bundle_reader_payload");
         let src = b"import Core.Console; function main() -> void { Console.println(\"x\"); }";
         std::fs::write(&payload, encode_container(src)).unwrap();
-        let objcopy = std::env::var("PHORGE_OBJCOPY").unwrap_or_else(|_| "llvm-objcopy".into());
+        let objcopy = std::env::var("PHORJ_OBJCOPY").unwrap_or_else(|_| "llvm-objcopy".into());
         let status = std::process::Command::new(&objcopy)
             .args([
                 "--add-section",
-                &format!(".phorge={}", payload.display()),
+                &format!(".phorj={}", payload.display()),
                 "--set-section-flags",
-                ".phorge=noload,readonly",
+                ".phorj=noload,readonly",
             ])
             .arg(&exe)
             .arg(&tmp)

@@ -10,11 +10,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use phorge::cli;
-use phorge::loader;
-use phorge::lock::Lock;
-use phorge::manifest::Project;
-use phorge::vendor::vendor;
+use phorj::cli;
+use phorj::loader;
+use phorj::lock::Lock;
+use phorj::manifest::Project;
+use phorj::vendor::vendor;
 
 /// A unique temp dir, removed on drop.
 struct TempDir(PathBuf);
@@ -23,7 +23,7 @@ impl TempDir {
         static N: AtomicUsize = AtomicUsize::new(0);
         let unique = N.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!(
-            "phorge_vendor_it_{tag}_{}_{unique}",
+            "phorj_vendor_it_{tag}_{}_{unique}",
             std::process::id()
         ));
         std::fs::create_dir_all(&dir).unwrap();
@@ -48,7 +48,7 @@ impl Drop for TempDir {
 fn git(args: &[&str], cwd: &Path) -> String {
     let out = Command::new("git")
         // Config flags must precede the subcommand; keep commits deterministic and independent of
-        // the host's git config.  `core.hooksPath=/dev/null` prevents the Phorge pre-commit hook
+        // the host's git config.  `core.hooksPath=/dev/null` prevents the Phorj pre-commit hook
         // (which runs `cargo test` + `cargo fmt`) from triggering inside these temp-dir fixtures,
         // where there is no Cargo.toml — without this, commits inside a git worktree environment
         // inherit the parent repository's `core.hooksPath` and the hook fails.
@@ -56,7 +56,7 @@ fn git(args: &[&str], cwd: &Path) -> String {
         // parent worktree's git directory when run from inside a worktree pre-commit hook.
         .args([
             "-c",
-            "user.email=test@phorge",
+            "user.email=test@phorj",
             "-c",
             "user.name=test",
             "-c",
@@ -81,7 +81,7 @@ fn git(args: &[&str], cwd: &Path) -> String {
 /// Returns its path; the `file://` URL of it is the dependency's `git` coordinate.
 fn build_upstream(dir: &TempDir) {
     dir.write(
-        "phorge.toml",
+        "phorj.toml",
         "module = \"acme/greet\"\nversion = \"1.0.0\"\nsource = \"src\"\n",
     );
     dir.write(
@@ -95,7 +95,7 @@ fn build_upstream(dir: &TempDir) {
     git(&["tag", "v1.0.0"], p);
 }
 
-/// Vendoring a `file://` dependency populates `vendor/` + a correct `phorge.lock`, and the vendored
+/// Vendoring a `file://` dependency populates `vendor/` + a correct `phorj.lock`, and the vendored
 /// package then loads + runs byte-identically on both backends.
 #[test]
 fn vendor_fetches_and_loads_offline() {
@@ -106,13 +106,13 @@ fn vendor_fetches_and_loads_offline() {
     // A consumer project that requires the upstream library at its tag.
     let consumer = TempDir::new("consumer");
     consumer.write(
-        "phorge.toml",
+        "phorj.toml",
         &format!("module = \"acme/app\"\nsource = \"src\"\n\n[require]\n\"acme/greet\" = {{ git = \"{url}\", tag = \"v1.0.0\" }}\n"),
     );
     let entry = consumer.write(
         "src/main.phg",
         "package Main;\nimport Core.Console;\nimport Acme.Greet;\n\
-         function main() -> void { Console.println(Greet.hi(\"phorge\")); }\n",
+         function main() -> void { Console.println(Greet.hi(\"phorj\")); }\n",
     );
 
     // --- vendor (the network/git path, here over file://) ------------------
@@ -122,7 +122,7 @@ fn vendor_fetches_and_loads_offline() {
 
     // The lockfile pins the resolved SHA + a content hash.
     let lock_path = consumer.path().join(Lock::LOCK_FILE);
-    assert!(lock_path.is_file(), "phorge.lock written");
+    assert!(lock_path.is_file(), "phorj.lock written");
     let lock = Lock::parse(&std::fs::read_to_string(&lock_path).unwrap()).unwrap();
     assert_eq!(lock.packages.len(), 1);
     assert_eq!(lock.packages[0].name, "acme/greet");
@@ -143,7 +143,7 @@ fn vendor_fetches_and_loads_offline() {
     let unit = loader::load(&entry).expect("offline load");
     let run = cli::run_program(&unit);
     let runvm = cli::runvm_program(&unit);
-    assert_eq!(run.as_deref(), Ok("hi phorge\n"), "interpreter output");
+    assert_eq!(run.as_deref(), Ok("hi phorj\n"), "interpreter output");
     assert_eq!(run, runvm, "backends must be byte-identical");
 }
 
@@ -156,7 +156,7 @@ fn vendor_is_idempotent() {
 
     let consumer = TempDir::new("consumer2");
     consumer.write(
-        "phorge.toml",
+        "phorj.toml",
         &format!("module = \"acme/app\"\nsource = \"src\"\n\n[require]\n\"acme/greet\" = {{ git = \"{url}\", tag = \"v1.0.0\" }}\n"),
     );
     let project = Project::detect(consumer.path()).unwrap().expect("project");
@@ -174,7 +174,7 @@ fn vendor_is_idempotent() {
 fn missing_vendor_is_rejected() {
     let consumer = TempDir::new("consumer3");
     consumer.write(
-        "phorge.toml",
+        "phorj.toml",
         "module = \"acme/app\"\nsource = \"src\"\n\n[require]\n\"acme/greet\" = { git = \"file:///nonexistent\", tag = \"v1.0.0\" }\n",
     );
     let entry = consumer.write(

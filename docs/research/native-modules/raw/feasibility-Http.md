@@ -13,7 +13,7 @@ gated entirely on the TLS decision, not on engineering effort.
 - **Zero external crates is real and enforced.** `Cargo.toml` `[dependencies]` is empty; the crate
   roots are `#![forbid(unsafe_code)]`; `warnings = "deny"` + `clippy::all = "deny"` are *compile*
   gates. The only external crate in the workspace is `wasm-bindgen`, scoped to the `playground/`
-  member as a wasm32-only dep — the core `phorge` crate stays dependency-free. [Verified: read
+  member as a wasm32-only dep — the core `phorj` crate stays dependency-free. [Verified: read
   `Cargo.toml`.] → **Any TLS crate (`rustls`, `native-tls`, `openssl`) is off the table by policy,
   not just by preference.**
 
@@ -38,7 +38,7 @@ gated entirely on the TLS decision, not on engineering effort.
 
 - **The `pure: false` quarantine is automatic and derived, not hardcoded.** `tests/differential.rs`
   `uses_impure_native(src)` builds the impure-module set **from `NativeFn::pure == false`** via
-  `phorge::native::registry()`, then SKIPs any program that imports such a module from the
+  `phorj::native::registry()`, then SKIPs any program that imports such a module from the
   byte-identity oracle. [Verified: read `differential.rs:908–923`, `:1004`, `:1903`.] `Core.Process`
   / `Core.Env` are the shipped precedent (`src/native/process.rs`, `pure: false`, walkthrough under
   `examples/process/`, tested in `tests/process.rs` under a controlled environment). → **Marking a
@@ -46,7 +46,7 @@ gated entirely on the TLS decision, not on engineering effort.
   is the single most important reuse.
 
 - **The portable value unit already exists in M6's design.** `docs/specs/2026-06-18-m6-web-design.md`
-  locks **Shape A**: `Request`/`Response` as pure-Phorge classes, `parse_request(bytes) -> Request?`
+  locks **Shape A**: `Request`/`Response` as pure-Phorj classes, `parse_request(bytes) -> Request?`
   and `serialize_response(Response) -> bytes`, bodies are `bytes`, headers `List<string>` raw lines
   with a `req.header(name)` linear-scan accessor. M6 W1 is **COMPLETE** (per CLAUDE.md). → A client
   reuses these *same* value types: `Http.send(Request) -> Response` is the mirror of the server's
@@ -121,25 +121,25 @@ prefer the most portable:
     $ctx = stream_context_create(['http' => ['method' => 'GET', 'ignore_errors' => true]]);
     $body = @file_get_contents($url, false, $ctx);
     // $http_response_header is populated by the wrapper; status parsed from $http_response_header[0]
-    return __phorge_http_response($http_response_header ?? [], $body === false ? '' : $body);
+    return __phorj_http_response($http_response_header ?? [], $body === false ? '' : $body);
 })($url)
 ```
-backed by a **gated runtime helper** `__phorge_http_response($rawHeaders, $body)` (emitted via the
-`uses_http` bool + `emit_runtime_helpers` pattern) that builds the Phorge `Response` shape from the
+backed by a **gated runtime helper** `__phorj_http_response($rawHeaders, $body)` (emitted via the
+`uses_http` bool + `emit_runtime_helpers` pattern) that builds the Phorj `Response` shape from the
 wrapper's `$http_response_header` array — keeping the per-call PHP small and the parsing logic
 single-sourced. A `curl`-based variant can be a documented opt-in for environments where
 `allow_url_fopen` is disabled.
 
 **Note:** because the bodies are `bytes` (PHP `string`) and headers are `List<string>` raw lines,
-the Phorge `Response` maps to PHP cleanly with no mbstring dependency (byte-level only).
+the Phorj `Response` maps to PHP cleanly with no mbstring dependency (byte-level only).
 
 ---
 
-## 5. Phorge API sketch
+## 5. Phorj API sketch
 
 Reuse M6 W1's `Request`/`Response` verbatim. Add a `Core.Http` leaf:
 
-```phorge
+```phorj
 package Main;
 import Core.Console;
 import Core.Http;        // pure:false → program is quarantined from the oracle
@@ -220,7 +220,7 @@ the existing `Core.Process`/`Core.File` natives that return Optional/Instance-ad
 
 - **Engineering effort: medium** — a `src/http.rs` mirroring `src/serve.rs` (an `HttpTransport`
   trait + real `TcpStream` impl + in-memory fixture impl), 1–3 `Core.Http` natives in
-  `src/native/http.rs`, a gated `__phorge_http_response` helper, `tests/http.rs`, an
+  `src/native/http.rs`, a gated `__phorj_http_response` helper, `tests/http.rs`, an
   `examples/http/` walkthrough. No backend/Op surgery. The serve infrastructure cuts the cost
   roughly in half (the wire-level HTTP/1.1 read/write code can be shared).
 - **Hard dependency: M6 W1 `Request`/`Response`** (COMPLETE) and ideally M6 W3 `src/serve.rs`'s

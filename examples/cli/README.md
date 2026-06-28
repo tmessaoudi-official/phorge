@@ -1,4 +1,4 @@
-# The `phorge` CLI — source forms, inspection, and diagnostics
+# The `phorj` CLI — source forms, inspection, and diagnostics
 
 Beyond `run` / `runvm`, the CLI takes a program three ways, exposes the front-end stages, and ships a
 diagnostic dictionary. `demo.phg` is the program used below (and, like every example, it is in the
@@ -14,7 +14,7 @@ phg run -e 'package Main; import Core.Console; function main() { Console.println
 
 ```
 $ phg run demo.phg
-phorge CLI demo
+phorj CLI demo
 n doubled = 12
 ```
 
@@ -76,14 +76,14 @@ Look any code up in the dictionary with `explain`:
 $ phg explain E-UNKNOWN-IDENT
 E-UNKNOWN-IDENT — a name was used that is not in scope.
 
-Phorge resolves identifiers lexically: block-scope locals (including `var` bindings
+Phorj resolves identifiers lexically: block-scope locals (including `var` bindings
 and `for` loop variables), parameters, top-level functions, and — inside a method —
 the current class's fields. ...
 ```
 
 ## Faults never panic
 
-Phorge never panics on input — runtime faults are clean, one-line errors with exit code 1:
+Phorj never panics on input — runtime faults are clean, one-line errors with exit code 1:
 
 ```
 $ phg run   -e 'package Main; function main() { int a = 10; int b = 0; int x = a / b; }'

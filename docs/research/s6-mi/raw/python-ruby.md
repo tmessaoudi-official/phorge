@@ -1,6 +1,6 @@
-# Python C3 Linearization (MRO) & Ruby Mixins — research for Phorge S6 multiple inheritance
+# Python C3 Linearization (MRO) & Ruby Mixins — research for Phorj S6 multiple inheritance
 
-> Topic: the two leading dynamic-language linearization models, and whether Phorge can
+> Topic: the two leading dynamic-language linearization models, and whether Phorj can
 > reproduce them across its three byte-identical backends (interpreter / VM / PHP transpile,
 > target PHP 8.4: single-inheritance + traits, `insteadof`/`as` conflict resolution, **no MRO, no
 > linearization-aware `super`**).
@@ -208,17 +208,17 @@ ordered list and "next" has no referent. **This is the entire difficulty of lowe
 
 ---
 
-## 4. Synthesis for Phorge
+## 4. Synthesis for Phorj
 
-Phorge has an advantage the dynamic languages lack: a **fully static class graph** known at compile
+Phorj has an advantage the dynamic languages lack: a **fully static class graph** known at compile
 time. The whole linearization is computable ahead of time. The question is what to *do* with it, and
 the two sub-cases diverge sharply.
 
-### 4.1 Can Phorge compute C3 at compile time and flatten?
+### 4.1 Can Phorj compute C3 at compile time and flatten?
 
 **Yes for the order; the consequence depends on whether `super` is cooperative.**
 
-C3 is a pure function of the class graph — Phorge can run the identical merge in the checker over
+C3 is a pure function of the class graph — Phorj can run the identical merge in the checker over
 `ClassDecl` parents, reject inconsistent hierarchies with a clean diagnostic (the `K1/K2` case →
 `E-MRO-INCONSISTENT`), and store the resulting `Vec<ClassId>` linearization on each class. This is a
 front-end-only computation, **no new `Op`, no `Value` change** — exactly the discipline the project
@@ -238,14 +238,14 @@ method.
   body via the precomputed order; build a flat per-class method table. Dispatch is an ordinary table
   lookup — *no runtime MRO walk at all.* The two Rust backends consume the same table ⇒ byte-identical
   by construction.
-- **Transpiler → PHP:** trivial. Each Phorge class becomes a PHP class whose method set is the
+- **Transpiler → PHP:** trivial. Each Phorj class becomes a PHP class whose method set is the
   C3-resolved flat set (inline the bodies, or model each mixin as a PHP `trait` and let
-  `insteadof`/`as` encode the C3 winner — PHP's trait conflict resolution is *manual* but here Phorge
+  `insteadof`/`as` encode the C3 winner — PHP's trait conflict resolution is *manual* but here Phorj
   generates the resolution from the computed order, so it's deterministic). No forwarding methods, no
   `super` emulation. Shared-base "diamond" state is just fields merged into the one PHP class.
 - **`super`/`parent::`** keeps PHP's familiar single-parent meaning. No surprise for a PHP audience.
 
-This is the **Phorge-philosophy-aligned** choice: it removes the surprise (ambiguous MI) without
+This is the **Phorj-philosophy-aligned** choice: it removes the surprise (ambiguous MI) without
 adding a runtime mechanism PHP doesn't have, and it lowers to idiomatic PHP. **Verdict: adopt.**
 
 ### 4.3 Case (b): C3 + cooperative super — **POWERFUL BUT HARD TO LOWER; defer/avoid for the PHP target**
@@ -265,7 +265,7 @@ backends can do it cleanly — but PHP cannot, and the transpiler emulation is f
   `parent::m()` is the single declared parent, full stop. To emulate cooperative super you must
   **synthesize forwarding plumbing** per class, e.g.:
     - flatten each ancestor's method body into a uniquely-renamed PHP method
-      (`__phorge_mro_B_who`, `__phorge_mro_C_who`, …) on the final concrete class;
+      (`__phorj_mro_B_who`, `__phorj_mro_C_who`, …) on the final concrete class;
     - rewrite every `super.who()` inside those bodies into an explicit call to the *next* renamed
       method **for this specific concrete class's linearization** — i.e. the same source method gets a
       *different* forwarding target per concrete subclass it ends up in (because the MRO differs), so
@@ -276,7 +276,7 @@ backends can do it cleanly — but PHP cannot, and the transpiler emulation is f
 
   This is real codegen complexity with multiple fragility points: per-concrete-class body duplication
   (code-size blow-up), name-mangling collisions with PHP builtins (the project already hit
-  `serialize`→`serialize_response`), `private`/visibility mismatches (PHP enforces what the Phorge
+  `serialize`→`serialize_response`), `private`/visibility mismatches (PHP enforces what the Phorj
   backends don't — the project already logged this), and constructor-chain ordering for promoted
   fields. It is *buildable* but it is exactly the kind of "emit a runtime PHP doesn't have" that the
   project has consistently chosen to avoid, and every divergence is a `run`↔transpile byte-identity

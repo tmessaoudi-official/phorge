@@ -1,7 +1,7 @@
 package Main;
 import Core.Console;
 
-// A bank ledger. Phorge values are immutable, so `apply` returns a *new* Account
+// A bank ledger. Phorj values are immutable, so `apply` returns a *new* Account
 // rather than mutating in place — state evolves by binding fresh names.
 
 enum Tx {

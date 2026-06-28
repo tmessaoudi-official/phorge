@@ -2,7 +2,7 @@
 
 ## Track summary
 
-Phorge today ships a deliberately thin, std-only stdlib: `Core.Console` (`println` only),
+Phorj today ships a deliberately thin, std-only stdlib: `Core.Console` (`println` only),
 `Core.Math`, `Core.Text`, `Core.File` (`read`/`exists`/`write`), `Core.Bytes`, `Core.Html`,
 `Core.List`, `Core.Map`, `Core.Set`. The HTTP **server** value model (`handle(Request) -> Response`)
 is in flight under M6. Everything else a "real app" needs — an HTTP **client**, a database access
@@ -10,7 +10,7 @@ layer, env/config loading, structured logging, CLI argument parsing, richer file
 spawning, datetime, crypto/hashing, UUID, randomness, base64/hex, compression, and regular
 expressions — is **absent**. This is the largest open surface in the whole roadmap and the one most
 directly felt by anyone trying to write something more than a demo. Each candidate must map to
-idiomatic PHP and erase cleanly, and several break Phorge's two hard constraints: the
+idiomatic PHP and erase cleanly, and several break Phorj's two hard constraints: the
 **zero-dependency** core (no external crates) and the **byte-identity / determinism spine**
 (`run ≡ runvm ≡ real PHP`). Where they do, the M6 quarantine model is the precedent: keep the
 non-deterministic / impure surface out of `tests/differential.rs` and behind a Rust-side seam, and
@@ -100,10 +100,10 @@ exercised on the byte-identical spine. But it is high-leverage and PHP-idiomatic
 the quarantine in a dedicated batteries milestone. Pure parsing of a dotenv *string* can be
 spine-tested.
 
-**G-args — `Core.Args`.** Phorge has a strong CLI story (`phg build`, standalone executables) yet a
+**G-args — `Core.Args`.** Phorj has a strong CLI story (`phg build`, standalone executables) yet a
 *built program cannot read argv* (KNOWN_ISSUES: "built binaries ignore argv"). A typed CLI
 arg-parser (positional + flags, PHP's `getopt` is the floor; a typed builder is the craftsmanship
-upgrade) is what turns Phorge from "scripting toy" into "real CLI tool language." Argv is impure
+upgrade) is what turns Phorj from "scripting toy" into "real CLI tool language." Argv is impure
 (quarantine the *source* of args) but parsing a given `List<string>` is pure and spine-testable.
 This also unblocks the standalone-executable story end-to-end.
 
@@ -186,11 +186,11 @@ Newly-found gaps (the long tail the first pass missed — all map to tier-1 `php
 | G-url | `Core.Url` urlencode/decode + query-string + `parseUrl` | port | strong | adopt | M6+/M11 | M |
 | G-csv | `Core.Csv` parse/format rows | port | ok | adopt | new M-Batteries | M |
 
-**G-numfmt — string↔number conversion + numeric formatting.** The most glaring miss. Phorge ships
+**G-numfmt — string↔number conversion + numeric formatting.** The most glaring miss. Phorj ships
 **no** `string→int`/`string→float` parse and **no** `number_format`-style output — a PHP dev uses
 `intval`/`floatval`/`(int)`/`number_format`/`intdiv`/`%` constantly. All pure & deterministic;
 `parseInt` returns `int?` (clean failure on bad input, composes with S2 `??`). `intDiv`/`mod` map to
-PHP `intdiv`/`%` (and Phorge already has checked-arith kernels to reuse). This is table-stakes for any
+PHP `intdiv`/`%` (and Phorj already has checked-arith kernels to reuse). This is table-stakes for any
 program that reads numbers from text (args, files, JSON later). Strong adopt; arguably should precede
 the I/O batteries since it is pure and unblocks parsing argv/env/file content into numbers.
 

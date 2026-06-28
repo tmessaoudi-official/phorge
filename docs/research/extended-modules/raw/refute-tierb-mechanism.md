@@ -16,9 +16,9 @@ the design's recipe would walk straight into.
 ## R1 — [HIGH, VERIFIED] The project-aware oracle has NO impure skip. A multi-file impure walkthrough breaks the build.
 
 The design (§2 step 6, §3.2/§3.3/§3.1) prescribes shipping each impure feature with an
-`examples/<feature>/` *walkthrough*. The M5 convention for any non-trivial walkthrough is a **`phorge.toml`
+`examples/<feature>/` *walkthrough*. The M5 convention for any non-trivial walkthrough is a **`phorj.toml`
 project** — four already ship (`examples/project/{shapes,withdeps,tempconv,visibility}/`,
-verified by `find examples -name phorge.toml`).
+verified by `find examples -name phorj.toml`).
 
 The single-file glob test `all_examples_match_between_backends` DOES skip impure programs
 (`differential.rs:1004` → `if uses_impure_native(&src) { continue; }`). **But the project-aware test
@@ -26,7 +26,7 @@ The single-file glob test `all_examples_match_between_backends` DOES skip impure
 lines 1030–1057: it loads every project via `loader::load`, then asserts `run.is_ok()` AND `run == runvm`
 **unconditionally**. There is no `uses_impure_native` call anywhere in that function.
 
-Consequence: the moment any impure feature ships its walkthrough as a `phorge.toml` project (the natural
+Consequence: the moment any impure feature ships its walkthrough as a `phorj.toml` project (the natural
 M5 shape), it is gated `run == runvm` with no quarantine escape. Whether that gate passes depends entirely
 on R2.
 
@@ -38,7 +38,7 @@ audited. The "auto-quarantined with no harness edit" guarantee (§0, §2 step 1)
 file in the loaded `Unit`, skip if any imports an impure module — note the current fn only inspects a
 single `src` string, so it needs a project-aware variant), or (b) mandate impure walkthroughs be
 single-file flat examples under `examples/<feature>/foo.phg` (caught by the glob skip) and NEVER a
-`phorge.toml` project. `examples/process/` is currently flat (`args-env.phg`, verified) — so the precedent
+`phorj.toml` project. `examples/process/` is currently flat (`args-env.phg`, verified) — so the precedent
 the design leans on accidentally dodges this, which is *why the gap was never hit*. The design generalizes
 from a precedent that happens to sidestep the exact trap it would introduce.
 

@@ -2,7 +2,7 @@
 
 Scope: `src/parser/` — every place a modifier/keyword/annotation is PARSED then DROPPED, consumed-and-ignored,
 or accepted with no enforcement. Empirical verdicts use the prebuilt binary
-`BIN=/stack/projects/phorge/target/release/phg`; probes live under the scratchpad `audit/` dir (never committed).
+`BIN=/stack/projects/phorj/target/release/phg`; probes live under the scratchpad `audit/` dir (never committed).
 
 Severity: P0 (unsound — provably-wrong code through) · P1 (declared rule silently ignored) · P2 (missing
 diagnostic, not unsound) · P3 (cosmetic).

@@ -28,7 +28,7 @@ S1/S2's BCMath; nothing to load).
 - `Convert.toFloat(int) -> float` → `(float)$i`. Total. (i64→f64 round-to-nearest, identical both sides.)
 - `Convert.toInt(float) -> int?` → **null** on NaN / ±Inf / out-of-i64-range; else truncate toward zero.
   Rust: `if x.is_finite() && (i64::MIN as f64..=i64::MAX as f64).contains(&x.trunc()) { Some(x.trunc() as i64) } else { None }`.
-  PHP helper `__phorge_float_to_int`: `is_finite($f) && $f >= -9.2233720368547758E18 && $f < 9.2233720368547758E18 ? (int)$f : null`
+  PHP helper `__phorj_float_to_int`: `is_finite($f) && $f >= -9.2233720368547758E18 && $f < 9.2233720368547758E18 ? (int)$f : null`
   (the upper bound is exclusive because i64::MAX isn't exactly representable as f64 — pick the bound that
   makes Rust and PHP agree; gate it with a probe value near the edge). **Avoids** PHP `(int)NAN`=0+warning.
 - `Convert.intToDecimal(int) -> decimal` → the decimal `{unscaled: i, scale: 0}`; PHP `(string)$i` (decimal carrier).
@@ -42,7 +42,7 @@ S1/S2's BCMath; nothing to load).
   prefer a pure string-split of the integer part (before `.`) + `intval` with range check to avoid bcmath here.
 
 ## Documentation task (N-int-width)
-Document that Phorge `int` is a **64-bit signed integer** (i64), pinned (not PHP's platform-width `int`):
+Document that Phorj `int` is a **64-bit signed integer** (i64), pinned (not PHP's platform-width `int`):
 add to `FEATURES.md`/`docs/INVARIANTS.md` (whichever holds the type model) + a `KNOWN_ISSUES` note that
 `int` arithmetic overflow is a checked fault (already true). One-paragraph doc, no code.
 

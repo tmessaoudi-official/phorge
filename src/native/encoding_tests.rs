@@ -14,7 +14,7 @@ fn base64_encode_matches_php() {
     // Pinned to real `php -n` output (base64_encode).
     assert!(matches!(enc(base64_encode_native, bytes("hi")), Value::Str(s) if s == "aGk="));
     assert!(
-        matches!(enc(base64_encode_native, bytes("Hello, Phorge!")), Value::Str(s) if s == "SGVsbG8sIFBob3JnZSE=")
+        matches!(enc(base64_encode_native, bytes("Hello, Phorj!")), Value::Str(s) if s == "SGVsbG8sIFBob3JqIQ==")
     );
     assert!(matches!(enc(base64_encode_native, bytes("")), Value::Str(s) if s.is_empty()));
     // padding variants: 1 and 2 leftover bytes.
@@ -26,9 +26,7 @@ fn base64_encode_matches_php() {
 fn hex_encode_matches_php() {
     // Pinned to real `php -n` output (bin2hex) — lowercase.
     assert!(matches!(enc(hex_encode_native, bytes("hi")), Value::Str(s) if s == "6869"));
-    assert!(
-        matches!(enc(hex_encode_native, bytes("Phorge")), Value::Str(s) if s == "50686f726765")
-    );
+    assert!(matches!(enc(hex_encode_native, bytes("Phorj")), Value::Str(s) if s == "50686f726a"));
     assert!(matches!(enc(hex_encode_native, bytes("")), Value::Str(s) if s.is_empty()));
 }
 
@@ -53,7 +51,7 @@ fn base64_roundtrip() {
 
 #[test]
 fn hex_roundtrip() {
-    let raw = b"\x00\x01\xfePhorge".to_vec();
+    let raw = b"\x00\x01\xfePhorj".to_vec();
     let Value::Str(hex) = enc(hex_encode_native, Value::Bytes(Rc::new(raw.clone()))) else {
         panic!("encode");
     };

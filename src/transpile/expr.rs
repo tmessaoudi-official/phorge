@@ -31,7 +31,7 @@ impl Transpiler {
                 let l = self.emit_expr(lhs)?;
                 let r = self.emit_expr(rhs)?;
                 let bs = if self.namespaced { "\\" } else { "" };
-                // Decimal `+ - *` (M-NUM S1): route to the BCMath `__phorge_dec_*` helpers, which
+                // Decimal `+ - *` (M-NUM S1): route to the BCMath `__phorj_dec_*` helpers, which
                 // derive each operand's scale at PHP-runtime, compute the result scale (add/sub = max,
                 // mul = sum), call `bcadd`/`bcsub`/`bcmul`, then bounds-check the result against i128
                 // range and `throw` the same `decimal overflow` fault as the Rust kernels. A mixed
@@ -58,34 +58,34 @@ impl Transpiler {
                         let helper = match op {
                             BinaryOp::Add => {
                                 self.uses_dec_add = true;
-                                "__phorge_dec_add"
+                                "__phorj_dec_add"
                             }
                             BinaryOp::Sub => {
                                 self.uses_dec_sub = true;
-                                "__phorge_dec_sub"
+                                "__phorj_dec_sub"
                             }
                             BinaryOp::Mul => {
                                 self.uses_dec_mul = true;
-                                "__phorge_dec_mul"
+                                "__phorj_dec_mul"
                             }
                             // Exact decimal `%` (2026-06-27): `bcmod` at `max(scales)`, zero divisor
                             // throws (matching the Rust `decimal_rem` fault).
                             BinaryOp::Rem => {
                                 self.uses_dec_rem = true;
-                                "__phorge_dec_rem"
+                                "__phorj_dec_rem"
                             }
                             // Exact-or-fault decimal `/` (2026-06-27): bcdiv + exactness check + strip
                             // to minimal form; non-terminating or zero divisor throws.
                             BinaryOp::Div => {
                                 self.uses_dec_div_exact = true;
-                                "__phorge_dec_div_exact"
+                                "__phorj_dec_div_exact"
                             }
                             _ => unreachable!("matched Add/Sub/Mul/Rem/Div above"),
                         };
                         return Ok(format!("{bs}{helper}({ls}, {rs})"));
                     }
                 }
-                // T6: `/`, `%`, `+` are type-driven in Phorge (PHP's `/` is always float, `%` always
+                // T6: `/`, `%`, `+` are type-driven in Phorj (PHP's `/` is always float, `%` always
                 // integer, `+` numeric-only with `.` for concat). When the operand kind is statically
                 // known (`expr_kind`), emit the native PHP operator directly; otherwise fall back to
                 // the runtime helper that branches at PHP-runtime (the checker guarantees both
@@ -101,7 +101,7 @@ impl Transpiler {
                         }
                         _ => {
                             self.uses_div = true;
-                            format!("{bs}__phorge_div({l}, {r})")
+                            format!("{bs}__phorj_div({l}, {r})")
                         }
                     });
                 }
@@ -111,16 +111,16 @@ impl Transpiler {
                             let (l, r) = (Self::paren_if_compound(lhs, l), Self::paren_if_compound(rhs, r));
                             format!("{l} % {r}")
                         }
-                        // Float `%` routes through `__phorge_rem` (not a bare `fmod`) so a zero divisor
-                        // *throws* — PHP `fmod($x, 0.0)` returns `NAN`, but Phorge faults on any
+                        // Float `%` routes through `__phorj_rem` (not a bare `fmod`) so a zero divisor
+                        // *throws* — PHP `fmod($x, 0.0)` returns `NAN`, but Phorj faults on any
                         // division by zero, so the helper guards `$b == 0` before the `fmod`.
                         OpKind::Float => {
                             self.uses_rem = true;
-                            format!("{bs}__phorge_rem({l}, {r})")
+                            format!("{bs}__phorj_rem({l}, {r})")
                         }
                         _ => {
                             self.uses_rem = true;
-                            format!("{bs}__phorge_rem({l}, {r})")
+                            format!("{bs}__phorj_rem({l}, {r})")
                         }
                     });
                 }
@@ -143,7 +143,7 @@ impl Transpiler {
                         }
                         None => {
                             self.uses_add = true;
-                            format!("{bs}__phorge_add({l}, {r})")
+                            format!("{bs}__phorj_add({l}, {r})")
                         }
                     });
                 }
@@ -197,7 +197,7 @@ impl Transpiler {
                 let parts: Result<Vec<_>, _> = items.iter().map(|i| self.emit_expr(i)).collect();
                 Ok(format!("[{}]", parts?.join(", ")))
             }
-            // A map literal → a PHP `[k => v, …]` array (insertion-ordered, like Phorge), M-RT S3.
+            // A map literal → a PHP `[k => v, …]` array (insertion-ordered, like Phorj), M-RT S3.
             Expr::Map(pairs, _) => {
                 let mut parts = Vec::with_capacity(pairs.len());
                 for (k, v) in pairs {
@@ -234,8 +234,8 @@ impl Transpiler {
             }
             // `inner!` → PHP 8.0's null-coalescing throw expression: `($v ?? throw new …)`. `??`
             // evaluates the receiver once and throws iff it is null — exactly the old
-            // `__phorge_unwrap` helper, now inline with no runtime function (M3 S2.5). The null-fault
-            // message differs from the Phorge backends' (no name/line) — a documented transpile-only
+            // `__phorj_unwrap` helper, now inline with no runtime function (M3 S2.5). The null-fault
+            // message differs from the Phorj backends' (no name/line) — a documented transpile-only
             // divergence (KNOWN_ISSUES); the present-value case is exact. `\RuntimeException` is
             // already fully qualified, so this is identical in flat and namespaced mode.
             Expr::Force { inner, .. } => {
@@ -255,7 +255,7 @@ impl Transpiler {
             // is `clone($obj)` (valid since PHP 5). A non-empty list emits PHP 8.5's native two-arg
             // `clone($o, ['f' => e, …])` (the transpile floor is 8.5): it clones, applies the property
             // overrides, bypasses the constructor and honors `__clone` — exactly the backends'
-            // shallow clone-then-override. (Pre-8.5 this needed the `__phorge_clone_with` helper.)
+            // shallow clone-then-override. (Pre-8.5 this needed the `__phorj_clone_with` helper.)
             Expr::CloneWith { object, fields, .. } => {
                 let o = self.emit_expr(object)?;
                 if fields.is_empty() {
@@ -271,7 +271,7 @@ impl Transpiler {
             // Expression-position `match` (M11): wrap the SAME if-chain `emit_match` produces in
             // statement position inside an immediately-invoked closure, so both positions share one
             // lowering and cannot diverge. Over-capture every enclosing local by value via `use(…)`
-            // — Phorge values are immutable, so by-value capture is exact; pattern-bound payload vars
+            // — Phorj values are immutable, so by-value capture is exact; pattern-bound payload vars
             // are declared *inside* the closure and so are intentionally excluded. A regular closure
             // auto-binds `$this`, so a match inside a method keeps working.
             Expr::Match {
@@ -308,7 +308,7 @@ impl Transpiler {
                 chain?;
                 Ok(format!("(function(){use_clause} {{\n{body}}})()"))
             }
-            // `__phorge_range` reproduces Phorge's range semantics under PHP: an empty/reversed range
+            // `__phorj_range` reproduces Phorj's range semantics under PHP: an empty/reversed range
             // (`start > hi`) yields `[]`, where PHP's bare `range()` would *descend* (QW-13 — formerly
             // a transpile-only divergence). The `run`/`runvm` backends were always byte-identical.
             Expr::Range {
@@ -322,7 +322,7 @@ impl Transpiler {
                 self.uses_range = true;
                 let bs = if self.namespaced { "\\" } else { "" };
                 Ok(format!(
-                    "{bs}__phorge_range({s}, {e}, {})",
+                    "{bs}__phorj_range({s}, {e}, {})",
                     if *inclusive { "true" } else { "false" }
                 ))
             }
@@ -498,7 +498,7 @@ impl Transpiler {
 
     /// Coerce a non-embeddable interpolation hole to a string for concatenation — the pre-B-1
     /// type-directed path: `string` as-is · `int` → `(string)` · `bool` → ternary · `float` →
-    /// `__phorge_float` (Ryū, irreducible) · class/list/map/unknown → the `__phorge_str` dispatch.
+    /// `__phorj_float` (Ryū, irreducible) · class/list/map/unknown → the `__phorj_str` dispatch.
     fn coerce_hole_concat(&mut self, e: &Expr, code: String) -> String {
         let bs = if self.namespaced { "\\" } else { "" };
         match self.expr_kind(e) {
@@ -512,11 +512,11 @@ impl Transpiler {
             ),
             OpKind::Float => {
                 self.uses_float = true;
-                format!("{bs}__phorge_float({code})")
+                format!("{bs}__phorj_float({code})")
             }
             OpKind::Class(_) | OpKind::List(_) | OpKind::Map(..) | OpKind::Other => {
                 self.uses_str = true;
-                format!("{bs}__phorge_str({code})")
+                format!("{bs}__phorj_str({code})")
             }
         }
     }
@@ -537,7 +537,7 @@ impl Transpiler {
     /// A PHP "primary" expression: emits self-contained, so it never needs wrapping parens when used
     /// as an operand. Compound expressions (`Binary`/`Unary`/`If`/`Match`/`Lambda`) are NOT primary
     /// and get parenthesized by `paren_if_compound` (P0-2). `Force`/`Range`/`Call`/`Member`/`Index`
-    /// emit as `__phorge_unwrap(…)` / `__phorge_range(…)` / `f(…)` / `$o->x` / `$o[$i]` — all primary.
+    /// emit as `__phorj_unwrap(…)` / `__phorj_range(…)` / `f(…)` / `$o->x` / `$o[$i]` — all primary.
     pub(super) fn is_primary(e: &Expr) -> bool {
         matches!(
             e,
@@ -577,14 +577,14 @@ impl Transpiler {
             Mul => "*",
             // `**` power: PHP's native `**` is also right-associative and binds tighter than unary
             // minus, but the caller parenthesizes compound operands (`paren_if_compound`), so the
-            // emitted `(a) ** (b)` preserves Phorge's grouping exactly. PHP `**` returns `int` for
-            // int operands / `float` for floats — matching the type-directed Phorge result.
+            // emitted `(a) ** (b)` preserves Phorj's grouping exactly. PHP `**` returns `int` for
+            // int operands / `float` for floats — matching the type-directed Phorj result.
             Pow => "**",
-            // `+`, `/`, `%` are routed through `__phorge_add`/`__phorge_div`/`__phorge_rem` before
+            // `+`, `/`, `%` are routed through `__phorj_add`/`__phorj_div`/`__phorj_rem` before
             // binop() (`+` is string-concat-overloaded, P0-1/P0-4 for the others).
-            Add => unreachable!("Add handled via __phorge_add before binop()"),
-            Div => unreachable!("Div handled via __phorge_div before binop()"),
-            Rem => unreachable!("Rem handled via __phorge_rem before binop()"),
+            Add => unreachable!("Add handled via __phorj_add before binop()"),
+            Div => unreachable!("Div handled via __phorj_div before binop()"),
+            Rem => unreachable!("Rem handled via __phorj_rem before binop()"),
             Eq => "==",
             NotEq => "!=",
             Lt => "<",

@@ -3,7 +3,7 @@
 ## Decisions Log
 - [2026-06-27] AGREED: build all three, in order **Entry-point (B+C) → Native stdlib wave → Bidirectional lift (L5+L6)** (developer: "all of them", chose recommended order). Rationale: foundation → breadth → capstone; lift last covers the widest stable surface (least rework).
 - [2026-06-27] AGREED: pace = fully autonomous (autonomous-3c sentinels armed, per-session + per-project). Commit green byte-identical slices; never push.
-- [2026-06-27] AGREED: **Core.Http API = Option 1 (static methods on injected types).** Inject `Request`/`Response` as types (used bare, like `Json`) with static/instance methods — `Request.parse(raw) -> Request?`, `resp.serialize() -> bytes`, `Response.text(status, body)` — pure Phorge ⇒ byte-identical for free; namespace-clean (no free-floating functions, honors "nothing in the wind"). `phg serve` keeps its `respond(bytes)->bytes` entry; Core.Http injects a `respond` bridge that wraps the user's `handle`. Rationale: developer pick.
+- [2026-06-27] AGREED: **Core.Http API = Option 1 (static methods on injected types).** Inject `Request`/`Response` as types (used bare, like `Json`) with static/instance methods — `Request.parse(raw) -> Request?`, `resp.serialize() -> bytes`, `Response.text(status, body)` — pure Phorj ⇒ byte-identical for free; namespace-clean (no free-floating functions, honors "nothing in the wind"). `phg serve` keeps its `respond(bytes)->bytes` entry; Core.Http injects a `respond` bridge that wraps the user's `handle`. Rationale: developer pick.
 - [2026-06-27] AGREED (**Batch-1 D — class entry points**): developer chose **both forms allowed** (over my "top-level only" recommendation — I challenged it as a Java-ism solving a non-problem; developer overruled, wants the flexibility). A program entry (`main` AND `handle`) may be EITHER a top-level free function OR a `static` method on a class (`class App { static function main(...) }`). The `List<string> args` param stays **optional** (0-or-1, both forms) — `main(): void` still valid, NO breaking migration. Ambiguity (a top-level entry AND a class-static one, or 2+ class-static ones) → new error **E-MULTIPLE-MAIN** (never silent). Transpile: class-static entry → `\Main\App::main(...)` bootstrap. Sequence: (A) class-static `main` → (B) Core.Http (Option 1) with top-level `handle` → (C) class-static `handle` wiring.
 
 ## Stage 1 — Entry-point story
@@ -51,7 +51,7 @@ Pattern: `src/native/<m>.rs` (`Vec<NativeFn>` + `php:` emission) + register in `
 a PHP **core** fn under `php -n` (no mbstring; hash/base64/bin2hex/pcre are core).
 
 ## Stage 3 — Bidirectional lift (L5 + L6)
-L5 round-trip semantic gate (PHP→Phorge→PHP via oracle) + L6 `phg lift <file.php>` CLI.
+L5 round-trip semantic gate (PHP→Phorj→PHP via oracle) + L6 `phg lift <file.php>` CLI.
 
 ## Status
 **Stage 1 DONE** (`b710c6e` Batch-1 B, `6f0a939` Batch-1 C). **Stage 2 5/6 done**: Encoding `31745c3`,
@@ -89,7 +89,7 @@ Autonomous; commit green, no push.
 4. Gated `examples/guide/<m>.phg` + a row in `examples/README.md`. Tier-A only if byte-identical to a
    PHP **core** fn under `php -n` (hash/base64/bin2hex/pcre are core; mbstring is NOT — see
    [[transpile-no-ini-extensions]]). Quarantine impure modules (import-based, like `Core.Process`).
-5. Gate: `PHORGE_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php PHORGE_REQUIRE_PHP=1 cargo test
+5. Gate: `PHORJ_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php PHORJ_REQUIRE_PHP=1 cargo test
    --workspace` + `cargo clippy --all-targets -- -D warnings` + `cargo fmt --all --check`. Commit green.
 
 ### Batch-1 B notes (for reuse)

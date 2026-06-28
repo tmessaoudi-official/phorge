@@ -6,7 +6,7 @@
 //! (plus seed reproducibility and bounds) is what this dedicated suite checks. The PHP leg is *not*
 //! checked here: the transpiled code uses PHP's `mt_rand`, whose sequence intentionally differs.
 
-use phorge::cli::{cmd_run, cmd_runvm};
+use phorj::cli::{cmd_run, cmd_runvm};
 use std::sync::Mutex;
 
 /// `RANDOM_STATE` is a process global, so these tests must not interleave their seed/advance calls

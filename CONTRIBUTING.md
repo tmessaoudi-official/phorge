@@ -1,17 +1,17 @@
-# Contributing to Phorge
+# Contributing to Phorj
 
-Thanks for your interest in Phorge! This guide covers how to set up, the quality bar every change
+Thanks for your interest in Phorj! This guide covers how to set up, the quality bar every change
 must clear, and the correctness invariants that keep the project sound. By participating you agree to
 the [Code of Conduct](CODE_OF_CONDUCT.md).
 
-Phorge is pre-1.0 and developed by a single maintainer; the surface is still moving. Before investing
+Phorj is pre-1.0 and developed by a single maintainer; the surface is still moving. Before investing
 in a large change, please open an issue to discuss it first (see [SUPPORT.md](SUPPORT.md)).
 
 ## Development setup
 
 ```sh
-git clone https://github.com/tmessaoudi-official/phorge
-cd phorge
+git clone https://github.com/tmessaoudi-official/phorj
+cd phorj
 cargo build              # std-only — no dependencies to fetch
 cargo test               # run the full suite
 ```
@@ -30,7 +30,7 @@ cargo fmt --check            # formatting matches rustfmt
 
 A pre-commit hook (`scripts/git-hooks/pre-commit`) enforces this locally. GitHub Actions runs the
 same gate on every push and PR (`.github/workflows/ci.yml`), additionally setting
-`PHORGE_REQUIRE_PHP=1` so the PHP oracle in `tests/differential.rs` *fails* — never silently
+`PHORJ_REQUIRE_PHP=1` so the PHP oracle in `tests/differential.rs` *fails* — never silently
 skips — if transpiled PHP diverges from the interpreter/VM. A second CI job exercises
 `phg build --target` cross-compilation parity. A change is not done until all three checks are
 clean. There is no `unsafe` in this crate — `#![forbid(unsafe_code)]` is set crate-wide and must stay.

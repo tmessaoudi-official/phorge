@@ -1,7 +1,7 @@
-# Phorge M3 — Language Enrichment Roadmap & Design Decisions
+# Phorj M3 — Language Enrichment Roadmap & Design Decisions
 
 > Brainstorm output, 2026-06-17. Principle: **fix PHP's real pains; adopt the best of modern
-> languages; keep Phorge's wins.** Captures the reject-spine, PHP 8.x verdicts, cross-language
+> languages; keep Phorj's wins.** Captures the reject-spine, PHP 8.x verdicts, cross-language
 > high-ROI additions, the ROI-ordered slice roadmap, and locked decisions. Each slice ships as its
 > own implementation spec + plan, byte-identical on both backends. Living doc — extend as ideas land.
 > Refines the M3 section of `ROADMAP.md`. **Draft — under review.**
@@ -10,21 +10,21 @@
 
 **ROI = (PHP / developer pain addressed) × (ease).** "Ease" is real: every language feature touches
 `lexer → parser → checker → interpreter → VM → transpiler` + the differential harness, and an
-`Op`-coupled feature hits three exhaustive matches (`vm.rs`, `chunk.rs`, `compiler.rs`). Keep Phorge's
+`Op`-coupled feature hits three exhaustive matches (`vm.rs`, `chunk.rs`, `compiler.rs`). Keep Phorj's
 existing wins: static types, immutable-by-default, checked arithmetic, two byte-identical backends,
 std-only, `#![forbid(unsafe_code)]`. Reject anything that reintroduces a PHP footgun.
 
-**The transpile contract (D-L9).** Phorge is to PHP what **TypeScript is to JavaScript**: a
+**The transpile contract (D-L9).** Phorj is to PHP what **TypeScript is to JavaScript**: a
 statically-typed *superset* that transpiles to **idiomatic PHP**. Every feature maps onto a PHP
 mechanism (traits, enums, `match`, nullable, attributes, closures); the few things PHP lacks
 (generics) are **compile-time-only and erased** in the output (optionally emitting PHPStan
 `@template` docblocks). Prior art: **Hack** (Meta) did exactly this — but required its own VM (HHVM)
-and drifted off PHP until it broke compatibility and faded. Phorge's deliberate edge is the bridge
+and drifted off PHP until it broke compatibility and faded. Phorj's deliberate edge is the bridge
 Hack burned: **transpile *to* PHP, require no custom VM, stay runnable as plain PHP forever.**
 
-## 2. Reject spine — PHP misfeatures Phorge will NOT copy
+## 2. Reject spine — PHP misfeatures Phorj will NOT copy
 
-| PHP misfeature | Phorge's better way |
+| PHP misfeature | Phorj's better way |
 |---|---|
 | `==` type-juggling; `strict_types` *opt-in* | always-strict static types, zero coercion — ✅ already |
 | `array` = list+map+stack+everything | typed `List`/`Map`/`Set`/tuples (S4) |
@@ -36,7 +36,7 @@ Hack burned: **transpile *to* PHP, require no custom VM, stay runnable as plain 
 | `&` references, by-ref `foreach` | immutable-by-default — ✅ already |
 | superglobals, `global`, `goto`, `$$var`, variable-variables | none — explicit scope |
 
-## 3. Phorge already beats PHP
+## 3. Phorj already beats PHP
 
 Static types (no `==` juggling) · immutable-by-default (no reference bugs) · checked arithmetic (no
 silent int→float overflow) · exhaustive enum `match` (vs value-only `switch`) · constructor promotion ·
@@ -44,7 +44,7 @@ two byte-identical backends. This is a strong base — these are *closed*.
 
 ## 4. PHP 8.x inventory → verdict (condensed, version-annotated)
 
-| PHP feature (version) | Verdict for Phorge | Slice |
+| PHP feature (version) | Verdict for Phorj | Slice |
 |---|---|---|
 | `match` expression (8.0) | ✅ have (over enums); extend to expression `if` too | S1 |
 | named args + trailing commas (8.0) | adopt (ergonomics) | S1/later |
@@ -66,7 +66,7 @@ two byte-identical backends. This is a strong base — these are *closed*.
 
 ## 5. Cross-language high-ROI additions
 
-| Feature | Origin | What it buys Phorge | Slice |
+| Feature | Origin | What it buys Phorj | Slice |
 |---|---|---|---|
 | Data classes / records (auto equality, `copy`, display) | Kotlin, C#, Scala | kills getter/setter/`equals` boilerplate | S5 |
 | Extension functions | Kotlin, C# | add methods to any type without subclassing | S7 |
@@ -91,13 +91,13 @@ two byte-identical backends. This is a strong base — these are *closed*.
 | **S5 — OOP done right** | interfaces + traits/mixins, records, sealed, static, visibility, enum methods | high |
 | **S6 — error handling** | `Result`/`Option` + `?` propagation, must-use returns | med |
 | **S7 — stdlib + imports** | consistent `std.string/list/map/math`, single-item import, extension fns, more examples | med |
-| **DX milestone** | REPL (`phorge repl`), `phorge fmt`, LSP | — (REPL could jump after S0) |
+| **DX milestone** | REPL (`phorj repl`), `phorj fmt`, LSP | — (REPL could jump after S0) |
 
 ## 7. Locked decisions
 
 - **D-L1 — null model = Option 3.** Non-null by default; `T?` ≡ `Option<T>`; ergonomics `??`, `?.`,
   `if (var x = opt)` binding, exhaustive `match { Some/None }`, and a **checked** force-unwrap `opt!`
-  (clean runtime error on `None`, never UB — Phorge has none). Guardrails: `!` stays loud + greppable,
+  (clean runtime error on `None`, never UB — Phorj has none). Guardrails: `!` stays loud + greppable,
   a lint nudges `!` → `??`/`if`/`match`, and every `!` failure names the binding + line. The
   force-unwrap is the deliberate escape hatch, *not* the happy path.
 - **D-L2 — no raw `any`/`mixed`.** Generics + optionals + checked unions cover the need without the
@@ -114,7 +114,7 @@ two byte-identical backends. This is a strong base — these are *closed*.
   stay immutable.
 - **D-L7 — records / data classes** with auto structural equality + display + `clone with` — S5.
 - **D-L8 — indexing/range out-of-bounds = clean runtime error**, never PHP's silent null + warning.
-- **D-L9 — the transpile contract: Phorge : PHP :: TypeScript : JavaScript** (see §1). Every feature
+- **D-L9 — the transpile contract: Phorj : PHP :: TypeScript : JavaScript** (see §1). Every feature
   transpiles to idiomatic PHP; PHP-absent features (generics) are erased. No custom VM required — the
   edge Hack lacked. This is now a *hard* design filter: a feature ships only with its PHP-mapping
   defined.

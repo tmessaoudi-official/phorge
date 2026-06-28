@@ -1,6 +1,6 @@
-# Phorge M2 — Bytecode Compiler + Stack VM + Mark-Sweep GC — Design
+# Phorj M2 — Bytecode Compiler + Stack VM + Mark-Sweep GC — Design
 
-> Milestone M2 of the roadmap (`2026-06-15-phorge-language-design.md` §5, decision #24):
+> Milestone M2 of the roadmap (`2026-06-15-phorj-language-design.md` §5, decision #24):
 > the "rival Java" phase — `AST → bytecode → stack VM → GC`. This document is the frozen
 > design for M2; the implementation plan lives in `docs/plans/`.
 
@@ -46,7 +46,7 @@ source → lex → parse → check        (existing M1 front-end, unchanged)
 The compiler is a dedicated pass over the **type-checked** AST (decoupled; relies on the
 checker's guarantees but is *not* handed an annotated/typed AST — the checker validates without
 attaching types, so the compiler re-derives the little it needs via `num_ty`/`CTy`) — **not** a
-clox-style fused parse+compile, because Phorge already
+clox-style fused parse+compile, because Phorj already
 has a separate parser/AST.
 
 ## 4. Bytecode format

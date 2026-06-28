@@ -1,9 +1,9 @@
-//! Project manifest (`phorge.toml`) — Composer's *vocabulary* in a TOML container.
+//! Project manifest (`phorj.toml`) — Composer's *vocabulary* in a TOML container.
 //!
 //! The manifest speaks the words a PHP/Composer developer reads natively —
 //! `module = "vendor/package"`, `[require]` / `[require-dev]` — but it is an honest
-//! `phorge.toml` that the `phorge` tool actually runs (a literal `composer.json` would
-//! be a false promise: no Packagist, no autoloader Phorge uses). The distributable is
+//! `phorj.toml` that the `phorj` tool actually runs (a literal `composer.json` would
+//! be a false promise: no Packagist, no autoloader Phorj uses). The distributable is
 //! keyed `module` (not `name`): the *keyword* `package` names the code unit (folder=path,
 //! `Main` entry) while `module` names the distributable, mirroring Go's `go.mod` split and
 //! removing the `package`-keyword vs `name = "vendor/package"` overload (reshape D1). Each
@@ -44,7 +44,7 @@ pub struct Dependency {
     pub pin: Pin,
 }
 
-/// A parsed `phorge.toml`.
+/// A parsed `phorj.toml`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Manifest {
     /// `vendor/package` distributable identity (the `module` key); doubles as the emitted
@@ -63,11 +63,11 @@ pub struct Manifest {
 
 impl Manifest {
     /// The manifest filename walked-up for during project detection.
-    pub const MANIFEST_FILE: &'static str = "phorge.toml";
+    pub const MANIFEST_FILE: &'static str = "phorj.toml";
     /// Source root used when the manifest omits `source`.
     pub const DEFAULT_SOURCE: &'static str = "src";
 
-    /// Parse a `phorge.toml` from its text. Returns a human-readable, line-numbered
+    /// Parse a `phorj.toml` from its text. Returns a human-readable, line-numbered
     /// error on any malformed or unsupported construct.
     pub fn parse(text: &str) -> Result<Manifest, String> {
         let mut module: Option<String> = None;
@@ -96,7 +96,7 @@ impl Manifest {
                     "require-dev" => Sec::RequireDev,
                     other => {
                         return Err(format!(
-                            "phorge.toml:{lineno}: unknown section `[{other}]` \
+                            "phorj.toml:{lineno}: unknown section `[{other}]` \
                              (expected [package], [require], or [require-dev])"
                         ));
                     }
@@ -104,7 +104,7 @@ impl Manifest {
                 continue;
             }
             let (k, v) = line.split_once('=').ok_or_else(|| {
-                format!("phorge.toml:{lineno}: expected `key = value`, found `{line}`")
+                format!("phorj.toml:{lineno}: expected `key = value`, found `{line}`")
             })?;
             let key = unquote_key(k);
             let val = v.trim();
@@ -112,42 +112,42 @@ impl Manifest {
                 Sec::Meta => match key.as_str() {
                     "module" => {
                         module = Some(
-                            parse_string(val).map_err(|e| format!("phorge.toml:{lineno}: {e}"))?,
+                            parse_string(val).map_err(|e| format!("phorj.toml:{lineno}: {e}"))?,
                         );
                     }
                     "version" => {
                         version =
-                            parse_string(val).map_err(|e| format!("phorge.toml:{lineno}: {e}"))?;
+                            parse_string(val).map_err(|e| format!("phorj.toml:{lineno}: {e}"))?;
                     }
                     "source" => {
                         source = Some(
-                            parse_string(val).map_err(|e| format!("phorge.toml:{lineno}: {e}"))?,
+                            parse_string(val).map_err(|e| format!("phorj.toml:{lineno}: {e}"))?,
                         );
                     }
                     other => {
                         return Err(format!(
-                            "phorge.toml:{lineno}: unknown key `{other}` \
+                            "phorj.toml:{lineno}: unknown key `{other}` \
                              (expected module, version, or source)"
                         ));
                     }
                 },
                 Sec::Require => require
-                    .push(parse_dep(key, val).map_err(|e| format!("phorge.toml:{lineno}: {e}"))?),
+                    .push(parse_dep(key, val).map_err(|e| format!("phorj.toml:{lineno}: {e}"))?),
                 Sec::RequireDev => require_dev
-                    .push(parse_dep(key, val).map_err(|e| format!("phorge.toml:{lineno}: {e}"))?),
+                    .push(parse_dep(key, val).map_err(|e| format!("phorj.toml:{lineno}: {e}"))?),
             }
         }
 
         let module = module.ok_or_else(|| {
-            "phorge.toml: missing required `module` (e.g. module = \"acme/myapp\")".to_string()
+            "phorj.toml: missing required `module` (e.g. module = \"acme/myapp\")".to_string()
         })?;
         if module.trim().is_empty() {
-            return Err("phorge.toml: `module` must not be empty".to_string());
+            return Err("phorj.toml: `module` must not be empty".to_string());
         }
         let source = source.unwrap_or_else(|| Self::DEFAULT_SOURCE.to_string());
         // `source` is joined onto the project root (`<root>/<source>`) — same boundary as a
         // dependency name (GA blocker B2): no `..`, no absolute escape.
-        validate_path_component("source", &source).map_err(|e| format!("phorge.toml: {e}"))?;
+        validate_path_component("source", &source).map_err(|e| format!("phorj.toml: {e}"))?;
         Ok(Manifest {
             module,
             version,
@@ -172,7 +172,7 @@ impl Manifest {
 /// resolved source root that anchors folder=path.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Project {
-    /// Directory containing `phorge.toml` (the project root).
+    /// Directory containing `phorj.toml` (the project root).
     pub root: PathBuf,
     /// The parsed manifest.
     pub manifest: Manifest,
@@ -181,7 +181,7 @@ pub struct Project {
 }
 
 impl Project {
-    /// Walk up from `start` (a file or directory) looking for a `phorge.toml`. The first
+    /// Walk up from `start` (a file or directory) looking for a `phorj.toml`. The first
     /// one found marks the project root. Returns `Ok(None)` when none is found before the
     /// filesystem root — that is *loose-script mode* (folder=path suspended; only
     /// `package Main;` is legal, enforced in a later slice). Returns `Err` only when a
@@ -604,7 +604,7 @@ mod tests {
             static N: AtomicUsize = AtomicUsize::new(0);
             let unique = N.fetch_add(1, Ordering::Relaxed);
             let dir = std::env::temp_dir().join(format!(
-                "phorge_manifest_test_{}_{unique}",
+                "phorj_manifest_test_{}_{unique}",
                 std::process::id()
             ));
             std::fs::create_dir_all(&dir).unwrap();
@@ -625,7 +625,7 @@ mod tests {
         let tmp = TempDir::new();
         let root = tmp.path();
         std::fs::write(
-            root.join("phorge.toml"),
+            root.join("phorj.toml"),
             "module = \"acme/app\"\nsource = \"src\"",
         )
         .unwrap();
@@ -647,7 +647,7 @@ mod tests {
         std::fs::create_dir_all(&nested).unwrap();
         let file = nested.join("script.phg");
         std::fs::write(&file, "package Main;").unwrap();
-        // No phorge.toml anywhere under the temp dir → loose-script mode.
+        // No phorj.toml anywhere under the temp dir → loose-script mode.
         assert_eq!(Project::detect(&file).unwrap(), None);
     }
 
@@ -656,7 +656,7 @@ mod tests {
         let tmp = TempDir::new();
         let root = tmp.path();
         // Missing required `module`.
-        std::fs::write(root.join("phorge.toml"), "version = \"1.0\"").unwrap();
+        std::fs::write(root.join("phorj.toml"), "version = \"1.0\"").unwrap();
         let err = Project::detect(root).unwrap_err();
         assert!(err.contains("missing required `module`"), "got: {err}");
     }

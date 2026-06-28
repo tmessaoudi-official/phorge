@@ -6,7 +6,7 @@ claim; **medium** on the bind-value ergonomics decision (resolved below by reusi
 the two compile-blockers it found (heterogeneous bind list rejected at `checker/expr.rs:686`; no
 list-printing surface) are both closed here without inventing any new language feature.
 
-This document specifies: (1) the Phorge API; (2) *why injection is impossible by construction*; (3) the
+This document specifies: (1) the Phorj API; (2) *why injection is impossible by construction*; (3) the
 exact `(sql, params)` shape produced; (4) the PHP transpile target (PDO prepared statements); (5) the
 byte-identity plan; (6) dialect concerns; (7) the build plan that compiles **today**.
 
@@ -55,11 +55,11 @@ There are two builder shapes. Only one is both *secure* and *Tier-A-deterministi
 
 ## 2. Bind values are `Json` — the keystone decision
 
-The hardest real constraint (Stage 2b's P0) is that Phorge `List<T>` is homogeneous. A SQL query binds
+The hardest real constraint (Stage 2b's P0) is that Phorj `List<T>` is homogeneous. A SQL query binds
 mixed scalars in one clause (`WHERE age > ? AND name = ?` ⇒ `[18, "alice"]`). The clean, *already-shipping*
 answer:
 
-```phorge
+```phorj
 // The Json enum is injected on `import Core.Json` (JSON_PRELUDE, src/cli/mod.rs:294):
 //   enum Json { Null(), Bool(bool value), Int(int value), Float(float value),
 //               Str(string value), Arr(List<Json> items), Obj(Map<string,Json> entries) }
@@ -86,9 +86,9 @@ A SQL bind is exactly one of `Null | Bool | Int | Float | Str` — the scalar su
 
 ---
 
-## 3. Phorge API (compiles with today's surface)
+## 3. Phorj API (compiles with today's surface)
 
-```phorge
+```phorj
 package Main;
 import Core.Console;
 import Core.Sql;        // injects the Query/Sql classes AND (idempotently) the Json enum
@@ -207,14 +207,14 @@ quarantined behind the M6 `Transport` trait, fixture-tested *outside* `different
 
 ## 5. PHP transpile target — PDO prepared statements
 
-Because `Core.Sql` is **injected Phorge classes**, the transpiler emits their method bodies as ordinary
+Because `Core.Sql` is **injected Phorj classes**, the transpiler emits their method bodies as ordinary
 PHP — there is **no SQL-specific PHP builtin on the build path**. The whole module reduces to string
 concatenation (`.`), `implode`, `str_replace`, and array appends — all PHP **core**, all surviving
 `php -n` ([[transpile-no-ini-extensions]]).
 
 ### 5.1 The builder's own emission (build path — pure, byte-identity-gated)
 
-| Phorge | PHP |
+| Phorj | PHP |
 |---|---|
 | `Text.join(parts, ", ")` | `implode(', ', $parts)` (`Text.join → implode`, `src/native/text.rs:76`) |
 | identifier quote: `"\"" + Text.replace(id, "\"", "\"\"") + "\""` | `'"' . str_replace('"', '""', $id) . '"'` |
@@ -248,11 +248,11 @@ build path. `[Inferred: PDO positional-`?` binding is the PHP-idiomatic executio
 ## 6. Byte-identity plan
 
 **The byte-identity guarantee is free by construction: the build path emits only `string` + `List<Json>`,
-both already byte-identical primitives on the existing spine, and the PHP leg runs the *same* Phorge
+both already byte-identical primitives on the existing spine, and the PHP leg runs the *same* Phorj
 string code (transpiled), so there is no second implementation to diverge.** Concretely:
 
-1. **Placeholders are literal `"?"`** the Phorge code writes — identical on all three legs, no surface.
-2. **Identifiers are quoted by a literal Phorge transform** (`"`-wrap + `str_replace('"','""')`) — pure,
+1. **Placeholders are literal `"?"`** the Phorj code writes — identical on all three legs, no surface.
+2. **Identifiers are quoted by a literal Phorj transform** (`"`-wrap + `str_replace('"','""')`) — pure,
    ASCII, core-only, byte-level (no mbstring). Identical by construction.
 3. **Bind values are carried, never formatted** — a float bind is stored as `Json.Float`, never rendered
    into the SQL string, so the Ryū-vs-PHP-`precision=14` float divergence ([[php-leg-outside-correctness-loop]])
@@ -262,12 +262,12 @@ string code (transpiled), so there is no second implementation to diverge.** Con
    no float, no locale, `src/value.rs`), and many drivers reject bound LIMIT, so inlining is also the
    correct PDO choice.
 5. **The gating example prints only `string` (`q.sql()`) and a `match`-rendered per-bind line** — a printed
-   `int`/`bool`/`string` is reconciled by the `__phorge_str` runtime helper
+   `int`/`bool`/`string` is reconciled by the `__phorj_str` runtime helper
    ([[php-leg-outside-correctness-loop]]); a `List` is **never** printed directly (avoids the
    `as_display→None` / non-interpolatable-list trap, `src/value.rs:254`).
 
 **Gating:** `examples/sql/builder.phg` is globbed by `tests/differential.rs` (`examples/**/*.phg`) and
-asserts `run ≡ runvm ≡ real-PHP-8.5` byte-for-byte, run with `PHORGE_PHP=…php-8.5.7 PHORGE_REQUIRE_PHP=1`
+asserts `run ≡ runvm ≡ real-PHP-8.5` byte-for-byte, run with `PHORJ_PHP=…php-8.5.7 PHORJ_REQUIRE_PHP=1`
 ([[php-transpile-floor-84]]). Because the build path has no clock/RNG/float-format/map-order/object-id
 surface, the assertion is structurally safe.
 
@@ -310,26 +310,26 @@ knob (a `Dialect` enum the builder branches on — still no native, still byte-i
 1. **`SQL_PRELUDE`** const + **`inject_sql_prelude`** in `src/cli/mod.rs`, mirroring `inject_json_prelude`
    — **generalize the prelude injector to carry `Item::Class` as well as `Item::Enum`** (today it
    `find`s only `Item::Enum`; extend to push all prelude items in order). The prelude declares the
-   `Sql` + `Query` classes (pure Phorge method bodies: `clone-with` returns, `Core.Text.join`, ANSI
+   `Sql` + `Query` classes (pure Phorj method bodies: `clone-with` returns, `Core.Text.join`, ANSI
    quoting, `match`-over-`Json` in render). It also re-declares the `Json` enum **idempotently** (the
    existing `already_declared` guard makes co-import safe). Wire `inject_sql_prelude` into the
    `check_and_expand` chokepoint alongside the json/rounding injectors (`src/cli/mod.rs:378`).
-2. **(Optional) `Pure` natives** *only* if a hot helper is cleaner in Rust than Phorge (e.g. an
-   identifier-quote native) — **not required**; the pure-Phorge path is preferred (zero Rust↔PHP
+2. **(Optional) `Pure` natives** *only* if a hot helper is cleaner in Rust than Phorj (e.g. an
+   identifier-quote native) — **not required**; the pure-Phorj path is preferred (zero Rust↔PHP
    divergence surface). If added, one `src/native/sql.rs` leaf, `NativeEval::Pure`, `pure: true`, a
    `php` closure mapping to `str_replace`/`implode`. **No new `Op`.**
 3. **`examples/sql/builder.phg`** — the §3 program (SELECT + INSERT + UPDATE + DELETE coverage, mixed
    binds via `Json`, per-bind render via `match`) + an `examples/README.md` entry (index + coverage
    matrix), in the **same change** (the examples-ship-with-features rule, [[examples-ship-with-features]]).
    Auto-gated by the `examples/**/*.phg` glob.
-4. **Round-trip the floor:** `PHORGE_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php PHORGE_REQUIRE_PHP=1
+4. **Round-trip the floor:** `PHORJ_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php PHORJ_REQUIRE_PHP=1
    cargo test --workspace` ([[php-transpile-floor-84]]).
 
 **Effort:** small–medium. The materially-new piece (Stage 2b's P1) is **injecting a method-bearing class
 pair** — no shipped prelude does this yet (Json/RoundingMode are bare enums). Risk is low (it's ordinary
-Phorge that already compiles standalone), but it must be proven: the de-risking step is to write the
+Phorj that already compiles standalone), but it must be proven: the de-risking step is to write the
 `Query`/`Sql` classes as a *normal* user file first, gate it green, then lift it verbatim into
-`SQL_PRELUDE`. `[Inferred: the prelude is just a string of Phorge source lex-parsed at inject time, so any
+`SQL_PRELUDE`. `[Inferred: the prelude is just a string of Phorj source lex-parsed at inject time, so any
 program that compiles standalone compiles as a prelude — verified mechanism in inject_json_prelude.]`
 
 ---
@@ -340,7 +340,7 @@ program that compiles standalone compiles as a prelude — verified mechanism in
    on the build path (and absent under `php -n`).
 2. **Bind-order ↔ placeholder-order skew** — controlled: SQL fragment + binds appended in the same mutator;
    `List`/`Map` insertion-ordered `Rc<Vec>`.
-3. **Identifier-quote dialect drift** — controlled: pinned literal ANSI `"`+`""` in Phorge; no driver call.
+3. **Identifier-quote dialect drift** — controlled: pinned literal ANSI `"`+`""` in Phorj; no driver call.
 4. **Heterogeneous bind typing** — **closed** by `List<Json>` (§2); no `Any`, no bespoke `Bind`.
 5. **Float bind rendering** — N/A on build path (carried, never formatted); LIMIT/OFFSET pinned `int` (§6).
 6. **mbstring absence** — N/A: identifiers/SQL ASCII; `str_replace`/`implode` byte-level core.

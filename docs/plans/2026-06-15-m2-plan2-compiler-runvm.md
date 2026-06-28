@@ -38,7 +38,7 @@ them).
 | P2-1 | Locals | clox-style stack slots (`GetLocal`/`SetLocal(slot)`), compile-time slot resolution | Spec §6 mandates "locals are a window into the value stack"; sets up P3 frames |
 | P2-2 | Jump addressing | **absolute** instruction indices (typed `enum Op`), backpatched | With `enum Op` (not raw bytes) absolute is simplest; makes the spec's separate `Loop` op redundant — dropped |
 | P2-3 | `println` | generalize `Op::Print` → `Op::Print(n)` (pop n, space-join, render, newline) | Matches interpreter's multi-arg join; subsumes P1's single-value print as `Print(1)` |
-| P2-4 | `SetLocal` | set-and-**pop** (`stack[slot] = pop()`) | Only used by the compiler-internal for-loop counter; Phorge has no user assignment |
+| P2-4 | `SetLocal` | set-and-**pop** (`stack[slot] = pop()`) | Only used by the compiler-internal for-loop counter; Phorj has no user assignment |
 | P2-5 | `JumpIfFalse` | always **pops** the condition | Uniform for `if`, `for` guard, and `&&`/`||` desugar |
 | P2-6 | int vs float arithmetic | minimal `num_ty` inference in the compiler (literals + local declared types + arithmetic recursion) | Post-check AST carries no inferred types; arithmetic is the only op needing the int/float distinction; comparison/equality stay runtime-generic |
 | P2-7 | Lists | inline `Value::List` (reuse the interpreter's variant) | Lets `for`/list literals run in P2; **migrates to the arena heap at P4** (documented churn) |
@@ -1227,7 +1227,7 @@ git commit -m "feat(cli): phg runvm — bytecode backend command (M2 P2)"
 //! stdout to the tree-walking interpreter (`cmd_run`) for every P2-surface program. This is
 //! the M2 correctness spine (mirrors the transpiler round-trip-against-real-PHP technique).
 
-use phorge::cli::{cmd_run, cmd_runvm};
+use phorj::cli::{cmd_run, cmd_runvm};
 
 /// Assert the two backends agree, and (when given) that the output is exactly `expected`.
 fn agree(src: &str) {
@@ -1279,7 +1279,7 @@ fn examples_that_are_p2_compatible_match() {
     // `examples/hello.phg` and `examples/fib.phg` are P2-incompatible (fib uses user
     // function calls → P3). Drive only the P2 list above here; the full examples sweep
     // arrives in P6. This test documents the boundary explicitly.
-    agree(r#"function main() { println("Hello, Phorge!"); }"#);
+    agree(r#"function main() { println("Hello, Phorj!"); }"#);
 }
 ```
 
@@ -1298,7 +1298,7 @@ fn runvm_sample_simple_program_exits_0() {
     let out = Command::new(BIN)
         .args(["runvm", path.to_str().unwrap()])
         .output()
-        .expect("spawn phorge");
+        .expect("spawn phorj");
     let _ = std::fs::remove_file(&path);
     assert!(out.status.success(), "exit {:?}", out.status.code());
     assert_eq!(String::from_utf8_lossy(&out.stdout), "2\n");
@@ -1310,7 +1310,7 @@ fn runvm_runtime_error_exits_1() {
     let out = Command::new(BIN)
         .args(["runvm", path.to_str().unwrap()])
         .output()
-        .expect("spawn phorge");
+        .expect("spawn phorj");
     let _ = std::fs::remove_file(&path);
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&out.stderr).contains("runtime error"));

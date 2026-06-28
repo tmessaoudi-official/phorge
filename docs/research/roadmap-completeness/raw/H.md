@@ -2,7 +2,7 @@
 
 ## Track summary
 
-Phorge's headline promise is "if it type-checks, whole classes of runtime errors are gone" (VISION
+Phorj's headline promise is "if it type-checks, whole classes of runtime errors are gone" (VISION
 §1) plus EV-7 ("never panics on input"). The EV-7 / no-panic / no-`unsafe` pillar is in excellent
 shape: integer arithmetic is fully checked and single-sourced (`value.rs`: `int_add/sub/mul/div/rem/
 neg → Result`), `i64::MIN/-1` and `-i64::MIN` are clean faults, literal overflow is a lex error,
@@ -85,7 +85,7 @@ expression-position `match` the way expression-`if` already lowers) makes the sa
 everywhere. No new `Op` (reuses the branch lowering); front-end + compiler emit only.
 
 **H-overflow-policy-doc (adopt, M9, S).** The fault-on-overflow behavior is correct and tested, but
-it's a *policy* (Phorge chose fault-not-wrap, unlike PHP's silent float promotion in `array_sum`, and
+it's a *policy* (Phorj chose fault-not-wrap, unlike PHP's silent float promotion in `array_sum`, and
 unlike Rust release-mode wrap). It deserves a one-line entry in `docs/INVARIANTS.md` ("integer ops
 fault on overflow; never wrap, never promote to float") plus an explicit differential test asserting
 the policy at each op boundary, so a future "make it wrap for perf" change is a conscious invariant

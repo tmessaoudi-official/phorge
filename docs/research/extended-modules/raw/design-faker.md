@@ -13,8 +13,8 @@ same stream → same data on `run`, `runvm`, and real `php -n` 8.5.
 |------|----------|
 | **Tier** | **A (gated)** — admitted to the byte-identity differential. |
 | **New `Op`** | **None.** Every native dispatches through the existing `Op::CallNative`. |
-| **New `Value`** | **None** (recommended path); the RNG is a **pure-Phorge value object** built from existing `Value::Instance`, or a bare `int` seed in the functional variant. |
-| **PHP target** | A small **hand-rolled, identical PRNG** emitted as a PHP function (`__phorge_faker_*`) over **integer-only** arithmetic (`intdiv`, `&`, `%`, `*` with the *same* wrapping rule), plus the corpora as a PHP array literal. **No `mt_rand`/`mt_srand`** (not bit-identical to any Rust PRNG). |
+| **New `Value`** | **None** (recommended path); the RNG is a **pure-Phorj value object** built from existing `Value::Instance`, or a bare `int` seed in the functional variant. |
+| **PHP target** | A small **hand-rolled, identical PRNG** emitted as a PHP function (`__phorj_faker_*`) over **integer-only** arithmetic (`intdiv`, `&`, `%`, `*` with the *same* wrapping rule), plus the corpora as a PHP array literal. **No `mt_rand`/`mt_srand`** (not bit-identical to any Rust PRNG). |
 | **Feasibility** | **~82%** — the corpora + name/email/lorem/number are ~95%; the only genuine risk is the i64-wrapping-multiply ↔ PHP-int parity proof and the date formatting (see §6/§9). |
 | **Confidence** | **medium** (the PRNG-parity argument is sound and grounded in the existing M-NUM i128/intdiv precedent, but it has not been built; the wrapping-multiply equivalence needs one fixture test to *prove* before the design is locked). |
 
@@ -104,18 +104,18 @@ to prove*, so ship it first.)
 
 ---
 
-## 2. Public API (Phorge syntax)
+## 2. Public API (Phorj syntax)
 
 Two layers. **Layer 1** is the seeded PRNG (`Core.Random`) — the kernel. **Layer 2** is `Core.Faker`,
 the corpora + field generators built *on* the kernel. The Faker never re-implements randomness; it
 only consumes `rng.nextInt(...)`.
 
-### 2.1 The RNG value — recommended: a pure-Phorge object (no new `Value`)
+### 2.1 The RNG value — recommended: a pure-Phorj object (no new `Value`)
 
 The cleanest ergonomic surface is a **stateful object** with methods. To avoid a new `Value` variant,
-the RNG is a **pure-Phorge class** whose single field is the `int` state, *injected* into the program
+the RNG is a **pure-Phorj class** whose single field is the `int` state, *injected* into the program
 exactly like `Core.Json`'s injected `Json` enum (the "injected-type pattern" memory,
-`cli::inject_json_prelude`). The class body is written in Phorge and prepended before checking when the
+`cli::inject_json_prelude`). The class body is written in Phorj and prepended before checking when the
 program imports `Core.Random`; its methods call **two tiny natives** (`__random_next`,
 `__random_seed_norm`) that do the integer kernel. This means:
 
@@ -124,7 +124,7 @@ program imports `Core.Random`; its methods call **two tiny natives** (`__random_
 * **No new `Op`** — methods compile to ordinary method calls + `Op::CallNative`.
 * The PHP leg gets the same injected class, transpiled to a normal PHP class holding `$state`.
 
-```phorge
+```phorj
 package Main;
 import Core.Random;
 import Core.Console;
@@ -154,10 +154,10 @@ call sequence → same outputs", the JS-event-loop-style *total order is a langu
 
 ### 2.2 `Core.Faker` — field generators
 
-`Core.Faker` is itself a **pure-Phorge module class** (`Faker`) injected the same way, **constructed
+`Core.Faker` is itself a **pure-Phorj module class** (`Faker`) injected the same way, **constructed
 from an `Rng`** so the faker stream is part of the same deterministic sequence:
 
-```phorge
+```phorj
 import Core.Random;
 import Core.Faker;
 
@@ -226,7 +226,7 @@ pub const LOREM: &[&str] = &["lorem", "ipsum", "dolor", "sit", "amet", /* ~180 *
   `php -n`** — the project's `transpile-no-ini-extensions` invariant). `email()`'s lowercasing uses the
   ASCII subset only, so `strtolower` (core) is byte-identical to Rust `to_ascii_lowercase`.
 * The corpora ship as **embedded Rust slices** and are emitted to PHP as `['Olivia','Liam',...]`
-  literals inside the injected Faker class (or as `__phorge_faker_first_names()` returning the array).
+  literals inside the injected Faker class (or as `__phorj_faker_first_names()` returning the array).
   Both legs use **0-based indexing** with the PRNG draw `idx = rng.nextInt(0, len)` (half-open
   `[0,len)`), so `FIRST_NAMES[idx]` ≡ `$first_names[$idx]`.
 * Size budget: ~1–2 KB of strings; embedded directly in the binary and the transpiled PHP. Acceptable.
@@ -265,8 +265,8 @@ The injected `Rng`/`Faker` classes transpile to ordinary PHP classes (the inject
 does this for `Json`). The **two kernel natives** map to emitted PHP functions:
 
 ```php
-// emitted once when the program uses Core.Random / Core.Faker (gated helper, like __phorge_div):
-function __phorge_rng_mulmod(int $a, int $b, int $m): int {   // identical to the Rust mul_mod
+// emitted once when the program uses Core.Random / Core.Faker (gated helper, like __phorj_div):
+function __phorj_rng_mulmod(int $a, int $b, int $m): int {   // identical to the Rust mul_mod
     $r = 0; $a %= $m;
     while ($b > 0) {
         if (($b & 1) === 1) { $r = ($r + $a) % $m; }
@@ -275,22 +275,22 @@ function __phorge_rng_mulmod(int $a, int $b, int $m): int {   // identical to th
     }
     return $r;
 }
-function __phorge_rng_next(int $state): array {               // returns [newState, word]
+function __phorj_rng_next(int $state): array {               // returns [newState, word]
     $MASK = (1 << 62) - 1;
     $MUL  = 6364136223846793005 & $MASK;
     $INC  = 1442695040888963407 & $MASK;
-    $state = (__phorge_rng_mulmod($state, $MUL, 1 << 62) + $INC) & $MASK;
+    $state = (__phorj_rng_mulmod($state, $MUL, 1 << 62) + $INC) & $MASK;
     return [$state, ($state >> 30) & 0xFFFFFFFF];
 }
-function __phorge_rng_seed_norm(int $seed): int {             // fold an arbitrary seed into [0, 2^62)
+function __phorj_rng_seed_norm(int $seed): int {             // fold an arbitrary seed into [0, 2^62)
     return $seed & ((1 << 62) - 1);  // plus one scrambling round in real impl (see §6)
 }
 ```
 
 ```php
-class Rng {                  // the injected Phorge class, transpiled
+class Rng {                  // the injected Phorj class, transpiled
     public int $state;
-    public function nextWord(): int { [$this->state, $w] = __phorge_rng_next($this->state); return $w; }
+    public function nextWord(): int { [$this->state, $w] = __phorj_rng_next($this->state); return $w; }
     public function nextInt(int $lo, int $hi): int { return $lo + ($this->nextWord() % ($hi - $lo)); }
     // ...
 }
@@ -303,7 +303,7 @@ class Rng {                  // the injected Phorge class, transpiled
 * Everything used is **PHP core** (`%`, `&`, `>>`, `*`, `implode`, `strtolower` on ASCII) — clean under
   `php -n`.
 
-The single per-program emission of the helpers rides the existing `uses_* + __phorge_*` gated-helper
+The single per-program emission of the helpers rides the existing `uses_* + __phorj_*` gated-helper
 mechanism (the project's `php-leg-outside-correctness-loop` memory: prefer a runtime helper over static
 types).
 
@@ -314,7 +314,7 @@ types).
 1. **i64-wrapping-multiply ↔ PHP-int parity** *(the one real risk)* — the *entire* feature rests on
    `mul_mod` staying < 2^63 on both legs. **Mitigation:** the shift-add `mul_mod` proven in §1.1 keeps
    every intermediate < 2^63 by construction; a dedicated fixture test (Rust `mul_mod` vs the emitted
-   PHP `__phorge_rng_mulmod` over a vector of `(a,b,m)` near the 2^62 boundary) **proves** it before
+   PHP `__phorj_rng_mulmod` over a vector of `(a,b,m)` near the 2^62 boundary) **proves** it before
    the design is locked. *Status:* designed-not-proven → see Q4.
 2. **The masked multiplier `MUL = K & MASK`** is **not** a tested full-period LCG multiplier — masking
    a known good 64-bit multiplier into 62 bits does **not** guarantee a full-period generator. **This
@@ -349,7 +349,7 @@ types).
 
 ## 7. New Op / Value — none
 
-* **No new `Op`.** `Random.seeded`, `rng.nextInt`, `f.name()` etc. are method calls on injected Phorge
+* **No new `Op`.** `Random.seeded`, `rng.nextInt`, `f.name()` etc. are method calls on injected Phorj
   classes whose leaves call `Op::CallNative` for the kernel — the existing dispatch.
 * **No new `Value`.** `Rng`/`Faker` are `Value::Instance` (shared-mutable, M-mut). The corpora live in
   Rust `const` slices, not in any `Value`.
@@ -358,7 +358,7 @@ types).
   so they flow as ordinary user types with zero backend machinery.
 * The two kernel natives (`__random_next`, `__random_seed_norm`, plus maybe a `mulmod` helper) are
   ordinary `NativeEval::Pure` entries in a new `src/native/random.rs` (the Faker's corpora-picking can
-  be expressed entirely in injected Phorge calling `rng.nextInt`, so `Core.Faker` may need **no Rust
+  be expressed entirely in injected Phorj calling `rng.nextInt`, so `Core.Faker` may need **no Rust
   native at all** beyond the corpora data — open question Q2).
 
 ---
@@ -371,7 +371,7 @@ types).
 |-------|--------|------|
 | `Core.Random` kernel (LCG + `mul_mod` natives, injected `Rng` class, PHP helpers) | medium | the load-bearing parity work; ~1 native module + 1 injected class + 3 emitted PHP fns |
 | Corpora (`faker_data.rs` + PHP emission + length-parity test) | small | pure data |
-| `Core.Faker` injected class (field generators in Phorge over `rng`) | small-medium | mostly Phorge code calling `rng`; `date()` integer math is the fiddly bit |
+| `Core.Faker` injected class (field generators in Phorj over `rng`) | small-medium | mostly Phorj code calling `rng`; `date()` integer math is the fiddly bit |
 | `mul_mod` parity fixture test (Rust vs emitted PHP) | small | **must precede lock** (Q4) |
 | `examples/guide/faker.phg` + README (byte-identity-gated) | small | the standing "examples ship with features" rule |
 | Differential admission (it's `pure:true` ⇒ auto-gated) | trivial | no quarantine needed |
@@ -406,9 +406,9 @@ replacing the simple version. Flagged, not blocking.
 * **Q1 — RNG surface: object or functional?** Recommended: **object** (`Random.seeded(n).nextInt(...)`)
   via the injected-class pattern (matches PHP/dev expectations, no new `Value`). The functional
   `(seed)->(val,seed)` form is more trivially-provable but uglier. Confirm object.
-* **Q2 — Is `Core.Faker` pure-Phorge (corpora-as-PHP, generators-in-Phorge) or does it need Rust
+* **Q2 — Is `Core.Faker` pure-Phorj (corpora-as-PHP, generators-in-Phorj) or does it need Rust
   natives?** Recommended: corpora as a Rust `const` emitted to PHP + Faker generators written in
-  **injected Phorge** calling `rng.nextInt` — minimizes native surface and maximizes shared logic.
+  **injected Phorj** calling `rng.nextInt` — minimizes native surface and maximizes shared logic.
   The only thing that *must* be a native is the PRNG `next` and `mul_mod`.
 * **Q3 — PRNG multiplier choice.** Recommended: a **verified < 2^62 LCG multiplier** (L'Ecuyer table
   for modulus 2^62) rather than masking a 64-bit constant — removes the period-quality guesswork while

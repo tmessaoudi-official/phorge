@@ -15,8 +15,8 @@
   **NO push** — master stays local for the developer to review in the morning.
 - [2026-06-25] AGREED: **Gate** = fully autonomous (suppress confirmation gates; risky/destructive still
   pause) + maximum rigor. Every commit must pass `cargo test --workspace` + `cargo clippy --all-targets`
-  + `cargo fmt --check` + the PHP-8.5 oracle (`PHORGE_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php
-  PHORGE_REQUIRE_PHP=1`). A convergence pass runs per slice (design before, result after).
+  + `cargo fmt --check` + the PHP-8.5 oracle (`PHORJ_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php
+  PHORJ_REQUIRE_PHP=1`). A convergence pass runs per slice (design before, result after).
 - [2026-06-25] AGREED: **Per-feature deliverable** (standing project rule [[examples-ship-with-features]]):
   every shipped feature lands with a runnable `examples/guide/*.phg` (byte-identity-gated) + an
   `examples/README.md` entry, in the same commit as the feature.
@@ -61,7 +61,7 @@ Process I/O can be built.
   objects, optional null-branch, erased→coarse) + a coarse `Reflect.kind` + full set incl. sorted
   enumeration natives via `NativeEval::Reflective` + `ClassTables`. **Q3 enum erasure verified** (enum →
   PHP class hierarchy; enums use literals/`"object"`, never inspected). Build mechanics noted in the spec
-  (gated `__phorge_kind` helper special-cased in `emit_member_call`; type-directed checker pass for
+  (gated `__phorj_kind` helper special-cased in `emit_member_call`; type-directed checker pass for
   typeName/className).
 - **F-007 Process I/O:** `pure: bool` marker; differential skips impure programs entirely + a dedicated
   `tests/process.rs`; argv via process-global, sorted `Env.all`, careful `--` grammar.

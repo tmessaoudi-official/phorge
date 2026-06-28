@@ -2,9 +2,9 @@
 
 ## Track summary
 
-Phorge today ships **zero first-class testing capability for end-user code**. The robust testing
+Phorj today ships **zero first-class testing capability for end-user code**. The robust testing
 machinery that exists — `tests/differential.rs` (the `run ≡ runvm ≡ real PHP` oracle), the PHP
-oracle, `phg bench`, `phg disasm` — is *internal to Phorge's own Rust development*; a developer
+oracle, `phg bench`, `phg disasm` — is *internal to Phorj's own Rust development*; a developer
 writing a `.phg` program gets nothing. There is no `phg test` runner, no assertion library, no test
 discovery, no fakes/mocks, no property testing, no coverage, no snapshot testing, no seedable RNG /
 injectable clock for deterministic tests. This is the single largest "ecosystem table-stakes" gap in
@@ -14,7 +14,7 @@ no way to write and run tests is incomplete on its own terms. The PHP-familiar a
 `#[test]`/`cargo test`/doctests, Go's `go test` + table-driven tests + `testing/quick`, Swift Testing,
 Elixir's `ExUnit` + `doctest`, and Hypothesis/QuickCheck/`proptest` for property-based testing. The
 recommended core is a **built-in `phg test` runner + a typed `Core.Test` assertion stdlib**, both of
-which transpile cleanly (Phorge tests can even run under PHPUnit as generated PHP). Higher-power items
+which transpile cleanly (Phorj tests can even run under PHPUnit as generated PHP). Higher-power items
 (property testing, mutation testing, coverage, snapshot) layer on top and are mostly deferable, but a
 few — a **seedable `Core.Random` / injectable `Core.Time`** seam — are prerequisites that unblock
 *deterministic* testing and should land early because the byte-identical spine forbids ambient
@@ -56,7 +56,7 @@ reporter, and exit-code semantics — but it has no new `Op` and no spine risk (
 fault on mismatch like any other fault).
 
 **O-assert-lib — `Core.Test` typed assertions.** A runner is useless without assertions. The
-PHP-familiar shape is `assertEqual(a, b)`, `assertTrue(c)`, `assertThrows(...)` — but Phorge can do
+PHP-familiar shape is `assertEqual(a, b)`, `assertTrue(c)`, `assertThrows(...)` — but Phorj can do
 *better*: assertions are statically typed (`assertEqual<T>(T, T)` rejects comparing an `int` to a
 `string` at compile time, a class of PHPUnit footgun gone) and report a byte-identical diff using the
 same diagnostic surface as the compiler. Erases to PHPUnit `$this->assertSame(...)` on transpile.
@@ -71,21 +71,21 @@ two birds. Maps to PHP `mt_srand($seed)` / an injected clock; strong philosophic
 is a stated design principle).
 
 **O-table-driven — parameterized / data-provider tests.** PHPUnit `#[DataProvider]` and Go's
-table-driven idiom are the single most-used test-scaling pattern. The legible Phorge form is a test
+table-driven idiom are the single most-used test-scaling pattern. The legible Phorj form is a test
 function taking a `List<Case>` (a typed struct of inputs+expected) and the runner iterating it — far
-cleaner than PHPUnit's stringly-typed reflection providers, and it leverages Phorge's existing typed
+cleaner than PHPUnit's stringly-typed reflection providers, and it leverages Phorj's existing typed
 records and `for…in`. Adopt within the testing milestone.
 
-**O-fakes-traits — fakes/stubs via interfaces.** Phorge already has interfaces + nominal subtyping
+**O-fakes-traits — fakes/stubs via interfaces.** Phorj already has interfaces + nominal subtyping
 (M-RT S2). The idiomatic, legible way to substitute a dependency in a test is to implement the
 interface with a hand-written fake — exactly Go's and modern-PHP's preferred style (constructor
 injection + a test double class). This is a *map* gap: it is already expressible, but the testing
 docs/guide must establish it as the blessed pattern. Cheap (S) — mostly documentation + an example —
-and it lets Phorge **reject** the reflection-based magic-mock approach (O-mock-reflection) cleanly.
+and it lets Phorj **reject** the reflection-based magic-mock approach (O-mock-reflection) cleanly.
 
-**O-phpunit-bridge — transpiled tests run under PHPUnit.** Because Phorge transpiles to PHP, a
-Phorge test suite can emit a real PHPUnit test class, letting teams adopting Phorge incrementally run
-Phorge tests inside their existing PHP CI. This is the migration-bridge philosophy applied to testing
+**O-phpunit-bridge — transpiled tests run under PHPUnit.** Because Phorj transpiles to PHP, a
+Phorj test suite can emit a real PHPUnit test class, letting teams adopting Phorj incrementally run
+Phorj tests inside their existing PHP CI. This is the migration-bridge philosophy applied to testing
 and is nearly free once O-test-runner + O-assert-lib exist (it is a second emission target of the same
 machinery). Small effort, high adoption value.
 
@@ -145,7 +145,7 @@ reports in the summary. Strong fit — directly serves the legible-iteration loo
 are present in every mainstream runner.]
 
 **O-assert-fault — fault-assertion as first-class.** The list's O-assert-lib mentions `assertThrows`
-*in passing*, but for Phorge this is load-bearing enough to call out: Phorge has **no exceptions yet**
+*in passing*, but for Phorj this is load-bearing enough to call out: Phorj has **no exceptions yet**
 (try/catch is M3-deferred), so the only failure mode a user's code has is a **clean fault** (div-by-zero,
 index-OOB, `opt!`-on-null, a future `requires`). Asserting "this input *faults*" (and ideally with a
 `FaultKind` / message match — exactly what the internal `agree_err`/`FaultKind` harness already does
@@ -153,19 +153,19 @@ internally) is the primary negative-path test and currently impossible to expres
 to *catch* a fault instead of aborting the process — a real mechanism, not just a function — so it's M
 not S, and it should be designed alongside the eventual catchable-error slice (memory:
 error-handling-and-whole-project-validation). PHPUnit anchor: `expectException`. Strong fit — it's the
-test surface for Phorge's distinctive fault model. [Verified: KNOWN_ISSUES documents faults as the
+test surface for Phorj's distinctive fault model. [Verified: KNOWN_ISSUES documents faults as the
 universal failure mode and that `try`/`catch` is deferred; the internal harness already classifies by
 `FaultKind`.]
 
 **O-ci-report — JUnit-XML / TAP output.** A test runner that only prints to a terminal is invisible to
 CI dashboards. PHPUnit `--log-junit`, `cargo test`'s libtest JSON, Go's `-json`, TAP — every mature
-runner emits a machine-readable report so CI can show per-test pass/fail and trend it. Phorge already
+runner emits a machine-readable report so CI can show per-test pass/fail and trend it. Phorj already
 has the JSON-diagnostic precedent (`phg check --json`), so a `phg test --format=junit|tap|json` is the
 same discipline. Small once the runner has a structured result model. Ok/strong fit — table-stakes for
 the CI-mature teams the migration-bridge story targets. [Inferred: JUnit-XML is the de-facto CI test
 format; PHPUnit ships `--log-junit`.]
 
-**O-test-isolation — per-test fresh state.** Phorge's immutable-by-default + acyclic-heap + no-ambient-
+**O-test-isolation — per-test fresh state.** Phorj's immutable-by-default + acyclic-heap + no-ambient-
 globals model means tests are **already** far more isolated than PHP's (no superglobal/static bleed
 between tests — a structural superpower, like the whole-project-validation one). This is mostly a *map*
 + a stated guarantee rather than new machinery, but it deserves an explicit line: the runner should
@@ -183,7 +183,7 @@ class fields shipped (M-mut.7a per CLAUDE.md/KNOWN_ISSUES) — the one place cro
 All original verdicts hold up against the philosophy lens. Spot-checks:
 
 - **O-mock-reflection — reject** is *correct and well-reasoned*: runtime-reflection mocking is exactly
-  the dynamic surprise Phorge removes, and O-fakes-traits is the strictly-better PHP-familiar
+  the dynamic surprise Phorj removes, and O-fakes-traits is the strictly-better PHP-familiar
   alternative (constructor injection + a hand-written interface fake). Keep the reject.
 - **O-fuzz / O-mutation-testing — defer to v2** is right: low PHP-dev demand, heavy machinery; property
   testing covers most of the value sooner. (Mutation testing's `philosophy_fit: weak` is slightly

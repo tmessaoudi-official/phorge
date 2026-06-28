@@ -1,10 +1,10 @@
 // Multiple inheritance with explicit resolution (M-RT S6b).
 //
-// Phorge supports real multiple inheritance: a class may `extend` several parents at once. PHP has no
+// Phorj supports real multiple inheritance: a class may `extend` several parents at once. PHP has no
 // multiple inheritance, so the transpiler lowers each parent to an interface + trait and the subclass
 // `implements` the interfaces and `use`s the traits — the model the field (Haxe, Hack) uses.
 //
-// When two parents supply a method of the same name, Phorge will NOT silently pick one: the collision
+// When two parents supply a method of the same name, Phorj will NOT silently pick one: the collision
 // must be resolved explicitly with `use P.m` (pick a parent), `rename P.m as n` (keep both), or
 // `exclude P.m` (drop one) — else `E-MI-CONFLICT`. A *diamond* shared base (a method reached through
 // two arms that both resolve to the SAME declaring method) auto-merges and is never a conflict.

@@ -7,9 +7,9 @@
 
 ## Why bytes (and why it's cheaper than it looks)
 
-HTTP bodies/headers are octets; Phorge `string` is UTF-8 (`value.rs:17`, enforced — the lexer asserts
+HTTP bodies/headers are octets; Phorj `string` is UTF-8 (`value.rs:17`, enforced — the lexer asserts
 `from_utf8`). A `bytes` type makes binary bodies honest. **The transpile is trivial because PHP has no
-separate bytes type — PHP strings ARE byte arrays** — so all the design work is Phorge-side: the
+separate bytes type — PHP strings ARE byte arrays** — so all the design work is Phorj-side: the
 literal syntax and the `string`↔`bytes` interop. Verified: literals compile through
 `emit_const(Value) -> Op::Const` (`compiler.rs:605`), so a byte literal needs **no new `Op`**.
 
@@ -41,7 +41,7 @@ literal syntax and the `string`↔`bytes` interop. Verified: literals compile th
 Three natives in a new `core.bytes` module (the established `(module,name)` registry pattern —
 `native.rs`), imported via `import core.bytes;`:
 
-| Phorge call | Sig | Semantics | PHP erasure |
+| Phorj call | Sig | Semantics | PHP erasure |
 |---|---|---|---|
 | `bytes.from_string(s)` | `string -> bytes` | UTF-8 encode (identity bytes) | `$s` (identity) |
 | `bytes.to_string(b)` | `bytes -> string?` | UTF-8 decode; `null` if invalid | `(mb_check_encoding($b,'UTF-8') ? $b : null)` |
@@ -67,7 +67,7 @@ Three natives in a new `core.bytes` module (the established `(module,name)` regi
 - `==` on bytes → existing `Op::Eq` via `eq_val`.
 - `validate`/`stack_effect`/`exec_op` are untouched (no new variant → no three-match coupling).
 
-## 5. Transpile (Phorge → PHP)
+## 5. Transpile (Phorj → PHP)
 
 - `emit_type`: `Ty::Bytes -> "string"` (PHP strings are byte arrays) — `transpile.rs:243`.
 - `b"…"` literal → a PHP **double-quoted** string with `\xHH` preserved (PHP supports `\xHH` in
@@ -95,7 +95,7 @@ Three natives in a new `core.bytes` module (the established `(module,name)` regi
 - **D2 — interop module name `core.bytes`?** Recommend **yes** (consistent with `core.text`/`core.file`).
   Caveat: the type name `bytes` and the import leaf `bytes` overlap — disambiguated by position (type vs
   call), and the existing `E-SHADOW-IMPORT` guard blocks a local named `bytes`. Alternative: built-in
-  `string()`/`bytes()` cast functions (rejected — Phorge has no cast syntax; natives are the pattern).
+  `string()`/`bytes()` cast functions (rejected — Phorj has no cast syntax; natives are the pattern).
 - **D3 — W0 native surface.** RESOLVED: **all five** — `from_string`/`to_string`/`len` **+
   `concat`/`slice`** (developer choice; `slice` clamps, see §3). Byte-indexing deferred.
 

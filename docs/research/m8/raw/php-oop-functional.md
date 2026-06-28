@@ -1,4 +1,4 @@
-# PHP OOP + Functional Model — Exhaustive Feature Map → Phorge
+# PHP OOP + Functional Model — Exhaustive Feature Map → Phorj
 
 Research date: 2026-06-18. Scope: every **non-deprecated** OOP + functional feature from the PHP 5 era
 through **PHP 8.6** (8.6 is in active dev / early alpha as of mid-2026). Deprecated/removed features are
@@ -7,18 +7,18 @@ noted but excluded from the verdict accounting.
 ## Legend
 
 **Bucket**
-- ✅ — Phorge has an equivalent **at least as capable** (≥).
-- 🔶 — Phorge has a **partial** equivalent.
+- ✅ — Phorj has an equivalent **at least as capable** (≥).
+- 🔶 — Phorj has a **partial** equivalent.
 - 🔲 — **roadmapped** for a named milestone.
-- ❌ — **reject-by-design** (incompatible with Phorge's static, immutable, transpile-to-PHP model).
+- ❌ — **reject-by-design** (incompatible with Phorj's static, immutable, transpile-to-PHP model).
 
 **Verdict**
-- BETTER — Phorge's form is stricter/safer/cleaner.
+- BETTER — Phorj's form is stricter/safer/cleaner.
 - SAME — semantically equivalent.
 - SAME+syntax — equivalent meaning, different (usually nicer) surface.
-- WORSE→reject — PHP's form would degrade Phorge's invariants; rejected.
+- WORSE→reject — PHP's form would degrade Phorj's invariants; rejected.
 
-**Phorge facts assumed (per CLAUDE.md / docs):** statically typed, immutable-by-default, VM + PHP
+**Phorj facts assumed (per CLAUDE.md / docs):** statically typed, immutable-by-default, VM + PHP
 transpile, byte-identical `run`/`runvm` spine. HAS: classes, constructor promotion, instance methods,
 field visibility (public/private), enums-with-payloads + exhaustive `match`, optionals `T?`, `this`.
 NOT YET: inheritance, abstract, interface, traits, static members, late static binding, closures/lambdas/
@@ -29,7 +29,7 @@ visibility, anonymous classes, Reflection.
 
 ## 1. Class System
 
-| Feature | First ver | Phorge mapping | Bucket | Verdict |
+| Feature | First ver | Phorj mapping | Bucket | Verdict |
 |---|---|---|---|---|
 | `class` declaration | PHP 4/5 | `class` exists; value-native instances | ✅ | SAME |
 | `abstract class` | PHP 5.0 | none yet → M3 S5 | 🔲 M3 S5 | SAME (when landed) |
@@ -37,22 +37,22 @@ visibility, anonymous classes, Reflection.
 | Multiple interface impl (`implements A, B`) | PHP 5.0 | none yet → M3 S5 | 🔲 M3 S5 | SAME |
 | Interface constants | PHP 5.0 | none yet; tie to S5 interfaces | 🔲 M3 S5 | SAME |
 | Interface default methods | n/a | PHP has **no** interface default methods (that's traits) | ❌ | n/a — PHP doesn't have this |
-| `final` class / method | PHP 5.0 | none yet; pairs with inheritance | 🔲 M3 S5 | SAME — but Phorge is immutable/closed-by-default, so `final` is the *default* posture (BETTER default) |
+| `final` class / method | PHP 5.0 | none yet; pairs with inheritance | 🔲 M3 S5 | SAME — but Phorj is immutable/closed-by-default, so `final` is the *default* posture (BETTER default) |
 | `extends` (single inheritance) | PHP 5.0 | none yet → M3 S5 | 🔲 M3 S5 | SAME |
 | `implements` | PHP 5.0 | none yet → M3 S5 | 🔲 M3 S5 | SAME |
 | Class constants (`const`) | PHP 5.0 | none yet; design w/ S5 | 🔲 M3 S5 | SAME |
 | Class constant **visibility** | PHP 7.1 | none yet | 🔲 M3 S5 | SAME |
-| **Typed** class constants | PHP 8.3 | none yet; should land typed from day 1 | 🔲 M3 S5 | BETTER (typed-by-default fits Phorge) |
+| **Typed** class constants | PHP 8.3 | none yet; should land typed from day 1 | 🔲 M3 S5 | BETTER (typed-by-default fits Phorj) |
 | Static properties | PHP 5.0 | none yet | 🔲 M3 S5 | SAME-or-reject (mutable static = global state; see note) |
 | Static methods | PHP 5.0 | none yet | 🔲 M3 S5 | SAME |
 | Late static binding (`static::`) | PHP 5.3 | none yet; needs inheritance + static dispatch | 🔲 M3 S5 | SAME (deferred behind inheritance) |
 | `self::` | PHP 5.0 | none yet | 🔲 M3 S5 | SAME |
 | `parent::` | PHP 5.0 | none yet (needs inheritance) | 🔲 M3 S5 | SAME |
-| `instanceof` | PHP 5.0 | `match`/enum narrowing covers many cases; explicit `instanceof` → S5 | 🔶 → 🔲 M3 S5 | SAME+syntax — Phorge's exhaustive `match` over a sealed type is BETTER than open `instanceof` chains |
+| `instanceof` | PHP 5.0 | `match`/enum narrowing covers many cases; explicit `instanceof` → S5 | 🔶 → 🔲 M3 S5 | SAME+syntax — Phorj's exhaustive `match` over a sealed type is BETTER than open `instanceof` chains |
 | `::class` (class-name constant) | PHP 5.5 | none yet; transpile-friendly | 🔲 M3 S5 | SAME |
 | Namespaces (`namespace`) | PHP 5.3 | **DONE** — Go-style packages, mandatory `package`, `core.` reserved | ✅ | BETTER — mandatory packaging, "nothing in the wind", folder=path strictness |
 
-**Note — static mutable state:** PHP static properties are shared mutable globals. In Phorge's
+**Note — static mutable state:** PHP static properties are shared mutable globals. In Phorj's
 immutable-by-default model, *mutable* statics are a candidate for `❌ reject-by-design`; **static
 constants / static pure methods** are fine. Recommend: allow static constants + associated functions,
 reject mutable static properties (or gate them behind M3 mutation with explicit `mut`).
@@ -61,26 +61,26 @@ reject mutable static properties (or gate them behind M3 mutation with explicit 
 
 ## 2. Properties
 
-| Feature | First ver | Phorge mapping | Bucket | Verdict |
+| Feature | First ver | Phorj mapping | Bucket | Verdict |
 |---|---|---|---|---|
 | `public` / `private` visibility | PHP 5.0 | **HAS** public/private | ✅ | SAME |
 | `protected` visibility | PHP 5.0 | none yet (needs inheritance to be meaningful) | 🔲 M3 S5 | SAME (deferred with inheritance) |
 | Static properties | PHP 5.0 | none yet | 🔲 M3 S5 | see §1 note |
-| `readonly` property | PHP 8.1 | **immutable-by-default** — every field is effectively readonly | ✅ | BETTER — Phorge makes the *exception* (mutable) opt-in instead of the *default*; PHP makes readonly opt-in |
+| `readonly` property | PHP 8.1 | **immutable-by-default** — every field is effectively readonly | ✅ | BETTER — Phorj makes the *exception* (mutable) opt-in instead of the *default*; PHP makes readonly opt-in |
 | Typed properties | PHP 7.4 | **HAS** — all fields are statically typed | ✅ | BETTER — typed is mandatory, not opt-in; no `mixed`-by-omission |
-| **Property hooks** (`get`/`set`) | PHP 8.4 | none; needs computed accessors | 🔲 (Track A / S3-adjacent) | SAME+syntax when landed — but Phorge being immutable makes `set` hooks less needed; `get` ≈ a zero-arg method |
+| **Property hooks** (`get`/`set`) | PHP 8.4 | none; needs computed accessors | 🔲 (Track A / S3-adjacent) | SAME+syntax when landed — but Phorj being immutable makes `set` hooks less needed; `get` ≈ a zero-arg method |
 | **Asymmetric visibility** (`public private(set)`) | PHP 8.4 | immutable fields make write-visibility moot | ✅ (subsumed) | BETTER — "public read, private write" is the *default* under immutability; no syntax needed |
 | Constructor promotion | PHP 8.0 | **HAS** | ✅ | SAME |
 | Default values | PHP 4/5 | supported via constructor / initializers | ✅ | SAME |
 | Nullable property | PHP 7.1 (`?T`) | **HAS** via optionals `T?` + non-null discipline | ✅ | BETTER — non-optional `T` is *statically guaranteed* non-null (PHP `?T` is runtime-only; `T` can still be null via error paths) |
-| Dynamic properties | PHP <8.2 | **deprecated in PHP 8.2** (removed PHP 9) | ❌ reject-by-design | WORSE→reject — needs runtime metaprogramming; statically typed Phorge forbids by construction |
+| Dynamic properties | PHP <8.2 | **deprecated in PHP 8.2** (removed PHP 9) | ❌ reject-by-design | WORSE→reject — needs runtime metaprogramming; statically typed Phorj forbids by construction |
 | `#[AllowDynamicProperties]` | PHP 8.2 | escape hatch for above; n/a | ❌ | WORSE→reject — same reason |
 
 ---
 
 ## 3. Methods
 
-| Feature | First ver | Phorge mapping | Bucket | Verdict |
+| Feature | First ver | Phorj mapping | Bucket | Verdict |
 |---|---|---|---|---|
 | Instance methods + visibility | PHP 5.0 | **HAS** instance methods + public/private | ✅ | SAME |
 | Static methods | PHP 5.0 | none yet → S5 | 🔲 M3 S5 | SAME |
@@ -101,7 +101,7 @@ Magic methods require **runtime metaprogramming** / dynamic dispatch on undeclar
 incompatible with static typing + the immutable model. PHP `__sleep`/`__wakeup` are additionally
 **soft-deprecated in PHP 8.5** (use `__serialize`/`__unserialize`).
 
-| Feature | First ver | Phorge mapping | Bucket | Verdict |
+| Feature | First ver | Phorj mapping | Bucket | Verdict |
 |---|---|---|---|---|
 | `__get` | PHP 5.0 | dynamic read of undeclared prop | ❌ reject-by-design | WORSE→reject — runtime metaprogramming; defeats static field typing |
 | `__set` | PHP 5.0 | dynamic write | ❌ reject-by-design | WORSE→reject — same + breaks immutability |
@@ -109,7 +109,7 @@ incompatible with static typing + the immutable model. PHP `__sleep`/`__wakeup` 
 | `__unset` | PHP 5.1 | dynamic removal | ❌ reject-by-design | WORSE→reject |
 | `__call` | PHP 5.0 | dynamic method dispatch | ❌ reject-by-design | WORSE→reject — no static signature |
 | `__callStatic` | PHP 5.3 | dynamic static dispatch | ❌ reject-by-design | WORSE→reject |
-| `__invoke` (callable object) | PHP 5.3 | covered better by closures/first-class fns | 🔶 → 🔲 Track A | SAME+syntax — Phorge closures (Track A) supersede the `__invoke` idiom |
+| `__invoke` (callable object) | PHP 5.3 | covered better by closures/first-class fns | 🔶 → 🔲 Track A | SAME+syntax — Phorj closures (Track A) supersede the `__invoke` idiom |
 | `__toString` | PHP 5.2 | a declared `to_string(): string` method / Stringable-style trait | 🔲 M3 S5 | SAME+syntax — make it an explicit interface method, not magic |
 | `__clone` | PHP 5.0 | clone hook; immutability → clone-with instead | 🔲 (M3 mutation / clone-with) | SAME+syntax — see clone-with §12 |
 | `__debugInfo` | PHP 5.6 | debug-repr customization | ❌ reject-by-design | WORSE→reject — runtime introspection hook |
@@ -127,7 +127,7 @@ constructs** — `__toString`→a `Stringable`-style interface method (S5); `__i
 
 ## 5. Traits
 
-| Feature | First ver | Phorge mapping | Bucket | Verdict |
+| Feature | First ver | Phorj mapping | Bucket | Verdict |
 |---|---|---|---|---|
 | `trait` definition | PHP 5.4 | none yet → **M3 S5** (traits/mixins; MI rejected as MI) | 🔲 M3 S5 | SAME — locked as the multiple-inheritance answer |
 | `use Trait;` | PHP 5.4 | none yet → S5 | 🔲 M3 S5 | SAME |
@@ -141,7 +141,7 @@ constructs** — `__toString`→a `Stringable`-style interface method (S5); `__i
 
 ## 6. Interfaces & Built-in Interfaces
 
-| Feature | First ver | Phorge mapping | Bucket | Verdict |
+| Feature | First ver | Phorj mapping | Bucket | Verdict |
 |---|---|---|---|---|
 | `Iterator` | PHP 5.0 | none yet; needs iteration protocol | 🔲 M3 S5 + iteration design | SAME |
 | `IteratorAggregate` | PHP 5.0 | none yet | 🔲 M3 S5 | SAME |
@@ -154,28 +154,28 @@ constructs** — `__toString`→a `Stringable`-style interface method (S5); `__i
 
 ---
 
-## 7. Enums (PHP 8.1) — Phorge is already BETTER here
+## 7. Enums (PHP 8.1) — Phorj is already BETTER here
 
 PHP enums are **pure** (no associated data) or **backed** by a single scalar (int/string). They can have
 methods, implement interfaces, and define constants — but **cannot hold per-case payload data** (a known
 PHP limitation; people emulate it with `match`-on-`$this` lookup methods).
 
-| Feature | First ver | Phorge mapping | Bucket | Verdict |
+| Feature | First ver | Phorj mapping | Bucket | Verdict |
 |---|---|---|---|---|
 | Pure enum (`enum X { case A; }`) | PHP 8.1 | enums (subsumed: a zero-payload variant) | ✅ | SAME |
-| Backed enum (`: int` / `: string`) | PHP 8.1 | a single-typed-payload variant covers it | ✅ | SAME — and Phorge generalizes to *any* payload shape |
-| **Per-case associated data (payloads)** | **n/a in PHP** | **Phorge enums carry payloads** (`Value::Enum`) | ✅ | **BETTER — PHP enums literally cannot do this; Phorge can (sum-type / ADT model)** |
+| Backed enum (`: int` / `: string`) | PHP 8.1 | a single-typed-payload variant covers it | ✅ | SAME — and Phorj generalizes to *any* payload shape |
+| **Per-case associated data (payloads)** | **n/a in PHP** | **Phorj enums carry payloads** (`Value::Enum`) | ✅ | **BETTER — PHP enums literally cannot do this; Phorj can (sum-type / ADT model)** |
 | Enum methods | PHP 8.1 | enum methods (P4a landed) | ✅ | SAME |
 | Enum constants | PHP 8.1 | none yet; tie to S5 const work | 🔲 M3 S5 | SAME |
 | Enum implementing interface | PHP 8.1 | needs interfaces → S5 | 🔲 M3 S5 | SAME |
 | `cases()` | PHP 8.1 | none as a built-in yet; trivial to add | 🔲 (cheap) | SAME |
 | `from()` (throws) | PHP 8.1 | maps to a `from(...) -> X` that faults | 🔲 (cheap) | SAME |
 | `tryFrom()` (null) | PHP 8.1 | maps to `tryFrom(...) -> X?` (optionals!) | 🔲 (cheap) | **BETTER — return type is `X?` and the non-null discipline forces handling; PHP returns nullable but doesn't force the check** |
-| **Exhaustive `match` over enum** | match exists in PHP 8.0 but **non-exhaustive** | **Phorge `match` is exhaustive + null-arm narrowing** | ✅ | **BETTER — PHP `match` throws `UnhandledMatchError` at *runtime*; Phorge enforces exhaustiveness at *compile time*** |
+| **Exhaustive `match` over enum** | match exists in PHP 8.0 but **non-exhaustive** | **Phorj `match` is exhaustive + null-arm narrowing** | ✅ | **BETTER — PHP `match` throws `UnhandledMatchError` at *runtime*; Phorj enforces exhaustiveness at *compile time*** |
 
-**Headline:** Phorge enums-with-payloads + compile-time-exhaustive `match` are a true **algebraic sum
+**Headline:** Phorj enums-with-payloads + compile-time-exhaustive `match` are a true **algebraic sum
 type** — strictly more expressive and safer than PHP's scalar-backed enums + runtime-checked `match`.
-This is Phorge's single biggest OOP-model advantage over PHP.
+This is Phorj's single biggest OOP-model advantage over PHP.
 
 ---
 
@@ -183,7 +183,7 @@ This is Phorge's single biggest OOP-model advantage over PHP.
 
 All of this is **roadmapped to Track A / M3 S3** (closures + arrow fns + pipe + first-class callables).
 
-| Feature | First ver | Phorge mapping | Bucket | Verdict |
+| Feature | First ver | Phorj mapping | Bucket | Verdict |
 |---|---|---|---|---|
 | Closure `function() {}` | PHP 5.3 | none yet → **Track A / S3** | 🔲 Track A | SAME |
 | `use (...)` capture by value | PHP 5.3 | immutable capture is the natural default | 🔲 Track A | SAME+syntax — by-value is default; explicit `use` list may be unnecessary |
@@ -196,13 +196,13 @@ All of this is **roadmapped to Track A / M3 S3** (closures + arrow fns + pipe + 
 | First-class callable `f(...)` | PHP 8.1 | none yet → Track A | 🔲 Track A | SAME+syntax — clean transpile to PHP `f(...)` |
 | `callable` type | PHP 5.4 | will become a proper function type `(T) -> U` | 🔲 Track A | BETTER — a *typed* function signature beats PHP's untyped `callable` |
 | `__invoke` objects as callables | PHP 5.3 | closures supersede | 🔲 Track A | SAME+syntax (see §4) |
-| **Partial application** `f(?, 2)` / `f(...)` | **PHP 8.6** | pairs with closures + pipe | 🔲 Track A | SAME+syntax — Phorge can adopt the same `?` placeholder; transpiles to PHP 8.6 PFA or a closure |
+| **Partial application** `f(?, 2)` / `f(...)` | **PHP 8.6** | pairs with closures + pipe | 🔲 Track A | SAME+syntax — Phorj can adopt the same `?` placeholder; transpiles to PHP 8.6 PFA or a closure |
 
 ---
 
 ## 9. Generators
 
-| Feature | First ver | Phorge mapping | Bucket | Verdict |
+| Feature | First ver | Phorj mapping | Bucket | Verdict |
 |---|---|---|---|---|
 | `yield` | PHP 5.5 | none; coroutine state machine | 🔲 (deferred — post-S3; ties to iteration protocol) | SAME (long-horizon) |
 | `yield key => value` | PHP 5.5 | none | 🔲 deferred | SAME |
@@ -218,26 +218,26 @@ the M6 green-threads work (the only other place suspension appears). Not on a ne
 
 ## 10. Exceptions — roadmapped to M3
 
-| Feature | First ver | Phorge mapping | Bucket | Verdict |
+| Feature | First ver | Phorj mapping | Bucket | Verdict |
 |---|---|---|---|---|
 | `try` / `catch` / `finally` | PHP 5.0 / 5.5 (finally) | none yet → **M3 exceptions** | 🔲 M3 | SAME |
 | Multi-catch `catch (A\|B $e)` | PHP 7.1 | none yet → M3 | 🔲 M3 | SAME |
 | Non-capturing catch `catch (A)` | PHP 8.0 | none yet → M3 | 🔲 M3 | SAME+syntax |
-| `throw` as expression | PHP 8.0 | none yet → M3 | 🔲 M3 | SAME — fits expression-oriented Phorge well |
+| `throw` as expression | PHP 8.0 | none yet → M3 | 🔲 M3 | SAME — fits expression-oriented Phorj well |
 | `Throwable` / `Error` / `Exception` hierarchy | PHP 7.0 | needs interfaces + inheritance (S5) | 🔲 M3 (+ S5) | SAME |
 | Custom exceptions | PHP 5.0 | needs class inheritance | 🔲 M3 + S5 | SAME |
 | `set_exception_handler` (global handler) | PHP 5.0 | runtime global mutable handler | ❌ reject-by-design | WORSE→reject — global mutable callback registry; nondeterministic; against spine |
 
-**Design opportunity:** Phorge already has a **`FaultKind` fault model** (IndexOob, ForceUnwrap, etc.) on
+**Design opportunity:** Phorj already has a **`FaultKind` fault model** (IndexOob, ForceUnwrap, etc.) on
 the byte-identical spine. A typed-result / checked-exception or `Result<T,E>`-style approach would be
-*more* Phorge-idiomatic than PHP's open `Throwable` hierarchy — worth a design spike when M3 exceptions
-open. (Phorge could end up BETTER here via typed errors.)
+*more* Phorj-idiomatic than PHP's open `Throwable` hierarchy — worth a design spike when M3 exceptions
+open. (Phorj could end up BETTER here via typed errors.)
 
 ---
 
 ## 11. Reflection API — reject-by-design (metaprogramming)
 
-| Feature | First ver | Phorge mapping | Bucket | Verdict |
+| Feature | First ver | Phorj mapping | Bucket | Verdict |
 |---|---|---|---|---|
 | `ReflectionClass` | PHP 5.0 | runtime type introspection | ❌ reject-by-design | WORSE→reject — runtime metaprogramming; no PHP-erasable static target; breaks transpile contract |
 | `ReflectionMethod` | PHP 5.0 | runtime method introspection | ❌ reject-by-design | WORSE→reject |
@@ -252,11 +252,11 @@ attributes — erased before backends, like generics — are the only conceivabl
 
 ## 12. Anonymous Classes, Lazy Objects, Clone-with
 
-| Feature | First ver | Phorge mapping | Bucket | Verdict |
+| Feature | First ver | Phorj mapping | Bucket | Verdict |
 |---|---|---|---|---|
-| Anonymous classes `new class {...}` | PHP 7.0 | no named type → conflicts with static nominal typing | ❌ reject-by-design | WORSE→reject — Phorge is nominally typed + packaged; ad-hoc unnamed types break that. (A *struct/record literal* could serve the same need later — different feature.) |
+| Anonymous classes `new class {...}` | PHP 7.0 | no named type → conflicts with static nominal typing | ❌ reject-by-design | WORSE→reject — Phorj is nominally typed + packaged; ad-hoc unnamed types break that. (A *struct/record literal* could serve the same need later — different feature.) |
 | **Lazy objects** (`newLazyGhost`/`newLazyProxy`) | PHP 8.4 | Reflection-driven deferred init | ❌ reject-by-design | WORSE→reject — built *on* Reflection; runtime proxy machinery; no erasable target |
-| **Clone-with** (`clone $o with { x: 1 }`) | PHP 8.5 | immutable-update idiom — a perfect fit | 🔲 (M3 mutation / dedicated immutable-update slice) | **BETTER fit** — for an immutable-by-default language, `clone … with` *is* the canonical update operation; Phorge should adopt it as a first-class immutable-update expression. Transpiles to PHP 8.5 `clone with`. |
+| **Clone-with** (`clone $o with { x: 1 }`) | PHP 8.5 | immutable-update idiom — a perfect fit | 🔲 (M3 mutation / dedicated immutable-update slice) | **BETTER fit** — for an immutable-by-default language, `clone … with` *is* the canonical update operation; Phorj should adopt it as a first-class immutable-update expression. Transpiles to PHP 8.5 `clone with`. |
 
 ---
 
@@ -266,7 +266,7 @@ attributes — erased before backends, like generics — are the only conceivabl
 |---|---|---|
 | Dynamic properties | deprecated PHP 8.2, removed PHP 9.0 | use declared typed props (`#[AllowDynamicProperties]` is the escape hatch) |
 | `__sleep` / `__wakeup` | **soft-deprecated PHP 8.5** | use `__serialize` / `__unserialize` |
-| `__autoload()` | removed PHP 8.0 | use `spl_autoload_register` (n/a to Phorge — no autoloader) |
+| `__autoload()` | removed PHP 8.0 | use `spl_autoload_register` (n/a to Phorj — no autoloader) |
 | `create_function()` | removed PHP 8.0 | use closures |
 | `each()` | removed PHP 8.0 | use `foreach` |
 
@@ -277,7 +277,7 @@ attributes — erased before backends, like generics — are the only conceivabl
 Counting the rows above (excluding the "PHP doesn't have this" interface-default row and the
 deprecated/removed table):
 
-- **✅ Phorge has ≥**: ~17 (class, namespaces [BETTER], readonly→immutable [BETTER], typed props [BETTER],
+- **✅ Phorj has ≥**: ~17 (class, namespaces [BETTER], readonly→immutable [BETTER], typed props [BETTER],
   nullable→optionals [BETTER], asymmetric-visibility-subsumed [BETTER], ctor promotion, instance methods,
   return types [BETTER], `__toString` intent, pure enum, backed enum, payload enums [BETTER],
   enum methods, `tryFrom`→`X?` [BETTER], exhaustive match [BETTER], list indexing).
@@ -343,24 +343,24 @@ clone-with (PHP 8.5) — immutable-update slice (BETTER fit); enum `cases()`/`fr
 
 ---
 
-## Where Phorge is already BETTER than PHP (the headline wins)
+## Where Phorj is already BETTER than PHP (the headline wins)
 
 1. **Enums-with-payloads = true algebraic sum types.** PHP enums **cannot** carry per-case data — they're
-   pure or single-scalar-backed only. Phorge's `Value::Enum` carries arbitrary typed payloads, making it a
-   real ADT. This is Phorge's single biggest model advantage.
+   pure or single-scalar-backed only. Phorj's `Value::Enum` carries arbitrary typed payloads, making it a
+   real ADT. This is Phorj's single biggest model advantage.
 2. **Compile-time-exhaustive `match`.** PHP `match` throws `UnhandledMatchError` at **runtime** on a missing
-   arm; Phorge enforces exhaustiveness at **compile time** (+ null-arm narrowing over `T?`). Strictly safer.
+   arm; Phorj enforces exhaustiveness at **compile time** (+ null-arm narrowing over `T?`). Strictly safer.
 3. **Immutable-by-default subsumes `readonly` AND asymmetric visibility.** PHP 8.1 `readonly` and PHP 8.4
-   `public private(set)` are opt-in ceremonies to claw back safety; in Phorge immutability + "public read /
+   `public private(set)` are opt-in ceremonies to claw back safety; in Phorj immutability + "public read /
    no external write" is the *default* — no keyword needed.
-4. **Optionals `T?` + non-null discipline beat PHP nullable + nullable `tryFrom`.** A non-optional Phorge
+4. **Optionals `T?` + non-null discipline beat PHP nullable + nullable `tryFrom`.** A non-optional Phorj
    `T` is statically guaranteed non-null; PHP's `?T` is runtime-only and `tryFrom()`'s nullable result is
-   easy to ignore. Phorge *forces* the null check.
-5. **Mandatory typed properties + mandatory return types.** PHP made these opt-in (7.4 / 7.0); Phorge makes
+   easy to ignore. Phorj *forces* the null check.
+5. **Mandatory typed properties + mandatory return types.** PHP made these opt-in (7.4 / 7.0); Phorj makes
    them mandatory — no `mixed`-by-omission, no untyped drift.
-6. **Mandatory packaging ("nothing in the wind").** Phorge requires `package` everywhere with strict
+6. **Mandatory packaging ("nothing in the wind").** Phorj requires `package` everywhere with strict
    folder=path; stricter and more predictable than PHP's optional namespaces + autoloader sprawl.
-7. **`final`-by-default posture.** Phorge classes are closed by default (inheritance opt-in at S5); PHP is
+7. **`final`-by-default posture.** Phorj classes are closed by default (inheritance opt-in at S5); PHP is
    open by default and bolts on `final` after the fact.
 8. **Typed function signatures will beat `callable`.** When Track A lands, a typed `(T) -> U` function type
    is strictly more informative than PHP's untyped `callable`.

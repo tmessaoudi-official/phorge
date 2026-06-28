@@ -31,39 +31,39 @@ fn free_function_with_params_and_arithmetic() {
     let out = php("function add(int a, int b) -> int { int c = a + b; return c; }");
     assert!(out.contains("function add(int $a, int $b): int {"), "{out}");
     // T6: both operands are statically `int`, so `+` emits the native PHP operator — no
-    // `__phorge_add` helper (which remains only as a fallback for operands of unknown kind).
+    // `__phorj_add` helper (which remains only as a fallback for operands of unknown kind).
     assert!(out.contains("$c = $a + $b;"), "{out}");
-    assert!(!out.contains("__phorge_add"), "{out}");
+    assert!(!out.contains("__phorj_add"), "{out}");
     assert!(out.contains("return $c;"), "{out}");
 }
 
 #[test]
 fn t6d_index_native_call_and_const_reads_specialize() {
-    // T6d: a list-index result is an `int` operand → native `intdiv`, no `__phorge_div`.
+    // T6d: a list-index result is an `int` operand → native `intdiv`, no `__phorj_div`.
     let idx = php("function f(List<int> xs, int i) -> int { return xs[i] / 2; }");
     assert!(idx.contains("intdiv($xs[$i], 2)"), "{idx}");
-    assert!(!idx.contains("__phorge_div"), "{idx}");
+    assert!(!idx.contains("__phorj_div"), "{idx}");
 
     // T6d: a native-call result carries its declared return type — `Text.upper` → string, so the
-    // interpolation hole concatenates directly (no `__phorge_str`).
+    // interpolation hole concatenates directly (no `__phorj_str`).
     let nat = php(
         "import Core.Console; import Core.Text; function main() -> void { Console.println(\"got {Text.upper(\\\"hi\\\")}\"); }",
     );
     assert!(nat.contains("strtoupper(\"hi\")"), "{nat}");
-    assert!(!nat.contains("__phorge_str(strtoupper"), "{nat}");
+    assert!(!nat.contains("__phorj_str(strtoupper"), "{nat}");
 
-    // T6d: a const read `Limits.MAX` is an `int` → `(string)` cast in interpolation, no `__phorge_str`.
+    // T6d: a const read `Limits.MAX` is an `int` → `(string)` cast in interpolation, no `__phorj_str`.
     let c = php(
         "import Core.Console; class Limits { const int MAX = 9; } function main() -> void { Console.println(\"max={Limits.MAX}\"); }",
     );
     assert!(c.contains("(string)Limits::MAX"), "{c}");
-    assert!(!c.contains("__phorge_str(Limits::MAX)"), "{c}");
+    assert!(!c.contains("__phorj_str(Limits::MAX)"), "{c}");
 }
 
 #[test]
 fn force_unwrap_uses_native_throw_expression_not_helper() {
     // `opt!` lowers to PHP 8.0's null-coalescing throw expression `($v ?? throw new …)` — `??`
-    // throws iff the value is null and evaluates the receiver once, exactly the old `__phorge_unwrap`
+    // throws iff the value is null and evaluates the receiver once, exactly the old `__phorj_unwrap`
     // helper. No runtime helper function is emitted.
     let out =
         php("function f(int? o) -> int { return o!; } function main() -> void { int x = f(5); }");
@@ -71,14 +71,14 @@ fn force_unwrap_uses_native_throw_expression_not_helper() {
         out.contains("($o ?? throw new \\RuntimeException(\"force-unwrap of null\"))"),
         "{out}"
     );
-    assert!(!out.contains("__phorge_unwrap"), "{out}");
+    assert!(!out.contains("__phorj_unwrap"), "{out}");
 }
 
 #[test]
 fn clone_with_lowers_to_native_php85_two_arg_clone() {
     // T4: the transpile floor is PHP 8.5, where `clone($o, [...])` is native (clone + property
     // overrides, constructor bypassed, `__clone` honored) — exactly what `obj with { f = e }` means.
-    // It replaces the old `__phorge_clone_with` runtime helper (which existed only for the prior 8.4
+    // It replaces the old `__phorj_clone_with` runtime helper (which existed only for the prior 8.4
     // floor). An empty override list is still a one-arg `clone($o)`.
     let out = php("class P { constructor(public int x, public int y) {} } \
              function main() -> void { P a = P(1, 2); P b = a with { x = 9 }; }");
@@ -87,7 +87,7 @@ fn clone_with_lowers_to_native_php85_two_arg_clone() {
         "clone-with uses native two-arg clone:\n{out}"
     );
     assert!(
-        !out.contains("__phorge_clone_with"),
+        !out.contains("__phorj_clone_with"),
         "the 8.4 helper is gone (call site and definition):\n{out}"
     );
 }
@@ -143,7 +143,7 @@ fn empty_return_emits_no_php_hint() {
 
 #[test]
 fn if_and_for_and_unary() {
-    // Phorge is immutable (no reassignment) — use fresh var decls inside branches.
+    // Phorj is immutable (no reassignment) — use fresh var decls inside branches.
     let out = php("function f(int n) -> int { \
                List<int> xs = [1, 2]; \
                for (int x in xs) { if (x > 0) { int a = -x; } else { bool b = !true; } } \
@@ -166,15 +166,15 @@ fn indexing_emits_php_subscript() {
 
 #[test]
 fn ranges_emit_php_range() {
-    // Ranges route through `__phorge_range` (QW-13): the helper yields `[]` for an empty/reversed
+    // Ranges route through `__phorj_range` (QW-13): the helper yields `[]` for an empty/reversed
     // range, where PHP's bare `range()` would descend. The `inclusive` flag is the third arg.
     let out = php(r#"import Core.Console;
 function main() -> void { for (int i in 0..3) { Console.println("{i}"); } }"#);
-    assert!(out.contains("__phorge_range(0, 3, false)"), "{out}");
-    assert!(out.contains("function __phorge_range"), "{out}");
+    assert!(out.contains("__phorj_range(0, 3, false)"), "{out}");
+    assert!(out.contains("function __phorj_range"), "{out}");
     let inc = php(r#"import Core.Console;
 function main() -> void { for (int i in 1..=3) { Console.println("{i}"); } }"#);
-    assert!(inc.contains("__phorge_range(1, 3, true)"), "{inc}");
+    assert!(inc.contains("__phorj_range(1, 3, true)"), "{inc}");
 }
 
 #[test]
@@ -192,7 +192,7 @@ fn interpolation_string_hole_emits_native_php_interpolation() {
         !out.contains(". $name"),
         "no concat for a simple hole: {out}"
     );
-    assert!(!out.contains("__phorge_str"), "{out}");
+    assert!(!out.contains("__phorj_str"), "{out}");
 }
 
 #[test]
@@ -252,29 +252,29 @@ fn string_literal_dollar_minimal_escape() {
 }
 
 #[test]
-fn float_interpolation_emits_phorge_float_helper() {
-    // T6: a statically-`float` interpolation hole emits `__phorge_float` directly (bypassing the
-    // `__phorge_str` dispatch). `__phorge_float` reproduces Rust's shortest-round-trip positional
+fn float_interpolation_emits_phorj_float_helper() {
+    // T6: a statically-`float` interpolation hole emits `__phorj_float` directly (bypassing the
+    // `__phorj_str` dispatch). `__phorj_float` reproduces Rust's shortest-round-trip positional
     // `f64` Display (no PHP precision-14 / scientific divergence) and is irreducible.
     let out = php("function f(float x) -> string { return \"v={x}\"; }");
     assert!(
-        out.contains(r#"return "v=" . __phorge_float($x);"#),
-        "float hole emits __phorge_float directly: {out}"
+        out.contains(r#"return "v=" . __phorj_float($x);"#),
+        "float hole emits __phorj_float directly: {out}"
     );
     assert!(
-        !out.contains("__phorge_str"),
+        !out.contains("__phorj_str"),
         "no str dispatch needed: {out}"
     );
     assert!(
-        out.contains("function __phorge_float($v) {")
+        out.contains("function __phorj_float($v) {")
             && out.contains(r#"$cand = sprintf("%.{$p}e", $a);"#),
-        "__phorge_float helper is defined with the shortest-round-trip loop: {out}"
+        "__phorj_float helper is defined with the shortest-round-trip loop: {out}"
     );
     // Only tier-1 PHP functions — must stay correct under `php -n` (extension policy).
     for forbidden in ["mb_", "ctype_", "iconv", "bcadd"] {
         assert!(
             !out.contains(forbidden),
-            "__phorge_float must use tier-1 functions only, found `{forbidden}`: {out}"
+            "__phorj_float must use tier-1 functions only, found `{forbidden}`: {out}"
         );
     }
 }
@@ -288,7 +288,7 @@ fn pure_string_literal_no_concat() {
 #[test]
 fn literal_match_with_binding_emits_native_match() {
     // T1: a value `match` of literals + a bare-binding catch-all lowers to a native PHP `match`
-    // expression (PHP `match` is strict `===`, agreeing with Phorge literal patterns). The binding
+    // expression (PHP `match` is strict `===`, agreeing with Phorj literal patterns). The binding
     // is assigned *inside* the subject (`match ($x = $n)`) so the `default` arm can reference it —
     // single evaluation, no `if/elseif` chain, no IIFE.
     let out = php(
@@ -365,7 +365,7 @@ fn enum_emits_base_and_subclasses() {
 // Slice A: PHP reserves int/float/bool/null (and string/true/false/…) as class names, even inside a
 // namespace. Enum variants transpile to `final class <V> extends <Enum>`, so a variant named after a
 // reserved word must be mangled (trailing `_`) or the PHP is a parse error. Transpiler-only: run/runvm
-// use the Phorge variant string, so stdout byte-identity is untouched.
+// use the Phorj variant string, so stdout byte-identity is untouched.
 const RESERVED_ENUM: &str =
     "enum Tok { Int(int v), Float(float f), Bool(bool b), Null(), Str(string s) }";
 
@@ -416,9 +416,9 @@ fn class_with_promotion_and_method() {
         "{out}"
     );
     assert!(out.contains("function greet(): string {"), "{out}");
-    // bare field ref inside a method resolves to $this->name (coerced via __phorge_str — P0-3)
+    // bare field ref inside a method resolves to $this->name (coerced via __phorj_str — P0-3)
     assert!(
-        out.contains(r#"return "Hello " . __phorge_str($this->name);"#),
+        out.contains(r#"return "Hello " . __phorj_str($this->name);"#),
         "{out}"
     );
 }
@@ -502,7 +502,7 @@ fn match_as_call_argument_emits_match_true() {
     // T2: a variant `match` in expression position (here a call argument) lowers to a native PHP
     // `match (true) { <cond> => <body>, … }` expression, NOT an IIFE. PHP `if` is a statement and
     // `match` is an expression, so the if-chain stays for statement-position matches while
-    // expression position uses `match` — mapping Phorge's match onto PHP's own statement/expression
+    // expression position uses `match` — mapping Phorj's match onto PHP's own statement/expression
     // duality. Payload bindings ride into the condition as `(($x = access) || true)` conjuncts (the
     // same proven technique the guarded if-chain uses), so no preceding statement is needed.
     let prog = parse_only(&format!(

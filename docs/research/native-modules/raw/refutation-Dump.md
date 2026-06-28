@@ -17,7 +17,7 @@ could reach Tier A, but that is a different, smaller module than the one claimed
 
 ## REFUTATION 1 (P0, blocks the claim) — Map key-type is destroyed on the PHP leg
 
-**The break.** A Phorge `Map` value is `Rc<Vec<(HKey, Value)>>` where `HKey ∈ {Int(i64), Bool(bool),
+**The break.** A Phorj `Map` value is `Rc<Vec<(HKey, Value)>>` where `HKey ∈ {Int(i64), Bool(bool),
 Str(String)}` (`src/value.rs:107`). The checker explicitly admits `int`/`bool`/`string` keys
 (`src/checker/expr.rs:695-725`, code `E-MAP-KEY`). A map literal transpiles to a plain PHP array
 `[k => v]` (`src/transpile/expr.rs:171-177`). **PHP coerces array keys**: I verified under
@@ -35,7 +35,7 @@ gettype(true-key) == "integer"
 
 So on the **Rust legs** a dumper iterating the `Vec<(HKey,Value)>` holds `HKey::Bool(true)` and would
 render e.g. `true => …` or `bool(true) => …`. On the **PHP leg** the original key type is *already
-gone* before `__phorge_dump` runs — the array only has `int(1)`. A PHP dumper reading
+gone* before `__phorj_dump` runs — the array only has `int(1)`. A PHP dumper reading
 `foreach ($arr as $k => $v)` sees `1`, an integer, and cannot reconstruct that it was a bool, nor
 that `"5"` was a string. **One byte (at minimum) differs; usually the whole key token differs.**
 
@@ -51,7 +51,7 @@ guide example would pass and mask the bug — the dangerous cases (`Map<bool, V>
 whose keys are numeric strings like `"5"`/`"007"`/`"0"`/`"+1"`) are constructible, type-checked, and
 would silently diverge. A differential example using `["5" => 1]` or `[true => 1]` fails immediately.
 
-**No clean fix on the spine.** To preserve key type the transpiler would have to stop emitting Phorge
+**No clean fix on the spine.** To preserve key type the transpiler would have to stop emitting Phorj
 maps as bare PHP arrays (e.g. wrap them in a tagged object carrying the original key kind) — a
 language-wide representation change far outside a "new native + PHP helper" dumper, and one that would
 ripple into every existing Map native and the byte-identity of `maps.phg` itself.
@@ -80,7 +80,7 @@ safe Map subset.)
 `Value::Enum(EnumVal{ ty, variant, payload: Vec<Value> })` (`src/value.rs:98-101`) is a first-class
 Value kind. The spike's §4 trap table enumerates Instance / Float / Map / Set / Cycle / Decimal /
 Closure / Bytes — and **never mentions enums**. `grep -in enum` on the spike finds only prose about
-the *Rust* `Value` enum, never the Phorge enum value kind. Yet enums are pervasive (Option/Result,
+the *Rust* `Value` enum, never the Phorj enum value kind. Yet enums are pervasive (Option/Result,
 RoundingMode, the injected Json enum, every user `enum`). The PHP transpile target for an enum (its
 runtime object/array shape) must be rendered byte-identically to the Rust `ty::variant(payload…)`
 form, and the payload recursion must agree — an unbudgeted, non-trivial format-pinning task with its
@@ -90,7 +90,7 @@ claim (§4 "Net").
 
 ## REFUTATION 4 (P2, but real) — Float edge cases beyond the KNOWN_ISSUE caveat
 
-The spike routes floats through `__phorge_float` (correct, and the PHP helper at
+The spike routes floats through `__phorj_float` (correct, and the PHP helper at
 `transpile/program.rs:300+` does handle `NaN`→`"NaN"`, `±inf`, and signed-zero `-0`). So ordinary and
 even special floats are actually OK *if and only if* the Rust renderer uses the identical tokens
 (`"NaN"`, `"inf"`/`"-inf"`, `"-0"`/`"0"`). But the spike says the Rust side uses

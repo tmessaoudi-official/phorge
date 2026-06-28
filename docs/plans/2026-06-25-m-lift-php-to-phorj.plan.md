@@ -1,6 +1,6 @@
-# M-Lift — PHP → Phorge (`phg lift`) Plan
+# M-Lift — PHP → Phorj (`phg lift`) Plan
 
-> The reverse of `transpile`: read PHP, emit a Phorge **draft**. A new front-end subsystem. Scoped as
+> The reverse of `transpile`: read PHP, emit a Phorj **draft**. A new front-end subsystem. Scoped as
 > a **best-effort, review-required** tool — NOT a verified-equivalent transform (see the verdict below).
 
 ## Verdict / Decisions Log
@@ -11,19 +11,19 @@
   rejected `composer.json`). Asymmetry of names mirrors asymmetry of guarantees: transpile *down*
   (total, verified) vs lift *up* (partial, review-required). Alternatives considered: `port`/`import`.
 - [2026-06-25] AGREED: **100% confidence is impossible in general** (fundamental, not an engineering
-  gap): the languages aren't bijective (Phorge = strict/typed/smaller; PHP = dynamic/larger), type
+  gap): the languages aren't bijective (Phorj = strict/typed/smaller; PHP = dynamic/larger), type
   inference from untyped PHP is undecidable + lossy (`array` ⇒ List|Map|Set), and no spine runs
   backward. Same reason no 100% JS→TS converter exists. So: best-effort + human-in-the-loop, honest
   boundaries.
 - [2026-06-25] AGREED: **Tier-1 first, demo-angle first.** Highest value-per-effort + the "show what
-  PHP becomes in Phorge" use case (playground "paste PHP → see Phorge").
+  PHP becomes in Phorj" use case (playground "paste PHP → see Phorj").
 - [2026-06-25] OPEN (ask before build): demo angle (smaller, playground-first) vs migration angle
   (bigger, needs the round-trip gate) as the primary driver — they share the parser but differ in depth.
 
 ## Feasibility tiers (what `lift` handles)
 | Tier | PHP shape | Confidence |
 |---|---|---|
-| **1** | Already Phorge-shaped: typed signatures (PHP 7/8 hints), typed class props, `enum` (8.1), `match`, plain control flow, arrays | High (near 1:1 backward) |
+| **1** | Already Phorj-shaped: typed signatures (PHP 7/8 hints), typed class props, `enum` (8.1), `match`, plain control flow, arrays | High (near 1:1 backward) |
 | **2** | Untyped-but-inferrable; `array` whose List/Map role is clear from use | Medium (heuristic + checker validation) |
 | **3** | Dynamic PHP (`$$x`, `eval`, magic methods, reflection, true `mixed`) | **Refuse + flag** `// CANNOT LIFT: <reason>`, never guess |
 
@@ -31,19 +31,19 @@
 | Phase | Work | Size |
 |---|---|---|
 | **L1** | PHP lexer (std-only) for the Tier-1 token set | S–M |
-| **L2** | **PHP parser, Tier-1 subset** (typed fn sigs, classes + typed props + promotion, `enum`, `match`, `if`/`for`/`foreach`/`while`, exprs, array literals) | **L — dominant cost; rivals Phorge's own parser** |
-| **L3** | Phorge AST → `.phg` **pretty-printer** (does not exist yet; the transpiler prints PHP, not Phorge) | M |
-| **L4** | **Lifter**: PHP-AST → Phorge-AST. Map typed PHP 1:1; infer `List`/`Map`/`Set` from `array` usage; map `?T`→`T?`, `??`/`?->`; flag dynamic features as `// CANNOT LIFT`. | M–L |
-| **L5** | **Round-trip differential gate** + confidence annotations: `lift` PHP→Phorge, `transpile` back→PHP, run BOTH PHPs on sample inputs, compare stdout. Match = evidence the lift preserved behavior. Annotate output `// lifted (verify)`. | M |
-| **L6** | `phg lift` CLI + **playground "paste PHP → see Phorge" demo** | S–M |
+| **L2** | **PHP parser, Tier-1 subset** (typed fn sigs, classes + typed props + promotion, `enum`, `match`, `if`/`for`/`foreach`/`while`, exprs, array literals) | **L — dominant cost; rivals Phorj's own parser** |
+| **L3** | Phorj AST → `.phg` **pretty-printer** (does not exist yet; the transpiler prints PHP, not Phorj) | M |
+| **L4** | **Lifter**: PHP-AST → Phorj-AST. Map typed PHP 1:1; infer `List`/`Map`/`Set` from `array` usage; map `?T`→`T?`, `??`/`?->`; flag dynamic features as `// CANNOT LIFT`. | M–L |
+| **L5** | **Round-trip differential gate** + confidence annotations: `lift` PHP→Phorj, `transpile` back→PHP, run BOTH PHPs on sample inputs, compare stdout. Match = evidence the lift preserved behavior. Annotate output `// lifted (verify)`. | M |
+| **L6** | `phg lift` CLI + **playground "paste PHP → see Phorj" demo** | S–M |
 
 ## Contract (lock before build)
 - **Review-required**: output is a draft/scaffold, never a verified equivalent.
 - **Annotates confidence**: `// lifted (verify)` on lifted code; `// CANNOT LIFT: <reason>` on Tier-3.
 - **Refuses Tier-3 loudly** rather than guessing.
 - **Round-trip-gated** (L5) as the quality signal — confidence is *earned and visible*, like the rest
-  of Phorge, not claimed.
-- The Phorge type-checker validates the lifted draft: if it type-checks, it's structurally sound
+  of Phorj, not claimed.
+- The Phorj type-checker validates the lifted draft: if it type-checks, it's structurally sound
   (behavior still needs review).
 
 ## Effort
@@ -53,12 +53,12 @@ Start at L1–L3 + a thin Tier-1 lifter behind the playground demo; grow the par
 ## Dependencies / sequencing
 - **After Track 1** (transpile modernization): a clean native-PHP printer makes the L5 round-trip
   comparison far easier to validate.
-- L3 (Phorge printer) is independently useful (e.g. `phg fmt` could reuse it later).
+- L3 (Phorj printer) is independently useful (e.g. `phg fmt` could reuse it later).
 
 ## Decisions Log (build)
-- [2026-06-25] AGREED: **demo angle first** (playground "paste PHP → see Phorge"). Tier-1 PHP
+- [2026-06-25] AGREED: **demo angle first** (playground "paste PHP → see Phorj"). Tier-1 PHP
   subset, thin lifter, `// lifted (verify)` annotations; L5 round-trip optional this phase. Build
-  L1 (PHP lexer) → L2 (Tier-1 parser) → L3 (Phorge pretty-printer) → L4 (thin lifter) → L6 (CLI +
+  L1 (PHP lexer) → L2 (Tier-1 parser) → L3 (Phorj pretty-printer) → L4 (thin lifter) → L6 (CLI +
   playground demo). Module lives at `src/lift/`.
 - [2026-06-25] AGREED (reach EXPANDED, developer): **Tier-1 + Tier-2 AND attempt Tier-3** — no longer
   demo-only. Tier-2 (`array`→`List`/`Map`/`Set` inference, `?T`→`T?`, `??`/`?->`) is in scope and
@@ -89,34 +89,34 @@ Start at L1–L3 + a thin Tier-1 lifter behind the playground demo; grow the par
     dynamic `new $x`/`$obj::`, array-append `[]`, `interface`/`trait`/`try`/`switch`/`namespace`/…
   - Wholly isolated — no `Op`/`Value`/checker/interpreter/VM/transpiler change; nothing outside
     `src/lift/` consumes it. 840 lib tests green (43 in the lift module), clippy + fmt clean.
-- [2026-06-26] **L3 COMPLETE** (`d1a074b`): `src/lift/printer.rs` — Phorge AST → `.phg` pretty-printer
+- [2026-06-26] **L3 COMPLETE** (`d1a074b`): `src/lift/printer.rs` — Phorj AST → `.phg` pretty-printer
   (inverse of the PHP transpiler). Scoped to the lifter-output subset (out-of-subset node → clear
   `Err`); strings escaped (incl. `{`/`}`→`\{`/`\}`), binaries fully-parenthesized — both re-parse-safe.
   Verified by exact-output + round-trip-idempotency tests. Reusable later as `phg fmt`. 11 tests.
-- [2026-06-26] **L4 COMPLETE** (`bf08b1d`): `src/lift/lifter.rs` — PHP-AST → Phorge-AST + `lift_source`
-  (lex→parse→lift→print). **The ↑ PHP→Phorge direction is now end-to-end for the Tier-1 core.** Idiomatic
+- [2026-06-26] **L4 COMPLETE** (`bf08b1d`): `src/lift/lifter.rs` — PHP-AST → Phorj-AST + `lift_source`
+  (lex→parse→lift→print). **The ↑ PHP→Phorj direction is now end-to-end for the Tier-1 core.** Idiomatic
   mapping (top-level code → `main()`; `$x=e`→`mutable var`; `.`→`+`; `===`→`==`; `echo`→`Console.print`
   +auto-import; `__construct`→`constructor`; PHP fields→`mutable`, non-final class→`open`; array→List/Map;
   ternary→expr-`if`; match→`Expr::Match`). Loud lift-errors for the Tier-2/no-equivalent frontier
-  (`array` type, instance-field default, backed enums + enum methods, **foreach** [Phorge for-in needs a
+  (`array` type, instance-field default, backed enums + enum methods, **foreach** [Phorj for-in needs a
   concrete element type — `var` is VarDecl-only], default params, untyped params, elvis, assign-as-subexpr,
   non-literal match arms, main/top-level collision). End-to-end test asserts the lifted `.phg` re-parses
-  as valid Phorge. 13 tests. 864 lib green, isolated.
+  as valid Phorj. 13 tests. 864 lib green, isolated.
 - [2026-06-26] **L6 COMPLETE** (`8a89e8a`): the ↑ direction is **user-facing**. `phg lift <file.php>`
   CLI (string-source path; `cmd_lift` prepends a `// lifted (verify)` banner; wired across USAGE/
   help_text/help_for/main.rs match+dispatch). `examples/lift/` = README walkthrough + `sample.php` +
   GENERATED `sample.phg` — the lifted output is in the example suite, so it's byte-identity-gated on
-  run/runvm/**real PHP** (all print `Hello, Phorge`). Playground `lift_json` + `pg_lift` wasm wrapper
+  run/runvm/**real PHP** (all print `Hello, Phorj`). Playground `lift_json` + `pg_lift` wasm wrapper
   (lift_source uses no `on_deep_stack` → browser-safe). 975 lib+differential green + 11 playground.
-  **Web-UI button deferred** (needs a PHP-input "paste PHP → see Phorge" mode in `main.js`).
+  **Web-UI button deferred** (needs a PHP-input "paste PHP → see Phorj" mode in `main.js`).
 - [2026-06-26] **L5 COMPLETE** — round-trip differential gate (`tests/lift_roundtrip.rs`). For each
-  Tier-1 PHP sample: lift→Phorge, then assert the lifted Phorge run **three ways** (interpreter, VM,
+  Tier-1 PHP sample: lift→Phorj, then assert the lifted Phorj run **three ways** (interpreter, VM,
   transpiled-back PHP) all equal the **original PHP's** stdout — the original is the source of truth, so
-  a full match is evidence the lift *preserved behavior*, not just produced valid Phorge. 5 samples
+  a full match is evidence the lift *preserved behavior*, not just produced valid Phorj. 5 samples
   (concat, if/elseif/else, for-loop string-build, class+ctor+method, match). PHP-gated like the oracle
-  (`PHORGE_REQUIRE_PHP=1`). Samples echo strings only (int-echo would lift to a `Console.print(int)` type
+  (`PHORJ_REQUIRE_PHP=1`). Samples echo strings only (int-echo would lift to a `Console.print(int)` type
   error; floats have a known formatting divergence). **The ↑ direction is now behavior-verified.**
 - **NEXT = Tier-2 build-out** — the lift-error frontier in `lifter.rs`: `array`→List/Map/Set inference,
   foreach element-type inference, default params, backed enums. Then the playground web-UI button
   (`pg_lift` exists; needs a PHP-input mode in `main.js`). **M-Lift core (L1–L6) is complete** — the
-  ↑ PHP→Phorge bridge is end-to-end, user-facing, and behavior-gated for Tier-1.
+  ↑ PHP→Phorj bridge is end-to-end, user-facing, and behavior-gated for Tier-1.

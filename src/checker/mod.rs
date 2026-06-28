@@ -157,7 +157,7 @@ struct HookInfo {
 
 /// Member-level visibility (Feature A — `const` class constants). Distinct from `ast::Visibility`
 /// (declaration/file scope): a *member* is `public` (default), `protected`, or `private`, derived from
-/// the `Modifier::{Public,Private,Protected}` set. Const access is the one site Phorge enforces member
+/// the `Modifier::{Public,Private,Protected}` set. Const access is the one site Phorj enforces member
 /// visibility — required because the transpiler emits a PHP `private const`, which PHP would reject if
 /// read from outside the class (a `run`↔PHP byte-identity break otherwise).
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -280,7 +280,7 @@ pub struct Checker {
     scopes: Vec<HashMap<String, (Ty, bool)>>,
     errors: Vec<Diagnostic>,
     /// Non-fatal lints (e.g. `W-FORCE-UNWRAP`). Surfaced to stderr by the CLI but never fail the
-    /// build — the first member of Phorge's warning channel (M3 S2.5).
+    /// build — the first member of Phorj's warning channel (M3 S2.5).
     warnings: Vec<Diagnostic>,
     /// return type of the function/method currently being checked
     cur_ret: Ty,
@@ -594,7 +594,7 @@ impl Checker {
         None
     }
     /// Resolve a name against the lexical scope stack only (params + locals + captures). Bare *field*
-    /// access is intentionally NOT resolved here (2026-06-27): Phorge requires `this.field` everywhere,
+    /// access is intentionally NOT resolved here (2026-06-27): Phorj requires `this.field` everywhere,
     /// matching PHP's `$this->field` (no bare field access) — a bare field reference is reported as
     /// `E-BARE-FIELD` at the `Ident` site, not silently resolved.
     fn lookup(&self, name: &str) -> Option<Ty> {

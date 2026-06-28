@@ -1,11 +1,11 @@
 # S6 Multiple-Inheritance research — Scala traits (→JVM) & Eiffel MI
 
-> Topic owner research for Phorge S6 (`extends`/abstract/traits). Two precedents:
-> **(1) Scala traits compiled to the JVM** — the closest real-world analogue to Phorge→PHP
+> Topic owner research for Phorj S6 (`extends`/abstract/traits). Two precedents:
+> **(1) Scala traits compiled to the JVM** — the closest real-world analogue to Phorj→PHP
 > (MI-of-implementation lowered onto a single-inheritance target), and **(2) Eiffel MI** —
 > the gold standard for *explicit, feature-level* conflict resolution.
 >
-> Phorge target is **PHP 8.4**: single class inheritance, many interfaces, traits
+> Phorj target is **PHP 8.4**: single class inheritance, many interfaces, traits
 > (`use A, B;` carrying state + methods; collisions are a *fatal error* unless resolved with
 > `insteadof` / `as`; **no** runtime MRO, **no** super-through-linearization).
 >
@@ -20,7 +20,7 @@
 
 A Scala trait is **multiple inheritance of implementation**: it can carry concrete method
 bodies *and* state (`val`/`var`), and a class may mix in many traits (`class C extends B with T1 with T2`).
-This is exactly the capability PHP traits provide — and exactly the capability Phorge S6 wants —
+This is exactly the capability PHP traits provide — and exactly the capability Phorj S6 wants —
 but Scala layers a **deterministic linearization** on top so the diamond never produces ambiguity
 or double-execution. [Verified: scala-lang linearization sources]
 
@@ -28,7 +28,7 @@ or double-execution. [Verified: scala-lang linearization sources]
 
 The JVM has **single class inheritance** + **multiple interface implementation**, and (pre-Java-8)
 interfaces could hold **no method bodies and no instance fields**. Scala therefore had to *encode*
-trait MI onto that constrained target — the identical structural problem Phorge faces lowering onto
+trait MI onto that constrained target — the identical structural problem Phorj faces lowering onto
 PHP. The encoding evolved across three eras:
 
 #### Era A — pre-2.12 (Scala 2.11.x and earlier): interface + `T$class` + virtual forwarders
@@ -56,14 +56,14 @@ PHP. The encoding evolved across three eras:
   trait methods, purely to recover JVM **startup performance** (default-method resolution was slower
   to warm up), at the cost of larger bytecode. [Verified: scala-lang blog; scala-dev#35]
 
-**Takeaway for Phorge:** the durable trick across all three eras is *separation of TYPE from
+**Takeaway for Phorj:** the durable trick across all three eras is *separation of TYPE from
 IMPLEMENTATION* — emit the trait's contract as an interface (the type), emit the bodies somewhere a
 single-inheritance target can reach (static methods / default methods), and **wire them per concrete
 class**. PHP already gives us this split for free: `interface` (type) + `trait` (impl) are first-class.
 
 ### 1.3 How trait FIELDS / state are handled — the crucial part
 
-A JVM interface **cannot declare instance fields**. Scala's solution (the exact pattern Phorge must
+A JVM interface **cannot declare instance fields**. Scala's solution (the exact pattern Phorj must
 mirror onto PHP):
 
 1. **The trait declares only accessors in the interface — never the field.**
@@ -171,9 +171,9 @@ order-independent**.
 
 ---
 
-## PART 3 — Synthesis for Phorge (interp + VM + transpiled PHP)
+## PART 3 — Synthesis for Phorj (interp + VM + transpiled PHP)
 
-### 3.1 Phorge's actual target toolkit (PHP 8.4)
+### 3.1 Phorj's actual target toolkit (PHP 8.4)
 - **One** parent class (`extends`), **many** interfaces (`implements`), **many** traits (`use`).
 - A trait carries **methods, abstract methods, static methods, AND properties (state)**.
 - **Trait method collision is a FATAL compile error** unless resolved with:
@@ -193,7 +193,7 @@ order-independent**.
 
 | Scala-on-JVM trick | PHP equivalent | Fit |
 |---|---|---|
-| Trait *type* = interface | PHP `interface` | **Clean** — emit each Phorge trait/parent's *contract* as an `interface`. |
+| Trait *type* = interface | PHP `interface` | **Clean** — emit each Phorj trait/parent's *contract* as an `interface`. |
 | Trait *impl* = static methods / default methods, wired per class | PHP `trait` (flattened into the class) | **Clean** — PHP traits *are* the "inject implementation into the concrete class" mechanism, done by the engine. We don't even need forwarders; PHP copies the bodies in. |
 | Trait *state* = abstract accessors in interface + **backing field injected into the concrete class** + `$init$` from ctor | PHP `trait` properties are **also injected into the using class** | **Mostly clean, with one collision hazard** — see below. |
 | `super` = next-in-linearization | *(no PHP analogue)* | **Does NOT map** — PHP has no trait `super`/MRO. |
@@ -204,7 +204,7 @@ surface as accessor-signature clashes, resolvable. PHP injects the **raw propert
 class, so **two traits with a same-named property are an unresolvable fatal** (no `insteadof` for
 properties; identical-declaration is the only escape). Therefore:
 
-- **If Phorge lowers trait state as raw PHP trait properties**, a diamond/collision on *state* is a
+- **If Phorj lowers trait state as raw PHP trait properties**, a diamond/collision on *state* is a
   hard PHP error with no resolution clause — worse than methods.
 - **The Scala-faithful fix is to lower trait state the way scalac does:** declare an **abstract
   accessor pair in the emitted interface** (`function x(): T; function setX(T $v): void;`) and put a
@@ -213,12 +213,12 @@ properties; identical-declaration is the only escape). Therefore:
   and never as two colliding raw properties. This converts an un-resolvable property clash into a
   resolvable *method* clash. [Inferred — direct application of §1.3 onto PHP's property rule.]
 
-### 3.3 Could Phorge adopt an Eiffel-style explicit clause that lowers to PHP `insteadof`/`as`?
+### 3.3 Could Phorj adopt an Eiffel-style explicit clause that lowers to PHP `insteadof`/`as`?
 
 Yes — and it is an *almost 1:1* structural match, which is the strongest finding here:
 
 ```
-// Phorge surface (Eiffel-flavoured, PHP-lowerable)
+// Phorj surface (Eiffel-flavoured, PHP-lowerable)
 class C extends Base implements I uses A, B {
     rename A.foo as aFoo;   // Eiffel `rename`  → PHP  A::foo as aFoo;
     use    B.foo;           // Eiffel `select`  → PHP  B::foo insteadof A;  (pick the winner)
@@ -236,7 +236,7 @@ class C extends Base implements I uses A, B {
 **Assessment: strong fit.** An Eiffel-style explicit `rename`/`select` clause at the inheritance site
 lowers **directly and statically** to PHP `as` / `insteadof`. There is no order to compute, no MRO to
 reproduce — the resolution is a **local, named, compile-time rewrite**. This is *exactly* the kind of
-front-end-only transform Phorge already uses (alias expansion, generic erasure): resolve at the
+front-end-only transform Phorj already uses (alias expansion, generic erasure): resolve at the
 checker/loader, emit explicit `insteadof`/`as`, and **all three backends see an already-disambiguated
 program**.
 
@@ -244,7 +244,7 @@ program**.
 
 **Pick Eiffel-style explicit `rename`/`select` resolution. Reject Scala-style linearized `super`.**
 
-Reasoning, weighted by Phorge's *defining* constraint (byte-identical interp ≡ VM ≡ generated PHP):
+Reasoning, weighted by Phorj's *defining* constraint (byte-identical interp ≡ VM ≡ generated PHP):
 
 1. **Reproducibility across three backends.** Explicit resolution is a **static rewrite** with a
    single, written-down answer per conflict. The interpreter, the VM, and the transpiler each see the
@@ -253,14 +253,14 @@ Reasoning, weighted by Phorge's *defining* constraint (byte-identical interp ≡
    Scala-style linearization requires every backend to **compute the identical linear order and the
    identical `super`-chain target** independently; any discrepancy between the interpreter's walk, the
    VM's encoding, and what PHP would do is a silent byte-identity break — and **PHP has no
-   linearization to match against at all**, so the transpiled leg could never reproduce a Phorge MRO
+   linearization to match against at all**, so the transpiled leg could never reproduce a Phorj MRO
    without emitting a hand-rolled dispatch shim (defeating "idiomatic PHP"). [Verified: PHP has no
    MRO/trait-super; §3.1.]
 
 2. **No new runtime mechanism, no new `Op`.** Explicit resolution lives entirely in the front end
    (checker + loader name-mangling/rewrite pass, mirroring the existing cross-package mangle). The
    backends consume a flattened, conflict-free program — **zero `Op` additions, zero `Value`
-   changes** — the cheapest possible landing and the one most consistent with every prior Phorge
+   changes** — the cheapest possible landing and the one most consistent with every prior Phorj
    slice. Scala-style `super`-chaining would force a runtime "next-in-linearization" dispatch the VM
    and interpreter must both implement *and* the transpiler must fake in PHP.
 
@@ -271,7 +271,7 @@ Reasoning, weighted by Phorge's *defining* constraint (byte-identical interp ≡
 4. **Philosophy fit ("legible, no surprises, familiarity-first").** Eiffel's "you must disambiguate
    explicitly, at the site, by name" is *more legible* and *less surprising* than "memorise the
    right-to-left dedupe-keeping-last rule to predict which override wins" — and it is the model a PHP
-   developer **already knows** (`insteadof`/`as`). Phorge's job is to be a provably-correct *upgrade*
+   developer **already knows** (`insteadof`/`as`). Phorj's job is to be a provably-correct *upgrade*
    of PHP, not to import JVM-trait mental overhead.
 
 **The one Scala idea worth keeping** is the **field-lowering technique** (§3.2): accessor-in-interface
@@ -295,7 +295,7 @@ trick together.
 - **PHP 8.4:** single `extends`, many `implements`, many `use` (traits flattened, methods + state);
   method collision = fatal unless `insteadof`/`as`; property collision = fatal unless identical
   declarations; **no MRO, no trait `super`**.
-- **Phorge verdict:** adopt **Eiffel-style explicit `rename`/`select`** lowering to PHP `as`/`insteadof`
+- **Phorj verdict:** adopt **Eiffel-style explicit `rename`/`select`** lowering to PHP `as`/`insteadof`
   (front-end-only, byte-identity-safe, no new `Op`); borrow **Scala's accessor+injected-backing-field**
   state lowering to dodge PHP's un-resolvable property collisions; **reject Scala linearized `super`**
   (no PHP analogue, requires per-backend MRO reproduction = silent spine break).

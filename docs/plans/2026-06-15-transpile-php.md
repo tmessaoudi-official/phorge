@@ -1,10 +1,10 @@
-# Phorge → PHP Transpiler Implementation Plan
+# Phorj → PHP Transpiler Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement
 > this plan task-by-task (subagent-driven deadlocks on the ask-human gate in this project —
 > execute inline on `master`). Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Emit runnable PHP 8.x from a type-checked Phorge program via `phg transpile <file>`.
+**Goal:** Emit runnable PHP 8.x from a type-checked Phorj program via `phg transpile <file>`.
 
 **Architecture:** New `src/transpile.rs` codegen module walks the untyped AST (same AST as
 the evaluator), tracking global tables (funcs/classes/variants) and a per-function
@@ -97,7 +97,7 @@ Expected: compile error — `emit` not found.
 - [ ] **Step 3: Implement the scaffold**
 
 ```rust
-//! Phorge → PHP transpiler. Walks the untyped AST and emits runnable PHP 8.x.
+//! Phorj → PHP transpiler. Walks the untyped AST and emits runnable PHP 8.x.
 use crate::ast::*;
 use std::collections::{HashMap, HashSet};
 
@@ -922,7 +922,7 @@ fn transpiled_php_runs_and_matches_interpreter() {
         .output().expect("spawn transpile");
     assert!(php.status.success());
     // write to a temp file and run it
-    let dir = std::env::temp_dir().join("phorge_rt");
+    let dir = std::env::temp_dir().join("phorj_rt");
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("sample.php");
     std::fs::write(&path, &php.stdout).unwrap();

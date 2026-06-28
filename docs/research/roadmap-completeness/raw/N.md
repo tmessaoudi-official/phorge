@@ -2,16 +2,16 @@
 
 ## Track summary
 
-Phorge's numeric tower today is intentionally minimal and **provably correct**: `int` (checked
+Phorj's numeric tower today is intentionally minimal and **provably correct**: `int` (checked
 `i64` — overflow and div/mod-by-zero are clean faults, never wraparound or panic), `float` (`f64`,
-rendered byte-identically across all three backends via the `__phorge_float` helper), `bytes`
+rendered byte-identically across all three backends via the `__phorj_float` helper), `bytes`
 (`b"…"`), and a thin `Core.Math` (`sqrt`/`pow`/`floor`/`ceil` on float, `abs`/`min`/`max` on int).
 There is **no decimal, no arbitrary-precision integer, no rational, no sized integers, no rounding
 control, and — most strikingly — no date/time type whatsoever** (verified: zero `time`/`date`/
 `duration`/`timezone` references in `src/`, ROADMAP, VISION, or specs). This is precisely the domain
 where PHP burns its users: `0.1 + 0.2`-style float money bugs, `bcmath`'s stringly-typed API, the
 sprawling mutable `DateTime` family with timezone/DST footguns, and integer width surprises. Because
-Phorge's whole pitch is "a typed, surprise-free upgrade of PHP," the single highest-leverage business
+Phorj's whole pitch is "a typed, surprise-free upgrade of PHP," the single highest-leverage business
 feature it can ship is a **typed `Decimal` money/fixed-point type** that makes float-for-currency a
 *compile error*, followed by a **correct, immutable date/time library** modelled on the good parts of
 `DateTimeImmutable` but with the timezone made non-optional. Both map cleanly: `Decimal` → `brick/
@@ -50,7 +50,7 @@ quarantined exactly as URL/network was (M6) and the float-irrational caveat alre
 **N-decimal — typed `decimal` money/fixed-point primitive (the headline gap).** This is the single
 feature a PHP/GRDF business dev would adopt instantly. PHP has *no* native decimal: developers either
 misuse `float` (the classic `0.1 + 0.2` money bug that silently corrupts invoices) or fall back to
-`bcmath`'s stringly-typed, error-prone API, or pull in `brick/math`. Phorge can make
+`bcmath`'s stringly-typed, error-prone API, or pull in `brick/math`. Phorj can make
 `float`-for-currency a **compile error** by giving `decimal` its own `Ty` so it never auto-coerces with
 `float`. The shippable, byte-identity-safe core is a **fixed-precision decimal as `(i128 mantissa,
 scale)` or a small bignum on `Vec<u32>` — std-only, deterministic**, with checked arithmetic in the
@@ -63,7 +63,7 @@ PHP-leg helper are a cohesive unit.
 
 **N-decimal-rounding — explicit rounding modes.** Money math is meaningless without controlled
 rounding; `brick/math` ships a `RoundingMode` enum precisely because the rounding policy *is* the
-business rule (banker's rounding for finance, half-up for retail). A Phorge `RoundingMode` enum
+business rule (banker's rounding for finance, half-up for retail). A Phorj `RoundingMode` enum
 (`HalfUp`/`HalfEven`/`Floor`/`Ceil`/…) consumed by `decimal.round(scale, mode)` is a direct,
 legible map to PHP and forces the developer to make the choice explicit rather than inheriting a
 silent default. Ships with N-decimal.
@@ -71,8 +71,8 @@ silent default. Ships with N-decimal.
 **N-datetime-core — immutable timezone-aware `DateTime`/`Instant`.** PHP's date handling is its
 second-most-notorious footgun: a sprawling mutable `DateTime` (mutation-aliasing bugs), an *optional*
 timezone that silently defaults to a global ini setting, and DST surprises. The community consensus
-(confirmed: "use `DateTimeImmutable`, always specify the timezone, store UTC") is exactly what Phorge
-should bake into the *type*. A `DateTime` value that is **immutable by construction** (Phorge already
+(confirmed: "use `DateTimeImmutable`, always specify the timezone, store UTC") is exactly what Phorj
+should bake into the *type*. A `DateTime` value that is **immutable by construction** (Phorj already
 is) and where **the timezone/offset is a mandatory constructor argument** (no global-default footgun)
 is a clean, strictly-safer mapping onto `DateTimeImmutable`. The deterministic, byte-identity-safe core
 is **explicit-offset timestamps + arithmetic** (epoch seconds + fixed offset → no IANA DB, no `now()`):
@@ -91,9 +91,9 @@ source (the "date shifts by a day across timezones" classic). Separate `Date` (y
 `DateTime` approach. Maps to `DateTimeImmutable` constrained to midnight UTC, or a documented civil
 convention. Ships in M-TIME.
 
-**N-int-width — pin and document `int` = `i64`.** Phorge's `int` is a checked `i64`; PHP's `int` is
+**N-int-width — pin and document `int` = `i64`.** Phorj's `int` is a checked `i64`; PHP's `int` is
 platform-width (64-bit on modern installs, but conceptually unbounded-via-float-promotion on overflow).
-Phorge already *diverges safely* (it faults instead of promoting — see the `List.sum` KNOWN_ISSUES
+Phorj already *diverges safely* (it faults instead of promoting — see the `List.sum` KNOWN_ISSUES
 caveat). This gap is cheap (S): make the i64 contract explicit in `docs/INVARIANTS.md` and FEATURES,
 so the decimal/bigint deferrals have a documented rationale and the PHP-leg overflow divergence is a
 stated contract, not a surprise. Adopt now, in M-NUM, because it's the documentation backbone the whole
@@ -113,7 +113,7 @@ to PHP's `round`/`abs`/`gmp_gcd`/`sin`/`M_PI`. Low surprise, high daily utility.
 already-documented irrational-`f64` PHP-render divergence (`sqrt(2.0)`) — new transcendental functions
 inherit it and must be documented the same way (kept out of byte-identity examples). Adopt in M-NUM.
 
-**N-int-conv — explicit numeric conversions.** Phorge has no `int`↔`float`↔`decimal` conversion surface
+**N-int-conv — explicit numeric conversions.** Phorj has no `int`↔`float`↔`decimal` conversion surface
 yet; PHP's implicit coercions are a surprise source the philosophy explicitly targets. Explicit,
 named, lossy-by-intent conversions (`x.toFloat()`, `x.toInt()` = documented truncation, `d.toFloat()`
 = documented precision loss) are legible and make every narrowing a deliberate, visible act. Small
@@ -180,11 +180,11 @@ test at `lexer.rs:732` notes "no exponent". So `1e6`, `6.022e23`, `2.5e-3` don't
 mainstream language have scientific notation; business/scientific data routinely arrives this way
 (JSON/CSV). Trivial lexer extension, same `f64` value, byte-identical. Adopt in M-NUM.
 
-**N-pow-operator (defer, S).** PHP has `**` (right-assoc) *and* `pow()`; Phorge ships `Core.Math.pow`
+**N-pow-operator (defer, S).** PHP has `**` (right-assoc) *and* `pow()`; Phorj ships `Core.Math.pow`
 but no operator. Legible sugar, but lower-value than the literal gaps and adds an operator-precedence
 slot — defer to the M-NUM polish wave once `Core.Math` breadth lands. Maps 1:1 to PHP `**`.
 
-**N-bitwise-ops (defer, M).** PHP integer bitwise `& | ^ << >> ~` are absent in Phorge — and there's
+**N-bitwise-ops (defer, M).** PHP integer bitwise `& | ^ << >> ~` are absent in Phorj — and there's
 now a **syntactic collision the original audit didn't flag**: `&` is `TokenKind::Amp` (intersection
 types, S5) and `|` is `TokenKind::Bar` (unions, S4), both *type-level*. A value-level bitwise `&`/`|`
 is disambiguated by context (type position vs expression position) the same way TS/PHP do, but the
@@ -192,7 +192,7 @@ collision must be designed for, not assumed. Real PHP feature, but niche for bus
 permissions); defer to M-NUM-2. Maps 1:1 to PHP operators.
 
 **N-intdiv (adopt, S).** PHP distinguishes `/` (always float-ish, throws on div-by-zero) from
-`intdiv()` (integer division) and `%`. Phorge's `int / int` semantics need an explicit, documented
+`intdiv()` (integer division) and `%`. Phorj's `int / int` semantics need an explicit, documented
 contract (truncating-toward-zero `intdiv`, with the matching `%` already shipped) so `7 / 2` isn't a
 silent surprise. Cheap, removes a coercion surprise the philosophy targets, maps to PHP `intdiv`/`%`.
 Bundle with N-int-conv/N-int-width as the integer-semantics backbone of M-NUM.
@@ -200,7 +200,7 @@ Bundle with N-int-conv/N-int-width as the integer-semantics backbone of M-NUM.
 **N-float-predicates (adopt, S).** KNOWN_ISSUES already documents that `1.0/0.0` yields `inf`/`NaN`
 on the Rust backends (a valid `f64`, not a fault) — but there is **no way to test for it**. PHP has
 `is_nan`/`is_finite`/`is_infinite` + `INF`/`NAN`. Without predicates, a non-finite float is an
-undetectable silent corruptor — exactly the surprise Phorge exists to remove. Pure deterministic
+undetectable silent corruptor — exactly the surprise Phorj exists to remove. Pure deterministic
 natives (`Core.Math.isNan`, etc.), byte-identical (these compare structurally, not via irrational
 rendering). Adopt in M-NUM. (Note: the non-finite *transpile* fault-domain divergence stands; the
 predicates themselves are byte-identical on finite + non-finite inputs.)

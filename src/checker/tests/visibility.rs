@@ -2,7 +2,7 @@
 //!
 //! `private`/`protected` on instance fields, promoted ctor params, and methods is now enforced by
 //! the checker (not just emitted to PHP), so `run ≡ runvm ≡ transpiled PHP` all agree: an out-of-scope
-//! access is rejected up front instead of passing on the Phorge backends and throwing in PHP.
+//! access is rejected up front instead of passing on the Phorj backends and throwing in PHP.
 
 use super::support::*;
 

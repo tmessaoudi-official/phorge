@@ -6,8 +6,8 @@ RFC-4180-style CSV parsing and formatting at the string level.
 **Verdict up front:** **ADOPT-NOW. Tier A (pure). std-only. No new VM Op. Feasibility ~92%.**
 The single non-trivial decision is the transpile target: **do NOT map to PHP `str_getcsv`/`fputcsv`**
 (version-drifting escape semantics + a hard deprecation warning under PHP 8.5 + stream ceremony for
-formatting) — emit **gated hand-rolled `__phorge_csv_*` helpers** instead, exactly as `Core.Text.parseInt`
-already does with `__phorge_parse_int`. With that decision the byte-identity spine is safe by
+formatting) — emit **gated hand-rolled `__phorj_csv_*` helpers** instead, exactly as `Core.Text.parseInt`
+already does with `__phorj_parse_int`. With that decision the byte-identity spine is safe by
 construction.
 
 ---
@@ -49,7 +49,7 @@ Three legs must agree byte-for-byte: interpreter `run`, VM `runvm`, and transpil
 `Op::CallNative` (the structural-parity guarantee documented in `src/native/mod.rs`). One impl, two
 callers — exactly like every other native.
 
-**run ≡ PHP** is the real work, and the strategy is: **own the grammar in a `__phorge_csv_*` PHP helper,
+**run ≡ PHP** is the real work, and the strategy is: **own the grammar in a `__phorj_csv_*` PHP helper,
 do not call PHP's `str_getcsv`/`fputcsv`.** Rationale proven empirically below (§4). The helper is gated
 by a `uses_csv_parse` / `uses_csv_format` bool on the transpiler struct (the established pattern —
 `uses_div`/`uses_parse_int` at `src/transpile/mod.rs:174`, emitted once per file in
@@ -77,7 +77,7 @@ enter (CSV is string-typed at this layer), so the Ryū float-divergence KNOWN_IS
 
 ## 4. The PHP-native trap (verified, this is why we hand-roll)
 
-Tested against the floor `PHORGE_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php` (`php -n`):
+Tested against the floor `PHORJ_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php` (`php -n`):
 
 1. **Deprecation warning poisons the oracle.** `str_getcsv("...")` with the default escape emits:
    `Deprecated: str_getcsv(): the $escape parameter must be provided as its default value will
@@ -110,7 +110,7 @@ Two gated helpers, emitted once per file when used (sketch — final lines autho
 `emit_runtime_helpers`):
 
 ```php
-function __phorge_csv_parse($s) {
+function __phorj_csv_parse($s) {
     $rows = []; $row = []; $field = ''; $inq = false; $started = false;
     $n = strlen($s); $i = 0;
     while ($i < $n) {
@@ -132,7 +132,7 @@ function __phorge_csv_parse($s) {
     return $rows;
 }
 
-function __phorge_csv_format($rows) {
+function __phorj_csv_format($rows) {
     $out = '';
     foreach ($rows as $row) {
         $cells = [];
@@ -152,10 +152,10 @@ function __phorge_csv_format($rows) {
 All functions used (`strlen`, string indexing, `str_replace`, `strpbrk`, `implode`) are **PHP core**,
 so they survive `php -n`. No `str_getcsv`/`fputcsv`, no mbstring, no ext-hash. The `php:` closures map:
 
-- `Csv.parse(s)` → `format!("__phorge_csv_parse({})", parg(a,0))` + set `uses_csv_parse`.
-- `Csv.format(rows)` → `format!("__phorge_csv_format({})", parg(a,0))` + set `uses_csv_format`.
-- `Csv.parseRow(s)` → emit as `__phorge_csv_parse({}) [0] ?? []`-style, or give it its own thin helper;
-  simplest is a dedicated `__phorge_csv_parse_row` that runs the scanner with newline-as-field-char.
+- `Csv.parse(s)` → `format!("__phorj_csv_parse({})", parg(a,0))` + set `uses_csv_parse`.
+- `Csv.format(rows)` → `format!("__phorj_csv_format({})", parg(a,0))` + set `uses_csv_format`.
+- `Csv.parseRow(s)` → emit as `__phorj_csv_parse({}) [0] ?? []`-style, or give it its own thin helper;
+  simplest is a dedicated `__phorj_csv_parse_row` that runs the scanner with newline-as-field-char.
   (Recommend: parseRow = parse the single line and return `rows[0]`, pinned to first record.)
 
 The Rust `Pure` bodies implement the identical state machine over `s.chars()`, building
@@ -163,9 +163,9 @@ The Rust `Pure` bodies implement the identical state machine over `s.chars()`, b
 
 ---
 
-## 6. Phorge API sketch
+## 6. Phorj API sketch
 
-```phorge
+```phorj
 import Core.Csv;
 
 // parse a whole document → rows of fields
@@ -220,7 +220,7 @@ untouched).
    CSV-roundtrip footgun — call it out in the guide and a differential case.)
 5. **Float formatting** — N/A: CSV is string-typed here; floats never enter the parse/format path.
    (A caller that wants numeric cells uses `Core.Text.parseFloat`/`Convert` *after* parse — that path
-   already routes through `__phorge_float`.)
+   already routes through `__phorj_float`.)
 6. **mbstring absence under `php -n`** — N/A: byte-level scanning + passthrough only; no multibyte op.
 7. **Empty-field vs absent-field** — pinned: `"a,,b"` → `["a","","b"]` (three fields); `""` (empty
    input) → `[]` (zero rows). Encode both in differential cases.

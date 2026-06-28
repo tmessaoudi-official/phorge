@@ -53,7 +53,7 @@ under `-n` and by reading the actual native/transpile/value source.
 
 ### 5. The non-determinism checklist — all NEGATIVE (correctly)
 - No clock, no entropy, no filesystem, no locale, no map/set iteration order, no object ids/addresses,
-  no float formatting (Ryū `__phorge_float` is never reached — digests are int/str only). The
+  no float formatting (Ryū `__phorj_float` is never reached — digests are int/str only). The
   gzip-timestamp class of trap does not apply (no compression). mbstring absence is irrelevant: every
   PHP target (`crc32`/`md5`/`sha1`/`hash`) is a byte-level `standard`/`hash` function, not mbstring.
 

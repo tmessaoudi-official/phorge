@@ -11,7 +11,7 @@ and is deferred"). This probe **confirms** it, **proves it is a genuine type hol
 missing diagnostic), and **locates the exact line**.
 
 ## Binary
-`/stack/projects/phorge/target/release/phg` (pre-built release, not rebuilt).
+`/stack/projects/phorj/target/release/phg` (pre-built release, not rebuilt).
 
 ## Probe 1 — Box<string> into Box<int> slot
 
@@ -24,7 +24,7 @@ class Box<T> {
   function get(): T { return this.value; }
 }
 function main(): void {
-  Box<int> b = new Box("phorge"); // Box<string> into a Box<int> slot — SHOULD be rejected
+  Box<int> b = new Box("phorj"); // Box<string> into a Box<int> slot — SHOULD be rejected
   var v = b.get();
   Console.println("got value");
 }
@@ -45,7 +45,7 @@ The mismatched generic instantiation type-checks clean and runs. Should have bee
 
 ```
 function main(): void {
-  Box<int> b = new Box("phorge"); // Box<string> bound to Box<int>: hole
+  Box<int> b = new Box("phorj"); // Box<string> bound to Box<int>: hole
   int x = b.get();                // checker thinks get() returns int -> x:int
   int y = x + 1;                  // arithmetic on a string at runtime
   Console.println("y = {y}");
@@ -71,16 +71,16 @@ A statically-typed language whose pitch is *provable correctness* let a type err
 ## Control — the checker DOES reject a plain mismatch (so this is not a dead checker)
 
 ```
-function main(): void { int x = "phorge"; ... }
+function main(): void { int x = "phorj"; ... }
 ```
 ```
 $ phg check $TMP/control.phg
 type error at 4:3: expected `int`, found `string`
-  int x = "phorge"; // plain mismatch
+  int x = "phorj"; // plain mismatch
   ^
 exit=1
 ```
-Plain `int = "phorge"` is correctly rejected — proving the hole is specific to same-head generic
+Plain `int = "phorj"` is correctly rejected — proving the hole is specific to same-head generic
 argument invariance, not a globally-broken assignability check.
 
 ## Root cause (located)

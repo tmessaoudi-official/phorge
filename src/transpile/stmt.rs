@@ -64,7 +64,7 @@ impl Transpiler {
             Stmt::Assign { target, value, .. } => {
                 // Reassignment (`$x = …;`) and value-type element set (`$xs[$i] = …;`, M-mut.5) share
                 // one shape: the lhs is the target rendered as an expression. PHP arrays are COW value
-                // types, so `$xs[$i] = $e` has the same value semantics as Phorge's `Op::SetIndex`.
+                // types, so `$xs[$i] = $e` has the same value semantics as Phorj's `Op::SetIndex`.
                 // `mutable`/immutable is erased (PHP locals are always mutable).
                 let lhs = match target {
                     Expr::Ident(n, _) => format!("${n}"),
@@ -276,7 +276,7 @@ impl Transpiler {
                 }
                 self.line("}");
             }
-            // Let-destructuring (Phase 1 slice 5). Spill the init to a fresh `$__phorge_d{N}` temp, then:
+            // Let-destructuring (Phase 1 slice 5). Spill the init to a fresh `$__phorj_d{N}` temp, then:
             // a STRUCT pattern reads each public PHP property (`$d->field`) into its binder; a LIST
             // pattern emits the (diverging) `else` guarded by a `count(...)` mismatch, then PHP's native
             // list assignment `[$a, $b] = $d`. The temp avoids re-evaluating a side-effecting init.
@@ -288,7 +288,7 @@ impl Transpiler {
             } => {
                 use crate::ast::DestructurePat;
                 let e = self.emit_expr(init)?;
-                let tmp = format!("__phorge_d{}", self.tmp);
+                let tmp = format!("__phorj_d{}", self.tmp);
                 self.tmp += 1;
                 self.line(&format!("${tmp} = {e};"));
                 match pat {

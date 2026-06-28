@@ -3,7 +3,7 @@
 //! Turns an entry source into a single [`Unit`] (one [`Program`] ready for check + run) and
 //! enforces the project structure that the package declaration alone cannot:
 //!
-//! - **Project mode** — a `phorge.toml` found by walking up from the entry ([`crate::manifest`])
+//! - **Project mode** — a `phorj.toml` found by walking up from the entry ([`crate::manifest`])
 //!   marks the project root. Every `.phg` under the source root is parsed, its package is validated
 //!   against its location (**folder = package**, Go's model — `src/acme/util/*.phg` ⇒ `package
 //!   acme.util`; `package Main` is folder-exempt and may live anywhere). A resolution pass then
@@ -167,7 +167,7 @@ pub fn discover_phg(dir: &Path) -> Result<Vec<PathBuf>, String> {
     collect_phg(dir)
 }
 
-/// Load the entry at `path`: project mode if a `phorge.toml` is found by walking up, else loose mode.
+/// Load the entry at `path`: project mode if a `phorj.toml` is found by walking up, else loose mode.
 pub fn load(entry: &Path) -> Result<Unit, String> {
     // Canonicalize so walk-up detection works from a relative entry path; fall back to the raw path
     // when it does not exist yet (the read below then yields the canonical "cannot read" error).

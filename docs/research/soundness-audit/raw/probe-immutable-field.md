@@ -15,7 +15,7 @@ fails identically (no runtime bypass).
 ## Probe 1 — direct assignment `b.x = 99` (promoted `public int x`)
 
 File `$TMP/immutable-field-direct.phg`:
-```phorge
+```phorj
 package Main;
 import Core.Console;
 
@@ -31,7 +31,7 @@ function main(): void {
 ```
 
 ```
-$ /stack/projects/phorge/target/release/phg check $TMP/immutable-field-direct.phg
+$ /stack/projects/phorj/target/release/phg check $TMP/immutable-field-direct.phg
 type error at 10:5: field `x` of `Box` is immutable and cannot be assigned
     b.x = 99;
     ^
@@ -39,7 +39,7 @@ type error at 10:5: field `x` of `Box` is immutable and cannot be assigned
   hint: declare it `mutable` (e.g. `mutable int x;`)
 exit=1
 
-$ /stack/projects/phorge/target/release/phg run $TMP/immutable-field-direct.phg
+$ /stack/projects/phorj/target/release/phg run $TMP/immutable-field-direct.phg
 type error at 10:5: field `x` of `Box` is immutable and cannot be assigned
     b.x = 99;
     ^
@@ -53,7 +53,7 @@ Rejected for the RIGHT reason. `run` does not bypass (same front-end gate).
 
 File `$TMP/immutable-field-alias.phg` (same class; `Box alias = b; alias.x = 99;`):
 ```
-$ /stack/projects/phorge/target/release/phg check $TMP/immutable-field-alias.phg
+$ /stack/projects/phorj/target/release/phg check $TMP/immutable-field-alias.phg
 type error at 11:5: field `x` of `Box` is immutable and cannot be assigned
     alias.x = 99;
     ^
@@ -61,7 +61,7 @@ type error at 11:5: field `x` of `Box` is immutable and cannot be assigned
   hint: declare it `mutable` (e.g. `mutable int x;`)
 exit=1
 
-$ /stack/projects/phorge/target/release/phg run $TMP/immutable-field-alias.phg
+$ /stack/projects/phorj/target/release/phg run $TMP/immutable-field-alias.phg
 type error at 11:5: field `x` of `Box` is immutable and cannot be assigned
     alias.x = 99;
     ^
@@ -76,7 +76,7 @@ correctly caught.
 
 File `$TMP/immutable-field-declared.phg` (`int x;` set in ctor body, then `b.x = 99` externally):
 ```
-$ /stack/projects/phorge/target/release/phg check $TMP/immutable-field-declared.phg
+$ /stack/projects/phorj/target/release/phg check $TMP/immutable-field-declared.phg
 type error at 7:9: field `x` of `Box` is immutable and cannot be assigned
         this.x = v;
         ^
@@ -94,7 +94,7 @@ Note: the checker even rejects the ctor-body init `this.x = v` on a declared imm
 
 File `$TMP/immutable-field-this-method.phg` (`function set(int v): void { this.x = v; }`):
 ```
-$ /stack/projects/phorge/target/release/phg check $TMP/immutable-field-this-method.phg
+$ /stack/projects/phorj/target/release/phg check $TMP/immutable-field-this-method.phg
 type error at 7:9: field `x` of `Box` is immutable and cannot be assigned
         this.x = v;
         ^

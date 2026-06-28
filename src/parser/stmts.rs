@@ -651,7 +651,7 @@ impl Parser {
     /// desugared to `x = x op e`, M-mut.2), a statement increment/decrement (`++`/`--`), or a bare
     /// `Stmt::Expr` if no tail follows. Does **not** consume a terminator, so it is shared by the
     /// statement parser (which then expects `;`) and the C-`for` clause parser (terminated by `;`
-    /// or `)`). `/=`/`%=` inherit `__phorge_div`/`__phorge_rem` via `BinaryOp::Div`/`Rem` (F7).
+    /// or `)`). `/=`/`%=` inherit `__phorj_div`/`__phorj_rem` via `BinaryOp::Div`/`Rem` (F7).
     pub(super) fn finish_assign_or_expr(
         &mut self,
         expr: Expr,

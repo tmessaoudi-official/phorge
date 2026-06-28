@@ -4,7 +4,7 @@
 > checkbox (`- [ ]`) syntax. Execution mode for this run: **autonomous inline** (developer chose
 > "plan + build all of S2"); gates run internally, only destructive actions pause.
 
-**Goal:** Add PHP-native null-safety to Phorge — `T?` optionals, `??`, `?.`, `if (var x = opt)`,
+**Goal:** Add PHP-native null-safety to Phorj — `T?` optionals, `??`, `?.`, `if (var x = opt)`,
 `opt!`, and `match` over `T?` — with the compile-time guarantee that a non-optional `T` can never be
 `null` (TypeScript `strictNullChecks` over PHP's nullable runtime), `run`≡`runvm` byte-identical and
 transpiling 1:1 to PHP.
@@ -41,14 +41,14 @@ if-let lower to existing `SetLocal`/`GetLocal` + a null-test (`Eq` vs a `null` c
   convention (AskUserQuestion): **stderr, non-fatal, all commands** (rustc/clippy-style). Checker
   collects `warnings: Vec<Diagnostic>`; `check()` returns `Ok(warnings)` on success; the shared
   `parse_checked` funnel renders them to stderr on every command; exit code unaffected; stdout (and
-  differential byte-identity) stays clean. Reusable for all future Phorge lints.
+  differential byte-identity) stays clean. Reusable for all future Phorj lints.
 - [2026-06-17] AGREED (Task 5 — fault op): generalized `Op::MatchFail` (payloadless) →
   `Op::Fault(FaultMsg)` carrying a `Copy` discriminant ({NonExhaustiveMatch, ForceUnwrapNull}); the
   message is single-sourced on `FaultMsg::message()`. Honors S2-OPS **no new `Op` variant** (variant
   count unchanged; like `MakeRange(bool)` it needs no `validate` arm). `opt!`-on-null lowers to
   `GetLocal; Const null; Eq; JumpIfFalse ok; Fault(ForceUnwrapNull); ok:` — both backends fault with
   body `"force-unwrap of null"` → `FaultKind::ForceUnwrap`. PHP transpile uses a once-per-file
-  `__phorge_unwrap($v)` helper (null-message detail is a documented transpile divergence).
+  `__phorj_unwrap($v)` helper (null-message detail is a documented transpile divergence).
 
 ---
 
@@ -60,7 +60,7 @@ if-let lower to existing `SetLocal`/`GetLocal` + a null-test (`Eq` vs a `null` c
   optional→inner, no new `Op`, `E-IF-LET-TYPE`, PHP round-trip) — committed below
 - [x] Task 5 — `opt!` checked force-unwrap + `W-FORCE-UNWRAP` lint (`Expr::Force`, postfix `!`,
   `E-OPT-UNWRAP`, warning channel, `MatchFail`→`Fault(FaultMsg)` generalization, `FaultKind::ForceUnwrap`
-  parity, `__phorge_unwrap` PHP helper) — committed below
+  parity, `__phorj_unwrap` PHP helper) — committed below
 - [x] Task 6 — `match` over `T?` with null-arm narrowing (`Pattern::Null` un-rejected on optional
   scrutinee across all 4 backends; catch-all binding narrows to inner `T` after a prior `null` arm;
   `emit_literal_test(Null)` lowering; PHP `=== null` guard) — committed below
@@ -82,7 +82,7 @@ if-let lower to existing `SetLocal`/`GetLocal` + a null-test (`Eq` vs a `null` c
 | `src/interpreter.rs` | `Expr::Null`→`Value::Null`; eval `??`/`?.`/`!`/if-let; `Pattern::Null` matches `Value::Null` |
 | `src/compiler.rs` | `Expr::Null`→`add_const(Value::Null)`; `resolve_cty`/`ctype` for `Optional`; lower `??`/`?.`/`!`/if-let; `Pattern::Null` compile |
 | `src/vm.rs` | `Value::Null` arms (exhaustive matches) |
-| `src/transpile.rs` | `null`; `($a ?? $b)`; `$o?->m`; `opt!`→`__phorge_unwrap` helper; if-let; erase `Optional` |
+| `src/transpile.rs` | `null`; `($a ?? $b)`; `$o?->m`; `opt!`→`__phorj_unwrap` helper; if-let; erase `Optional` |
 | `src/cli.rs` | `explain` arms: `E-OPT-ASSIGN`, `E-OPT-USE`, `E-OPT-UNWRAP`, `W-FORCE-UNWRAP` |
 | `tests/differential.rs` | a parity case per feature (+ `FaultKind` for force-unwrap) |
 | `tests/cli.rs` | a PHP round-trip per feature |
@@ -116,7 +116,7 @@ fn optional_assignability() {
     assert!(!Ty::assignable(&Ty::Optional(Box::new(Ty::Int)), &Ty::Optional(Box::new(Ty::Float))));
 }
 ```
-- [ ] **Step 2: Run** `cargo test -p phorge --lib types:: 2>&1 | tail` → FAIL (no `Ty::Optional`).
+- [ ] **Step 2: Run** `cargo test -p phorj --lib types:: 2>&1 | tail` → FAIL (no `Ty::Optional`).
 - [ ] **Step 3: Implement** in `src/types.rs`: add `Optional(Box<Ty>)`; rewrite `assignable`:
 ```rust
 pub fn assignable(from: &Ty, to: &Ty) -> bool {
@@ -257,8 +257,8 @@ Add `FaultKind::ForceUnwrap` + a classify arm matching the body substring `force
   and compiler (eval inner → temp → null-test → `JumpIfFalse ok` → emit the fault via the existing
   channel; reuse the `MatchFail`-style fault op if one carries a message, else the string-error return
   the VM already line-prefixes — confirm in `vm.rs`; **no new `Op`**).
-- [ ] **Step 11: Transpile** → emit a once-per-file helper `__phorge_unwrap($v,'name',line)` that
-  `throw`s on null else returns `$v`; `o!` → `__phorge_unwrap($o, 'o', <line>)`. Round-trip (present case
+- [ ] **Step 11: Transpile** → emit a once-per-file helper `__phorj_unwrap($v,'name',line)` that
+  `throw`s on null else returns `$v`; `o!` → `__phorj_unwrap($o, 'o', <line>)`. Round-trip (present case
   only; the null-fault case is a documented divergence). **Step 12:** `explain` arms for the 2 new codes.
 - [ ] **Step 13: Commit** `feat(lang): opt! checked force-unwrap + W-FORCE-UNWRAP lint (M3 S2.5)`.
 

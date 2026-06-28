@@ -1,7 +1,7 @@
 package Main;
 import Core.Console;
 
-// Functions in Phorge: typed parameters and a return type.
+// Functions in Phorj: typed parameters and a return type.
 // A function with no `-> T` (like `main`) returns nothing.
 
 // Two typed parameters, returns int.
@@ -32,8 +32,8 @@ function banner(string title): void {
 function main(): void {
     banner("functions");
     Console.println("add(2, 3) = {add(2, 3)}");
-    Console.println(greet("phorge"));
-    Console.println(shout("phorge"));
+    Console.println(greet("phorj"));
+    Console.println(shout("phorj"));
 
     // Call results feed directly into other expressions.
     int total = add(add(1, 2), add(3, 4));

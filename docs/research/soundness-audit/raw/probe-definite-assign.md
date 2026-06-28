@@ -18,12 +18,12 @@ unusable* declaration that the checker nonetheless accepts and lets you read.
 
 ## Evidence
 
-Binary: `/stack/projects/phorge/target/release/phg` (prebuilt release, not rebuilt).
+Binary: `/stack/projects/phorj/target/release/phg` (prebuilt release, not rebuilt).
 
 ### Probe 1 — non-optional field never initialized, read via method
 
 `$TMP/definite-assign.phg`:
-```phorge
+```phorj
 package Main;
 import Core.Console;
 
@@ -60,7 +60,7 @@ the checker's `int` promise is unbacked. **GAP.**
 
 ### Probe 2 — same hole via external field read
 
-```phorge
+```phorj
 class Secret { int x; constructor(int y) {} }
 ... Console.println("x = {s.x}");
 ```
@@ -71,7 +71,7 @@ $ phg run   $TMP/da2.phg   →  runtime error at 9: no field `x` on `Secret`   e
 
 ### Probe 3 — used as an arithmetic operand; both backends agree (so the differential spine does NOT catch it)
 
-```phorge
+```phorj
 class Secret { int x; constructor(int y) {} function calc(): int { return this.x + 1; } }
 ```
 ```
@@ -85,7 +85,7 @@ caught it.
 
 ### Probe 4 — the compounding facet: a bare field cannot even be initialized in the ctor
 
-```phorge
+```phorj
 class Ok { int x; constructor(int y) { this.x = y; } function xOf(): int { return this.x; } }
 ```
 ```
@@ -104,7 +104,7 @@ never says so.
 
 ### Probe 5 — `mutable` field, still never initialized → same GAP
 
-```phorge
+```phorj
 class C { mutable int x; constructor(int y) {} function xOf(): int { return this.x; } }
 ```
 ```
@@ -169,7 +169,7 @@ for field initializers), add a definite-assignment check:
 
 This is **front-end-only** (no new `Op`, no `Value` change, no backend touch) — the byte-identity
 spine is untouched; it merely turns an existing latent runtime fault into a compile-time error,
-which is exactly Phorge's "provably-correct upgrade of PHP" thesis.
+which is exactly Phorj's "provably-correct upgrade of PHP" thesis.
 
 **Severity: P0** — it is an unsoundness (a declared non-optional `T` slot that does not exist at
 runtime; the checker hands out an `int` that is really "field missing"). It also masks a usability

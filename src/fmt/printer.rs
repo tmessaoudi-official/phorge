@@ -1,4 +1,4 @@
-//! `phg fmt` — a comment-preserving, **full-surface** Phorge AST → `.phg` source printer. Unlike the
+//! `phg fmt` — a comment-preserving, **full-surface** Phorj AST → `.phg` source printer. Unlike the
 //! Tier-1-subset lift printer (`src/lift/printer.rs`), this one covers the *entire* language so it can
 //! format any parseable program. Its matches are exhaustive — the Rust compiler proves completeness,
 //! so it can never silently mis-handle a node — and the only `Err` arms are for AST shapes that a
@@ -1230,7 +1230,7 @@ const PREC_UNARY: u8 = 80;
 /// Ranges (`a..b`) bind looser than every binary operator (operands are full binaries).
 const PREC_RANGE: u8 = 0;
 
-/// Binding power of a binary operator — mirrors the Phorge parser's `infix_op` table exactly
+/// Binding power of a binary operator — mirrors the Phorj parser's `infix_op` table exactly
 /// (`src/parser/exprs.rs`); higher binds tighter. The shared source of truth for re-parse fidelity.
 fn bin_prec(op: BinaryOp) -> u8 {
     match op {
@@ -1381,7 +1381,7 @@ fn escape_bytes(bytes: &[u8]) -> String {
     out
 }
 
-/// Escape a string literal's contents for a Phorge double-quoted string. `{`/`}` become `\{`/`\}`
+/// Escape a string literal's contents for a Phorj double-quoted string. `{`/`}` become `\{`/`\}`
 /// because a bare `{` opens an interpolation.
 fn escape_str(s: &str) -> String {
     let mut out = String::with_capacity(s.len());

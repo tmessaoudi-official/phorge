@@ -14,7 +14,7 @@ assignees: ""
 
 <!-- The smallest .phg program (or stdin/-e snippet) that triggers it. -->
 
-```phorge
+```phorj
 function main() {
     // ...
 }
@@ -25,7 +25,7 @@ function main() {
 <!-- e.g. `phg run repro.phg`, `phg runvm -e '...'`, `phg build repro.phg` -->
 
 ```sh
-phorge ...
+phorj ...
 ```
 
 ## Expected vs. actual
@@ -44,6 +44,6 @@ phorge ...
 
 ## Environment
 
-- phorge version (`phg --version`):
+- phorj version (`phg --version`):
 - OS / arch:
 - built from source / prebuilt binary:

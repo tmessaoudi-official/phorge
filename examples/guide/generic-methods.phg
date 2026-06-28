@@ -40,7 +40,7 @@ function main(): void {
 
   // `identity` reused at three different concrete types — one method definition, no duplication.
   int n = u.identity(7);
-  string s = u.identity("phorge");
+  string s = u.identity("phorj");
   bool flag = u.identity(true);
 
   // `firstOr` over a non-empty `List<int>` → `T = int`, returns the first element.

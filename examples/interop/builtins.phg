@@ -1,9 +1,9 @@
-// M8.5 interop — calling existing PHP from Phorge via `declare` (the migration bridge).
+// M8.5 interop — calling existing PHP from Phorj via `declare` (the migration bridge).
 //
 // IMPORTANT: this program is **PHP-target-only**. It declares foreign PHP functions, which live only in
 // the PHP runtime — so `phg run` / `phg runvm` refuse it (`E-FOREIGN-RUNTIME`). Build it with
 // `phg transpile builtins.phg > out.php && php out.php`. The `declare` lines describe existing PHP
-// functions so Phorge type-checks the calls; they emit no PHP (PHP already has them) and each call
+// functions so Phorj type-checks the calls; they emit no PHP (PHP already has them) and each call
 // transpiles to the global form `\name(...)`.
 package Main;
 
@@ -25,7 +25,7 @@ declare function max(int a, int b): int;
 function main(): void {
     Console.println(strtoupper("hello"));
     // HELLO
-    Console.println(strrev("phorge"));
+    Console.println(strrev("phorj"));
     // egrohp
     Console.println(str_repeat("ab", 3));
     // ababab
@@ -33,8 +33,8 @@ function main(): void {
     // Migrated
     Console.println("{abs(-42)} {max(7, 12)}");
     // 42 12
-    // Foreign results compose with native Phorge code and Core.* normally.
-    string shout = strtoupper("phorge");
+    // Foreign results compose with native Phorj code and Core.* normally.
+    string shout = strtoupper("phorj");
     Console.println("{shout}!");
 }
-// PHORGE!
+// PHORJ!

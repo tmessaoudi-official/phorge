@@ -1,4 +1,4 @@
-// Core.List breadth (M4 stdlib) — slicing, search, join, ends. Every op returns a NEW list (Phorge
+// Core.List breadth (M4 stdlib) — slicing, search, join, ends. Every op returns a NEW list (Phorj
 // lists are immutable; the inputs are untouched):
 //   • `slice(xs, offset, len) -> List<T>` — a sub-list (PHP `array_slice`: a negative offset/len
 //                                           counts from the end; out-of-range clamps to empty).

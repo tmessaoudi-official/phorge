@@ -1,6 +1,6 @@
 Dear Ada,
   you have 3 unread message(s).
 Regards,
-The Phorge Team
+The Phorj Team
 {"unit": "px", "pattern": "\d{2,3}"}
 no \n escape and {no} interpolation

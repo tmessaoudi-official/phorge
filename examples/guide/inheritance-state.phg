@@ -1,6 +1,6 @@
 // Multiple inheritance with state: composed constructors + fields + `instanceof` (M-RT S6c).
 //
-// Phorge composes a multi-parent class's *state*, not just its methods. A class with several parents
+// Phorj composes a multi-parent class's *state*, not just its methods. A class with several parents
 // and NO constructor of its own gets a synthesized orchestrating constructor: its parameters are the
 // parents' constructor parameters concatenated in `extends` order, and constructing it runs each
 // parent's constructor (with its slice of the arguments) on the one new instance — so every inherited

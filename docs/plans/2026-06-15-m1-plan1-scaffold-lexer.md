@@ -1,14 +1,14 @@
-# Phorge M1 — Plan 1: Rust Scaffold + Lexer
+# Phorj M1 — Plan 1: Rust Scaffold + Lexer
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a Rust project that tokenizes Phorge source into a typed token stream with source spans and clear lexing errors.
+**Goal:** Build a Rust project that tokenizes Phorj source into a typed token stream with source spans and clear lexing errors.
 
 **Architecture:** A hand-written lexer (no lexer-generator) over a `&str`, producing `Vec<Token>`. Single pass, byte/char cursor with line/column tracking. String interpolation is recognized at the *string* level but the `{...}` split is **deferred to the parser** (Plan 2) — the lexer emits the raw template body. This keeps the lexer focused on lexical structure.
 
 **Tech Stack:** Rust (stable, edition 2021), `cargo test` (built-in test harness). No external crates in Plan 1.
 
-**Spec:** `/stack/projects/phorge/docs/specs/2026-06-15-phorge-language-design.md`
+**Spec:** `/stack/projects/phorj/docs/specs/2026-06-15-phorj-language-design.md`
 
 **This is Plan 1 of 5 for M1:** scaffold+lexer → parser → type-checker → evaluator → integration.
 
@@ -37,16 +37,16 @@ Each file has one responsibility: `token.rs` = data, `lexer.rs` = scanning logic
 `Cargo.toml`:
 ```toml
 [package]
-name = "phorge"
+name = "phorj"
 version = "0.0.1"
 edition = "2021"
 
 [lib]
-name = "phorge"
+name = "phorj"
 path = "src/lib.rs"
 
 [[bin]]
-name = "phorge"
+name = "phorj"
 path = "src/main.rs"
 ```
 
@@ -61,7 +61,7 @@ pub mod lexer;
 `src/main.rs`:
 ```rust
 fn main() {
-    println!("phorge dev cli");
+    println!("phorj dev cli");
 }
 ```
 
@@ -717,7 +717,7 @@ git commit -m "feat(lexer): line and block comments"
 - [ ] **Step 1: Write the integration test**
 
 Create `examples/hello.phg` (the spec sample, trimmed):
-```phorge
+```phorj
 function area(Shape s) -> float {
     return match s {
         Circle(r)  => 3.14159 * r * r,
@@ -728,8 +728,8 @@ function area(Shape s) -> float {
 
 Create `tests/lexer_integration.rs`:
 ```rust
-use phorge::lexer::lex;
-use phorge::token::TokenKind;
+use phorj::lexer::lex;
+use phorj::token::TokenKind;
 
 #[test]
 fn tokenizes_sample_without_error() {
@@ -761,7 +761,7 @@ fn main() {
         Some("lex") => {
             let path = args.get(2).unwrap_or_else(|| { eprintln!("usage: phg lex <file>"); exit(2); });
             let src = std::fs::read_to_string(path).unwrap_or_else(|e| { eprintln!("read error: {e}"); exit(1); });
-            match phorge::lexer::lex(&src) {
+            match phorj::lexer::lex(&src) {
                 Ok(toks) => for t in toks { println!("{:?} @ {}:{}", t.kind, t.span.line, t.span.col); }
                 Err(e) => { eprintln!("lex error at {}:{}: {}", e.line, e.col, e.message); exit(1); }
             }

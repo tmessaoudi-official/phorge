@@ -1,10 +1,10 @@
 // Enum variants named after PHP-reserved words.
 //
-// Phorge does not reserve `int`/`float`/`bool`/`null` as identifiers, so they make perfectly good
+// Phorj does not reserve `int`/`float`/`bool`/`null` as identifiers, so they make perfectly good
 // enum *variant* names. PHP, however, reserves them as *class* names — and an enum variant transpiles
 // to `final class <Variant> extends <Enum>`. The transpiler resolves this invisibly by mangling a
 // reserved variant's PHP class name (`Int` → `Int_`), at the declaration, construction, and
-// `instanceof` sites alike. This is transpile-only: `run`/`runvm` address a variant by its Phorge
+// `instanceof` sites alike. This is transpile-only: `run`/`runvm` address a variant by its Phorj
 // name, so the program behaves and prints identically on all three backends.
 package Main;
 import Core.Console;

@@ -1,7 +1,7 @@
 //! `phg test` — discover and run `test "name" { … }` blocks (M-Test T3).
 //!
 //! Discovery: with no path, every `*.phg` under the project's `tests/` directory (the project root
-//! is the nearest ancestor holding a `phorge.toml`, else the current directory); with a path, that
+//! is the nearest ancestor holding a `phorj.toml`, else the current directory); with a path, that
 //! file, or every `*.phg` under that directory.
 //!
 //! Each file is loaded through the normal loader (so a test gets packages, imports, cross-package
@@ -179,7 +179,7 @@ fn synthesize_main(program: &Program, body: &[Stmt], span: Span) -> Program {
 }
 
 /// Resolve the test files to run. Empty `paths` ⇒ `<project-root>/tests/` (project root = nearest
-/// ancestor with a `phorge.toml`, else the current directory). A path argument is taken literally:
+/// ancestor with a `phorj.toml`, else the current directory). A path argument is taken literally:
 /// a file runs as-is, a directory is searched recursively for `*.phg`.
 fn discover(paths: &[String]) -> Result<Vec<PathBuf>, String> {
     if paths.is_empty() {
@@ -201,13 +201,13 @@ fn discover(paths: &[String]) -> Result<Vec<PathBuf>, String> {
     Ok(out)
 }
 
-/// The nearest ancestor of the current directory that contains a `phorge.toml`, else the current
+/// The nearest ancestor of the current directory that contains a `phorj.toml`, else the current
 /// directory itself.
 fn project_root() -> PathBuf {
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let mut dir = cwd.as_path();
     loop {
-        if dir.join("phorge.toml").is_file() {
+        if dir.join("phorj.toml").is_file() {
             return dir.to_path_buf();
         }
         match dir.parent() {

@@ -1,10 +1,10 @@
-# Concurrency / Async / Reactive Prior-Art — Rust & JavaScript, through the Phorge byte-identity lens
+# Concurrency / Async / Reactive Prior-Art — Rust & JavaScript, through the Phorj byte-identity lens
 
 **Stage 1 of the extended-modules research.** Lens = Rust (async/await + executors like tokio,
 plus rayon data-parallelism / fork-join) and JavaScript (single-threaded event loop, Promises,
 async/await, microtask determinism). Goal: catalogue each concurrency/async/reactive model, how it
 *schedules*, whether its *output* is deterministic and under what constraints, and how (if at all)
-it maps onto Phorge's single-threaded `Rc`-heap + byte-identity-or-Tier-B reality.
+it maps onto Phorj's single-threaded `Rc`-heap + byte-identity-or-Tier-B reality.
 
 Verified codebase facts this analysis is built on (read this session):
 - `Cargo.toml` core crate `[dependencies]` is empty; only `playground/` (wasm32-only) pulls
@@ -12,14 +12,14 @@ Verified codebase facts this analysis is built on (read this session):
 - `Value` is `Rc`-shared (`src/serve.rs` doc: "the `Rc`-shared heap (P5a) makes `Value`
   non-`Send`, so a thread pool is impossible"). Single-threaded is *forced*, not chosen. [Verified]
 - The `pure:false` quarantine seam exists and is **generic**: `tests/differential.rs::uses_impure_native`
-  reads `phorge::native::registry().filter(|n| !n.pure)` and SKIPs any program importing such a
+  reads `phorj::native::registry().filter(|n| !n.pure)` and SKIPs any program importing such a
   module — no hardcoding (`differential.rs:916`, `:1004`). `Core.Process`/`Core.Env` are the live
   precedent (`src/native/process.rs`), fixture-tested in `tests/process.rs`. [Verified]
 - The `Transport` trait (`src/serve.rs:25`) already quarantines sockets + wall-clock out of the
   spine; `tests/serve.rs` swaps an in-memory transport for determinism. [Verified]
 - The VM is already **re-entrant**: `Vm::call_closure_value` + `run_until` (`src/vm/closure.rs`)
   drive the *shared* `exec_op` for a closure called from a `HigherOrder` native — so a scheduler
-  that resumes Phorge closures has a working primitive today. [Verified]
+  that resumes Phorj closures has a working primitive today. [Verified]
 - `std::thread::scope` appears once (`src/cli/mod.rs:257`) purely to run the pipeline on a
   256 MB-stack worker — NOT user-facing concurrency. [Verified]
 
@@ -33,7 +33,7 @@ program text and its (gated, fixed) inputs** — i.e. the *interleaving* of conc
 merged in a fixed order. Everything that admits a *scheduler-dependent* or *wall-clock-dependent*
 observable is Tier-B (quarantined, fixture-tested) at best, or rejected.
 
-| Property of the model | Deterministic output? | Phorge tier |
+| Property of the model | Deterministic output? | Phorj tier |
 |---|---|---|
 | Cooperative scheduling, fixed run-to-completion order | **Yes** (order is a language rule) | **A — gated** |
 | Pure data-parallelism, ordered merge | **Yes** (merge order fixed; bodies side-effect-free) | **A — gated** |
@@ -51,7 +51,7 @@ HARD NO.
 
 ---
 
-## 1. JavaScript — the model Phorge should *be*, semantically
+## 1. JavaScript — the model Phorj should *be*, semantically
 
 ### 1.1 The single-threaded event loop (run-to-completion + microtask queue)
 
@@ -76,7 +76,7 @@ console.log('B');
 luck. **The non-determinism in real JS comes entirely from the *sources* that enqueue work** (timers
 fire by wall clock, `fetch` resolves by network), never from the loop itself.
 
-**The Phorge lesson (high confidence).** Phorge can adopt **exactly this scheduler** — a single
+**The Phorj lesson (high confidence).** Phorj can adopt **exactly this scheduler** — a single
 cooperative event loop with a FIFO ready-queue and a microtask-before-next-task drain rule — and get
 *deterministic output for free*, **provided every source that enqueues work is itself gated/pure**.
 This is the cleanest fit for the `Rc`-heap: one stack, no `Send`, no data races possible.
@@ -100,7 +100,7 @@ that's ready, a spec rule).
 
 Cooperative coroutines: explicit `yield` suspends, `.next()` resumes. **Fully deterministic** — the
 caller drives every step. This is the lower-level primitive async/await is built on. Maps directly to
-a Phorge coroutine the scheduler resumes.
+a Phorj coroutine the scheduler resumes.
 
 ### 1.4 Reactive — RxJS observables / async iterators
 
@@ -137,14 +137,14 @@ executors (`tokio` default work-stealing) require `Future: Send` and steal tasks
   runtime decision).
 - The futures themselves are deterministic; the **executor's polling order is the non-determinism**.
 
-**The Phorge lesson (high confidence).** Phorge must NOT expose a tokio-style executor with
+**The Phorj lesson (high confidence).** Phorj must NOT expose a tokio-style executor with
 `select!`/`FuturesUnordered` semantics as a *gated* feature — the unspecified poll order breaks
-byte-identity. Phorge's own scheduler must instead use a **specified, fixed** poll/ready order
+byte-identity. Phorj's own scheduler must instead use a **specified, fixed** poll/ready order
 (FIFO, like JS), giving up tokio's anti-starvation randomisation in exchange for determinism. The
 *mechanism* (a state machine polled to completion, parked on suspend) is reusable; the *scheduling
-policy* must be Phorge's own deterministic one, not tokio's. Crucially, **Phorge does not need any
+policy* must be Phorj's own deterministic one, not tokio's. Crucially, **Phorj does not need any
 async runtime crate** — the existing re-entrant VM (`run_until`/`call_closure_value`) already
-suspends and resumes Phorge code; a cooperative scheduler is a `VecDeque` of resumable closures, not
+suspends and resumes Phorj code; a cooperative scheduler is a `VecDeque` of resumable closures, not
 a `Future` executor. Std-only feasible. [Verified mechanism exists; scheduler design is Speculative]
 
 ### 2.2 rayon — data-parallelism / fork-join (THE model for `parallelMap`)
@@ -160,18 +160,18 @@ mutable state, no order-dependent side effects)** — which rayon's API *encoura
 For a *pure* `map`/`filter`/`reduce` with an **associative** reduce, the result is bit-identical to
 the sequential version, every run.
 
-**The Phorge lesson (high confidence — this is the core of decision (b)).** This is the *exact*
+**The Phorj lesson (high confidence — this is the core of decision (b)).** This is the *exact*
 shape the developer locked: `parallelMap(list, fn)` / fork-join over **side-effect-free** functions
 with a **deterministic, order-preserving merge**. The byte-identity argument is airtight:
 
-> Today, all three Phorge legs run the bodies **sequentially in index order**, so the output is
+> Today, all three Phorj legs run the bodies **sequentially in index order**, so the output is
 > trivially identical to a plain `List.map`. Rust-side *physical* parallelism (a rayon-style split)
 > is a **pure performance optimization added LATER** that, by the order-preserving-merge contract,
 > produces byte-identical output to the sequential run. The PHP leg stays sequential
 > (`array_map`). So `parallelMap` is **Tier-A, gated, byte-identical on day one**, and the parallel
 > speedup is an invisible engine upgrade — never an API or output change.
 
-The enforcement Phorge *can* do that rayon can't: the closure passed to `parallelMap` is already
+The enforcement Phorj *can* do that rayon can't: the closure passed to `parallelMap` is already
 **`E-LAMBDA-THIS`-restricted and captures by value** (immutable `Rc` heap), and the checker can
 require the body be side-effect-free (no `Console.*`, no `pure:false` native) → the purity rayon
 merely *encourages* is **statically enforced**. Reduce must be declared **associative** (or only a
@@ -211,7 +211,7 @@ gated. The split mirrors JS `Promise.all` (safe) vs `Promise.race` (unsafe).
 
 ---
 
-## 3. Synthesis — the mapping onto Phorge
+## 3. Synthesis — the mapping onto Phorj
 
 ### 3.1 The recommended gated (Tier-A) surface
 
@@ -221,7 +221,7 @@ escape hatch. Concretely, three layers, all byte-identical across the three legs
 **(a) Cooperative async/await — `async`/`await`, deterministic event loop.**
 - *Scheduler*: a single FIFO ready-queue + microtask-drain-before-next-task, **JS ordering rules
   adopted verbatim** (the only ordering that's both intuitive-to-PHP/JS devs *and* total/deterministic).
-- *Phorge surface sketch*:
+- *Phorj surface sketch*:
   ```
   async function fetchAll() -> List<int> {
       var a = await compute(1);   // suspends, resumes deterministically
@@ -231,7 +231,7 @@ escape hatch. Concretely, three layers, all byte-identical across the three legs
   ```
 - *Transpile target*: PHP 8.1 **Fibers** (present under `php -n` — confirmed in the prompt). An
   `async fn` ↔ a Fiber; `await` ↔ `Fiber::suspend`/`resume`; the event loop ↔ a small PHP scheduler
-  emitted as a runtime helper (`__phorge_scheduler`), driven in the **same FIFO order** as the Rust
+  emitted as a runtime helper (`__phorj_scheduler`), driven in the **same FIFO order** as the Rust
   legs. The Rust legs drive their own scheduler over resumable closures via the existing
   `run_until`/`call_closure_value` primitive.
 - *Byte-identity argument*: ordering is a **language rule** (FIFO + microtask drain), identical in
@@ -247,7 +247,7 @@ escape hatch. Concretely, three layers, all byte-identical across the three legs
   no `setTimeout`-style timer in the gated set (timers are Tier-B); `await` only of pure/gated values.
 
 **(b) Pure data-parallelism — `Core.Parallel.map` / `.reduce` (rayon-shaped, ordered merge).**
-- *Phorge surface sketch*:
+- *Phorj surface sketch*:
   ```
   import Core.Parallel;
   var doubled = Parallel.map(xs, fn(int x) => x * 2);     // List<int>, input order preserved
@@ -267,7 +267,7 @@ escape hatch. Concretely, three layers, all byte-identical across the three legs
   may be permanently limited to scalar element types — that's an acceptable optimization scope.
 
 **(c) Reactive / streams over deterministic sources — `Core.Stream` (Rx-shaped, pull-based).**
-- *Phorge surface sketch*:
+- *Phorj surface sketch*:
   ```
   import Core.Stream;
   var result = Stream.of([1, 2, 3])      // deterministic source
@@ -310,9 +310,9 @@ core — `pcntl`/`parallel` are absent extensions).
 **Determinism lives in the *scheduler's ordering policy* and the *purity of sources/bodies*, never in
 the parallelism mechanism.** Both JS (specified loop order) and rayon (ordered merge over pure
 bodies) prove the same thing: you get deterministic concurrency by *fixing the order* and *forbidding
-shared mutation* — both of which Phorge's `Rc`-heap + checker can enforce *more strongly* than either
+shared mutation* — both of which Phorj's `Rc`-heap + checker can enforce *more strongly* than either
 prior-art language. The mechanisms (state-machine suspension, work-stealing split) are reusable; the
-**ordering policy must be Phorge's own deterministic one** (FIFO + microtask drain for async;
+**ordering policy must be Phorj's own deterministic one** (FIFO + microtask drain for async;
 index-order merge for parallel), explicitly NOT tokio's randomised `select!` or rayon's
 unspecified-without-purity behavior.
 
@@ -325,7 +325,7 @@ unspecified-without-purity behavior.
 | JS event-loop ordering is fully specified & deterministic given fixed work | High | Spec (HTML/ECMAScript), universal cross-engine behavior |
 | rayon output is deterministic iff bodies pure + reduce associative | High | rayon docs/semantics; order-preserving collect |
 | tokio `select!`/`FuturesUnordered` poll order is non-specified/random | High | tokio docs (bias randomisation) |
-| Phorge can adopt JS scheduler semantics for byte-identical async | High | maps to fixed FIFO ordering; PHP 8.1 Fibers present under `php -n` |
+| Phorj can adopt JS scheduler semantics for byte-identical async | High | maps to fixed FIFO ordering; PHP 8.1 Fibers present under `php -n` |
 | `parallelMap` is Tier-A byte-identical day-one (sequential), parallel later invisible | High | all legs sequential today = identical to `List.map`; ordered-merge contract |
 | A future Rust parallel `parallelMap` impl is limited by `Value` non-`Send` | Medium | verified `Value` non-Send; parallel needs Send-able scalar element subset |
 | Async needs NO new VM Op (desugar over `run_until`) | Medium | re-entrant primitive verified; whether desugar beats a dedicated Op needs a spike |

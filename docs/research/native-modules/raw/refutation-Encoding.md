@@ -70,12 +70,12 @@ spike §6.1 is correct on that point.)
 
 Verified: `rawurldecode("%FF%FE")` → bytes `0xFF 0xFE` (invalid UTF-8), `rawurldecode("a%2")` → `"a%2"`
 (stray percent left literal), `rawurldecode("a%ZZ")` → `"a%ZZ"`. So `rawurldecode` is a **total
-bytes→bytes** function in PHP, but Phorge `Value::Str` MUST be valid UTF-8. The spike's §6.6 picks
+bytes→bytes** function in PHP, but Phorj `Value::Str` MUST be valid UTF-8. The spike's §6.6 picks
 "type `string?`, null on non-UTF-8" — that IS a sound resolution, but note the consequence the spike
 omits: **the Rust eval must run a `std::str::from_utf8` validity check on the decoded bytes and return
 `Value::Null` whenever PHP would have produced a non-UTF-8 string** — and the PHP emission therefore
 can NOT be a bare `rawurldecode({0})` (which yields a PHP string of raw bytes, byte-identical on stdout
-but representing a value Phorge would have nulled). The transpile target listed in §4
+but representing a value Phorj would have nulled). The transpile target listed in §4
 (`rawurldecode({0})` "total; see §6 note") is **wrong for the chosen `string?` typing**: PHP must wrap
 it in a UTF-8 validity check (PCRE `//u` or `mb_check_encoding`-free equivalent) to mirror the null,
 or the `string?` value diverges between the Rust backends (null) and PHP (a raw-byte string). Under

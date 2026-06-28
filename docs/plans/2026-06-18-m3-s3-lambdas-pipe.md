@@ -5,7 +5,7 @@
 > syntax for tracking.
 
 **Goal:** Add first-class anonymous functions (`fn(int x) => expr` / `fn(int x) { … }`), function-value
-calls, bare named-function references, and the pipe operator `|>` to Phorge — byte-identical on both
+calls, bare named-function references, and the pipe operator `|>` to Phorj — byte-identical on both
 backends and round-tripped through real PHP.
 
 **Architecture:** Lambdas become a `Value::Closure(Rc<ClosureData>)` (per-backend variant: interpreter
@@ -84,7 +84,7 @@ exhaustiveness error is the loud backstop.
 
 Run:
 ```bash
-cd /stack/projects/phorge
+cd /stack/projects/phorj
 grep -rn "\bfn\b" examples/ && echo "FOUND — migrate before proceeding" || echo "clear in examples"
 grep -rn "\"fn\"\|\bfn\b" src/*.rs | grep -iv "fn \|fn(" | grep -i "ident\|test prog\|agree(" || echo "no fn-as-ident in test programs"
 ```
@@ -923,7 +923,7 @@ function main() {
 
 Run:
 ```bash
-cd /stack/projects/phorge
+cd /stack/projects/phorj
 PATH=/stack/tools/cargo/bin:$PATH cargo run --quiet -- run examples/guide/lambdas-pipe.phg
 PATH=/stack/tools/cargo/bin:$PATH cargo run --quiet -- runvm examples/guide/lambdas-pipe.phg
 PATH=/stack/tools/cargo/bin:$PATH cargo run --quiet -- transpile examples/guide/lambdas-pipe.phg | /stack/tools/phpbrew/php/php-master/bin/php

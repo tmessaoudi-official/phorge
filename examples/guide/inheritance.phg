@@ -1,6 +1,6 @@
 // Single inheritance with `open`/`final` and method override (M-RT S6a).
 //
-// Phorge is *final-by-default* — the inheritance sibling of immutable-by-default. A class must be
+// Phorj is *final-by-default* — the inheritance sibling of immutable-by-default. A class must be
 // declared `open` to be extended, and a method must be declared `open` to be overridden. A subclass
 // inherits its parent's methods, may override the `open` ones, and is a subtype of its parent (so it
 // flows into a parent-typed binding). Dispatch is dynamic: an inherited method that calls another

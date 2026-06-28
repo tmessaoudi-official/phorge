@@ -62,12 +62,12 @@ function main(): void {
     // is `mixed` to the backend, so it is not a *specialized* arithmetic operand on the VM — to do math
     // on it, return it into a typed local first (`int got = …; got + got`), exactly as with a generic
     // class method result. String interpolation of the payload needs no such hint and works directly.
-    var os = new Some("phorge"); // Option<string>
+    var os = new Some("phorj"); // Option<string>
     string label = match os {
         Some(s) => "label {s}",
         None()  => "label none",
     };
-    Console.println(label); // label phorge
+    Console.println(label); // label phorj
 
     Console.println(report(safeDiv(10, 2))); // ok 5
     Console.println(report(safeDiv(1, 0))); // err divide by zero

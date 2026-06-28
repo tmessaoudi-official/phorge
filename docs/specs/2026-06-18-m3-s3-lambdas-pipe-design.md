@@ -1,4 +1,4 @@
-# Phorge M3 S3 — Lambdas + Pipe: Design
+# Phorj M3 S3 — Lambdas + Pipe: Design
 
 > Brainstorm output, 2026-06-18. Track A of M3 (`docs/specs/2026-06-17-m3-language-roadmap-design.md`
 > slice **S3 — lambdas + pipeline**). First-class anonymous functions (closures) + the pipe operator
@@ -27,11 +27,11 @@ the pipe works for free — byte-identically, with the correct precedence the pa
 | # | Decision | Rationale |
 |---|----------|-----------|
 | **A1** | **Syntax:** `fn(int x) => expr` (expression body) **and** `fn(int x) { stmts; return e; }` (statement body). Zero params: `fn() => 42`. | `fn` is unused today (declarations use `function`); `=>` already tokenizes (match arms). Mirrors PHP arrow fn `fn($x)=>…` and `function($x) use(){…}` 1:1 (D-L9). |
-| **A2** | **Params explicitly typed.** **Expression-body return is inferred** (the body expression's type); **statement-body requires an explicit `-> T`** this slice. | Phorge is always-explicit-typed; param inference needs bidirectional checking (deferred). Expr-body inference reuses the `var`/`Type::Infer` path; inferring a block body's return by unifying all `return` statements is deferred (keeps the rule simple + sound). |
+| **A2** | **Params explicitly typed.** **Expression-body return is inferred** (the body expression's type); **statement-body requires an explicit `-> T`** this slice. | Phorj is always-explicit-typed; param inference needs bidirectional checking (deferred). Expr-body inference reuses the `var`/`Type::Infer` path; inferring a block body's return by unifying all `return` statements is deferred (keeps the rule simple + sound). |
 | **A3** | **`x \|> rhs ≡ rhs(lhs)`**, lowered to `Call` in the parser. | PHP 8.5 native `\|>` semantics (D-L5); zero backend pipe-code; precedence already correct. Extra args via a lambda: `x \|> fn(int v) => add(v, 10)`. |
 | **A4** | **A bare named-function identifier is a value** (a zero-capture closure). | `var f = myFn;`, `5 \|> myFn`. PHP 8.1 first-class callable `myFn(...)`. Uniform with lambda values at the VM level. |
 | **A5** | **Capture by value at creation time.** No GC needed. | Immutable heap; a binding is **not** in scope inside its own initializer ⇒ no self-capture ⇒ acyclic ⇒ `Rc`/`Drop` reclaims fully (consistent with the M2 P5a "no tracing GC" position). |
-| **A6** | **Function-type assignability = exact structural equality** (params equal, return equal); variance deferred. | Matches Phorge's no-subtyping rule (the only widening is `T → T?` and `Error`). Sound and conservative; variance can relax it later without breaking programs. |
+| **A6** | **Function-type assignability = exact structural equality** (params equal, return equal); variance deferred. | Matches Phorj's no-subtyping rule (the only widening is `T → T?` and `Error`). Sound and conservative; variance can relax it later without breaking programs. |
 
 ## 3. Scope
 

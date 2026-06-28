@@ -18,14 +18,14 @@ PHP 8.5 transpile floor under `php -n`** (mbstring + most ext ABSENT; Fibers/PCR
 
 | Candidate | Tier | Feas | Conf | Verdict / reframe |
 |---|---|---|---|---|
-| **Caching** (persistent/TTL) | B | low (gateable ≈0%) | high | Persistence+TTL+shared-store are all impure (clock; Redis/Memcached need a socket Phorge can't open; APCu absent under `php -n`; fs writes impure). **Defer (Tier-B milestone).** Pure slice = a request-scoped `memoize`/`Cache<K,V>` over the shipped `Core.Map` + higher-order natives — optional small Tier-A helper. |
+| **Caching** (persistent/TTL) | B | low (gateable ≈0%) | high | Persistence+TTL+shared-store are all impure (clock; Redis/Memcached need a socket Phorj can't open; APCu absent under `php -n`; fs writes impure). **Defer (Tier-B milestone).** Pure slice = a request-scoped `memoize`/`Cache<K,V>` over the shipped `Core.Map` + higher-order natives — optional small Tier-A helper. |
 | **Testing/assert/mock** | A | high | high (assert) / med (auto-mock) | **ADOPT.** Assertions = pure, transpile to plain PHP if-checks + a custom reporter (NOT PHPUnit — Composer pkg, absent under `php -n`). `phg test` runner with deterministic output (no timing/memory, sorted order) = Tier A, top-tier value. Manual mocks via interfaces today; auto-mock via Core.Reflect tables = follow-up slice. |
 | **Rich HTTP types** (Response/JsonResponse/StreamResponse/Redirect/…) | A (types) / B (stream+client) | high | high | **ADOPT as an M6 extension.** Response/JsonResponse/RedirectResponse/HtmlResponse = pure subclasses (headers + Core.Json/Core.Html body) over the shipped M6 W1 `Request`/`Response`. StreamResponse *type* pure; *streaming* = Tier B serve runtime (W3). HTTP *client* stays Tier B (no TLS, research-deferred). |
 | **Threads** (true parallel) | — | ~0% | high | **REJECT.** `Rc`-shared heap (`Value` not `Send`/`Sync`) forces single-threaded; real threads are non-deterministic → break the spine; no `php -n` target (pthreads/parallel are ext). Fighting the foundation. |
 | **Async** (cooperative coroutines) | A/B | medium | medium | **ADOPT-LATER (major M6+ milestone).** PHP 8.1 **Fibers are core** (under `php -n`) → cooperative, single-threaded, *deterministic* scheduler = the "green threads under an unchanged contract." Byte-identity-safe IF scheduling order is deterministic. Real design + effort. |
 | **Core.Serde** (typed safe codec) | A | high | med-high | The SAFER `serialize`: no code-exec on decode, decimal/bytes survive, byte-stable. Shares Core.Dump's value-walk + cyclic guard. (Already in the research upgrade-lens.) |
 | **Core.Event** (observer/dispatcher) | A | high | medium | In-process typed pub/sub; deterministic if handler order is deterministic (registration order). Pure, decouples architectures. |
-| **Core.Cli** (arg/flag parser) | A | high | high | Pure parser over a given arg list (the list comes from Tier-B `Core.Process`). High DX for building Phorge CLIs. |
+| **Core.Cli** (arg/flag parser) | A | high | high | Pure parser over a given arg list (the list comes from Tier-B `Core.Process`). High DX for building Phorj CLIs. |
 | **Core.Template** (string templating) | A | high | medium | Pure typed templating; complements Core.Html. (Scope: escaping/interp only; control-flow templating is bigger.) |
 | **Core.Uuid** | A (v5/v3) / B (v4) | high | high | Namespace UUIDs (v5/v3 = name + Core.Hash) are deterministic → Tier A now. v4 random = seeded `Core.Random` (deterministic) or Tier B. |
 | **Core.Log** | A (record) / B (emit) | high | high | A structured log-RECORD builder is pure (Tier A); actually emitting (timestamp + sink) is Tier B. |
@@ -54,7 +54,7 @@ PHP*. The wall is the three-leg **byte-identity** (`run≡runvm≡PHP`), for thr
 (1) **non-determinism** (clock/random/network/scheduling); (2) **backend asymmetry** — the *Rust* legs
 can't do what PHP can (a persistent cache: PHP hits APCu/Redis, the Rust legs have neither → diverge;
 transpiles fine); (3) the one HARD zero-dep wall: **TLS** (no std TLS → Rust legs can't do HTTPS without
-a crate; escapes = http-only `TcpStream` or `curl` shell-out). Phorge **already** has the two-tier model
+a crate; escapes = http-only `TcpStream` or `curl` shell-out). Phorj **already** has the two-tier model
 (`Core.Process`/`Core.Env` = `pure:false`, quarantined, fixture-tested). The strategic decision is **how
 far to expand Tier B** for high-value impure features (full cache / HTTP client / DB / live concurrency)
 — all of which transpile to PHP and are fixture-testable, just not byte-identity-gated.

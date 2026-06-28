@@ -16,7 +16,7 @@ reason, with a precise "expects N … found M" diagnostic. Correct-arity program
 
 ## Probes & evidence
 
-Binary: `/stack/projects/phorge/target/release/phg` (pre-built release, not rebuilt).
+Binary: `/stack/projects/phorj/target/release/phg` (pre-built release, not rebuilt).
 Probes under the scratchpad audit dir.
 
 ### A. Constructor arity (`new V(...)`)

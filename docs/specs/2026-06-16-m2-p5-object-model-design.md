@@ -1,4 +1,4 @@
-# Phorge M2 P5 — Object-Model Performance (shared immutable heap) — Design
+# Phorj M2 P5 — Object-Model Performance (shared immutable heap) — Design
 
 > Supersedes the original M2 design's §7 "arena + mark-sweep GC" for the *current* language. The
 > original plan (`2026-06-15-m2-bytecode-vm-design.md` §6/§7) assumed a mutable heap that needs a

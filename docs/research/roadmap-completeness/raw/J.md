@@ -2,14 +2,14 @@
 
 ## Track summary
 
-Phorge has already locked the *hard-to-undo* semantic decisions in a way that is faithful to the
+Phorj has already locked the *hard-to-undo* semantic decisions in a way that is faithful to the
 philosophy (a legible, provably-correct upgrade of PHP): equality is **structural** `==` only (no loose
 `==` juggling — PHP's single largest footgun is gone by construction, since values are statically typed
 and never coerced), floats render Rust-shortest-round-trip identically across all three backends, maps
 and sets compare order-independently like PHP associative arrays, `eq_val` is cycle-guarded so `==` on a
 cyclic instance graph terminates, and `HKey` pins the hashable key set to `int`/`bool`/`string`. What
 remains in this domain is a cluster of **small, individually-decidable semantic rules** that a PHP dev
-will eventually hit and ask "what does Phorge do here?" — and right now several have no answer because
+will eventually hit and ask "what does Phorj do here?" — and right now several have no answer because
 the construct is simply *rejected* (`compare_ord` only accepts `int`/`int` and `float`/`float`; `for…in`
 only walks a materialized `List`; there is no `<=>`, no `===`, no string ordering, no user-type
 iteration, no operator overloading). The most valuable gaps here are the ones that **remove a surprise**
@@ -69,26 +69,26 @@ familiarity, pairs with J-sort-stability. Adopt within M-RT alongside the orderi
 
 **J-sort-stability — Sort semantics + stability + comparator contract.** Once `core.list` lands a `sort`
 (M11), the *stability* and the comparator-contract semantics must be locked and documented: PHP `sort` is
-**not** stable before 8.0 and **is** stable from 8.0 on — Phorge should commit to **stable** (Rust's
+**not** stable before 8.0 and **is** stable from 8.0 on — Phorj should commit to **stable** (Rust's
 `sort_by` is stable; matches modern PHP) and document the comparator must be a consistent total order.
 This is a semantic decision that is painful to change after code depends on it. Strong fit (removes the
 "is my sort stable?" surprise).
 
 **J-float-eq-lint — Float `==` exactness lint.** `eq_val` compares floats with raw IEEE `==`
 (`#[allow(clippy::float_cmp)]`), which is correct but a classic footgun (`0.1 + 0.2 == 0.3` is `false`).
-Phorge already has a warning channel (`W-FORCE-UNWRAP` precedent); a `W-FLOAT-EQ` lint on a literal-float
+Phorj already has a warning channel (`W-FORCE-UNWRAP` precedent); a `W-FLOAT-EQ` lint on a literal-float
 `==`/`!=` removes the surprise *without* changing semantics (the comparison still works, byte-identical
 to PHP). Cheap, strong-fit, ships in the existing warning infra.
 
 **J-numeric-tower — int↔float coercion rule.** `compare_ord` *errors* on `int` vs `float`
 (`compare_ord(Int, Float)` → `Err`), and arithmetic kernels are split int-only/float-only. PHP silently
-widens `1 + 1.5` to float. Phorge's static-type stance means this must be an *explicit, documented rule*:
+widens `1 + 1.5` to float. Phorj's static-type stance means this must be an *explicit, documented rule*:
 either require an explicit cast (most legible, matches "no surprises") or auto-widen `int`→`float` in
 mixed arithmetic/comparison like PHP (most familiar). The decision is load-bearing for the whole numeric
 surface and is currently *implicit by rejection*. Adopt the rule (recommend: auto-widen to float in mixed
 ops, matching PHP, with the result typed `float`) and document it in INVARIANTS.
 
-**J-unicode-model — Unicode / string encoding model.** Phorge has `string` (declared UTF-8) and `bytes`
+**J-unicode-model — Unicode / string encoding model.** Phorj has `string` (declared UTF-8) and `bytes`
 (octets) — but the *semantic model* of `string` operations is unstated: is `Core.Text.len` codepoints,
 bytes, or graphemes? PHP `strlen` is bytes; `mb_strlen` is codepoints. KNOWN_ISSUES already records the
 "`php -n` has no mbstring → use tier-1 (PCRE not mbstring)" constraint, which *forces* a byte model for
@@ -118,7 +118,7 @@ mutation spec + CLAUDE.md. Surface it as a first-class FEATURES/guide section (w
 `examples/guide/aliasing.phg`). Shipped behavior — documentation gap only, strong fit.
 
 **J-bool-coercion — Truthiness rule.** PHP's `if ("0")`, `if ([])`, `if (0.0)` truthiness is a famous
-footgun. Phorge is statically typed, so `if (cond)` should *require* a `bool` (no implicit coercion of
+footgun. Phorj is statically typed, so `if (cond)` should *require* a `bool` (no implicit coercion of
 `int`/`string`/`List` to bool) — this is almost certainly already the de-facto behavior, but it must be a
 *documented, enforced* semantic decision (the philosophy is "remove surprises"). Confirm + document +
 ensure a clean `E-COND-NOT-BOOL` (or equivalent) rather than silent coercion. Strong fit, cheap.
@@ -174,7 +174,7 @@ Set/List/scalar structurally and is cycle-guarded. Findings below.
 
 - **J-string-concat — no string concatenation operator (PHP `.`).** `BinaryOp` has no `.` and no
   string `+`; string building is **interpolation-only** (`"{a}{b}"`). PHP's single most-used string
-  operator (`$a . $b`) has no Phorge surface, and the obvious port — overloading `+` — is *rejected*
+  operator (`$a . $b`) has no Phorj surface, and the obvious port — overloading `+` — is *rejected*
   by the checker (arithmetic requires int/float). A PHP dev WILL reach for `.` or `+` and hit a wall.
   Philosophy-fit form: adopt PHP's `.` operator on `string` (and `bytes`), `string . string -> string`,
   transpiling 1:1 to PHP `.`. This is surface + one checker arm + one `Op::Concat2` (or reuse the
@@ -185,7 +185,7 @@ Set/List/scalar structurally and is cycle-guarded. Findings below.
   questions (`2 ** 63`), so DEFER — note it as a known absence (use `Core.Math.pow`), revisit if demand
   appears. M11, S.
 - **J-bitwise-ops — bitwise/shift operators (`& | ^ << >> ~`) are absent AND `&`/`|` now collide with
-  type operators.** PHP has the full bitwise set; Phorge has none, and post-S4/S5 a lone `|`/`&` lexes
+  type operators.** PHP has the full bitwise set; Phorj has none, and post-S4/S5 a lone `|`/`&` lexes
   to `Bar`/`Amp` (union/intersection *type* operators). Value-level bitwise would need careful
   disambiguation (only in expression position) or named functions (`Core.Bits.and(…)`). Bitwise is
   systems/low-level, weak philosophy fit for an app language, and the token collision is a real cost —

@@ -1,17 +1,17 @@
-# Phorge → PHP Transpiler — Design
+# Phorj → PHP Transpiler — Design
 
 > Milestone: **Converter (stage 1 of bidirectional)**. Built after M1 (interpreter).
-> Direction: **Phorge → PHP only**. PHP → Phorge import is a separate, larger future
+> Direction: **Phorj → PHP only**. PHP → Phorj import is a separate, larger future
 > milestone (needs a full PHP front-end + dynamic→static type inference) and is out of
 > scope here.
 
 **Goal:** Emit semantically-equivalent, runnable PHP 8.x source from a type-checked
-Phorge program, via a new `phg transpile <file>` subcommand that prints PHP to stdout.
+Phorj program, via a new `phg transpile <file>` subcommand that prints PHP to stdout.
 
 **Architecture:** A new `src/transpile.rs` codegen module walks the **untyped AST** (same
 AST the evaluator walks), tracking the same global tables (functions / enums / classes)
 and a per-function variable/field scope so it can resolve identifiers and dispatch calls
-exactly as the evaluator does. `phorge::cli::cmd_transpile(src) -> Result<String, String>`
+exactly as the evaluator does. `phorj::cli::cmd_transpile(src) -> Result<String, String>`
 gates on the type-checker (reuse `parse_checked`) then calls `transpile::emit(&Program)`.
 `main.rs` adds `transpile` to its subcommand set.
 
@@ -72,7 +72,7 @@ throw new \UnhandledMatchError();
 
 ## Construct mapping (full set)
 
-| Phorge | PHP |
+| Phorj | PHP |
 |---|---|
 | `import a.b.c;` | dropped (no-op; std is implicit) |
 | `function f(int a) -> float { }` | `function f(int $a): float { }` |
@@ -105,7 +105,7 @@ throw new \UnhandledMatchError();
 `List/Map/Set→array`, enum/class name → that class name.
 
 ### String interpolation → concatenation (judgment call — flagged for review)
-Phorge interpolation allows **free function calls** inside `{…}` (e.g. `"area = {area(s)}"`),
+Phorj interpolation allows **free function calls** inside `{…}` (e.g. `"area = {area(s)}"`),
 which PHP's `"{$…}"` syntax does **not** support. To be always-correct and avoid PHP
 interpolation edge cases, every interpolated string is emitted as a concatenation of
 string-literal segments and parenthesized expressions:
@@ -144,5 +144,5 @@ return/var-decl-init position → `transpile error: <feature> is not yet support
   stdout starts with `<?php`; ill-typed input exits 1.
 
 ## Out of scope (this milestone)
-PHP → Phorge import; PHP namespaces/autoloading/composer output; formatting beyond simple
+PHP → Phorj import; PHP namespaces/autoloading/composer output; formatting beyond simple
 indentation; preserving comments.

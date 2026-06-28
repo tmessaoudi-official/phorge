@@ -6,7 +6,7 @@ import Core.Console;
 // that triggered it, so context is preserved instead of lost. A conventional `cause` field of type
 // `Error?` on an `Error` subtype is routed into PHP's native exception chain
 // (`parent::__construct($message, 0, $cause)`), so the transpiled PHP reports an idiomatic
-// "caused by" via `getPrevious()` too — while the Phorge backends read it back as a plain field.
+// "caused by" via `getPrevious()` too — while the Phorj backends read it back as a plain field.
 
 class IoError implements Error {
   constructor(public string message) {}

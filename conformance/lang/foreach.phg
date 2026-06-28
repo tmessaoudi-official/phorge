@@ -5,7 +5,7 @@ package Main;
 import Core.Console;
 
 function main() -> void {
-    List<string> langs = ["Phorge", "PHP", "TypeScript"];
+    List<string> langs = ["Phorj", "PHP", "TypeScript"];
 
     // Value form — `w` is inferred as `string` from the iterable.
     foreach (langs as w) {

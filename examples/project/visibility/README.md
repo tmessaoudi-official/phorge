@@ -1,7 +1,7 @@
 # `project/visibility/` — declaration visibility (`public` / `internal` / `private`)
 
-Phorge gives every **top-level declaration** (class, enum, interface, free function) a visibility
-level. It is the declaration analog of member visibility, and it follows Phorge's strictest-sensible
+Phorj gives every **top-level declaration** (class, enum, interface, free function) a visibility
+level. It is the declaration analog of member visibility, and it follows Phorj's strictest-sensible
 default — a `private` declaration leaks *nothing*, not even to a sibling file, unless you widen it.
 
 ## The three levels — a lattice `file ⊂ package ⊂ public`
@@ -48,7 +48,7 @@ The legal references it exercises:
 Every shipped example must produce identical *Ok* output, so a compile error can't be one — it is
 documented here instead. Each of the following, added to `main.phg`, is a **compile error**:
 
-```phorge
+```phorj
 // scale is `internal` to Acme.Shapes — not exportable to another package:
 import type Acme.Shapes.Scale;   //  no such public type
 Shapes.scale(12);                  //  E-VIS-INTERNAL: scale is internal to Acme.Shapes

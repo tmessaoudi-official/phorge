@@ -4,7 +4,7 @@ import Core.Console;
 import Core.Text;
 
 function main(): void {
-  Console.println(Text.reverse("phorge"));
+  Console.println(Text.reverse("phorj"));
   Console.println(Text.reverse("abcABC123"));
   Console.println(Text.reverse(""));
   bool a = Text.equalsIgnoreCase("Hello", "hello");

@@ -1,6 +1,6 @@
-// Phorge Playground — main thread orchestrator.
+// Phorj Playground — main thread orchestrator.
 //
-// Responsibilities: CodeMirror editor, a Web Worker running the Phorge WASM pipeline (with a
+// Responsibilities: CodeMirror editor, a Web Worker running the Phorj WASM pipeline (with a
 // per-call timeout that terminates a runaway program), lazy php-wasm to *execute* the transpiled
 // PHP, the examples picker, the URL-hash permalink, diagnostics + `explain`, and the 3-way
 // agreement badge. Everything is client-side; nothing is sent to a server.
@@ -75,7 +75,7 @@ const callJson = (op, arg) =>
   call(op, arg).then(JSON.parse).catch((e) => ({ ok: false, error: String(e.message || e) }));
 
 // --- php-wasm (lazy; the transpiled PHP executes in-browser, PHP 8.4) --------------------------
-// php-wasm (seanmorris) defaults to PHP 8.4 — matching Phorge's transpile floor. Loaded only when
+// php-wasm (seanmorris) defaults to PHP 8.4 — matching Phorj's transpile floor. Loaded only when
 // the user first runs with "Run PHP" enabled. NOTE: this CDN import is the one integration point
 // not exercised by the Rust test suite; pin a specific version once validated on first deploy.
 const PHP_WASM_URL = "https://cdn.jsdelivr.net/npm/php-wasm/PhpWeb.mjs";
@@ -154,20 +154,20 @@ async function share() {
   }
 }
 
-// --- lift (PHP -> Phorge draft) ----------------------------------------------------------------
+// --- lift (PHP -> Phorj draft) ----------------------------------------------------------------
 // Treat the editor contents as PHP and run the `lift` engine (the inverse of transpile). On success
-// the lifted Phorge draft REPLACES the editor (then runs through the 3-way pipeline). On failure the
+// the lifted Phorj draft REPLACES the editor (then runs through the 3-way pipeline). On failure the
 // editor is left untouched and the badge carries the lift error — never a guess, never a silent blank.
 // The lift carries no byte-identity guarantee (it's a best-effort scaffold), so — exactly like the
 // `phg lift` CLI — we prepend a `// lifted (verify)` banner here at the entrypoint (the engine's
 // `lift_source` returns the bare draft) so the review-required contract is visible in the editor.
-const LIFT_BANNER = "// lifted (verify) — a best-effort PHP->Phorge draft; review before trusting it.\n";
+const LIFT_BANNER = "// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.\n";
 async function liftPhp() {
   if (running) return;
-  flashBadge("neutral", "Lifting PHP → Phorge…");
+  flashBadge("neutral", "Lifting PHP → Phorj…");
   const res = await callJson("lift", source());
-  if (res.ok && res.phorge != null) {
-    setSource(LIFT_BANNER + res.phorge);
+  if (res.ok && res.phorj != null) {
+    setSource(LIFT_BANNER + res.phorj);
     runAll(); // run the lifted draft so the user immediately sees it behave
   } else {
     // The engine's errors are already self-describing (they start with `lift …`); only the fallback
@@ -232,7 +232,7 @@ function renderDiagnostics(check) {
 
 // Append a backend (interpreter/VM) rejection to the diagnostics pane when the checker was clean —
 // otherwise a lowering rejection (not a checker diagnostic) leaves the tab empty under a "does not
-// compile" badge. A VM-only rejection is additionally flagged as a likely run≠runvm Phorge bug.
+// compile" badge. A VM-only rejection is additionally flagged as a likely run≠runvm Phorj bug.
 function surfaceBackendRejection(check, run, vm) {
   const checkClean = !(check && check.parseError) && !((check && check.diagnostics) || []).length;
   if (!checkClean) return;
@@ -244,7 +244,7 @@ function surfaceBackendRejection(check, run, vm) {
   d.className = "diag";
   const sev = document.createElement("span");
   sev.className = "sev-error";
-  sev.textContent = vm.error && !run.error ? "backend rejection (run≠runvm — likely a Phorge bug)" : "backend rejection";
+  sev.textContent = vm.error && !run.error ? "backend rejection (run≠runvm — likely a Phorj bug)" : "backend rejection";
   const loc = document.createElement("span");
   loc.className = "loc";
   loc.textContent = " " + msg;
@@ -282,14 +282,14 @@ function flashBadge(kind, text) {
 
 function renderBadge(run, vm, phpOut, phpErr, phpEnabled) {
   // A backend that REJECTS (front-end / lowering error) while the other does not — or both rejecting
-  // with different messages — is a run≠runvm divergence, a real Phorge bug. Checked BEFORE the
+  // with different messages — is a run≠runvm divergence, a real Phorj bug. Checked BEFORE the
   // generic "does not compile" so a VM-only lowering rejection isn't mislabelled. The error text is
   // in the run / runvm panes (a VM-only rejection is NOT a checker diagnostic, so it won't be in the
   // diagnostics tab — that mismatch was the reported bug).
   const runRej = !!run.error;
   const vmRej = !!vm.error;
   if (runRej !== vmRej || (runRej && vmRej && run.error !== vm.error)) {
-    flashBadge("err", "❌ run ≠ runvm — one backend rejects, the other doesn't (a Phorge bug!) — see the run/runvm panes");
+    flashBadge("err", "❌ run ≠ runvm — one backend rejects, the other doesn't (a Phorj bug!) — see the run/runvm panes");
     return;
   }
   // Both backends reject identically — a genuine front-end / lowering rejection.
@@ -299,7 +299,7 @@ function renderBadge(run, vm, phpOut, phpErr, phpEnabled) {
   }
   const rustAgree = run.ok && vm.ok && run.stdout === vm.stdout;
   if (run.ok !== vm.ok || (run.ok && vm.ok && run.stdout !== vm.stdout)) {
-    flashBadge("err", "❌ run ≠ runvm — interpreter/VM divergence (a Phorge bug!)");
+    flashBadge("err", "❌ run ≠ runvm — interpreter/VM divergence (a Phorj bug!)");
     return;
   }
   if (run.fault && vm.fault) {
@@ -377,7 +377,7 @@ async function runAll() {
 // --- examples picker ---------------------------------------------------------------------------
 function initExamples() {
   const sel = $("examples");
-  const examples = window.PHORGE_EXAMPLES || {};
+  const examples = window.PHORJ_EXAMPLES || {};
   for (const name of Object.keys(examples)) {
     const o = document.createElement("option");
     o.value = name;
@@ -395,12 +395,12 @@ function initExamples() {
 
 // --- boot --------------------------------------------------------------------------------------
 async function boot() {
-  const examples = window.PHORGE_EXAMPLES || {};
+  const examples = window.PHORJ_EXAMPLES || {};
   // Fallback when examples.js hasn't populated the global (e.g. it failed to load). Must be VALID
-  // current Phorge — return types are mandatory — so the editor never boots a program that errors
+  // current Phorj — return types are mandatory — so the editor never boots a program that errors
   // on the first run. Mirrors gen_examples.py's DEFAULT (keep the two in sync).
   let initialDoc = examples["hello (default)"] ||
-    'package Main;\nimport Core.Console;\n\nfunction main(): void {\n    List<string> who = ["world", "Phorge"];\n    for (string w in who) {\n        Console.println("Hello, {w}!");\n    }\n}\n';
+    'package Main;\nimport Core.Console;\n\nfunction main(): void {\n    List<string> who = ["world", "Phorj"];\n    for (string w in who) {\n        Console.println("Hello, {w}!");\n    }\n}\n';
   if (location.hash.length > 2) {
     try {
       const decoded = await decodeSource(location.hash.slice(1));

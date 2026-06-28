@@ -87,7 +87,7 @@ impl Checker {
         self.prebind_types(program);
         for item in &program.items {
             // PHP reserves a set of words in symbol positions (a free function / class / enum /
-            // interface / trait / type-alias). Several are usable Phorge value identifiers (param /
+            // interface / trait / type-alias). Several are usable Phorj value identifiers (param /
             // field / local / property / method — e.g. `var`, `list`, `print`, `int`) but naming a
             // *symbol* with one would transpile to invalid PHP, so reject it here with a clear
             // diagnostic (kind-aware — `int` is a legal PHP function name but not a class name) rather
@@ -1214,7 +1214,7 @@ impl Checker {
             // Two overloads that are not *identical* but collide under PHP erasure: `string`/`bytes`
             // both erase to PHP `string`, and `List`/`Map`/`Set` all erase to PHP `array`. The
             // transpiler's overload dispatch is an `instanceof`/`is_*` if-chain that cannot tell them
-            // apart, so an ambiguous call would fault on the Phorge backends but silently take the
+            // apart, so an ambiguous call would fault on the Phorj backends but silently take the
             // first PHP branch (the documented transpile-only divergence). Reject at declaration
             // instead (decision review, 2026-06-27).
             self.err_coded(

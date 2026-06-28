@@ -1,6 +1,6 @@
 # `phg test` — self-hosted test suite
 
-A small, runnable showcase of Phorge's built-in test runner (M-Test). These files are exercised by
+A small, runnable showcase of Phorj's built-in test runner (M-Test). These files are exercised by
 CI (`tests/mtest.rs`), so they are guaranteed to stay green.
 
 ## Running
@@ -20,16 +20,16 @@ selftest/faults.phg :: code that should NOT fault ... ok
 Exit code is `0` iff every test passes, else `1` — so `phg test` drops straight into CI.
 
 With no path, `phg test` discovers every `*.phg` under the project's `tests/` directory (the project
-root is the nearest ancestor holding a `phorge.toml`, else the current directory). You can also point
+root is the nearest ancestor holding a `phorj.toml`, else the current directory). You can also point
 it at a single file or a directory: `phg test selftest/arithmetic.phg`, `phg test selftest/`.
 
 ## Writing tests
 
-A test file is a **normal Phorge program** — it can declare functions, classes, and imports
+A test file is a **normal Phorj program** — it can declare functions, classes, and imports
 alongside its `test` blocks. `test` is a contextual keyword (special only at the start of a top-level
 item, before a string name), so it stays usable as an ordinary identifier everywhere else.
 
-```phorge
+```phorj
 package Main;
 import Core.Test;
 
@@ -61,7 +61,7 @@ A failing assertion raises a fault with a clear message; the runner catches it p
 failure with its line and stack trace, and continues to the next test. A test that faults *outside*
 an assertion (a real bug in the code under test) is a failure too — not a runner crash.
 
-```phorge
+```phorj
 test "indexing past the end faults" {
     var xs = [10, 20, 30];
     Test.assertFaults(fn() => xs[5]);   // out-of-range read faults → the test passes

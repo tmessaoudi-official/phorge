@@ -19,7 +19,7 @@
 
 ## Post-LSP autonomous run — locked plan (2026-06-28, developer front-loaded all decisions)
 > Developer will **push** the 6 commits themselves, then I run the below **fully autonomously** after a
-> compaction. Persistent project autonomy bypass set (`~/.claude/projects/-stack-projects-phorge/state/
+> compaction. Persistent project autonomy bypass set (`~/.claude/projects/-stack-projects-phorj/state/
 > autonomous-3c-bypass`). Recommended-defaults at every non-pre-decided fork; commit green slices;
 > **never push**; only stop for a fundamental design fork or a risky/destructive action.
 > **Run order: (1) overloaded statics → (2) LSP v2 → (3) rock 3.**
@@ -187,17 +187,17 @@ a risky/destructive action. Rebuild the release binary after each feature; end e
 Each its own commit, TDD, byte-identity-gated (run≡runvm≡real PHP 8.5), + example where user-visible.
 1. **CSV empty → `[]`** ✅ DONE `ea6bc96`.
 2. **Division-by-zero cluster** ✅ DONE (float `/0`/`%0` now fault — `value::float_div`/`float_rem`
-   → `Result`, wired through both backends + `__phorge_rem` PHP guard; int/0 + decimal-div/0 already
+   → `Result`, wired through both backends + `__phorj_rem` PHP guard; int/0 + decimal-div/0 already
    faulted). `Math.fdiv` for explicit IEEE inf = deferred (add only if requested).
 3. **Decimal `%` un-reject** ✅ DONE — exact remainder operator (`Op::RemD` → `value::decimal_rem` →
    `bcmod`; zero divisor faults; result scale = max). Checker allows `%`, keeps `/` rejected.
 4. **Decimal `/` exact-or-fault** ✅ DONE — `Op::DivD` → `value::decimal_div_exact` (reduce fraction,
-   strip 2s/5s, fault if non-terminating, minimal-form result). Transpiles to `__phorge_dec_div_exact`
+   strip 2s/5s, fault if non-terminating, minimal-form result). Transpiles to `__phorj_dec_div_exact`
    (bcdiv + exactness check + strip) byte-identical under PHP 8.5. `Decimal.div` (rounded) unchanged.
 5. **numberFormat digit-based rounding** ✅ DONE — both legs digit-round the shortest-round-trip
-   string (`__phorge_float`) by carry, not float-scaling. `0.285→0.29` byte-identical; `.5` divergence gone.
+   string (`__phorj_float`) by carry, not float-scaling. `0.285→0.29` byte-identical; `.5` divergence gone.
 6. **Random → byte-identical parity** ✅ DONE — `pure: true`; transpiler hand-rolls the same xorshift64
-   (`__phorge_rng_*`, logical-`>>` mask + signed `GOLDEN`); dice.phg now oracle-gated, seq identical 3-way.
+   (`__phorj_rng_*`, logical-`>>` mask + signed `GOLDEN`); dice.phg now oracle-gated, seq identical 3-way.
 7. **Overload erasure reject** ✅ DONE — `E-OVERLOAD-ERASE` at declaration via a `php_erasure_key`
    (string/bytes→string, List/Map/Set→array, Optional recursive); explain + checker test.
 8. **Lambda bare-field fix** ✅ DONE — resolved by the bigger decision: **require `this.field`
@@ -230,7 +230,7 @@ return annotation, coverage+example).
   EXCLUDED from the byte-identity oracle (random salt); dedicated `tests/crypto.rs`; a **verify-only**
   example (committed PHC hash) IS gateable (deterministic). argon2 feature-gated OFF for the WASM
   playground. **Principle reaffirmed:** transpile/lift are migration+test bridges, never a runtime
-  Phorge depends on — every native has a real Rust impl; PHP is only an emission target.
+  Phorj depends on — every native has a real Rust impl; PHP is only an emission target.
   **✅ COMPLETE** (`e345b85`): `argon2` crate adopted; `Core.Crypto.hashPassword`(impure)/
   `verifyPassword`(pure) native on Rust backends + PHP peer emission (PHC cross-verify proven);
   feature-gated off for the playground; `tests/crypto.rs` + verify-only gated example; 1112 tests green.
@@ -255,7 +255,7 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
 5. **Breadth gaps** — only what `m4-stdlib-breadth.plan.md` left open (most is ✅); `core.json`
    safe-parse hardening, path/log/sprintf if not present.
 6. **Close M-NUM S4** — Math breadth + `number_format` (shared with M-text). Flips M-NUM to ✅.
-7. **lift L5** — PHP→Phorge→PHP round-trip oracle gate. Flips lift to ✅.
+7. **lift L5** — PHP→Phorj→PHP round-trip oracle gate. Flips lift to ✅.
 8. **Release-readiness** — M8 security hardening (injection guards, `Secret<T>` **FORK**, `write_atomic`)
    → GA governance docs (semver/BC/conformance corpus/security model) → M2.5 Phase 3 (CI stub registry
    + `--sign`). Docs last: they describe a stable surface.
@@ -276,7 +276,7 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
   LSP is last.
 - [2026-06-28] FORK A **COMPLETE** (`159b296`) — `Core.Regex` shipped: `regex` crate (2nd vetted dep,
   policy amended), injected `Regex` class, 7 natives (compile/matches/find/findAll/findGroups/replace/
-  split), gated `__phorge_regex_*` transpile helpers. 1354 tests green, clippy+fmt clean, playground
+  split), gated `__phorj_regex_*` transpile helpers. 1354 tests green, clippy+fmt clean, playground
   builds without it, `examples/guide/regex.phg` byte-identical run≡runvm≡PHP 8.5. NOT pushed.
 - [2026-06-28] FORK A RESOLVED — **`Core.Regex`**: (engine) **adopt the `regex` crate** as the 2nd
   vetted dependency (developer reframed the question to "best & most secure regardless of byte-identity
@@ -327,7 +327,7 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
   next: Item C (statics research), then Item D (LSP).**
 - [2026-06-28] FORK B RESOLVED — **`Secret<T>` = Path 1 (opaque & non-printable)**, design
   `docs/specs/2026-06-28-secret-type-design.md`. An implementation discovery reopened the earlier
-  "displays as `***`" wording: Phorge's `as_display` renders only primitives, so a class-typed `Secret`
+  "displays as `***`" wording: Phorj's `as_display` renders only primitives, so a class-typed `Secret`
   is **already unprintable** — `Console.println(s)`/`"{s}"` is a clean type error, the strongest+loudest
   guarantee, free from the type system. Chosen over Path 2 (runtime `***`, which needs a new `Value`
   variant + a *silent* `***`) — loud > silent, no new `Op`/`Value`. Model: an **injected generic class**
@@ -360,7 +360,7 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
   Natural push point (collections done). NEXT options: Text breadth, push+tag, or a bigger track.
 - [2026-06-28] DONE: **stdlib List breadth** (developer-chosen fresh deterministic track). `Core.List` +=
   `unique`/`min`/`max`/`find`/`any`/`all`. Pure (unique/min/max) + higher-order (find/any/all,
-  short-circuiting). All via `__phorge_*` helpers for strict parity (PHP min/max/array_unique juggle
+  short-circuiting). All via `__phorj_*` helpers for strict parity (PHP min/max/array_unique juggle
   numeric strings — verified: string min/max of `["10","9","100","2"]` = `"10"`/`"9"` byte-order on all
   3 backends). No new Op/Value. `examples/guide/list-breadth.phg` + `conformance/collections/list-query.phg`
   + 2 lib unit tests. NEXT options: more stdlib breadth (Set/Map ergonomics, Text breadth), or another track.
@@ -397,7 +397,7 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
   (`#[Route]` on class methods).**
 - [2026-06-28] DONE: **M6 W2-ext slice 1 — middleware + route groups** (`f01035e`): `router.use(mw)`
   (`(Request,next)->Response`, short-circuit or pass-through) + `router.group(prefix, build)`; pure
-  Phorge, no new Op/Value, byte-identical 3-way. Also fixed two latent VM-compiler CTy gaps found while
+  Phorj, no new Op/Value, byte-identical 3-way. Also fixed two latent VM-compiler CTy gaps found while
   prototyping: a native-qualified call as an arithmetic operand (`e44bc29`) and a static-method call as
   a fn-value (folded into `f01035e`). **NEXT: slice 2 (regex/typed route constraints `{id:\d+}` via
   Core.Regex) → slice 3 (`#[Route]` on class methods).** Spec `docs/specs/2026-06-28-m6-w2-extensions-design.md`.
@@ -425,7 +425,7 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
     reflection** — collect `#[Route]`-annotated free functions at load/check and lower
     `Http.autoRouter() -> Router` into explicit `new Router()` + `.route(method, path, handler)` per
     collected handler (expand-before-backends discipline ⇒ byte-identity trivial, no runtime attr
-    machinery). [Verified 2026-06-28: Phorge has NO attribute syntax today — only Rust derives in the
+    machinery). [Verified 2026-06-28: Phorj has NO attribute syntax today — only Rust derives in the
     compiler — so this is a genuinely new surface.]
 - [2026-06-28] AGREED: developer wants me **fully autonomous** for the whole sequence; asked all
   questions up front; no further blocking forks (sub-decisions defaulted + documented).
@@ -448,7 +448,7 @@ foreach (+ `with i`), text-blocks (`"""…"""`) + raw strings, default parameter
 
 ### Item 2 — M6 W2 router + attributes (milestone, spec-first)
 Spec → `docs/specs/2026-06-28-m6-w2-router-attributes-design.md`. Build order:
-(a) **Router** class (pure Phorge, on the injected Core.Http Request/Response): `route(string method,
+(a) **Router** class (pure Phorj, on the injected Core.Http Request/Response): `route(string method,
 string pattern, handler)` + `handle(Request) -> Response`; segment matcher with `{name}` capture →
 Request attributes (`req.param`); literal>param precedence; first-registered tie-break; 404 fallback.
 Byte-identity-gated + a guide/conformance example.
@@ -466,7 +466,7 @@ README/CHANGELOG/KNOWN_ISSUES. (W3 socket serve runtime stays the next slice; W2
 ### Item 3 — M2.5 Phase 3a (CI stub registry; NO signing) — ✅ DONE (`3d6e7bc`)
 Shipped `bundle/sha256.rs` (hand-rolled FIPS SHA-256, FIPS+cross-impl tested), `bundle/manifest.rs`
 (tolerant parser + lookup + registry_base + `phg-stub-<triple>` asset names), `build.rs` (bakes
-`PHORGE_BAKE_STUB_MANIFEST`, empty default → breaks the stub↔manifest circularity), the `bundle/cross.rs`
+`PHORJ_BAKE_STUB_MANIFEST`, empty default → breaks the stub↔manifest circularity), the `bundle/cross.rs`
 3-way branch (`download_stub`/`fetch`: verify-before-cache, curl/file:// transport), `Cargo.toml`
 `repository`. CI workflow shipped as **`.github/workflows/stub-registry.yml`** (the spec's `release.yml`
 name was taken → distinct file, complements it). Tests: `tests/registry.rs` (hermetic client +
@@ -476,7 +476,7 @@ download → verify → embed → run ≡ runvm). Phase 3b (signing/macOS) defer
 ### Item 3 (original spec) — M2.5 Phase 3a (CI stub registry; NO signing)
 Spec already exists: `docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`. Build: `bundle/
 sha256.rs` (std SHA-256), `bundle/manifest.rs` (parse + lookup + `registry_base` via Cargo.toml
-`repository` / `PHORGE_STUB_REGISTRY` / `PHORGE_STUB_MANIFEST` overrides), `download_stub()` 3-way
+`repository` / `PHORJ_STUB_REGISTRY` / `PHORJ_STUB_MANIFEST` overrides), `download_stub()` 3-way
 branch in `bundle/cross.rs::build_stub` (cache→local-build→download), `build.rs` bakes the per-target
 sha256 manifest into the released `x86_64-linux-gnu` primary, `.github/workflows/release.yml`
 (build stubs → hash → bake → publish), `Cargo.toml` `repository`. Integrity gate (sha256 mismatch →
@@ -491,8 +491,8 @@ Developer answered the milestone-fork with **"all of them in order"** — execut
 sequence fully autonomously (persistent autonomy bypass ON), spec-first, each slice green +
 byte-identical (run≡runvm≡real PHP 8.5) + guide example + conformance + docs + memory:
 
-1. **M-TIME** (dates/time/durations) — FIRST. Design: an **injected pure-Phorge prelude**
-   (`Instant`/`Duration`/`Date`/`DateTime`, all calendar+format math in Phorge ⇒ identical on all
+1. **M-TIME** (dates/time/durations) — FIRST. Design: an **injected pure-Phorj prelude**
+   (`Instant`/`Duration`/`Date`/`DateTime`, all calendar+format math in Phorj ⇒ identical on all
    backends, zero native divergence) + **one native clock seam** `Core.Time.nowMillis()` (process-
    global, `freeze`/`unfreeze` like `Core.Random.seed`, hand-rolled identically in PHP). Examples
    freeze the clock for determinism; unfrozen `now()` reads wall-clock and is documented non-gated
@@ -571,11 +571,11 @@ fully specced above — execute first in a fresh session (mechanical, parity-gat
 Order note: doing #4 (stdlib breadth, lowest-risk additive) first given session depth, then #2/#3.
 
 ## PROJECT NAME — LOCKED 2026-06-28 → `Phorj`
-Developer locked the rename target: **Phorj** (reads "forge" — keeps Phorge's identity, PH-homage,
+Developer locked the rename target: **Phorj** (reads "forge" — keeps Phorj's identity, PH-homage,
 verified-free on crates.io/npm/PyPI/domain/trademark; fire-theme rejected because the PH+fire root space
 is phonetically saturated — Pyre/Pyra/Pyro/PHYRN/Phlare all collide). See
-[[name-collision-rename-decision]]. **Execution (the breaking codemod — crate/lib `phorge`,
-`phorge.toml` filename, `.phorge` ELF section, `PHORGE_*` env, `~/.cache/phorge`, repo, docs) is NOT
+[[name-collision-rename-decision]]. **Execution (the breaking codemod — crate/lib `phorj`,
+`phorj.toml` filename, `.phorj` ELF section, `PHORJ_*` env, `~/.cache/phorj`, repo, docs) is NOT
 done** — `phg` binary + `.phg` extension stay (ripgrep model). Scope/timing pending developer.
 
 ## THIRD MARATHON (2026-06-28, "all of them in order") — Decisions Log

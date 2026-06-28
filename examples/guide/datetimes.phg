@@ -3,7 +3,7 @@
 // An `Instant` is both a machine timestamp (epoch-millis) AND a human date-time: it exposes
 // year/month/day/hour/minute/second/millis and `toIso()`, all in UTC. There is no separate `DateTime`
 // class — that name collides with PHP's built-in, and `Instant` already is the point in time. All field
-// math is pure Phorge, so it is byte-identical on `run`/`runvm`/transpiled PHP.
+// math is pure Phorj, so it is byte-identical on `run`/`runvm`/transpiled PHP.
 package Main;
 
 import Core.Console;

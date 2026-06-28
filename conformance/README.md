@@ -1,6 +1,6 @@
 # Conformance corpus
 
-A **golden-output** regression net for Phorge's *stable* surface (GA rock 3). Each program here has a
+A **golden-output** regression net for Phorj's *stable* surface (GA rock 3). Each program here has a
 committed expected output; `tests/conformance.rs` asserts the interpreter, the bytecode VM, **and** the
 transpiled PHP all produce *exactly* that output.
 
@@ -26,9 +26,9 @@ loudly.
   Rust backends' shortest-round-trip formatting and PHP's 14-digit `echo`; use exactly-representable
   values, e.g. integer cents for money).
 - Discovery is glob-based: a program added under `conformance/` is gated with no test edit. A directory
-  holding a `phorge.toml` is treated as a project (golden = `expected.out`).
+  holding a `phorj.toml` is treated as a project (golden = `expected.out`).
 - Run the full gate (incl. the PHP oracle) before relying on a change:
-  `PHORGE_PHP=/path/to/php PHORGE_REQUIRE_PHP=1 cargo test --test conformance`.
+  `PHORJ_PHP=/path/to/php PHORJ_REQUIRE_PHP=1 cargo test --test conformance`.
 
 ## Regenerating a golden
 

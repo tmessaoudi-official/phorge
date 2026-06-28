@@ -2,7 +2,7 @@
 //!
 //! `pure: true` (2026-06-27): the result is deterministic w.r.t. the program text — a process-global
 //! xorshift64 state advanced by each call, seeded deterministically, replaying the same stream on
-//! every backend. The transpiler hand-rolls the **same** xorshift64 in PHP (`__phorge_rng_*`), so a
+//! every backend. The transpiler hand-rolls the **same** xorshift64 in PHP (`__phorj_rng_*`), so a
 //! seeded sequence is **byte-identical** on `run`/`runvm`/transpiled PHP and Random is gated by the
 //! oracle like any other native (no longer quarantined; the prior `mt_srand`/`mt_rand` divergence is
 //! gone). The PHP `>>` is arithmetic where Rust's `u64 >>` is logical, so the emitted step masks the
@@ -90,7 +90,7 @@ fn random_int_between(args: &[Value], _: &mut String) -> Result<Value, String> {
 }
 
 /// The `Core.Random` registry entries. `pure: true` (2026-06-27): the PHP emission **hand-rolls the
-/// same xorshift64** (`__phorge_rng_*` helpers) rather than PHP's Mersenne-Twister, so a seeded
+/// same xorshift64** (`__phorj_rng_*` helpers) rather than PHP's Mersenne-Twister, so a seeded
 /// sequence is **byte-identical** on `run`/`runvm`/transpiled PHP — Random rejoins the oracle and
 /// reproducibility survives transpile. The kernel itself is still process-global state (the result of
 /// a call depends on prior calls), but it is *deterministic w.r.t. the program text*, which is what
@@ -104,7 +104,7 @@ pub(crate) fn random_natives() -> Vec<NativeFn> {
             ret: Ty::Void,
             pure: true,
             eval: NativeEval::Pure(random_seed),
-            php: |a| format!("__phorge_rng_seed({})", parg(a, 0)),
+            php: |a| format!("__phorj_rng_seed({})", parg(a, 0)),
         },
         NativeFn {
             module: "Core.Random",
@@ -113,7 +113,7 @@ pub(crate) fn random_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(random_next),
-            php: |_| "__phorge_rng_next()".to_string(),
+            php: |_| "__phorj_rng_next()".to_string(),
         },
         NativeFn {
             module: "Core.Random",
@@ -122,7 +122,7 @@ pub(crate) fn random_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(random_int_between),
-            php: |a| format!("__phorge_rng_int_between({}, {})", parg(a, 0), parg(a, 1)),
+            php: |a| format!("__phorj_rng_int_between({}, {})", parg(a, 0), parg(a, 1)),
         },
     ]
 }

@@ -53,7 +53,7 @@ three legs. It does **not**: there are demonstrably **two** implementations — 
 hand-ported PHP helper in a *different language with different integer/string/array semantics*. "Ported
 verbatim" across Rust→PHP is not "the same code"; it is two codebases that must be kept in lockstep by
 test discipline. Every other Core.* native gets byte-identity because the PHP leg erases to a
-**single PHP-core builtin** whose behavior is fixed; here the PHP leg is *bespoke Phorge-authored PHP*
+**single PHP-core builtin** whose behavior is fixed; here the PHP leg is *bespoke Phorj-authored PHP*
 that can drift from the Rust engine on any of the four sub-behaviors §10 enumerates. The claim under
 review ("can stay byte-identical") is therefore **not established by the spike** — it is deferred to
 future build work with a 45% chance of needing the fallback narrowing.
@@ -73,7 +73,7 @@ position (e.g. `Regex.findAll("a*", "baab")`, or `Regex.split("", "abc")`, or `R
 empty match; `preg_split` with `PREG_SPLIT_NO_EMPTY` differs again; PHP 7.3+ changed empty-match
 behavior). POSIX-NFA libraries (and the `regex` crate, see R4) have *different* empty-match iteration
 conventions. There is no canonical "single answer" here — there are at least three (PCRE, POSIX,
-Rust-`regex`), and the Phorge Rust engine and the Phorge PHP helper must pick the **same** one and
+Rust-`regex`), and the Phorj Rust engine and the Phorj PHP helper must pick the **same** one and
 encode it identically in two languages. The spike lists this in §10.1 as a sub-bullet of the risk but
 its §3 "single well-defined answer" framing **understates it**: leftmost-longest disambiguates
 *overlapping alternatives at one position*, not *how the cursor steps after a zero-width match*. This
@@ -134,7 +134,7 @@ reserved). Either way the spike's fault story is incomplete and a divergence vec
 ---
 
 ## What the spike got RIGHT (so the refutation is fair)
-- The core inversion — **do NOT transpile to `preg_*`; emit a Phorge-authored PHP helper** — is correct
+- The core inversion — **do NOT transpile to `preg_*`; emit a Phorj-authored PHP helper** — is correct
   and is the only path that *could* hold. Verified: `preg_*` is core under `php -n` (so the temptation
   is real), and `mb_*` is absent — the §10.2 mbstring-leakage guard is a genuine, correct concern.
 - `Op::CallNative` suffices, no new VM Op (Verified against the established multi-arg native path; the

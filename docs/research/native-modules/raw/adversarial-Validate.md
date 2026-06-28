@@ -54,9 +54,9 @@ not in the grammar, including `\n`). With `\z` on the PHP side and a strict end-
 Rust side, the email predicate is byte-identical. **This fix is mandatory and was absent from the
 spike.**
 
-## R2 — CORROBORATING EVIDENCE: the same `$`-anchor trap is already a latent bug in the SHIPPED `__phorge_parse_float` helper
+## R2 — CORROBORATING EVIDENCE: the same `$`-anchor trap is already a latent bug in the SHIPPED `__phorj_parse_float` helper
 
-The transpiler's existing `__phorge_parse_float` (src/transpile/program.rs) is
+The transpiler's existing `__phorj_parse_float` (src/transpile/program.rs) is
 `preg_match($re, $s) === 1 ? (float)$s : null` with a `$`-anchored regex and **no round-trip guard**.
 Measured:
 
@@ -73,14 +73,14 @@ file it in KNOWN_ISSUES.
 
 ## R3 — WHY `isInt`/`toInt` SURVIVE (the spike's reuse decision is sound, for a non-obvious reason)
 
-`__phorge_parse_int` uses the same `$`-anchored `preg_match('/^[+-]?[0-9]+$/', $s)`, so `"5\n"` DOES
+`__phorj_parse_int` uses the same `$`-anchored `preg_match('/^[+-]?[0-9]+$/', $s)`, so `"5\n"` DOES
 pass its `preg_match`. But it is **rescued by its round-trip guard**:
 `$digits = ltrim("5\n","+-") = "5\n"`, while `(string)(int)"5\n" = "5"`, and `"5" !== "5\n"` → returns
-null. Measured: `__phorge_parse_int("5\n") = null`, matching Rust `"5\n".parse::<i64>() = Err`. So
-**`isInt`/`toInt` aliasing `__phorge_parse_int` is byte-identical** — confirmed across `5`, `5\n`,
+null. Measured: `__phorj_parse_int("5\n") = null`, matching Rust `"5\n".parse::<i64>() = Err`. So
+**`isInt`/`toInt` aliasing `__phorj_parse_int` is byte-identical** — confirmed across `5`, `5\n`,
 `\n5`, `05`, `-5`, `5\n6`. The spike's §5-note recommendation to define `isInt` as
-`__phorge_parse_int($s) !== null` is correct and is the only int path that holds. The literal
-`__phorge_validate_int` body in §5 is pseudocode (`... ; // (range guard, see note)` does not parse)
+`__phorj_parse_int($s) !== null` is correct and is the only int path that holds. The literal
+`__phorj_validate_int` body in §5 is pseudocode (`... ; // (range guard, see note)` does not parse)
 and must not be shipped; the note already redirects away from it.
 
 `filter_var INT` would break (`"05"` int=false/Rust=true; `" 5"`/`"5 "`/`"5\n"` filter=true/Rust=false)
@@ -126,9 +126,9 @@ case the byte-identity harness gives false assurance.
 
 1. **MANDATORY:** email PHP helper uses `\z` (not `$`); Rust email scanner checks strict end-of-input.
    Add `"a@b.com\n" => false` to the differential test.
-2. **RECOMMENDED:** define `isInt` = `__phorge_parse_int($s) !== null`; do not ship the §5 literal
-   `__phorge_validate_int` pseudocode.
-3. **ADVISORY (out of scope, file separately):** the shipped `__phorge_parse_float` has the same
+2. **RECOMMENDED:** define `isInt` = `__phorj_parse_int($s) !== null`; do not ship the §5 literal
+   `__phorj_validate_int` pseudocode.
+3. **ADVISORY (out of scope, file separately):** the shipped `__phorj_parse_float` has the same
    `$`-anchor divergence on `"1.5\n"` — `\z`-harden it or KNOWN_ISSUES it.
 
 ## Revised numbers

@@ -5,13 +5,13 @@
 > behind the byte-identity gate, committing green slices.
 >
 > Register: `docs/plans/2026-06-25-php-fidelity-and-divergence-audit.plan.md` (findings A-1, A-6,
-> A-46, A-62). Philosophy: [[philosophy-of-phorge]] — Phorge : PHP :: TypeScript : JavaScript;
+> A-46, A-62). Philosophy: [[philosophy-of-phorj]] — Phorj : PHP :: TypeScript : JavaScript;
 > familiarity-first; *better, not just different*; remove surprises, never capability.
 
 ## Why
 
 Four surface divergences from PHP/TypeScript that the audit found have **no solid reason**. Each makes
-Phorge look like it doesn't know its parent language. Stream 1 fixes the *syntax* (front-end only) so
+Phorj look like it doesn't know its parent language. Stream 1 fixes the *syntax* (front-end only) so
 both the language and its `lift`/`transpile` bridges read idiomatically. **No backend semantics
 change** — the AST after parsing is unchanged for A-1 (pure surface), additive for A-6/A-46/A-62.
 The byte-identity spine (`run ≡ runvm ≡ real PHP 8.5`) is the gate for every slice.
@@ -68,7 +68,7 @@ double-quoted literal with the dedented content is exact and floor-safe).
   byte-identical run/runvm/real-PHP.
 
 ### `lift` (↑)
-- PHP heredoc/nowdoc (`<<<EOT`) → Phorge `"""…"""` is a **later** lift addition (not this slice;
+- PHP heredoc/nowdoc (`<<<EOT`) → Phorj `"""…"""` is a **later** lift addition (not this slice;
   Tier-2 today). Note in KNOWN_ISSUES.
 
 ---
@@ -104,7 +104,7 @@ double-quoted literal with the dedented content is exact and floor-safe).
 
 ## A-6 — `foreach (xs as x)` + binding forms + `with` counter
 
-**Decision (locked):** keep Phorge's `for (T x in xs)` working **and** add PHP's `foreach (xs as x)`
+**Decision (locked):** keep Phorj's `for (T x in xs)` working **and** add PHP's `foreach (xs as x)`
 as a first-class equal (developer: "better, not just different — keep AND add on top"). Plus the four
 binding forms and an optional **`with int i`** auto-increment position counter (developer's idea: "I
 have to set a var to count things").
@@ -119,7 +119,7 @@ foreach (xs as x with int i) { … }               // value + a 0-based counter 
 foreach (xs as k => v with int i) { … }          // counter alongside key/value
 ```
 - `as` is **contextual** (not a reserved word elsewhere) — like `when`/`as`-import already are.
-- **Element type:** Phorge is typed; `foreach (xs as x)` infers `x`'s type from `xs`'s element type
+- **Element type:** Phorj is typed; `foreach (xs as x)` infers `x`'s type from `xs`'s element type
   (the checker already knows `List<T>`/`Map<K,V>`). This is the inference the `lift` side calls
   Tier-2 — here we own both sides so the checker resolves it. A non-inferable source →
   `E-FOREACH-ELEM-TYPE` (suggest the explicit `for (T x in xs)`).
@@ -193,7 +193,7 @@ separator and map/match `=>` are unchanged (distinct contexts — type vs expres
 - **`phg explain E-ARROW-RETIRED`** entry.
 
 ### `lift` (↑)
-- The lifter already emits Phorge; after the printer update it emits `: T` / `=>` automatically. PHP
+- The lifter already emits Phorj; after the printer update it emits `: T` / `=>` automatically. PHP
   `: T` return types already lift (the PHP parser reads `:`); no lift change beyond the printer.
 
 ---

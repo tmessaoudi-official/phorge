@@ -1,10 +1,10 @@
-//! Phorge CLI: `phg <run|runvm|check|parse|lex|transpile|lift|disasm|bench|build|vendor|serve|explain>
-//! <file>`. Thin dispatcher over the testable `phorge::cli` module.
+//! Phorj CLI: `phg <run|runvm|check|parse|lex|transpile|lift|disasm|bench|build|vendor|serve|explain>
+//! <file>`. Thin dispatcher over the testable `phorj::cli` module.
 #![forbid(unsafe_code)]
 
 use std::process::exit;
 
-use phorge::{cli, loader};
+use phorj::{cli, loader};
 
 const USAGE: &str =
     "usage: phg <run|runvm|check|parse|lex|transpile|lift|disasm|bench|build|vendor|serve|lsp|test|fmt|explain> \
@@ -13,10 +13,10 @@ const USAGE: &str =
 fn main() {
     // Self-executing artifact: if this binary carries an embedded program, run it on the VM and
     // exit before any CLI parsing. No payload -> fall through to the normal dispatcher.
-    if let Some(src) = phorge::bundle::embedded_source() {
+    if let Some(src) = phorj::bundle::embedded_source() {
         // A standalone built binary runs as a normal executable, so `Core.Process.args()` reads the
         // real process arguments (everything after the program name).
-        phorge::native::set_process_args(std::env::args().skip(1).collect());
+        phorj::native::set_process_args(std::env::args().skip(1).collect());
         // Batch-1 B: a built binary honors `main`'s `int` return as its process exit status.
         match cli::cmd_runvm_exit(&src) {
             Ok((text, code)) => {
@@ -137,7 +137,7 @@ fn main() {
         print!("{report}");
         exit(code as i32);
     }
-    // `vendor [project-dir | phorge.toml]` resolves a project (not a program source) and fetches its
+    // `vendor [project-dir | phorj.toml]` resolves a project (not a program source) and fetches its
     // git dependencies — the only network-touching command. Defaults to the current directory; any
     // extra argument is a usage error.
     if cmd == "vendor" {
@@ -210,9 +210,9 @@ fn main() {
             exit(2);
         }
         let res = if all {
-            phorge::bundle::cross::build_all(file, &src, out)
+            phorj::bundle::cross::build_all(file, &src, out)
         } else if let Some(t) = target {
-            phorge::bundle::cross::build_target(file, &src, t, out)
+            phorj::bundle::cross::build_target(file, &src, t, out)
         } else {
             cli::cmd_build(file, &src, out)
         };
@@ -230,7 +230,7 @@ fn main() {
     // `lsp` runs the language server over stdio (Item D). No source file: it speaks JSON-RPC on
     // stdin/stdout for an editor client. Returns the process exit code (0 after a clean shutdown/exit).
     if cmd == "lsp" {
-        match phorge::lsp::run() {
+        match phorj::lsp::run() {
             Ok(code) => exit(code),
             Err(e) => {
                 eprintln!("lsp: {e}");
@@ -340,7 +340,7 @@ fn main() {
         .cloned()
         .collect();
     // run/runvm/check/transpile are project-aware (M5 S2b): a <file> source is resolved through the
-    // project loader — a phorge.toml walk-up triggers multi-file merge + folder=path validation;
+    // project loader — a phorj.toml walk-up triggers multi-file merge + folder=path validation;
     // otherwise loose mode (single file, `package Main` only). `-e`/stdin are always loose. parse,
     // lex, disasm, and bench keep the single-file string path (they dump/measure one source).
     let result = if matches!(cmd, "run" | "runvm" | "check" | "transpile") {
@@ -354,7 +354,7 @@ fn main() {
             }
         };
         if matches!(cmd, "run" | "runvm") {
-            phorge::native::set_process_args(prog_args);
+            phorj::native::set_process_args(prog_args);
         }
         let unit = match spec {
             cli::SourceSpec::File(path) => loader::load(std::path::Path::new(&path)),

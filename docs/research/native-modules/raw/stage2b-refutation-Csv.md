@@ -4,7 +4,7 @@
 `run` (interpreter) ≡ `runvm` (VM) ≡ real PHP 8.5 (`php -n`), tier A, feasibility 92%.
 
 **Verdict: the determinism/byte-identity claim HOLDS.** I attempted to refute it and could not. The
-spike's strategy (hand-rolled grammar mirrored in a gated `__phorge_csv_*` PHP helper, no
+spike's strategy (hand-rolled grammar mirrored in a gated `__phorj_csv_*` PHP helper, no
 `str_getcsv`/`fputcsv`) is sound, and the empirical evidence below confirms the two hand-rolled legs
 agree byte-for-byte on every edge case I could construct — including the genuinely dangerous ones the
 spike did not test. `determinism_holds = true`. Feasibility revised modestly **up** to ~94% (the spike's
@@ -19,7 +19,7 @@ on. I flag them as residual, not as refutations.
 
 ## What I tested (all against the floor binary `php-8.5.7/bin/php -n`)
 
-I ported the spike's exact PHP `__phorge_csv_parse`/`__phorge_csv_format` helpers AND wrote the
+I ported the spike's exact PHP `__phorj_csv_parse`/`__phorj_csv_format` helpers AND wrote the
 equivalent Rust char-scanning scanner (the `Pure` body the spike describes), then ran identical inputs
 through both and diffed the outputs.
 

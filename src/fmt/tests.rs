@@ -110,7 +110,7 @@ fn comments_are_preserved() {
 #[test]
 fn unparseable_source_is_refused_not_reformatted() {
     assert!(format("package Main;\nfunction (").is_err());
-    assert!(format("@@@ not phorge").is_err());
+    assert!(format("@@@ not phorj").is_err());
 }
 
 #[test]

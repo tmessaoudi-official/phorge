@@ -2,7 +2,7 @@
 
 ## Track summary
 
-Phorge's text model today is **byte-oriented ASCII by design**. `Core.Text.len` is `str.len()`
+Phorj's text model today is **byte-oriented ASCII by design**. `Core.Text.len` is `str.len()`
 (UTF-8 *byte* count → PHP `strlen`); `upper`/`lower` are `to_ascii_uppercase`/`_lowercase` →
 `strtoupper`/`strtolower` (C-locale ASCII); `contains`/`split`/`splitOnce`/`join`/`replace` are all
 byte/substring operations → `str_contains`/`explode`/`implode`/`str_replace`. The `string` type is a
@@ -20,9 +20,9 @@ zero-dependency) or ship megabytes of Unicode tables std-only (a real but bounde
 
 The philosophy verdict colors the whole track. PHP's i18n is a genuine *pain point* a PHP dev feels
 daily — the byte/char `strlen` trap, the mbstring-vs-intl split, locale-global `setlocale` state, and
-the "is my string normalized?" question. Phorge's "remove surprises, provably-correct upgrade"
+the "is my string normalized?" question. Phorj's "remove surprises, provably-correct upgrade"
 mission is *tailor-made* to fix the small, high-value end of this: codepoint-correct length/iteration,
-a clear `string`-is-UTF-8 contract, and an explicit byte/char distinction (which Phorge already has
+a clear `string`-is-UTF-8 contract, and an explicit byte/char distinction (which Phorj already has
 via `bytes`). The **large** end (full ICU collation, locale-data formatting, CLDR message catalogs)
 is real capability but a poor philosophy fit *right now*: it is heavyweight, data-table-bound, and —
 critically — **untranspilable to `php -n`**, so it would either fork the backends off the spine or
@@ -59,7 +59,7 @@ oracle today.
 ### M-codepoint-len — Codepoint-aware length & iteration
 The single highest-value, most-PHP-familiar fix in the track. PHP's `strlen("é")` returning 2 (bytes)
 when the user means 1 (character) is the canonical i18n footgun; PHP devs reach for `mb_strlen`
-precisely to escape it. Phorge can offer a *named, unambiguous* pair — keep `Text.len` as the byte
+precisely to escape it. Phorj can offer a *named, unambiguous* pair — keep `Text.len` as the byte
 length (it already is, and that maps cleanly to `strlen`), and add `Text.charCount` / `Text.chars`
 (→ `List<string>` of single codepoints) for codepoint semantics. The Rust side is trivial
 (`s.chars().count()`, `s.chars()`); the **transpile** is the catch — codepoint length under `php -n`
@@ -70,7 +70,7 @@ language's biggest text surprise. Adopt in the first text slice; it unblocks cor
 width, truncation, and any "first N characters" logic.
 
 ### M-encoding-contract — Explicit UTF-8 contract + byte↔char bridge
-Phorge already has the right *bones*: `string` is UTF-8-validated and `bytes` is the raw-octet type
+Phorj already has the right *bones*: `string` is UTF-8-validated and `bytes` is the raw-octet type
 with `Core.Bytes.fromString`/`toString` (the `toString` even returns `string?` for invalid UTF-8).
 The gap is that this contract is implicit and under-documented, so a dev can't reason about when an
 operation is byte-wise vs char-wise. The adopt is small and mostly *specification + a couple of bridge
@@ -84,7 +84,7 @@ machinery — no new `Op`, no backend change, mostly natives + docs. Low effort,
 `endsWith` (→ PHP 8.0 `str_starts_with`/`str_ends_with`), `indexOf` (→ `strpos`, returns `int?`),
 `substring` (→ `substr`), `repeat` (→ `str_repeat`), `padStart`/`padEnd` (→ `str_pad`), `reverse`
 (→ `strrev`). All are tier-1 PHP builtins, all byte-wise (so byte-identical with the Rust `&str`/byte
-ops), all camelCase-named per Phorge convention. This is purely additive on the already-generic
+ops), all camelCase-named per Phorj convention. This is purely additive on the already-generic
 native call path (no plumbing change, mirroring the Wave-2 `Core.Text` landing) and closes the most
 glaring "I can't do basic string work" gap. Strong fit, modest mechanical effort (each fn = one
 registry entry + one Rust kernel + one PHP mapping + a byte-identity example case). Caveat to encode:
@@ -92,10 +92,10 @@ the *char-indexed* variants (substring by codepoint) belong to M-codepoint-len, 
 is the honest byte layer.
 
 ### M-regex — Regular expressions with PCRE `/u` Unicode mode
-Regex is the one place Phorge can get *real Unicode behavior on the `php -n` oracle today*, because
+Regex is the one place Phorj can get *real Unicode behavior on the `php -n` oracle today*, because
 PCRE (with the `/u` modifier and `\p{...}` property classes) is tier-1 — it needs no mbstring/intl.
 A `Core.Regex` module (`match`/`matches`/`find`/`findAll`/`replace`/`split`) transpiling to
-`preg_match`/`preg_match_all`/`preg_replace`/`preg_split` gives Phorge codepoint-aware search,
+`preg_match`/`preg_match_all`/`preg_replace`/`preg_split` gives Phorj codepoint-aware search,
 property-class matching, and Unicode-correct splitting — the practical 80% of i18n text work — without
 violating zero-dependency (Rust std has no regex engine, so the *interpreter/VM* side needs a small
 std-only matcher OR this is gated as a transpile-first native with a hand-rolled minimal engine for the
@@ -106,7 +106,7 @@ strong PHP familiarity (`preg_*` is daily PHP); effort is M-to-L because of the 
 burden — flagged here as the design's central risk.
 
 ### M-unicode-escape — Unicode escapes in string literals (`\u{1F600}`)
-A tiny, pure-front-end win that is conspicuously absent: Phorge string literals support `\xHH` in
+A tiny, pure-front-end win that is conspicuously absent: Phorj string literals support `\xHH` in
 `bytes` literals but there's no `\u{...}` codepoint escape in `string` literals, so writing a non-ASCII
 character requires pasting the raw UTF-8 bytes into source. Adding `\u{1F600}` / `é` lexing
 (producing the UTF-8 bytes at lex time) is a lexer-only change, transpiles to the identical UTF-8 bytes
@@ -133,13 +133,13 @@ This is the "remove the surprise even if you don't yet add the capability" minim
   bounded but real multi-megabyte effort, and **none of them transpile to `php -n`** (they all require
   mbstring/intl). They belong in a dedicated **M-text S2/S3 "Unicode-data" slice** that first decides
   the tier policy: either (a) embed generated Unicode tables in the Rust backends and accept that these
-  functions are *Phorge-native-only* (the PHP leg would need tier-3 ext or be excluded from the oracle),
+  functions are *Phorj-native-only* (the PHP leg would need tier-3 ext or be excluded from the oracle),
   or (b) wait for a tier-3 extension mechanism. Defer, don't reject — they're on-mission, just gated.
 
 - **M-collation, M-num-fmt, M-date-fmt, M-msg-catalog, M-transliterate** are the **ICU-locale-data**
   features (`Collator`, `NumberFormatter`, `IntlDateFormatter`, `MessageFormatter`/gettext,
   `Transliterator`). These are weak fits *for now*: they are locale-data-bound (CLDR), inherently
-  stateful/locale-global (the exact PHP pain Phorge wants to avoid replicating naively), and
+  stateful/locale-global (the exact PHP pain Phorj wants to avoid replicating naively), and
   fundamentally untranspilable to `php -n` (ext-intl absent). Reproducing ICU in std-only Rust is out
   of proportion to a pre-1.0 language. They are **deferred to a future M-locale milestone gated on a
   tier-3 extension policy** (the `docs/specs/2026-06-19-extension-policy-design.md` mechanism), where
@@ -149,7 +149,7 @@ This is the "remove the surprise even if you don't yet add the capability" minim
   approximation and no near-term milestone — they should only re-enter if the tier-3 ICU decision is
   made.
 
-- **M-string-fmt** (`sprintf`-style formatting) is `map`/defer: Phorge already has type-safe string
+- **M-string-fmt** (`sprintf`-style formatting) is `map`/defer: Phorj already has type-safe string
   *interpolation* (`"{x}"`), which covers the common case more safely than `sprintf`; a positional
   width/precision formatter is a convenience that maps onto interpolation + a small `Core.Text.format`
   native (→ PHP `sprintf`) later, once the locale-aware number formatting question is settled (so the

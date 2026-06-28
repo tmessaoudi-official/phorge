@@ -7,7 +7,7 @@
 
 A program entry — `main` (and later `handle`) — may be declared in **either** form:
 
-```phorge
+```phorj
 // (1) Go-style top-level free function (unchanged, the existing form)
 function main(): int { ... }
 

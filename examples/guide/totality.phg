@@ -1,6 +1,6 @@
 // Totality — return-on-all-paths, the `never` bottom type, and dead-code lints (M-RT totality cluster).
 //
-// A function whose return type carries a value must `return` (or diverge) on EVERY path — Phorge
+// A function whose return type carries a value must `return` (or diverge) on EVERY path — Phorj
 // rejects a typed function that can fall off the end (`E-MISSING-RETURN`), closing the type system's
 // #1 soundness leak. `never` is the bottom type: a `-> never` function is verified to never return
 // (today, via an infinite loop). Unreachable code after a `return`, and a `match` arm after a

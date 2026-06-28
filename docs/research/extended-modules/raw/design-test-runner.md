@@ -13,7 +13,7 @@ This file is the long-form design. The structured object returned to the caller 
 
 The task's correctness spine is the three-leg byte-identity (`run` ≡ `runvm` ≡ transpiled PHP under
 `php -n`), broken only by (1) non-determinism, (2) backend asymmetry, (3) the TLS hard wall. A *test
-runner* is the **purest possible Tier-A feature**: its entire job is to take deterministic Phorge
+runner* is the **purest possible Tier-A feature**: its entire job is to take deterministic Phorj
 code, run it, and emit a deterministic report. There is no clock, no random, no socket, no scheduling
 in the core. The only thing that could leak non-determinism into a runner is exactly the set of
 things a *good* test runner must suppress anyway:
@@ -60,7 +60,7 @@ I read the live code; these are the load-bearing facts the design reuses.
   `run|runvm|check|parse|lex|transpile|lift|disasm|bench|build|vendor|serve|explain`, plus the
   `<file>`/`-`/`-e` source resolver `cli::resolve_source`. [Verified: `src/main.rs:68`,
   `src/cli/mod.rs:214`.] Adding `test` is one arm + one `cli::cmd_test`.
-- **Project/loader model:** a project root = a dir with `phorge.toml`; `loader::load` assembles all
+- **Project/loader model:** a project root = a dir with `phorj.toml`; `loader::load` assembles all
   `.phg` under the source root, mangles non-`main` defs, flat-merges. `tests/differential.rs` is
   project-aware (discovers roots, gates run≡runvm). [Verified: `src/cli/mod.rs:456` `run_program(&Unit)`,
   `tests/differential.rs:944-960` `collect_projects`.]
@@ -72,7 +72,7 @@ I read the live code; these are the load-bearing facts the design reuses.
 
 ## 2. Scope of THIS slice
 
-In: (a) the **assertion library** (`Core.Test` natives + a small Phorge-level prelude type); (b) the
+In: (a) the **assertion library** (`Core.Test` natives + a small Phorj-level prelude type); (b) the
 **`phg test` runner CLI**; (c) **deterministic reporting + exit codes**; (d) the **transpile target**
 (plain-PHP if-checks + a hand-written reporter, NOT PHPUnit); (e) **how it composes with
 `differential.rs`**.
@@ -85,7 +85,7 @@ Tier-B affordance — sketched in §9 but not built here).
 
 ## 3. The assertion library
 
-### 3.1 Surface (Phorge syntax)
+### 3.1 Surface (Phorj syntax)
 
 Assertions live in a new stdlib module **`Core.Test`** (PascalCase, consistent with
 `Core.Console`/`Core.Math`). Each is a native: deterministic, faulting-on-failure, returning `Unit`
@@ -93,7 +93,7 @@ on success. A failing assertion **faults** through the existing `FaultMsg`/`Sign
 is byte-identical across backends by construction, and (importantly) it is *catchable* by the runner
 (§4) exactly like any other fault.
 
-```phorge
+```phorj
 package Main;
 import Core.Test;
 
@@ -174,25 +174,25 @@ never echoing the floats.
 
 Each assertion native supplies a `php: fn(&[String]) -> String` mapping, like every other native
 [Verified: `src/native/mod.rs:71`, `tests.rs:php_emission_is_echo_with_newline`]. They erase to a
-**gated helper** `__phorge_assert_*` (the established `uses_* + __phorge_*` pattern [Verified:
+**gated helper** `__phorj_assert_*` (the established `uses_* + __phorj_*` pattern [Verified:
 `src/transpile/call.rs:112-156`]) so the emitted PHP is small and the helper is only included when used:
 
 ```php
-function __phorge_assert_eq($exp, $act) {
+function __phorj_assert_eq($exp, $act) {
     if ($exp !== $act) {
         throw new \RuntimeException("assertion failed: assertEquals — expected "
-            . __phorge_str($exp) . ", got " . __phorge_str($act));
+            . __phorj_str($exp) . ", got " . __phorj_str($act));
     }
 }
 ```
 
-- `assertThrows(closure)` → `__phorge_assert_throws($closure)` which wraps `try { $closure(); }
+- `assertThrows(closure)` → `__phorj_assert_throws($closure)` which wraps `try { $closure(); }
   catch (\Throwable $e) { return; } throw new \RuntimeException("assertion failed: assertThrows — no
   fault");`. PHP `\Throwable` is core (no extension), works under `php -n`. The closure is a PHP
   `\Closure` (the existing lambda erasure [Verified: CLAUDE.md S3 — arrow fn / `function(){}use()`]).
-- `===` (identity) vs `==` (loose): use **`===`** to match Phorge's structural `eq_val` for scalars;
+- `===` (identity) vs `==` (loose): use **`===`** to match Phorj's structural `eq_val` for scalars;
   composite values (`List`/`Map`/instances) erase to PHP arrays/objects where `===` is too strict — so
-  `assertEquals` over composites must emit a recursive `__phorge_eq($a,$b)` helper that mirrors
+  `assertEquals` over composites must emit a recursive `__phorj_eq($a,$b)` helper that mirrors
   `eq_val` (it already has to exist conceptually for `==` on composites in the transpiler; reuse it).
   [Inferred: the transpiler must already handle `==` over composites somewhere — confirm and reuse
   rather than add a parallel comparator. Open question Q3.]
@@ -213,9 +213,9 @@ Two layers, both deterministic:
 
 1. **Function convention:** within the loaded program, every **free function whose name starts with
    `test_`** and whose signature is `() -> Empty` is a test case. [Chosen over an attribute/annotation
-   because Phorge has no attribute syntax yet, and a name convention is what Go (`func TestXxx`) and
-   pytest (`test_*`) use — familiarity-first per the Phorge philosophy memory.]
-2. **Project layer:** in project mode (`phorge.toml` present), the runner loads the project via the
+   because Phorj has no attribute syntax yet, and a name convention is what Go (`func TestXxx`) and
+   pytest (`test_*`) use — familiarity-first per the Phorj philosophy memory.]
+2. **Project layer:** in project mode (`phorj.toml` present), the runner loads the project via the
    **existing `loader::load`** [Verified: `src/cli/mod.rs:456`] and collects `test_*` functions from
    **all merged packages**. A dedicated `tests/` source subtree is *not* required in v1 — tests live
    beside code (Go model), or in their own package; the loader already flat-merges. A future
@@ -228,7 +228,7 @@ key (Q4)" precedent and `ClassTables`' sorted-list invariant — Verified both.]
 
 ### 4.2 Execution model (no new control flow)
 
-The runner is itself **a generated `main()`** — conceptually the runner *lowers to* a Phorge program
+The runner is itself **a generated `main()`** — conceptually the runner *lowers to* a Phorj program
 that calls each `test_*` in sorted order, each wrapped in a `try`/`catch` (the shipped catchable-fault
 model). This is the elegant move: **the runner reuses the language's own fault-catching to isolate
 test failures**, so a faulting test does not abort the suite; it is recorded as a failure and the
@@ -242,15 +242,15 @@ Two viable implementations — recommend **(B)**:
   deferrals].
 - **(B) Lowering / synthesized entry (recommended):** `phg test` parses+checks+loads the program, then
   the CLI **synthesizes a runner `main`** that, for each sorted `test_*`, emits the equivalent of:
-  ```phorge
+  ```phorj
   Console.print("test PkgName.test_arithmetic ... ");
   try { test_arithmetic(); Console.println("ok"); /* tally pass */ }
   catch (e) { Console.println("FAIL"); Console.println("  " + e.message); /* tally fail */ }
   ```
   This is **front-end-only** (build the runner AST, then run it on the chosen backend / transpile it).
   No new Op, no native even strictly required for the driver (the assertions are natives; the *driver*
-  is synthesized Phorge). It composes perfectly with all three backends because it *is* ordinary
-  Phorge.
+  is synthesized Phorj). It composes perfectly with all three backends because it *is* ordinary
+  Phorj.
 
   Subtlety: `catch (e)` needs the fault to be catchable. A *`throws`/`Signal::Throw`* (assertion) is
   catchable; a hard *`Runtime`* fault (index-OOB, `panic`) is currently **not** catchable
@@ -301,7 +301,7 @@ CLI maps it to the exit code).
 One new subcommand arm in `src/main.rs:68` `match cmd` and one `cli::cmd_test`:
 
 ```
-phg test [<file>|<dir>|.]            # run tests (project mode if a phorge.toml is found by walk-up)
+phg test [<file>|<dir>|.]            # run tests (project mode if a phorj.toml is found by walk-up)
          [--backend=run|runvm]        # default: run (interpreter). runvm available for parity spot-check.
          [--filter=<substr>]          # only tests whose qualified name contains <substr>
          [--format=text|json]         # default: text
@@ -318,10 +318,10 @@ phg test [<file>|<dir>|.]            # run tests (project mode if a phorge.toml 
 
 ### 4.6 Transpile target for the runner (`phg test --transpile` / `phg transpile`)
 
-The synthesized runner `main` is **ordinary Phorge**, so it transpiles through the *existing*
+The synthesized runner `main` is **ordinary Phorj**, so it transpiles through the *existing*
 transpiler with **zero new transpiler arms** — the `try`/`catch`, `Console.print`, and the assertion
-helpers all already have emit paths. The emitted PHP is a single file: the gated `__phorge_assert_*`
-helpers + the user's (namespaced) functions + a synthesized `\Main\__phorge_test_main()` that runs the
+helpers all already have emit paths. The emitted PHP is a single file: the gated `__phorj_assert_*`
+helpers + the user's (namespaced) functions + a synthesized `\Main\__phorj_test_main()` that runs the
 sorted cases under `try/catch (\Throwable)` and `echo`es the same report, then `exit(0|1)`.
 
 This is the "NOT PHPUnit" requirement satisfied **for free**: PHPUnit is a Composer package, absent
@@ -335,7 +335,7 @@ backends → the runner is part of the byte-identity spine.
 
 This is the elegant payoff and the strongest Tier-A argument.
 
-- **A `phg test` run is just a Phorge program** (the synthesized runner). So an example test suite can
+- **A `phg test` run is just a Phorj program** (the synthesized runner). So an example test suite can
   be dropped under `examples/` (e.g. `examples/test/calculator/` as a project, or a single
   `examples/guide/testing.phg`) and the **existing glob/project harness gates it byte-identically with
   no harness edit** [Verified: `tests/differential.rs:986` globs `examples/**/*.phg`; project-aware
@@ -355,7 +355,7 @@ This is the elegant payoff and the strongest Tier-A argument.
   returns false for them, so they stay *inside* the differential. Good: we *want* them gated.
 - **`tests/test_runner.rs` (new):** integration tests that (a) run the synthesized runner over a green
   fixture suite and assert the byte report on `run` and `runvm`; (b) run it over a red fixture and
-  assert the FAIL report + exit 1; (c) under `PHORGE_REQUIRE_PHP=1`, transpile the same fixtures and
+  assert the FAIL report + exit 1; (c) under `PHORJ_REQUIRE_PHP=1`, transpile the same fixtures and
   assert the PHP report matches. This *is* the Coverage evidence per Rule 6/7.
 
 ---
@@ -363,8 +363,8 @@ This is the elegant payoff and the strongest Tier-A argument.
 ## 6. Naming constraints (a real trap, verified)
 
 `package Main` user functions become **global** PHP functions [Verified: CLAUDE.md M6 W1 gotcha]. So:
-- The synthesized runner entry must be named to avoid PHP-builtin collision — use a `__phorge_`-prefixed
-  internal name (`__phorge_test_main`) which can never collide.
+- The synthesized runner entry must be named to avoid PHP-builtin collision — use a `__phorj_`-prefixed
+  internal name (`__phorj_test_main`) which can never collide.
 - A user's `test_foo` becomes a global PHP `test_foo()` — `test_` is not a PHP reserved prefix, safe.
 - **But** a user must not name a test fn `assert`, `print`, etc. — already guarded by the existing
   `E-RESERVED-NAME` / PHP-reserved-word work [Verified: memory `[[contextual-var-and-reserved-names]]`].
@@ -391,7 +391,7 @@ This is the elegant payoff and the strongest Tier-A argument.
 - Assertions: `CallNative` (existing dispatch). `assertThrows` is `HigherOrder` (existing). [Verified:
   `src/native/mod.rs:86`, `Op::CallNative` is how all natives dispatch — memory
   `[[higher-order-natives-reentrant-vm]]`.]
-- Runner driver: synthesized ordinary Phorge AST (`try`/`catch`/`Console.print`/calls) — all existing
+- Runner driver: synthesized ordinary Phorj AST (`try`/`catch`/`Console.print`/calls) — all existing
   Ops. The `try`/`catch` Ops (Throw/PushHandler/PopHandler) already shipped [Verified: memory
   `[[error-model-slice2-progress]]`].
 - Exit code: set in the CLI, not the VM.
@@ -436,10 +436,10 @@ by output-order preservation. Not in v1.
   should the runner get a privileged catch-all over *all* faults? This decides the assertion
   mechanism (catchable typed exception vs the intrinsic `FaultMsg::Assert`).
 - **Q2:** Test discovery convention — `test_*` free-function names (recommended, Go/pytest-familiar),
-  or an explicit `@test`/attribute (needs attribute syntax Phorge lacks), or a reserved
+  or an explicit `@test`/attribute (needs attribute syntax Phorj lacks), or a reserved
   `package Test;` (Go-test-file analogue)? I recommend `test_*` now, `[test]` manifest scoping later.
 - **Q3:** Does the transpiler already have a recursive composite-equality emitter (for `==` over
-  `List`/`Map`/instances) that `assertEquals` can reuse, or must `__phorge_eq` be written fresh? (Reuse
+  `List`/`Map`/instances) that `assertEquals` can reuse, or must `__phorj_eq` be written fresh? (Reuse
   if it exists — single comparison surface.)
 - **Q4:** Default runner backend — interpreter `run` (recommended, fastest startup) — and do we want CI
   to *always* run both backends and diff, or trust `differential.rs`?
@@ -458,7 +458,7 @@ by output-order preservation. Not in v1.
 3. **Fault message text drift between backends** — mitigated by single-sourced `FaultMsg`/`Value`-display
    kernels and the `FaultKind`-body comparison already used by `differential.rs`.
 4. **Composite equality (`===` too strict / `==` too loose in PHP)** — mitigated by a single
-   `__phorge_eq` mirroring `eq_val` (Q3).
+   `__phorj_eq` mirroring `eq_val` (Q3).
 5. **Timing/memory leaking into the report** — mitigated by hard exclusion (§4.3).
 6. **Process exit code vs program output** — exit code set in the CLI as a pure function of the tally;
    the *program* output (the report) is what's gated.

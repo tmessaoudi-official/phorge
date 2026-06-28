@@ -7,7 +7,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use phorge::{cli, loader};
+use phorj::{cli, loader};
 
 struct TempDir(PathBuf);
 impl TempDir {
@@ -15,7 +15,7 @@ impl TempDir {
         static N: AtomicUsize = AtomicUsize::new(0);
         let unique = N.fetch_add(1, Ordering::Relaxed);
         let dir =
-            std::env::temp_dir().join(format!("phorge_project_it_{}_{unique}", std::process::id()));
+            std::env::temp_dir().join(format!("phorj_project_it_{}_{unique}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         TempDir(dir)
     }
@@ -42,7 +42,7 @@ fn run_both(entry: &Path) -> (String, String) {
 #[test]
 fn multi_file_project_qualified_call_runs_byte_identically() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     // S2c: cross-package calls are *qualified* via an import leaf (`Util.compute`), no longer the
     // S2b bare form. The loader resolves it against the imported package's mangled symbol.
     let entry = tmp.write(
@@ -63,7 +63,7 @@ fn multi_file_project_qualified_call_runs_byte_identically() {
 #[test]
 fn import_alias_resolves_qualified_call() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"");
     // `import Acme.Util as U;` binds the leaf `u`; the call qualifies on the alias.
     let entry = tmp.write(
         "src/main.phg",
@@ -85,7 +85,7 @@ fn same_package_cross_file_bare_call_resolves() {
     // Two files in the *same* library package: one calls the other by its bare (same-package) name;
     // the loader mangles both consistently so the intra-package call still resolves.
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Console;\nimport Acme.Util;\n\
@@ -109,7 +109,7 @@ fn same_package_cross_file_bare_call_resolves() {
 fn unqualified_cross_package_call_is_rejected() {
     // The S2b interim (bare cross-package call) is gone: a library function must be qualified.
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Console;\nimport Acme.Util;\n\
@@ -135,7 +135,7 @@ fn library_package_type_is_usable_cross_package() {
     // The E-PKG-TYPE gate is retired (M-RT cross-package types): a library package may declare a
     // type, and `package Main` consumes it via `import type`, instantiating + reading a field.
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Console;\nimport type Acme.Util.Shape;\n\
@@ -157,7 +157,7 @@ fn library_package_type_is_usable_cross_package() {
 #[test]
 fn import_type_unknown_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport type Acme.Util.Nope;\nfunction main() -> void {}",
@@ -174,7 +174,7 @@ fn import_type_unknown_is_rejected() {
 #[test]
 fn import_type_conflict_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport type Acme.A.Shape;\nimport type Acme.B.Shape;\nfunction main() -> void {}",
@@ -195,7 +195,7 @@ fn import_type_conflict_is_rejected() {
 #[test]
 fn import_type_builtin_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport type Acme.Util.List;\nfunction main() -> void {}",
@@ -212,7 +212,7 @@ fn import_type_builtin_is_rejected() {
 #[test]
 fn import_type_shadow_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"");
     // A type named `Util` (bound bare by `import type Acme.Types.Util`) clashing with the
     // `Acme.Util` module-import leaf `Util`. The shadow guard keeps the two import kinds disjoint.
     let entry = tmp.write(
@@ -234,7 +234,7 @@ fn import_type_shadow_is_rejected() {
 #[test]
 fn multi_package_transpiles_to_brace_namespaces() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport Core.Console;\nimport Acme.Util;\n\
@@ -258,7 +258,7 @@ fn multi_package_transpiles_to_brace_namespaces() {
 #[test]
 fn folder_path_violation_is_reported() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write("src/main.phg", "package Main;\nfunction main() -> void {}");
     tmp.write(
         "src/Acme/Util/x.phg",
@@ -271,8 +271,8 @@ fn folder_path_violation_is_reported() {
 #[test]
 fn loose_non_main_file_is_rejected() {
     let tmp = TempDir::new();
-    // No phorge.toml anywhere above → loose mode; a dotted package is illegal.
+    // No phorj.toml anywhere above → loose mode; a dotted package is illegal.
     let entry = tmp.write("script.phg", "package App.Util;\nfunction f() -> void {}");
     let err = loader::load(&entry).unwrap_err();
-    assert!(err.contains("requires a phorge.toml project"), "got: {err}");
+    assert!(err.contains("requires a phorj.toml project"), "got: {err}");
 }

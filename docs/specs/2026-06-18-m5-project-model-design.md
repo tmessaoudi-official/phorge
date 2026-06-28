@@ -1,4 +1,4 @@
-# Phorge — M5 Project Model (modules & packages) — Design
+# Phorj — M5 Project Model (modules & packages) — Design
 
 > Brainstorm + design, 2026-06-18. Trigger: developer chose to build the full `src/`-rooted,
 > mandatory-packaged, enforced folder=path project model — **Go-shaped**, transpiling to idiomatic PHP.
@@ -6,9 +6,9 @@
 > Pulls forward roadmap **M5 = "modules + git-based packages"** (`docs/MILESTONES.md`). Grounded in
 > three research streams (raw notes `/tmp/m5-research/`): PHP/PSR-4 multi-file emission, the
 > script-vs-project + git-dep models of Go/Rust/TS/Deno/Gleam, and a file-by-file blast-radius map of
-> Phorge's single-`Program` pipeline. **Draft — locked decisions + sliced plan below.**
+> Phorj's single-`Program` pipeline. **Draft — locked decisions + sliced plan below.**
 
-## 1. The shape: Phorge is a Go-shaped language
+## 1. The shape: Phorj is a Go-shaped language
 
 Mandatory package declaration, strict folder=path, directory-inferred membership, a reserved
 `package Main` entry — this is Go's exact structural profile. Research confirms folder=path enforcement
@@ -26,10 +26,10 @@ runtime, idiomatic PHP on emission.**
 - **M5-3 — reserved `package Main;`** is the executable entry (Go model; pairs with `fn main()`).
 - **M5-4 — `core.` reserved** as a package root: a user `package core…;` or `import core.Foo;` of a
   non-existent native is a hard error (reserved like a built-in type name; cf. `is_builtin_type_name`).
-- **M5-5 — project detection = manifest-presence (walk up).** A `phorge.toml` found by walking up from
+- **M5-5 — project detection = manifest-presence (walk up).** A `phorj.toml` found by walking up from
   a source file's directory marks the project root. **No manifest above ⇒ loose-script mode**, where
   folder=path is suspended and **only `package Main;` is legal** (a non-`main` package as a loose
-  script is a hard error: *"package `app.util` requires a phorge.toml project; only `package Main` runs
+  script is a hard error: *"package `app.util` requires a phorj.toml project; only `package Main` runs
   loose"*). `package Main` is *also* valid inside a project as the entry. Manifest presence — not the
   `src/` dir, not the package name — is the sole trigger. (Go's `GO111MODULE=auto` model.)
 - **M5-6 — strict folder=path in project mode.** With source root `src/` (manifest `source =`
@@ -47,14 +47,14 @@ runtime, idiomatic PHP on emission.**
   **`[require]` / `[require-dev]`** (Composer's words — the transpile-target audience reads them
   natively) as `"vendor/pkg" = { git = "…", tag|rev = "v1" }` (tag/rev only — never bare URL/branch),
   with an optional `"vendor/pkg" = "<git-url>@v1.2.0"` string shorthand. **Exact-pin only — no `^`/`~`
-  ranges** (the lockfile pins exact, so a resolver/SAT-solve is unnecessary; deferred). `phorge.lock`
+  ranges** (the lockfile pins exact, so a resolver/SAT-solve is unnecessary; deferred). `phorj.lock`
   pins resolved commit SHA + content hash. A committed `vendor/` (via `phg vendor`) is **used
   automatically with zero network** when present — the only way examples stay byte-identical. (Go's
   `vendor/` + self-locating import path + Cargo's lock, fused.) **Rejected: literal `composer.json`** —
-  a file the `composer` tool cannot actually process (no Packagist, no autoloader Phorge uses) is a
+  a file the `composer` tool cannot actually process (no Packagist, no autoloader Phorj uses) is a
   false promise; familiarity is vocabulary, not the filename. (2026-06-18, developer-confirmed.)
 
-## 3. The project manifest — minimal `phorge.toml`
+## 3. The project manifest — minimal `phorj.toml`
 
 ```toml
 name = "acme/myapp"   # vendor/package — Composer-style; doubles as the PSR-4 namespace root (Acme\Myapp)
@@ -71,14 +71,14 @@ source = "src"        # source root anchoring folder=path (default "src")
 
 `name` doubles as the PSR-4-style vendor prefix in emitted PHP (`acme/myapp` ⇒ namespace `Acme\Myapp`).
 **Composer's vocabulary** (`name = "vendor/package"`, `[require]`/`[require-dev]`) over a TOML container
-that `phorge` actually runs — honest, not a `composer.json` the `composer` tool can't process. Each dep
+that `phorj` actually runs — honest, not a `composer.json` the `composer` tool can't process. Each dep
 self-locates via `git` + a pinned `tag`/`rev` (no Packagist, no `repositories` side-table); ranges are
 intentionally absent. **S2a parses + represents this only** — resolution/vendoring is S3.
 
 ## 4. PHP emission (transpile contract D-L9)
 
 **The free-function nuance (load-bearing):** PSR-4 autoloads *classes only* — PHP has no
-function-autoloading hook. Phorge is function-heavy, so a PSR-4 directory tree would need eager
+function-autoloading hook. Phorj is function-heavy, so a PSR-4 directory tree would need eager
 `require`s or a Composer `files` map. **The single-file brace-namespace form avoids the whole problem**
 and runs with a bare `php out.php`:
 
@@ -125,14 +125,14 @@ it is isolated to its own slice. Lowest-risk order below.
   programs (mechanical; reuse the Wave-1 migrator, but distinguish program literals from help/prose
   strings — Wave-1 gotcha). run==runvm unchanged; PHP round-tripped.
 - **S2 — project model.** Sub-sliced:
-  - **S2a — manifest + source root + project detection** (`phorge.toml`, walk-up discovery, `source`).
+  - **S2a — manifest + source root + project detection** (`phorj.toml`, walk-up discovery, `source`).
   - **S2b — multi-file loader + folder=path enforcement** (discover project `.phg` files, validate
     path↔package, assemble a compilation unit). Backends still see a flat merged set until S2c.
   - **S2c — qualified cross-package calls** (`import app.util;` → `util.parse(x)` resolution in all four
     backends; the only flat-namespace-breaking change) + **multi-namespace PHP emission** (one brace
     block per package). + aliasing (O-9).
   - **S2d — project-aware differential harness** + a multi-file `examples/project/` showcase.
-- **S3 — git deps + vendor + lockfile.** `[dependencies]` git+tag, `phorge.lock` (SHA), `phg vendor`,
+- **S3 — git deps + vendor + lockfile.** `[dependencies]` git+tag, `phorj.lock` (SHA), `phg vendor`,
   auto-offline when `vendor/` present. May land as the final M5 slice or split to a follow-up; design
   must not preclude it. Examples needing deps ship vendored sources for determinism.
 

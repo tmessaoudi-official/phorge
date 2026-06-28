@@ -142,7 +142,7 @@ impl Parser {
     }
 
     /// True if the current token is the contextual keyword `kw` (an identifier with that exact text).
-    /// Phorge's contextual keywords (`var`, `foreach`, `as`, `when`) live as ordinary identifiers in
+    /// Phorj's contextual keywords (`var`, `foreach`, `as`, `when`) live as ordinary identifiers in
     /// the token stream and are recognized only in the positions where they are meaningful, so the
     /// same word stays usable as a value / field / parameter name everywhere else.
     fn at_kw(&self, kw: &str) -> bool {

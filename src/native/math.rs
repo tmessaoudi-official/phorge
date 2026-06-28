@@ -117,10 +117,10 @@ fn math_intdiv(args: &[Value], _: &mut String) -> Result<Value, String> {
 
 // --- Math breadth (M-NUM S4) -----------------------------------------------------------------
 // Integer helpers (`sign`/`clamp`/`gcd`) return `int` → byte-identical regardless of float display.
-// `gcd` has no PHP-core builtin (gmp is absent under `php -n`), so it erases to a `__phorge_gcd`
+// `gcd` has no PHP-core builtin (gmp is absent under `php -n`), so it erases to a `__phorj_gcd`
 // helper. Transcendentals (`log`/`log10`/`exp`/`sin`/`cos`/`tan`/`pi`/`e`) erase to the libm builtins;
 // a non-representable result diverges between Rust's shortest-round-trip and PHP, so examples exercise
-// them at exact values or via `numberFormat`. `numberFormat` erases to a `__phorge_number_format`
+// them at exact values or via `numberFormat`. `numberFormat` erases to a `__phorj_number_format`
 // helper (identical string assembly both legs — see `value::number_format`).
 
 fn math_sign(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -241,7 +241,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             // `Math.ipow(int, int) -> int` — integer power as a value (the `**` operator's named twin,
             // Phase 1 operators slice). PHP's `pow` returns an `int` for non-negative int args whose
             // result fits, matching the kernel's safe domain; the negative/overflow cases fault in
-            // Phorge (never reached by a byte-identity example).
+            // Phorj (never reached by a byte-identity example).
             module: "Core.Math",
             name: "ipow",
             params: vec![Ty::Int, Ty::Int],
@@ -395,7 +395,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::Int,
             pure: true,
             eval: NativeEval::Pure(math_gcd),
-            php: |a| format!("__phorge_gcd({}, {})", parg(a, 0), parg(a, 1)),
+            php: |a| format!("__phorj_gcd({}, {})", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
             module: "Core.Math",
@@ -476,7 +476,7 @@ pub(crate) fn math_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(math_number_format),
-            php: |a| format!("__phorge_number_format({}, {})", parg(a, 0), parg(a, 1)),
+            php: |a| format!("__phorj_number_format({}, {})", parg(a, 0), parg(a, 1)),
         },
     ]
 }

@@ -1,7 +1,7 @@
 //! The versioned, CRC-guarded payload container (design §3). Format-agnostic — shared by every
 //! object-format reader. Moved verbatim from the Phase-1 `bundle.rs`.
 
-const MAGIC: [u8; 8] = *b"PHORGE\0\0";
+const MAGIC: [u8; 8] = *b"PHORJ\0\0\0";
 const CONTAINER_VERSION: u16 = 1;
 const HEADER_LEN: u16 = 32;
 
@@ -45,7 +45,7 @@ pub fn decode_container(blob: &[u8]) -> Option<Vec<u8>> {
         return None;
     }
     if u16::from_le_bytes([blob[8], blob[9]]) > CONTAINER_VERSION {
-        return None; // artifact built for a newer phorge
+        return None; // artifact built for a newer phorj
     }
     let header_len = u16::from_le_bytes([blob[10], blob[11]]) as usize;
     if header_len < HEADER_LEN as usize || header_len > blob.len() {

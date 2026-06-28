@@ -245,7 +245,7 @@ fn list_breadth_slice_indexof_concat_first_last() {
         php("slice", &["$xs", "$o", "$l"]),
         "array_slice($xs, $o, $l)"
     );
-    assert_eq!(php("indexOf", &["$xs", "$n"]), "__phorge_index_of($xs, $n)");
+    assert_eq!(php("indexOf", &["$xs", "$n"]), "__phorj_index_of($xs, $n)");
     assert_eq!(php("concat", &["$a", "$b"]), "array_merge($a, $b)");
     assert_eq!(php("first", &["$xs"]), "($xs[0] ?? null)");
     assert_eq!(php("last", &["$xs"]), "($xs[count($xs) - 1] ?? null)");

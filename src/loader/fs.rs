@@ -24,8 +24,8 @@ pub(super) fn enforce_loose_main(prog: &Program) -> Result<(), String> {
         return Ok(());
     }
     Err(format!(
-        "package `{}` requires a phorge.toml project; only `package Main` runs as a loose script \
-         (add a phorge.toml above the source root, or declare `package Main`)",
+        "package `{}` requires a phorj.toml project; only `package Main` runs as a loose script \
+         (add a phorj.toml above the source root, or declare `package Main`)",
         prog.package.join(".")
     ))
 }

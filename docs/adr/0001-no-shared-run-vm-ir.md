@@ -3,12 +3,12 @@
 - **Status:** Accepted (2026-06-19)
 - **Deciders:** project author
 - **Fuller design:** `docs/ARCHITECTURE.md` §"Backends today vs. planned"; GA roadmap
-  `docs/plans/2026-06-19-phorge-ga-roadmap.plan.md` Decisions Log; ecosystem spec decision E-1.
+  `docs/plans/2026-06-19-phorj-ga-roadmap.plan.md` Decisions Log; ecosystem spec decision E-1.
 
 ## Context
 
-Phorge has three backends — the tree-walking interpreter (`run`), the bytecode compiler + stack VM
-(`runvm`), and the Phorge→PHP transpiler — and they all consume the **same validated AST**. Today
+Phorj has three backends — the tree-walking interpreter (`run`), the bytecode compiler + stack VM
+(`runvm`), and the Phorj→PHP transpiler — and they all consume the **same validated AST**. Today
 each is a plain free function dispatched by a string `match` in `main.rs`
 (`cmd_run` / `cmd_runvm` / `cmd_transpile`); `grep 'trait ' src/` returns zero. Two unifications are
 perennially tempting: a shared intermediate representation (`src/ir.rs`) that all backends lower

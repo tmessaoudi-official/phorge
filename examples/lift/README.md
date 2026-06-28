@@ -1,12 +1,12 @@
-# `phg lift` — PHP → Phorge
+# `phg lift` — PHP → Phorj
 
-`lift` is the **inverse of `transpile`**: it reads PHP and emits a Phorge **draft**.
+`lift` is the **inverse of `transpile`**: it reads PHP and emits a Phorj **draft**.
 
-Where `transpile` is *total and byte-identity-verified* (every Phorge program has one correct PHP
-translation), `lift` is **best-effort and review-required** — PHP is larger and dynamic, Phorge is
+Where `transpile` is *total and byte-identity-verified* (every Phorj program has one correct PHP
+translation), `lift` is **best-effort and review-required** — PHP is larger and dynamic, Phorj is
 smaller and typed, so the map is partial by nature. The output is a scaffold a human checks, prefixed
 `// lifted (verify)`. Anything outside the supported subset is refused with a clear `lift …` error
-rather than guessed at — lift **never** silently produces wrong Phorge.
+rather than guessed at — lift **never** silently produces wrong Phorj.
 
 ## Try it
 
@@ -27,15 +27,15 @@ class Counter {
 }
 
 $c = new Counter(41);
-echo greet("Phorge");
+echo greet("Phorj");
 echo " Counter starts at $c->start, next is {$c->next()}.";
 ```
 
-Output — [`sample.phg`](sample.phg), idiomatic Phorge (PHP is the *floor*, not the ceiling — lift
-emits clean Phorge, it doesn't mirror PHP's quirks). PHP interpolation maps straight to Phorge holes:
+Output — [`sample.phg`](sample.phg), idiomatic Phorj (PHP is the *floor*, not the ceiling — lift
+emits clean Phorj, it doesn't mirror PHP's quirks). PHP interpolation maps straight to Phorj holes:
 `"$name"` → `"{name}"`, `"$c->start"` → `"{c.start}"`, `"{$c->next()}"` → `"{c.next()}"`:
 
-```phorge
+```phorj
 package Main;
 import Core.Console;
 
@@ -52,35 +52,35 @@ open class Counter {
 
 function main() -> void {
     mutable var c = new Counter(41);
-    Console.print(greet("Phorge"));
+    Console.print(greet("Phorj"));
     Console.print(" Counter starts at {c.start}, next is {c.next()}.");
 }
 ```
 
-Both print `Hello, Phorge! Counter starts at 41, next is 42.` The lifted `sample.phg` is part of the
+Both print `Hello, Phorj! Counter starts at 41, next is 42.` The lifted `sample.phg` is part of the
 example suite, so it is byte-identity-gated on `run`, `runvm`, **and** real PHP like every other
 example.
 
 ## What lift does (idiomatic, not a mirror)
 
-| PHP | Phorge |
+| PHP | Phorj |
 |---|---|
 | top-level statements | a synthesized `function main()` (the runnable entry) |
 | the whole file | `package Main;` (PHP has no packages) |
 | `$x = e` | `mutable var x = e;` (PHP locals are freely reassignable) |
-| `.` string concat / `===` / `!==` | `+` / `==` / `!=` (Phorge is typed) |
+| `.` string concat / `===` / `!==` | `+` / `==` / `!=` (Phorj is typed) |
 | `echo e;` | `Console.print(e);` (+ an automatic `import Core.Console;`) |
 | `__construct` + promoted params | a `constructor` with promoted (mutable) fields |
-| a non-`final` PHP class | an `open` class (Phorge is final-by-default) |
+| a non-`final` PHP class | an `open` class (Phorj is final-by-default) |
 | `[a, b]` / `[k => v]` | a `List` / a `Map` |
-| ternary `c ? a : b` / `match` | an expression `if` / a Phorge `match` |
-| `"$name"` / `"$o->prop"` / `"{$o->m()}"` interpolation | Phorge `"{name}"` / `"{o.prop}"` / `"{o.m()}"` holes |
-| `foreach ($xs as $x)` (keyless) | Phorge `foreach (xs as x)` — element type inferred (A-6) |
+| ternary `c ? a : b` / `match` | an expression `if` / a Phorj `match` |
+| `"$name"` / `"$o->prop"` / `"{$o->m()}"` interpolation | Phorj `"{name}"` / `"{o.prop}"` / `"{o.m()}"` holes |
+| `foreach ($xs as $x)` (keyless) | Phorj `foreach (xs as x)` — element type inferred (A-6) |
 
 ## What lift refuses (loudly — the Tier-2 frontier)
 
-Lift errors rather than guess when there is no faithful Phorge form *yet*: an `array` **type**
-annotation (needs `List`/`Map`/`Set` inference), a **key/value** `foreach ($xs as $k => $v)` (Phorge's
+Lift errors rather than guess when there is no faithful Phorj form *yet*: an `array` **type**
+annotation (needs `List`/`Map`/`Set` inference), a **key/value** `foreach ($xs as $k => $v)` (Phorj's
 `foreach` has no key binding yet), backed enums and enum methods, default parameter values, untyped
 parameters, the elvis `?:`, an assignment used as a sub-expression, and a non-literal `match` arm.
 Each is a clear `lift …` message naming what to do by hand.

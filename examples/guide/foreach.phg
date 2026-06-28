@@ -1,14 +1,14 @@
 package Main;
 import Core.Console;
 
-// A-6 — PHP-familiar `foreach (xs as x)` iteration, kept alongside Phorge's typed `for (T x in xs)`.
+// A-6 — PHP-familiar `foreach (xs as x)` iteration, kept alongside Phorj's typed `for (T x in xs)`.
 // The element type is INFERRED from the iterable (no `var`/type needed), and an optional
 // `with int i` adds a 0-based position counter — the thing you'd otherwise hand-roll with a
 // separate `mutable int i = 0;`. Both forms desugar to the same for-in, so all three backends and
 // the transpiled PHP (`foreach ($xs as $x)`) stay byte-identical.
 
 function main(): void {
-    List<string> langs = ["Phorge", "PHP", "TypeScript"];
+    List<string> langs = ["Phorj", "PHP", "TypeScript"];
 
     // Value form — `w` is inferred as `string` from `langs: List<string>`.
     foreach (langs as w) {

@@ -2,7 +2,7 @@
 
 ## Track summary
 
-Phorge already has a surprisingly mature **diagnostics** core for a pre-1.0 language: caret-underlined
+Phorj already has a surprisingly mature **diagnostics** core for a pre-1.0 language: caret-underlined
 spans, stable error codes, `phg explain <CODE>`, an edit-distance ≤2 "did you mean" suggester (unknown
 idents, unknown fields/methods, casing fixes), `phg check --json` (stage/severity/message/line/col/code/hint
 for editors), and a non-fatal **warning channel** (`W-FORCE-UNWRAP`). Trailing commas are already accepted
@@ -43,13 +43,13 @@ except syntax that would *add surprise* (e.g. significant-whitespace or macro su
 | C-heredoc | Heredoc / flexible multiline string sugar | omit | weak | reject | — | — |
 | C-shorthand-arrow | Single-expr fn shorthand beyond lambdas | omit | weak | reject | — | — |
 | C-color-diag | Colorized diagnostics (opt-in) | new | ok | defer | M7 | S |
-| C-init-config | `phg init` (phorge.toml + .gitignore) | port | ok | adopt | M5/M7 (with C-new) | S |
+| C-init-config | `phg init` (phorj.toml + .gitignore) | port | ok | adopt | M5/M7 (with C-new) | S |
 
 ## Rationale per ADOPT item
 
 **C-numsep — Numeric separators `1_000_000`.** The single best syntax win in this track. PHP 7.4 added
 underscore separators in all numeric literals and strips them at the lexing stage (confirmed: each `_` must
-sit directly between two digits), so the runtime is unaffected — which maps *perfectly* onto Phorge's
+sit directly between two digits), so the runtime is unaffected — which maps *perfectly* onto Phorj's
 constraints: `scan_number` in `src/lexer.rs` is the only file that changes, and the underscore is dropped
 before the token carries a value, so the interpreter/VM/transpiler and the PHP output are byte-identical by
 construction (no new `Op`, no parity surface). A PHP dev recognizes it instantly and it makes long literals
@@ -57,14 +57,14 @@ provably more legible. Pure adoption-strategy fit; effort is genuinely S (one le
 rejection: trailing `_`, doubled `__`, `_` adjacent to `.`).
 
 **C-fmt / C-fmt-check — Canonical formatter.** A PHP/TS developer expects a formatter (`php-cs-fixer`,
-`prettier`, `gofmt`). Phorge has none. Because Phorge is single-developer and pre-1.0, the *gofmt* model —
+`prettier`, `gofmt`). Phorj has none. Because Phorj is single-developer and pre-1.0, the *gofmt* model —
 **one canonical style, no options** — is the highest-leverage, lowest-bikeshedding choice and fits the
 "removes surprises" philosophy (formatting is never a debate). It reuses the existing lexer/parser; the only
 new surface is a pretty-printer over the AST (comments are the hard part and the L driver). `--check`/`--diff`
 is a trivial follow-on that gates CI (M9 already enforces the oracle, so a fmt gate slots in naturally). This
 is the tooling item most likely to be *missed every day*, so it ranks above the LSP.
 
-**C-unused-import / C-unused-local — Static-analysis lints.** Phorge already has the two things needed: a
+**C-unused-import / C-unused-local — Static-analysis lints.** Phorj already has the two things needed: a
 checker that resolves every import and every local binding, and a **warning channel** (`W-FORCE-UNWRAP` is
 the precedent). An import that is never referenced, and a local that is bound but never read, are both
 cheaply detectable at the existing resolution chokepoints and surface as non-fatal `W-UNUSED-IMPORT` /
@@ -74,15 +74,15 @@ Unused-import is S (one pass over the import map); unused-local + simple unreach
 (needs a use-set walk per scope, but the compiler already tracks dead-code-after-`return` for height).
 
 **C-repl — Interactive shell.** A REPL is the canonical "tiny path from idea to running program" affordance
-(PHP has `php -a`). Phorge already has `-e '<code>'` inline eval and the testable `cli` module, so a
+(PHP has `php -a`). Phorj already has `-e '<code>'` inline eval and the testable `cli` module, so a
 read-eval-print loop that wraps a synthesized `main()` per line and runs it on the VM is mechanically within
-reach. It is `ok` fit rather than `strong` because Phorge's immutable-by-default, package-mandatory model
+reach. It is `ok` fit rather than `strong` because Phorj's immutable-by-default, package-mandatory model
 makes a stateful REPL slightly awkward (each line is a fresh program unless state is threaded), but the
 value for learning/exploration is high and it is genuinely M effort.
 
-**C-new / C-init-config — Scaffolding.** `phg new <name>` (a `phorge.toml` + `src/main.phg` + `.gitignore`
+**C-new / C-init-config — Scaffolding.** `phg new <name>` (a `phorj.toml` + `src/main.phg` + `.gitignore`
 skeleton) and `phg init` (add a manifest to an existing dir) are the Go/Cargo affordance a packaged language
-needs — and Phorge made packaging *mandatory* (M5), so the friction of hand-writing `phorge.toml` +
+needs — and Phorj made packaging *mandatory* (M5), so the friction of hand-writing `phorj.toml` +
 `package Main;` + folder=path is real for newcomers. Both are S, ride the existing manifest writer, and
 directly serve adoption. Fits cleanly alongside M5's project model or in the M7 tooling slice.
 
@@ -112,7 +112,7 @@ the dev to already know the code. Trivial (the dictionary is already a static ta
   The LSP is the keystone (hover/go-to-def/find-refs/rename/completion all reuse the checker), but it should
   follow `fmt` because formatting is a smaller, higher-frequency win and de-risks the AST-printer the LSP's
   rename/quick-fix later needs.
-- **C-heredoc / C-shorthand-arrow — reject.** Phorge strings are already multi-line (lexer.rs:180), so PHP
+- **C-heredoc / C-shorthand-arrow — reject.** Phorj strings are already multi-line (lexer.rs:180), so PHP
   heredoc/nowdoc add a *second* multiline syntax with new surprises (indent-stripping rules, `<<<`/`<<<'`)
   for no capability gain — it violates "removes surprises, never adds them." Likewise, lambdas (`fn(x) => e`)
   already provide the single-expression shorthand; a further top-level `function f(x) => e` shorthand is
@@ -143,7 +143,7 @@ the interpolation line=1 bug is still in KNOWN_ISSUES "Behavioral quirks" (C-int
 | C-numsep-bases | Numeric separators in *all* bases (hex/binary/octal/float) | port | strong | adopt | M3 (rolled into C-numsep/C-int-base) | S |
 
 **C-int-base — Integer base literals (hex/binary/octal).** A genuine syntax-legibility gap the first
-pass entirely missed. PHP has `0x`, `0b`, **and** `0o`/`0` octal; Phorge's `scan_number`
+pass entirely missed. PHP has `0x`, `0b`, **and** `0o`/`0` octal; Phorj's `scan_number`
 (`src/lexer.rs:59`, verified) only parses decimal — `0x1F` lexes `0` then errors on `x`. A PHP dev
 reaches for `0xFF` / `0b1010` for masks and flags constantly; the value the token carries is a plain
 `i64` (parse with the right radix), so interpreter/VM/transpiler and the PHP output are byte-identical
@@ -173,7 +173,7 @@ affordances). Effort S.
 **Deliberately NOT added** (considered and rejected as out-of-track or surprise-budget failures):
 significant-whitespace / off-side rule (rejected — adds surprise, no PHP precedent); a macro system
 (beyond-PHP, not DX-ergonomics, and the `html"…"`/named-tag macros are an *internal* mechanism, not a
-user surface); a `#[deprecated]` attribute + lint (Phorge has no attribute syntax at all — that is a
+user surface); a `#[deprecated]` attribute + lint (Phorj has no attribute syntax at all — that is a
 language-design item for another track, not a DX micro-gap); custom operators (purism, rejected by
 philosophy). Per-file `// phg-disable W-…` lint suppression was considered as a companion to the
 warning channel but is premature with only two lint codes shipped — note it as a *follow-on* to the

@@ -1,23 +1,23 @@
-//! M-Lift L5 — the round-trip differential gate for the ↑ PHP→Phorge direction.
+//! M-Lift L5 — the round-trip differential gate for the ↑ PHP→Phorj direction.
 //!
 //! `lift` carries no byte-identity guarantee on its own (it's a best-effort draft), so confidence is
-//! *earned* here: for a Tier-1 PHP sample we **lift** it to Phorge, then check that the lifted Phorge
+//! *earned* here: for a Tier-1 PHP sample we **lift** it to Phorj, then check that the lifted Phorj
 //! behaves exactly like the original PHP — running it three ways (`run` interpreter, `runvm` VM, and
 //! its own transpiled-back PHP) and asserting all three match the **original PHP's** stdout. A full
 //! match is evidence the lift preserved behavior; the original program is the source of truth.
 //!
-//! Gating mirrors the differential oracle: `PHORGE_REQUIRE_PHP=1` makes a missing `php` FAIL (CI),
-//! otherwise it skips loudly. `PHORGE_PHP=<path>` overrides the binary. (The tiny php-runner helpers
+//! Gating mirrors the differential oracle: `PHORJ_REQUIRE_PHP=1` makes a missing `php` FAIL (CI),
+//! otherwise it skips loudly. `PHORJ_PHP=<path>` overrides the binary. (The tiny php-runner helpers
 //! are duplicated from `differential.rs` rather than shared — integration test files here are each
 //! self-contained, the same pattern as `process.rs`/`serve.rs`.)
 
-use phorge::cli::{cmd_run, cmd_runvm};
-use phorge::{cli, lift};
+use phorj::cli::{cmd_run, cmd_runvm};
+use phorj::{cli, lift};
 use std::process::Command;
 
-/// Resolve the php binary: `PHORGE_PHP` override, else `php` on PATH if `--version` succeeds.
+/// Resolve the php binary: `PHORJ_PHP` override, else `php` on PATH if `--version` succeeds.
 fn php_bin() -> Option<String> {
-    let cand = std::env::var("PHORGE_PHP").unwrap_or_else(|_| "php".to_string());
+    let cand = std::env::var("PHORJ_PHP").unwrap_or_else(|_| "php".to_string());
     let ok = Command::new(&cand)
         .arg("--version")
         .output()
@@ -26,17 +26,17 @@ fn php_bin() -> Option<String> {
     ok.then_some(cand)
 }
 
-/// The fails-not-skips gate. `Some(php)` ⇒ run; `None` ⇒ caller returns. Under `PHORGE_REQUIRE_PHP=1`
+/// The fails-not-skips gate. `Some(php)` ⇒ run; `None` ⇒ caller returns. Under `PHORJ_REQUIRE_PHP=1`
 /// a missing php panics instead of skipping.
 fn php_or_gate(test: &str) -> Option<String> {
     if let Some(p) = php_bin() {
         return Some(p);
     }
     assert!(
-        std::env::var("PHORGE_REQUIRE_PHP").as_deref() != Ok("1"),
-        "{test}: php required (PHORGE_REQUIRE_PHP=1) but not found on PATH or $PHORGE_PHP"
+        std::env::var("PHORJ_REQUIRE_PHP").as_deref() != Ok("1"),
+        "{test}: php required (PHORJ_REQUIRE_PHP=1) but not found on PATH or $PHORJ_PHP"
     );
-    eprintln!("SKIP {test}: php not found — set PHORGE_REQUIRE_PHP=1 to make this a failure");
+    eprintln!("SKIP {test}: php not found — set PHORJ_REQUIRE_PHP=1 to make this a failure");
     None
 }
 
@@ -74,7 +74,7 @@ fn run_php(php: &str, php_src: &str, label: &str) -> String {
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
         .collect();
-    let path = std::env::temp_dir().join(format!("phorge_lift_rt_{safe}.php"));
+    let path = std::env::temp_dir().join(format!("phorj_lift_rt_{safe}.php"));
     std::fs::write(&path, php_src).expect("write temp php");
     let out = Command::new(php)
         .args(php_n_args(php))
@@ -90,28 +90,28 @@ fn run_php(php: &str, php_src: &str, label: &str) -> String {
     String::from_utf8(out.stdout).expect("utf-8 php stdout")
 }
 
-/// The round-trip: lift `php_src` → Phorge, then assert the lifted Phorge run three ways
+/// The round-trip: lift `php_src` → Phorj, then assert the lifted Phorj run three ways
 /// (interpreter, VM, transpiled-back PHP) all equal the **original** PHP's stdout.
 fn roundtrip(php: &str, label: &str, php_src: &str) {
-    let phorge =
+    let phorj =
         lift::lifter::lift_source(php_src).unwrap_or_else(|e| panic!("{label}: lift failed: {e}"));
 
     let expected = run_php(php, php_src, &format!("{label}_orig"));
 
-    let interp = cmd_run(&phorge).unwrap_or_else(|e| {
-        panic!("{label}: lifted Phorge failed on the interpreter: {e}\n--- phorge ---\n{phorge}")
+    let interp = cmd_run(&phorj).unwrap_or_else(|e| {
+        panic!("{label}: lifted Phorj failed on the interpreter: {e}\n--- phorj ---\n{phorj}")
     });
     assert_eq!(
         interp, expected,
-        "{label}: interpreter ≠ original PHP\n--- phorge ---\n{phorge}"
+        "{label}: interpreter ≠ original PHP\n--- phorj ---\n{phorj}"
     );
 
-    let vm = cmd_runvm(&phorge)
-        .unwrap_or_else(|e| panic!("{label}: lifted Phorge failed on the VM: {e}"));
+    let vm =
+        cmd_runvm(&phorj).unwrap_or_else(|e| panic!("{label}: lifted Phorj failed on the VM: {e}"));
     assert_eq!(vm, expected, "{label}: VM ≠ original PHP");
 
-    let php_back = cli::cmd_transpile(&phorge)
-        .unwrap_or_else(|e| panic!("{label}: lifted Phorge failed to transpile back: {e}"));
+    let php_back = cli::cmd_transpile(&phorj)
+        .unwrap_or_else(|e| panic!("{label}: lifted Phorj failed to transpile back: {e}"));
     assert_eq!(
         run_php(php, &php_back, &format!("{label}_back")),
         expected,
@@ -131,7 +131,7 @@ fn lift_roundtrip_preserves_behavior() {
     let cases: &[(&str, &str)] = &[
         (
             "concat",
-            r#"<?php function greet(string $n): string { return "Hi, " . $n; } echo greet("Phorge");"#,
+            r#"<?php function greet(string $n): string { return "Hi, " . $n; } echo greet("Phorj");"#,
         ),
         (
             "if_elseif_else",
@@ -170,7 +170,7 @@ function name(int $c): string {
 echo name(1) . name(9);"#,
         ),
         (
-            // A-6 ↔ lift: a keyless PHP `foreach ($xs as $x)` lifts to Phorge `foreach (xs as x)`
+            // A-6 ↔ lift: a keyless PHP `foreach ($xs as $x)` lifts to Phorj `foreach (xs as x)`
             // (element type inferred) and round-trips behavior-identically.
             "foreach",
             r#"<?php
@@ -184,7 +184,7 @@ echo joined();"#,
         ),
         (
             // C-1: PHP double-quoted interpolation — simple `$var`, simple public `$o->prop`, and
-            // complex `{$o->method()}` — lifts to Phorge `"{…}"` holes and round-trips identically.
+            // complex `{$o->method()}` — lifts to Phorj `"{…}"` holes and round-trips identically.
             "string_interpolation",
             r#"<?php
 class Box {
@@ -198,9 +198,9 @@ $b = new Box("crate");
 echo describe("Ada", $b);"#,
         ),
         (
-            // Contextual `var`: a PHP variable/parameter literally named `$var` lifts to a Phorge
+            // Contextual `var`: a PHP variable/parameter literally named `$var` lifts to a Phorj
             // value named `var` (not mangled) and round-trips — the original motivating bug. PHP
-            // allows `$var`; Phorge now does too (`var` is the inference keyword only at a binding
+            // allows `$var`; Phorj now does too (`var` is the inference keyword only at a binding
             // start). Here `$var` is a parameter (read) and also a top-level local (a `var var = …`
             // declaration), both kept verbatim.
             "var_as_identifier",

@@ -1,7 +1,7 @@
 # M2 Wave 4 — Class-aware compiler types (close the `num_ty` parity gap)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans (inline; subagents
-> deadlock on the ask-human gate in this repo). Steps use checkbox (`- [ ]`) syntax. Phorge git
+> deadlock on the ask-human gate in this repo). Steps use checkbox (`- [ ]`) syntax. Phorj git
 > autonomy applies (commit green, self-contained; see `CLAUDE.md`). Read `docs/INVARIANTS.md`
 > before touching the compiler/backends. This is the long-deferred "Wave 4" from the M2 P3.5
 > hardening roadmap, scheduled (per that roadmap) to land *with* P4/P5 — now, right after P4.

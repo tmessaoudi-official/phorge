@@ -1,14 +1,14 @@
-# Full Bidirectional PHP ↔ Phorge Support — Plan
+# Full Bidirectional PHP ↔ Phorj Support — Plan
 
 > Umbrella plan: make **both** directions complete.
-> **↓ Phorge→PHP** (`transpile`, byte-identity-verified) and **↑ PHP→Phorge** (`lift`, best-effort).
+> **↓ Phorj→PHP** (`transpile`, byte-identity-verified) and **↑ PHP→Phorj** (`lift`, best-effort).
 > Sub-plans: [`2026-06-25-transpile-modernization.plan.md`](2026-06-25-transpile-modernization.plan.md)
-> (↓ modernization, **COMPLETE**) and [`2026-06-25-m-lift-php-to-phorge.plan.md`](2026-06-25-m-lift-php-to-phorge.plan.md)
+> (↓ modernization, **COMPLETE**) and [`2026-06-25-m-lift-php-to-phorj.plan.md`](2026-06-25-m-lift-php-to-phorj.plan.md)
 > (↑ lift, L1 done). This file coordinates the remaining waves across both.
 
 ## Decisions Log
 - [2026-06-25] AGREED (developer): pursue **full bidirectional support** — close every gap in both
-  directions, then add the PHP-parity language features Phorge still lacks.
+  directions, then add the PHP-parity language features Phorj still lacks.
 - [2026-06-25] AGREED: **scope = Both, sequenced** — Wave 1 (coverage + parity of already-shipped
   features) first, then Wave 2 (new PHP-parity language features).
 - [2026-06-25] AGREED: **close the visibility parity hole in the checker now** — extend the existing
@@ -28,13 +28,13 @@
 ## Answers to the developer's three questions (verified against code, 2026-06-25)
 | Question | Status | Evidence |
 |---|---|---|
-| Static **function value** (`static (int)->int f = …;`) — "PHP doesn't support" | ✅ **Shipped.** PHP can't init a static prop with a closure, so transpile emits `public static \Closure $f;` + `__phorge_init_statics()` assigns it once before `main()`. Incl. `static mutable`. | `src/transpile/program.rs:839-858`, `:167-190` |
+| Static **function value** (`static (int)->int f = …;`) — "PHP doesn't support" | ✅ **Shipped.** PHP can't init a static prop with a closure, so transpile emits `public static \Closure $f;` + `__phorj_init_statics()` assigns it once before `main()`. Incl. `static mutable`. | `src/transpile/program.rs:839-858`, `:167-190` |
 | `public`/`private`/`protected` member attributes | ⚠️ **Syntax/AST/transpile complete; runtime NOT enforced** (only `const` is). Parity hole → **Wave 1.1 fixes it.** | `src/checker/calls.rs:790-824`; KNOWN_ISSUES.md:521-527 |
 | Initialize a field **with a function** | ✅ **Shipped** (instance + static field initializers accept lambdas/fn-values). Constraint: field-init lambda may not capture `this` (`E-LAMBDA-THIS`). | `src/checker/tests/field_init.rs:57-104` |
 
 ---
 
-## WAVE 1 — Coverage + Parity (↓ Phorge→PHP completeness)
+## WAVE 1 — Coverage + Parity (↓ Phorj→PHP completeness)
 Small, high-value, fully verifiable; de-risks the rest. Each slice green + `run≡runvm≡real PHP 8.5`,
 clippy+fmt clean, no new `Op`/`Value` unless noted, one guide example.
 
@@ -46,12 +46,12 @@ clippy+fmt clean, no new `Op`/`Value` unless noted, one guide example.
 | **W1.4 ✅** | **Coverage audit + triage** — **COMPLETE.** Swept the transpiler for unhandled-construct markers; **found + fixed a real cross-backend gap**: a general function-valued callee (`adder()(41)`, `fns[i](x)`, `(if … )(x)`) type-checked + ran on the interpreter but the **VM compiler AND transpiler both rejected it** ("unsupported call target"). Fixed both via the existing `CallValue` / `(<expr>)(args)` path (mirrors the interpreter); byte-identical 3-way, showcased in `guide/lambdas-pipe.phg`. Triage of the rest below. | Closes the ↓ direction. The `unreachable!`/`call.rs:135` markers are guaranteed invariants, not gaps. |
 
 ### W1.4 transpile-completeness triage (the ↓ direction)
-**Conclusion: every shipped, example-covered Phorge feature has a working transpile path** — proven by the differential PHP oracle gating all **88** `examples/**/*.phg` byte-identical `run≡runvm≡real PHP 8.5`. The remaining KNOWN_ISSUES entries are NOT "feature exists but won't transpile" gaps; they fall into:
+**Conclusion: every shipped, example-covered Phorj feature has a working transpile path** — proven by the differential PHP oracle gating all **88** `examples/**/*.phg` byte-identical `run≡runvm≡real PHP 8.5`. The remaining KNOWN_ISSUES entries are NOT "feature exists but won't transpile" gaps; they fall into:
 - **Fixed this wave:** member visibility (W1.1), trait-vs-trait conflicts (W1.3), MI-ancestor refs (W1.2/S6c.3, already shipped), general callable-expression callee (W1.4).
-- **Inherent fault-domain divergences** (kept, documented): float ÷0 → PHP `DivisionByZeroError` vs Phorge `inf`/`NaN`; `opt!` message has no PHP source location. The differential excludes faults by design; no example produces them.
+- **Inherent fault-domain divergences** (kept, documented): float ÷0 → PHP `DivisionByZeroError` vs Phorj `inf`/`NaN`; `opt!` message has no PHP source location. The differential excludes faults by design; no example produces them.
 - **Unbuilt language features** (no transpile path needed yet): generic traits, cross-package traits, sized ints, `decimal`, etc. — later milestones; the PHP-parity subset (variadics/defaults/named args/attributes) is **Wave 2**.
 - **Narrow checker corners** (not transpile gaps): `private` statics + intersection-member visibility (W1.1 follow-ups); a generic-typed result not a VM arithmetic operand (run↔runvm, pre-existing, workaround = bind to a typed local).
-No transpiler marker is a reachable valid-Phorge gap after W1.4.
+No transpiler marker is a reachable valid-Phorj gap after W1.4.
 
 ## WAVE 2 — New PHP-parity language features (bidirectional per feature)
 Each lands the **full pipeline in one slice**: lexer → parser → AST → checker → interpreter → VM →
@@ -62,18 +62,18 @@ transpiler → (lift path once L2 exists) → guide example. Byte-identity-gated
 | **W2.1** | **Default arguments** `function f(int x = 0)` | Param gains `default: Option<Expr>`; checker validates const-or-expr + trailing-only; backends fill missing args; transpile → PHP default param. |
 | **W2.2** | **Variadic params** `function f(int... xs)` | Param `variadic: bool`; collects trailing args into a `List<T>`; one new lowering, likely no new `Op` (build a list). Transpile → PHP `...$xs`. |
 | **W2.3** | **Named arguments** `f(x: 1, y: 2)` | Call-site arg labels; checker reorders against the sig; backends reorder at the call. Transpile → PHP named args (8.0). |
-| **W2.4** | **Attributes** `#[Route("/x")]` | New `Item`/member annotation node; checker stores; transpile → PHP `#[...]`. Decision needed: are Phorge attributes *inert metadata* (emit + reflect only) or do any drive behavior? Default: inert, reflectable via `Core.Reflect`. |
+| **W2.4** | **Attributes** `#[Route("/x")]` | New `Item`/member annotation node; checker stores; transpile → PHP `#[...]`. Decision needed: are Phorj attributes *inert metadata* (emit + reflect only) or do any drive behavior? Default: inert, reflectable via `Core.Reflect`. |
 
-## ↑ DIRECTION — M-Lift (PHP→Phorge), build-out
-Continues [`2026-06-25-m-lift-php-to-phorge.plan.md`](2026-06-25-m-lift-php-to-phorge.plan.md). L1 (lexer) done.
+## ↑ DIRECTION — M-Lift (PHP→Phorj), build-out
+Continues [`2026-06-25-m-lift-php-to-phorj.plan.md`](2026-06-25-m-lift-php-to-phorj.plan.md). L1 (lexer) done.
 
 | Slice | Work | Tier reach |
 |---|---|---|
 | **L2** | Tier-1 PHP **parser** (`src/lift/parser.rs`): typed fn sigs, classes + typed props + ctor promotion, `enum`, `match`, `if`/`for`/`foreach`/`while`, exprs, array literals → a PHP AST. The dominant slice. | Tier-1 |
-| **L3** | Phorge AST → `.phg` **pretty-printer** (new; transpiler prints PHP, not Phorge). Reusable later for `phg fmt`. | — |
-| **L4** | **Lifter** PHP-AST → Phorge-AST: Tier-1 1:1; Tier-2 infer `List`/`Map`/`Set` from `array` usage, `?T`→`T?`, `??`/`?->`; **Tier-3 best-effort + `// LIFTED TIER-3 (unsafe — verify)`**; hard-untranslatable → `// CANNOT LIFT`. | Tier-1+2+3 |
-| **L5** | **Round-trip differential gate**: lift PHP→Phorge, transpile back→PHP, run both under real PHP, compare stdout. Match = behavior preserved. Annotate `// lifted (verify)`. The Tier-3 confidence proof. | gate |
-| **L6** | `phg lift` CLI + **playground "paste PHP → see Phorge"** demo. | tooling |
+| **L3** | Phorj AST → `.phg` **pretty-printer** (new; transpiler prints PHP, not Phorj). Reusable later for `phg fmt`. | — |
+| **L4** | **Lifter** PHP-AST → Phorj-AST: Tier-1 1:1; Tier-2 infer `List`/`Map`/`Set` from `array` usage, `?T`→`T?`, `??`/`?->`; **Tier-3 best-effort + `// LIFTED TIER-3 (unsafe — verify)`**; hard-untranslatable → `// CANNOT LIFT`. | Tier-1+2+3 |
+| **L5** | **Round-trip differential gate**: lift PHP→Phorj, transpile back→PHP, run both under real PHP, compare stdout. Match = behavior preserved. Annotate `// lifted (verify)`. The Tier-3 confidence proof. | gate |
+| **L6** | `phg lift` CLI + **playground "paste PHP → see Phorj"** demo. | tooling |
 
 ## Proposed sequence (adjustable)
 1. **Wave 1** (W1.1→W1.4) — quick parity wins, closes ↓ direction.
@@ -82,11 +82,11 @@ Continues [`2026-06-25-m-lift-php-to-phorge.plan.md`](2026-06-25-m-lift-php-to-p
 4. **M-Lift L5 + L6 + Tier-2/Tier-3 extension** — round-trip gate, CLI, playground, deeper inference.
 
 ## Invariants (all slices)
-- `run ≡ runvm ≡ real PHP 8.5` byte-identical (gate: `PHORGE_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php PHORGE_REQUIRE_PHP=1 cargo test --lib --test differential`).
+- `run ≡ runvm ≡ real PHP 8.5` byte-identical (gate: `PHORJ_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php PHORJ_REQUIRE_PHP=1 cargo test --lib --test differential`).
 - No new `Op`/`Value` unless a slice explicitly justifies one (then the 3 coupled matches in the same commit).
 - Each shipped feature → a runnable byte-identity-gated `examples/` guide program + README entry.
 - `cargo clippy --all-targets` + `cargo fmt --check` clean. TDD: failing test first.
-- The lift front-end (`src/lift/`) is wholly separate from the Phorge pipeline → unit-tested, not on the byte-identity oracle (except L5's round-trip).
+- The lift front-end (`src/lift/`) is wholly separate from the Phorj pipeline → unit-tested, not on the byte-identity oracle (except L5's round-trip).
 
 ## Status
 - [2026-06-25] Plan written + committed (`f3c3bc2`).
@@ -99,15 +99,15 @@ Continues [`2026-06-25-m-lift-php-to-phorge.plan.md`](2026-06-25-m-lift-php-to-p
   KNOWN_ISSUES doc needed correcting. (Phase-0 empirical verification, not doc-trust.)
 - [2026-06-25] **W1.3 COMPLETE** — trait-vs-trait conflict resolution now transpiles to PHP
   `insteadof`/`as`; `guide/trait-conflicts.phg` byte-identical 3-way.
-- [2026-06-25] **W1.4 COMPLETE — WAVE 1 (↓ Phorge→PHP) CLOSED.** Audit found + fixed a real
+- [2026-06-25] **W1.4 COMPLETE — WAVE 1 (↓ Phorj→PHP) CLOSED.** Audit found + fixed a real
   cross-backend gap (general callable-expression callee rejected by VM+transpiler); triage confirms
   every example-covered feature transpiles byte-identically (88 oracle-gated examples). Remaining
   KNOWN_ISSUES are inherent fault-domain / unbuilt-feature / narrow-corner — none a reachable transpile
   gap. **NEXT = Wave 2 (new PHP-parity features) and/or M-Lift L2 (↑ direction).**
 - [2026-06-25] PRINCIPLE (developer): **PHP is the floor, not the ceiling.** Adopt PHP's well-thought
   features; *fix* what violates best practice / craftsmanship — both directions. In transpile, hide
-  PHP's awkward mechanics behind a cleaner Phorge surface (e.g. `use P.m` → PHP `insteadof`); in lift,
-  emit idiomatic best-practice Phorge, never mirror PHP warts. Applies to Wave 2 (new features) + M-Lift.
+  PHP's awkward mechanics behind a cleaner Phorj surface (e.g. `use P.m` → PHP `insteadof`); in lift,
+  emit idiomatic best-practice Phorj, never mirror PHP warts. Applies to Wave 2 (new features) + M-Lift.
 - [2026-06-26] AGREED (developer, post-compact): **next = M-Lift L2** (↑ direction) over Wave 2 — it's
   the missing half of the bidirectional goal and L1 already waits for it. 3C convergence params = **Full
   30/8** (developer choice); converged 8/8.
@@ -134,15 +134,15 @@ Continues [`2026-06-25-m-lift-php-to-phorge.plan.md`](2026-06-25-m-lift-php-to-p
   - **Blast radius: zero on the spine** — purely additive `src/lift/` files + `mod` lines; no `Op`,
     `Value`, checker/interpreter/VM/transpiler change.
 - [2026-06-26] **M-Lift L2 COMPLETE** (`f5e9c73` L2a spine + `fb3cb06` L2b classes/enums): the Tier-1
-  PHP parser + PHP AST is up. Full detail in `2026-06-25-m-lift-php-to-phorge.plan.md` Progress.
-  840 lib tests green, clippy + fmt clean, isolated. **NEXT = L3** (Phorge `.phg` pretty-printer) → L4
-  (lifter PHP-AST → Phorge-AST) → L5 (round-trip gate) → L6 (`phg lift` CLI + playground).
+  PHP parser + PHP AST is up. Full detail in `2026-06-25-m-lift-php-to-phorj.plan.md` Progress.
+  840 lib tests green, clippy + fmt clean, isolated. **NEXT = L3** (Phorj `.phg` pretty-printer) → L4
+  (lifter PHP-AST → Phorj-AST) → L5 (round-trip gate) → L6 (`phg lift` CLI + playground).
 - [2026-06-26] **L3 + L4 design locked** (3C Full 30/8, converged 8/8; PHP-is-the-floor — emit idiomatic
-  Phorge, never mirror warts; never silently guess):
-  - **L3** (`src/lift/printer.rs`): Phorge AST → `.phg` text, scoped to the **lifter-output subset**
+  Phorj, never mirror warts; never silently guess):
+  - **L3** (`src/lift/printer.rs`): Phorj AST → `.phg` text, scoped to the **lifter-output subset**
     (out-of-subset node → clear `Err`, not `phg fmt`-complete yet). Strings escaped; binaries
     fully-parenthesized (re-parse-safe). Verified by round-trip (build AST → print → re-parse → AST-eq).
-  - **L4** (`src/lift/lifter.rs`): PHP-AST → Phorge-AST. `package Main;`; top-level stmts → synthesized
+  - **L4** (`src/lift/lifter.rs`): PHP-AST → Phorj-AST. `package Main;`; top-level stmts → synthesized
     `main()` (only if present; PHP `main` + top-level code → lift-error). Lifted locals: 1st `$x=e` →
     `mutable var x = e`, later → `x = e`. `.`→`+`, `===`/`!==`→`==`/`!=`. `echo e` → `Console.print(e)`
     + auto `import Core.Console;` (non-string echo = verify-flagged). `foreach($a as $v)`→`for(var v in a)`.
@@ -150,12 +150,12 @@ Continues [`2026-06-25-m-lift-php-to-phorge.plan.md`](2026-06-25-m-lift-php-to-p
     fields/promoted params → **`mutable`** (PHP fields are mutable), `readonly`→immutable; ternary→`Expr::If`,
     `match`(literal arms,+default→`_`)→`Expr::Match`; `new C(a)`→`Expr::New`. Output annotated `// lifted (verify)`.
   - **Loud lift-errors (Tier-2/no-equivalent, never guess):** `array` *type* annotation; instance-field
-    default (needs ctor synthesis); backed enums + enum methods (no Phorge equivalent); key-foreach
+    default (needs ctor synthesis); backed enums + enum methods (no Phorj equivalent); key-foreach
     `$k=>$v`; elvis `?:`; assignment/inc-dec as a *sub-expression*; non-literal match arms.
-  - **Test:** end-to-end PHP → L2 parse → L4 lift → L3 print → re-parse as Phorge (structural validity).
+  - **Test:** end-to-end PHP → L2 parse → L4 lift → L3 print → re-parse as Phorj (structural validity).
     Run-and-compare round-trip is L5 (deferred). Both slices isolated — zero spine contact.
 - [2026-06-26] **L3 + L4 COMPLETE** (`d1a074b` L3 printer + `bf08b1d` L4 lifter): the ↑ direction is
-  end-to-end for Tier-1. Detail in `2026-06-25-m-lift-php-to-phorge.plan.md`. 864 lib green.
+  end-to-end for Tier-1. Detail in `2026-06-25-m-lift-php-to-phorj.plan.md`. 864 lib green.
 - [2026-06-26] **L6 design** (3C Full 30/8, converged): `phg lift <file.php>` CLI (string-source path,
   NOT the loader) → `cmd_lift` prepends a `// lifted (verify)` header then `lift_source`; `lift` added to
   USAGE/help_text/help_for/main.rs match+dispatch. `examples/lift/` = README walkthrough + `sample.php` +

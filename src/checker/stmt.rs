@@ -303,7 +303,7 @@ impl Checker {
                         }
                     }
                     // A clause every member of which is already covered by an earlier clause can
-                    // never run (PHP is silent here; Phorge lints — see the totality cluster).
+                    // never run (PHP is silent here; Phorj lints — see the totality cluster).
                     if !members.is_empty()
                         && members
                             .iter()
@@ -614,7 +614,7 @@ impl Checker {
                     }
                 }
             }
-            // (Phorge has no `x == null` / `x != null` comparison — the checker rejects comparing a
+            // (Phorj has no `x == null` / `x != null` comparison — the checker rejects comparing a
             // `T?` to the null literal; optionals are tested via if-let / `??` / match-over-optional,
             // so there is no null-equality narrowing source here.)
             // `a && b` narrows the conjunction on its true side; `a || b` narrows on its false side

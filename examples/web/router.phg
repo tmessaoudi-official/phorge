@@ -15,7 +15,7 @@ package Main;
 //   * **Method-sensitive** — a path under the wrong verb falls through; no match → a 404 response.
 //
 // There is NO socket here (that is W3's `phg serve`) and NO new language feature — `Router` is pure
-// Phorge over classes + lists + first-class functions, so the whole pipe is byte-identical on
+// Phorj over classes + lists + first-class functions, so the whole pipe is byte-identical on
 // `run` / `runvm` and round-trips through real PHP.
 import Core.Console;
 import Core.Bytes;
@@ -23,7 +23,7 @@ import Core.Http;
 
 // Handlers are plain `(Request) -> Response` functions — registered as first-class values below.
 function home(Request req): Response {
-  return Response.text(200, "Phorge web — home");
+  return Response.text(200, "Phorj web — home");
 }
 
 function health(Request req): Response {
@@ -79,7 +79,7 @@ function main(): void {
   show(rt, b"GET /health HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
   show(rt, b"GET /users/42 HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
   show(rt, b"GET /users/me HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a"); // literal beats {id}
-  show(rt, b"GET /posts/2026/hello-phorge HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
+  show(rt, b"GET /posts/2026/hello-phorj HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
   show(rt, b"GET /missing HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a"); // 404
   show(rt, b"POST / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");       // method mismatch -> 404
 }

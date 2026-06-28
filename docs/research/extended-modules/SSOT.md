@@ -21,7 +21,7 @@ the Stage-2 agents against the live tree this session and cross-checked by the a
 ### 1.1 The byte-identity partition (Tier A vs Tier B), restated
 
 The correctness spine is a **three-leg byte-identity**: interpreter `run` ≡ bytecode VM `runvm` ≡
-Phorge→PHP transpiled under real `php -n` 8.5 (`tests/differential.rs`). The earlier framing "X can't
+Phorj→PHP transpiled under real `php -n` 8.5 (`tests/differential.rs`). The earlier framing "X can't
 transpile to PHP" is the **wrong lens** — *everything* transpiles. The real axis is what breaks the
 three-leg byte-identity:
 
@@ -71,15 +71,15 @@ mechanism itself) and against the test-runner's "gated for free" claim.
   `uses_impure_native(&src)` and `continue`s (~line 1004).
 - `all_example_projects_match_between_backends` (project `run≡runvm`, ~line 1030) and
   `all_example_projects_transpile_and_match_php` (project PHP oracle, ~line 1938) call **neither** —
-  they `loader::load` every `phorge.toml` project and assert `run.is_ok()` + `run==runvm` /
+  they `loader::load` every `phorj.toml` project and assert `run.is_ok()` + `run==runvm` /
   `php==interpreter` **unconditionally**.
-- `collect_phg` returns early on any dir containing a `phorge.toml`, so a project never reaches the
+- `collect_phg` returns early on any dir containing a `phorj.toml`, so a project never reaches the
   single-file skip.
 
 The `Core.Process` precedent works **only by accident of file placement** — `examples/process/
 args-env.phg` is a *flat single file*, so it rides the guarded glob. Every Tier-B feature in this
 initiative naturally wants a **multi-file project walkthrough** (a server, a worker, a cache app, a DB
-app), which lands *with* a `phorge.toml` → picked up by the un-guarded project harness → runs the
+app), which lands *with* a `phorj.toml` → picked up by the un-guarded project harness → runs the
 **real** SystemClock/TcpStream (no injection seam in that path) → `assert_eq!(run, runvm)` **fails
 flakily in CI** for any clock/random/network feature.
 
@@ -133,13 +133,13 @@ A1 = eager finite operator algebra over a `List`/range source (`of`/`from`/`rang
 `scan`/`take`/`drop`/`zip`/`concat`/`flatMap`/`distinct` + terminals `collect`/`fold`/`forEach`/`count`),
 chained via the shipped **UFCS** over a `List` runtime value (zero new `Value`, zero new class). **No new
 `Op`.** feas **88%**, conf **high**, `feasible_std_only=true`. PHP targets are core array builtins +
-gated `__phorge_*` helpers for `zip`/`scan`/`flatMap`/`takeWhile`/`dropWhile`.
+gated `__phorj_*` helpers for `zip`/`scan`/`flatMap`/`takeWhile`/`dropWhile`.
 
 **Adversarial corrections (must apply):** `determinism_holds=false` **as written** because of `distinct`:
 - **`distinct()` is NOT byte-identical** (verified PHP 8.5.7): `array_unique($xs, SORT_REGULAR)` uses
-  **loose numeric-coercing** comparison (`[1,"1"]→[1]`, `[1.0,1]→one elem`) but Phorge `eq_val` is
+  **loose numeric-coercing** comparison (`[1,"1"]→[1]`, `[1.0,1]→one elem`) but Phorj `eq_val` is
   type-strict (`Int(1) != Float(1.0)`). Any heterogeneous-numeric / `int|string` (S4 unions ship)
-  `Stream.distinct()` diverges. **Fix:** emit `__phorge_distinct` via a strict `in_array($x,$seen,true)`
+  `Stream.distinct()` diverges. **Fix:** emit `__phorj_distinct` via a strict `in_array($x,$seen,true)`
   loop (helper-over-builtin), OR add `E-STREAM-DISTINCT-TYPE` limiting `distinct` to one primitive type.
 - **`merge` = concat-in-arg-order** (locked, total order). Do **not** also ship `interleave` — scope
   creep, no Rx-fidelity gain.
@@ -283,7 +283,7 @@ KNOWN_ISSUES line. feas **90%**, conf **high** for the mechanism itself.
 
 - **Part A (pure response factories)** — `Core.Http.text/json/html/redirect/ok/notFound` returning **one
   `Response` value** (factories, **not** a subclass hierarchy — keeps the wire folder monomorphic + the PHP
-  flat; Symfony subclasses are rejected for Phorge's immutable single-file model). `Http.stream(List<bytes>)`
+  flat; Symfony subclasses are rejected for Phorj's immutable single-file model). `Http.stream(List<bytes>)`
   is Tier A only for finite deterministic producers (reduces to `Bytes.concat`). **No new `Op`/`Value`**;
   reuses shipped `Core.Json`/`Core.Html`/W1 `Request`/`Response`. feas **~90%**, `determinism_holds=true`.
   *Constraint (hard rule, not footnote):* no non-exactly-representable float in a gated JSON body (inherited
@@ -328,7 +328,7 @@ gated spine). Execution transpiles to **PDO prepared statements** (core under `p
 build-specific). **The closed `Value` hosts the connection by NOT hosting it** — `Connection` is a
 `Value::Instance` carrying an opaque `int` id into a process-global `RwLock<Vec<Box<dyn DbBackend>>>`;
 default `NullDbBackend` **faults cleanly** on the Rust legs; `tests/db.rs` injects a fixture backend
-(in-memory canned + opt-in `/stack` docker Postgres via `PHORGE_DB_DSN`). **No new `Op`/`Value`.** feas
+(in-memory canned + opt-in `/stack` docker Postgres via `PHORJ_DB_DSN`). **No new `Op`/`Value`.** feas
 **~85% of mechanism** (refute: optimistic — omits the mandatory project-path quarantine fix).
 
 **Refute caveats:** the project-harness leak (§1.3) — a DB walkthrough shipped as a project leaks in and
@@ -368,7 +368,7 @@ new `Op`/`Value`.** feas **~90%**, conf **high**, `feasible_std_only=true`.
 - **EXIT-CODE / oracle tension:** a single intentional red test → `exit(1)` → `run_php` asserts
   `out.status.success()` → the oracle **hard-fails** (not just disagrees). So gated example suites **must be
   all-green**; the FAIL-path is README + a Rust `tests/test_runner.rs` integration test only.
-- **Composite `assertEquals`** needs a recursive `__phorge_eq` mirroring `eq_val` — verify it exists before
+- **Composite `assertEquals`** needs a recursive `__phorj_eq` mirroring `eq_val` — verify it exists before
   assuming reuse (Q3). Float: exact-equality only in v1; `assertApproxEquals` (compares a bool) later.
 
 ### 5.2 Seeded Faker (`Core.Faker`) — Tier A (the one design the refute UPGRADED)
@@ -377,7 +377,7 @@ A seeded fake-data generator over **embedded ASCII corpora** + a **seeded intege
 (`Core.Random`). The byte-identity proof rests on a hand-rolled **63-bit LCG with a shift-add `mul_mod`**
 where *every intermediate stays < 2^63* — so Rust `i64` wrapping == PHP signed-int arithmetic with **no
 float promotion** (PHP has no u64; `mt_rand` is never emitted). **No new `Op`/`Value`** — `Rng`/`Faker` are
-injected Phorge classes (the `inject_json_prelude` pattern) over `Value::Instance`. feas **82% (refute
+injected Phorj classes (the `inject_json_prelude` pattern) over `Value::Instance`. feas **82% (refute
 raises to ~92-95%)**, conf medium, `determinism_holds=true`, `feasible_std_only=true`.
 
 **Refute notes:** the only sub-95% component (i64/PHP-int PRNG parity) was **empirically verified** by the
@@ -398,7 +398,7 @@ use hand-rolled integer `date` math (no `DateTime`/clock).
 ### 5.3 Auto-mocker (`Core.Test.Mock`) — Tier A (foundational code path is broken as written)
 
 `Mock.of<T>()` synthesizes a `ClassDecl implementing` the interface, injected pre-checker (the
-`inject_json_prelude` pattern) — so the mock is *ordinary Phorge code*, byte-identical by construction;
+`inject_json_prelude` pattern) — so the mock is *ordinary Phorj code*, byte-identical by construction;
 records calls in an **ordered `List<string>`**; canned returns via per-primitive-kind slots; verification
 (`timesCalled`/`calledWith`) are pure folds. `Core.Reflect` is read-only (no construct-by-name) so this is
 **compile-time codegen, not runtime reflection** — reusing the `InterfaceDecl` (full sigs) + `ClassTables`
@@ -428,7 +428,7 @@ sorted-name discipline. **No new `Op`/`Value`.** feas **80%**, conf medium, `fea
 |---|---|---|
 | **Async scheduler** | `determinism_holds=false`, `feasible_std_only=false` | R-A: **no suspension primitive exists** on the Rust legs in safe std (CPS deferred to Layer 2 / a new Op solves only the VM); only the suspension-free subset is Tier A. R-B: live natives co-located in `Core.Async` **invert** the module-granular quarantine. |
 | **Pure parallelism** | `determinism_holds=true` but **design has a load-bearing false claim** | R1: the glob gates **two** legs (`agree()` never runs PHP); a `agree_out_php` test is a hard deliverable. R3: deny-list must be "no *stateful* native", wider than `pure:false`. R5: drop `Parallel.reduce`. |
-| **Reactive streams** | `determinism_holds=false` | `distinct()` diverges — PHP `array_unique(SORT_REGULAR)` is loose-numeric vs strict `eq_val`; fix with `__phorge_distinct` strict loop or `E-STREAM-DISTINCT-TYPE`. |
+| **Reactive streams** | `determinism_holds=false` | `distinct()` diverges — PHP `array_unique(SORT_REGULAR)` is loose-numeric vs strict `eq_val`; fix with `__phorj_distinct` strict loop or `E-STREAM-DISTINCT-TYPE`. |
 | **Tier-B live concurrency** | `determinism_holds=false` | P0: the **project harness has no `uses_impure_native` guard** → a multi-file live example runs the real clock → `assert_eq!(run,runvm)` **flakily fails CI**. A harness edit is required, not optional. |
 | **Tier-B mechanism** | `determinism_holds=false`, `feasible_std_only=false` | R1/R2 (project leak + `run≡runvm` breaks for ambient state across two sequential invocations). R2b: **G1 `Effects` has no plumbing path** — `cmd_run`/`run_program` take no caller param; it's a cross-surface signature change, not a 4th enum arm. R4: **seeded 64-bit PRNG is not three-leg-reproducible under `php -n` core** (no u64). |
 | **Cache** | `determinism_holds=false` | P0: project leak + **in-process `static` warms `runvm` after `run` in one process** → `run≠runvm`. (Memo is genuinely Tier A.) |
@@ -462,7 +462,7 @@ the test-runner's catchability are *design-gated* (don't start until the named d
 **Phase 1 — Tier A, byte-identity-gated (build in this order):**
 1. **`Core.Parallel`** (`map` + `forkJoin` only) — feas 95%, cleanest pass; establishes the HigherOrder
    data-parallel pattern. **+ an explicit `agree_out_php` test** (R1). *Gated.*
-2. **`Core.Stream` A1** — feas 88%; ship with the `__phorge_distinct` strict-loop fix and the
+2. **`Core.Stream` A1** — feas 88%; ship with the `__phorj_distinct` strict-loop fix and the
    "sequentially-keyed array" invariant. *Gated.*
 3. **`Core.Faker` + the PR0 `Core.Random`** — feas ~92-95%; the upgraded design. Add the empty-range fault
    + a pinned <2^62 multiplier. *Gated.*
@@ -519,7 +519,7 @@ is the Tier-B wall-clock half (#9). Recommended global thread: ship the native-m
   the whole suspending surface and ship only the suspension-free subset (#1)?
 - **D-Async-2:** confirm the **module split** (`Core.Async` pure / `Core.AsyncLive`+`Core.Time`+`Core.Net`
   impure) and the **`select` source-order** tie-break as a permanent language rule.
-- **D-Stream:** `distinct` via `__phorge_distinct` strict loop vs `E-STREAM-DISTINCT-TYPE` single-primitive
+- **D-Stream:** `distinct` via `__phorj_distinct` strict loop vs `E-STREAM-DISTINCT-TYPE` single-primitive
   restriction? Ship `merge` only (no `interleave`)?
 
 **Testing:**
@@ -535,6 +535,6 @@ is the Tier-B wall-clock half (#9). Recommended global thread: ship the native-m
   `HttpTransport` seam + path-based glob backstop.
 - **D-Cache:** `getOrCompute` return shape (injected `MemoResult`); `open()` default backend (in-process vs
   file); cache value `string`-only v1 vs `Core.Json`; confirm Redis deferral.
-- **D-Db:** fixture backend (canned + opt-in docker Postgres via `PHORGE_DB_DSN`); `Row` typing (`string?`
+- **D-Db:** fixture backend (canned + opt-in docker Postgres via `PHORJ_DB_DSN`); `Row` typing (`string?`
   v1); add `Db.withConnection(dsn, fn)`; confirm `Sql` builder lands first.
 ```

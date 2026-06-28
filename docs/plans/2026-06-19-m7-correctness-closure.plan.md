@@ -1,22 +1,22 @@
 # M7 — Correctness Closure — Execution Plan
 
 > Companion to `docs/specs/2026-06-19-m7-correctness-closure-design.md`. First milestone of the GA
-> roadmap (`docs/plans/2026-06-19-phorge-ga-roadmap.plan.md`). TDD throughout: each wave writes the
+> roadmap (`docs/plans/2026-06-19-phorj-ga-roadmap.plan.md`). TDD throughout: each wave writes the
 > failing test first, then the fix; every wave ends `cargo test` green + `cargo clippy --all-targets`
 > + `cargo fmt --check` clean before commit. Code state at plan time: master `8c6fbb2`
 > (code spine `687a7bd`), 452 tests green, `php 8.6.0-dev` on PATH.
 
 ## Decisions Log
 - [2026-06-19] AGREED: spec M7 first (developer), full 30/8 3C gate run before authoring (converged 8/8).
-- [2026-06-19] AGREED (developer approved spec): runtime PHP helpers (`__phorge_div`/`__phorge_rem`/
-  `__phorge_str`/`__phorge_range`) for P0-1/3/4 + QW-13 over a static transpiler type resolver
+- [2026-06-19] AGREED (developer approved spec): runtime PHP helpers (`__phorj_div`/`__phorj_rem`/
+  `__phorj_str`/`__phorj_range`) for P0-1/3/4 + QW-13 over a static transpiler type resolver
   (see spec §4.0); P0-2 = syntactic precedence parens; `MAX_RANGE_LEN = 10_000_000` shared const;
   oracle folded into `tests/differential.rs`; the 2 self-skip `cli.rs` php tests deleted.
 - [2026-06-19] AGREED: begin TDD Wave 1 (oracle red), then W2→W4.
 
 ## Wave 1 — Oracle harness (red: must FAIL, proving the P0 bugs)
-1. `tests/differential.rs`: add `php_bin()` (honor `PHORGE_PHP`, else probe PATH) + `require_or_skip()`
-   (panic if `PHORGE_REQUIRE_PHP=1` and absent; else loud `eprintln!` skip).
+1. `tests/differential.rs`: add `php_bin()` (honor `PHORJ_PHP`, else probe PATH) + `require_or_skip()`
+   (panic if `PHORJ_REQUIRE_PHP=1` and absent; else loud `eprintln!` skip).
 2. Add `all_examples_transpile_and_match_php` (glob, §3.2) + `all_example_projects_transpile_and_match_php`
    (§3.3): transpile → unique temp `.php` → `php -n` → assert `status.success()` + stdout == `cmd_run`.
 3. Run with php present → **expect RED** on `operators.phg` (P0-1 `7/2`→`3.5`) and any bool-interp /
@@ -29,10 +29,10 @@
 
 ## Wave 2 — The four emitter fixes (turns W1 green)
 1. `src/transpile.rs`: add `uses_div`/`uses_rem`/`uses_str`/`uses_range` flags + emit the four helper
-   bodies (spec §4.1) in the once-per-file helper block, namespaced-`\` aware (mirror `__phorge_unwrap`).
-2. P0-1/P0-4: special-case `Div`/`Rem` in the `Binary` arm → `__phorge_div`/`__phorge_rem`; make them
+   bodies (spec §4.1) in the once-per-file helper block, namespaced-`\` aware (mirror `__phorj_unwrap`).
+2. P0-1/P0-4: special-case `Div`/`Rem` in the `Binary` arm → `__phorj_div`/`__phorj_rem`; make them
    `unreachable!` in `binop()` (§4.2).
-3. P0-3: wrap each `StrPart::Expr` in `emit_string` with `__phorge_str(…)` (§4.3). **Do not touch
+3. P0-3: wrap each `StrPart::Expr` in `emit_string` with `__phorj_str(…)` (§4.3). **Do not touch
    `value.rs`.**
 4. P0-2: add `is_primary(&Expr)` + wrap non-primary operands in Unary and the generic Binary join
    (§4.4); resolve the `Coalesce`-double-paren corner (oracle-verified, harmless either way).
@@ -41,7 +41,7 @@
   **Commit W1+W2 together** (`fix(transpile): close the PHP correctness leg — oracle + 4 P0 fixes`).
 
 ## Wave 3 — Range fixes
-1. QW-13: route `Expr::Range` emit through `__phorge_range` (§5.1); add empty/reversed examples/tests.
+1. QW-13: route `Expr::Range` emit through `__phorj_range` (§5.1); add empty/reversed examples/tests.
 2. P1-#9: add `const MAX_RANGE_LEN: i64 = 10_000_000;` (single-sourced) + `checked_sub` length guard +
    `"range too large"` fault, applied **identically** in `src/vm.rs:252-263` and
    `src/interpreter.rs:380-389` (§5.2).
@@ -63,7 +63,7 @@
 ## Completion Gate (Rule 6 — produced at Phase 6, all four dimensions)
 - **Coverage:** paste `cargo test` output incl. the oracle test names + counts; oracle red→green proof.
 - **Docs:** KNOWN_ISSUES diff (P0 entries removed), CHANGELOG/FEATURES, MILESTONES leg-closed note.
-- **Config:** `PHORGE_REQUIRE_PHP` / `PHORGE_PHP` documented; M9 CI seam noted.
+- **Config:** `PHORJ_REQUIRE_PHP` / `PHORJ_PHP` documented; M9 CI seam noted.
 - **Blast radius:** `grep` for the deleted cli.rs tests, `binop()` `Div`/`Rem` callers, every
   `MakeRange`/`Expr::Range` site, and `as_display` (untouched) accounted for.
 
@@ -73,7 +73,7 @@ M7 section to DONE. Carried review cleanup (dangling branch, S3 plan disposition
 
 ## Status
 STATUS: ✅ Implemented — W1–W4 complete. Oracle (examples + projects, fails-not-skips), 4 P0 fixes via
-runtime helpers, P0-2 precedence parens, QW-13 `__phorge_range`, P1-#9 large-range cap +
+runtime helpers, P0-2 precedence parens, QW-13 `__phorj_range`, P1-#9 large-range cap +
 `FaultKind::RangeTooLarge`, 5 self-skip `cli.rs` tests removed, regression tests added, `demo.php`
 golden regenerated, docs updated (KNOWN_ISSUES / CHANGELOG / CLAUDE.md / GA roadmap). ~453 tests green,
 clippy + fmt clean. Phase-8 disposition (delete plan, keep spec) pending developer confirmation.

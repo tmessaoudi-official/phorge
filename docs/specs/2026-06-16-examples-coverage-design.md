@@ -1,15 +1,15 @@
-# Phorge Examples — Full-Coverage Design
+# Phorj Examples — Full-Coverage Design
 
 > A living set of `examples/*.phg` that demonstrate the **entire runnable language surface**,
 > kept correct by the differential harness. Companion to `docs/MILESTONES.md` (M2 complete) and
-> the language design (`docs/specs/2026-06-15-phorge-language-design.md`). Implementation plan:
+> the language design (`docs/specs/2026-06-15-phorj-language-design.md`). Implementation plan:
 > `docs/plans/2026-06-16-examples-coverage.md` (written after this spec is approved).
 
 ## 1. Goal & Non-Goals
 
 **Goal.** Give a newcomer (and the maintainer) a complete, *honest*, runnable picture of what
-Phorge can do today: four real-world programs, a focused per-feature guide set, and the
-Phorge→PHP transpile bridge — every runnable example guaranteed byte-identical on `phg run`
+Phorj can do today: four real-world programs, a focused per-feature guide set, and the
+Phorj→PHP transpile bridge — every runnable example guaranteed byte-identical on `phg run`
 and `phg runvm`, and grown incrementally as the language grows.
 
 **Non-goals.**
@@ -20,8 +20,8 @@ and `phg runvm`, and grown incrementally as the language grows.
   hard-codes `println`). Real module resolution is **M5**. We show the `import std.io;` line as-is
   and state plainly in the README that it is currently decorative.
 - **No PHP-consumption example.** The only PHP touchpoint is `phg transpile` *producing* PHP;
-  Phorge does not consume composer/PHP packages (FFI was rejected in the ecosystem roadmap). The
-  "PHP ecosystem" example is therefore a Phorge→PHP *output* demo.
+  Phorj does not consume composer/PHP packages (FFI was rejected in the ecosystem roadmap). The
+  "PHP ecosystem" example is therefore a Phorj→PHP *output* demo.
 
 ## 2. The runnable surface (ground truth, verified 2026-06-16)
 
@@ -70,7 +70,7 @@ examples/
     rpg.phg        # party + combat actions
   guide/                             # focused, one feature-cluster each
     enums-match.phg classes.phg collections.phg operators.phg control-flow.phg strings.phg
-  transpile/                         # the Phorge → PHP bridge (the real "PHP ecosystem" path)
+  transpile/                         # the Phorj → PHP bridge (the real "PHP ecosystem" path)
     demo.phg  demo.php  README.md
 ```
 
@@ -136,7 +136,7 @@ Small and didactic — one feature cluster each, heavily commented:
 
 `examples/README.md`: a one-line index of every example, the §3 coverage matrix, the explicit list
 of M3+ not-yet-supported features, and the honest `import`/PHP notes from §1. This is the "what can
-Phorge do today" page and is updated whenever an example is added (the "as we go" contract).
+Phorj do today" page and is updated whenever an example is added (the "as we go" contract).
 
 ## 9. Build order
 
@@ -159,7 +159,7 @@ Three self-contained, green commits (`cargo test` + clippy + fmt clean each):
 | # | Decision | Choice | Rationale |
 |---|---|---|---|
 | EX-1 | Import-files examples | **Not written**; `import` documented as decorative (M5) | Real resolution is a no-op today; a working example is impossible — faking it would lie |
-| EX-2 | PHP-ecosystem example | A Phorge→PHP **transpile** demo (output), not PHP consumption | The only PHP path is `phg transpile`; FFI/consumption was rejected in the roadmap |
+| EX-2 | PHP-ecosystem example | A Phorj→PHP **transpile** demo (output), not PHP consumption | The only PHP path is `phg transpile`; FFI/consumption was rejected in the roadmap |
 | EX-3 | Real-world domains | **All four** (ledger, library, shop, rpg) | User chose all four; each stresses a different mix of the same surface |
 | EX-4 | Sweep mechanism | **Glob `examples/**/*.phg`** into the differential harness | "Add as we go" needs zero test edits; divergence fails loudly |
 | EX-5 | Layout | Keep `hello`/`fib`/`grades` flat; new ones under `realworld/`/`guide/`/`transpile/` | Don't break explicit test paths; subdirs aid navigation at this scale |

@@ -328,7 +328,7 @@ pub(super) fn is_builtin_type_name(name: &str) -> bool {
 
 /// Whether `name` is reserved *in PHP* for a top-level symbol of the given `kind` ("function" /
 /// "class" / "enum" / "interface" / "trait" / "type alias") and would therefore transpile to invalid
-/// PHP. These are words that are usable Phorge value identifiers (not Phorge keywords — lexed as
+/// PHP. These are words that are usable Phorj value identifiers (not Phorj keywords — lexed as
 /// `Ident`) but a PHP parse error in the corresponding symbol position. The split is **kind-aware**
 /// (verified empirically against PHP 8.5): the type words `int`/`float`/`object`/… are legal as a PHP
 /// *function* name but illegal as a *class* name, so a `function int(){}` is fine while `class int{}`

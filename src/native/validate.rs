@@ -1,6 +1,6 @@
 //! `Core.Validate` — syntactic string predicates (native-stdlib wave, Tier A).
 //!
-//! Pure, deterministic, std-only. Each predicate is `string -> bool`. Phorge has no regex crate (the
+//! Pure, deterministic, std-only. Each predicate is `string -> bool`. Phorj has no regex crate (the
 //! library is std-only), so the checks are hand-rolled in Rust and the PHP side emits a `preg_match`
 //! with the *same* anchored, explicit-char-class pattern — so the two cannot disagree (no
 //! `filter_var`, whose validation semantics we'd have to chase). These are *format* checks, not

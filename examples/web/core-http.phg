@@ -1,6 +1,6 @@
 // Core.Http — the portable HTTP handler model, now in the stdlib.
 //
-// M6 W1 shipped `Request`/`Response`/parse/serialize as pure Phorge written *in* the example
+// M6 W1 shipped `Request`/`Response`/parse/serialize as pure Phorj written *in* the example
 // (examples/web/handler.phg). Core.Http promotes them to the standard library: `import Core.Http;`
 // gives you the `Request` and `Response` types with a static-method API —
 //   * `Request.parse(bytes) -> Request?`   — parse a raw HTTP/1.1 request (null if malformed)

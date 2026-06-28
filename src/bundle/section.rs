@@ -1,13 +1,13 @@
-//! Magic-sniffing dispatcher: locate the phorge payload section in an executable image of any
+//! Magic-sniffing dispatcher: locate the phorj payload section in an executable image of any
 //! supported object format. Unknown/malformed magic → None (caller falls through to the CLI).
 use crate::bundle::{elf, macho, pe};
 
-/// Canonical phorge payload identifiers. ELF + PE use a named section; Mach-O uses segment+section.
-pub const ELF_PE_SECTION: &str = ".phorge";
-pub const MACHO_SEG: &str = "__PHORGE";
+/// Canonical phorj payload identifiers. ELF + PE use a named section; Mach-O uses segment+section.
+pub const ELF_PE_SECTION: &str = ".phorj";
+pub const MACHO_SEG: &str = "__PHORJ";
 pub const MACHO_SECT: &str = "__source";
 
-/// Locate the phorge payload section by sniffing the leading magic. Never panics.
+/// Locate the phorj payload section by sniffing the leading magic. Never panics.
 pub fn find_section(bytes: &[u8]) -> Option<&[u8]> {
     match bytes.get(0..4)? {
         [0x7F, b'E', b'L', b'F'] => elf::elf_find_section(bytes, ELF_PE_SECTION),
@@ -33,7 +33,7 @@ mod tests {
 
     #[test]
     fn dispatch_routes_pe_to_pe_reader() {
-        // An MZ image carrying a `.phorge` section with a real container: find_section must sniff PE,
+        // An MZ image carrying a `.phorj` section with a real container: find_section must sniff PE,
         // route to the PE reader, and return the raw container that decodes back to the source.
         let payload = encode_container(
             b"import Core.Console; function main() -> void { Console.println(\"pe\"); }",
@@ -48,7 +48,7 @@ mod tests {
         img.extend_from_slice(&coff);
         let sh_off = img.len();
         let mut sh = [0u8; 40];
-        sh[..7].copy_from_slice(b".phorge");
+        sh[..6].copy_from_slice(b".phorj");
         img.extend_from_slice(&sh);
         let ptr = img.len() as u32;
         img[sh_off + 16..sh_off + 20].copy_from_slice(&(payload.len() as u32).to_le_bytes());

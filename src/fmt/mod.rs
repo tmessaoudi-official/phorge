@@ -16,7 +16,7 @@ use crate::diagnostic::Diagnostic;
 use crate::lexer::lex_with_comments;
 use crate::parser::Parser;
 
-/// Format Phorge source to canonical form. Returns the formatted text, or a `Diagnostic` if the
+/// Format Phorj source to canonical form. Returns the formatted text, or a `Diagnostic` if the
 /// source does not lex/parse (the caller must NOT write the file in that case — a formatter never
 /// corrupts broken source).
 pub fn format(src: &str) -> Result<String, Diagnostic> {

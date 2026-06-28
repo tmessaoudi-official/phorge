@@ -1,4 +1,4 @@
-// lifted (verify) — a best-effort PHP->Phorge draft; review before trusting it.
+// lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
 package Main;
 
 import Core.Console;
@@ -16,6 +16,6 @@ open class Counter {
 
 function main(): void {
     mutable var c = new Counter(41);
-    Console.print(greet("Phorge"));
+    Console.print(greet("Phorj"));
     Console.print(" Counter starts at {c.start}, next is {c.next()}.");
 }

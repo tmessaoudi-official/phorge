@@ -18,7 +18,7 @@ assignees: ""
 
 <!-- Syntax sketch, CLI flag, or behavior. A small example helps. -->
 
-```phorge
+```phorj
 // what you'd like to write
 ```
 

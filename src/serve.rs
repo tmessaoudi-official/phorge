@@ -3,7 +3,7 @@
 //! its conformance is covered by `tests/serve.rs` over a deterministic in-memory [`Transport`].
 //!
 //! The portable unit stays `handle(Request) -> Response` (W1) *inside* the served program; the
-//! runtime only shuttles raw bytes to a single Phorge entry **`respond(bytes) -> bytes`** ([`SERVE_ENTRY`])
+//! runtime only shuttles raw bytes to a single Phorj entry **`respond(bytes) -> bytes`** ([`SERVE_ENTRY`])
 //! and writes the result back. HTTP/1.1, `Connection: close`, one request per accepted connection.
 //!
 //! Concurrency (M6 W3): a bounded OS-thread pool, **one request per worker thread, each with its own
@@ -22,7 +22,7 @@ use std::sync::mpsc::sync_channel;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-/// The default Phorge entry the runtime calls per request: `respond(bytes) -> bytes`.
+/// The default Phorj entry the runtime calls per request: `respond(bytes) -> bytes`.
 pub const SERVE_ENTRY: &str = "respond";
 
 /// Seam between the serve loop and the world. [`TcpTransport`] is the real socket; `tests/serve.rs`
@@ -144,14 +144,14 @@ fn dev_error_page(diag: &crate::diagnostic::Diagnostic, raw: &[u8]) -> Vec<u8> {
         frames.push_str(&format!("{}{}    {}\n", mark, esc(&f.function), esc(&loc)));
     }
     let body = format!(
-        "<!doctype html><html><head><meta charset=\"utf-8\"><title>Phorge — runtime fault</title>\
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>Phorj — runtime fault</title>\
          <style>body{{font:14px/1.5 ui-monospace,monospace;background:#1e1e2e;color:#cdd6f4;margin:2rem}}\
          h1{{color:#f38ba8}}pre{{background:#181825;padding:1rem;border-radius:8px;overflow:auto}}\
          .req{{color:#a6adc8}}</style></head><body>\
          <h1>Runtime fault</h1><pre>{msg}</pre>\
          <h2>Stack trace (most recent call first)</h2><pre>{frames}</pre>\
          <h2>Request</h2><pre class=\"req\">{req}</pre>\
-         <p class=\"req\">phorge serve --dev — this page is shown in development only.</p>\
+         <p class=\"req\">phorj serve --dev — this page is shown in development only.</p>\
          </body></html>",
         msg = esc(&diag.to_string()),
         frames = frames,

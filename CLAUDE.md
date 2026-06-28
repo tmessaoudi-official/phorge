@@ -1,9 +1,9 @@
-# CLAUDE.md — phorge
+# CLAUDE.md — phorj
 
-Phorge is a statically-typed, PHP-inspired language implemented in Rust (edition 2021, std-only,
-no external crates): lexer → parser → type-checker → tree-walking interpreter + Phorge→PHP
+Phorj is a statically-typed, PHP-inspired language implemented in Rust (edition 2021, std-only,
+no external crates): lexer → parser → type-checker → tree-walking interpreter + Phorj→PHP
 transpiler (M1) + bytecode compiler + stack VM (M2). Single developer, commits direct to `master`,
-remote is GitHub (`tmessaoudi-official/phorge`).
+remote is GitHub (`tmessaoudi-official/phorj`).
 
 This sub-project lives under `/stack/projects/` and is handled with the global reasoning framework
 (`~/.claude/CLAUDE.md`). It is NOT `/stack` infrastructure — do not route work here to
@@ -32,9 +32,9 @@ Scope and limits:
 The differential harness (`tests/differential.rs`) is the correctness spine — `run`, `runvm`, **and
 (since M7) the transpiled PHP** must stay byte-identical. The M7 **PHP oracle** there transpiles every
 example/project, runs it under a real `php`, and asserts stdout matches the interpreter; run the full
-gate with `PHORGE_REQUIRE_PHP=1` so a missing `php` **fails** (not skips). `PHORGE_PHP=<path>`
+gate with `PHORJ_REQUIRE_PHP=1` so a missing `php` **fails** (not skips). `PHORJ_PHP=<path>`
 overrides the binary. **Transpile floor = PHP 8.5** (raised from 8.4 on 2026-06-24): test against the
-floor — `PHORGE_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php PHORGE_REQUIRE_PHP=1 cargo test
+floor — `PHORJ_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php PHORJ_REQUIRE_PHP=1 cargo test
 --workspace` before pushing. The bare `php` on PATH is 8.6.0-dev (too permissive — an 8.6-only
 construct would pass locally then fail the 8.5 CI gate); CI also runs a non-gating 8.6-dev canary. Adding an `Op` variant requires extending three exhaustive matches in
 the same commit: `src/vm.rs` `exec_op`, `src/chunk.rs` `BytecodeProgram::validate`, and
@@ -80,14 +80,14 @@ evidence).
 (backends byte-identical, quality gate green; the mark-sweep GC criterion was revised — `Rc`/`Drop`
 reclaims the immutable+acyclic heap fully, tracing GC deferred to M3). A **full-coverage example set**
 also landed (`docs/specs/2026-06-16-examples-coverage-design.md`): four real-world programs
-(`examples/realworld/`), six focused guide programs (`examples/guide/`), and the Phorge→PHP transpile
+(`examples/realworld/`), six focused guide programs (`examples/guide/`), and the Phorj→PHP transpile
 bridge (`examples/transpile/`) — `tests/differential.rs` now **globs `examples/**/*.phg`** so every
 example (and any added later) is byte-identity-gated automatically; `examples/README.md` is the
 living surface showcase. **Gotcha:** zero-payload enum variants need call form `V()` both to
 construct AND in a `match` pattern (bare `V =>` is a silent catch-all binding).
 
 **M2.5 `phg build` (standalone executables) — Phases 1 & 2 COMPLETE** (released as **v0.4.0**).
-Phase 1 (host `x86_64-linux-gnu`): `phg build foo.phg` embeds the program **source** in a `.phorge`
+Phase 1 (host `x86_64-linux-gnu`): `phg build foo.phg` embeds the program **source** in a `.phorj`
 section (versioned CRC-guarded container + hand-rolled ELF64 reader); `main()` self-detects + runs it
 on the VM. Phase 2 (`docs/plans/2026-06-16-m2.5-phase2-cross-os.md`): `src/bundle.rs` split into a
 `bundle/` module — `container`, per-format readers `elf`/`pe`/`macho` (thin + fat), a magic-sniffing
@@ -118,7 +118,7 @@ CODE_OF_CONDUCT, SECURITY, ROADMAP, VISION, FEATURES, KNOWN_ISSUES, THIRD-PARTY-
 `.github/` templates). See **`ROADMAP.md`** / **`VISION.md`** for the forward plan.
 
 **M3 is now the active milestone** (`docs/specs/2026-06-17-m3-language-roadmap-design.md` +
-`docs/specs/2026-06-17-m3-slice1-s0-s1-s2-design.md`). The transpile contract is **Phorge : PHP ::
+`docs/specs/2026-06-17-m3-slice1-s0-s1-s2-design.md`). The transpile contract is **Phorj : PHP ::
 TypeScript : JavaScript** — every feature maps to idiomatic PHP; PHP-absent features (generics) are
 compile-time-only and erased. **Slice S0 (developer experience) is COMPLETE**
 (`docs/plans/2026-06-17-m3-s0-dx.md`): per-command `--help` with worked examples; `var` local type
@@ -153,7 +153,7 @@ stash their receiver in a scratch slot that must be `self.height - 1` (the recei
 live transient below the receiver and the old slot was off, a silent `run`↔`runvm` break.
 
 **Post-S2 direction (designed 2026-06-18, `docs/specs/2026-06-18-m3-next-intuitive-features-and-io-design.md`):**
-developer asked for more intuitive features + exhaustive examples (file/URL/imports) + a Phorge-vs-PHP
+developer asked for more intuitive features + exhaustive examples (file/URL/imports) + a Phorj-vs-PHP
 benchmark. Locked: **build order D→B→A**; **URL/network deferred to M6** (Rust std has no HTTP client →
 breaks zero-dep, *and* network is non-deterministic → breaks the byte-identical spine; determinism, not
 the dependency, gates examples); **rich std-only stdlib now**; multiple inheritance = traits/mixins at
@@ -206,16 +206,16 @@ model (design `docs/specs/2026-06-18-m5-project-model-design.md`, plan
 `docs/plans/2026-06-18-m5-modules-packages.md`). Decisions: **mandatory `package` everywhere, never
 inferred** (even `-e`/stdin); reserved **`package Main;`** = runnable entry (Go model); `core` reserved;
 **single-file brace-namespace PHP emission** (no Composer/autoloader — chosen because PSR-4 can't
-autoload free functions, and Phorge is function-heavy); project detection = `phorge.toml` walk-up;
+autoload free functions, and Phorj is function-heavy); project detection = `phorj.toml` walk-up;
 git-based deps pinned + vendored for determinism. **M5 S1 COMPLETE** (single-file `package` decl + parse
 + checker `E-NO-PACKAGE`/`E-RESERVED-PACKAGE` + flat PHP unchanged → byte-identical; all 24 examples +
 every test program migrated to `package Main;`; also fixed Wave-1 `README.md` drift). **M5 S2a COMPLETE**
-(`src/manifest.rs`: std-only `phorge.toml` parser → `Manifest`/`Dependency`/`Pin` + `Project::detect`
+(`src/manifest.rs`: std-only `phorj.toml` parser → `Manifest`/`Dependency`/`Pin` + `Project::detect`
 walk-up + source-root + PSR-4 `namespace_root()`; 18 unit tests; byte-safe — unconsumed, no backend
 touched). **Manifest = Composer's *vocabulary* in an honest TOML container** (developer-chosen): `name =
 "vendor/package"`, `[require]`/`[require-dev]`, deps `{ git, tag|rev }` or `"url@tag"` shorthand,
 exact-pin only (no `^`/`~` ranges — lockfile pins exact). Literal `composer.json` was **rejected** — the
-`composer` tool can't process it (no Packagist/autoloader Phorge uses), so the filename is a false
+`composer` tool can't process it (no Packagist/autoloader Phorj uses), so the filename is a false
 promise; familiarity is vocabulary, not the tool. **M5 S2b COMPLETE** (`src/loader.rs`: `load`/
 `load_loose_src` → `Unit{program,diag_src}`; project-mode walk-up + parse every `.phg` under source
 root + folder=path `E-PKG-PATH` (directory=package, `main` exempt) + flat AST merge; loose-mode
@@ -238,16 +238,16 @@ C→F converter) showcasing mandatory packages + folder=path, a cross-package qu
 aliasing (`as`), a same-package bare call across files, and namespaced PHP; runs `freezing = 32F` /
 `boiling = 212F` byte-identically on run/runvm/**real PHP 8.6** (exact integer math, so PHP's float `/`
 agrees). `tests/differential.rs` is now **project-aware**: it discovers every project root (a dir with
-`phorge.toml`) under `examples/`, loads via `loader::load`, and gates `run` ≡ `runvm`; the single-file
-glob skips any dir holding a `phorge.toml` (structural exclusion). 410 tests green.
+`phorj.toml`) under `examples/`, loads via `loader::load`, and gates `run` ≡ `runvm`; the single-file
+glob skips any dir holding a `phorj.toml` (structural exclusion). 410 tests green.
 
 **M5 S3 COMPLETE — M5 is now CLOSED** (`docs/plans/2026-06-18-m5-modules-packages.md`): git dependencies
-+ `phorge.lock` + `phg vendor` + auto-offline. `src/lock.rs` is a strict TOML-subset lockfile
++ `phorj.lock` + `phg vendor` + auto-offline. `src/lock.rs` is a strict TOML-subset lockfile
 (`[[package]]` → `name`/`git`/`rev`/`hash`, round-tripping). `src/vendor.rs` (`phg vendor`) is the
 **only network-touching command**: clone → checkout the pinned tag/rev → copy the dep's source into
 `vendor/<vendor>/<package>/` (its own mini source-root, so folder=path validates per-dep) → FNV-1a-64
 content hash (reuses `bundle::cross::fnv1a_64`; the resolved 40-hex commit SHA is the real pin) → write
-`phorge.lock`; idempotent + crash-safe (stage in a temp dir, atomic swap, touch only each dep's owned
+`phorj.lock`; idempotent + crash-safe (stage in a temp dir, atomic swap, touch only each dep's owned
 subtree). `loader::load_project` merges vendored packages **exactly like first-party library packages**
 (mangle + resolve *before* any backend ⇒ run≡runvm structural; the transpiler de-mangles to
 `namespace Acme\Strutil { … }`), and is **offline-only** — vendor is consulted only when `[require]` is
@@ -255,12 +255,12 @@ non-empty and `run`/`check`/`transpile` **never fetch** (`E-VENDOR-MISSING` when
 vendored). New guards: **`E-VENDOR-MAIN`** (a vendored `package Main` would collide with the entry) and
 **`E-DUP-DEF`** (duplicate `(package,name)` after the flat merge — previously a silent `HashMap`
 overwrite since S2c). Example `examples/project/withdeps/` (consumes a vendored `acme/strutil`) ships its
-committed `vendor/` + `phorge.lock`; the project-aware harness loads it offline → byte-identical on
+committed `vendor/` + `phorj.lock`; the project-aware harness loads it offline → byte-identical on
 run/runvm + **real PHP 8.6**. `tests/vendor.rs` drives the real git path against a **`file://` local-git
 fixture** (offline, deterministic): fetch+lock+load, idempotent re-vendor, `E-VENDOR-MISSING`.
 **Gotcha:** the example's `[require]` git URL is a documented public-style placeholder; the dep's source
 is committed under `vendor/` (Go's vendoring model), so the example runs with zero network — `rev`/`hash`
-in `phorge.lock` are the real values for the committed source. **Deferred (KNOWN_ISSUES, not regressions):**
+in `phorj.lock` are the real values for the committed source. **Deferred (KNOWN_ISSUES, not regressions):**
 transitive deps (a dep's own `[require]`); `phg build` stays single-file (won't merge `vendor/`).
 421 tests green.
 
@@ -268,7 +268,7 @@ transitive deps (a dep's own `[require]`); `phg build` stays single-file (won't 
 `docs/plans/2026-06-18-m6-web-capabilities-research.md`, design `docs/specs/2026-06-18-m6-web-design.md`).
 4 parallel research agents (raw in `docs/research/m6/raw/`) + a 30/8 3C gate converged on: **the portable
 unit is `handle(Request) -> Response` at the VALUE level** (PSR-7/15 — the socket/superglobal bridge is
-runtime glue, NOT transpiled 1:1; only `handle` round-trips); **Shape A** (pure-Phorge `Request`/`Response`
+runtime glue, NOT transpiled 1:1; only `handle` round-trips); **Shape A** (pure-Phorj `Request`/`Response`
 classes) is the ONE public API ("do both?" resolved to one-API/evolving-engine — a native header map is a
 later invisible optimization, not a 2nd API); **single-threaded is FORCED** by the `Rc`-shared heap (`Value`
 isn't `Send`), real concurrency = M6 green-threads under an unchanged contract; socket quarantined in a future
@@ -279,7 +279,7 @@ PHP front-controller + docs**. **M6 W0 COMPLETE** (`446bcb9`, `docs/specs/2026-0
 byte-count/`concat`/`slice` clamped) — **no new `Op`** (literal via `Op::Const`, interop via `Op::CallNative`,
 `==` via `Op::Eq`); erases to PHP `string`; `examples/guide/bytes.phg` byte-identical on run/runvm/**real PHP**.
 **M6 W1 COMPLETE** (`docs/specs/2026-06-18-m6-w1-handler-design.md`): the portable `handle(Request) ->
-Response` model in **pure Phorge** — `Request`/`Response` classes + `parse_request(bytes) -> Request?` +
+Response` model in **pure Phorj** — `Request`/`Response` classes + `parse_request(bytes) -> Request?` +
 `serialize_response(Response) -> bytes`, bodies are `bytes`, headers as `List<string>` raw lines with a
 `req.header(name)` linear-scan accessor (the method-call API is the one public surface; typed `Header`
 deferred to S3). Two new natives (**no new `Op`** — both `Op::CallNative`): `bytes.find(bytes,bytes) ->
@@ -287,10 +287,10 @@ int?` (CRLFCRLF boundary; `find(h,b"")`=0 per PHP `strpos`) and `text.split_once
 List<string>` (robust `Name: value`; → PHP `explode($sep,$s,2)`). `examples/web/handler.phg` byte-identical
 run/runvm/**real PHP**. **Two transpile gotchas found + in KNOWN_ISSUES:** (1) `package Main` fns become
 *global* PHP fns → a name like `serialize` collides with a PHP builtin (renamed `serialize_response`);
-(2) PHP enforces `private` but the Phorge backends don't → externally-read promoted fields must be
+(2) PHP enforces `private` but the Phorj backends don't → externally-read promoted fields must be
 **`public`** (or use an accessor). **W2 (static exact-match router) is next.** Also this session: **the
-CLI binary was renamed `phorge` → `phg`** (`70ea75d`; package/lib/`PHORGE_*`/`.phorge` section/`phorge.toml`
-stay `phorge` — ripgrep model). See [[binary-renamed-to-phg]].
+CLI binary was renamed `phorj` → `phg`** (`70ea75d`; package/lib/`PHORJ_*`/`.phorj` section/`phorj.toml`
+stay `phorj` — ripgrep model). See [[binary-renamed-to-phg]].
 
 **M3 S3 Track A — lambdas + first-class functions + pipe `|>` — COMPLETE**
 (`docs/specs/2026-06-18-m3-s3-lambdas-pipe-design.md`, plan `docs/plans/2026-06-18-m3-s3-lambdas-pipe.md`;
@@ -389,7 +389,7 @@ sequence = Core rename✓ → **S7b** → generics-all → S4 unions → S5 → 
   closure's result AND any fault are byte-identical to the interpreter (parity discipline extended to
   control flow). **No new Op, no Value change.** Generic (same call-site unifier); erase to PHP
   `array_map`/`array_values(array_filter(…))`/`array_reduce` (note: array_map arg order swapped, reduce
-  init is Phorge's 2nd arg). `guide/higher-order.phg`; differential adds fault-parity + named-fn-ref +
+  init is Phorj's 2nd arg). `guide/higher-order.phg`; differential adds fault-parity + named-fn-ref +
   re-entrancy (map-in-reduce) cases. 432 lib + oracle + 51 integration green. See [[higher-order-natives-reentrant-vm]].
 
 **GENERICS-ALL is ACTIVE** (pace: **fully autonomous**, sub-slice by sub-slice). **Sub-slice 1 — generic
@@ -471,7 +471,7 @@ intersection is checker- + PHP-signature-only; the runtime value is always a con
 (`C & D` two classes = bottom type ∅ → `E-INTERSECT-MULTI-CLASS`; one class + interfaces is inhabitable
 and future-proofs S6 `extends`); primitive/enum/optional/function member → `E-INTERSECT-MEMBER`. **D2:
 require-agreement** — two members sharing a method with differing signatures → `E-INTERSECT-SIG` (no
-class can implement both: Phorge has no overloading *yet*). **Member access over an intersection** (the
+class can implement both: Phorj has no overloading *yet*). **Member access over an intersection** (the
 one genuinely new mechanism) searches every member (`check_method_call`/`check_member` gain an
 `Ty::Intersection` arm; `E-INTERSECT-NO-MEMBER` when none match). `instanceof` now also accepts an
 intersection *operand*. Transpiles to PHP 8.1 native `A&B`. Byte-identical run≡runvm≡**real PHP**
@@ -538,7 +538,7 @@ composition, early-return guards narrow the rest of a block) + **if-let `when` g
 to a nested `if`, no `Stmt::If.guard` field). **Primitives:** number literals (`0x`/`0b`/`0o`/`_`/`1e3`),
 bitwise `& | ^ ~ << >>` (`>>`=two `Gt`), `Console.print`, byte-safe stdlib (`Text.startsWith`/`endsWith`/
 `repeat`, `Math.round`, `List.length`). Deferred (KNOWN_ISSUES): `||`-true-side / equality-literal /
-`== null` / post-match narrowing (Phorge rejects those comparisons or has no statement-match), while-let
+`== null` / post-match narrowing (Phorj rejects those comparisons or has no statement-match), while-let
 guards; optional-return/generic-ordering natives → M4. See [[pattern-cluster-and-primitives]].
 
 **ROADMAP-COMPLETENESS AUDIT DELIVERED + decisions locked (2026-06-22)** — a one-shot 20-track (A–S+V)

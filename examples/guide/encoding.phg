@@ -11,7 +11,7 @@ import Core.Bytes;
 import Core.Encoding;
 
 function main(): void {
-    var data = Bytes.fromString("Hello, Phorge!");
+    var data = Bytes.fromString("Hello, Phorj!");
 
     // Encode to base64 and hex.
     var b64 = Encoding.base64Encode(data);

@@ -1,4 +1,4 @@
-# Phorge Architecture
+# Phorj Architecture
 
 A one-page map of the codebase. For the *rules* that keep it correct see `docs/INVARIANTS.md`; for
 the load-bearing decisions see `docs/adr/`, and for the fuller design rationale see `docs/specs/`
@@ -90,7 +90,7 @@ it is deferred to the 4th backend (`phg build`, M2.5) per the Rule of Three — 
 spec E-1.
 
 ## Decision records
-Phorge keeps architecture decisions in three complementary places:
+Phorj keeps architecture decisions in three complementary places:
 - **`docs/adr/`** — the canonical one-page **Architecture Decision Records** for the load-bearing
   decisions: the *verdict + consequences*, in Nygard format, **immutable once Accepted**. Start here.
 - **`docs/specs/`** — frozen design docs with numbered decision logs (e.g. the M2 VM design's

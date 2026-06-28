@@ -3,7 +3,7 @@ use crate::types::Ty;
 use crate::value::Value;
 
 /// HTML-escape `s` exactly as PHP's `htmlspecialchars($s, ENT_QUOTES, 'UTF-8')` does for valid UTF-8
-/// (Phorge strings are always valid UTF-8, so the invalid-byte/ENT_SUBSTITUTE path is unreachable).
+/// (Phorj strings are always valid UTF-8, so the invalid-byte/ENT_SUBSTITUTE path is unreachable).
 /// `&` MUST be replaced first — otherwise the `&` this function inserts gets double-escaped. This
 /// five-char table is THE byte-identity contract with the `php` emission below; the unit test pins it.
 fn html_escape(s: &str) -> String {

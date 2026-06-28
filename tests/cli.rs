@@ -1,6 +1,6 @@
 use std::process::Command;
 
-/// Path to the compiled `phorge` binary (Cargo sets this for integration tests).
+/// Path to the compiled `phorj` binary (Cargo sets this for integration tests).
 const BIN: &str = env!("CARGO_BIN_EXE_phg");
 
 #[test]
@@ -8,7 +8,7 @@ fn run_sample_fixture_prints_expected_output() {
     let out = Command::new(BIN)
         .args(["run", "tests/fixtures/sample.phg"])
         .output()
-        .expect("spawn phorge");
+        .expect("spawn phorj");
     assert!(out.status.success(), "exit: {:?}", out.status.code());
     assert_eq!(
         String::from_utf8_lossy(&out.stdout),
@@ -18,14 +18,14 @@ fn run_sample_fixture_prints_expected_output() {
 
 #[test]
 fn no_arguments_is_usage_error_exit_2() {
-    let out = Command::new(BIN).output().expect("spawn phorge");
+    let out = Command::new(BIN).output().expect("spawn phorj");
     assert_eq!(out.status.code(), Some(2));
 }
 
 #[test]
 fn version_flag_prints_version_exit_0() {
     for flag in ["--version", "-v"] {
-        let out = Command::new(BIN).arg(flag).output().expect("spawn phorge");
+        let out = Command::new(BIN).arg(flag).output().expect("spawn phorj");
         assert!(out.status.success(), "{flag} exit {:?}", out.status.code());
         let s = String::from_utf8_lossy(&out.stdout);
         assert!(s.starts_with("phg "), "{flag} stdout: {s}");
@@ -39,7 +39,7 @@ fn version_flag_prints_version_exit_0() {
 #[test]
 fn help_flag_prints_usage_exit_0() {
     for flag in ["--help", "-h"] {
-        let out = Command::new(BIN).arg(flag).output().expect("spawn phorge");
+        let out = Command::new(BIN).arg(flag).output().expect("spawn phorj");
         assert!(out.status.success(), "{flag} exit {:?}", out.status.code());
         let s = String::from_utf8_lossy(&out.stdout);
         assert!(s.contains("usage:"), "{flag} stdout: {s}");
@@ -55,7 +55,7 @@ fn missing_file_is_error_exit_1() {
     let out = Command::new(BIN)
         .args(["run", "tests/fixtures/does_not_exist.phg"])
         .output()
-        .expect("spawn phorge");
+        .expect("spawn phorj");
     assert_eq!(out.status.code(), Some(1));
 }
 
@@ -64,7 +64,7 @@ fn check_clean_fixture_exits_0() {
     let out = Command::new(BIN)
         .args(["check", "tests/fixtures/sample.phg"])
         .output()
-        .expect("spawn phorge");
+        .expect("spawn phorj");
     assert!(out.status.success());
     assert!(String::from_utf8_lossy(&out.stdout).contains("OK"));
 }
@@ -107,7 +107,7 @@ fn transpile_sample_exits_0_with_php() {
     let out = Command::new(BIN)
         .args(["transpile", "tests/fixtures/sample.phg"])
         .output()
-        .expect("spawn phorge");
+        .expect("spawn phorj");
     assert!(out.status.success(), "exit {:?}", out.status.code());
     assert!(String::from_utf8_lossy(&out.stdout).starts_with("<?php"));
 }
@@ -121,7 +121,7 @@ fn transpile_demo_matches_committed_php() {
     let out = Command::new(BIN)
         .args(["transpile", "examples/transpile/demo.phg"])
         .output()
-        .expect("spawn phorge");
+        .expect("spawn phorj");
     assert!(
         out.status.success(),
         "transpile exit {:?}",
@@ -143,7 +143,7 @@ fn run_reads_program_from_stdin() {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
-        .expect("spawn phorge");
+        .expect("spawn phorj");
     child
         .stdin
         .take()
@@ -171,7 +171,7 @@ import Core.Console;
 function main() -> void { Console.println("{2 * 3}"); }"#,
             ])
             .output()
-            .expect("spawn phorge");
+            .expect("spawn phorj");
         assert!(out.status.success(), "{flag} exit {:?}", out.status.code());
         assert_eq!(String::from_utf8_lossy(&out.stdout), "6\n");
     }
@@ -188,7 +188,7 @@ function main() -> void { Console.println("ok"); }"#,
     let out = Command::new(BIN)
         .args(["run", "--", path.to_str().unwrap()])
         .output()
-        .expect("spawn phorge");
+        .expect("spawn phorj");
     let _ = std::fs::remove_file(&path);
     assert!(out.status.success(), "exit {:?}", out.status.code());
     assert_eq!(String::from_utf8_lossy(&out.stdout), "ok\n");
@@ -196,7 +196,7 @@ function main() -> void { Console.println("ok"); }"#,
 
 /// Write `src` to a uniquely-named temp file so parallel tests never collide.
 fn write_temp(name: &str, src: &str) -> std::path::PathBuf {
-    let path = std::env::temp_dir().join(format!("phorge_cli_{name}.phg"));
+    let path = std::env::temp_dir().join(format!("phorj_cli_{name}.phg"));
     std::fs::write(&path, src).expect("write temp fixture");
     path
 }
@@ -206,7 +206,7 @@ fn parse_subcommand_dumps_ast_exit_0() {
     let out = Command::new(BIN)
         .args(["parse", "tests/fixtures/sample.phg"])
         .output()
-        .expect("spawn phorge");
+        .expect("spawn phorj");
     assert!(out.status.success(), "exit {:?}", out.status.code());
     assert!(String::from_utf8_lossy(&out.stdout).contains("Program"));
 }
@@ -216,7 +216,7 @@ fn lex_subcommand_dumps_tokens_exit_0() {
     let out = Command::new(BIN)
         .args(["lex", "tests/fixtures/sample.phg"])
         .output()
-        .expect("spawn phorge");
+        .expect("spawn phorj");
     assert!(out.status.success(), "exit {:?}", out.status.code());
     assert!(String::from_utf8_lossy(&out.stdout).contains("@ 1:1"));
 }
@@ -230,7 +230,7 @@ fn transpile_ill_typed_exits_1_with_type_error() {
     let out = Command::new(BIN)
         .args(["transpile", path.to_str().unwrap()])
         .output()
-        .expect("spawn phorge");
+        .expect("spawn phorj");
     let _ = std::fs::remove_file(&path);
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&out.stderr).contains("type error"));
@@ -247,7 +247,7 @@ function main() -> void { Console.println("{1 / 0}"); }"#,
     let out = Command::new(BIN)
         .args(["run", path.to_str().unwrap()])
         .output()
-        .expect("spawn phorge");
+        .expect("spawn phorj");
     let _ = std::fs::remove_file(&path);
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&out.stderr).contains("runtime error"));
@@ -264,7 +264,7 @@ function main() -> void { Console.println("{1 + 1}"); }"#,
     let out = Command::new(BIN)
         .args(["runvm", path.to_str().unwrap()])
         .output()
-        .expect("spawn phorge");
+        .expect("spawn phorj");
     let _ = std::fs::remove_file(&path);
     assert!(out.status.success(), "exit {:?}", out.status.code());
     assert_eq!(String::from_utf8_lossy(&out.stdout), "2\n");
@@ -281,7 +281,7 @@ function main() -> void { Console.println("{1 / 0}"); }"#,
     let out = Command::new(BIN)
         .args(["runvm", path.to_str().unwrap()])
         .output()
-        .expect("spawn phorge");
+        .expect("spawn phorj");
     let _ = std::fs::remove_file(&path);
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&out.stderr).contains("runtime error"));
@@ -303,7 +303,7 @@ fn per_command_help_prints_examples_exit_0() {
         let out = Command::new(BIN)
             .args([cmd, "--help"])
             .output()
-            .expect("spawn phorge");
+            .expect("spawn phorj");
         assert!(
             out.status.success(),
             "{cmd} --help exit {:?}",
@@ -326,13 +326,13 @@ fn explain_subcommand_known_and_unknown() {
     let ok = Command::new(BIN)
         .args(["explain", "E-UNKNOWN-IDENT"])
         .output()
-        .expect("spawn phorge");
+        .expect("spawn phorj");
     assert!(ok.status.success(), "explain exit {:?}", ok.status.code());
     assert!(String::from_utf8_lossy(&ok.stdout).contains("E-UNKNOWN-IDENT"));
 
     let bad = Command::new(BIN)
         .args(["explain", "E-NOPE"])
         .output()
-        .expect("spawn phorge");
+        .expect("spawn phorj");
     assert_eq!(bad.status.code(), Some(1));
 }

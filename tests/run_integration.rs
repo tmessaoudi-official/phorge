@@ -1,6 +1,6 @@
-use phorge::interpreter::interpret;
-use phorge::lexer::lex;
-use phorge::parser::Parser;
+use phorj::interpreter::interpret;
+use phorj::lexer::lex;
+use phorj::parser::Parser;
 
 /// The complete sample program from the language design spec (§6), verbatim.
 const SAMPLE: &str = r#"
@@ -39,7 +39,7 @@ function main() -> void {
 }
 "#;
 
-fn run(src: &str) -> Result<String, phorge::diagnostic::Diagnostic> {
+fn run(src: &str) -> Result<String, phorj::diagnostic::Diagnostic> {
     let tokens = lex(src).expect("lex ok");
     let prog = Parser::new(tokens).parse_program().expect("parse ok");
     interpret(&prog)

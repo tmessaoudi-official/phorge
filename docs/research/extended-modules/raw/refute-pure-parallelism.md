@@ -20,7 +20,7 @@ by the `examples/**/*.phg` glob in `tests/differential.rs` … the three-leg spi
 - `all_examples_match_between_backends` (`tests/differential.rs:991`) calls `agree(&src)` per example.
 - `agree` (`tests/differential.rs:50`) does **only** `cmd_run` vs `cmd_runvm` — `run ≡ runvm`. It never
   transpiles and never runs PHP. (Verified: `sed -n '991,1021p'` of the test body contains **no**
-  `transpile` / `run_php` / `PHORGE_REQUIRE_PHP` reference.)
+  `transpile` / `run_php` / `PHORJ_REQUIRE_PHP` reference.)
 - The PHP oracle lives in `agree_out_php` (`tests/differential.rs:378`), which is invoked only from a
   **hand-curated list** of `#[test]` functions (lines 404, 422, 438, …), each passing an explicit
   `expected` string and label. It is *not* wired to the example glob.
@@ -92,7 +92,7 @@ mechanically" framing (§9) is optimistic for the checker portion; the Medium es
 `Parallel.reduce` shipped as a strict left-fold *is literally `List.reduce`* with zero parallelism
 benefit (the fold is sequential by construction). The design's own §11-Q1 + §8-1 concede this and
 recommend Option A (drop `reduce`, ship only `map`+`forkJoin`). I concur and **strengthen it to a
-requirement**: shipping `Parallel.reduce` as a left-fold violates the philosophy-of-Phorge "no
+requirement**: shipping `Parallel.reduce` as a left-fold violates the philosophy-of-Phorj "no
 surprises" rule (a name implying a benefit it cannot deliver). It should not ship.
 
 ## R6 — [Verified] Quarantine question is N/A; no leak risk. Tier-A airtightness is moot but the gate is name-based.

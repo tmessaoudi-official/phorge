@@ -2,15 +2,15 @@
 
 ## Track summary
 
-Phorge already owns one direction of the interop bridge superbly — **Phorge → PHP transpile** is
+Phorj already owns one direction of the interop bridge superbly — **Phorj → PHP transpile** is
 first-class, byte-identity-gated against real PHP, and deploys onto any PHP host (so transpiled output
 can already sit alongside Composer/Symfony/Laravel). That is the *deploy* half of "the relationship
 TypeScript has to JavaScript." The **adoption** half — the half that actually won TypeScript — is
-almost entirely unbuilt and only loosely roadmapped as a single line item: "M8 — PHP → Phorge migration
+almost entirely unbuilt and only loosely roadmapped as a single line item: "M8 — PHP → Phorj migration
 tool (the inverse of the transpiler)." TypeScript did not win because it transpiled *to* JS; it won
 because of `allowJs` (mix `.ts` and `.js` in one project from day one), `.d.ts` declaration files +
 DefinitelyTyped (type the entire untyped npm ecosystem without touching it), `// @ts-check` + JSDoc
-(opt into checking one file at a time), and a codemod/`ts-migrate`-style automated importer. Phorge's
+(opt into checking one file at a time), and a codemod/`ts-migrate`-style automated importer. Phorj's
 *equivalent* of each of these is a distinct gap, and the current single "M8 importer" line collapses a
 half-dozen separable adoption mechanisms into one deferred milestone.
 
@@ -20,11 +20,11 @@ importability inventory (`docs/research/m8/raw/`). The parity spec already resol
 "thin PHP-interop bridge" and attributes as full runtime reflection (both interop-relevant). So this
 track is less about *discovering* the importer and more about (a) **decomposing the monolithic "M8"**
 into the genuine adoption-killer sub-capabilities, and (b) surfacing the interop mechanisms that aren't
-captured anywhere yet — the **declaration-file equivalent** (Phorge's `.d.ts`/`.stub`), **mixed
-`.php`+`.phg` projects**, **calling a real Composer package from Phorge source**, and a **raw-PHP escape
-hatch**. The philosophy lens is decisive here and prunes hard: Phorge's spine is `run ≡ runvm ≡ real
+captured anywhere yet — the **declaration-file equivalent** (Phorj's `.d.ts`/`.stub`), **mixed
+`.php`+`.phg` projects**, **calling a real Composer package from Phorj source**, and a **raw-PHP escape
+hatch**. The philosophy lens is decisive here and prunes hard: Phorj's spine is `run ≡ runvm ≡ real
 PHP` byte-identity over a *closed, statically-typed, no-`eval`* program. Any interop mechanism that
-requires executing arbitrary dynamic PHP *inside* the Phorge VM (live FFI, embedding the PHP engine,
+requires executing arbitrary dynamic PHP *inside* the Phorj VM (live FFI, embedding the PHP engine,
 runtime `require` of a Composer lib) is fundamentally incompatible with that spine and is a clean
 **reject** — the ecosystem spec already rejected these for the right reason. What survives is the
 TypeScript-shaped set: erasure-style declaration files, an offline codemod, transpile-time interop, and
@@ -35,13 +35,13 @@ roadmap decomposition) or **defer** (real but post-GA).
 
 | id | title | kind | fit | rec | milestone | effort |
 |---|---|---|---|---|---|---|
-| E-importer-stageA | PHP→Phorge importer Stage A (round-trip of our own emitted PHP) | port | strong | adopt | M8 | L |
-| E-importer-stageB | PHP→Phorge importer Stage B (idiomatic typed PHP 8) | port | strong | adopt | M8 | L |
+| E-importer-stageA | PHP→Phorj importer Stage A (round-trip of our own emitted PHP) | port | strong | adopt | M8 | L |
+| E-importer-stageB | PHP→Phorj importer Stage B (idiomatic typed PHP 8) | port | strong | adopt | M8 | L |
 | E-decl-files | Declaration-file equivalent (`.d.phg` / stub) for untyped PHP deps | new | strong | adopt | new milestone M8.5 (interop) | L |
 | E-mixed-project | Mixed `.php` + `.phg` in one project (`allowJs` analogue) | new | ok | defer | M8.5 | L |
-| E-call-composer | Call a Composer/PHP library from Phorge source (transpile-time) | new | strong | adopt | M8.5 | M |
+| E-call-composer | Call a Composer/PHP library from Phorj source (transpile-time) | new | strong | adopt | M8.5 | M |
 | E-raw-php-escape | Raw-PHP escape hatch (`php"…"` / `extern php fn`), transpile-only | new | ok | defer | M8.5 | M |
-| E-gradual-checkjs | Per-file gradual checking / `@phorge-check` opt-in on imported PHP | map | weak | reject | — | — |
+| E-gradual-checkjs | Per-file gradual checking / `@phorj-check` opt-in on imported PHP | map | weak | reject | — | — |
 | E-importer-stageC | Importer of general/dynamic PHP (eval, var-vars, `__call`) | omit | weak | reject | — | — |
 | E-php-ffi | Live PHP-engine FFI / embed PHP into the VM | omit | weak | reject | — | — |
 | E-named-args | Named arguments (importer prerequisite + own-right feature) | port | strong | adopt | M-RT / M8-prereq | M |
@@ -51,10 +51,10 @@ roadmap decomposition) or **defer** (real but post-GA).
 | E-trycatch-bridge | try/catch/throw as the PHP-interop error bridge | port | ok | defer | M3 (error-model S2) | L |
 | E-migration-report | Importer migration report (per-construct BETTER/SAME/REJECT verdict + un-importable list) | new | strong | adopt | M8 | M |
 | E-incremental-codemod | Directory-at-a-time codemod CLI (`phg import ./legacy`) with idempotent re-run | new | strong | adopt | M8 | M |
-| E-composer-manifest-bridge | `phorge.toml` ↔ `composer.json` interop (consume/emit) | map | ok | defer | M8.5 | M |
+| E-composer-manifest-bridge | `phorj.toml` ↔ `composer.json` interop (consume/emit) | map | ok | defer | M8.5 | M |
 | E-php-version-target | `--php-target=8.1\|8.2\|8.3\|8.4` transpile floor (deploy-interop) | port | strong | adopt | M9/M12 | S |
 | E-phpunit-bridge | Emit/consume PHPUnit for transpiled output (test interop) | new | ok | defer | M7-tooling | M |
-| E-namespace-fqn-interop | Map PHP `namespace`/`use` ↔ Phorge package on import | map | strong | adopt | M8 | M |
+| E-namespace-fqn-interop | Map PHP `namespace`/`use` ↔ Phorj package on import | map | strong | adopt | M8 | M |
 
 ## Rationale for ADOPT items
 
@@ -72,12 +72,12 @@ Adopt; build after M6 per the existing lock.
 adoption-killer. TypeScript's `.d.ts` + DefinitelyTyped let a TS program use the entire untyped npm
 ecosystem without porting it; PHP's de-facto equivalent already exists as **PHPStan/Psalm `.stub`
 files** (PHPDoc signatures over `vendor/` — [Verified: PHPStan Stub Files docs] ) and
-**phpstorm-stubs** for builtins. Phorge needs the same thing: a way to *declare* the typed surface of a
-Composer package (or a builtin) — a `.d.phg` of erased signatures, no bodies — so Phorge code can call
+**phpstorm-stubs** for builtins. Phorj needs the same thing: a way to *declare* the typed surface of a
+Composer package (or a builtin) — a `.d.phg` of erased signatures, no bodies — so Phorj code can call
 into it (through the transpile backend) while the checker type-checks the call. This is pure
 erasure-discipline (signatures only, erased before any backend), it leans on existing
-mechanisms Phorge already runs (`expand-before-backends`, `import type`, the `(module,name)` native
-registry), and it is what makes "use Phorge as a typed layer over an existing PHP codebase" *real*
+mechanisms Phorj already runs (`expand-before-backends`, `import type`, the `(module,name)` native
+registry), and it is what makes "use Phorj as a typed layer over an existing PHP codebase" *real*
 rather than aspirational. It is genuinely beyond plain PHP (PHP has no native declaration-file format —
 it's a tooling convention), so `kind=new`. Adopt as the headline of a dedicated interop milestone
 (M8.5) sitting beside the importer; it is independent of and complementary to Stage B.
@@ -85,11 +85,11 @@ it's a tooling convention), so `kind=new`. Adopt as the headline of a dedicated 
 **E-call-composer (M8.5, M).** The concrete payoff of declaration files: `import php Vendor\Package;`
 resolves a `.d.phg`/stub, the checker types the calls, and the **transpile backend** emits `\Vendor\…`
 calls into idiomatic PHP that runs against the real Composer autoloader. Crucially this is
-**transpile-time only** — it never tries to run Composer code inside the Phorge VM (that would shatter
+**transpile-time only** — it never tries to run Composer code inside the Phorj VM (that would shatter
 the byte-identity spine and is the rejected `E-php-ffi`). On the native VM these calls are simply
 unavailable (a clean compile error stating the symbol is PHP-backend-only), exactly as a TS program
 using a Node-only API can't run in a browser. Strong fit, modest effort once E-decl-files exists; it is
-the single most compelling "you can adopt Phorge incrementally on your existing Laravel app today" demo.
+the single most compelling "you can adopt Phorj incrementally on your existing Laravel app today" demo.
 
 **E-named-args + E-variadics (M-RT / M8-prereq, M each).** Already flagged as M8 prerequisites in the
 import design plan, and both are own-right parity features (named args is PHP 8.0; variadics is
@@ -101,7 +101,7 @@ forward into the M-RT/parity track so they're ready before the importer build st
 **E-strict-types-gate (M8, S).** The cheap, decisive eligibility rule: only `declare(strict_types=1)`
 PHP files are import-eligible (the inventory already marks this IMPORTANT — only strict-typed PHP is
 cleanly importable). Weak-typed/coercing PHP is rejected cleanly at the front door rather than
-mis-imported into something that violates Phorge's strict-types promise. Small, high-leverage, sets
+mis-imported into something that violates Phorj's strict-types promise. Small, high-leverage, sets
 honest expectations. Adopt as part of the importer's front-end.
 
 **E-migration-report (M8, M).** Migration is never 100% automatic — the adoption-killer is *trust*, and
@@ -117,7 +117,7 @@ team migrates incrementally rather than big-bang. This is how every successful m
 A/B engine. Adopt.
 
 **E-namespace-fqn-interop (M8, M).** Concrete, load-bearing mapping work: PHP `namespace Acme\Util;` +
-`use` statements must map onto Phorge's Go-shaped package/`import` model (and back, since the transpiler
+`use` statements must map onto Phorj's Go-shaped package/`import` model (and back, since the transpiler
 already emits `namespace Acme\Util { … }` brace blocks — the inverse exists). Without this the importer
 can't place imported symbols into the right packages or resolve cross-file references. Strong fit (it's
 a direct structural correspondence), and it reuses the existing loader name-mangling/de-mangling pass.
@@ -135,7 +135,7 @@ release-hardening milestones (M9/M12) where the emit surface is being audited an
 - **E-mixed-project (defer):** mixing `.php` and `.phg` in one *built* project is the literal `allowJs`
   analogue and is powerful, but it only makes sense once both the importer and declaration files exist,
   and it complicates the loader (two front-ends, one merged program). Real and on-philosophy, but
-  sequenced after the M8/M8.5 core. Fit is "ok" not "strong" because the cleaner Phorge story is
+  sequenced after the M8/M8.5 core. Fit is "ok" not "strong" because the cleaner Phorj story is
   *import once* (codemod) rather than *coexist forever*.
 - **E-raw-php-escape (defer):** a `php"…"`/`extern php fn` block that passes a literal PHP fragment
   straight through the transpiler (and is *unavailable* on the VM/interpreter) is a legitimate, bounded
@@ -143,8 +143,8 @@ release-hardening milestones (M9/M12) where the emit surface is being audited an
   marked unsafe, so it doesn't touch the byte-identity spine. Real but explicitly a power-user corner;
   defer until demand is proven.
 - **E-union-to-enum (defer):** the import design already locked "raw `T|U` stays rejected on import; map
-  to a tagged enum (the better idiom)." Now that Phorge *has* shipped real union types `A|B` (M-RT S4),
-  this mapping choice should be revisited at build time — it may be that importing PHP `A|B` to Phorge
+  to a tagged enum (the better idiom)." Now that Phorj *has* shipped real union types `A|B` (M-RT S4),
+  this mapping choice should be revisited at build time — it may be that importing PHP `A|B` to Phorj
   `A|B` is now the right move for class/interface unions, with the enum mapping reserved for
   scalar-discriminated unions. Defer the final decision to the importer build.
 - **E-trycatch-bridge (defer):** the parity spec resolved recoverable errors **Result-first**, with
@@ -164,9 +164,9 @@ release-hardening milestones (M9/M12) where the emit surface is being audited an
   byte-identity spine. The sanctioned path is the transpile backend (Composer is free there) or native
   connectors. Clean reject; this is the one place the philosophy hard-stops a tempting feature.
 - **E-gradual-checkjs (reject):** per-file *gradual/optional* typing (a `mixed`/`any` hole so untyped
-  PHP can be checked loosely in-place) is the one TS mechanism Phorge should NOT copy — the parity spec
+  PHP can be checked loosely in-place) is the one TS mechanism Phorj should NOT copy — the parity spec
   already rejected gradual typing ("punches a hole in the static + byte-identity story; PHP already IS
-  the gradual target"). The Phorge answer to "I have untyped PHP" is *declaration files* (E-decl-files)
+  the gradual target"). The Phorj answer to "I have untyped PHP" is *declaration files* (E-decl-files)
   + *import* (E-importer), not loosening the type system. Reject.
 
 Sources: [PHPStan Stub Files](https://phpstan.org/user-guide/stub-files), [php-stubs/wordpress-stubs](https://github.com/php-stubs/wordpress-stubs), [phpstan/php-8-stubs](https://github.com/phpstan/php-8-stubs)
@@ -178,7 +178,7 @@ project CLAUDE.md milestone log) and the M8 design + raw inventory before judgin
 
 ### Mis-listings (already shipped) — none
 
-Every original item is genuinely unbuilt. The **Phorge→PHP transpiler** ships and is byte-identity-gated,
+Every original item is genuinely unbuilt. The **Phorj→PHP transpiler** ships and is byte-identity-gated,
 but that is the *deploy* direction; the entire *import* direction (Stage A/B, decl-files, codemod,
 migration report) and all interop tooling (version-target, Composer bridge, PHPUnit bridge) are
 un-built. `E-named-args`/`E-variadics` are confirmed absent from FEATURES.md and KNOWN_ISSUES.md.
@@ -198,7 +198,7 @@ absent (the hazards live only as prose caveats in KNOWN_ISSUES).
 |---|---|---|---|---|---|---|
 | E-phpdoc-harvest | Harvest PHPDoc `@param`/`@return`/`@var`/`@template` type hints on import | port | strong | adopt | M8 (Stage B) | M |
 | E-attributes-import | Import `#[Attr(...)]` attributes as erased annotations (drop or map to lint) | map | ok | defer | M8 (Stage B) | S |
-| E-firstclass-callable-import | Map PHP first-class callable `f(...)` / `$o->m(...)` → Phorge fn value | map | strong | adopt | M8 (Stage B) | S |
+| E-firstclass-callable-import | Map PHP first-class callable `f(...)` / `$o->m(...)` → Phorj fn value | map | strong | adopt | M8 (Stage B) | S |
 | E-heredoc-nowdoc-import | Map heredoc `<<<EOT` → interpolated string, nowdoc `<<<'EOT'` → raw string | map | strong | adopt | M8 (Stage A/B) | S |
 | E-psr4-autoload-bridge | Consume `composer.json` `autoload.psr-4` to drive package placement on import | map | ok | defer | M8.5 | M |
 | E-transpile-hazard-lint | Transpile-interop hazard linter (`W-PHP-BUILTIN-NAME`, external-`private`-field, non-finite-float) | new | strong | adopt | M9/M12 | S |
@@ -217,12 +217,12 @@ absent (the hazards live only as prose caveats in KNOWN_ISSUES).
   only and weak-typing as the dominant gap; PhpStorm/PHPStan PHPDoc reliance is well established.]
 
 - **E-firstclass-callable-import (M8 Stage B, S).** The inventory explicitly marks first-class callable
-  `f(...)` / `$obj->m(...)` / `C::m(...)` as **importable** ("they carry a type") and core. Phorge
+  `f(...)` / `$obj->m(...)` / `C::m(...)` as **importable** ("they carry a type") and core. Phorj
   *already ships* first-class function values + `(T)->T` types (M3 S3), so this is a near-free 1:1
   mapping — the receiving feature exists, only the import arm is missing. Strong fit, small effort.
 
 - **E-heredoc-nowdoc-import (M8 Stage A/B, S).** Inventory verdict is SAME / SAME+syntax: heredoc → a
-  Phorge interpolated multi-line string (Phorge strings are already multi-line, lexer.rs:180), nowdoc →
+  Phorj interpolated multi-line string (Phorj strings are already multi-line, lexer.rs:180), nowdoc →
   a raw string. A common-enough literal form that an importer must handle to round-trip real files;
   trivial mapping onto existing string machinery. Adopt as a small Stage-A/B mapping rule.
 
@@ -240,13 +240,13 @@ absent (the hazards live only as prose caveats in KNOWN_ISSUES).
 **Rationale (new DEFER items):**
 
 - **E-attributes-import (defer):** the inventory marks most attributes erasable/diagnostics-only and a
-  few (`#[\Override]`, `#[\Deprecated]`, `#[\NoDiscard]`) as mappable to a Phorge lint. Importing them
-  means *dropping* them (safe — they're metadata) or mapping the handful with a Phorge-lint analogue.
-  Real but low-value and dependent on whether Phorge grows a native attribute/annotation surface; defer
+  few (`#[\Override]`, `#[\Deprecated]`, `#[\NoDiscard]`) as mappable to a Phorj lint. Importing them
+  means *dropping* them (safe — they're metadata) or mapping the handful with a Phorj-lint analogue.
+  Real but low-value and dependent on whether Phorj grows a native attribute/annotation surface; defer
   behind the core Stage B mappings.
 - **E-psr4-autoload-bridge (defer):** `E-namespace-fqn-interop` covers the `namespace`/`use` → package
   mapping; the *additional* signal is `composer.json`'s `autoload.psr-4` map (dir → namespace prefix),
-  which tells the importer where to place files under Phorge's folder=path model. A useful refinement of
+  which tells the importer where to place files under Phorj's folder=path model. A useful refinement of
   the namespace mapping but second-order; pair it with `E-composer-manifest-bridge` at M8.5.
 - **E-stub-distribution (defer, L):** `E-decl-files` builds the *format*; this is the *ecosystem* — a
   shared repository of community stubs for popular Composer packages (the DefinitelyTyped analogue) plus
@@ -259,9 +259,9 @@ absent (the hazards live only as prose caveats in KNOWN_ISSUES).
 The three rejects are correct and philosophy-decisive: `E-php-ffi` (drags the dynamic runtime in,
 shatters the `run≡runvm≡php` spine), `E-importer-stageC` (eval/var-vars/magic are un-importable into a
 closed no-`eval` language), and `E-gradual-checkjs` (gradual typing punches a hole in the static spine;
-PHP *is* the gradual target — the Phorge answer is decl-files + import, not `mixed` holes). One nuance
+PHP *is* the gradual target — the Phorj answer is decl-files + import, not `mixed` holes). One nuance
 worth flagging at build time (already noted by the first pass under `E-union-to-enum`): now that real
-unions `A|B` ship, the import mapping should send PHP class/interface unions to Phorge `A|B` 1:1 and
+unions `A|B` ship, the import mapping should send PHP class/interface unions to Phorj `A|B` 1:1 and
 reserve the enum mapping for scalar-discriminated unions — the original DEFER is right to leave the final
 call to the importer build.
 

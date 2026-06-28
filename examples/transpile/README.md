@@ -1,7 +1,7 @@
-# Phorge → PHP
+# Phorj → PHP
 
-Phorge can transpile to runnable **PHP 8.x**. This is the only Phorge↔PHP-ecosystem path: the
-transpiler *produces* PHP source; Phorge does **not** consume Composer/PHP packages (FFI and live
+Phorj can transpile to runnable **PHP 8.x**. This is the only Phorj↔PHP-ecosystem path: the
+transpiler *produces* PHP source; Phorj does **not** consume Composer/PHP packages (FFI and live
 transpile were rejected in the ecosystem roadmap).
 
 ```bash
@@ -9,7 +9,7 @@ phg transpile demo.phg > demo.php   # regenerate the committed output
 php demo.php                           # run it under any PHP 8.x
 ```
 
-- `demo.phg` is a normal Phorge program — it also runs on both native backends
+- `demo.phg` is a normal Phorj program — it also runs on both native backends
   (`phg run demo.phg` / `phg runvm demo.phg`) and is in the byte-identity sweep.
 - `demo.php` is the committed output of `phg transpile demo.phg`, kept in sync by a snapshot
   test (`tests/cli.rs::transpile_demo_matches_committed_php`) — regenerate it and re-commit if you

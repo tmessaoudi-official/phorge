@@ -1,4 +1,4 @@
-# Phorge M1 — Plan 6: CLI Runner (Design)
+# Phorj M1 — Plan 6: CLI Runner (Design)
 
 > Status: **frozen** (2026-06-15). Final M1 plan (6/6). Inputs: the frozen
 > language design (§6 sample) and all prior stage APIs (`lexer::lex`,
@@ -6,7 +6,7 @@
 
 ## 1. Goal
 
-`phg run file.phg` executes a Phorge program end-to-end and prints its output.
+`phg run file.phg` executes a Phorj program end-to-end and prints its output.
 The full four-stage pipeline (lex → parse → check → interpret) is exposed through
 subcommands. After this plan, M1 is complete: programs run from a file.
 
@@ -17,7 +17,7 @@ Keeping the pipeline and error rendering in the library (not `main`) makes them
 unit-testable without spawning the binary; `main` only does arg parsing, file I/O,
 printing, and exit codes. **Std only** — no argument-parsing crate.
 
-The `[[bin]] phorge` and `src/main.rs` already exist (a `lex` debug command from
+The `[[bin]] phorj` and `src/main.rs` already exist (a `lex` debug command from
 Plan 1); this plan extends them.
 
 ## 3. Commands
@@ -40,7 +40,7 @@ printed and the program is **not** executed.
   `fn(&str) -> Result<String, String>`: `Ok` = text to print verbatim, `Err` =
   rendered error message), plus private `lex_parse` / `parse_checked` helpers.
   Unit tests.
-- `src/main.rs` — rewritten as a thin dispatcher over `phorge::cli`.
+- `src/main.rs` — rewritten as a thin dispatcher over `phorj::cli`.
 - `src/lib.rs` — add `pub mod cli;`.
 - `tests/cli.rs` — subprocess smoke tests via `env!("CARGO_BIN_EXE_phg")`.
 - `tests/fixtures/sample.phg` — the verbatim §6 sample (committed fixture).
@@ -87,6 +87,6 @@ no-args → exit 2; `run` on a nonexistent file → exit 1.
 - **CLI-3** Thin `main` over a testable `cli` library module; std-only arg parsing.
 - **CLI-4** `run` type-checks first (gate); refuses to execute on type errors.
 - **CLI-5** Exit codes `0`/`1`/`2` (success / compile-or-runtime error / usage-or-IO).
-- **CLI-6** PHP converter is a **separate future milestone** (Phorge→PHP transpile
-  first; PHP→Phorge import deferred and evaluated separately) — explicitly out of
+- **CLI-6** PHP converter is a **separate future milestone** (Phorj→PHP transpile
+  first; PHP→Phorj import deferred and evaluated separately) — explicitly out of
   Plan 6 scope.

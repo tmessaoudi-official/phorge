@@ -34,7 +34,7 @@ closure's AST `body` recursively **on the native Rust call stack** and returns a
 leg has any way to pause a closure mid-body and hand control back to a scheduler while keeping the
 closure resumable.** The design *itself admits this* in §3.4(A): *"`run_until` returns a value, it
 does not leave a resumable suspended Rust frame … a genuine mid-expression suspend would need a
-Phorge-level CPS transform or a saved VM frame snapshot."*
+Phorj-level CPS transform or a saved VM frame snapshot."*
 
 So the design's own §3.4(A) refutes §3.2/§3.4's "already-shipped" framing. It then pivots to (B), CPS
 trampolining, as the v1 recommendation. But here is the contradiction that breaks Tier-A as scoped:

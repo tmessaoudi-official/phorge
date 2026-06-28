@@ -1,13 +1,13 @@
 # Examples Full-Coverage Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans (inline — subagents
-> deadlock on the ask-human gate in this repo). Steps use checkbox (`- [ ]`) syntax. Phorge git
+> deadlock on the ask-human gate in this repo). Steps use checkbox (`- [ ]`) syntax. Phorj git
 > autonomy applies (commit green, self-contained; `feat:`/`docs:`/`test:` prefixes, no
 > `Co-Authored-By`). Read `docs/specs/2026-06-16-examples-coverage-design.md` and
 > `docs/INVARIANTS.md` first.
 
 **Goal:** Add a complete, honest, runnable example set — four real-world programs, six focused
-guide programs, and a Phorge→PHP transpile demo — every runnable `.phg` byte-identical on `run`
+guide programs, and a Phorj→PHP transpile demo — every runnable `.phg` byte-identical on `run`
 and `runvm`, auto-gated by a globbing differential test.
 
 **Architecture:** Examples-only change plus one test refactor (explicit example list → recursive
@@ -15,7 +15,7 @@ and `runvm`, auto-gated by a globbing differential test.
 runnable surface (spec §2) and obeys two rules: zero-payload enum variants are constructed with
 call form `V()`, and state evolves by fresh bindings/recursion (no reassignment, no list folding).
 
-**Tech Stack:** Rust (std-only), the `phorge` CLI (`run`/`runvm`/`transpile`), `tests/differential.rs`.
+**Tech Stack:** Rust (std-only), the `phorj` CLI (`run`/`runvm`/`transpile`), `tests/differential.rs`.
 
 **Hard constraints baked into every program (verified 2026-06-16):**
 - No reassignment, no field mutation, no list indexing/destructuring → accumulate via recursion on
@@ -96,7 +96,7 @@ git commit -m "test: glob examples/ into the differential sweep (auto-gate new e
 ```
 import std.io;
 
-// A bank ledger. Phorge values are immutable, so `apply` returns a *new* Account
+// A bank ledger. Phorj values are immutable, so `apply` returns a *new* Account
 // rather than mutating in place — state evolves by binding fresh names.
 
 enum Tx {
@@ -483,7 +483,7 @@ class Car {
 }
 
 function main() {
-    Car c = Car("Phorge", Engine(250));
+    Car c = Car("Phorj", Engine(250));
     println("{c.make_of()} has {c.horsepower()} hp");
 }
 ```
@@ -552,7 +552,7 @@ function greet(string who) -> string {
 }
 
 function main() {
-    string name = "Phorge";
+    string name = "Phorj";
     int n = 3;
     float pi = 3.14;
     println("name = {name}, n = {n}, pi = {pi}");
@@ -589,7 +589,7 @@ git commit -m "docs: six focused guide examples (operators, control-flow, collec
 import std.io;
 
 // This program is also in the byte-identity sweep. `phg transpile` turns it into
-// runnable PHP 8.x — the only Phorge↔PHP-ecosystem path (output, not input).
+// runnable PHP 8.x — the only Phorj↔PHP-ecosystem path (output, not input).
 
 enum Shape {
     Circle(float r),
@@ -659,10 +659,10 @@ fn transpile_demo_matches_committed_php() {
 - [ ] **Step 1: Write it** — show the transpile command, how to run the PHP, and the honest scope:
 
 ```markdown
-# Phorge → PHP
+# Phorj → PHP
 
-Phorge can transpile to runnable **PHP 8.x**. This is the only Phorge↔PHP-ecosystem path: the
-transpiler *produces* PHP source; Phorge does not consume composer/PHP packages.
+Phorj can transpile to runnable **PHP 8.x**. This is the only Phorj↔PHP-ecosystem path: the
+transpiler *produces* PHP source; Phorj does not consume composer/PHP packages.
 
 ```bash
 phg transpile demo.phg > demo.php   # regenerate the committed output
@@ -681,7 +681,7 @@ on both native backends (`phg run` / `phg runvm`).
 - [ ] **Step 1: Write the index** — one-line-per-example listing, the coverage matrix (spec §3), the
   honest notes (`import` is decorative until M5; PHP is via transpile only), and the explicit
   not-yet-supported list (`null`, `T?`, `Map`/`Set` values, `|>`, exceptions, traits, overloading,
-  sized ints, `decimal`). Mark it as the "what Phorge can do today" page, updated as examples are
+  sized ints, `decimal`). Mark it as the "what Phorj can do today" page, updated as examples are
   added. (Content drafted at execution against the final file set so the listing is accurate.)
 
 ### Task C5: CHANGELOG + pointers, gate + commit
@@ -695,7 +695,7 @@ on both native backends (`phg run` / `phg runvm`).
 - [ ] **Step 3: Commit.**
 ```bash
 git add examples/transpile examples/README.md tests/cli.rs CHANGELOG.md docs/MILESTONES.md
-git commit -m "docs: Phorge→PHP transpile example + examples README index + coverage matrix"
+git commit -m "docs: Phorj→PHP transpile example + examples README index + coverage matrix"
 ```
 
 ---

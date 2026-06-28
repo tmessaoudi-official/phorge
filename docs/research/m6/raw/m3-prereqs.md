@@ -1,6 +1,6 @@
 # M6 Web Handler — M3 Language Prerequisites (raw findings)
 
-> Research date 2026-06-18. Question: can Phorge ship a **pure top-level `handler(Request) -> Response`**
+> Research date 2026-06-18. Question: can Phorj ship a **pure top-level `handler(Request) -> Response`**
 > on TODAY's language, dodging unbuilt M3 features? Each prerequisite checked against the actual code +
 > specs. Evidence cited as `file:line`.
 
@@ -65,9 +65,9 @@ the value-type signatures."*
   the already-built `T?`:
   `req.header(string name) -> string?`, `req.query(string name) -> string?`,
   `req.param(string name) -> string?`. The internal storage can be a **Rust-side `HashMap` inside the
-  native `Request` value** (the `core.http` native module owns the map; Phorge code never sees a
+  native `Request` value** (the `core.http` native module owns the map; Phorj code never sees a
   `Ty::Map`). This is exactly the S2 `core.file.read -> string?` pattern (a native returns an
-  optional; Phorge composes with `??`/if-let). The accessor returns `string?` and composes with the
+  optional; Phorj composes with `??`/if-let). The accessor returns `string?` and composes with the
   *fully-built* null-safety suite. **No Map type needed in v1.**
 
 ---
@@ -173,7 +173,7 @@ the value-type signatures."*
   request/response bodies** covers the overwhelming majority of web payloads (HTML, JSON, form-encoded,
   plain text — all UTF-8 / ASCII). Binary upload/download (images, gzip, multipart binary parts) is
   deferred with the `bytes` type. PHP's own `string` is a byte-string, so the transpile target is
-  *more* permissive than Phorge's UTF-8 `string` — the mapping is safe (Phorge UTF-8 ⊂ PHP byte-string).
+  *more* permissive than Phorj's UTF-8 `string` — the mapping is safe (Phorj UTF-8 ⊂ PHP byte-string).
   **Defer `bytes`; ship a text-only body contract for v1.**
 
 ---

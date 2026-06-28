@@ -4,9 +4,9 @@
 //! receive ordinary `Value::Enum { ty: "Json", … }` values.
 //!
 //! The one `eval` body per native is shared by both Rust backends (the parity guarantee). The PHP
-//! transpile of each native delegates to a `__phorge_json_*` helper (`transpile/program.rs`) that
+//! transpile of each native delegates to a `__phorj_json_*` helper (`transpile/program.rs`) that
 //! walks the same enum hierarchy — kept byte-identical with the kernels here: floats render via the
-//! shortest-round-trip positional formatter (`format!("{}")` / `__phorge_float`, NOT json's
+//! shortest-round-trip positional formatter (`format!("{}")` / `__phorj_float`, NOT json's
 //! scientific notation), strings escape to match PHP `json_encode`'s default, objects keep Map
 //! insertion order, and number decoding distinguishes `Int` from `Float` exactly as `json_decode`.
 
@@ -15,7 +15,7 @@ use crate::types::Ty;
 use crate::value::{build_map, EnumVal, HKey, Value};
 use std::rc::Rc;
 
-/// Build a `Json` enum node. `variant` is the Phorge variant name (`Null`/`Bool`/`Int`/`Float`/
+/// Build a `Json` enum node. `variant` is the Phorj variant name (`Null`/`Bool`/`Int`/`Float`/
 /// `Str`/`Arr`/`Obj`); the transpiler mangles reserved ones to PHP class names, the backends use this
 /// string directly.
 fn jnode(variant: &str, payload: Vec<Value>) -> Value {
@@ -65,7 +65,7 @@ fn key_str(k: &HKey) -> Result<&str, String> {
     }
 }
 
-/// Compact encoding — matches `__phorge_json_encode` byte-for-byte.
+/// Compact encoding — matches `__phorj_json_encode` byte-for-byte.
 fn encode(v: &Value, out: &mut String) -> Result<(), String> {
     let e = as_json(v)?;
     match (e.variant.as_str(), &e.payload[..]) {
@@ -102,7 +102,7 @@ fn encode(v: &Value, out: &mut String) -> Result<(), String> {
 }
 
 /// Pretty encoding (`JSON_PRETTY_PRINT` layout: 4-space indent, `": "` after a key, empty `[]`/`{}`
-/// inline). `indent` is the current leading-space count. Matches `__phorge_json_pretty`.
+/// inline). `indent` is the current leading-space count. Matches `__phorj_json_pretty`.
 fn encode_pretty(v: &Value, indent: usize, out: &mut String) -> Result<(), String> {
     let e = as_json(v)?;
     match (e.variant.as_str(), &e.payload[..]) {
@@ -425,7 +425,7 @@ pub(crate) fn json_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(json())),
             pure: true,
             eval: NativeEval::Pure(json_parse),
-            php: |a| format!("__phorge_json_decode({})", parg(a, 0)),
+            php: |a| format!("__phorj_json_decode({})", parg(a, 0)),
         },
         NativeFn {
             module: "Core.Json",
@@ -434,7 +434,7 @@ pub(crate) fn json_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(json_stringify),
-            php: |a| format!("__phorge_json_encode({})", parg(a, 0)),
+            php: |a| format!("__phorj_json_encode({})", parg(a, 0)),
         },
         NativeFn {
             module: "Core.Json",
@@ -443,7 +443,7 @@ pub(crate) fn json_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(json_stringify_pretty),
-            php: |a| format!("__phorge_json_encode_pretty({})", parg(a, 0)),
+            php: |a| format!("__phorj_json_encode_pretty({})", parg(a, 0)),
         },
     ]
 }

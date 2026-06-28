@@ -2,7 +2,7 @@
 """S0b return-type mandate codemod.
 
 Insert `-> void` into every `function NAME(...)` declaration that lacks a return type, across
-`.phg` sources AND inline Phorge programs embedded in Rust string literals.
+`.phg` sources AND inline Phorj programs embedded in Rust string literals.
 
 Rule (uniform): find the `function` keyword followed by `NAME(` ; depth-match the parameter list's
 parens (function-typed params like `(int) -> bool f` contain parens, so a regex won't do); then look

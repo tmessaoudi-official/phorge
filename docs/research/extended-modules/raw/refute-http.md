@@ -68,7 +68,7 @@ accurate. **Refutation failed** — `feasible_std_only` holds for the mechanism.
 
 ### 2.1 [Part B, MEDIUM] No path-based backstop — an example leaks into the differential if the impure import is omitted
 `tests/differential.rs:932 collect_phg` recurses **all** of `examples/` and excludes a `.phg` only if
-(a) it is under a `phorge.toml` project root, or (b) `uses_impure_native(src)` is true (import-driven).
+(a) it is under a `phorj.toml` project root, or (b) `uses_impure_native(src)` is true (import-driven).
 There is **no `examples/web/` path exclusion**. Verified: the existing `examples/web/{handler,router,
 json-api,server}.phg` are gated *today* precisely because they are pure (canned `b"…"` requests, pure
 imports) — `server.phg` is socket-*themed* but its `main()` is pure, so it correctly runs in the
@@ -116,7 +116,7 @@ the full import-mapped path, not the bare leaf.
 ### 2.4 [Part A, LOW] `Http.json` float divergence is inherited, not eliminated — examples must self-restrict
 The design (cross-cutting #3) correctly notes the `Core.Json` float-extreme divergence (KNOWN_ISSUES) is
 inherited. This is honest, but it means a gated `examples/web/responses.phg` that puts a non-exactly-
-representable float in a JSON body **will break the three-leg byte-identity** (Rust `__phorge_float` Ryū
+representable float in a JSON body **will break the three-leg byte-identity** (Rust `__phorj_float` Ryū
 vs PHP 14-digit `echo`/`json_encode`). The design says "examples keep to exactly-representable values" —
 this is a real constraint the example author must honor, and it narrows what a Part-A "showcase" can
 demonstrate (no `1.0/3.0` in a response body). Not a refutation of the tier, but a real limit on the

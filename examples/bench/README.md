@@ -1,7 +1,7 @@
 # Profiling example — `workload.phg`
 
-A focused workload for measuring the two M2 backends, plus a guide to **how** Phorge collects the
-time and memory numbers. (Phorge the language has no clock or syscall surface — `println` is the only
+A focused workload for measuring the two M2 backends, plus a guide to **how** Phorj collects the
+time and memory numbers. (Phorj the language has no clock or syscall surface — `println` is the only
 builtin — so a `.phg` program *cannot* profile itself. All measurement lives in the Rust `bench`
 tool; this page documents that mechanism.)
 
@@ -34,7 +34,7 @@ seconds — that's the sampling cost, not the program's runtime.
 `phg bench --vs-php <file>` adds a head-to-head against the **PHP backend**: it transpiles the
 program to PHP, runs it once to **gate output identity** (a transpile divergence aborts the
 comparison — it's a bug report, not a timing result), then median-times `php <file>` the same way.
-The report gains a `vs PHP` section naming the faster of the Phorge VM and PHP. Requires `php` on
+The report gains a `vs PHP` section naming the faster of the Phorj VM and PHP. Requires `php` on
 PATH; absent it, the section is a graceful skip note.
 
 A representative run on this workload (`fib(18)` + 1000-instance allocation):
@@ -46,7 +46,7 @@ verdict: vm run is 7.48× faster than tree-walk run
 
 vs PHP — PHP 8.6.0-dev (cli)
   php run       38.519 ms  (spawns a process per sample)
-  winner: Phorge (vm) — 3.23× faster than PHP (38.519 ms → 11.910 ms)
+  winner: Phorj (vm) — 3.23× faster than PHP (38.519 ms → 11.910 ms)
 ```
 
 **Read it honestly:** this is the Rust bytecode VM vs the PHP interpreter on the *same algorithm* —

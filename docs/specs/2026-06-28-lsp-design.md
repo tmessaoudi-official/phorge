@@ -1,4 +1,4 @@
-# Phorge LSP — design (Item D)
+# Phorj LSP — design (Item D)
 
 > Status: **design-first** 2026-06-28; scope forks awaiting the developer. Finishes GA rock 2
 > (daily-use tooling). Builds on `phg check --json` (structured diagnostics already emitted) and the
@@ -6,7 +6,7 @@
 
 ## Goal
 
-A minimal **Language Server** so editors (VSCode, PhpStorm, Neovim, …) show Phorge diagnostics inline
+A minimal **Language Server** so editors (VSCode, PhpStorm, Neovim, …) show Phorj diagnostics inline
 as you type — the single highest-leverage IDE feature. One server, many thin editor clients (the LSP
 contract). The server reuses the *exact* checker the CLI uses, so editor diagnostics ≡ `phg check`.
 
@@ -19,7 +19,7 @@ An LSP server is **not** a security-critical primitive, so the dependency policy
 - **Transport**: LSP base protocol over **stdio** — `Content-Length: N\r\n\r\n<json>` framing, read
   from stdin / write to stdout. (The LSP standard; editors all support stdio. No socket in v1.)
 - **JSON**: reuse the project's existing hand-rolled JSON emit (the `diagnostics_json` / `to_json`
-  path) for responses, and a **minimal std JSON *parser*** for incoming requests — Phorge has no JSON
+  path) for responses, and a **minimal std JSON *parser*** for incoming requests — Phorj has no JSON
   parser for arbitrary input yet (`Core.Json` is the *language's* parser, not usable internally). A
   small, total, std-only request parser (object/string/number/array, enough for LSP message bodies) is
   the one genuinely new internal piece. It is **internal tooling, not on the byte-identity spine** —
@@ -38,11 +38,11 @@ core message set is small).
   uses, via `on_deep_stack`), collect errors + warnings, map to LSP `Diagnostic[]`, send
   `textDocument/publishDiagnostics`. A parse/lex error maps to a single diagnostic at its span.
 - **Document sync**: **full** (the client sends the whole text on each change). Simplest, correct, and
-  fine for Phorge file sizes; incremental sync is a v2 optimization.
+  fine for Phorj file sizes; incremental sync is a v2 optimization.
 
 ## Diagnostic mapping (checker → LSP)
 
-| Phorge `Diagnostic` | LSP |
+| Phorj `Diagnostic` | LSP |
 |---------------------|-----|
 | `line`/`col` (1-based) | `range.start` (0-based: `line-1`, `col-1`); `range.end` = start + token length (v1: a 1-char or word range — the struct flattens span to a point, so v1 highlights from the caret) |
 | error vs warning | `severity` 1 (Error) / 2 (Warning) |

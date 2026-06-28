@@ -1,6 +1,6 @@
 # Roadmap Completeness Review — Plan
 
-> A single comprehensive research + brainstorming pass to **find every gap** in Phorge's
+> A single comprehensive research + brainstorming pass to **find every gap** in Phorj's
 > roadmap/milestones and **lock each into the planning docs**, so gaps stop being discovered ad hoc.
 > Developer-requested 2026-06-21: *"I keep detecting missing things (class private, error handling,
 > missing PHP features, beyond-PHP game-changers, small DX/syntax wins). Capture everything and lock
@@ -10,15 +10,15 @@
 - [2026-06-21] AGREED: run **one definitive roadmap-completeness review** (supersedes the narrower
   `php-parity-review`, which becomes Track A of this). Goal: an exhaustive, triaged gap list folded
   into `ROADMAP.md` / `docs/MILESTONES.md` + a consolidated spec, so the developer stops finding gaps
-  one at a time. See [[php-parity-review]], [[ga-roadmap-spec-m7-next]], [[philosophy-of-phorge]].
+  one at a time. See [[php-parity-review]], [[ga-roadmap-spec-m7-next]], [[philosophy-of-phorj]].
 - [2026-06-21] SCOPE LOCKED — **19 tracks (A–S + V)**. The tracks are the *search space*; at run time
   each gets parallel research agents + a completeness-critic loop that enumerates the exhaustive item
   list and cross-checks against shipped features (FEATURES/KNOWN_ISSUES/docs) so nothing is re-listed.
-  - **A — PHP parity:** every PHP language/stdlib feature Phorge lacks → port / map / omit (+reason).
+  - **A — PHP parity:** every PHP language/stdlib feature Phorj lacks → port / map / omit (+reason).
     Incl. PHP 8.3/8.4 recents (typed class constants, `#[\Override]`, asymmetric visibility
     `private(set)`, readonly classes, DNF types, `json_validate`), magic methods, backed enums,
     generators/`yield`, references `&`, late static binding, `declare(strict_types)`, streams.
-  - **B — Beyond-PHP game-changers** (TS:JS-over-PHP; judged vs [[philosophy-of-phorge]]): deeper
+  - **B — Beyond-PHP game-changers** (TS:JS-over-PHP; judged vs [[philosophy-of-phorj]]): deeper
     pattern matching, ADTs, generic bounds/variance/generic-enums, Result/Option, structured
     concurrency (async/channels/actors), design-by-contract, derive-serialization, persistent
     collections, typestate, refinement types/units, comptime/macros, TCO, reactive primitives.
@@ -27,9 +27,9 @@
     replay debugging, sharper diagnostics, common-mistake messages.
   - **D — Consolidate already-found gaps:** visibility (DONE), error-handling/traces (IN PROGRESS),
     promotable KNOWN_ISSUES deferrals.
-  - **E — PHP interop & migration (the adoption killer, *how TypeScript won*):** gradual PHP→Phorge
-    migration, a PHP→Phorge codemod/importer, calling existing Composer/PHP libs, mixing `.php`+`.phg`,
-    Phorge as a typed layer over an existing PHP codebase.
+  - **E — PHP interop & migration (the adoption killer, *how TypeScript won*):** gradual PHP→Phorj
+    migration, a PHP→Phorj codemod/importer, calling existing Composer/PHP libs, mixing `.php`+`.phg`,
+    Phorj as a typed layer over an existing PHP codebase.
   - **F — Tooling & ecosystem maturity (1.0):** LSP, formatter, package registry/publishing, docs
     site, web playground, debugger, test framework+coverage, profiler, editor extensions, CI.
   - **G — Real-world "batteries":** HTTP server (M6)+client, DB/PDO, env/config, logging, CLI
@@ -59,7 +59,7 @@
   - **S — Governance / release / stability (GA M12):** semver + stability policy, deprecation policy,
     an **editions mechanism** (Rust-style), RFC process, backwards-compat guarantees.
   - **V — Competitive analysis (cross-cutting):** mine TypeScript, Hack, Kotlin, Swift, Rust, Go,
-    Gleam, Roc, Elixir for adoption lessons and map onto Phorge.
+    Gleam, Roc, Elixir for adoption lessons and map onto Phorj.
 - [2026-06-21] METHOD: a **multi-agent workflow** (workflow opt-in already standing from the
   php-parity-review) — parallel web-research tracks (PHP docs/RFCs, TS/Hack/other transpiled langs,
   modern-language DX surveys) × a **completeness-critic loop** (keep finding until N dry rounds) ×

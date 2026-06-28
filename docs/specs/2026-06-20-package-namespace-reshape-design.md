@@ -27,19 +27,19 @@ overloading **four distinct concepts**:
 |---|---|---|
 | **A** | lexical **namespace qualifier** (prefixes names → PHP `namespace`) | the keyword |
 | **B** | **source-grouping unit** (folder = path, dir-mapped) | the keyword |
-| **C** | **distributable / dependency unit** (git dep, `vendor/`, manifest) | `phorge.toml` `name` |
+| **C** | **distributable / dependency unit** (git dep, `vendor/`, manifest) | `phorj.toml` `name` |
 | **D** | **runnable-entry marker** | `package Main` |
 
 The mature-language lesson is that **nobody uses one word for A+B+C**: Go splits `package` (A+B) +
 `module` (C); Rust splits `mod` (A) + `crate` (B+C). And the languages that *enforce folder=path*
 (Go, Java, Python) call the unit a **package/module**, never a **namespace** — `namespace` (PHP, C#)
-is reserved for the *path-independent, multi-per-file* construct, which is exactly what Phorge
-forbids. So Phorge's construct **is** a Go-style package, not a PHP namespace.
+is reserved for the *path-independent, multi-per-file* construct, which is exactly what Phorj
+forbids. So Phorj's construct **is** a Go-style package, not a PHP namespace.
 
 Key clarification on the cross-OS angle: **PHP-the-language is case-insensitive** for
 namespaces/classes; PHP's famous cross-OS case bug lives in **Composer's PSR-4 autoloader**
-(case-sensitive file lookup on Linux). **Phorge emits a single brace-namespaced file with no
-autoloader**, so the *output* is immune; the only case concern is Phorge's own `.phg` loader, which
+(case-sensitive file lookup on Linux). **Phorj emits a single brace-namespaced file with no
+autoloader**, so the *output* is immune; the only case concern is Phorj's own `.phg` loader, which
 we control — hence we can pick and enforce any source convention for free.
 
 ---
@@ -48,10 +48,10 @@ we control — hence we can pick and enforce any source convention for free.
 
 ### D1 — Keep the keyword `package`; rename the manifest's distributable to `module`
 The construct is Go-shaped (folder=path, dir-mapped, `Main` entry), so `package` is the accurate
-term; `namespace` would imply PHP's looseness Phorge forbids and orphan the entry marker. The TS:JS
-contract (Phorge's own model) does **not** require source-keyword == target-keyword — TS keeps
+term; `namespace` would imply PHP's looseness Phorj forbids and orphan the entry marker. The TS:JS
+contract (Phorj's own model) does **not** require source-keyword == target-keyword — TS keeps
 `interface`/`type`/`enum` and lowers them — so emitting PHP `namespace A\B {}` from a `package`
-keyword is correct, not dishonest. The real wart (the word `package` colliding with `phorge.toml`'s
+keyword is correct, not dishonest. The real wart (the word `package` colliding with `phorj.toml`'s
 `name = "vendor/package"`) is fixed at the **manifest** layer: the distributable becomes a
 **`module`** (Go's `go.mod` split — `package` = code unit, `module` = distributable).
 
@@ -81,9 +81,9 @@ merge into one package).
 
 **Accepted tradeoff (D5a):** PascalCase packages visually overlap PascalCase types
 (`StringUtil` can be both a package leaf and a type — `StringUtil.StringUtil`). This is a
-*readability* cost, **not** a correctness one: Phorge has **no static methods**, so `X.member` is
+*readability* cost, **not** a correctness one: Phorj has **no static methods**, so `X.member` is
 always a package/value member, `X(...)` is a constructor, `X x` is a type position — grammar position
-disambiguates. Go avoids the overlap by lowercasing packages; Phorge accepts it for the clean 1:1
+disambiguates. Go avoids the overlap by lowercasing packages; Phorj accepts it for the clean 1:1
 PHP mapping, plus a guard (D5b).
 
 **D5b — guard:** a type name may not equal an in-scope **import leaf** (extends the
@@ -97,7 +97,7 @@ PHP mapping, plus a guard (D5b).
 These follow the Go-shaped model; override at build time if desired.
 
 - **Exports / visibility:** all top-level items in a package are exported (no package-private yet).
-  Revisit if access control is wanted (Go uses capitalization; Phorge's identifier casing is already
+  Revisit if access control is wanted (Go uses capitalization; Phorj's identifier casing is already
   spoken for by D5, so a future `private`/`pub` keyword would be the route).
 - **Imports:** leaf-qualified (`import Acme.StringUtil;` → call `StringUtil.fn()`), with `as`
   aliasing (already shipped). No glob/wildcard imports; no importing a single member
@@ -115,7 +115,7 @@ Breaking, wide-blast: rename keyword usages + entry (`package Main` → `package
 all type names and camelCase all functions/vars in every `.phg`, fixture, and inline test program;
 **migrate the shipped stdlib API** to camelCase (`split_once`→`splitOnce`, `bool_attr`→`boolAttr`,
 `void_el`→`voidEl`, `from_string`→`fromString`, `split_once`, etc.) — a public-surface break;
-rename `phorge.toml` `name` → `module`; update loader type-mangling for cross-package types; add
+rename `phorj.toml` `name` → `module`; update loader type-mangling for cross-package types; add
 `E-PKG-CASE` + the D5b type-vs-leaf guard; update FEATURES/CHANGELOG/KNOWN_ISSUES/README + every
 spec that shows a package decl. The byte-identity spine (`run≡runvm≡php`) must stay green throughout
 (rename-only changes are output-preserving, so the differential harness is the safety net).
@@ -128,7 +128,7 @@ needed; this is **not** a single-sitting change.
 ## 5. Suggested build order (each slice independently green)
 
 1. **Manifest `name` → `module`** (C-word fix) — smallest, isolated. ✅ **DONE** — `Manifest.module`
-   (struct + parser key + error messages + `namespace_root`), `phorge.toml` `module = …`, all manifest/
+   (struct + parser key + error messages + `namespace_root`), `phorj.toml` `module = …`, all manifest/
    loader/project/vendor fixtures + example projects migrated; lockfile `name` (dependency coordinate)
    and the `[require]` keys unchanged; 471 tests green, PHP oracle ran, clippy + fmt clean.
 2. **Casing enforcement** (`E-PKG-CASE` for segments + identifier-casing lint) + migrate all `.phg` /

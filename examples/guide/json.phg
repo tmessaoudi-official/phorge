@@ -32,7 +32,7 @@ function shapeOf(Json j): string {
 function main(): void {
     // Build a JSON document with the enum constructors.
     Json doc = new Obj([
-        "name" => new Str("phorge"),
+        "name" => new Str("phorj"),
         "stars" => new Int(42),
         "ratio" => new Float(0.5),
         "tags" => new Arr([new Str("lang"), new Str("php")]),

@@ -11,8 +11,8 @@ machinery.
 
 ## Core decisions
 
-1. **Pure-Phorge prelude + one native clock seam.** Everything except *reading the wall clock* is
-   expressed as ordinary Phorge classes/functions in an **injected prelude** (mirrors
+1. **Pure-Phorj prelude + one native clock seam.** Everything except *reading the wall clock* is
+   expressed as ordinary Phorj classes/functions in an **injected prelude** (mirrors
    `inject_http_prelude` / `inject_regex_prelude`). Because the prelude is run through the *same*
    transpiler as user code, its calendar + formatting math becomes PHP automatically and is
    byte-identical on `run`/`runvm`/real-PHP **by construction** — zero hand-rolled-PHP divergence risk.
@@ -30,7 +30,7 @@ machinery.
 
 4. **Integer epoch-millis is the canonical representation.** `Instant` wraps `int millis`; `Duration`
    wraps `int millis`. Calendar math uses days-since-epoch via Hinnant's truncating-division-safe
-   `days_from_civil` / `civil_from_days` (validated: Phorge int `/` = truncate-toward-zero = PHP
+   `days_from_civil` / `civil_from_days` (validated: Phorj int `/` = truncate-toward-zero = PHP
    `intdiv`, so the algorithm ports verbatim). No floats anywhere → no rounding divergence.
 
 5. **No new `Op`, no new `Value`.** The prelude is classes (`Value::Instance`); the clock is
@@ -71,19 +71,19 @@ class`), and `Instant` already *is* the point in time. So the civil fields live 
 - static `Instant.ofCivil(y, mo, d, h, mi, s) -> Instant` (UTC fields → instant)
 - accessors `year`/`month`/`day`/`dayOfWeek`/`hour`/`minute`/`second`/`millis`/`millisOfDay` (UTC)
 - `toIso() -> string` → `YYYY-MM-DDTHH:MM:SSZ` (zero-padded, always `Z`, second resolution)
-- a printf-style `format(pattern)` was **dropped**: Phorge has first-class string interpolation, so
+- a printf-style `format(pattern)` was **dropped**: Phorj has first-class string interpolation, so
   custom layouts are just `"{i.day()}/{i.month()}/{i.year()}"` — no pattern mini-language needed.
 
 ## Native registry (`Core.Time`, new `src/native/time.rs`)
 
 | name | sig | eval | php |
 |------|-----|------|-----|
-| `nowMillis` | `() -> int` | read frozen-or-wall clock | `__phorge_now_millis()` |
-| `freeze` | `(int) -> void` | set frozen millis | `__phorge_now_freeze($0)` |
-| `unfreeze` | `() -> void` | clear frozen | `__phorge_now_unfreeze()` |
+| `nowMillis` | `() -> int` | read frozen-or-wall clock | `__phorj_now_millis()` |
+| `freeze` | `(int) -> void` | set frozen millis | `__phorj_now_freeze($0)` |
+| `unfreeze` | `() -> void` | clear frozen | `__phorj_now_unfreeze()` |
 
 `pure: false` (the unfrozen result depends on wall-clock). The PHP helpers are emitted via the existing
-runtime-helper injection path (same mechanism as `__phorge_rng_*`). A `static $__phorge_clock` holds the
+runtime-helper injection path (same mechanism as `__phorj_rng_*`). A `static $__phorj_clock` holds the
 frozen value.
 
 ## Slices (each ships green + byte-identical + guide example + conformance + docs)
@@ -97,8 +97,8 @@ frozen value.
 
 ## Verification
 
-Per slice: `cargo test --workspace`, `PHORGE_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php
-PHORGE_REQUIRE_PHP=1 cargo test --workspace` (3-way oracle), `cargo clippy --all-targets`,
+Per slice: `cargo test --workspace`, `PHORJ_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php
+PHORJ_REQUIRE_PHP=1 cargo test --workspace` (3-way oracle), `cargo clippy --all-targets`,
 `cargo fmt --check`. The example glob in `tests/differential.rs` gates each new `examples/guide/*.phg`.
 
 ## Deferred (KNOWN_ISSUES)

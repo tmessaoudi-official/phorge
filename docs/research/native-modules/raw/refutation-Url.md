@@ -6,7 +6,7 @@ function of string input," byte-identical across `run` / `runvm` / real-PHP-8.5 
 **Verdict:** The claim **largely survives** adversarial review. `determinism_holds = true` for the
 codec/query slice. No hidden non-determinism (no clock, entropy, addresses, object-ids, float
 formatting, locale) exists in this module — those classes are genuinely absent because every output
-is a pure function of a string and a Phorge `Value::Map` (insertion-ordered `Rc<Vec<(HKey,Value)>>`).
+is a pure function of a string and a Phorj `Value::Map` (insertion-ordered `Rc<Vec<(HKey,Value)>>`).
 Empirical re-verification against **PHP 8.5.7 under `php -n`** confirms the spike's load-bearing PHP
 claims. However, I found **three under-specified landmines** that are byte-divergence risks *if the
 implementation follows the transpile table literally* rather than the "own the helper" discipline. None
@@ -22,7 +22,7 @@ the parse/build slice and flag the decode contract specifically.
 | `rawurlencode` unreserved = `A-Za-z0-9-_.~`, space→`%20`, `~` kept, uppercase hex | `rawurlencode("~-._ /+&=A z9")` → `~-._%20%2F%2B%26%3DA%20z9`; `rawurlencode("/?#[]")` → `%2F%3F%23%5B%5D` (UPPER) | ✅ |
 | `http_build_query(...,PHP_QUERY_RFC3986)` does NOT sort, preserves insertion order | `["b"=>"2","a"=>"1"]` → `b=2&a=1` | ✅ (prior-art "sorted keys" is indeed WRONG) |
 | RFC3986 flag → `rawurlencode` semantics (space→`%20`, `~` kept) | `["k"=>"a b","t"=>"~"]` → `k=a%20b&t=~` | ✅ |
-| `rawurldecode` is lenient (passes bad `%` through) | `rawurldecode("a%2")`→`"a%2"`, `rawurldecode("%ZZ")`→`"%ZZ"`, `rawurldecode("a+b")`→`"a+b"` (plus stays plus) | ✅ — a strict Phorge decoder genuinely diverges from bare `rawurldecode`; the gated helper is mandatory, not optional |
+| `rawurldecode` is lenient (passes bad `%` through) | `rawurldecode("a%2")`→`"a%2"`, `rawurldecode("%ZZ")`→`"%ZZ"`, `rawurldecode("a+b")`→`"a+b"` (plus stays plus) | ✅ — a strict Phorj decoder genuinely diverges from bare `rawurldecode`; the gated helper is mandatory, not optional |
 | `parse_url` returns `bool(false)` on malformed; do not transpile to it | (accepted from spike; the leniency class is real and version-drifting) | ✅ |
 | `parse_str` bracket / `.`→`_` magic — must not replicate | (accepted; own `parseQuery`) | ✅ |
 | Byte-level encoding (operate on `&[u8]`, not `chars()`) | `rawurlencode("é")`→`%C3%A9` (per-UTF-8-byte) | ✅ — matches a Rust `&[u8]` loop exactly |
@@ -44,7 +44,7 @@ invariant), so `String::from_utf8(decoded_bytes)` failing → `None` is natural.
 The PHP gated helper has **no such free invariant** — PHP strings are byte strings and hold invalid
 UTF-8 happily (verified: `rawurldecode("%FF")` → a 1-byte string `0xFF`, `strlen`=1). So the helper
 **must explicitly detect invalid UTF-8** to return `null` byte-identically. The spike's transpile table
-(`__phorge_url_decode`) says "mirror Rust strictness" but never names the detection mechanism. Under
+(`__phorj_url_decode`) says "mirror Rust strictness" but never names the detection mechanism. Under
 `php -n` the only *guaranteed-core* mechanism is **PCRE `preg_match('//u', $s)`** (PCRE is core — verified
 `preg_match` present). `mb_check_encoding` happens to be present on *this* build but mbstring is NOT
 guaranteed compiled-in on every `php -n` (KNOWN: the oracle assumes only PHP core + compiled-in ext;
@@ -60,7 +60,7 @@ fix is trivial (use `preg_match('//u', $s) === 1`), but it is a real, must-pin d
 `http_build_query` silently **drops `null` values** and coerces `true`→`1`, `false`→`0` (verified:
 `["n"=>5,"f"=>1.5,"b"=>true,"x"=>false,"z"=>null]` → `n=5&f=1.5&b=1&x=0` — `z` is GONE). The spike scopes
 `buildQuery` to `Map<string,string>`, which sidesteps this entirely — *as long as the checker actually
-enforces the `string` value type*. But Phorge `Value::Map` can hold any `Value`, and a generic-erased or
+enforces the `string` value type*. But Phorj `Value::Map` can hold any `Value`, and a generic-erased or
 `Map<string, V>` caller could smuggle a non-string in. If a `Value::Null` ever reaches the transpiled
 `http_build_query`, the Rust `eval` (which would need its own null-handling) and PHP **must agree** that
 the pair is dropped — and a naive Rust `eval` that emits `k=` would diverge. → The native's checker
@@ -71,13 +71,13 @@ scope creeps.
 ## Landmine 3 (NAMED, low/structural) — PHP array integer-key normalization (does NOT bite buildQuery, but bites any Map round-trip)
 
 PHP arrays auto-cast numeric-string keys to ints: `["10"=>"x"]` has key `int(10)` (verified
-`array_keys` → `int(10)`, `int(2)`, `"abc"`). Phorge `HKey::from_value` keeps `Str("10")` as a **string**
+`array_keys` → `int(10)`, `int(2)`, `"abc"`). Phorj `HKey::from_value` keeps `Str("10")` as a **string**
 (verified `src/value.rs` `from_value`: `Value::Str(s) => HKey::Str(...)`, no numeric cast). For
 `buildQuery` this is **harmless** — the emitted *text* is `10=x` either way and insertion order is
 preserved on both sides (verified `["z","5","a"]` insertion order survives `http_build_query`). **But**
 the spike's slice-2 `Url` struct and any future "return a Map" API (e.g. `parseQuery` returning a Map that
-is then printed or compared) must never assume PHP-side and Phorge-side keys are the *same type* — a
-`parseQuery("10=x")` result Map would have a `Str("10")` key in Phorge and, if the gated helper builds a
+is then printed or compared) must never assume PHP-side and Phorj-side keys are the *same type* — a
+`parseQuery("10=x")` result Map would have a `Str("10")` key in Phorj and, if the gated helper builds a
 PHP array, an `int(10)` key in PHP. They only stay byte-identical because (a) `parseQuery` is owned by a
 gated helper that should build the array with **string keys forced** (`$r["$k"] = $v` does NOT prevent the
 cast — PHP *always* casts numeric-string array keys; the only safe rep is to NOT round-trip the Map

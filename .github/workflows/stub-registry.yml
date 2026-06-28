@@ -4,10 +4,10 @@
 # archives); this workflow adds the cross stubs + a manifest-baked Linux primary used for cross-builds.
 #
 # Two passes break the stub<->manifest circularity (design docs/specs/2026-06-17-m2.5-phase3a-…):
-#   1. build the 4 cross stubs with PHORGE_BAKE_STUB_MANIFEST UNSET  -> their bytes are manifest-
+#   1. build the 4 cross stubs with PHORJ_BAKE_STUB_MANIFEST UNSET  -> their bytes are manifest-
 #      independent, so their sha256 is stable;
 #   2. hash each stub, write the manifest, then build the x86_64-linux primary with
-#      PHORGE_BAKE_STUB_MANIFEST=<that manifest>  -> the released primary carries the manifest.
+#      PHORJ_BAKE_STUB_MANIFEST=<that manifest>  -> the released primary carries the manifest.
 # No secrets: unsigned cross stubs need no certs; publishing uses the Actions GITHUB_TOKEN. Signing
 # (--sign) and the macOS stub are Phase 3b.
 name: stub-registry
@@ -48,7 +48,7 @@ jobs:
           version: ${{ env.ZIG_VERSION }}
       - name: Install cargo-zigbuild
         run: cargo install --locked cargo-zigbuild
-      # PHORGE_BAKE_STUB_MANIFEST is intentionally UNSET here (empty manifest -> stable stub bytes).
+      # PHORJ_BAKE_STUB_MANIFEST is intentionally UNSET here (empty manifest -> stable stub bytes).
       - name: Build stub
         run: cargo zigbuild --release --bin phg --target ${{ matrix.target }}
         env:
@@ -107,7 +107,7 @@ jobs:
         run: cargo build --release --bin phg --target x86_64-unknown-linux-gnu
         env:
           RUSTFLAGS: "--cap-lints=warn"
-          PHORGE_BAKE_STUB_MANIFEST: stub_manifest.txt
+          PHORJ_BAKE_STUB_MANIFEST: stub_manifest.txt
       - name: Stage the primary
         shell: bash
         run: |

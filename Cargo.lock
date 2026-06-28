@@ -146,7 +146,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "phorge"
+name = "phorj"
 version = "0.5.0-alpha.1"
 dependencies = [
  "argon2",
@@ -154,10 +154,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "phorge-playground"
+name = "phorj-playground"
 version = "0.1.0"
 dependencies = [
- "phorge",
+ "phorj",
  "serde_json",
  "wasm-bindgen",
 ]

@@ -2,7 +2,7 @@
 //! literal `19.99d` covers source constants; `Decimal.of(s)` covers dynamic/string input (parsed
 //! input, config values), returning `decimal?` so a malformed or out-of-range string is a clean
 //! `null` (composes with S2 `??`). Parsing is single-sourced in `value::decimal_of`, mirrored by the
-//! PHP `__phorge_dec_of` PCRE helper (set in `transpile::emit_member_call`, the gated-helper pattern).
+//! PHP `__phorj_dec_of` PCRE helper (set in `transpile::emit_member_call`, the gated-helper pattern).
 
 use super::*;
 use crate::types::Ty;
@@ -65,9 +65,9 @@ pub(crate) fn decimal_natives() -> Vec<NativeFn> {
             ret: Ty::Optional(Box::new(Ty::Decimal)),
             pure: true,
             eval: NativeEval::Pure(decimal_of),
-            // The `__phorge_dec_of` helper is gated on by `transpile::emit_member_call` (a native's
+            // The `__phorj_dec_of` helper is gated on by `transpile::emit_member_call` (a native's
             // `php` closure has no `&mut self` to set `uses_dec_of`). Mirrors `value::decimal_of`.
-            php: |a| format!("__phorge_dec_of({})", parg(a, 0)),
+            php: |a| format!("__phorj_dec_of({})", parg(a, 0)),
         },
         NativeFn {
             module: "Core.Decimal",
@@ -76,11 +76,11 @@ pub(crate) fn decimal_natives() -> Vec<NativeFn> {
             ret: Ty::Decimal,
             pure: true,
             eval: NativeEval::Pure(decimal_div_native),
-            // `__phorge_dec_div($a, $b, $scale, $mode)` — gated in `transpile::call`. The mode enum
+            // `__phorj_dec_div($a, $b, $scale, $mode)` — gated in `transpile::call`. The mode enum
             // arrives in its PHP form; the helper switches on it. Mirrors `value::decimal_div`.
             php: |a| {
                 format!(
-                    "__phorge_dec_div({}, {}, {}, {})",
+                    "__phorj_dec_div({}, {}, {}, {})",
                     parg(a, 0),
                     parg(a, 1),
                     parg(a, 2),
@@ -95,11 +95,11 @@ pub(crate) fn decimal_natives() -> Vec<NativeFn> {
             ret: Ty::Decimal,
             pure: true,
             eval: NativeEval::Pure(decimal_round_native),
-            // `__phorge_dec_round($d, $scale, $mode)` — gated in `transpile::call`. Mirrors
+            // `__phorj_dec_round($d, $scale, $mode)` — gated in `transpile::call`. Mirrors
             // `value::decimal_round`.
             php: |a| {
                 format!(
-                    "__phorge_dec_round({}, {}, {})",
+                    "__phorj_dec_round({}, {}, {})",
                     parg(a, 0),
                     parg(a, 1),
                     parg(a, 2)

@@ -56,7 +56,7 @@
   get `file:line`).
 - **Task 6 DONE** (`29b8b26`): `phg serve --dev` HTML error page (fault+stack+request, `Core.Html`
   escaping); production stays a bare 500 (no leak).
-- **Task 7 SKIPPED** — Phorge diagnostics are plain (no ANSI anywhere); coloring only the trace would
+- **Task 7 SKIPPED** — Phorj diagnostics are plain (no ANSI anywhere); coloring only the trace would
   be inconsistent and coloring all diagnostics is out of scope. Deferred as polish (KNOWN_ISSUES).
 - **Task 8 DONE:** `examples/errors/README.md` walkthrough + index; CHANGELOG / KNOWN_ISSUES /
   MILESTONES updated. **SLICE 1 COMPLETE** — 690 tests green. Slice 2 (catchable model) next.
@@ -66,4 +66,4 @@ Slice-1 implementation plan: **`docs/plans/2026-06-21-stack-traces-impl.plan.md`
 `Frame`+`Diagnostic.frames`+CLI render → VM frame-walk → interpreter `trace_stack` → loader
 file-attribution+source-map → run≡runvm parity differential test → `phg serve --dev` web error page
 (prod stays bare 500) → CLI color → docs/example. Each task ends green on the full
-`PHORGE_REQUIRE_PHP=1` gate. Slice 2 (catchable error model — try/catch vs Result) is a later design.
+`PHORJ_REQUIRE_PHP=1` gate. Slice 2 (catchable error model — try/catch vs Result) is a later design.

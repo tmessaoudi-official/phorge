@@ -22,13 +22,13 @@ fn cross_toolchain_ready(target: &str) -> bool {
     ok
 }
 
-/// Skip-aware: true iff `llvm-objcopy` (or `$PHORGE_OBJCOPY`) can run. Host `phg build` shells out
-/// to it to embed the `.phorge` section, so a host-build test must **skip — not fail** where it is
+/// Skip-aware: true iff `llvm-objcopy` (or `$PHORJ_OBJCOPY`) can run. Host `phg build` shells out
+/// to it to embed the `.phorj` section, so a host-build test must **skip — not fail** where it is
 /// absent (a lean CI runner, a contributor without LLVM tools). The `cross-build` CI job installs
 /// it, so these tests still run for real there; only the lean `gate` job skips them. Mirrors
 /// `cross_toolchain_ready`'s philosophy for the zig / cargo-zigbuild toolchain.
 fn objcopy_available() -> bool {
-    let obj = std::env::var("PHORGE_OBJCOPY").unwrap_or_else(|_| "llvm-objcopy".into());
+    let obj = std::env::var("PHORJ_OBJCOPY").unwrap_or_else(|_| "llvm-objcopy".into());
     let ok = Command::new(&obj)
         .arg("--version")
         .output()
@@ -60,7 +60,7 @@ fn distributed_download_embed_run_matches_runvm() {
 
     // 1) Populate the standard cache with a real musl stub via the local build branch (we have
     //    Cargo.toml at the repo root), then locate that cached stub via the public `cache_dir`.
-    let warm = std::env::temp_dir().join("phorge-dist-warm");
+    let warm = std::env::temp_dir().join("phorj-dist-warm");
     let built = Command::new(BIN)
         .args(["build", src, "--target", target, "-o"])
         .arg(&warm)
@@ -73,7 +73,7 @@ fn distributed_download_embed_run_matches_runvm() {
     );
     let _ = std::fs::remove_file(&warm);
     let bin_bytes = std::fs::read(BIN).expect("read phg bin");
-    let cached_stub = phorge::bundle::cross::cache_dir(&bin_bytes)
+    let cached_stub = phorj::bundle::cross::cache_dir(&bin_bytes)
         .expect("cache dir")
         .join(target)
         .join("phg");
@@ -83,7 +83,7 @@ fn distributed_download_embed_run_matches_runvm() {
     );
 
     // 2) Build a fixture registry from the cached stub + a manifest with its host-sha256sum hash.
-    let root = std::env::temp_dir().join(format!("phorge-dist-{}", std::process::id()));
+    let root = std::env::temp_dir().join(format!("phorj-dist-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     let reg = root.join("reg");
     let fresh_cache = root.join("cache");
@@ -112,8 +112,8 @@ fn distributed_download_embed_run_matches_runvm() {
         .arg(&out)
         .current_dir(&work)
         .env("XDG_CACHE_HOME", &fresh_cache)
-        .env("PHORGE_STUB_REGISTRY", format!("file://{}/", reg.display()))
-        .env("PHORGE_STUB_MANIFEST", root.join("manifest.txt"))
+        .env("PHORJ_STUB_REGISTRY", format!("file://{}/", reg.display()))
+        .env("PHORJ_STUB_MANIFEST", root.join("manifest.txt"))
         .output()
         .expect("distributed build");
     assert!(
@@ -123,7 +123,7 @@ fn distributed_download_embed_run_matches_runvm() {
     );
     // The downloaded stub must have been verified and cached under the fresh cache.
     assert!(
-        fresh_cache.join("phorge").join("stubs").is_dir(),
+        fresh_cache.join("phorj").join("stubs").is_dir(),
         "download did not populate the fresh cache"
     );
 
@@ -150,7 +150,7 @@ fn cross_musl_binary_matches_runvm() {
         return;
     }
     let src = "examples/guide/operators.phg";
-    let out = std::env::temp_dir().join("phorge-musl-parity");
+    let out = std::env::temp_dir().join("phorj-musl-parity");
     let built = Command::new(BIN)
         .args(["build", src, "--target", target, "-o"])
         .arg(&out)
@@ -178,7 +178,7 @@ fn cross_windows_section_round_trips() {
         return;
     }
     let src = "examples/guide/operators.phg";
-    let out = std::env::temp_dir().join("phorge-win-parity.exe");
+    let out = std::env::temp_dir().join("phorj-win-parity.exe");
     let built = Command::new(BIN)
         .args(["build", src, "--target", target, "-o"])
         .arg(&out)
@@ -189,12 +189,12 @@ fn cross_windows_section_round_trips() {
         "build failed: {}",
         String::from_utf8_lossy(&built.stderr)
     );
-    // Dump the .phorge section back out and confirm it decodes to the original source.
-    let dumped = std::env::temp_dir().join("phorge-win-section.bin");
-    let objcopy = std::env::var("PHORGE_OBJCOPY").unwrap_or_else(|_| "llvm-objcopy".into());
+    // Dump the .phorj section back out and confirm it decodes to the original source.
+    let dumped = std::env::temp_dir().join("phorj-win-section.bin");
+    let objcopy = std::env::var("PHORJ_OBJCOPY").unwrap_or_else(|_| "llvm-objcopy".into());
     let st = Command::new(objcopy)
         .args(["--dump-section"])
-        .arg(format!(".phorge={}", dumped.display()))
+        .arg(format!(".phorj={}", dumped.display()))
         .arg(&out)
         .status()
         .expect("objcopy dump");
@@ -202,7 +202,7 @@ fn cross_windows_section_round_trips() {
     let section = std::fs::read(&dumped).expect("read dumped section");
     let expected = std::fs::read_to_string(src).expect("read src");
     assert_eq!(
-        phorge::bundle::container::decode_container(&section).as_deref(),
+        phorj::bundle::container::decode_container(&section).as_deref(),
         Some(expected.as_bytes())
     );
     let _ = std::fs::remove_file(&out);
@@ -215,7 +215,7 @@ fn built_binary_matches_runvm() {
         return;
     }
     let prog = "examples/realworld/ledger.phg";
-    let out_bin = std::env::temp_dir().join(format!("phorge_built_{}", std::process::id()));
+    let out_bin = std::env::temp_dir().join(format!("phorj_built_{}", std::process::id()));
     let _ = std::fs::remove_file(&out_bin);
 
     let build = Command::new(BIN)
@@ -249,7 +249,7 @@ fn built_binary_ignores_argv_runs_embedded() {
     }
     // v1 limitation: the embedded program ignores argv. Passing args must not change behavior.
     let prog = "examples/hello.phg";
-    let out_bin = std::env::temp_dir().join(format!("phorge_built_argv_{}", std::process::id()));
+    let out_bin = std::env::temp_dir().join(format!("phorj_built_argv_{}", std::process::id()));
     let _ = std::fs::remove_file(&out_bin);
     let build = Command::new(BIN)
         .args(["build", prog, "-o", out_bin.to_str().unwrap()])
@@ -263,15 +263,15 @@ fn built_binary_ignores_argv_runs_embedded() {
     let _ = std::fs::remove_file(&out_bin);
     assert_eq!(
         String::from_utf8_lossy(&with_args.stdout),
-        "Hello, Phorge!\n"
+        "Hello, Phorj!\n"
     );
 }
 
 #[test]
 fn build_rejects_ill_typed_program() {
-    let bad = std::env::temp_dir().join(format!("phorge_bad_{}.phg", std::process::id()));
+    let bad = std::env::temp_dir().join(format!("phorj_bad_{}.phg", std::process::id()));
     std::fs::write(&bad, "function main() -> void { int x = \"no\"; }").unwrap();
-    let out_bin = std::env::temp_dir().join(format!("phorge_bad_out_{}", std::process::id()));
+    let out_bin = std::env::temp_dir().join(format!("phorj_bad_out_{}", std::process::id()));
     let _ = std::fs::remove_file(&out_bin);
     let build = Command::new(BIN)
         .args([
@@ -297,7 +297,7 @@ fn build_rejects_ill_typed_program() {
 fn build_rejects_dangling_o_flag() {
     // `build f.phg -o` with no value must be a usage error (exit 2), not a silent default-named
     // build. Run in a temp cwd with an absolute source so a buggy default build can't pollute the repo.
-    let cwd = std::env::temp_dir().join(format!("phorge_argtest_o_{}", std::process::id()));
+    let cwd = std::env::temp_dir().join(format!("phorj_argtest_o_{}", std::process::id()));
     std::fs::create_dir_all(&cwd).unwrap();
     let src = std::fs::canonicalize("examples/hello.phg").unwrap();
     let out = Command::new(BIN)
@@ -346,7 +346,7 @@ fn build_rejects_sign_flag_as_phase3() {
 #[test]
 fn build_rejects_macos_target_as_deferred() {
     // F7: an apple/darwin --target must error clearly (deferred), never silently emit a Mach-O with a
-    // mismatched `.phorge` section. The guard fires before rustup-target resolution, so this holds
+    // mismatched `.phorj` section. The guard fires before rustup-target resolution, so this holds
     // even without the apple target installed. build_target -> Err -> main exits 1.
     let out = Command::new(BIN)
         .args([
@@ -370,7 +370,7 @@ fn build_rejects_macos_target_as_deferred() {
 fn build_rejects_unknown_trailing_arg() {
     // An unrecognized trailing argument must error, not be silently ignored (which would write a
     // default-named binary). Same temp-cwd + absolute-source isolation.
-    let cwd = std::env::temp_dir().join(format!("phorge_argtest_x_{}", std::process::id()));
+    let cwd = std::env::temp_dir().join(format!("phorj_argtest_x_{}", std::process::id()));
     std::fs::create_dir_all(&cwd).unwrap();
     let src = std::fs::canonicalize("examples/hello.phg").unwrap();
     let out = Command::new(BIN)

@@ -1,6 +1,6 @@
-# Phorge fit-analysis for an M6 web/HTTP capability
+# Phorj fit-analysis for an M6 web/HTTP capability
 
-> How a web feature slots into Phorge's existing architecture, with the determinism quarantine
+> How a web feature slots into Phorj's existing architecture, with the determinism quarantine
 > (byte-identical `run`≡`runvm` spine) and the transpile contract as the dominating constraints.
 > Every claim cites `file:line`. Read with `docs/INVARIANTS.md`, the M6 research plan
 > (`docs/plans/2026-06-18-m6-web-capabilities-research.md`), and memory
@@ -23,11 +23,11 @@
   `cmd_run(&src).is_ok()` assertion (`:614-619`) is load-bearing: `agree` alone is *vacuously
   green* when both backends fail identically (e.g. a broken import), so the harness asserts success
   to catch a malformed example. **A new `.phg` is auto-gated the moment it lands — no test edit.**
-- **Structural project exclusion**: `collect_phg` returns early if a dir holds a `phorge.toml`
+- **Structural project exclusion**: `collect_phg` returns early if a dir holds a `phorj.toml`
   (`tests/differential.rs:540-542`) — a multi-file M5 project can't run file-standalone, so it's
   excluded by manifest presence (not by name). A project added later is auto-excluded.
 - **Multi-file projects** are gated separately by `all_example_projects_match_between_backends`
-  (`tests/differential.rs:631-659`): `collect_projects` finds every `phorge.toml` root
+  (`tests/differential.rs:631-659`): `collect_projects` finds every `phorj.toml` root
   (`:554-565`), `find_main_phg` locates the `package Main` entry (`:569-592`), then it loads via
   `loader::load` and gates `run_program` ≡ `runvm_program` (`:644-657`), again with an explicit
   `run.is_ok()` (`:647-651`).
@@ -87,12 +87,12 @@ transpile-time PHP erasure). The table is built once in `build()` (`:421-446`), 
 ### Could `core.http` be hosted as natives, or does it need language types?
 **Mixed — and this is the central design decision.** Two sub-questions:
 
-1. **Request/Response value types.** Phorge's value model already has `Value::Instance(Rc<Instance>)`
+1. **Request/Response value types.** Phorj's value model already has `Value::Instance(Rc<Instance>)`
    (`src/value.rs:27`, an `Instance` = class name + `HashMap<String,Value>` fields, `:31-35`) and the
    type system has `Ty::Named(String)` for nominal class/enum types (`src/types.rs:13`). It also has
    `Value::Map` / `Ty::Map(K,V)` (`src/value.rs:25`, `src/types.rs:15`) for headers, and `Value::Null`
    / `Ty::Optional` (`src/value.rs:21`, `src/types.rs:18-19`) for optional fields. **So Request and
-   Response are most naturally `class`es written in Phorge itself** (a `package core.http` library, or
+   Response are most naturally `class`es written in Phorj itself** (a `package core.http` library, or
    stdlib-provided classes) — not native Rust types. A handler is then an ordinary
    `function handle(Request) -> Response` — already fully supported by both backends (P4b/P4c classes
    + methods are in the spine, `tests/differential.rs:438-531`). **No new `Value` variant, no new
@@ -103,10 +103,10 @@ transpile-time PHP erasure). The table is built once in `build()` (`:421-446`), 
    `response_text(status, body) -> Response`, header getters, etc. *could* be natives — but a native's
    `eval` returns a `Value`, and constructing a `Value::Instance` of a user class from Rust is awkward
    (the native would need the class name + field layout). **Cleaner: write the parser/builders in
-   Phorge** (pure Phorge functions over `string`/`List`/`Map`), so they are spine-tested like any
-   example and transpile for free. Reserve natives for the genuinely-primitive ops Phorge can't
+   Phorj** (pure Phorj functions over `string`/`List`/`Map`), so they are spine-tested like any
+   example and transpile for free. Reserve natives for the genuinely-primitive ops Phorj can't
    express: the raw socket read/write (which is the *dirty* layer, see §6) and possibly a fast
-   byte-level split. **Recommendation: `core.http` parsing + Request/Response are Phorge code; the
+   byte-level split. **Recommendation: `core.http` parsing + Request/Response are Phorj code; the
    only native is the transport (`core.net`/`serve` runtime), which is dirty and lives outside the
    spine.**
 
@@ -139,7 +139,7 @@ round-trip through PHP (same constraint as `core.text`, `src/native.rs:187-191`)
   `Op::Fault(FaultMsg)` (`src/chunk.rs:141-147`, `:44-61`) so `opt!`-on-null reused one op. If the
   web layer needs a fixed runtime fault, add a `FaultMsg` variant — still no new `Op`.
 
-**Conclusion:** the web handler model is pure natives + Phorge code over the existing op set. The only
+**Conclusion:** the web handler model is pure natives + Phorj code over the existing op set. The only
 thing that can't be an op is the socket accept-loop — and that doesn't run in the VM at all (§6).
 
 ---
@@ -164,7 +164,7 @@ thing that can't be an op is the socket accept-loop — and that doesn't run in 
 ### Where the `phg serve` → `php -S` seam is
 - **There is no `serve` in the transpiler** — and there shouldn't be. The transpiler emits the
   *handler script*; `php -S` is the *server* that invokes that script per request. The seam is the
-  **CLI**, not the language: `phg serve app.phg` runs Phorge's own socket loop calling the Phorge
+  **CLI**, not the language: `phg serve app.phg` runs Phorj's own socket loop calling the Phorj
   handler; `php -S localhost:8000 app.php` (the transpiled output) is the PHP-side equivalent. They
   are two runtimes wrapping the **same pure handler** — precisely the §6 three-layer split.
 - Concretely: `transpile` already exists as a Program-taking runner (`cli::transpile_program`,
@@ -213,7 +213,7 @@ thing that can't be an op is the socket accept-loop — and that doesn't run in 
 ### The three layers (the key insight, from memory `m6-web-capabilities-direction:23-26`)
 1. **Pure (in the spine):** `bytes → Request` parsing, routing, and `handle(Request) -> Response`
    dispatch. These are deterministic functions of their input — testable with `agree`/`agree_err`
-   exactly like every existing example, and transpilable to PHP. Written as Phorge code +/- a small
+   exactly like every existing example, and transpilable to PHP. Written as Phorj code +/- a small
    parsing native.
 2. **Dirty (outside the spine):** the `TcpListener::accept()` loop — read raw bytes off the socket,
    hand them to layer 1, write `Response` bytes back. Maximally non-deterministic (timing, client
@@ -224,7 +224,7 @@ thing that can't be an op is the socket accept-loop — and that doesn't run in 
 
 ### The minimal trait/function seam
 The pattern to copy is **the env-update HTTP-fixture seam** (`_GS_EU2_HTTP_FIXTURE_DIR` in `/stack`)
-and Phorge's own `vendor.rs` `file://` fixture: abstract the byte source so a deterministic fixture
+and Phorj's own `vendor.rs` `file://` fixture: abstract the byte source so a deterministic fixture
 can substitute for a live socket. Minimal Rust seam:
 
 ```rust
@@ -238,11 +238,11 @@ pub trait Transport {
 // Test impl: a Vec<Vec<u8>> of canned requests + a captured Vec<u8> of responses (deterministic).
 
 // The PURE core — fully unit/fixture-testable, no socket:
-pub fn handle_raw(req_bytes: &[u8], dispatch: &PhorgeHandler) -> Vec<u8> { /* parse → route → run → serialize */ }
+pub fn handle_raw(req_bytes: &[u8], dispatch: &PhorjHandler) -> Vec<u8> { /* parse → route → run → serialize */ }
 ```
 
-- `handle_raw` (bytes→bytes through the Phorge handler) is **deterministic** → unit-tested with a
-  fixture `Transport`, and its Phorge-level half (`parse_request`/`handle`/`serialize`) lives in the
+- `handle_raw` (bytes→bytes through the Phorj handler) is **deterministic** → unit-tested with a
+  fixture `Transport`, and its Phorj-level half (`parse_request`/`handle`/`serialize`) lives in the
   byte-identity spine via an `examples/` program (below).
 - The real `Transport` (TcpListener) is the *only* non-deterministic code — wrapped behind the trait,
   exercised by **one thin `tests/serve.rs`** that binds an ephemeral port, sends one real request, and
@@ -282,8 +282,8 @@ aren't a single program get a walkthrough README + a small companion `.phg`.
 
 | Layer | Where it goes | Spine status |
 |---|---|---|
-| Request/Response | Phorge `class`es (`Value::Instance` `value.rs:27`, `Ty::Named` `types.rs:13`); `Map` for headers (`value.rs:25`) | in spine (P4b/P4c classes already gated) |
-| Parsing / routing / dispatch | Phorge functions + (optional) parsing native via `Op::CallNative` (`chunk.rs:118-122`, `vm.rs:266-273`) — **no new Op** | in spine (deterministic) |
+| Request/Response | Phorj `class`es (`Value::Instance` `value.rs:27`, `Ty::Named` `types.rs:13`); `Map` for headers (`value.rs:25`) | in spine (P4b/P4c classes already gated) |
+| Parsing / routing / dispatch | Phorj functions + (optional) parsing native via `Op::CallNative` (`chunk.rs:118-122`, `vm.rs:266-273`) — **no new Op** | in spine (deterministic) |
 | `core.http` natives | append `NativeFn`s to a `http_natives()` builder in `native.rs` (purely additive, `:421-446`) | `eval` in spine; `php` erasure to superglobals+echo |
 | Socket accept-loop | new `src/serve.rs` behind a `Transport` trait (`std::net`, safe, std-only) | **outside spine** (`tests/serve.rs`, skip-aware) |
 | `phg serve` CLI | new command modeled on `vendor` (`main.rs:81-97`) / `build` (`main.rs:101-167`) + `cli.rs` help arm | tooling, not language |

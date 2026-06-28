@@ -31,11 +31,11 @@
   byte-identity tests) so the full claim can be restored. Spine-sensitive — verify each arm on
   run≡runvm≡php.
 - [2026-06-20] AGREED (P1-a float fidelity): **fix the formatting too** — correct the false
-  KNOWN_ISSUES "exactly-representable floats are byte-identical" claim AND add a `__phorge_float`
+  KNOWN_ISSUES "exactly-representable floats are byte-identical" claim AND add a `__phorj_float`
   helper so transpiled PHP emits positional shortest-round-trip floats (no sci-notation divergence for
   more values). `run≡runvm` is unaffected (spine-safe); this is a transpile-leg fidelity fix.
   `src/transpile.rs:251`, `src/native.rs:963`. Add oracle cases at `1e-5`/`1e15`/`1e20`.
-- [2026-06-20] DONE (P1-a) @ `8eae410`: `__phorge_float` helper shipped; finite floats byte-identical
+- [2026-06-20] DONE (P1-a) @ `8eae410`: `__phorj_float` helper shipped; finite floats byte-identical
   on run/runvm/PHP; `examples/guide/floats.phg`; KNOWN_ISSUES corrected. Pre-commit gate green.
 - [2026-06-20] DONE (P1-b match arms) @ `8579323`: literal-pattern + expression-position `match`
   transpile (IIFE for expr position); fixed a pre-existing Assign-position match unconditional-throw
@@ -46,7 +46,7 @@
   interpreter + VM: real type test; transpile: PHP `instanceof`; byte-identity-gated example).
   Discovery: `is` is currently value-equality aliased to `==` (interpreter `Is => l.eq_val(&r)`),
   broken as a type test (`x is T` → E-UNKNOWN-IDENT). **Claude's dissent (recorded, non-binding):**
-  recommended RETIRING the alias instead — `is` is largely redundant with Phorge's sealed enums +
+  recommended RETIRING the alias instead — `is` is largely redundant with Phorj's sealed enums +
   exhaustiveness-checked `match`, and a boolean `is` invites un-checkable if/elseif ladders; PHP needs
   `instanceof` only because it lacks sealed-match. User to confirm Option 1 stands after reading the
   challenge (asked me to challenge). **Post-compact implementation plan for Option 1 (if confirmed):**
@@ -71,7 +71,7 @@ HTML5 tag set to `html_natives()`.
   `examples/guide/html.phg` (Option-1 demo section), `examples/README.md`, `FEATURES.md`,
   `CHANGELOG.md`, `docs/specs/2026-06-19-core-html-design.md` (named set → shipped),
   `tests/differential.rs` (agree + transpile-shape case).
-- Acceptance: `cargo test` green; PHP oracle (`PHORGE_REQUIRE_PHP=1`) byte-identical; clippy+fmt clean.
+- Acceptance: `cargo test` green; PHP oracle (`PHORJ_REQUIRE_PHP=1`) byte-identical; clippy+fmt clean.
 - Risk: macro Rust-eval vs PHP-php drift → pinned by unit test + example oracle.
 
 ## Track 2 — core.html Option 2 (`phg check --json`)
@@ -101,7 +101,7 @@ tree, or run a fresh pass. Hardening, not features.
 - **Track 3 — in progress** (namespace reshape):
   - **Slice 1 — DONE**: manifest distributable `name` → `module` (`src/manifest.rs` struct/parser/
     `namespace_root`; `src/loader.rs` + `tests/project.rs` + `tests/vendor.rs` fixtures; both example
-    `phorge.toml`; CHANGELOG + spec §5.1 + example README). Lockfile `name` (dep coordinate) and
+    `phorj.toml`; CHANGELOG + spec §5.1 + example README). Lockfile `name` (dep coordinate) and
     `[require]` keys unchanged. Rename-only, output-preserving; 471 tests green, PHP oracle ran,
     clippy + fmt clean.
   - Slice 2 — SPLIT for safety into 2a + 2b (smaller green commits; the package-segment rule forces
@@ -119,7 +119,7 @@ tree, or run a fresh pass. Hardening, not features.
     D5b type-vs-leaf guard).
 - **Track 4 — Review pass — DONE** (background Workflow `wjq47kit9`, 26 agents, 14 dims,
   adversarially verified). Report (NOT committed — public repo, live vuln detail):
-  `~/.claude/projects/-stack-projects-phorge/reviews/2026-06-20-ga-readiness-review.md`.
+  `~/.claude/projects/-stack-projects-phorj/reviews/2026-06-20-ga-readiness-review.md`.
   Verdict: **NOT GA-ready but close**; spine held in every test; all weakness in non-spine
   M5/M6 modules. Drives the GA punch-list below.
 
@@ -160,7 +160,7 @@ included):
 
 ### Then: remaining GA P1/P2 punch-list (fan out)
 - **P1-a** float honesty: KNOWN_ISSUES claim that exactly-representable floats render byte-identically
-  is FALSE (PHP sci-notation). At minimum correct the claim; ideally fix `__phorge_str`/`println`
+  is FALSE (PHP sci-notation). At minimum correct the claim; ideally fix `__phorj_str`/`println`
   float formatting (positional shortest-round-trip). Spine unaffected. `src/transpile.rs:251`,
   `src/native.rs:963`.
 - **P1-b** transpiler rejects literal/expression `match` + `is` (M11 gap): complete the arms OR
@@ -171,8 +171,8 @@ included):
   lex/parse/check/run/runvm, assert no panic). `tests/`.
 - **P1-g** structure loader diagnostics (`Result<Unit, Vec<Diagnostic>>`, route `check --json` through
   loader) before the `--json` shape freezes at 1.0. `src/loader.rs`, `src/cli.rs`.
-- **P2 cluster** (transpiler fidelity): `==`/`!=` → strict `===`/`!==` + `__phorge_eq`; `trim`/`upper`/
-  `lower` ASCII-only parity; per-call-site scratch names; `println` via `__phorge_str`; a per-native
+- **P2 cluster** (transpiler fidelity): `==`/`!=` → strict `===`/`!==` + `__phorj_eq`; `trim`/`upper`/
+  `lower` ASCII-only parity; per-call-site scratch names; `println` via `__phorj_str`; a per-native
   PHP-mapping differential test; `core.file` no-sandbox doc + read size cap; built-binary exit status;
   serve eager `respond` validation; leaf-resolution parity hole (`index_of_by_leaf`).
 - **P3**: vendor `&rev[..12]` char-boundary; `overflow-checks` profile; stale "M1"/comment cleanup;

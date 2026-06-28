@@ -32,7 +32,7 @@ captured** command output, never invented.
 **Files:** Create `examples/build/app.phg`, `examples/build/README.md`; Modify `examples/README.md`.
 - [ ] `app.phg`: a small self-contained program (fib loop) suitable to build.
 - [ ] Capture real host output: build the binary to a temp path, run it, record stdout.
-- [ ] README: the host `phg build` flow, what the `.phorge` section holds, the
+- [ ] README: the host `phg build` flow, what the `.phorj` section holds, the
       built-binary-matches-`runvm` parity-test pointer, and that cross/macOS targets are partial.
 - [ ] Verify `app.phg` runs identically on both backends. `cargo test` green. Commit.
 

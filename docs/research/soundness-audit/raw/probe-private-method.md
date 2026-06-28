@@ -4,7 +4,7 @@
 **Verdict:** ✅ ENFORCED — not a gap. Severity: none.
 **Code emitted:** `E-METHOD-VISIBILITY` (correct, with accurate span + hint).
 
-Binary: `/stack/projects/phorge/target/release/phg` (pre-built, not rebuilt).
+Binary: `/stack/projects/phorj/target/release/phg` (pre-built, not rebuilt).
 
 ---
 
@@ -12,7 +12,7 @@ Binary: `/stack/projects/phorge/target/release/phg` (pre-built, not rebuilt).
 
 `private-method.phg`:
 
-```phorge
+```phorj
 package Main;
 
 import Core.Console;
@@ -70,7 +70,7 @@ Confirms the rule is not over-rejecting: a private method IS callable from insid
 
 `private-method-crossclass.phg`:
 
-```phorge
+```phorj
 class A {
     constructor(public int x) {}
     private function hidden(): int { return this.x; }

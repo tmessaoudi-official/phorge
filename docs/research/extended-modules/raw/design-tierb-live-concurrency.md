@@ -8,7 +8,7 @@ byte-identity-gated *by construction* (a total ordering rule with no real clock)
 that **cannot** be so gated, and the job here is to give it a *principled, already-precedented* home
 rather than letting non-determinism leak into the spine.
 
-The short version: **Tier-B live concurrency reuses, verbatim, the seam Phorge already shipped for
+The short version: **Tier-B live concurrency reuses, verbatim, the seam Phorj already shipped for
 `Core.Process`/`Core.Env` and for `src/serve.rs`.** There is essentially no new architecture to
 invent — the design is "apply the existing two patterns to a new module family and write down exactly
 what each backend can and cannot promise." That is why the feasibility is high and the effort is the
@@ -113,13 +113,13 @@ function of the program text. Instead, three weaker but *real* guarantees replac
 
 ---
 
-## 3. Module surface and Phorge-syntax API sketch
+## 3. Module surface and Phorj-syntax API sketch
 
 Three Tier-B leaf modules, each a `src/native/<leaf>.rs` (the no-god-file rule), all `pure:false`.
 
 ### 3.1 `Core.Time` — wall-clock + sleep (the simplest, ship first)
 
-```phorge
+```phorj
 package Main;
 import Core.Console;
 import Core.Time;
@@ -141,7 +141,7 @@ function main() -> void {
 
 ### 3.2 `Core.Net` — live TCP client (mirrors `serve.rs`'s server seam)
 
-```phorge
+```phorj
 package Main;
 import Core.Console;
 import Core.Net;
@@ -170,7 +170,7 @@ function main() -> void {
 This is the genuinely-live spawn — distinct from Tier-A `Async.spawn` (cooperative, deterministic).
 Named `Async.spawnLive` / `Async.parallelLive` to make the Tier crossing *visible at the call site*.
 
-```phorge
+```phorj
 package Main;
 import Core.Console;
 import Core.Async;

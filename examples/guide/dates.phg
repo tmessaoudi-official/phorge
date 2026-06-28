@@ -1,7 +1,7 @@
 // Core.Time — civil dates (M-TIME S2).
 //
 // `Date` is a civil calendar date (UTC, day-resolution), stored as days since 1970-01-01. The calendar
-// math is Howard Hinnant's days-from-civil / civil-from-days, written in pure Phorge — so it runs on the
+// math is Howard Hinnant's days-from-civil / civil-from-days, written in pure Phorj — so it runs on the
 // real backends and is byte-identical on `run`/`runvm`/transpiled PHP by construction.
 package Main;
 

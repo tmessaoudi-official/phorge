@@ -1,6 +1,6 @@
 //! Runtime overload dispatch (M-RT method/function overloading).
 //!
-//! Phorge overloading is **dynamic multiple dispatch**: the runtime types of the arguments select
+//! Phorj overloading is **dynamic multiple dispatch**: the runtime types of the arguments select
 //! the most-specific matching overload. The selection runs identically in the tree-walking
 //! interpreter and the stack VM — both feed the *same* [`ParamKind`]s (derived from the static
 //! parameter types via [`param_kind`]) to the *same* [`select_overload`], so a call resolves to the

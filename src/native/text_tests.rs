@@ -175,7 +175,7 @@ fn text_parse_float_strict_and_permissive() {
     let reg = &registry()[index_of("Core.Text", "parseFloat").unwrap()];
     assert_eq!(
         (reg.php)(&["$s".into(), "$p".into()]),
-        "__phorge_parse_float($s, $p)"
+        "__phorj_parse_float($s, $p)"
     );
     assert_eq!(reg.ret, Ty::Optional(Box::new(Ty::Float)));
     assert_eq!(reg.params, vec![Ty::String, Ty::Bool]);
@@ -289,7 +289,7 @@ fn text_breadth_pad_indexof_substring() {
     );
     assert_eq!(
         php("indexOf", &["$s", "$n"]),
-        "__phorge_text_index_of($s, $n)"
+        "__phorj_text_index_of($s, $n)"
     );
     assert_eq!(php("substring", &["$s", "$a", "$b"]), "substr($s, $a, $b)");
     assert_eq!(

@@ -6,10 +6,8 @@ impl TempDir {
     fn new() -> TempDir {
         static N: AtomicUsize = AtomicUsize::new(0);
         let unique = N.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!(
-            "phorge_loader_test_{}_{unique}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("phorj_loader_test_{}_{unique}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         TempDir(dir)
     }
@@ -41,7 +39,7 @@ fn loose_main_is_accepted() {
 #[test]
 fn loose_non_main_is_rejected() {
     let err = load_loose_src("package app.util;\nfunction f() -> void {}").unwrap_err();
-    assert!(err.contains("requires a phorge.toml project"), "got: {err}");
+    assert!(err.contains("requires a phorj.toml project"), "got: {err}");
 }
 
 #[test]
@@ -56,7 +54,7 @@ fn loose_empty_package_defers_to_checker() {
 #[test]
 fn project_merges_files_flat() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nfunction main() -> void {}\nfunction local() -> void {}",
@@ -79,7 +77,7 @@ fn project_merges_files_flat() {
 #[test]
 fn project_load_reports_stats() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nfunction main() -> void {}\nclass C {}",
@@ -108,7 +106,7 @@ fn loose_load_has_no_stats() {
 #[test]
 fn project_main_is_folder_exempt_at_root() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"");
     // main lives at the project root, outside src/ — allowed.
     let entry = tmp.write("main.phg", "package Main;\nfunction main() -> void {}");
     let u = load(&entry).unwrap();
@@ -118,7 +116,7 @@ fn project_main_is_folder_exempt_at_root() {
 #[test]
 fn folder_path_mismatch_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write("src/main.phg", "package Main;\nfunction main() -> void {}");
     // File sits in src/acme/util but declares the wrong package.
     tmp.write(
@@ -133,7 +131,7 @@ fn folder_path_mismatch_is_rejected() {
 #[test]
 fn non_main_directly_in_source_root_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write("src/main.phg", "package Main;\nfunction main() -> void {}");
     tmp.write("src/loose.phg", "package app;\nfunction f() -> void {}");
     let err = load(&entry).unwrap_err();
@@ -146,7 +144,7 @@ fn non_main_directly_in_source_root_is_rejected() {
 #[test]
 fn library_package_outside_source_root_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     tmp.write("src/main.phg", "package Main;\nfunction main() -> void {}");
     // A dotted package living outside the source root entirely.
     tmp.write(
@@ -168,7 +166,7 @@ fn missing_entry_file_errors() {
 #[test]
 fn duplicate_function_in_package_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write("src/main.phg", "package Main;\nfunction main() -> void {}");
     // Two files in the same package each define `f` — collides after the flat merge.
     tmp.write(
@@ -188,7 +186,7 @@ fn duplicate_function_in_package_is_rejected() {
 fn vendored_package_main_is_rejected() {
     let tmp = TempDir::new();
     tmp.write(
-            "phorge.toml",
+            "phorj.toml",
             "module = \"acme/app\"\nsource = \"src\"\n\n[require]\n\"acme/lib\" = { git = \"u\", tag = \"v1\" }",
         );
     let entry = tmp.write("src/main.phg", "package Main;\nfunction main() -> void {}");
@@ -206,7 +204,7 @@ fn vendored_package_main_is_rejected() {
 #[test]
 fn import_type_of_internal_library_type_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport type acme.geo.Hidden;\nfunction main() -> void { Hidden h = Hidden(); }",
@@ -222,7 +220,7 @@ fn import_type_of_internal_library_type_is_rejected() {
 #[test]
 fn import_type_of_public_library_type_is_allowed() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport type acme.geo.Shown;\nfunction main() -> void { Shown s = Shown(); }",
@@ -238,7 +236,7 @@ fn import_type_of_public_library_type_is_allowed() {
 #[test]
 fn private_type_referenced_from_sibling_file_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nfunction main() -> void { Helper h = Helper(); }",
@@ -255,7 +253,7 @@ fn private_type_referenced_from_sibling_file_is_rejected() {
 #[test]
 fn internal_type_referenced_from_sibling_file_is_allowed() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nfunction main() -> void { Helper h = Helper(); }",
@@ -270,7 +268,7 @@ fn internal_type_referenced_from_sibling_file_is_allowed() {
 #[test]
 fn private_function_called_from_sibling_file_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nfunction main() -> int { return helper(); }",
@@ -286,7 +284,7 @@ fn private_function_called_from_sibling_file_is_rejected() {
 #[test]
 fn internal_function_called_cross_package_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport acme.util;\nfunction main() -> int { return util.secret(); }",
@@ -302,7 +300,7 @@ fn internal_function_called_cross_package_is_rejected() {
 #[test]
 fn public_function_called_cross_package_is_allowed() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nimport acme.util;\nfunction main() -> int { return util.shown(); }",
@@ -320,7 +318,7 @@ fn type_alias_does_not_launder_private_type() {
     // file-scoped `private` check on `Helper()` fires regardless of the alias (aliases are
     // file-local + erased, so they cannot re-export across files).
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\ntype H = Helper;\nfunction main() -> void { H h = Helper(); }",
@@ -338,7 +336,7 @@ fn type_alias_does_not_launder_private_type() {
 #[test]
 fn public_type_in_mismatched_file_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nfunction main() -> void { Widget w = Widget(); }",
@@ -355,7 +353,7 @@ fn public_type_in_mismatched_file_is_rejected() {
 #[test]
 fn public_type_in_matching_file_is_allowed() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nfunction main() -> void { Widget w = Widget(); }",
@@ -370,7 +368,7 @@ fn public_type_in_matching_file_is_allowed() {
 #[test]
 fn two_public_types_in_one_file_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nfunction main() -> void { A a = A(); }",
@@ -386,7 +384,7 @@ fn two_public_types_in_one_file_is_rejected() {
 #[test]
 fn public_type_plus_public_fn_in_one_file_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nfunction main() -> void { Box b = Box(); }",
@@ -403,7 +401,7 @@ fn public_type_plus_public_fn_in_one_file_is_rejected() {
 fn private_helper_type_rides_along_in_a_type_module() {
     // A type module may carry private/internal helper types + functions — they ride along free.
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nfunction main() -> void { Widget w = Widget(); }",
@@ -418,7 +416,7 @@ fn private_helper_type_rides_along_in_a_type_module() {
 #[test]
 fn main_file_with_multiple_public_types_is_exempt() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     // The entry file declares `main` → exempt: multiple public types + functions are fine, any name.
     let entry = tmp.write(
         "src/main.phg",
@@ -435,7 +433,7 @@ fn forward_and_cross_file_type_references_resolve() {
     // Order-independence (the prebind pre-pass): `Order` references `OrderLine`, which sorts/merges
     // AFTER it — and a forward reference within the entry file — both resolve.
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
         "package Main;\nfunction main() -> void { B b = makeB(); }\nfunction makeB() -> B { return B(7); }",
@@ -464,7 +462,7 @@ fn forward_and_cross_file_type_references_resolve() {
 #[test]
 fn decl_file_is_loaded_ambiently_and_not_mangled() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write("src/main.phg", "package Main;\nfunction main() -> void {}");
     // A package-free declaration file under the source root — loaded ambiently, never compiled as a
     // package source (so no folder=path / package decl required).
@@ -493,7 +491,7 @@ fn decl_file_is_loaded_ambiently_and_not_mangled() {
 #[test]
 fn decl_file_with_package_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write("src/main.phg", "package Main;\nfunction main() -> void {}");
     tmp.write(
         "src/php.d.phg",
@@ -506,7 +504,7 @@ fn decl_file_with_package_is_rejected() {
 #[test]
 fn decl_file_with_nonforeign_item_is_rejected() {
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write("src/main.phg", "package Main;\nfunction main() -> void {}");
     // A real (non-`declare`) function has no place in a declaration file.
     tmp.write(
@@ -523,7 +521,7 @@ fn decl_file_is_not_counted_as_a_package_source() {
     // directly in the source root (where a real non-`main` `.phg` would be rejected) and confirm load
     // succeeds: only its ambient-merge path ran, not the package-source path.
     let tmp = TempDir::new();
-    tmp.write("phorge.toml", "module = \"acme/app\"\nsource = \"src\"");
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write("src/main.phg", "package Main;\nfunction main() -> void {}");
     tmp.write(
         "src/builtins.d.phg",

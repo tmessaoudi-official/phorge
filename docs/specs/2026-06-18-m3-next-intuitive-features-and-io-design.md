@@ -1,4 +1,4 @@
-# Phorge — "More Intuitive Features" + I/O / stdlib / imports — Research & Design
+# Phorj — "More Intuitive Features" + I/O / stdlib / imports — Research & Design
 
 > Brainstorm output, 2026-06-18. Trigger: developer asked for (a) **more intuitive language
 > features**, and (b) **exhaustive examples with imports — file reading, URL reading, complex
@@ -13,14 +13,14 @@ S0/S1/S2 are **done** (DX, ergonomics, null-safety). The developer wants more *i
 a much broader example set — specifically examples that **read files**, **read URLs**, and **use
 imports** beyond the decorative `import std.io;`.
 
-Reality check (verified against the repo): Phorge today has **`println` as its only builtin**, **no
+Reality check (verified against the repo): Phorj today has **`println` as its only builtin**, **no
 stdlib**, **no I/O**, `import` is **decorative** (parses, resolves nothing), and there are no `Map`/`Set`.
 So the file/URL/import examples **cannot be written today** — they require new language capability.
 This is why "research/design first" is the right order (developer's choice).
 
 ## 2. Two hard constraints the file/URL ask collides with
 
-These are load-bearing Phorge invariants (`VISION.md`, `docs/INVARIANTS.md`), not preferences:
+These are load-bearing Phorj invariants (`VISION.md`, `docs/INVARIANTS.md`), not preferences:
 
 - **C1 — byte-identical backends (the correctness spine).** Every feature must produce *identical*
   output on `run` (interpreter) and `runvm` (VM), enforced by `tests/differential.rs`, which globs
@@ -110,9 +110,9 @@ Independent of A/B, the **existing** surface can already be showcased far more e
 programs, a "kitchen-sink" feature tour, and per-feature focused examples for anything under-shown.
 File/real-import examples land *with* Track B; URL examples wait for the M6 decision.
 
-### Track D — Phorge-vs-PHP benchmark ("who's the winner?") — achievable NOW
+### Track D — Phorj-vs-PHP benchmark ("who's the winner?") — achievable NOW
 
-The developer wants a head-to-head Phorge-vs-PHP performance comparison. This is the **lowest-friction
+The developer wants a head-to-head Phorj-vs-PHP performance comparison. This is the **lowest-friction
 high-delight win**: it needs **no new language features**, only the existing `phg bench` (median-of-N
 timing of `run` vs `runvm`, output-identity-gated) + the existing PHP round-trip (`transpile` → run
 `php`). Extend `bench` (or add `bench --vs-php`) to also transpile + time the PHP backend, producing a
@@ -127,7 +127,7 @@ timing of `run` vs `runvm`, output-identity-gated) + the existing PHP round-trip
 
 ## 5. Decisions to lock (developer steer)
 
-- **Q1 — first deliverable:** Track D (Phorge-vs-PHP benchmark — achievable now, no new features),
+- **Q1 — first deliverable:** Track D (Phorj-vs-PHP benchmark — achievable now, no new features),
   Track B (I/O/stdlib/imports — unlocks file + real-import examples), or Track A (S3 lambdas/pipeline —
   highest-ROI ergonomics)? Recommendation: **D first** (instant payoff + showcases the bridge), then B.
 - **Q2 — URL reading:** defer to M6 (recommended), PHP-backend-only divergence, or pull in an HTTP dep
@@ -136,7 +136,7 @@ timing of `run` vs `runvm`, output-identity-gated) + the existing PHP round-trip
 
 ## 5b. Locked decisions (2026-06-18, developer-confirmed)
 
-- **L-1 — build sequence: D → B → A.** Phorge-vs-PHP benchmark first (no new features), then I/O +
+- **L-1 — build sequence: D → B → A.** Phorj-vs-PHP benchmark first (no new features), then I/O +
   std-only stdlib + real `import std.*`, then S3 lambdas/pipeline. Each ships byte-identical with
   examples + docs (the S2 cadence).
 - **L-2 — URL/network deferred to M6.** Build a **rich std-only stdlib now** (`std.fs`, `std.math`,

@@ -2,7 +2,7 @@
 
 ## Track summary
 
-Phorge's performance story today is **two correct backends and one honest measurement tool**: a
+Phorj's performance story today is **two correct backends and one honest measurement tool**: a
 tree-walking interpreter (the reference), a stack VM (`phg runvm`, ≈3.2× faster than the interpreter
 on `examples/bench/workload.phg`, and `--vs-php` shows it beating a debug PHP 8.6), and `phg bench`
 (median-of-N wall-clock + cold peak-RSS, Linux `/proc`) gated so a backend disagreement *aborts* the
@@ -67,7 +67,7 @@ CI work already shipped there.
 `Value::Str(String)` (`src/value.rs:18`), so `Op::GetLocal` on a string local still deep-copies the
 string — the exact cost P5a was created to eliminate, left on the one type strings flow through most
 (interpolation, every `Core.Text` result). Changing it to `Str(Rc<str>)` is a small, mechanical,
-**semantically invisible** change (strings are immutable in Phorge today; mutation is value-type COW),
+**semantically invisible** change (strings are immutable in Phorj today; mutation is value-type COW),
 must pass the byte-identical spine unchanged, and directly speeds string-heavy programs. Pure upside,
 zero surprise.
 
@@ -112,14 +112,14 @@ and it makes I-regress-gate trustworthy rather than a single-point measurement. 
   interning, const-fold, peephole). They are deferred on *sequencing*, not merit. Superinstructions
   and inline caches are the higher-ceiling items once the VM's allocation/clone costs are paid down.
 - **I-sized-ints / I-decimal** are visible *language* features and genuine beyond-PHP items (PHP has
-  neither). They carry real surprise budget (a PHP dev does not expect `i32` wraparound vs Phorge's
+  neither). They carry real surprise budget (a PHP dev does not expect `i32` wraparound vs Phorj's
   checked-overflow promise — they would *interact* with the "no silent wraparound" invariant and need
   a careful design) and they only pay off under native AOT. v2, where ROADMAP already files them.
 - **I-aot** is the v2 anchor (native ahead-of-time). Massive scope, needs a codegen strategy decision
   (own / Cranelift / LLVM — the last two break the std-only/zero-dep invariant, a real tension worth
   flagging now). Deferred to v2 by design.
 - **I-ownership-nogc — reject (as currently framed).** ROADMAP lists "an ownership model that removes
-  the GC" for v2, but Phorge has *no tracing GC today* (the `Rc`/`Drop` model reclaims the
+  the GC" for v2, but Phorj has *no tracing GC today* (the `Rc`/`Drop` model reclaims the
   immutable+acyclic heap fully; the only leak is mutation-created cycles, an accepted Fork-3 non-goal).
   A Rust-style ownership/borrow model is a maximal PL-theory feature that would massively expand the
   surprise budget for a PHP-familiar developer — the antithesis of the philosophy. Recommend
@@ -193,7 +193,7 @@ Rationale for the new rows:
   std-only/stable tension worth flagging) or a match the compiler can turn into a jump table. Real
   but lower-ceiling than superinstructions and gated on stable TCO; defer behind the cheap wins.
 - **I-tco (reject).** Tail-call optimization would let self-recursion run unbounded instead of
-  faulting at the 256 MB worker-stack cap — but **PHP has no TCO**, so a recursive Phorge program that
+  faulting at the 256 MB worker-stack cap — but **PHP has no TCO**, so a recursive Phorj program that
   *succeeds* under TCO would *fail* (stack overflow / fault) under the transpiled PHP, breaking the
   `run ≡ runvm ≡ real PHP` spine for deep-recursion programs. It also changes the observable
   behavior of an existing limit (KNOWN_ISSUES "recursion is depth-limited"). This is a spine-breaking

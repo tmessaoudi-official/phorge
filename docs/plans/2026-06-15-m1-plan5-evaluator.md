@@ -1003,9 +1003,9 @@ error paths.
 - [ ] **Step 1: Write the integration test**
 
 ```rust
-use phorge::interpreter::interpret;
-use phorge::lexer::lex;
-use phorge::parser::Parser;
+use phorj::interpreter::interpret;
+use phorj::lexer::lex;
+use phorj::parser::Parser;
 
 /// The complete sample program from the language design spec (§6), verbatim.
 const SAMPLE: &str = r#"
@@ -1044,7 +1044,7 @@ function main() {
 }
 "#;
 
-fn run(src: &str) -> Result<String, phorge::interpreter::RuntimeError> {
+fn run(src: &str) -> Result<String, phorj::interpreter::RuntimeError> {
     let tokens = lex(src).expect("lex ok");
     let prog = Parser::new(tokens).parse_program().expect("parse ok");
     interpret(&prog)
@@ -1093,7 +1093,7 @@ git commit -m "test(eval): §6 sample runs end-to-end (M1 Plan 5 Task 3)"
 | Dimension | Evidence to produce |
 |---|---|
 | **Coverage** | Paste `cargo test` count: Task 1 value tests + Task 2 interpreter tests + Task 3 integration. Every eval rule has a test. |
-| **Docs** | New public API `phorge::interpreter::{interpret, RuntimeError}` and `phorge::value::Value`; spec doc records EV-1..EV-8. Update `handoff.md` (Plan 5 done, 5/6). |
+| **Docs** | New public API `phorj::interpreter::{interpret, RuntimeError}` and `phorj::value::Value`; spec doc records EV-1..EV-8. Update `handoff.md` (Plan 5 done, 5/6). |
 | **Config** | No config impact (pure library addition) — state it. |
 | **Blast radius** | `git diff --stat` — only `src/value.rs`, `src/interpreter.rs`, `src/lib.rs`, `tests/run_integration.rs`. Confirm parser/lexer/checker untouched. Panic-probe optional: malformed-but-type-correct programs should error, not panic. |
 

@@ -15,9 +15,9 @@
 
 ## 1. Problem
 
-Phorge's transpile contract is **Phorge : PHP :: TypeScript : JavaScript** — every feature maps to
+Phorj's transpile contract is **Phorj : PHP :: TypeScript : JavaScript** — every feature maps to
 **idiomatic PHP that runs anywhere**. "Anywhere" is the load-bearing word: TypeScript output runs in
-any conformant JS engine; it doesn't silently assume a Node-only or browser-only API. Phorge's
+any conformant JS engine; it doesn't silently assume a Node-only or browser-only API. Phorj's
 emitted PHP made exactly that mistake.
 
 `core.bytes.to_string` emitted `mb_check_encoding($s, 'UTF-8')`. `mb_check_encoding` lives in the
@@ -46,15 +46,15 @@ mechanism** for a module that legitimately needs an extension to declare and gua
   guards value-divergence).
 
 **Non-Goals**
-- **Not** building a Cargo-feature matrix for Phorge's *own* (Rust) build — its std-only stdlib has
+- **Not** building a Cargo-feature matrix for Phorj's *own* (Rust) build — its std-only stdlib has
   no per-module cost; that's YAGNI until a module pulls a heavy/platform dep (revisit at M6 sockets
   or a wasm target).
-- **Not** vendoring or bundling PHP extensions — Phorge emits PHP source, it does not ship a runtime.
+- **Not** vendoring or bundling PHP extensions — Phorj emits PHP source, it does not ship a runtime.
 - **Not** changing the `run ≡ runvm` spine — this is transpile-output-only.
 
 ## 3. The extension tiers
 
-| Tier | Examples | Availability | Phorge stance |
+| Tier | Examples | Availability | Phorj stance |
 |------|----------|--------------|---------------|
 | **1 — always-compiled** | `Core`/`standard` (`strlen`, `substr`, `str_*`, `intdiv`, `fmod`, `range`, `strpos`, `explode`), **PCRE** (`preg_*`), `json_*` (always-on since 8.0) | Present on **every** PHP, survives `php -n` | **Allowed in core stdlib.** |
 | **2 — default-but-removable** | **mbstring**, `ctype`, `tokenizer`, `fileinfo` | Usually present; **absent under `php -n` and on minimal builds** | **Forbidden in core stdlib** — pick a tier-1 equivalent. |
@@ -80,12 +80,12 @@ regression test. One scan, no PHP needed, runs in the `gate` job.
 
 When a module *must* use a tier-3 extension, three coordinated pieces make it honest:
 
-1. **Declare** in `phorge.toml` `[require]` using Composer's own vocabulary — `ext-gd = "*"`. We
+1. **Declare** in `phorj.toml` `[require]` using Composer's own vocabulary — `ext-gd = "*"`. We
    already adopted Composer vocabulary for deps; `ext-*` is its native idiom. The manifest parser
    (`src/manifest.rs`) gains an `ext` requirement kind (no network, no resolution — purely declared).
 2. **Preflight guard** in emitted PHP — the transpiler prepends, once per required extension:
    ```php
-   if (!extension_loaded('gd')) { fwrite(STDERR, "phorge: this program requires the PHP 'gd' extension\n"); exit(1); }
+   if (!extension_loaded('gd')) { fwrite(STDERR, "phorj: this program requires the PHP 'gd' extension\n"); exit(1); }
    ```
    A clean, diagnosable exit — never an undefined-function fatal mid-run.
 3. **Transpile-time manifest + gate** — the transpiler already knows every imported `core.*` module,
@@ -103,7 +103,7 @@ declare-, compile-, and run-time.
 | Core = tier-1 only (the rule) | ✅ in force; `bytes.to_string` migrated (`0bb620b`) |
 | `transpile-no-ini-extensions` memory + this spec | ✅ landed |
 | Denylist transpile-scan regression test | 🔲 proposed (small, no PHP) |
-| `phorge.toml` `ext-*` requirement kind | 🔲 proposed (lands with first tier-3 module) |
+| `phorj.toml` `ext-*` requirement kind | 🔲 proposed (lands with first tier-3 module) |
 | Preflight `extension_loaded` guard emit | 🔲 proposed (same) |
 | `--php-target=baseline\|full` gate + `// requires:` header | 🔲 proposed (same) |
 
@@ -127,6 +127,6 @@ declare-, compile-, and run-time.
   (document it) or make a future `core.text.chars`/`graphemes` an explicit tier-3 (`ext-mbstring`)
   module. Not blocking; no current example needs codepoint length.
 - **`--php-target` default.** Proposed `baseline`. If a user base reliably has mbstring, a project
-  could set `full` in `phorge.toml`; out of scope until tier-3 exists.
+  could set `full` in `phorj.toml`; out of scope until tier-3 exists.
 - **JSON.** `json_*` is tier-1 (always-on since 8.0); `core.json` (deferred for needing a dynamic
   `Any` type) is unaffected by this policy.

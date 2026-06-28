@@ -2,13 +2,13 @@
 
 ## Our pledge
 
-The Phorge community is committed to providing a welcoming, friendly, and respectful environment for
+The Phorj community is committed to providing a welcoming, friendly, and respectful environment for
 everyone who participates — contributors, maintainers, and users alike — regardless of background or
 experience level.
 
 ## Our standard
 
-Phorge adopts the **[Contributor Covenant](https://www.contributor-covenant.org), version 2.1** as its
+Phorj adopts the **[Contributor Covenant](https://www.contributor-covenant.org), version 2.1** as its
 code of conduct. The full text, including the expected standards of behavior and the enforcement
 guidelines, is published here:
 

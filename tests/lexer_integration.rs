@@ -1,5 +1,5 @@
-use phorge::lexer::lex;
-use phorge::token::TokenKind;
+use phorj::lexer::lex;
+use phorj::token::TokenKind;
 
 #[test]
 fn tokenizes_sample_without_error() {

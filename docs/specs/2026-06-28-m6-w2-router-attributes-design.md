@@ -34,7 +34,7 @@ These were checked against the binary before writing the spec:
 2. **A function-typed *field* can't be invoked with `obj.f(x)`** (`type X has no method f`). It must be
    bound to a local first: `var h = this.handler; h(req)`. Verified byte-identical on run/runvm.
 3. **`List.concat`, `List.length`, `xs[i]`, `Text.split/startsWith/endsWith/replace`** all exist and
-   are byte-identical across backends — enough to write the matcher in pure Phorge with no new native.
+   are byte-identical across backends — enough to write the matcher in pure Phorj with no new native.
 4. **`Http.autoRouter()` parses as** `Call{callee: Member{object: Ident("Http"), name:"autoRouter"}, args:[]}`.
    `Http` is not otherwise a known qualifier, so this exact shape is free to claim.
 5. **No new `Op`, no new `Value`.** Router/Request/Route are ordinary classes; attributes are
@@ -49,7 +49,7 @@ These were checked against the binary before writing the spec:
    applies to hand-written `.route(…)` patterns *and* the `#[Route("GET", r"/users/{id}")]` arg. The
    examples + the generated registration use raw strings; documented as a usability note.
 
-## 4. Part A — Router + path params (pure Phorge, injected with `Core.Http`)
+## 4. Part A — Router + path params (pure Phorj, injected with `Core.Http`)
 
 Added to the `HTTP_PRELUDE` (injected when a program `import Core.Http;` and hasn't declared the type
 itself). `import Core.List;` is added to the prelude (the matcher needs `List.length`/`List.concat`).

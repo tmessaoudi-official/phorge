@@ -7,7 +7,7 @@ package Main;
 //   * `router.use(mw)` adds a middleware applied (outermost-first) to every route the router handles.
 //   * `router.group(prefix, build)` mounts a sub-router under a path prefix; `build` registers the
 //     sub-routes (and their own group-scoped middleware) on a fresh router.
-// It's all pure Phorge over first-class functions + closures — no new `Op`, no runtime framework, so
+// It's all pure Phorj over first-class functions + closures — no new `Op`, no runtime framework, so
 // run / runvm / real PHP stay byte-identical. Middleware composition is `fn(req) => mw(req, next)`
 // folded over the list.
 import Core.Console;

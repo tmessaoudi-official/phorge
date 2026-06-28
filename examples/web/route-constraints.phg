@@ -6,7 +6,7 @@ package Main;
 // anchored to the WHOLE segment (`^(?:regex)$`, via `Core.Regex`). Precedence: a literal segment is
 // most specific, then a *constrained* param, then a bare `{name}` param — so `/users/{id:\d+}` wins
 // over `/users/{name}` for `/users/42`, while `/users/ada` (not digits) falls through to `{name}`.
-// Patterns are raw strings (`r"…"`) so `{...}` and `\d` are literal. Pure Phorge over Core.Regex; the
+// Patterns are raw strings (`r"…"`) so `{...}` and `\d` are literal. Pure Phorj over Core.Regex; the
 // match is byte-identical on run / runvm / real PHP for ASCII patterns.
 import Core.Console;
 import Core.Bytes;

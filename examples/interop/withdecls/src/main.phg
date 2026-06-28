@@ -11,7 +11,7 @@ import Acme.Banner;
 function main(): void {
     string bar = Banner.rule(10);
     Console.println(bar);
-    Console.println(strtoupper("hello, phorge"));
+    Console.println(strtoupper("hello, phorj"));
     Console.println(strrev("interop"));
     Console.println(bar);
 }

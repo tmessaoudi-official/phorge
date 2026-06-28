@@ -38,7 +38,7 @@ fn reflect_kind_is_registered_and_resolvable_by_leaf() {
 #[test]
 fn reflect_kind_php_emits_the_gated_helper() {
     let i = index_of("Core.Reflect", "kind").unwrap();
-    assert_eq!((registry()[i].php)(&["$x".into()]), "__phorge_kind($x)");
+    assert_eq!((registry()[i].php)(&["$x".into()]), "__phorj_kind($x)");
 }
 
 #[test]
@@ -119,7 +119,7 @@ fn reflect_enumeration_natives_read_class_tables() {
     };
     assert_eq!(strs(call(i, widget.clone())), vec!["Drawable", "Shape"]);
     assert_eq!(strs(call(p, widget)), vec!["Base"]);
-    // A non-class value → empty list (matches the PHP `__phorge_reflect_of` non-object branch).
+    // A non-class value → empty list (matches the PHP `__phorj_reflect_of` non-object branch).
     assert!(strs(call(i, Value::Int(1))).is_empty());
 }
 
@@ -129,6 +129,6 @@ fn reflect_class_name_is_registered_and_php_emits_the_gated_helper() {
     assert_eq!(index_of_by_leaf("Reflect", "className"), Some(i));
     assert_eq!(
         (registry()[i].php)(&["$x".into()]),
-        "__phorge_class_name($x)"
+        "__phorj_class_name($x)"
     );
 }

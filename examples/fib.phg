@@ -1,7 +1,7 @@
 package Main;
 import Core.Console;
 
-// Recursion: classic Fibonacci. Phorge is immutable (no reassignment), so the
+// Recursion: classic Fibonacci. Phorj is immutable (no reassignment), so the
 // iterative form would need a fresh binding each step — recursion is the natural fit.
 function fib(int n): int {
     if (n < 2) {

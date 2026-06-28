@@ -3,7 +3,7 @@
 **Rule under test:** a `private`/`protected` modifier on a `constructor` must restrict
 external instantiation. External `new C(...)` on a class with a `private constructor`
 should be **rejected** by the checker (`E-METHOD-VISIBILITY`-class diagnostic), mirroring
-PHP semantics and Phorge's existing field/method visibility enforcement.
+PHP semantics and Phorj's existing field/method visibility enforcement.
 
 **Verdict: GAP (P0 — unsound).** The modifier is parsed and silently dropped; external
 `new` on a `private`/`protected` constructor checks and runs cleanly on **all three
@@ -17,7 +17,7 @@ accepted as valid.
 ### Probe 1 — `private constructor`
 
 `$TMP/private-ctor.phg`:
-```phorge
+```phorj
 package Main;
 import Core.Console;
 
@@ -33,15 +33,15 @@ function main(): int {
 ```
 
 ```
-$ /stack/projects/phorge/target/release/phg check $TMP/private-ctor.phg
+$ /stack/projects/phorj/target/release/phg check $TMP/private-ctor.phg
 OK (type-checks clean)
 exit=0
 
-$ /stack/projects/phorge/target/release/phg run $TMP/private-ctor.phg
+$ /stack/projects/phorj/target/release/phg run $TMP/private-ctor.phg
 42
 exit=0
 
-$ /stack/projects/phorge/target/release/phg runvm $TMP/private-ctor.phg
+$ /stack/projects/phorj/target/release/phg runvm $TMP/private-ctor.phg
 42
 exit=0
 ```
@@ -53,11 +53,11 @@ checks clean and prints `42` on both the interpreter and the VM.
 
 `$TMP/protected-ctor.phg` (same shape, `protected` instead of `private`):
 ```
-$ /stack/projects/phorge/target/release/phg check $TMP/protected-ctor.phg
+$ /stack/projects/phorj/target/release/phg check $TMP/protected-ctor.phg
 OK (type-checks clean)
 exit=0
 
-$ /stack/projects/phorge/target/release/phg run $TMP/protected-ctor.phg
+$ /stack/projects/phorj/target/release/phg run $TMP/protected-ctor.phg
 7
 exit=0
 ```

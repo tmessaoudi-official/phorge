@@ -19,7 +19,7 @@ DEFAULT = """package Main;
 import Core.Console;
 
 function main(): void {
-    List<string> who = ["world", "Phorge"];
+    List<string> who = ["world", "Phorj"];
     for (string w in who) {
         Console.println("Hello, {w}!");
     }
@@ -41,7 +41,7 @@ def main() -> int:
             continue
         examples[phg.stem] = src
 
-    body = "window.PHORGE_EXAMPLES = " + json.dumps(examples, indent=2, ensure_ascii=False) + ";\n"
+    body = "window.PHORJ_EXAMPLES = " + json.dumps(examples, indent=2, ensure_ascii=False) + ";\n"
     OUT.write_text(body, encoding="utf-8")
 
     print(f"wrote {OUT} with {len(examples)} examples")

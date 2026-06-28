@@ -26,7 +26,7 @@ and a matched `rustc -O` program.
 
 The xorshift64 sequence-identity claim — the single hardest unknown — is **directly reproduced and holds.**
 The float-output trap is genuinely already solved: `src/transpile/expr.rs:471-485` + `program.rs:298-307`
-route every statically-float value through `__phorge_float` (Ryū shortest-round-trip, tier-1 only), so the
+route every statically-float value through `__phorj_float` (Ryū shortest-round-trip, tier-1 only), so the
 bare-`echo` 14-digit truncation (`0.99999330739406`) never reaches output. That mechanism exists and is tested
 (`transpile/tests.rs:255`). Not a new risk.
 
@@ -102,7 +102,7 @@ to xor/shift/add-with-mask only.
 2. Every PRNG constant `< 2^63` — assert at transpile emit time; reject xoshiro/splitmix constants. [R2]
 3. All shift amounts are compile-time constants in `1..=63`. [R3]
 4. Rejection bound emitted as `intdiv(PHP_INT_MAX, $range)` with a multiply-free reject test. [R1]
-5. Logical-`>>` mask single-sourced in `__phorge_rng_step` helper (grep-auditable). [spike §3.3, agreed]
+5. Logical-`>>` mask single-sourced in `__phorj_rng_step` helper (grep-auditable). [spike §3.3, agreed]
 6. Differential harness must include: two draws in one expression; a draw in an argument list;
    seed 0 and a negative seed. [R4]
 7. Never transpile to `mt_rand`/`shuffle()`/`random_int`; grep transpiled examples as oracle hygiene. [spike §6, agreed]

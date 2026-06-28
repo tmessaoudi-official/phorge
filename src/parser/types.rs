@@ -102,7 +102,7 @@ impl Parser {
                 }
             } else {
                 // No `=>`: the parens were grouping, not a parameter list. Exactly one inner type is
-                // `(T)` ≡ `T`; `()` / `(A, B)` without a `=>` are invalid (Phorge has no unit-paren
+                // `(T)` ≡ `T`; `()` / `(A, B)` without a `=>` are invalid (Phorj has no unit-paren
                 // or tuple types — a multi-element list must be a function-type parameter list).
                 match params.len() {
                     1 => params.pop().expect("one grouped type"),
@@ -112,7 +112,7 @@ impl Parser {
                     }
                     _ => {
                         return Err(self.error(
-                            "a `=>` return type (Phorge has no tuple types — `(A, B)` is a function-type parameter list and needs `=> R`)",
+                            "a `=>` return type (Phorj has no tuple types — `(A, B)` is a function-type parameter list and needs `=> R`)",
                         ))
                     }
                 }

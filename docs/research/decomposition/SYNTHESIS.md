@@ -15,7 +15,7 @@ Pure by-construct is rejected.**
   tiny passes) and proves the whale dies by *sub-cutting*, not axis-flipping.
 - **The one by-construct counter-example proves the trap**: Roslyn's `Binder` splits by construct
   (`Binder_Expressions.cs`…) — but only works because C# has **no exhaustive match**; its dispatch
-  `default` throws at *runtime*. Phorge's compile-time exhaustiveness is exactly what by-construct gives up.
+  `default` throws at *runtime*. Phorj's compile-time exhaustiveness is exactly what by-construct gives up.
 - **This is the Expression Problem.** Rust `enum`+exhaustive `match` is column-cheap (adding a phase is
   cheap, adding a construct is the expensive-but-safe op). The by-construct vision optimizes the axis the
   language's core safety mechanism structurally fights.
@@ -49,6 +49,6 @@ Pure by-construct is rejected.**
 ## Tension to resolve with the developer
 The developer's stated vision was **by-construct** ("a file for `for`, a file for `while`"). The
 evidence says by-construct as the *backbone* is the path no production compiler takes and that gives up
-Phorge's exhaustiveness safety net. The honest recommendation is the **hybrid**: by-phase sub-split
+Phorj's exhaustiveness safety net. The honest recommendation is the **hybrid**: by-phase sub-split
 backbone + thin-dispatcher applied selectively where arm bodies are large and cleanly construct-shaped.
 This is a genuine fork → developer decision.

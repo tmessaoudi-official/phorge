@@ -8,19 +8,19 @@
 //! bodies (e.g. `"division by zero"`) but the CLI wraps them with stage-specific prefixes
 //! (`"runtime error:"` vs `"compile error:"`), so a raw `assert_eq!` would spuriously fail.
 
-use phorge::cli::{cmd_run, cmd_run_exit, cmd_runvm, cmd_runvm_exit};
-use phorge::{cli, loader};
+use phorj::cli::{cmd_run, cmd_run_exit, cmd_runvm, cmd_runvm_exit};
+use phorj::{cli, loader};
 use std::process::Command;
 
 /// Type-check `src`; return the error diagnostics (empty = well-typed). Auto-prepends
 /// `package Main;` if absent. Used to test checker rejections without running a backend.
-fn check_errs(src: &str) -> Vec<phorge::diagnostic::Diagnostic> {
+fn check_errs(src: &str) -> Vec<phorj::diagnostic::Diagnostic> {
     let src = with_pkg(src);
-    let tokens = phorge::lexer::lex(&src).expect("lex ok");
-    let prog = phorge::parser::Parser::new(tokens)
+    let tokens = phorj::lexer::lex(&src).expect("lex ok");
+    let prog = phorj::parser::Parser::new(tokens)
         .parse_program()
         .expect("parse ok");
-    match phorge::checker::check(&prog) {
+    match phorj::checker::check(&prog) {
         Ok(_warnings) => Vec::new(),
         Err(e) => e,
     }
@@ -729,7 +729,7 @@ function half(float x) -> float { return x / 2.0; }
     // void function (no return type) called for its side effect
     r#"import Core.Console;
 function greet(string who) -> void { Console.println("hi, {who}"); }
-       function main() -> void { greet("Phorge"); greet("world"); }"#,
+       function main() -> void { greet("Phorj"); greet("world"); }"#,
     // call used as a statement (return value discarded)
     r#"import Core.Console;
 function noisy(int n) -> int { Console.println("got {n}"); return n; }
@@ -921,7 +921,7 @@ fn p4c_programs_match_between_backends() {
 /// harness edit (the seam the `pure` marker exists for).
 fn uses_impure_native(src: &str) -> bool {
     use std::collections::HashSet;
-    let impure: HashSet<&str> = phorge::native::registry()
+    let impure: HashSet<&str> = phorj::native::registry()
         .iter()
         .filter(|n| !n.pure)
         .map(|n| n.module)
@@ -930,13 +930,13 @@ fn uses_impure_native(src: &str) -> bool {
 }
 
 /// Recursively collect every single-file `*.phg` under `dir`, **skipping project roots**. A
-/// directory containing a `phorge.toml` is a multi-file project (M5): its files import each other
+/// directory containing a `phorj.toml` is a multi-file project (M5): its files import each other
 /// and only run when assembled through `loader::load`, so running them standalone here would fail.
 /// `all_example_projects_match_between_backends` gates those instead. The exclusion is structural
 /// (keyed on the manifest's presence), not name-based, so any project added under `examples/` later
 /// is auto-excluded with no test edit.
 fn collect_phg(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
-    if dir.join("phorge.toml").is_file() {
+    if dir.join("phorj.toml").is_file() {
         return; // a project root — handled by the project-aware harness below
     }
     // M8.5: `examples/interop/` holds foreign-PHP (`declare`) walkthroughs that are PHP-target-only —
@@ -955,7 +955,7 @@ fn collect_phg(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
     }
 }
 
-/// Recursively collect every project root (a directory holding a `phorge.toml`) under `dir`.
+/// Recursively collect every project root (a directory holding a `phorj.toml`) under `dir`.
 fn collect_projects(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
     // M8.5: `examples/interop/` holds foreign-PHP (`declare`) walkthroughs — including `.d.phg`
     // declaration-file projects — that are PHP-target-only (`E-FOREIGN-RUNTIME`), so they cannot be
@@ -963,7 +963,7 @@ fn collect_projects(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
     if dir.file_name().and_then(|n| n.to_str()) == Some("interop") {
         return;
     }
-    if dir.join("phorge.toml").is_file() {
+    if dir.join("phorj.toml").is_file() {
         out.push(dir.to_path_buf());
         return; // projects don't nest in the example set — don't descend further
     }
@@ -1039,7 +1039,7 @@ fn all_examples_match_between_backends() {
 
 /// M5 S2d — every multi-file **project** under `examples/` must also run byte-identically on both
 /// backends. Unlike the single-file glob above, a project is assembled through `loader::load` (which
-/// walks up to its `phorge.toml`, parses every file under the source root, validates folder=path, and
+/// walks up to its `phorj.toml`, parses every file under the source root, validates folder=path, and
 /// resolves cross-package qualified calls into one flat program). Because the loader produces concrete
 /// bare names before any backend runs, run==runvm is structural — but a malformed example (an import
 /// that resolves to nothing, a folder=path violation) would surface as a *shared* failure, which the
@@ -1366,7 +1366,7 @@ fn statement_body_lambda_needs_return_type() {
 #[test]
 fn transpiles_statement_lambda_with_use_clause() {
     let php = transpile_ok("package Main; import Core.Console; function main()-> void { var base=100; var f = fn(int x) -> int { return x + base; }; Console.println(\"{f(3)}\"); }");
-    // T6: `x` (int param) + `base` (int local) → native `+`, no `__phorge_add` helper.
+    // T6: `x` (int param) + `base` (int local) → native `+`, no `__phorj_add` helper.
     assert!(
         php.contains("function($x) use ($base)") && php.contains("return $x + $base"),
         "{php}"
@@ -1793,15 +1793,15 @@ fn transpiles_named_tag_to_baked_php() {
 // `run ≡ runvm` is gated by every test above. This gates `run ≡ php` (⇒ all three byte-identical):
 // the transpiled PHP, executed by a real `php`, must print exactly what the interpreter prints.
 // Gating contract (closes P0-ROOT — no more self-skip-to-PASS):
-//   PHORGE_REQUIRE_PHP=1 → a missing php FAILS the test (CI / enforced mode).
+//   PHORJ_REQUIRE_PHP=1 → a missing php FAILS the test (CI / enforced mode).
 //   unset/empty          → a missing php skips LOUDLY (dev convenience), never a silent green.
-// Optional PHORGE_PHP=<path> overrides the php binary (non-PATH installs).
+// Optional PHORJ_PHP=<path> overrides the php binary (non-PATH installs).
 // Scope: stdout-parity over runnable (`Ok`) examples + projects. Fault classes (overflow, OOB,
 // range-too-large) stay `run ≡ runvm` `agree_err` above — they are not runnable examples.
 
-/// Resolve the php binary: `PHORGE_PHP` override, else `php` on PATH if `--version` succeeds.
+/// Resolve the php binary: `PHORJ_PHP` override, else `php` on PATH if `--version` succeeds.
 fn php_bin() -> Option<String> {
-    let cand = std::env::var("PHORGE_PHP").unwrap_or_else(|_| "php".to_string());
+    let cand = std::env::var("PHORJ_PHP").unwrap_or_else(|_| "php".to_string());
     let ok = Command::new(&cand)
         .arg("--version")
         .output()
@@ -1811,16 +1811,16 @@ fn php_bin() -> Option<String> {
 }
 
 /// The fails-not-skips gate. `Some(php)` ⇒ run; `None` ⇒ caller returns (loud skip). Under
-/// `PHORGE_REQUIRE_PHP=1` a missing php panics instead of skipping.
+/// `PHORJ_REQUIRE_PHP=1` a missing php panics instead of skipping.
 fn php_or_gate(test: &str) -> Option<String> {
     if let Some(p) = php_bin() {
         return Some(p);
     }
     assert!(
-        std::env::var("PHORGE_REQUIRE_PHP").as_deref() != Ok("1"),
-        "{test}: php required (PHORGE_REQUIRE_PHP=1) but not found on PATH or $PHORGE_PHP"
+        std::env::var("PHORJ_REQUIRE_PHP").as_deref() != Ok("1"),
+        "{test}: php required (PHORJ_REQUIRE_PHP=1) but not found on PATH or $PHORJ_PHP"
     );
-    eprintln!("SKIP {test}: php not found — set PHORGE_REQUIRE_PHP=1 to make this a failure");
+    eprintln!("SKIP {test}: php not found — set PHORJ_REQUIRE_PHP=1 to make this a failure");
     None
 }
 
@@ -1865,7 +1865,7 @@ fn run_php(php: &str, php_src: &str, label: &str) -> String {
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
         .collect();
-    let path = std::env::temp_dir().join(format!("phorge_oracle_{safe}.php"));
+    let path = std::env::temp_dir().join(format!("phorj_oracle_{safe}.php"));
     std::fs::write(&path, php_src).expect("write temp php");
     let out = Command::new(php)
         .args(php_n_args(php))
@@ -1894,7 +1894,7 @@ fn main_exit_code_is_byte_identical_across_backends() {
     assert_eq!(run, ("x\n".to_string(), 7));
     if let Some(php) = php_or_gate("main_exit_code") {
         let php_src = cli::cmd_transpile(src).expect("transpile ok");
-        let path = std::env::temp_dir().join("phorge_exitcode_oracle.php");
+        let path = std::env::temp_dir().join("phorj_exitcode_oracle.php");
         std::fs::write(&path, &php_src).expect("write php");
         let out = Command::new(&php)
             .args(php_n_args(&php))
@@ -1924,7 +1924,7 @@ fn class_static_main_exit_code_is_byte_identical_across_backends() {
     assert_eq!(run, ("x\n".to_string(), 7));
     if let Some(php) = php_or_gate("class_static_main_exit_code") {
         let php_src = cli::cmd_transpile(src).expect("transpile ok");
-        let path = std::env::temp_dir().join("phorge_classmain_oracle.php");
+        let path = std::env::temp_dir().join("phorj_classmain_oracle.php");
         std::fs::write(&path, &php_src).expect("write php");
         let out = Command::new(&php)
             .args(php_n_args(&php))
@@ -2069,7 +2069,7 @@ fn m7_emitter_uses_correctness_helpers() {
     assert!(div.contains("intdiv(7, 2)"), "{div}");
     assert!(div.contains("5 % 2"), "{div}");
     assert!(
-        !div.contains("__phorge_div") && !div.contains("__phorge_rem"),
+        !div.contains("__phorj_div") && !div.contains("__phorj_rem"),
         "{div}"
     );
     // P0-4 float path: float `%` ⇒ `fmod` (PHP's `%` int-casts — the divergence); float `/` ⇒ native.
@@ -2086,8 +2086,8 @@ fn m7_emitter_uses_correctness_helpers() {
         "package Main; import Core.Console; function id<T>(T x) -> T { return x; } function main()-> void { Console.println(\"{id(7) / id(2)}\"); }",
     );
     assert!(
-        fb.contains("__phorge_div(id(7), id(2))")
-            && fb.contains("function __phorge_div")
+        fb.contains("__phorj_div(id(7), id(2))")
+            && fb.contains("function __phorj_div")
             && fb.contains("intdiv"),
         "{fb}"
     );
@@ -2102,11 +2102,11 @@ fn m7_emitter_uses_correctness_helpers() {
     );
     assert!(p.contains("$a - ($b - $c)"), "{p}");
     assert!(p.contains("!($a < $b)"), "{p}");
-    // QW-13: ranges route through the empty/reversed-safe helper (PHP range() descends; Phorge ⇒ []).
+    // QW-13: ranges route through the empty/reversed-safe helper (PHP range() descends; Phorj ⇒ []).
     let r = transpile_ok(
         "package Main; import Core.Console; function main()-> void { for (int i in 5..2) { Console.println(\"{i}\"); } }",
     );
-    assert!(r.contains("__phorge_range(5, 2, false)"), "{r}");
+    assert!(r.contains("__phorj_range(5, 2, false)"), "{r}");
 }
 
 /// P0-1: integer division truncates toward zero on both backends, with negative operands. (The php

@@ -1,8 +1,8 @@
-# Phorge — VS Code extension
+# Phorj — VS Code extension
 
-A thin client that connects VS Code to the Phorge language server (`phg lsp`), plus a TextMate grammar
+A thin client that connects VS Code to the Phorj language server (`phg lsp`), plus a TextMate grammar
 for syntax highlighting. The language *intelligence* lives entirely in the server; this extension
-registers the `phorge` language (`*.phg`), ships the grammar (`syntaxes/phorge.tmLanguage.json`), and
+registers the `phorj` language (`*.phg`), ships the grammar (`syntaxes/phorj.tmLanguage.json`), and
 launches the server over stdio. (The same grammar + server power the JetBrains/PhpStorm setup — see
 `../phpstorm/README.md`.)
 
@@ -22,7 +22,7 @@ launches the server over stdio. (The same grammar + server power the JetBrains/P
 
 ## Prerequisites
 
-- The `phg` binary on your `PATH` (or set `phorge.serverPath` in settings to its absolute path).
+- The `phg` binary on your `PATH` (or set `phorj.serverPath` in settings to its absolute path).
   Build it with `cargo build --release` (the binary is `target/release/phg`).
 
 ## Run it (Extension Development Host)
@@ -40,11 +40,11 @@ Open any `.phg` file in the dev host; diagnostics, hover, and go-to-definition a
 ```sh
 npm install -g @vscode/vsce
 cd editors/vscode
-vsce package         # produces phorge-0.2.0.vsix
-code --install-extension phorge-0.2.0.vsix
+vsce package         # produces phorj-0.2.0.vsix
+code --install-extension phorj-0.2.0.vsix
 ```
 
 ## Configuration
 
-- `phorge.serverPath` (default `"phg"`) — path to the `phg` binary; the server is started as
+- `phorj.serverPath` (default `"phg"`) — path to the `phg` binary; the server is started as
   `phg lsp`.

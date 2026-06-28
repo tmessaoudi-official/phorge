@@ -14,7 +14,7 @@ classes only with bare enum variants.
 - **For:** familiar to PHP/TS at the class site; visually flags object creation; matches the
   transpiler's existing PHP output (`new Counter()` / `new Circle()` — variants lower to PHP classes).
 - **Accepted trade-off:** no surface language (`PHP` included) `new`s a *sum-type variant*
-  (Rust `Some(7)`, Swift `.some`, PHP enum cases), so `new Some(7)` is a deliberate Phorge departure.
+  (Rust `Some(7)`, Swift `.some`, PHP enum cases), so `new Some(7)` is a deliberate Phorj departure.
   The developer prizes the single rule over matching other languages' variant syntax.
 
 Today `new` is a **reserved-but-unhandled token** (`TokenKind::New`, lexed at `lexer/mod.rs`, no parser

@@ -2,7 +2,7 @@
 
 ## Track summary
 
-Phorge's security story today is **strong on the toolchain-as-software axis and weak on the
+Phorj's security story today is **strong on the toolchain-as-software axis and weak on the
 application-as-product axis** — the two are different threat models and only the first is mostly
 closed. The *toolchain* is excellent: `#![forbid(unsafe_code)]` crate-wide, never-panics-on-input
 (EV-7) for both adversarial source and adversarial binaries, depth-limited recursion on a 256 MB
@@ -13,7 +13,7 @@ symlink-escape guards, lockfile content-hash verification, atomic state writes, 
 500s. Most of this is M8 work that is *already designed and largely landed* (the GA roadmap M8 list,
 plus the shipped serve/vendor hardening). XSS-safe-by-construction is real and shipped (`Core.Html`).
 
-The gap is everything an **application written in Phorge** needs to be secure: there is **no crypto
+The gap is everything an **application written in Phorj** needs to be secure: there is **no crypto
 (`password_hash`/`hash_hmac`/`random_bytes`)**, **no CSPRNG**, **no SQL story at all** (no PDO, no
 prepared statements, so the language has no answer to SQL injection — the #1 PHP CWE), **no
 command/path injection-safe natives**, **no secrets/env handling**, **no auth/session/CSRF helpers**,
@@ -56,7 +56,7 @@ than duplicate those, and add the systemic posture items they don't cover.
 
 **K-crypto-stdlib** — A 1.0 language that transpiles to PHP and targets web work cannot ship without a
 hashing/HMAC/digest story. PHP devs reach for `password_hash`, `hash_hmac`, `hash_equals` reflexively;
-their absence forces every Phorge web app to drop into raw PHP or hand-roll crypto. The transpile maps
+their absence forces every Phorj web app to drop into raw PHP or hand-roll crypto. The transpile maps
 cleanly to PHP's `password_hash`/`password_verify`/`hash_hmac`/`hash`/`hash_equals` (1:1 erasure, like
 every other native). The determinism objection (hashing with a random salt is non-deterministic) is
 **not a blocker for the digest/HMAC subset** (`sha256`, `hmac` with a given key are pure functions —
@@ -80,7 +80,7 @@ exists to prevent. Coupling it to the trace renderer (redact a `Secret`-typed or
 small, high-leverage win that makes the prod-no-leak guarantee complete. Pairs naturally with a
 `Secret<T>` opaque newtype (K-secrets-type ⊂ the opaque-newtype work already adopted at line 347/434).
 
-**K-env-config** — Phorge's "nothing in the wind" philosophy *forbids* PHP's ambient `$_ENV`/`getenv`
+**K-env-config** — Phorj's "nothing in the wind" philosophy *forbids* PHP's ambient `$_ENV`/`getenv`
 superglobals, which is the right call — but it leaves no sanctioned way to read configuration/secrets.
 A small `Core.Env` (read-only, explicit-key) native fills the hole the philosophy creates; it erases
 to `getenv()`/`$_ENV[...]`. Non-deterministic, so excluded from the oracle (a test injects fixed
@@ -89,12 +89,12 @@ values). Small effort, removes a real adoption blocker for any deployable app.
 **K-html-context-escape** — KNOWN_ISSUES already documents that `Core.Html` escaping covers *text and
 quoted-attribute-value contexts only* — it is explicitly **not safe** for URL contexts
 (`href="javascript:…"`), inline CSS, or `<script>` bodies. That is a real XSS gap in the one place
-Phorge claims injection-safety-by-construction. Closing it (a `urlAttr`/`safeUrl` builder that
+Phorj claims injection-safety-by-construction. Closing it (a `urlAttr`/`safeUrl` builder that
 validates the scheme, a `jsValue`/`cssValue` context escaper) is the natural completion of the
 shipped Html work and keeps the "XSS-safe by construction" claim honest at 1.0.
 
 **K-deser-safe** — PHP's `unserialize()` is the classic object-injection gadget vector
-(CWE-502). Phorge's planned `Core.Json` (M11) is the chance to ship a **data-only** deserialization
+(CWE-502). Phorj's planned `Core.Json` (M11) is the chance to ship a **data-only** deserialization
 story (JSON → a typed `Any`/`Json` value, never object instantiation), structurally closing the
 gadget-chain class that plagues PHP. This is a `map` (already-planned `Core.Json` gets a security
 framing) more than new work — adopt the *constraint* (no object materialization from untrusted input)
@@ -103,16 +103,16 @@ into the M11 `Core.Json` design now.
 **K-supply-chain-vendor-min** — `phg vendor` copies a dependency's source into `vendor/`. Restricting
 the copy to the dependency's declared `src/` source-root (it already validates folder=path per dep)
 and refusing to vendor symlinks/executables/dotfiles outside it shrinks the attack surface of a hostile
-dependency to exactly its Phorge source. Small hardening that rides the M8 symlink-escape work already
+dependency to exactly its Phorj source. Small hardening that rides the M8 symlink-escape work already
 on the roadmap.
 
 **K-security-doc** — SECURITY.md today is a good *toolchain* threat model + reporting policy, but a 1.0
-needs a first-class **security model** doc aimed at the *application developer*: what Phorge guarantees
+needs a first-class **security model** doc aimed at the *application developer*: what Phorj guarantees
 (no panics, checked arithmetic, XSS-safe Html, prod-no-leak), what it does NOT (no taint tracking, no
 sandbox, `Core.File` is unrestricted), and the recommended patterns for the OWASP top categories. This
 is the artifact that lets a GRDF-style reviewer sign off; it costs a doc, not code.
 
-**K-int-overflow-story** — Phorge's checked arithmetic (overflow/div-by-zero → clean fault, never
+**K-int-overflow-story** — Phorj's checked arithmetic (overflow/div-by-zero → clean fault, never
 silent wrap) is a genuine **security property** — integer-overflow-to-wrap is a real CWE class that
 PHP's silent float-promotion hides. It is shipped; the gap is purely that it is framed as a
 "correctness" feature, not a security one. A `map` — surface it in the security doc as a guarantee.
@@ -125,7 +125,7 @@ the highest-ROI *verification* investment for the security story and fits the M9
 milestone. Std-only-runtime is preserved — cargo-fuzz is dev-tooling, exempt like clippy/zig.
 
 **K-timing-safe-eq** — Constant-time comparison (PHP `hash_equals`) is a tiny primitive but the
-required building block for any token/HMAC verification done in Phorge itself; ship it with the
+required building block for any token/HMAC verification done in Phorj itself; ship it with the
 K-crypto digest subset in M8 so the crypto natives have a safe comparison to recommend.
 
 ## Notes on DEFER / REJECT items
@@ -145,7 +145,7 @@ K-crypto digest subset in M8 so the crypto natives have a safe comparison to rec
   language is not obligated to ship a web framework), but the M6 design should leave room.
 - **K-taint-tracking (reject):** automatic taint tracking is research-grade (PL-theory maximalism that
   doesn't earn its surprise budget for a PHP-familiar audience) and is **strictly dominated** by the
-  by-construction approach Phorge already takes — opaque `Secret` types, XSS-safe `Html`, and
+  by-construction approach Phorj already takes — opaque `Secret` types, XSS-safe `Html`, and
   parameterized-only SQL make the *unsafe form unrepresentable*, which is more legible to a PHP dev than
   a flow analysis they must trust. Reject in favor of the type-driven story.
 
@@ -155,7 +155,7 @@ K-crypto digest subset in M8 so the crypto natives have a safe comparison to rec
 
 **Verification basis** (all [Verified] against the repo at the current `master`): read `FEATURES.md`,
 `KNOWN_ISSUES.md`, `SECURITY.md`, `ROADMAP.md`, `docs/MILESTONES.md`, the GA roadmap plan
-(`docs/plans/2026-06-19-phorge-ga-roadmap.plan.md`), the parity deliverable
+(`docs/plans/2026-06-19-phorj-ga-roadmap.plan.md`), the parity deliverable
 (`docs/specs/2026-06-21-php-parity-and-beyond.md`), and `src/vendor.rs`; grepped `src/native.rs` for
 the shipped stdlib surface (`Core.{Bytes,Console,File,Html,List,Map,Math,Set,Text}` — no crypto, no
 random, no env, no secret natives, confirming K-crypto/K-csprng/K-env/K-secrets are genuinely absent).
@@ -190,7 +190,7 @@ CSPRNG seam — i.e. K-csprng's injected-seam framing maps to a real, modern PHP
 | K-header-injection | `phg serve` response header-injection / smuggling guard (reject CR/LF in header names+values; one Content-Length; reject Transfer-Encoding) | port | strong | adopt | M8 | S |
 | K-hashdos-immunity | Document Map/Set HashDoS-immunity as a security property (Vec-backed, no hash table → no collision flooding) | map | strong | adopt | M12 | S |
 | K-redos-constraint | Lock a ReDoS-safe constraint for a future `Core.Regex` (linear-time engine or input/step cap; never raw PCRE backtracking) | new | ok | defer | M11/post-1.0 | M |
-| K-artifact-integrity | Reproducible-build + per-artifact SHA-256 framed as a *supply-chain integrity* property (deterministic `.phorge` embed; checksums published) | map | strong | adopt | M12 | S |
+| K-artifact-integrity | Reproducible-build + per-artifact SHA-256 framed as a *supply-chain integrity* property (deterministic `.phorj` embed; checksums published) | map | strong | adopt | M12 | S |
 | K-dep-provenance | `phg vendor` surfaces each dep's resolved commit SHA + license (SBOM-lite provenance record) | new | ok | defer | M12 (with `phg audit`) | S |
 | K-serve-handler-budget | Per-request wall-clock/step budget for `phg serve` handlers (busy-loop DoS; depth-limits cover recursion, not a tight loop) | new | ok | defer | post-1.0 (M6) | M |
 
@@ -207,13 +207,13 @@ CSPRNG seam — i.e. K-csprng's injected-seam framing maps to a real, modern PHP
 
 - **K-hashdos-immunity** — [Verified: `KNOWN_ISSUES.md` "Maps"/"Generic natives" + `eq_val` notes; `Value::Map`/
   `Value::Set` are insertion-ordered `Rc<Vec<…>>`, **not** a `HashMap`/`HashSet`] PHP arrays are hash tables
-  and historically a HashDoS target; Phorge's Vec-backed insertion-ordered maps have **no hash bucket to
+  and historically a HashDoS target; Phorj's Vec-backed insertion-ordered maps have **no hash bucket to
   flood** — collision attacks are structurally impossible (the cost is O(n) lookup, a perf trade, not a
   security hole). This is a genuine *beyond-PHP security property* that ships today and is currently framed
   only as an R1-ordering/perf choice. Pure `map`/doc work, exactly parallel to **K-int-overflow-story**;
   belongs in the same K-security-doc guarantees list.
 
-- **K-redos-constraint** — Phorge ships **no regex engine today** [Verified: `Core.*` grep shows no
+- **K-redos-constraint** — Phorj ships **no regex engine today** [Verified: `Core.*` grep shows no
   `Core.Regex`], so there is no ReDoS surface *now* — but `Core.Text` will eventually want pattern matching,
   and PHP's PCRE is a notorious catastrophic-backtracking (ReDoS, CWE-1333) vector. Lock the constraint *now*
   (mirroring K-sql-prepared's "lock the constraint before building"): a future `Core.Regex` must be a
@@ -230,7 +230,7 @@ CSPRNG seam — i.e. K-csprng's injected-seam framing maps to a real, modern PHP
   the *distribution* axis. Small.
 
 - **K-dep-provenance** — `phg vendor` already records the resolved commit SHA + a content hash in
-  `phorge.lock` [Verified: M5 S3 in CLAUDE.md / `src/lock.rs` — `name`/`git`/`rev`/`hash`], so the data exists;
+  `phorj.lock` [Verified: M5 S3 in CLAUDE.md / `src/lock.rs` — `name`/`git`/`rev`/`hash`], so the data exists;
   the missing piece is *surfacing* it (and each dep's declared license) as a readable provenance/SBOM-lite
   record. Complements **K-audit-cmd** (advisory check) on the same supply-chain axis: audit answers "is this
   dep known-vulnerable?", provenance answers "what exactly am I shipping and under what license?". Defer to
@@ -249,7 +249,7 @@ All original ADOPTs survive the philosophy lens — each maps 1:1 to a PHP API (
 `hash_equals`/`random_bytes`/`getenv`/`#[SensitiveParameter]`/`htmlspecialchars`-family) or is pure doc/map
 framing of a shipped guarantee, and each removes a *surprise* (silent overflow, secret-in-trace, unsafe URL
 escape) without removing capability. The single **reject** (K-taint-tracking) is correctly reasoned: a flow
-analysis is PL-theory maximalism strictly dominated by Phorge's by-construction story (opaque `Secret`, XSS-
+analysis is PL-theory maximalism strictly dominated by Phorj's by-construction story (opaque `Secret`, XSS-
 safe `Html`, parameterized-only SQL), which is the more PHP-legible answer — **concur, reject stands.** The
 defers (SQL/Process/File-capability/auth-CSRF/CSP) are correctly gated on M6 DB/web scope and the CSPRNG seam;
 no defer should be pulled forward. No original recommendation needs reversing.

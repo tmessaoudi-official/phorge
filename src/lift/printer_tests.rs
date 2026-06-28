@@ -1,19 +1,19 @@
-//! M-Lift L3 — Phorge pretty-printer tests. Two kinds: exact-output checks for representative
+//! M-Lift L3 — Phorj pretty-printer tests. Two kinds: exact-output checks for representative
 //! constructs, and a **round-trip** check (parse `.phg` → print → re-parse must succeed and printing
-//! must be idempotent), which proves the output is valid Phorge that re-parses to a stable tree.
+//! must be idempotent), which proves the output is valid Phorj that re-parses to a stable tree.
 
 use super::printer::print_program;
 use crate::parser::Parser;
 
-/// Parse Phorge source into a program (panics on lex/parse error — tests use valid input).
-fn phorge(src: &str) -> crate::ast::Program {
+/// Parse Phorj source into a program (panics on lex/parse error — tests use valid input).
+fn phorj(src: &str) -> crate::ast::Program {
     let toks = crate::lexer::lex(src).expect("lex");
     Parser::new(toks).parse_program().expect("parse")
 }
 
 /// Parse → print.
 fn pp(src: &str) -> String {
-    print_program(&phorge(src)).expect("print")
+    print_program(&phorj(src)).expect("print")
 }
 
 #[test]
@@ -124,12 +124,12 @@ fn prefix_unary_without_parens() {
     assert!(b.contains("return ~(a + b);"), "{b}");
 }
 
-// ── round-trip: print output must be valid Phorge and printing must be idempotent ──
+// ── round-trip: print output must be valid Phorj and printing must be idempotent ──
 
 fn assert_roundtrip(src: &str) {
     let once = pp(src);
-    // The printed output must itself parse (valid Phorge) and print identically (a fixed point).
-    let twice = print_program(&phorge(&once)).expect("re-print");
+    // The printed output must itself parse (valid Phorj) and print identically (a fixed point).
+    let twice = print_program(&phorj(&once)).expect("re-print");
     assert_eq!(
         once, twice,
         "printer not idempotent\n--- once ---\n{once}\n--- twice ---\n{twice}"

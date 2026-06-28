@@ -8,7 +8,7 @@ import Core.List;
 //                        (so `"10" < "9"`, matching the Rust backends — NOT PHP's numeric juggling).
 //   * `find(p) -> T?`  — first element satisfying the predicate, or null.
 //   * `any(p)`/`all(p)`— short-circuiting existential / universal quantifiers (`bool`).
-// All pure Phorge over the higher-order-native machinery; byte-identical run / runvm / real PHP.
+// All pure Phorj over the higher-order-native machinery; byte-identical run / runvm / real PHP.
 function main(): void {
     List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6, 5];
 

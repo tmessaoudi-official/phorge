@@ -22,7 +22,7 @@ of the two differential harnesses.
 - `all_examples_match_between_backends` (the **single-file** glob, lines 990–1020) DOES call
   `uses_impure_native(&src)` and `continue`s (line 1004). This is the seam the design relies on. It works
   **only on loose `.phg` files** — `collect_phg` (line 932) explicitly *returns early* on any directory
-  holding a `phorge.toml`, so it never even sees a multi-file project.
+  holding a `phorj.toml`, so it never even sees a multi-file project.
 - `all_example_projects_match_between_backends` (the **project** harness, lines 1029–1057) does **NOT**
   call `uses_impure_native`. Verified mechanically: `grep -c impure` over the project-harness body
   (lines 1038–1057) returns **0**. It unconditionally `loader::load`s every `examples/project/*` root and
@@ -30,7 +30,7 @@ of the two differential harnesses.
 
 The design's own precedent works **only by accident of file placement**: `examples/process/args-env.phg`
 is a **loose single file** (verified: `find examples/process -type f` → `README.md`, `args-env.phg`; no
-`phorge.toml`), so it rides the single-file harness that skips it. Every actual *project* in the example
+`phorj.toml`), so it rides the single-file harness that skips it. Every actual *project* in the example
 set (`examples/project/{shapes,tempconv,visibility,withdeps}`) is pure today, so the gap has never been
 exercised.
 
@@ -39,7 +39,7 @@ exercised.
 1. A real concurrency program is **multi-file by nature** — a server with a router, a worker pool, a
    client. The design's §11 Q5 *recommendation* is a dedicated `import Core.AsyncLive` module ("importing
    it quarantines you" — the Process model). The natural way to ship that walkthrough is a multi-file
-   project under `examples/` with a `phorge.toml` (matching `examples/project/*`). The moment it has a
+   project under `examples/` with a `phorj.toml` (matching `examples/project/*`). The moment it has a
    manifest, `collect_phg` skips it AND `collect_projects` picks it up — and the project harness has no
    skip. Result: a Tier-B project gets `assert_eq!(run, runvm)` applied to it.
 2. The design itself (§6.4) says place the example "so the differential's project/example discovery
@@ -73,7 +73,7 @@ change the design omits.
 
 `uses_impure_native` (line 923): `impure.iter().any(|m| src.contains(&format!("import {m}")))`. Two gaps:
 
-1. **Import aliasing.** Phorge supports `import a.b as c;` (M5 S2c, contextual `as`, verified in CLAUDE.md).
+1. **Import aliasing.** Phorj supports `import a.b as c;` (M5 S2c, contextual `as`, verified in CLAUDE.md).
    `import Core.Time as T;` still contains the substring `import Core.Time`, so the simple alias survives —
    BUT the substring check is brittle: `import Core.TimeZone` (a hypothetical future pure module) contains
    `import Core.Time` as a substring → a *false positive* skip; conversely a formatting variant

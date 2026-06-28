@@ -127,7 +127,7 @@ Candidate sub-modules (by cohesion): `interpreter/{stmt,expr,call,construct,matc
 | 224–260 | `collect` | gather decls |
 | 261–312 | `emit_program` | **Item dispatch (clean match, 7 arms)** + main + helpers |
 | 321–381 | `emit_program_namespaced` | multi-package brace-namespace variant (a second Item dispatch) |
-| 382–486 | `emit_runtime_helpers` | the `__phorge_div`/`_rem`/`_range`/`_unwrap`/`_clone_with` PHP helpers |
+| 382–486 | `emit_runtime_helpers` | the `__phorj_div`/`_rem`/`_range`/`_unwrap`/`_clone_with` PHP helpers |
 | 487–600 | `line`/scope/`static_ref`/`type_pos_ref`/`emit_type`/`ret_hint` | helpers (`emit_type` is a small match over `Type`) |
 | 601–736 | `emit_function*`/`emit_free_fn`/`emit_overload_set` | function emission |
 | 736–765 | `overload_branch_test` | match over `ParamKind` |
@@ -365,7 +365,7 @@ This is "by-phase sub-split with `impl`-across-files," NOT "by-construct thin-di
 
 6. **The byte-identity gate is the only acceptable proof.** `tests/differential.rs` (run ≡
    runvm ≡ real PHP over every `examples/**/*.phg` + project roots) must stay green after
-   every split step. Per CLAUDE.md, also run with `PHORGE_REQUIRE_PHP=1` and the PHP 8.4
+   every split step. Per CLAUDE.md, also run with `PHORJ_REQUIRE_PHP=1` and the PHP 8.4
    oracle (the local php-master is too permissive). No split is "done" without that.
 
 7. **Adding a `pub(crate)` field is a permanent encapsulation downgrade** — if the milestone

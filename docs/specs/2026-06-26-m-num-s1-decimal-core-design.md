@@ -7,7 +7,7 @@
 A statically-typed `decimal` **primitive** for exact money/fixed-point math — making
 float-for-currency a *compile choice*, not a silent bug. Headline ergonomics:
 
-```phorge
+```phorj
 package Main;
 import Core.Console;
 function main() {
@@ -39,7 +39,7 @@ function main() {
 ## Construction from string (LOCKED: ships in S1)
 `Decimal.of(string) -> decimal?` — a native (module `Core`, leaf reused as a built-in static like
 `Int.parse`). Parses the same grammar as the literal at runtime; returns `null` on malformed input or
-i128 overflow (composes with S2 `??`). PHP: a gated `__phorge_dec_of($s)` helper validating the grammar
+i128 overflow (composes with S2 `??`). PHP: a gated `__phorj_dec_of($s)` helper validating the grammar
 (PCRE, tier-1) and normalising; on failure returns the null sentinel.
 
 ## Type rules
@@ -74,13 +74,13 @@ result is identical).
 [Verified: BCMath compiled into PHP 8.5.7 floor AND 8.6-dev canary, works under `php -n`; GMP/intl are
 NOT under `-n`; `brick/math` needs Composer autoload → unusable in the oracle.]
 - Literal `19.99d` ⇒ PHP string literal `"19.99"` (BCMath operates on strings).
-- `a + b` (decimal) ⇒ `__phorge_dec_add($a, $b)`; `-`/`*`/compare similarly. Each helper derives operand
+- `a + b` (decimal) ⇒ `__phorj_dec_add($a, $b)`; `-`/`*`/compare similarly. Each helper derives operand
   scales at runtime (`scale = strlen(substr(strrchr($s,'.'),1))`, 0 if no dot), computes the result
   scale per the rules above, calls `bcadd/bcsub/bcmul/bccomp` with that scale, and **bounds-checks the
   result against i128 range** → throws the same `decimal overflow` fault as Rust.
 - `decimal op int`: the int operand is stringified (`(string)$i`) before the helper; scale 0 ⇒ rules hold.
 - Gated `uses_dec_add/_sub/_mul/_cmp/_of` bool fields on the Transpiler; emitted once in
-  `emit_runtime_helpers`. `Decimal.of` ⇒ `__phorge_dec_of`.
+  `emit_runtime_helpers`. `Decimal.of` ⇒ `__phorj_dec_of`.
 - `emit_type(Ty::Decimal)` ⇒ PHP `string` (BCMath's carrier; PHP has no native decimal).
 
 ## Byte-identity strategy (the spine)

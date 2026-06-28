@@ -10,7 +10,7 @@ Enforcement lives in `src/checker/matches.rs` (the messages `non-exhaustive matc
 produced there; a runtime `FaultMsg::NonExhaustiveMatch` in `src/chunk.rs` / `src/interpreter/expr.rs`
 is the belt-and-braces backstop, never reached because the checker rejects first).
 
-BIN=/stack/projects/phorge/target/release/phg
+BIN=/stack/projects/phorj/target/release/phg
 
 ---
 

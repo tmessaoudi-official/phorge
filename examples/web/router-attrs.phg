@@ -16,7 +16,7 @@ import Core.Http;
 
 #[Route("GET", "/")]
 function home(Request req): Response {
-  return Response.text(200, "Phorge web — home");
+  return Response.text(200, "Phorj web — home");
 }
 
 #[Route("GET", "/health")]
@@ -63,7 +63,7 @@ function main(): void {
   show(rt, b"GET /health HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
   show(rt, b"GET /users/42 HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
   show(rt, b"GET /users/me HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
-  show(rt, b"GET /posts/2026/hello-phorge HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
+  show(rt, b"GET /posts/2026/hello-phorj HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
   show(rt, b"GET /missing HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
   show(rt, b"POST / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a");
 }

@@ -16,9 +16,9 @@ and may be finished first if the developer prefers (see order item 0).
 - [2026-06-26] AGREED: research depth = **Option 1, a multi-agent research workflow** (real token cost):
   prior-art sweep (PHP/Python/Go/Rust stdlibs), per-module feasibility spike, dumper-format + SQL-builder
   designs, adversarial byte-identity review → a written research SSOT. Launch **after compaction**.
-- [2026-06-26] AGREED (new scope): also analyze **"what PHP can do today that Phorge cannot, and how to
+- [2026-06-26] AGREED (new scope): also analyze **"what PHP can do today that Phorj cannot, and how to
   port each to PHP in a *better* way"** — not just parity, but the provably-correct/typed UPGRADE lens
-  (Phorge:PHP :: TS:JS). Extends the existing parity SSOT `docs/specs/2026-06-21-php-parity-and-beyond.md`
+  (Phorj:PHP :: TS:JS). Extends the existing parity SSOT `docs/specs/2026-06-21-php-parity-and-beyond.md`
   (which covered *language* gaps); this new pass focuses on **stdlib/library capability** gaps + the
   "better-than-PHP port" angle.
 - [2026-06-26] LOCKED FRAMING — **the Determinism Partition** decides feasibility before usefulness:
@@ -35,8 +35,8 @@ and may be finished first if the developer prefers (see order item 0).
 ## Feasibility verdicts (challenged, with confidence)
 - **`Core.Dump` (var-dumper, symfony-like): ~100% feasible, Tier A.** Reuses the existing cyclic
   visited-set in `value::eq_val_rec` for circular refs; exhaustive over the closed `Value` enum; depth/
-  string limits/colors all deterministic. **LAW that makes it 100%:** define a *Phorge* deterministic
-  format (NO addresses/object-ids/resource handles) and emit an identical `__phorge_dump()` PHP helper —
+  string limits/colors all deterministic. **LAW that makes it 100%:** define a *Phorj* deterministic
+  format (NO addresses/object-ids/resource handles) and emit an identical `__phorj_dump()` PHP helper —
   NOT PHP's native `var_dump` (its `#1` ids are non-deterministic → byte-identity impossible).
 - **`Core.Url` (parse/build/query-encode): ~100% feasible, Tier A.** Maps to `parse_url`/`http_build_query`/
   `urlencode`. The feasible half of "Guzzle"; pairs with M6 W1's `Request`/`Response`.
@@ -93,8 +93,8 @@ A research-phase fan-out (pipeline by default), producing a written SSOT under `
   what's pure vs impure, what API shape*.
 - **Stage 2 — per-module feasibility spike** (pipeline per candidate module): std-only feasibility, byte-
   identity strategy, transpile target, Tier A/B classification, confidence.
-- **Stage 3 — PHP-can / Phorge-can't + better-port** (new scope): enumerate stdlib capabilities PHP has
-  that Phorge lacks; for each, the *better* port (typed/deterministic/safer), referencing the language
+- **Stage 3 — PHP-can / Phorj-can't + better-port** (new scope): enumerate stdlib capabilities PHP has
+  that Phorj lacks; for each, the *better* port (typed/deterministic/safer), referencing the language
   parity SSOT to avoid overlap.
 - **Stage 4 — designs**: `Core.Dump` deterministic format + `Sql` builder shape (the two highest-value).
 - **Stage 5 — adversarial byte-identity + completeness critic**: refute each "pure" claim; flag any

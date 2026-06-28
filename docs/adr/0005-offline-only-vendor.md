@@ -7,7 +7,7 @@
 
 ## Context
 
-Phorge supports git dependencies (pinned by tag/rev). The project's central correctness contract is
+Phorj supports git dependencies (pinned by tag/rev). The project's central correctness contract is
 a **byte-identical spine** (`run ≡ runvm ≡ php`) over committed examples, and that demands
 deterministic, reproducible builds. Network access during a build is inherently non-deterministic
 (a tag can move, a host can be down), which would break both reproducibility and the offline
@@ -16,7 +16,7 @@ example suite.
 ## Decision
 
 `phg vendor` is the **only network-touching command**: clone → checkout the pinned rev → copy the
-dependency's source into `vendor/<vendor>/<package>/` → content-hash → write `phorge.lock`.
+dependency's source into `vendor/<vendor>/<package>/` → content-hash → write `phorj.lock`.
 `run` / `check` / `transpile` / `build` **never fetch**; they consult `vendor/` only, and a project
 **auto-goes-offline** when `vendor/` is present. A required dependency that isn't vendored is a hard
 error (`E-VENDOR-MISSING`). Examples that need dependencies **ship their `vendor/` committed**.

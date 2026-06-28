@@ -53,10 +53,10 @@ right subclass.
 - LSB is a genuine PHP idiom (ORMs, active-record factories) — *familiarity* argues for it.
 - But it is **subtle/surprising** (the `self::` vs `static::` distinction is a classic PHP footgun) and
   it introduces a **runtime "called class" concept** threaded through static dispatch — the first
-  static feature that isn't a pure compile-time resolution. That cuts against Phorge's "legible, no
+  static feature that isn't a pure compile-time resolution. That cuts against Phorj's "legible, no
   surprises, no new runtime machinery unless necessary."
 - It also interacts with the type system: `new static()` has type "the called class" — expressible only
-  as the enclosing class bound, an `F`-bounded-polymorphism shape Phorge doesn't have.
+  as the enclosing class bound, an `F`-bounded-polymorphism shape Phorj doesn't have.
 
 **Options:**
 1. **Defer + reject cleanly** (recommended): no `static::`/`new static()`; document as a deliberate

@@ -7,7 +7,7 @@
 
 ## Lens (constant)
 Byte-identity Tier A (gated) vs case-by-case Tier B (impure, quarantined, fixture-tested, transpiles to
-PHP). Philosophy: pragmatic, legible PHP upgrade (Phorge:PHP :: TS:JS); remove surprises, never
+PHP). Philosophy: pragmatic, legible PHP upgrade (Phorj:PHP :: TS:JS); remove surprises, never
 capability; one obvious way.
 
 ## Batch 1 — entry-point / module model + naming (2026-06-26)
@@ -92,7 +92,7 @@ P1)**, all front-end-only (byte-identity-neutral), 7 fix batches A–G. Decision
   visibility but `this` forbidden), so the singleton pattern is legal. **Byte-identity fix:** the
   transpiler emits the PHP visibility keyword on `__construct` AND wraps a static initializer of a
   restricted-ctor class in a class-scope-bound closure (`Closure::bind(static fn() => …, null,
-  C::class)`), so PHP allows the private construction that the global `__phorge_init_statics` would
+  C::class)`), so PHP allows the private construction that the global `__phorj_init_statics` would
   otherwise reject — `run≡runvm≡real PHP 8.5` preserved. Example `examples/guide/ctor-visibility.phg`
   (singleton + factory-method construction) byte-identical on all three legs; `phg explain` for both
   codes; 11 new checker tests; full workspace gate green (1002 lib + 112 differential w/ PHP oracle).

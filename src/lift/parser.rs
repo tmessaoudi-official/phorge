@@ -834,7 +834,7 @@ impl PParser {
         }
         // C-46: `value instanceof ClassName` — a single, non-associative trailing clause at the
         // postfix level (binds tighter than the `!`/`-`/`~` unary layer above). A dynamic RHS
-        // (`$x instanceof $cls`) has no Phorge equivalent and is refused loudly.
+        // (`$x instanceof $cls`) has no Phorj equivalent and is refused loudly.
         if matches!(self.peek(), PTok::Ident(w) if w == "instanceof") {
             self.advance();
             if matches!(self.peek(), PTok::Var(_)) {
@@ -1089,7 +1089,7 @@ fn is_lvalue(e: &PhpExpr) -> bool {
 // PHP's double-quoted interpolation grammar is exactly a `$`-rooted *access chain* — a variable
 // followed by `->prop` / `[idx]` / method-call steps; a top-level operator is a PHP parse error
 // (verified against 8.5: `"{$a + $b}"` errors with `expecting "->" or "?->" or "["`). That is also
-// precisely Phorge's `"{…}"` hole grammar, so the faithful subset round-trips 1:1. Anything richer
+// precisely Phorj's `"{…}"` hole grammar, so the faithful subset round-trips 1:1. Anything richer
 // (variable-variable `${…}`, dynamic `{$o->$p}`, a bareword simple subscript whose key silently
 // coerces to a string) is rejected loudly — never lifted to a guess.
 

@@ -9,12 +9,12 @@
   - `Core.List.sort(List<T>) -> List<T>` — natural ascending; **byte-identity trap:** PHP `<=>` juggles
     numeric strings (`"10" <=> "9"` → numeric), so strings must compare via `strcmp` (byte/lexicographic,
     matching Rust `String` Ord); int/float via numeric `<=>` (matching Rust). Gated helper
-    `__phorge_sort` (usort + type-dispatched comparator). NaN floats = documented edge → use `sortWith`.
+    `__phorj_sort` (usort + type-dispatched comparator). NaN floats = documented edge → use `sortWith`.
   - `Core.List.sortWith(List<T>, (T, T) -> int) -> List<T>` — comparator (higher-order, reuses the
     map/reduce re-entrant closure machinery); erases to `usort($ys, $cmp)`. Stable (Rust + PHP 8.0+).
-  - Both return a NEW list (Phorge lists are immutable/COW), so the PHP helper copies before `usort`.
+  - Both return a NEW list (Phorj lists are immutable/COW), so the PHP helper copies before `usort`.
 - [2026-06-26] **Casting system** — sequencing: **sort now, casting spec next** (M4 Slice 2, spec-first,
-  developer choice). NOT a C-style `(int)x` cast (the PHP surprise Phorge removes). Surface: developer
+  developer choice). NOT a C-style `(int)x` cast (the PHP surprise Phorj removes). Surface: developer
   wants a **mix** (Core.Convert module + `as` operator + UFCS methods) **plus a TS-style `<X>` form**;
   explicitly wants to **research + brainstorm** it. **Key distinction to explore in the spec:** TS
   `<X>v` / `v as X` are compile-time *type assertions* (no runtime conversion) — a different axis from
@@ -28,15 +28,15 @@ TDD: kernel tests (sort int/string/float ascending, stability, sortWith comparat
 guide example `examples/guide/sort.phg` (byte-identity-gated 3-way). Add a gated `uses_list_sort` helper.
 
 ## Casting system — design notes (under discussion)
-Phorge philosophy ([[philosophy-of-phorge]]) = legible, surprise-free PHP upgrade. PHP casts
-(`(int)`, `(bool)`, type juggling) are a top surprise source → the Phorge answer is **explicit, named,
+Phorj philosophy ([[philosophy-of-phorj]]) = legible, surprise-free PHP upgrade. PHP casts
+(`(int)`, `(bool)`, type juggling) are a top surprise source → the Phorj answer is **explicit, named,
 total-or-optional conversions**, not a C-cast operator:
 - **Total/widening** (never fails): `int → float`, `int/float/bool → string`.
 - **Partial/narrowing** (→ `T?`, surfaces failure, no silent truncation): `string → int?` (= existing
   `Text.parseInt`), `string → float?`, `float → int?` (lossy: explicit `truncate`/`round`, or `int?`).
 - **Surface options:** a `Core.Convert` module (most consistent with namespaced stdlib + byte-identity
   control) vs a `x as T` operator (ergonomic but invites the C-cast surprise model — leaning against).
-- Open: does Phorge already auto-widen `int → float` in arithmetic (`1 + 2.0`)? The spec must pin the
+- Open: does Phorj already auto-widen `int → float` in arithmetic (`1 + 2.0`)? The spec must pin the
   implicit-coercion rules. Spec-first.
 
 ## Pinned completion backlog (autonomous — full-auto bypass active, 2026-06-26)
@@ -49,11 +49,11 @@ total-or-optional conversions**, not a C-cast operator:
    `Op`, byte-identical 3-way, single-eval proven, foreach-`as` ambiguity fixed. `examples/guide/as-cast.phg`.
 2. **Map mutation/access** — ✅ **DONE** (`examples/guide/map-ops.phg`, byte-identical 3-way).
    `get(Map<K,V>, K) -> V?` (inline `($m[$k] ?? null)`), `set`/`remove -> Map<K,V>` (new map, COW;
-   gated `__phorge_map_set`/`_remove`; `set` reuses `value::map_set`). No new `Op`/`Value`.
+   gated `__phorj_map_set`/`_remove`; `set` reuses `value::map_set`). No new `Op`/`Value`.
 3. **List breadth** — ✅ **DONE** (`examples/guide/list-ops.phg`, byte-identical): `slice` (array_slice,
-   normalized), `indexOf -> int?` (gated `__phorge_index_of`), `concat` (array_merge), `first`/`last -> T?`.
+   normalized), `indexOf -> int?` (gated `__phorj_index_of`), `concat` (array_merge), `first`/`last -> T?`.
 4. **Text breadth** — ✅ **DONE** (`examples/guide/text-ops.phg`, byte-identical): `padLeft`/`padRight`
-   (str_pad, byte), `indexOf -> int?` (gated `__phorge_text_index_of`), `substring` (substr, byte). Tier-1.
+   (str_pad, byte), `indexOf -> int?` (gated `__phorj_text_index_of`), `substring` (substr, byte). Tier-1.
 5. **Set ops** — ✅ **DONE** (`examples/guide/set-ops.phg`, byte-identical): `union`/`intersection`/
    `difference` (array_unique∘array_merge / array_intersect / array_diff; first-set order).
 6. **`Text.parseFloat(string, bool permissive = false) -> float?`** — ✅ **DONE** (shipped with the
@@ -62,7 +62,7 @@ total-or-optional conversions**, not a C-cast operator:
    Original blocker note retained below for history:
    ⛔ ~~**BLOCKED on a new language feature.**~~ Developer
    chose `parseFloat(string, bool permissive = false)` (strict default, opt-in lax) over strict-only /
-   two-named. That **requires default parameter values**, which Phorge lacks (`Param` has no default
+   two-named. That **requires default parameter values**, which Phorj lacks (`Param` has no default
    field; arity is checked exactly). So **default parameters is now a prerequisite language feature**
    (plan `docs/plans/2026-06-26-default-parameters.plan.md`, design
    `docs/specs/2026-06-26-default-parameters-design.md`). Strict grammar locked: rejects `inf`/`nan`
@@ -78,7 +78,7 @@ total-or-optional conversions**, not a C-cast operator:
 
 ## Status
 - [x] **Slice 1 sort/sortWith** — DONE (`examples/guide/sort.phg`, byte-identical; gated
-  `__phorge_sort`/`__phorge_sort_with`; no new Op/Value).
+  `__phorj_sort`/`__phorj_sort_with`; no new Op/Value).
 - [x] **Slice 2 design** — DONE: spec `docs/specs/2026-06-26-m4-casting-conversion-design.md`.
   Locked (developer): **checked `as` → `T?`** (decline TS unchecked); **no implicit coercion**;
   conversion via **`Core.Convert`** (UFCS makes it module+method in one); `to*` from typed values,

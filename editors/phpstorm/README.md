@@ -1,7 +1,7 @@
-# Phorge for PhpStorm / IntelliJ IDEA (and other JetBrains IDEs)
+# Phorj for PhpStorm / IntelliJ IDEA (and other JetBrains IDEs)
 
-Phorge ships a single language server (`phg lsp`) and a single TextMate grammar
-(`../vscode/syntaxes/phorge.tmLanguage.json`). JetBrains IDEs consume **both** without a compiled
+Phorj ships a single language server (`phg lsp`) and a single TextMate grammar
+(`../vscode/syntaxes/phorj.tmLanguage.json`). JetBrains IDEs consume **both** without a compiled
 plugin — using two built-in/marketplace mechanisms:
 
 1. **Syntax highlighting** — JetBrains' native **TextMate Bundles** support reads the same grammar the
@@ -25,7 +25,7 @@ the VSCode extension, because all three drive the *same* `phg lsp` server and th
 ## 1. Syntax highlighting (TextMate bundle)
 
 `Settings → Editor → TextMate Bundles → +` and select this repository's **`editors/vscode/`** directory.
-JetBrains reads its `package.json` `grammars` entry and loads `syntaxes/phorge.tmLanguage.json`, so
+JetBrains reads its `package.json` `grammars` entry and loads `syntaxes/phorj.tmLanguage.json`, so
 `.phg` files are highlighted (keywords, types, strings + `{…}` interpolation, numbers, comments,
 attributes). No VSCode required — the directory is just a standard TextMate-compatible bundle.
 
@@ -33,9 +33,9 @@ attributes). No VSCode required — the directory is just a standard TextMate-co
 
 1. Install **LSP4IJ** (`Settings → Plugins → Marketplace → "LSP4IJ"`).
 2. `Settings → Languages & Frameworks → Language Servers → +` (a new *user-defined* language server):
-   - **Name:** `Phorge`
+   - **Name:** `Phorj`
    - **Command:** `phg lsp` (or `/absolute/path/to/phg lsp`)
-   - **Mappings → File name patterns:** `*.phg` → language id `phorge`
+   - **Mappings → File name patterns:** `*.phg` → language id `phorj`
 3. Apply. Open any `.phg` file: diagnostics appear inline (identical to `phg check`), and hover,
    go-to-definition (`Ctrl/Cmd+Click`), completion, structure view (document symbols), find-usages
    (references), rename, and reformat (`phg fmt`) all work through the server.

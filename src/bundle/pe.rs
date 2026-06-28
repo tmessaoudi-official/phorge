@@ -1,5 +1,5 @@
 //! PE/COFF section reader (Windows). Minimal lookup, checked arithmetic, None on malformed input.
-//! Our payload section name (".phorge", 7 bytes) is <= 8 bytes, so no COFF string-table indirection.
+//! Our payload section name (".phorj", 7 bytes) is <= 8 bytes, so no COFF string-table indirection.
 
 /// Find a named section's bytes in a PE/COFF image. None on any malformed/oversized input.
 pub(crate) fn pe_find_section<'a>(bytes: &'a [u8], name: &str) -> Option<&'a [u8]> {
@@ -26,7 +26,7 @@ pub(crate) fn pe_find_section<'a>(bytes: &'a [u8], name: &str) -> Option<&'a [u8
     let sect_table = coff.checked_add(20)?.checked_add(opt_hdr_size)?;
     let want = name.as_bytes();
     if want.len() > 8 {
-        return None; // long names need the COFF string table; the phorge payload name is short
+        return None; // long names need the COFF string table; the phorj payload name is short
     }
     for i in 0..num_sections {
         let sh = sect_table.checked_add(i.checked_mul(40)?)?;
@@ -46,7 +46,7 @@ mod tests {
     use super::*;
 
     /// Build a minimal PE image: DOS stub (MZ + e_lfanew@0x3C) → "PE\0\0" → COFF header (1 section,
-    /// 0-byte optional header) → one 40-byte section header named ".phorge" pointing at `payload`.
+    /// 0-byte optional header) → one 40-byte section header named ".phorj" pointing at `payload`.
     fn pe_with_section(name: &str, payload: &[u8]) -> Vec<u8> {
         let mut v = vec![0u8; 0x40];
         v[0] = b'M';
@@ -74,23 +74,23 @@ mod tests {
 
     #[test]
     fn pe_reader_finds_section() {
-        let img = pe_with_section(".phorge", b"hello-pe");
-        assert_eq!(pe_find_section(&img, ".phorge"), Some(&b"hello-pe"[..]));
+        let img = pe_with_section(".phorj", b"hello-pe");
+        assert_eq!(pe_find_section(&img, ".phorj"), Some(&b"hello-pe"[..]));
         assert_eq!(pe_find_section(&img, ".other"), None);
     }
 
     #[test]
     fn pe_reader_rejects_malformed_without_panic() {
-        assert_eq!(pe_find_section(b"", ".phorge"), None);
-        assert_eq!(pe_find_section(b"MZ", ".phorge"), None); // too short for e_lfanew
-                                                             // e_lfanew = u32::MAX would overflow a plain `+`; checked arithmetic must return None.
-        let mut img = pe_with_section(".phorge", b"x");
+        assert_eq!(pe_find_section(b"", ".phorj"), None);
+        assert_eq!(pe_find_section(b"MZ", ".phorj"), None); // too short for e_lfanew
+                                                            // e_lfanew = u32::MAX would overflow a plain `+`; checked arithmetic must return None.
+        let mut img = pe_with_section(".phorj", b"x");
         img[0x3C..0x40].copy_from_slice(&u32::MAX.to_le_bytes());
-        assert_eq!(pe_find_section(&img, ".phorge"), None);
+        assert_eq!(pe_find_section(&img, ".phorj"), None);
         // NumberOfSections huge + an absent name -> the loop walks past EOF; the checked slice
         // `.get()` returns None (no overflow-panic), so the lookup is None. (Searching for the present
-        // ".phorge" would correctly match at index 0 before the huge count is ever reached.)
-        let mut img2 = pe_with_section(".phorge", b"x");
+        // ".phorj" would correctly match at index 0 before the huge count is ever reached.)
+        let mut img2 = pe_with_section(".phorj", b"x");
         img2[0x44..0x46].copy_from_slice(&u16::MAX.to_le_bytes()); // COFF NumberOfSections@(0x40+4)+2
         assert_eq!(pe_find_section(&img2, ".absent"), None);
     }

@@ -2,12 +2,12 @@
 
 ## Track summary
 
-Phorge's observability story today is **fault-reporting only**, and only one direction of it: the
+Phorj's observability story today is **fault-reporting only**, and only one direction of it: the
 in-progress stack-traces slice (`docs/specs/2026-06-21-stack-traces-and-fault-reporting-design.md`)
 renders an uncaught-fault call stack identically on `run`/`runvm`, surfaced in the CLI and in a
 `phg serve --dev` HTML 500 page (prod = bare 500, no leak). `src/serve.rs` writes operational
 events (request failures, client resets, slow-client timeouts) to **Rust `eprintln!`/stderr** — there
-is no Phorge-level logging primitive, no structured-event facility, and the stdlib registry
+is no Phorj-level logging primitive, no structured-event facility, and the stdlib registry
 (`src/native.rs`) has **no `Core.Time`, `Core.Log`, `Core.Env`, or `Core.Process` module**. There is
 no metrics surface, no tracing/span concept, no runtime reflection/introspection beyond `phg disasm`
 (a compile-time bytecode dump), and no health/readiness endpoint for the server. Catchable errors
@@ -52,7 +52,7 @@ warning/error/critical/alert/emergency) and Monolog. A `Core.Log` native module 
 `debug`/`info`/`warning`/`error`/… each taking a `string` (and later a context map) maps *directly* to
 PHP `error_log()` / a PSR-3 logger and erases cleanly — no new `Op`, no runtime-type machinery, the
 same `(module,name)` native registry path already used by `Core.Console`. It is legible, boring, and
-makes a `serve` workload debuggable in production today (right now the only Phorge-level output channel
+makes a `serve` workload debuggable in production today (right now the only Phorj-level output channel
 is `Console.println` to stdout, which is wrong for diagnostics). Effort M because it needs a level enum
 and a default sink (stderr) plus the transpile mapping; sits naturally in M11 stdlib breadth alongside
 `core.json`/`core.list`.
@@ -75,7 +75,7 @@ the concrete payoff that makes Q-corelog/Q-coretime worth shipping. Effort M; la
 serve` CLI + front-controller), the natural home for serve-operability polish.
 
 **Q-serve-health — health / readiness route helper.** A production HTTP server needs a liveness/
-readiness endpoint (Kubernetes probes, load-balancer health checks). Because Phorge's server model is
+readiness endpoint (Kubernetes probes, load-balancer health checks). Because Phorj's server model is
 the pure `handle(Request) -> Response` value function, this is *already expressible* in user code (a
 route returning 200 on `/healthz`) — so the gap is a **convenience helper**, not a capability: a tiny
 `serve`-level default `/healthz` (overridable) or a documented pattern + example. Keeping it as a thin
@@ -108,9 +108,9 @@ already implemented. (`removed_mislisted = 0`.)
 | Q-log-sink | Pluggable log sink / output target (file, custom) | new | weak | reject | — | M |
 
 **Q-assert — `assert(cond, msg)` dev-time contract check.** PHP `assert()` is a universally-recognized
-idiom for "this must be true or the program is broken" — a legible, boring upgrade. Phorge already has
+idiom for "this must be true or the program is broken" — a legible, boring upgrade. Phorj already has
 a clean-fault model (checked arithmetic, OOB index, `opt!` force-unwrap all fault byte-identically on
-both backends via `Op::Fault`), so a Phorge `assert(cond)` / `assert(cond, "msg")` lowers to exactly
+both backends via `Op::Fault`), so a Phorj `assert(cond)` / `assert(cond, "msg")` lowers to exactly
 that existing fault path — **no new `Op`** (the S2 `Op::Fault(FaultMsg)` generalization already exists),
 a tiny checker rule (the condition must be `bool`), and transpiles to PHP `assert()`. It is *fault*-
 domain so it's naturally quarantined from the byte-identity oracle like every other fault. The one

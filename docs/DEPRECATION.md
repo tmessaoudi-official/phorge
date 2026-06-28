@@ -1,6 +1,6 @@
 # Deprecation policy
 
-How Phorge retires a part of its public surface without breaking users silently. This complements
+How Phorj retires a part of its public surface without breaking users silently. This complements
 [`../SEMVER.md`](../SEMVER.md) (when breaks are allowed) and [`../STABILITY.md`](../STABILITY.md) (which
 surface is stable vs experimental vs deprecated).
 

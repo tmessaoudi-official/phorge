@@ -67,7 +67,7 @@ fn env_get_unset_is_null() {
     let mut out = String::new();
     assert!(matches!(
         env_get(
-            &[Value::Str("PHORGE_TEST_ENV_DEFINITELY_UNSET_XYZ".into())],
+            &[Value::Str("PHORJ_TEST_ENV_DEFINITELY_UNSET_XYZ".into())],
             &mut out
         ),
         Ok(Value::Null)

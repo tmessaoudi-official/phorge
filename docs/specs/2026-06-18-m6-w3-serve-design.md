@@ -10,7 +10,7 @@
 `src/serve.rs` — the ONE place sockets + wall-clock non-determinism live. Deliberately **outside**
 `tests/differential.rs` (its conformance is checked by a new `tests/serve.rs` over a deterministic
 in-memory `Transport`). The portable unit stays `handle(Request) -> Response` (W1) *inside* the
-served program; the runtime only shuttles raw bytes to a single Phorge entry **`respond(bytes) ->
+served program; the runtime only shuttles raw bytes to a single Phorj entry **`respond(bytes) ->
 bytes`** and writes the result back. HTTP/1.1, `Connection: close`, one request per connection.
 
 **Single-threaded by FORCE:** the `Rc`-shared heap (P5a) makes `Value` non-`Send`, so no thread pool
@@ -30,13 +30,13 @@ in the post-W4 review.
 ## 2. The single entry contract — `respond(bytes) -> bytes`
 
 The served program exposes ONE function the runtime calls per request:
-```phorge
+```phorj
 function respond(bytes raw) -> bytes {
   if (var req = parse_request(raw)) { return serialize_response(dispatch(req)); }
-  else { return serialize_response(bad_request()); }   // malformed → 400, in Phorge
+  else { return serialize_response(bad_request()); }   // malformed → 400, in Phorj
 }
 ```
-All HTTP logic (parse, route, serialize, 400) stays in **pure Phorge** (tested in-spine via the W4
+All HTTP logic (parse, route, serialize, 400) stays in **pure Phorj** (tested in-spine via the W4
 example). The runtime is the thinnest possible glue: `bytes` in → one call → `bytes` out. No opaque
 `Value` shuttling, no Rust knowledge of the `Request`/`Response` class layout. The PHP bridge (W4)
 mirrors this: a front-controller builds a `Request` from superglobals → `handle` → echo (the value
@@ -87,7 +87,7 @@ use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::rc::Rc;
 
-/// The default Phorge entry the runtime calls per request.
+/// The default Phorj entry the runtime calls per request.
 pub const SERVE_ENTRY: &str = "respond";
 
 /// Seam between the serve loop and the world. TcpTransport is the real socket; tests/serve.rs swaps
@@ -192,7 +192,7 @@ fn find_subslice(hay: &[u8], needle: &[u8]) -> Option<usize> {
 
 A `FixtureTransport` impl of `Transport` (a `VecDeque<Vec<u8>>` of canned requests, a `Vec<Vec<u8>>`
 of captured responses). Build a checked `Program` from an inline serve source via the public
-front-end (`phorge::parser` + `phorge::cli::check_and_expand`, or add a tiny pub
+front-end (`phorj::parser` + `phorj::cli::check_and_expand`, or add a tiny pub
 `cli::parse_checked_program(src)` helper — `parse_checked` is currently private). Then:
 - feed 2-3 canned raw requests (a known route, an unknown route → 404, a malformed buffer → 400),
 - run `serve(&program, &mut fixture)`,
@@ -219,7 +219,7 @@ binds `127.0.0.1:0`, spawns a thread, sends a request via `TcpStream`, asserts t
 
 After W4: a *functional* `phg serve app.phg` exists. **Stop for a code + plan review**, then re-plan
 (fold in: M8 importer build, Track A closures unblocking core.list/middleware/path-params, the
-language gaps named-args/variadics/union→enum, the parked "Phorge > PHP" benchmark).
+language gaps named-args/variadics/union→enum, the parked "Phorj > PHP" benchmark).
 
 ## 8. Invariants honored
 
@@ -227,5 +227,5 @@ language gaps named-args/variadics/union→enum, the parked "Phorge > PHP" bench
   imports it; conformance via deterministic `Transport` fixture in tests/serve.rs.
 - **No new `Op` / `Value` variant** — `call_named` reuses `run_call`; bytes↔socket is plain Rust.
 - **`#![forbid(unsafe_code)]`, std-only** — `TcpListener`/`TcpStream`/`Read`/`Write`, no crates.
-- **EV-7 no-crash** — request size capped; malformed/partial buffers flow to Phorge `parse_request`
+- **EV-7 no-crash** — request size capped; malformed/partial buffers flow to Phorj `parse_request`
   which returns `null` → a 400; faults degrade to a 500. Never panics on socket input.

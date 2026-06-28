@@ -71,7 +71,7 @@ Even granting "test only the PHP leg in `tests/db.rs` against `/stack` docker fi
   re-run here]. ⇒ the fixture golden is per-driver, not a single golden — more fragile than "exact
   golden" implies.
 - **`NULL` rendering.** A SQL `NULL` → PHP `null`; if the test echoes a row map naively (`echo $v`),
-  `null` prints as empty string while a Phorge `Null` value may render differently — but since the Rust
+  `null` prints as empty string while a Phorj `Null` value may render differently — but since the Rust
   legs don't run, this only bites the PHP-vs-expected-golden, not cross-backend. Still: the golden must
   encode the null-rendering convention explicitly. [Inferred].
 - **`php -n` connection requires the driver's *runtime* deps.** `class_exists("PDO")` being true is
@@ -104,8 +104,8 @@ is). It cannot:
 - **Row ordering** — Postgres heap order ≠ MySQL clustered-index order ≠ SQLite rowid; mandatory
   `ORDER BY` is the only fix, and even then a tie without a unique sort key is engine-defined. [Verified:
   standard SQL semantics]. Confirms spike risk 2.
-- **HashMap ordering** — N/A here in a damaging way: Phorge's `Value::Map` is insertion-ordered
-  (`Rc<Vec<(HKey,Value)>>`, not a `HashMap`), so the *Phorge* map preserves PDO `FETCH_ASSOC` column
+- **HashMap ordering** — N/A here in a damaging way: Phorj's `Value::Map` is insertion-ordered
+  (`Rc<Vec<(HKey,Value)>>`, not a `HashMap`), so the *Phorj* map preserves PDO `FETCH_ASSOC` column
   order — good — but column order is still SQL-`SELECT`-list order on the PHP side, which is fine as
   long as the SELECT pins columns. Not a divergence *given* explicit column lists. [Verified: value.rs
   Map is a Vec of pairs].

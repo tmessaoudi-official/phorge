@@ -1,6 +1,6 @@
 //! `Core.Convert` — explicit value conversion (`docs/specs/2026-06-26-m4-casting-conversion-design.md`,
 //! axis 1). The *cast* (type assertion / reinterpret) is the `as` operator; this module produces a
-//! **new value** of another type, always explicitly (Phorge has no implicit coercion). Lossy
+//! **new value** of another type, always explicitly (Phorj has no implicit coercion). Lossy
 //! conversions are *named* (`truncate`/`round`), never a silent `(int)`. Because UFCS ships,
 //! `Convert.toFloat(n)` and `n.toFloat()` are the same call — module + method API in one.
 
@@ -9,7 +9,7 @@ use crate::types::Ty;
 use crate::value::Value;
 
 /// `Convert.toString(T) -> string` — generic, runtime-dispatched, reusing `Value::as_display` (the
-/// same rendering as string interpolation / the PHP `__phorge_str` helper): bool → `true`/`false`,
+/// same rendering as string interpolation / the PHP `__phorj_str` helper): bool → `true`/`false`,
 /// float → shortest-round-trip, int/string verbatim. Byte-identity contract is the scalar types; a
 /// composite value (list/map/instance) is not displayable → a clean fault (documented edge).
 fn convert_to_string(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -48,7 +48,7 @@ fn convert_round(args: &[Value], _: &mut String) -> Result<Value, String> {
 
 /// `Convert.toInt(float) -> int?` (M-NUM S3) — truncate toward zero, or `null` on NaN / ±∞ /
 /// out-of-i64-range. Single-sourced with `value::float_to_int` (the edge-safe guards), so `run`/`runvm`
-/// agree; mirrored by the PHP `__phorge_float_to_int` helper. Avoids PHP's `(int)NAN == 0`.
+/// agree; mirrored by the PHP `__phorj_float_to_int` helper. Avoids PHP's `(int)NAN == 0`.
 fn convert_to_int(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Float(f)] => Ok(crate::value::float_to_int(*f).map_or(Value::Null, Value::Int)),
@@ -88,7 +88,7 @@ fn convert_decimal_to_float(args: &[Value], _: &mut String) -> Result<Value, Str
 
 /// `Convert.decimalToInt(decimal) -> int?` (M-NUM S3) — truncate toward zero (drop the fraction), or
 /// `null` if the integer part is out of i64 range. Single-sourced with `value::decimal_to_int` (exact
-/// i128 carrier math, no BCMath); mirrored by the PHP `__phorge_dec_to_int` helper (string split before
+/// i128 carrier math, no BCMath); mirrored by the PHP `__phorj_dec_to_int` helper (string split before
 /// the dot). For *rounded* decimal→int, compose `Decimal.round(d, 0, mode)` then `decimalToInt`.
 fn convert_decimal_to_int(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
@@ -101,7 +101,7 @@ fn convert_decimal_to_int(args: &[Value], _: &mut String) -> Result<Value, Strin
 
 /// `Convert.floatToIntExact(float) -> int?` (M4 as-matrix) — the `float as int` kernel: `Some` only
 /// when the float is integral & in range (`3.0 → 3`, `3.9 → null`), never a silent truncate.
-/// Single-sourced with `value::float_to_int_exact`; PHP `__phorge_float_to_int_exact`.
+/// Single-sourced with `value::float_to_int_exact`; PHP `__phorj_float_to_int_exact`.
 fn convert_float_to_int_exact(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Float(f)] => {
@@ -113,7 +113,7 @@ fn convert_float_to_int_exact(args: &[Value], _: &mut String) -> Result<Value, S
 
 /// `Convert.decimalToIntExact(decimal) -> int?` (M4 as-matrix) — the `decimal as int` kernel: `Some`
 /// only when the decimal is integral & in range (`3.00d → 3`, `3.50d → null`), never a silent
-/// truncate. Single-sourced with `value::decimal_to_int_exact`; PHP `__phorge_dec_to_int_exact`.
+/// truncate. Single-sourced with `value::decimal_to_int_exact`; PHP `__phorj_dec_to_int_exact`.
 fn convert_decimal_to_int_exact(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [v @ Value::Decimal { .. }] => {
@@ -156,7 +156,7 @@ fn convert_as_bool(args: &[Value], _: &mut String) -> Result<Value, String> {
 /// parse the float's **shortest round-trip** string into an exact decimal (`2.5 → 2.5`), or `null`
 /// on a non-finite value / i128 overflow. Captures the *displayed* value, not the exact binary float
 /// (documented; floats like `0.1` are inexact in binary). Single-sourced with `value::decimal_of`
-/// over the shortest string (Rust's `{}` Display == the PHP `__phorge_str`/`__phorge_float` helper).
+/// over the shortest string (Rust's `{}` Display == the PHP `__phorj_str`/`__phorj_float` helper).
 fn convert_float_to_decimal(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Float(f)] if f.is_finite() => Ok(crate::value::decimal_of(&format!("{f}")).map_or(
@@ -224,8 +224,8 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             ret: Ty::String,
             pure: true,
             eval: NativeEval::Pure(convert_to_string),
-            // Reuses the existing `__phorge_str` helper (gated via `uses_str`, set in transpile/call.rs).
-            php: |a| format!("__phorge_str({})", parg(a, 0)),
+            // Reuses the existing `__phorj_str` helper (gated via `uses_str`, set in transpile/call.rs).
+            php: |a| format!("__phorj_str({})", parg(a, 0)),
         },
         NativeFn {
             module: "Core.Convert",
@@ -261,9 +261,9 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             params: vec![Ty::Float],
             ret: Ty::Optional(Box::new(Ty::Int)),
             pure: true,
-            // `__phorge_float_to_int` is gated in `transpile::emit_member_call` (a native's `php`
+            // `__phorj_float_to_int` is gated in `transpile::emit_member_call` (a native's `php`
             // closure has no `&mut self`). Mirrors `value::float_to_int`.
-            php: |a| format!("__phorge_float_to_int({})", parg(a, 0)),
+            php: |a| format!("__phorj_float_to_int({})", parg(a, 0)),
             eval: NativeEval::Pure(convert_to_int),
         },
         NativeFn {
@@ -292,9 +292,9 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             params: vec![Ty::Decimal],
             ret: Ty::Optional(Box::new(Ty::Int)),
             pure: true,
-            // `__phorge_dec_to_int` is gated in `transpile::emit_member_call`. Mirrors
+            // `__phorj_dec_to_int` is gated in `transpile::emit_member_call`. Mirrors
             // `value::decimal_to_int` (split the carrier string before the dot, range-check).
-            php: |a| format!("__phorge_dec_to_int({})", parg(a, 0)),
+            php: |a| format!("__phorj_dec_to_int({})", parg(a, 0)),
             eval: NativeEval::Pure(convert_decimal_to_int),
         },
         // --- exact int conversions (M4 `as`-matrix `float/decimal as int`) ---
@@ -304,7 +304,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             params: vec![Ty::Float],
             ret: Ty::Optional(Box::new(Ty::Int)),
             pure: true,
-            php: |a| format!("__phorge_float_to_int_exact({})", parg(a, 0)),
+            php: |a| format!("__phorj_float_to_int_exact({})", parg(a, 0)),
             eval: NativeEval::Pure(convert_float_to_int_exact),
         },
         NativeFn {
@@ -313,7 +313,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             params: vec![Ty::Decimal],
             ret: Ty::Optional(Box::new(Ty::Int)),
             pure: true,
-            php: |a| format!("__phorge_dec_to_int_exact({})", parg(a, 0)),
+            php: |a| format!("__phorj_dec_to_int_exact({})", parg(a, 0)),
             eval: NativeEval::Pure(convert_decimal_to_int_exact),
         },
         // --- float → decimal (M4 as-matrix S4) — shortest-string parse, optional ---
@@ -323,9 +323,9 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             params: vec![Ty::Float],
             ret: Ty::Optional(Box::new(Ty::Decimal)),
             pure: true,
-            // Reuses the float-display (`__phorge_str`) + decimal-parse (`__phorge_dec_of`) helpers,
+            // Reuses the float-display (`__phorj_str`) + decimal-parse (`__phorj_dec_of`) helpers,
             // both gated in `transpile::emit_member_call` (see the `floatToDecimal` case there).
-            php: |a| format!("__phorge_dec_of(__phorge_str({}))", parg(a, 0)),
+            php: |a| format!("__phorj_dec_of(__phorj_str({}))", parg(a, 0)),
             eval: NativeEval::Pure(convert_float_to_decimal),
         },
         // --- bool conversions (M4 as-matrix S3) — total, explicit `!= 0` / `1`/`0` rules ---

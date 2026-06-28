@@ -368,7 +368,7 @@ pub enum Modifier {
     Private,
     Protected,
     Const,
-    /// `open` on a class or method (M-RT S6) — opts into extensibility/overridability. Phorge is
+    /// `open` on a class or method (M-RT S6) — opts into extensibility/overridability. Phorj is
     /// **final-by-default** (a non-`open` class can't be `extend`ed; a non-`open` method can't be
     /// overridden), so the `final` keyword is retired. Checker-enforced (`E-EXTEND-FINAL`/
     /// `E-OVERRIDE-FINAL`); the transpiler emits PHP `final` for the *absence* of `open`. The

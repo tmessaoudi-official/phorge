@@ -188,7 +188,7 @@ fn field_access_typed() {
 
 #[test]
 fn field_accessible_in_method_via_this() {
-    // A field is read through `this.` (Phorge requires `this.field` everywhere, like PHP `$this->`).
+    // A field is read through `this.` (Phorj requires `this.field` everywhere, like PHP `$this->`).
     let src =
         "class C { constructor(private string name) {} function who() -> string { return this.name; } }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));

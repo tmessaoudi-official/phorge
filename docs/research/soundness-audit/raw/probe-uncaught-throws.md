@@ -16,13 +16,13 @@ code — an unhandled checked exception — compiles clean).
 
 ## Evidence
 
-Binary: `/stack/projects/phorge/target/release/phg` (prebuilt release, not rebuilt).
+Binary: `/stack/projects/phorj/target/release/phg` (prebuilt release, not rebuilt).
 
 ### 1. Baseline — free-function call, unhandled (correctly REJECTED)
 
 `$TMP/uncaught-throws.phg`:
 
-```phorge
+```phorj
 package Main;
 import Core.Console;
 class NegativeInput implements Error { constructor(public string message) {} }
@@ -58,7 +58,7 @@ So the free-function spine is sound.
 
 `$TMP/method-throw.phg`:
 
-```phorge
+```phorj
 package Main;
 import Core.Console;
 class A implements Error { constructor(public string message) {} }
@@ -171,4 +171,4 @@ File: `src/checker/calls.rs` (with a small change at the `applied`-tuple constru
 **P0 — unsound.** An unhandled checked exception (provably-wrong code by the feature's own contract)
 type-checks clean whenever the throwing callee is a method. This breaks the central
 "provably-correct upgrade of PHP" promise for the entire OO surface (any `class … function f() throws
-E`), which is the idiomatic way most real Phorge code will raise errors.
+E`), which is the idiomatic way most real Phorj code will raise errors.

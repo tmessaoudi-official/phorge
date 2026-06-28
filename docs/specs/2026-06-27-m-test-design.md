@@ -5,18 +5,18 @@
 > `E-TEST-OUTSIDE-TESTS`; `Core.Test` (`assert`/`assertTrue`/`assertFalse`/`assertEquals`/
 > `assertNotEquals`/`assertNull`/`assertNotNull`/`assertFaults`); the `phg test [path…]` runner; and the
 > `selftest/` showcase. Deferred follow-ups (fixtures, parameterized, `--vm`, TAP/JUnit, PHPUnit bridge)
-> tracked in KNOWN_ISSUES. Goal achieved: a first-class testing story so Phorge can dogfood itself.
+> tracked in KNOWN_ISSUES. Goal achieved: a first-class testing story so Phorj can dogfood itself.
 
 ## Goals
-- Write tests *in Phorge*, run them with one command, get a clear pass/fail report + non-zero exit on
+- Write tests *in Phorj*, run them with one command, get a clear pass/fail report + non-zero exit on
   failure (CI-usable).
-- Assertions are ordinary Phorge calls (`Core.Test`), so a test file is a normal program.
-- Cover the fault surface (`assertFaults`) — Phorge's error model is a first-class feature to test.
+- Assertions are ordinary Phorj calls (`Core.Test`), so a test file is a normal program.
+- Cover the fault surface (`assertFaults`) — Phorj's error model is a first-class feature to test.
 
 ## Key decisions (recommendation + rationale; **confirm before building**)
 
 ### D1 — how a test is declared  → **recommend: a `test "name" { … }` top-level item**
-```phorge
+```phorj
 package Main;
 import Core.Test;
 
@@ -28,7 +28,7 @@ test "addition wraps at the boundary" {
 - `test` is a **contextual keyword** (only special at item position — like `package`/`type`), so it
   stays usable as an identifier elsewhere. A new `Item::Test { name: String, body: Vec<Stmt> }`.
 - Rejected alternatives: (a) functions named `test*` (Go/PHPUnit convention — implicit, less
-  readable, collides with a real function named `testX`); (b) a `@test` annotation (Phorge has no
+  readable, collides with a real function named `testX`); (b) a `@test` annotation (Phorj has no
   annotation system — would be a bigger prerequisite).
 - A `test` block body is checked like a `-> void` function body (no return value; may call asserts).
   It captures no `this`. Lives only in test files (see D3); an `Item::Test` in a non-test build is an
@@ -59,7 +59,7 @@ example differential glob** (they live under `tests/`, not `examples/`).
 
 ### D3 — discovery + the runner  → **recommend: `phg test [path]` over `*.phg` under `tests/`**
 - `phg test` with no arg: discover every `*.phg` under a `tests/` directory (project-aware: walk up to
-  `phorge.toml`; loose mode: `./tests/`). `phg test <file|dir>`: run exactly that.
+  `phorj.toml`; loose mode: `./tests/`). `phg test <file|dir>`: run exactly that.
 - Each test file is loaded through the **normal loader/checker** (so tests get packages, imports,
   cross-package types — real programs). Then every `Item::Test` is executed.
 - **Backend**: run each test on the **interpreter** (`run`) for speed and clear stack traces.

@@ -20,7 +20,7 @@
 
 ## 1. Slice 1 — middleware + route groups (this slice)
 
-Pure Phorge on the injected `Core.Http` types; **no new `Op`, no new `Value`**.
+Pure Phorj on the injected `Core.Http` types; **no new `Op`, no new `Value`**.
 
 ### 1.1 `Router` gains a middleware list (breaking the W2 ctor — W2 is unpushed, so this is a revision)
 `Router` becomes two-field: `constructor(private List<Route> table, private List<MW> mws)` where

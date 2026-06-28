@@ -1,7 +1,7 @@
 # M2 P5 Phase A — `Rc`-shared heap objects
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans (inline; subagents
-> deadlock on the ask-human gate in this repo). Steps use checkbox (`- [ ]`) syntax. Phorge git
+> deadlock on the ask-human gate in this repo). Steps use checkbox (`- [ ]`) syntax. Phorj git
 > autonomy applies (commit green, self-contained). Read `docs/INVARIANTS.md` and the design spec
 > `docs/specs/2026-06-16-m2-p5-object-model-design.md` before touching the backends.
 

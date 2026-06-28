@@ -5,7 +5,7 @@ import Core.Math;
 // M3 Track B Wave 2 — the `Core.Math` stdlib module. Each function erases to the PHP builtin of
 // the same name. Float ops (`sqrt`/`pow`/`floor`/`ceil`) return `float`; `abs`/`min`/`max` are
 // `int`. Every finite float renders byte-identically across all three backends (the transpiler's
-// `__phorge_float` helper reproduces Rust's shortest-round-trip `f64` Display) — see
+// `__phorj_float` helper reproduces Rust's shortest-round-trip `f64` Display) — see
 // `examples/guide/floats.phg` for the full magnitude/precision showcase.
 
 function main(): void {
@@ -39,8 +39,8 @@ function main(): void {
     int c3 = Math.clamp(5, 0, 10);
     Console.println("clamp(15,0,10) = {c1}, clamp(-3,0,10) = {c2}, clamp(5,0,10) = {c3}");
 
-    // `gcd` has no PHP-core builtin, so it erases to a `__phorge_gcd` helper (Euclid) emitted on
-    // both legs — byte-identical by construction, exactly like `__phorge_div`/`__phorge_round_div`.
+    // `gcd` has no PHP-core builtin, so it erases to a `__phorj_gcd` helper (Euclid) emitted on
+    // both legs — byte-identical by construction, exactly like `__phorj_div`/`__phorj_round_div`.
     int g1 = Math.gcd(48, 36);
     int g2 = Math.gcd(17, 5);
     Console.println("gcd(48,36) = {g1}, gcd(17,5) = {g2}");
@@ -57,7 +57,7 @@ function main(): void {
     Console.println("exp(0)={e0}, log(1)={l1}, log10(1)={lt}, cos(0)={c0}, sin(0)={s0}, tan(0)={t0}");
 
     // --- `numberFormat(value, decimals)` → a grouped string, rounded half-away-from-zero. It erases
-    // to a `__phorge_number_format` helper (identical string-building on both legs), so it is the safe
+    // to a `__phorj_number_format` helper (identical string-building on both legs), so it is the safe
     // way to *print* a real transcendental: formatting to a few decimals collapses any last-ULP noise. ---
     string n1 = Math.numberFormat(1234567.891, 2);
     string n2 = Math.numberFormat(1234.5678, 2);

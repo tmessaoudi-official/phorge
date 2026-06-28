@@ -17,7 +17,7 @@ maximal ("Everything" — developer-chosen):
 3. **Flow-narrowing** — a unified engine covering negative/else narrowing, early-return narrowing,
    post-exhaustive-match narrowing, and equality/null/literal refinement.
 
-**Philosophy fit** ([[philosophy-of-phorge]]): every form maps to legible, idiomatic PHP; nothing adds a
+**Philosophy fit** ([[philosophy-of-phorj]]): every form maps to legible, idiomatic PHP; nothing adds a
 runtime surprise. Uniform nesting (axis 2) is chosen specifically to *remove* the surprise of an
 arbitrary "patterns nest here but not there" asymmetry.
 
@@ -144,7 +144,7 @@ field-read ops.
    class field type, or the VM rejects what the interpreter accepts → silent `run`↔`runvm` break. The
    differential must include an `expr + 1` operand case over a destructured field/payload.
 2. **Assignment-in-condition idiom** ([[php-transpile-floor-84]]): verify against the **real PHP 8.4
-   oracle** (`PHORGE_PHP=…php-8.4… PHORGE_REQUIRE_PHP=1`), not just the permissive local php-master.
+   oracle** (`PHORJ_PHP=…php-8.4… PHORJ_REQUIRE_PHP=1`), not just the permissive local php-master.
 
 ## 6. Diagnostics (all `phg explain`-documented)
 - `E-MATCH-GUARD-EXHAUST` — a shape covered only by guarded arms, no unguarded fallback.

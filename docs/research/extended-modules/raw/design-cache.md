@@ -66,13 +66,13 @@ the strongest, free-est slice: it is essentially `Map`-with-a-compute-fallback, 
 the same higher-order shape as `List.map`/`reduce` (already shipped, `NativeEval::HigherOrder` +
 `ClosureInvoker`, verified `src/native/list.rs:189–232`).
 
-Because Phorge `Map` is **immutable / COW** (verified — `map_set` clones, `Map.set` returns a *new*
+Because Phorj `Map` is **immutable / COW** (verified — `map_set` clones, `Map.set` returns a *new*
 map), `Core.Memo` is purely functional: every op returns a *new* cache value. There is no hidden global
 state, so it is trivially deterministic and byte-identical on all three legs.
 
-### 3.2 Phorge-syntax API sketch
+### 3.2 Phorj-syntax API sketch
 
-```phorge
+```phorj
 package Main;
 import Core.Console;
 import Core.Memo;
@@ -82,7 +82,7 @@ function main() {
     var cache = Memo.new();                    // Memo<K, V> empty
 
     // getOrCompute: return the cached value, or compute+store it (returns BOTH the value and the
-    // updated cache, since Phorge has no mutation here — see §3.4 for the tuple-vs-pair decision).
+    // updated cache, since Phorj has no mutation here — see §3.4 for the tuple-vs-pair decision).
     var r1 = Memo.getOrCompute(cache, "fib10", fn() => fib(10));
     cache = r1.cache;                          // r1.value : int, r1.cache : Memo<K, V>
     Console.println("fib10 = {r1.value}");
@@ -132,14 +132,14 @@ determined by the source — no clock, no scheduling.)
 
 ### 3.4 Open decision (Tier-A): the `getOrCompute` return shape
 
-Phorge has no tuples yet (verified — no `Tuple` in the value set; structs/records are the idiom). Three
+Phorj has no tuples yet (verified — no `Tuple` in the value set; structs/records are the idiom). Three
 options, in preference order:
 
 1. **Return a small struct** `{ value: V, cache: Memo<K, V> }` (sketch above). Requires the type to
    exist — either an *injected* type (the `Core.Json` `inject_json_prelude` precedent — verified in
    memory `[[core-json-and-injected-types]]`: inject an AST type before check, gated on import) or a
    generic `MemoResult<V, K>`. Cleanest ergonomics; **recommended**.
-2. **Mutation-style** `Memo.getOrCompute(memo_ref, k, f) -> V` taking a *mutable* memo. Phorge has
+2. **Mutation-style** `Memo.getOrCompute(memo_ref, k, f) -> V` taking a *mutable* memo. Phorj has
    mutation (M-mut closed), but a native taking `&mut Value` is not in the current `NativeEval` shape
    (eval takes `&[Value]`). Would need a new native-eval variant — rejected (too much machinery).
 3. **Two-call** `Memo.get` + `Memo.set` with the compute done in user code. No `getOrCompute` at all.
@@ -174,9 +174,9 @@ Therefore a program importing `Core.Cache` is auto-dropped from `differential.rs
 exactly like `Core.Process`. Fixture-tested separately under a controlled environment in a new
 `tests/cache.rs` (mirroring `tests/process.rs`).
 
-### 4.2 Phorge-syntax API sketch (PSR-16-shaped)
+### 4.2 Phorj-syntax API sketch (PSR-16-shaped)
 
-```phorge
+```phorj
 package Main;
 import Core.Console;
 import Core.Cache;
@@ -214,7 +214,7 @@ Surface (all `Core.Cache`, all `pure: false`):
 
 Scope decision: **values are `string` only in v1** (a `bytes`/JSON value needs a serialization contract —
 defer to a follow-up that composes with `Core.Json.stringify`/`parse`, both shipped). PSR-16 stores
-arbitrary serializable values; Phorge v1 narrows to `string` to keep the Rust-leg degradation trivial
+arbitrary serializable values; Phorj v1 narrows to `string` to keep the Rust-leg degradation trivial
 and the PHP erasure to a bare `apcu_store`/`file_put_contents` with no `serialize()` ambiguity.
 
 ### 4.3 The Rust-leg story (why a persistent cache is even runnable on `run`/`runvm`)

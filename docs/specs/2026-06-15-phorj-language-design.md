@@ -1,16 +1,16 @@
-# Phorge — Language Design Spec (v0.1)
+# Phorj — Language Design Spec (v0.1)
 
 - **Date:** 2026-06-15
 - **Status:** Design frozen — ready for implementation planning
-- **Codename:** Phorge · **File extension:** `.phg`
+- **Codename:** Phorj · **File extension:** `.phg`
 - **Implementation language:** Rust
-- **Repo:** `/stack/projects/phorge` (own git repo; `/stack/projects` is gitignored by /stack)
+- **Repo:** `/stack/projects/phorj` (own git repo; `/stack/projects` is gitignored by /stack)
 
 ---
 
 ## 1. Vision & Intent
 
-Phorge is a **new general-purpose programming language inspired by PHP**, built as a
+Phorj is a **new general-purpose programming language inspired by PHP**, built as a
 **learning journey that produces a real, runnable socle** while **fixing specific,
 well-known PHP limitations**.
 
@@ -148,12 +148,12 @@ v2: Native + systems  (the "rival Rust" phase)
 4. **Tree-walking evaluator** — programs run.
 5. **Layer in** — core types → generics → ADTs + exhaustive `match`.
 
-**M1 deliverable:** real Phorge programs (e.g. the `Shape`/`area`/`match` sample) run end-to-end.
+**M1 deliverable:** real Phorj programs (e.g. the `Shape`/`area`/`match` sample) run end-to-end.
 
 ### Implementation language: Rust (decision rationale in §7)
 
 ### Server/deployment model (the "Go model")
-Phorge compiles to **one binary that *is* the web server** — listens on a port, handles
+Phorj compiles to **one binary that *is* the web server** — listens on a port, handles
 requests concurrently in-process, state persists in memory. No FPM (PHP's per-request model),
 no app server (Java's resident-VM model). `scp` one binary and run it. Native-resident, like Go/Rust.
 
@@ -161,7 +161,7 @@ no app server (Java's resident-VM model). `scp` one binary and run it. Native-re
 
 ## 6. Sample program (frozen syntax)
 
-```phorge
+```phorj
 import std.io;
 
 enum Shape {
@@ -229,8 +229,8 @@ function main() {
 | 24 | Backend | Bytecode+VM now, native-AOT in v2 | Max learning; matches "GC now, ownership later" |
 | 25 | POC scope | Ambitious: core + generics + ADTs + match | Owner's choice (eyes-open on stall risk) |
 | 26 | Impl language | Rust | Greenfield + extensibility + AST fit + learning synergy + native-v2 alignment |
-| 27 | Codename | Phorge (`.phg`) | PH + forge |
-| 28 | Location | `/stack/projects/phorge` (own repo) | `/stack/projects` is gitignored — clean separation |
+| 27 | Codename | Phorj (`.phg`) | PH + forge |
+| 28 | Location | `/stack/projects/phorj` (own repo) | `/stack/projects` is gitignored — clean separation |
 
 ---
 
@@ -242,13 +242,13 @@ function main() {
 - Standard library scope & naming (clean, consistent — large effort, v2 track).
 - **Source-position column semantics** for diagnostics/LSP: the M1 lexer counts columns per *byte*, so error columns after a multi-byte UTF-8 char on a line are offset by N. Decide the unit (UTF-16 code units for LSP, Unicode scalars, or graphemes) when building the diagnostics layer (Plan 3+), then make `bump()` column-counting match. Byte offsets in `Span.start`/`len` stay byte-based (correct for slicing).
 - Desktop/mobile UI story (Flutter's hard part is the rendering engine, not the language).
-- PHP→Phorge migration tool (separate sub-project).
+- PHP→Phorj migration tool (separate sub-project).
 
 ---
 
 ## 9. Prior Art to Study
 
-- **Hack** (Meta's statically-typed PHP) — Phorge's closest older sibling.
+- **Hack** (Meta's statically-typed PHP) — Phorj's closest older sibling.
 - **Crafting Interpreters** (Nystrom) — the M1→M2 path (tree-walker → bytecode VM).
 - **Rust** itself — the implementation language *and* a reference for traits/ADTs/ownership.
 - **Go** — the server/deployment model and concurrency inspiration.

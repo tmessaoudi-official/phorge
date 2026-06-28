@@ -1,11 +1,11 @@
 # Multi-file projects (M5)
 
-Single `.phg` files are great for scripts, but real programs span many files and packages. Phorge's
+Single `.phg` files are great for scripts, but real programs span many files and packages. Phorj's
 **project model** (milestone M5) is Go-shaped: every file declares a `package`, the folder layout
 *is* the package path, and cross-package functions are imported and called leaf-qualified — and it
 all transpiles to idiomatic namespaced PHP.
 
-Each subdirectory here is a self-contained project, discovered by its `phorge.toml`. Like every
+Each subdirectory here is a self-contained project, discovered by its `phorj.toml`. Like every
 other example, each one runs byte-identically on both backends — `tests/differential.rs` finds every
 project root and asserts `run` ≡ `runvm` (and that it runs at all).
 
@@ -13,7 +13,7 @@ project root and asserts `run` ≡ `runvm` (and that it runs at all).
 
 ```
 tempconv/
-├── phorge.toml                     # module = "acme/tempconv", source = "src"
+├── phorj.toml                     # module = "acme/tempconv", source = "src"
 └── src/
     ├── main.phg                    # package Main   — the runnable entry
     └── Acme/
@@ -24,7 +24,7 @@ tempconv/
             └── label.phg           #   tag(name, v) -> "{name} = {v}F"
 ```
 
-Run it (the CLI walks up to `phorge.toml`, loads the whole project, and runs `package Main`):
+Run it (the CLI walks up to `phorj.toml`, loads the whole project, and runs `package Main`):
 
 ```console
 $ phg run examples/project/tempconv/src/main.phg
@@ -75,10 +75,10 @@ namespace {
 Package segments map **1:1** to PHP namespaces (`Acme.Convert` ⇒ `Acme\Convert`) — segments are
 PascalCase at the source, so there is no casing transform; cross-package calls emit fully-qualified
 (`\Acme\Convert\cToF`). It runs under a bare `php out.php` — no Composer and no autoloader (PSR-4
-can't autoload free functions, and Phorge is function-heavy).
+can't autoload free functions, and Phorj is function-heavy).
 
 > The conversions use **exact integer arithmetic** (0→32, 100→212) on purpose: a non-whole result
-> would render differently under PHP's float `/` than under Phorge's integer `/`, so the example
+> would render differently under PHP's float `/` than under Phorj's integer `/`, so the example
 > sticks to values that are identical across all three. The `run` ≡ `runvm` spine is always identical
 > regardless.
 
@@ -86,6 +86,6 @@ can't autoload free functions, and Phorge is function-heavy).
 
 Library packages export **functions and types** — a `class`/`enum`/`interface` in a library package
 is consumed cross-package via `import type Pkg.Path.TypeName;` (see `shapes/`). Git-based
-dependencies (`[require]` in `phorge.toml`), `phorge.lock`, and vendoring ship in M5 S3 (see
+dependencies (`[require]` in `phorj.toml`), `phorj.lock`, and vendoring ship in M5 S3 (see
 `withdeps/`). Casing is enforced: package/folder segments are PascalCase (`E-PKG-CASE`), types are
 PascalCase, functions/variables are camelCase.

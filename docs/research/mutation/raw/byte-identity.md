@@ -3,7 +3,7 @@
 **Milestone:** Mutation + garbage collection (the "deferred" milestone in the GA roadmap).
 **Non-negotiable invariant:** `run ≡ runvm ≡ real PHP`, byte-identical stdout (INVARIANT #1).
 **Thesis:** Mutation is the single biggest threat to that spine, and the threat is *not* "mutation is
-hard" — it is that **PHP's value/handle split is a semantic fork** that Phorge's current
+hard" — it is that **PHP's value/handle split is a semantic fork** that Phorj's current
 "everything is `Rc`-shared with an immutable interior" model does not encode. Get the value/handle
 rule right and almost every sub-question (aliasing, foreach, copy-on-assign, clone, closure capture)
 falls out of one decision. Get it wrong and *every* program that mutates a list silently diverges.
@@ -79,15 +79,15 @@ nested arrays too (logically; physically COW-separated on first write). But an a
 shared object* (`obj_arr_alias`) is reachable through the shared handle, so mutating it is visible —
 the array didn't alias, the *object* did.
 
-### Why this is a fork for Phorge specifically
+### Why this is a fork for Phorj specifically
 
-Phorge today represents **both** `List` and `Instance` as `Rc<T>`. Cloning either is a refcount bump
+Phorj today represents **both** `List` and `Instance` as `Rc<T>`. Cloning either is a refcount bump
 → aliasing. While immutable, aliasing is unobservable, so List-as-`Rc` is harmless. **Under
 mutation, `Rc`-sharing gives a List PHP-*object* semantics (aliasing visible), but PHP gives arrays
 *value* semantics (aliasing invisible).** That is a direct, guaranteed byte-identity break the
 instant any program does:
 
-```phorge
+```phorj
 mutable List<int> a = [1, 2, 3];
 List<int> b = a;        // PHP: COPY.  Naive Rc-share: ALIAS.
 a.push(4);              // PHP: b stays [1,2,3].  Naive: b becomes [1,2,3,4]. DIVERGENCE.
@@ -95,7 +95,7 @@ a.push(4);              // PHP: b stays [1,2,3].  Naive: b becomes [1,2,3,4]. DI
 
 ### The master decision (forced, not a fork)
 
-**Phorge must split its value model along PHP's exact line: collections (`List`/`Map`/`Set`) get
+**Phorj must split its value model along PHP's exact line: collections (`List`/`Map`/`Set`) get
 *value* semantics; class instances (`Instance`) get *handle* semantics.** This is not a stylistic
 choice — it is the only way `run ≡ runvm ≡ real PHP` survives mutation. [Inferred from the verified
 PHP table + the verified `Rc`-everything representation; the conclusion is forced once both are
@@ -113,7 +113,7 @@ PHP itself implements arrays the same way — **copy-on-write zval separation** 
 ([PHP Internals — references](https://www.phpinternalsbook.com/php7/zvals/references.html)).
 
 Rust's exact analog of `isKnownUniquelyReferenced()` is **`Rc::make_mut`** (clones iff
-`strong_count > 1`, else mutates in place) and `Rc::strong_count`/`Rc::get_mut`. So Phorge can keep
+`strong_count > 1`, else mutates in place) and `Rc::strong_count`/`Rc::get_mut`. So Phorj can keep
 `List(Rc<Vec<Value>>)` *unchanged in representation* and get PHP-identical array value semantics by
 routing every list mutation through `Rc::make_mut` — **no representation change, no new `Value`
 variant.** Instances, by contrast, must become *shared-mutable*, which requires interior mutability
@@ -178,8 +178,8 @@ For each: PHP's verified behavior → the divergence risk → what each backend 
 - **PHP:** `foreach ($a as $x) { … $a[]=99; … }` iterates **a COPY** — the appended element is **not
   visited** (`mut_test2.php` Verified: prints `1 2 3`, final count 4). PHP snapshots the array for the
   loop (its COW gives the loop its own view).
-- **Phorge today:** `Stmt::For` already materializes the iterator once into a `List` and iterates
-  that snapshot (`interpreter.rs:297-307`). So **Phorge already has PHP's "iterate a copy" semantics
+- **Phorj today:** `Stmt::For` already materializes the iterator once into a `List` and iterates
+  that snapshot (`interpreter.rs:297-307`). So **Phorj already has PHP's "iterate a copy" semantics
   for free** — even after mutation lands, as long as the loop keeps eval-once-then-iterate-snapshot.
 - **Risk:** if a future optimization makes `for` iterate the *live* `Rc` buffer (to avoid the
   snapshot), and the body mutates the same binding, the two backends could disagree on whether the
@@ -196,7 +196,7 @@ For each: PHP's verified behavior → the divergence risk → what each backend 
   language level), so the "evaluated once" footgun (Python's mutable-default trap) **does not exist in
   PHP** — every call gets a fresh value-copy of the constant (`mut_test2.php` `default_array: 11`
   Verified — array default is fresh and value-copied each call). [Verified]
-- **Risk:** if Phorge allows *arbitrary-expression* defaults (more powerful than PHP), it must decide
+- **Risk:** if Phorj allows *arbitrary-expression* defaults (more powerful than PHP), it must decide
   evaluate-once-at-definition (Python footgun, breaks PHP parity) vs evaluate-per-call (PHP-like).
   Evaluate-once with a mutable default would make the default **alias across calls** — an instant
   three-way divergence (PHP has no such concept to match).
@@ -207,20 +207,20 @@ For each: PHP's verified behavior → the divergence risk → what each backend 
   no-new-Op lowering). A mutable default that is evaluate-once is **FORBIDDEN** (see §3). [Inferred —
   the recommendation follows from the verified PHP rule + the no-surprise philosophy.]
 
-### 2.6 Mutation through a closure capture (Phorge captures BY VALUE today)
+### 2.6 Mutation through a closure capture (Phorj captures BY VALUE today)
 
 - **PHP:** `use($x)` captures **by value at definition** for arrays/scalars (snapshot — `mut_test3.php`
   `closure_array_byval: 1` Verified), **by handle** for objects (`closure_obj_byhandle: 77` Verified),
   and `use(&$x)` captures **by reference** (`closure_byref: 5` Verified).
-- **Phorge today:** captures by value, period (`ClosureData.env`/`captures` are cloned `Value`s).
+- **Phorj today:** captures by value, period (`ClosureData.env`/`captures` are cloned `Value`s).
   - For **scalars and Lists/Maps/Sets**, capture-by-value already matches PHP's `use($x)` value
     capture *exactly* — a later mutation of the outer binding is a `make_mut` detach, invisible to
     the closure's snapshot. Byte-identical, **no change needed.** [Verified PHP + Verified capture
     model.]
   - For **objects**, PHP's `use($o)` captures the *handle*, so a later mutation of `$o` **is** seen
-    by the closure. Phorge's clone-the-`Value` capture — once `Instance` is `Rc<RefCell>` — would
+    by the closure. Phorj's clone-the-`Value` capture — once `Instance` is `Rc<RefCell>` — would
     clone the *handle* (refcount bump), which **also shares the interior**. So capturing an instance
-    by value in Phorge would, with the shared-mutable-instance model, *coincidentally* match PHP's
+    by value in Phorj would, with the shared-mutable-instance model, *coincidentally* match PHP's
     handle capture (both see later field mutations), because cloning a handle shares the cell. So
     **the existing by-value capture is correct for both axes after the split** — this is a pleasant
     consequence of the value/handle split, not a separate mechanism. [Inferred — needs a differential
@@ -229,7 +229,7 @@ For each: PHP's verified behavior → the divergence risk → what each backend 
   captured instance), the closure's capture detaches and PHP's "closure sees the mutation" breaks.
 - **Enforce:** instance capture = clone the handle (shares the cell). Do **not** route a closure-
   captured instance through `make_mut`. By-reference capture (`use(&$x)`) of a *scalar/list* is the
-  one case Phorge cannot match without true reference cells — **reject `use(&$x)` value-aliasing of
+  one case Phorj cannot match without true reference cells — **reject `use(&$x)` value-aliasing of
   non-objects** (PHP reference operator is already a `reject` in the parity matrix, line 165/229).
   [Verified: the matrix rejects `&` references.]
 
@@ -268,7 +268,7 @@ For each: PHP's verified behavior → the divergence risk → what each backend 
   a nested **object** property stays **shared** (`shallow_clone: x.inner.v=42 y.inner.v=42` — both
   mutated), but a nested **array** property is value-copied (`obj_clone_arr: h1=2 h2=3` — independent).
   `__clone()` is a hook to deep-copy manually.
-- **Risk:** Phorge must reproduce "shallow for objects, value-copy for arrays" *exactly*. With the
+- **Risk:** Phorj must reproduce "shallow for objects, value-copy for arrays" *exactly*. With the
   split model this is automatic: `clone` makes a new `Instance` cell whose fields are **cloned
   `Value`s** — an object field clones the handle (shared, PHP-shallow ✓), an array field clones the
   `Rc<Vec>` (refcount bump; first mutation `make_mut`-detaches → value-independent, PHP-array ✓).
@@ -279,7 +279,7 @@ For each: PHP's verified behavior → the divergence risk → what each backend 
   as "meaningful only with mutation." **Clone-with** (PHP 8.5 `clone($o, [...])`, functional update)
   is `defer/high-ROI` (line 140/285) — and note PHP 8.5's `clone with` **respects `readonly`** at the
   language level (`mut_test4.php` Verified: `Cannot modify ... readonly property` — clone-with is the
-  *only* sanctioned way to "change" a readonly field). For Phorge's immutable-by-default model,
+  *only* sanctioned way to "change" a readonly field). For Phorj's immutable-by-default model,
   **clone-with is the idiomatic "change an immutable value"** and aligns perfectly. [Verified PHP
   8.5 behavior; matrix-confirmed ROI.]
 - **Enforce:** when mutation lands, `clone` = fresh instance cell + shallow field-`Value` copy
@@ -292,13 +292,13 @@ For each: PHP's verified behavior → the divergence risk → what each backend 
 - **PHP:** `==` is **structural** (same class + equal props, recursive), `===` is **identity** (same
   handle) (`mut_test2.php` Verified: `$m==$n` true, `$m===$n` false, `$m===$o` true). **Mutation does
   not change identity** (`mut_test2.php` Verified: after `$m->v=5`, `$m===$o` still true).
-- **Phorge today:** `eq_val` is structural for instances (compares class + fields recursively,
-  `value.rs:238`) — matches PHP `==`. There is **no identity operator** (`===`) — Phorge has no
+- **Phorj today:** `eq_val` is structural for instances (compares class + fields recursively,
+  `value.rs:238`) — matches PHP `==`. There is **no identity operator** (`===`) — Phorj has no
   handle notion yet. `eq_val` on a *cyclic* graph would **infinite-loop** (it recurses unbounded).
 - **Risk:** (a) once instances are shared-mutable, an `===` identity test becomes meaningful and
-  *differs* from `==`; if Phorge wants `===`, both backends must compare `Rc` pointer identity
+  *differs* from `==`; if Phorj wants `===`, both backends must compare `Rc` pointer identity
   (`Rc::ptr_eq`) identically. (b) **Cyclic `==`**: PHP's `==` on a cycle is protected (it tracks
-  visited pairs / has recursion guards); Phorge's `eq_val` recurses without a guard → stack overflow
+  visited pairs / has recursion guards); Phorj's `eq_val` recurses without a guard → stack overflow
   on a cyclic graph, and the two backends could overflow at *different* depths (the VM and tree-walker
   have the same `MAX_CALL_DEPTH` but `eq_val` is native Rust recursion, NOT frame-counted) →
   potential non-identical crash, breaking `agree_err`.
@@ -328,7 +328,7 @@ For each: PHP's verified behavior → the divergence risk → what each backend 
 - **Enforce:** the tracing/cycle GC is required for **memory correctness**, not stdout identity — so
   it can be a `Rc`-with-cycle-collector (e.g. trial-deletion à la PHP/CPython, or a simple
   mark-sweep over the instance arena) that runs *between* observable operations and **must not** emit
-  anything. **Phorge has no destructors** (and the matrix should keep it that way for determinism) →
+  anything. **Phorj has no destructors** (and the matrix should keep it that way for determinism) →
   the GC is observationally invisible, so it cannot affect the spine as long as it never reorders or
   emits output. Build the GC scoped to the **instance arena only** (value types are still `Rc`/`Drop`
   acyclic). [Verified cycle buildability; Inferred GC scoping.]
@@ -391,7 +391,7 @@ These are *forced* by the verified PHP semantics + the existing representation �
 The current `agree`/`agree_err` oracle is **necessary but not sufficient** for mutation, because a
 value/handle slip can produce *identical single-run output on both Rust backends* while diverging
 from PHP (e.g. if BOTH Rust backends naively alias a List, they agree with each other but not PHP).
-The PHP oracle (`PHORGE_REQUIRE_PHP=1`, M7) is what catches that — so **every mutation example must
+The PHP oracle (`PHORJ_REQUIRE_PHP=1`, M7) is what catches that — so **every mutation example must
 be in the `examples/**/*.phg` glob** (auto-PHP-gated) and must:
 
 - assign a collection to a second binding, mutate via one, **print both** (catches §2.2/§2.3);

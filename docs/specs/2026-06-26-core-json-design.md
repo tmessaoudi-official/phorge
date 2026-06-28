@@ -13,7 +13,7 @@ enums + `Map` + `List` all shipped.
 
 ## Public surface
 
-```phorge
+```phorj
 import Core.Json;
 
 // The value model — a compiler-injected enum (see "Injection" below). Recursive.
@@ -37,7 +37,7 @@ A user constructs (`Json.Int(42)`, `Json.Obj([...])`) and `match`es on the varia
 ### Locked decisions (developer, 2026-06-26 — see plan Decisions Log)
 
 1. **Number model = `Int(int) + Float(float)`** (PHP-faithful). PHP `json_decode("42")` → `int`,
-   `"42.0"`/`"1e3"` → `float`; Phorge mirrors that, and it matches Phorge's own int/float split.
+   `"42.0"`/`"1e3"` → `float`; Phorj mirrors that, and it matches Phorj's own int/float split.
    Round-trip is byte-identical to PHP either way (`json_encode(42.0)` → `"42"`).
 2. **Ship both `stringify` (compact) and `stringifyPretty` (4-space)** in the first slice.
 3. **PHP-reserved enum-variant names are mangled in the transpiler** (append `_`). PHP reserves
@@ -49,7 +49,7 @@ A user constructs (`Json.Int(42)`, `Json.Obj([...])`) and `match`es on the varia
 ## Slice A — reserved enum-variant mangling (transpiler-only, prerequisite)
 
 A variant's PHP **class name** is its only PHP-reserved-collision surface. `run`/`runvm` use the
-Phorge variant string (`EnumVal.variant`) and never a PHP class name, so this is **transpiler-only**
+Phorj variant string (`EnumVal.variant`) and never a PHP class name, so this is **transpiler-only**
 and stdout byte-identity is untouched by construction.
 
 - New `transpile` helper `php_variant_name(variant: &str) -> String`: lowercase-compare against the
@@ -79,9 +79,9 @@ inject must precede it) **iff the program imports `Core.Json`**:
 fn inject_json_prelude(prog: &Program) -> Program  // prepend the canonical Json EnumDecl if imported
 ```
 
-The decl is produced by parsing a canonical Phorge snippet once (cached in a `OnceLock`, cloned per
+The decl is produced by parsing a canonical Phorj snippet once (cached in a `OnceLock`, cloned per
 call) — DRY: the snippet *is* the type. Injecting only-on-import keeps the namespace clean (a program
-not using JSON has no `Json` enum / no PHP output) and matches Phorge's explicit-import philosophy.
+not using JSON has no `Json` enum / no PHP output) and matches Phorj's explicit-import philosophy.
 The enum then flows through checker (registers it), interpreter/VM (construct + match), and transpiler
 (emits the PHP class hierarchy) as an ordinary enum — **zero new backend machinery**.
 
@@ -95,9 +95,9 @@ the `php` closure delegates to gated helpers.
 
 | native | params | ret | php emission | helper flag |
 |---|---|---|---|---|
-| `parse` | `[String]` | `Json?` (`Optional(Named "Json")`) | `__phorge_json_decode({0})` | `uses_json_decode` |
-| `stringify` | `[Named "Json"]` | `String` | `__phorge_json_encode({0})` | `uses_json_encode` |
-| `stringifyPretty` | `[Named "Json"]` | `String` | `__phorge_json_encode_pretty({0})` | `uses_json_pretty` |
+| `parse` | `[String]` | `Json?` (`Optional(Named "Json")`) | `__phorj_json_decode({0})` | `uses_json_decode` |
+| `stringify` | `[Named "Json"]` | `String` | `__phorj_json_encode({0})` | `uses_json_encode` |
+| `stringifyPretty` | `[Named "Json"]` | `String` | `__phorj_json_encode_pretty({0})` | `uses_json_pretty` |
 
 Flags set in `transpile/call.rs` for `nat.module == "Core.Json"` (the established Reflect gated-helper
 pattern — a `php` closure has no `&mut self`).
@@ -105,8 +105,8 @@ pattern — a `php` closure has no `&mut self`).
 ### Encoding spec (Rust `eval` and PHP helper must agree byte-for-byte)
 
 - **null** → `null`; **bool** → `true`/`false`; **int** → decimal.
-- **float** → **shortest-round-trip positional** (Rust `format!("{}")` ; PHP `__phorge_float`). This is
-  Phorge's float convention everywhere — *not* PHP json's scientific notation for extreme magnitudes
+- **float** → **shortest-round-trip positional** (Rust `format!("{}")` ; PHP `__phorj_float`). This is
+  Phorj's float convention everywhere — *not* PHP json's scientific notation for extreme magnitudes
   (`1e20`). Documented divergence from native `json_encode` for |exp| extremes (KNOWN_ISSUES); the
   common range is identical (`0.1+0.2`→`0.30000000000000004`, verified).
 - **string** → JSON-escaped to match PHP `json_encode` **default**: `"`→`\"`, `\`→`\\`, `/`→`\/`,
@@ -121,8 +121,8 @@ pattern — a `php` closure has no `&mut self`).
 
 ### Decoding spec (`parse` — recursive descent, Rust; PHP delegates to `json_decode`)
 
-- PHP: `__phorge_json_decode($s)` = `$d = json_decode($s)` (objects → `stdClass`, so `{}` ≠ `[]`);
-  if `json_last_error() !== JSON_ERROR_NONE` → return `null` (Phorge `None`); else recurse over `$d`:
+- PHP: `__phorj_json_decode($s)` = `$d = json_decode($s)` (objects → `stdClass`, so `{}` ≠ `[]`);
+  if `json_last_error() !== JSON_ERROR_NONE` → return `null` (Phorj `None`); else recurse over `$d`:
   `is_null`→`Null_`, `is_bool`→`Bool_`, `is_int`→`Int_`, `is_float`→`Float_`, `is_string`→`Str`,
   `is_array`→`Arr` (list), `is_object`→`Obj` (`get_object_vars`).
 - Rust: a std-only recursive-descent parser → `Value::Enum(Json…)`, or `Value::Null` on any syntax
@@ -138,12 +138,12 @@ pattern — a `php` closure has no `&mut self`).
 
 | risk | resolution |
 |---|---|
-| float format (`1e20` scientific in PHP json) | use `__phorge_float`/Rust positional everywhere; documented divergence from native json, but run≡runvm≡PHP-helper identical |
+| float format (`1e20` scientific in PHP json) | use `__phorj_float`/Rust positional everywhere; documented divergence from native json, but run≡runvm≡PHP-helper identical |
 | string escaping default (`\/`, `\uXXXX`) | PHP helper uses native `json_encode` per-scalar-string; Rust matches default; verified samples |
 | int vs float on decode | number lexer: `.`/`e` ⇒ Float else Int; i64 overflow ⇒ Float (matches `json_decode`) |
 | `{}` vs `[]` | decode via `json_decode($s)` (stdClass for objects), not assoc mode |
 | dup keys | last-value/first-position (PHP assoc) replicated in Rust decoder |
-| oracle runs `php -n` | `json_*` + `__phorge_float` are tier-1/core (no ini ext); no `mb_*` |
+| oracle runs `php -n` | `json_*` + `__phorj_float` are tier-1/core (no ini ext); no `mb_*` |
 
 ### Example
 
@@ -157,6 +157,6 @@ literal back, `match` to read a field. Byte-identity-gated by the `examples/**/*
   Int_`); the new example runs the oracle.
 - **Slice B:** `native/json_tests.rs` — encode each scalar/structure (compact + pretty), round-trip
   parse→stringify, malformed→None, int-vs-float decode, dup keys, `{}`/`[]`, escaping samples; the
-  example drives the 3-way oracle. Gate: `PHORGE_PHP=…/php-8.5.7 PHORGE_REQUIRE_PHP=1 cargo test
+  example drives the 3-way oracle. Gate: `PHORJ_PHP=…/php-8.5.7 PHORJ_REQUIRE_PHP=1 cargo test
   --workspace` + clippy + fmt.
 ```

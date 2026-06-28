@@ -6,7 +6,7 @@ hard errors). Plan SSOT `docs/plans/2026-06-27-ga-sequence.plan.md` (REPRIORITIZ
 ## Goal
 
 Make a file's name tell you its public surface, cleanly, **without** importing PSR-4's micro-file tax or
-contradicting Phorge's Go-shaped, function-heavy, `folder=path` package model. "Go packages, PSR-4-ish
+contradicting Phorj's Go-shaped, function-heavy, `folder=path` package model. "Go packages, PSR-4-ish
 public-type files."
 
 ## The rule
@@ -41,7 +41,7 @@ All three self-document via `phg explain`.
 
 - `folder=path` (`E-PKG-PATH`) governs *packages* (directory = dotted package). This new rule governs
   *the public surface within a package*. Orthogonal axes.
-- The two things that made PSR-4 impossible for Phorge — **free functions** and **helper types** — are
+- The two things that made PSR-4 impossible for Phorj — **free functions** and **helper types** — are
   explicitly carved out: public functions get their own (topic-named) module; private/internal helpers
   ride along anywhere.
 - `package Main` / entry files were never library modules, so exempting them costs nothing and keeps the

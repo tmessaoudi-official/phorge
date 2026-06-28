@@ -1,6 +1,6 @@
 # Features
 
-A capability matrix for Phorge — what works **today** versus what is **planned**. For runnable proof
+A capability matrix for Phorj — what works **today** versus what is **planned**. For runnable proof
 of the "today" column, see [`examples/`](examples/README.md); for the forward plan see
 [ROADMAP.md](ROADMAP.md); for things that are deliberately rejected-but-clean, see
 [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
@@ -50,8 +50,8 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Inheritance: `extends`, `open`/`final`, override, `abstract`, multiple parents | ✅ | final-by-default (a class/method must be `open` to extend/override); single + **multiple** inheritance with explicit `use`/rename/exclude resolution (`E-MI-CONFLICT`); `abstract` classes & methods (`E-ABSTRACT-INSTANTIATE`/`-UNIMPL`); MI lowers to PHP interface + trait decomposition (M-RT S6) |
 | Exceptions: `throws` / `throw` / `try`/`catch`/`finally` + `?`-propagation, `Result<T, E>` | ✅ | checked typed exceptions (a thrown type implements the built-in `Error` marker → PHP exception); `throws A \| B` declared sets, `?` propagates them, multi-`catch` dispatch by type; `Result<T, E>` value surface; faults/panics stay uncatchable (M-faults Slice 2) |
 | Mutation: reassignment, element/field/static writes, `with`, property hooks | ✅ | immutable-by-default, `mutable` opt-in; reassignment `x = e`, compound `+= … ??=`, element set `xs[i]=e`/`m[k]=e` (copy-on-write value semantics), instance fields `o.f=e` (shared-mutable handles), `static`/`static mutable` class fields, functional `obj with { … }`, PHP-8.4 property hooks — **no tracing GC** (value/handle split + COW + `Rc`/`Drop`) (M-mut) |
-| Traits, operator overloading | 🔲 future | Phorge-level `trait` construct (S8) and operator overloading are not yet a user-facing surface |
-| Modules / packages | 🚧 M5 | multi-file projects, folder=path, cross-package `import` + aliasing, namespaced PHP, **git dependencies** (`[require]` + `phg vendor` + `phorge.lock`, offline) — shipped; transitive deps next |
+| Traits, operator overloading | 🔲 future | Phorj-level `trait` construct (S8) and operator overloading are not yet a user-facing surface |
+| Modules / packages | 🚧 M5 | multi-file projects, folder=path, cross-package `import` + aliasing, namespaced PHP, **git dependencies** (`[require]` + `phg vendor` + `phorj.lock`, offline) — shipped; transitive deps next |
 | Concurrency (`spawn` + channels) | 🔲 M6 | uncolored, green-threaded |
 | Identifier casing (enforced) | ✅ | camelCase functions/methods/params/vars (`E-NAME-CASE`), PascalCase classes/enums/variants/type aliases (`E-TYPE-CASE`), PascalCase package/folder + import segments + `as` aliases (`E-PKG-CASE`, 1:1 to PHP namespaces); front-end-only — never affects the generated PHP |
 
@@ -63,7 +63,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Bytecode compiler + stack VM (byte-identical) | ✅ | `phg runvm` |
 | Backend benchmark (median-of-N, identity-gated) + memory (peak/current RSS, Linux) | ✅ | `phg bench` |
 | Bytecode disassembler (per-function listings + descriptor tables) | ✅ | `phg disasm` |
-| Phorge → PHP transpiler (runs under real PHP) | ✅ | `phg transpile` |
+| Phorj → PHP transpiler (runs under real PHP) | ✅ | `phg transpile` |
 | Type-check / parse / lex inspection | ✅ | `phg check` / `parse` / `lex`; `phg check --json` emits machine-readable diagnostics (stage/severity/message/line/col/code/hint) for editors/LSP |
 | `--version` / `--help`, plus per-command help with examples | ✅ | `phg -v` / `-h` / `phg <cmd> --help` |
 | Sharp diagnostics: caret-underlined span, did-you-mean hints, stable codes | ✅ | front-end errors |
@@ -72,11 +72,11 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Vendor git dependencies (offline, lockfile-pinned) | ✅ | `phg vendor` |
 | Test runner: `test "name" {}` blocks + `Core.Test` assertions (incl. `assertFaults`) | ✅ | `phg test [path…]` |
 | Formatter: canonical-form, comment-preserving, meaning-preserving (no reflow yet) | ✅ | `phg fmt [--check] [path… \| -]` |
-| HTTP server: `handle(Request) -> Response` (pure Phorge) over a real socket; PHP `php -S` bridge | ✅ | `phg serve foo.phg` |
+| HTTP server: `handle(Request) -> Response` (pure Phorj) over a real socket; PHP `php -S` bridge | ✅ | `phg serve foo.phg` |
 | Standalone executable (host) | ✅ | `phg build foo.phg` |
 | Standalone executable (Linux cross + Windows) | 🔨 | `phg build --target … / --all` |
 | Standalone executable (macOS) | 🔲 | reader ships; signed stub deferred to M2.5 Phase 3 |
-| PHP → Phorge migration | 🔲 M8 | the inverse of the transpiler |
+| PHP → Phorj migration | 🔲 M8 | the inverse of the transpiler |
 | Editor/LSP, formatter | 🔲 M7 | |
 
 ## Project qualities

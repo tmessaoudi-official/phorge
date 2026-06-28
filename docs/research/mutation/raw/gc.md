@@ -1,6 +1,6 @@
 # Track 2 — Garbage Collection Strategy (Mutation Milestone)
 
-> Research deliverable for the Phorge mutation + memory-reclamation milestone. Grounded in the repo
+> Research deliverable for the Phorj mutation + memory-reclamation milestone. Grounded in the repo
 > (read, not recalled); external comparisons cited; every claim graded.
 > Author pass: 2026-06-21. Companion to Track 1 (mutation semantics) — the two are coupled.
 
@@ -8,7 +8,7 @@
 
 ## 0. The one-line answer
 
-**A tracing GC is almost certainly NOT required for this milestone, and probably never for Phorge's
+**A tracing GC is almost certainly NOT required for this milestone, and probably never for Phorj's
 core model.** Given Track 1's locked direction — *immutable-by-default + opt-in `mutable`*
 [Verified: `docs/plans/2026-06-21-ga-direction-and-autonomy.plan.md` lines 13-28, 87] — the cheapest,
 most-craftsmanship-sound, byte-identity-safe, std-only path is **(a) avoid cycles by design**, keeping
@@ -53,7 +53,7 @@ A leak under pure `Rc` needs all three:
 2. **Post-construction field mutation** — `a.next = b;` reachable as a statement.
 3. **A back edge** — `b.next = a;` (or any longer cycle `a→b→c→a`).
 
-Today Phorge has (1) on read but lacks (2) and (3) — there is no assignment statement at all. The
+Today Phorj has (1) on read but lacks (2) and (3) — there is no assignment statement at all. The
 mutation milestone *introduces* (2)/(3) **only if** it allows reassigning a `mutable` field that holds
 a reference-semantic object. Local-variable mutation, value-type mutation, and collection mutation that
 does not introduce object↔object back-pointers do not create cycles.
@@ -67,7 +67,7 @@ programmer (`weak`/`unowned`) [Verified: Swift ARC is "deterministic and NOT a g
 
 ---
 
-## 3. The five options, evaluated against Phorge's actual constraints
+## 3. The five options, evaluated against Phorj's actual constraints
 
 The non-negotiable filters for every option: **std-only** (no crates), **byte-identical determinism**
 (GC must be invisible to output — no observable finalization), **two backends must agree** (the
@@ -86,8 +86,8 @@ in increasing permissiveness:
   No aliasing ⇒ no cycles ⇒ `Drop` is complete. This is the **Clojure/Haskell persistent-structure
   model** [Verified: web — "you can simulate value semantics on top of shared immutable state";
   "aliasing is harmless in the absence of mutation"]. **Cost:** PHP has *reference* object semantics,
-  so a Phorge `mutable` object that transpiles to a PHP object would diverge (PHP aliases, Phorge
-  copies) — a byte-identity hazard unless Phorge `mutable` objects transpile to PHP *arrays/values* or
+  so a Phorj `mutable` object that transpiles to a PHP object would diverge (PHP aliases, Phorj
+  copies) — a byte-identity hazard unless Phorj `mutable` objects transpile to PHP *arrays/values* or
   the language declares objects value-typed. This is a **Track 1 semantics fork**, not a GC decision.
 
 - **a2 — Reference semantics but forbid back-references structurally.** Allow `a.field = b` (aliased,
@@ -104,7 +104,7 @@ in increasing permissiveness:
   upgrade returns `Option`"]. Cycles are impossible because every cycle must cross at least one `weak`
   edge, and `weak` edges don't keep the target alive. **Cost:** the programmer must annotate back-edges
   (boilerplate, Swift's known ergonomic tax); a `weak` read yields `T?` (it may have been dropped) —
-  which *fits Phorge's existing optional model `T?` perfectly* and is a legible, no-surprise contract.
+  which *fits Phorj's existing optional model `T?` perfectly* and is a legible, no-surprise contract.
   Transpiles to PHP `\WeakReference` (PHP 7.4+) — a real, idiomatic target.
 
 **Verdict on (a):** This family keeps the entire current architecture (`Rc`/`Drop`, no root-scanning,
@@ -112,22 +112,22 @@ no `Op` changes, no VM/interpreter divergence risk, perfectly deterministic — 
 is already deterministic and, crucially, **not observable** because `__destruct` is rejected). It is
 the craftsmanship-apex answer *if* the language can express back-references via `weak` (a3) or live
 without them (a1/a2). a3 is the strongest: it is SOLID (explicit ownership), legible, std-only,
-PHP-mappable, and reuses Phorge's optional `T?` semantics.
+PHP-mappable, and reuses Phorj's optional `T?` semantics.
 
 ### (b) Rc + cycle collector (Bacon-Rajan / trial deletion) — what PHP itself does
 
 Keep `Rc`, add a synchronous cycle collector that periodically scans "suspect" objects (those whose
 refcount was decremented to non-zero — PHP's "purple" roots) using trial deletion: tentatively
 decrement, find subgraphs that drop to 0, reclaim them [Verified: Bacon-Rajan 2001; php.net root buffer
-of 10,000]. **This is the maximally PHP-faithful option** — Phorge would have the same memory semantics
+of 10,000]. **This is the maximally PHP-faithful option** — Phorj would have the same memory semantics
 as the transpile target.
 
-**Cost analysis for Phorge:**
+**Cost analysis for Phorj:**
 - **Determinism / byte-identity:** PHP runs cycle collection when the root buffer fills (every 10,000
   suspected roots) [Verified: php.net]. Collection *timing* is non-deterministic relative to program
-  logic — but it is **invisible to output** *as long as no finalizers run* (Phorge has rejected
+  logic — but it is **invisible to output** *as long as no finalizers run* (Phorj has rejected
   `__destruct`, so nothing observable happens at reclamation). So the byte-identity spine survives
-  **iff** Phorge keeps refusing finalizers. This is the load-bearing constraint and it is already met.
+  **iff** Phorj keeps refusing finalizers. This is the load-bearing constraint and it is already met.
 - **Std-only:** implementable in std (it is just graph bookkeeping over `Rc` with an internal "color"
   byte per object). But `std::rc::Rc` does **not** expose the refcount-decrement hook or a per-object
   color field — you cannot intercept `Drop` to enqueue purple roots. You would have to **replace `Rc`
@@ -152,7 +152,7 @@ Replace `Rc` entirely with an arena of GC objects; periodically trace from roots
 stack, globals), mark reachable, sweep the rest [Verified: Nystrom's bi-color mark-sweep, "the actual
 algorithm used in early Lua"; heuristic = "is live memory 2× the last GC?"].
 
-**Cost for Phorge:**
+**Cost for Phorj:**
 - **Root-scanning is where the two backends diverge and bite.** The VM has an explicit operand stack +
   reified `Frame { func, ip, slot_base }` stack — its roots are enumerable [Verified: ARCHITECTURE.md
   "vm::Frame is a reified call record on an explicit frame stack"]. The **tree-walker keeps its call
@@ -181,24 +181,24 @@ is the interesting one for a transpiler-adjacent language: the whole heap dies a
 garbage never needs collecting [Verified: HHVM "RDS + 2 stacks are the root set; zoned strategies
 partition the heap"].
 
-**Cost for Phorge:** inherits *all* of (c)'s problems (no tree-walker root set, throws away `Rc`,
+**Cost for Phorj:** inherits *all* of (c)'s problems (no tree-walker root set, throws away `Rc`,
 `unsafe` pressure) and adds write-barrier complexity (generational GC needs a barrier when an old object
 points to a young one [Verified: Lua "when a black object references a white object, mark it gray"]).
 A write barrier is plausible only *with* mutation, and it is more machinery than the immutable-default
 program population justifies. The one genuinely attractive idea — a **per-program/per-request region
-that bulk-frees at exit** — is something Phorge effectively already gets: a short-lived `phg run`
+that bulk-frees at exit** — is something Phorj effectively already gets: a short-lived `phg run`
 process drops its whole `Rc` graph at exit; leaked cycles would be reclaimed by the OS at process end
 anyway for batch programs. (That does **not** save a long-running `phg serve` worker — see §6.)
 
 **Verdict:** Dis-recommended as a collector; the "region that frees at exit" insight is real but is an
-OS-process property Phorge already has for batch runs, not a reason to build generational GC.
+OS-process property Phorj already has for batch runs, not a reason to build generational GC.
 
 ### (e) Rc<RefCell> + Weak by convention
 
 Make objects mutable via `Rc<RefCell<Instance>>` and ask programmers to use `Weak` for back-edges *by
 convention* (no enforcement).
 
-**Cost for Phorge:**
+**Cost for Phorj:**
 - `RefCell` moves borrow-checking to **runtime** — a double-borrow is a `panic!`, which **violates
   EV-7 / INVARIANTS #6** ("never SIGABRT/panic; exit 1 with a clean Diagnostic"). You'd have to catch
   every `borrow_mut` and convert a `BorrowMutError` into a fault — pervasive, fragile.
@@ -214,18 +214,18 @@ convention* (no enforcement).
 
 ## 4. What comparable transpiled / embedded languages do (and what it teaches)
 
-| Language | Model | Cycles handled by | Lesson for Phorge |
+| Language | Model | Cycles handled by | Lesson for Phorj |
 |---|---|---|---|
-| **Swift** | ARC (deterministic refcount), **no collector** | programmer: `weak`/`unowned` | [Verified] A production language ships *zero* cycle collection and pushes back-edges to a typed `weak`. Validates option (a3). Swift `weak` ⇒ optional — mirrors Phorge `T?`. |
-| **PHP** (transpile target) | refcount + **synchronous Bacon-Rajan cycle collector** | runtime, invisible (no user finalizer ordering guarantees) | [Verified] The twin of option (b). Confirms cycle collection can be *output-invisible* — but only because PHP's `__destruct` order is unspecified; Phorge dodges this by rejecting `__destruct` entirely. |
+| **Swift** | ARC (deterministic refcount), **no collector** | programmer: `weak`/`unowned` | [Verified] A production language ships *zero* cycle collection and pushes back-edges to a typed `weak`. Validates option (a3). Swift `weak` ⇒ optional — mirrors Phorj `T?`. |
+| **PHP** (transpile target) | refcount + **synchronous Bacon-Rajan cycle collector** | runtime, invisible (no user finalizer ordering guarantees) | [Verified] The twin of option (b). Confirms cycle collection can be *output-invisible* — but only because PHP's `__destruct` order is unspecified; Phorj dodges this by rejecting `__destruct` entirely. |
 | **HHVM** (the *other* PHP) | refcount + mark-sweep **backup** collector, request-local arena | runtime, deferred to low-pressure periods | [Verified] Even Facebook's PHP keeps refcounting primary and treats tracing as a *backup for cycles only*. Endorses "refcount-first, trace only cycles" (option b layered on a). |
-| **Lua / LuaJIT** | incremental tri-color mark-sweep (+ generational) | tracing collector with write barriers | [Verified] Full tracing; needs enumerable roots + write barriers. Phorge's tree-walker lacks the root set — option (c)'s blocker. |
-| **Wren / clox** | bi-color mark-sweep, `2×`-growth heuristic | tracing collector | [Verified] Clean & simple *when the VM owns all roots*. Phorge's VM does; its interpreter does not. |
-| **mruby** | mark-sweep (incremental, generational since 1.x) | tracing collector | [Inferred: mruby is a tracing-GC embedded Ruby — confirms the embedded-VM norm is tracing, but all such VMs control their root set, unlike Phorge's tree-walker.] |
+| **Lua / LuaJIT** | incremental tri-color mark-sweep (+ generational) | tracing collector with write barriers | [Verified] Full tracing; needs enumerable roots + write barriers. Phorj's tree-walker lacks the root set — option (c)'s blocker. |
+| **Wren / clox** | bi-color mark-sweep, `2×`-growth heuristic | tracing collector | [Verified] Clean & simple *when the VM owns all roots*. Phorj's VM does; its interpreter does not. |
+| **mruby** | mark-sweep (incremental, generational since 1.x) | tracing collector | [Inferred: mruby is a tracing-GC embedded Ruby — confirms the embedded-VM norm is tracing, but all such VMs control their root set, unlike Phorj's tree-walker.] |
 
 **Synthesis:** Languages that *own their entire runtime stack* (Lua, Wren, mruby, HHVM) can afford
-tracing. **Swift — the closest analog to Phorge's bet (refcounted, deterministic, no observable
-finalization)** — deliberately declines tracing and uses typed `weak`. Phorge's dual-backend design,
+tracing. **Swift — the closest analog to Phorj's bet (refcounted, deterministic, no observable
+finalization)** — deliberately declines tracing and uses typed `weak`. Phorj's dual-backend design,
 where the *interpreter has no scannable root set*, pushes it toward Swift's answer, not Lua's.
 
 ---
@@ -235,12 +235,12 @@ where the *interpreter has no scannable root set*, pushes it toward Swift's answ
 The byte-identity spine forbids any GC effect from reaching output. Three sub-claims:
 
 1. **`Rc`/`Drop` (options a, b) is already deterministic *and* invisible.** `Drop` runs at a
-   deterministic point (last owner dropped), but Phorge renders nothing on drop (`__destruct` rejected)
+   deterministic point (last owner dropped), but Phorj renders nothing on drop (`__destruct` rejected)
    [Verified: parity spec 172, 462]. So even prompt deterministic destruction is output-invisible.
    ✔ spine safe.
 2. **A cycle *collector* (b) runs at a non-deterministic time** (buffer-fill / heuristic). This is
-   output-invisible **iff no finalizer fires** — which holds as long as Phorge keeps rejecting
-   `__destruct`/`__clone`-side-effects. ✔ spine safe *under the existing rejection*. ⚠ If Phorge ever
+   output-invisible **iff no finalizer fires** — which holds as long as Phorj keeps rejecting
+   `__destruct`/`__clone`-side-effects. ✔ spine safe *under the existing rejection*. ⚠ If Phorj ever
    adds observable finalization, *every* GC option except (a1 value-semantics) breaks the spine.
 3. **Tracing (c, d) sweep order is non-deterministic**, but again invisible without finalizers. The
    real spine risk in (c/d) is not order — it is the **two-backend root-scan asymmetry** (§3c): if the
@@ -268,13 +268,13 @@ The exception is the **long-running M6 `phg serve` worker** [Verified: ARCHITECT
 `Transport` seam]: a request handler that builds a cycle leaks that memory *for the life of the
 process*, across requests — an unbounded leak. **But:** M6 is single-threaded with a *request-scoped*
 value graph, and the HHVM precedent [Verified] is exactly a **request-local heap that bulk-frees at
-request end**. Phorge can adopt the same: scope each request's allocations to a region dropped wholesale
+request end**. Phorj can adopt the same: scope each request's allocations to a region dropped wholesale
 when `handle()` returns. Because the heap is `Rc` and a request's graph is rooted only in that request's
 locals, **dropping the request's root bindings already drops the whole acyclic sub-graph**; the only
 survivors are cycles — and a request-end region-free (or a single trial-deletion pass over that
 request's suspect set) reclaims them without a global, always-on collector. This is the **narrowest
 possible** place a collector could be justified, and even there a per-request bulk-free is simpler than
-a tracing GC. [Inferred: from HHVM request-local model + Phorge's `Rc` rooting.]
+a tracing GC. [Inferred: from HHVM request-local model + Phorj's `Rc` rooting.]
 
 ---
 
@@ -289,7 +289,7 @@ back-edges, NO collector.**
   these alias object fields into a back-edge. [Verified: feature list, parity spec 503.]
 - For the cycle-*capable* feature (reassignable object-typed fields, e.g. linked structures), require
   back-edges to be declared `weak` (→ Rust `std::rc::Weak`, → PHP `\WeakReference`), yielding `T?` on
-  read — reusing Phorge's optional model. A non-`weak` field reassignment that the checker proves could
+  read — reusing Phorj's optional model. A non-`weak` field reassignment that the checker proves could
   close a cycle is an error with a clear diagnostic + did-you-mean-`weak` hint. This makes cycles
   **structurally impossible** while still allowing graphs — Swift's proven bet, in a typed,
   no-surprise form.
@@ -309,7 +309,7 @@ unenforced footgun vs the no-surprise philosophy).
 **Is GC required?** **No — not for this milestone, and likely never for the batch surface.** It becomes
 a *narrow, contingent* question only for (i) unrestricted mutable object back-references (avoided by
 `weak`) and (ii) the long-running `serve` worker (addressed by a request-local bulk-free). Track 1's
-immutable-default + the `weak` escape hatch keep Phorge in the Swift quadrant: deterministic
+immutable-default + the `weak` escape hatch keep Phorj in the Swift quadrant: deterministic
 refcounting, no tracing GC, cycles made impossible by type rather than collected at runtime.
 
 ---

@@ -3,8 +3,8 @@
 **Topic:** prior art for lowering multiple inheritance / rich object models onto PHP (or other
 constrained single-inheritance targets), plus the academic conflict-resolution models.
 
-**Phorge constraint (the spine):** three backends — tree-walking interpreter, stack bytecode VM,
-Phorge→PHP transpiler — must stay **byte-identical**. PHP 8.4 target: single class inheritance, many
+**Phorj constraint (the spine):** three backends — tree-walking interpreter, stack bytecode VM,
+Phorj→PHP transpiler — must stay **byte-identical**. PHP 8.4 target: single class inheritance, many
 interfaces, traits with explicit `insteadof`/`as` conflict resolution. The transpiler can only emit
 what PHP can express; the interp + VM must reproduce whatever semantics we pick, deterministically.
 
@@ -29,20 +29,20 @@ Date: 2026-06-22. All web claims dated June 2026 search.
   the bodies *at compile time*; at runtime the target stays single-inheritance. A PR (#5797) to allow
   MI on externs was **closed** — the community deliberately prefers the lightweight compile-time
   workaround over real MI.
-- **Lesson for Phorge:** Haxe never tries to *simulate* MI. It pushes the whole problem to the front
+- **Lesson for Phorj:** Haxe never tries to *simulate* MI. It pushes the whole problem to the front
   end (interfaces + macro-injected defaults resolved before codegen), so the PHP it emits is plain
-  single-inheritance PHP. This is the same "expand/resolve before the backend" discipline Phorge
+  single-inheritance PHP. This is the same "expand/resolve before the backend" discipline Phorj
   already uses (`erase_generics`, `expand_aliases`, `core.html` holes).
 
 ### Peachpie (PHP → .NET / CIL)
 - Peachpie compiles **PHP** onto .NET (CIL), which is *also* single-inheritance — so the interesting
-  direction is the reverse of Phorge, but the technique is directly relevant.
+  direction is the reverse of Phorj, but the technique is directly relevant.
 - PHP **traits** were "quite a challenge" to compile to CIL because .NET has no trait construct.
   Peachpie's approach: the compiled class **declares all the trait's members itself**, but the trait
   is compiled **once** as a separate type (constructor shape `public .ctor(Context ctx, TSelf @this)`);
   a **private field holds a trait instance**, and the host class's generated members **delegate** to
   that instance. So trait code is *not* copied per-use — it is shared and forwarded to.
-- **Lesson for Phorge:** there are two faithful lowerings of "horizontal reuse": (a) **copy/flatten**
+- **Lesson for Phorj:** there are two faithful lowerings of "horizontal reuse": (a) **copy/flatten**
   the members into the host (PHP's own trait model, and the original academic traits model), or
   (b) **store-and-delegate** (Peachpie). For a *transpiler to PHP*, (a) is free because PHP traits
   already do the flattening for us — we don't need Peachpie's delegation trick. But (b) is the model
@@ -60,9 +60,9 @@ Date: 2026-06-22. All web claims dated June 2026 search.
   inheritance while avoiding state conflicts" and, *combined with interfaces*, give "a convenient way
   to achieve multiple inheritance as long as they avoid name collisions." Hack's contribution is
   making that **statically checkable**, not adding new runtime power.
-- **Lesson for Phorge:** Hack validates the trait-as-MI-substitute thesis from a billion-line
-  codebase, and its **requirements** mechanism is exactly the static-checker hook Phorge would want to
-  make trait composition type-safe (Phorge already has a checker that runs before every backend).
+- **Lesson for Phorj:** Hack validates the trait-as-MI-substitute thesis from a billion-line
+  codebase, and its **requirements** mechanism is exactly the static-checker hook Phorj would want to
+  make trait composition type-safe (Phorj already has a checker that runs before every backend).
 
 ### Other PHP front-ends (Pharen, etc.)
 - Pharen (a Lisp that compiles to PHP) and similar PHP-targeting front-ends inherit PHP's object model
@@ -116,7 +116,7 @@ in charge.
   earlier) — they are essentially single-axis linearization. Traits are *symmetric*; the conflict is
   surfaced rather than silently won by application order.
 
-**This is exactly the model Phorge is leaning toward** — "compose many parents, collisions are a
+**This is exactly the model Phorj is leaning toward** — "compose many parents, collisions are a
 compile error unless the subclass resolves them." That *is* explicit-resolution flat composition.
 
 ---
@@ -138,12 +138,12 @@ compile error unless the subclass resolves them." That *is* explicit-resolution 
   (raises an error) when parent orders are inconsistent; and behaviour is implicit/global rather than
   local/explicit. CLOS additionally has **multiple dispatch** (method chosen on *all* argument types,
   not just the receiver) — far beyond anything PHP can express, and irrelevant to a PHP target.
-- **Relevance to Phorge:** this is the model the Traits paper is arguing *against* for
+- **Relevance to Phorj:** this is the model the Traits paper is arguing *against* for
   reasoning-clarity, and — critically — **PHP cannot express it.** PHP has no MRO, no
   `call-next-method` across multiple parents, single `parent::`. To reproduce C3 + cooperative super
   on a PHP target you would have to **build the MRO yourself and emit explicit dispatch glue** in the
   transpiled PHP, then reproduce that *same* dispatch in the interp and VM. Heavy, and the emitted PHP
-  would look nothing like idiomatic PHP (breaks Phorge's "transpiles to idiomatic PHP" contract).
+  would look nothing like idiomatic PHP (breaks Phorj's "transpiles to idiomatic PHP" contract).
 
 ---
 
@@ -164,15 +164,15 @@ compile error unless the subclass resolves them." That *is* explicit-resolution 
   incompatibility, not on "two mixins both define `foo`").
 - It compiles cleanly to single-inheritance JS *because* it builds an actual prototype chain. The cost
   is the silent-override / order-dependence the Traits paper warns about.
-- **Relevance to Phorge:** TS mixins prove a transpiler *can* fake MI on a single-inheritance target —
-  but via linearization with silent precedence, the exact footgun Phorge's "collision = compile error"
+- **Relevance to Phorj:** TS mixins prove a transpiler *can* fake MI on a single-inheritance target —
+  but via linearization with silent precedence, the exact footgun Phorj's "collision = compile error"
   stance is trying to avoid. Also, the chain trick has **no clean PHP analogue** (PHP can't
   `class X extends $dynamicBase` — `extends` needs a static name), so even the *mechanism* doesn't port
   to a PHP target. PHP **traits** are the right tool, not a synthesized parent chain.
 
 ---
 
-## 5. Synthesis for Phorge
+## 5. Synthesis for Phorj
 
 ### (a) Has anyone *faithfully* compiled true multiple inheritance to PHP?
 **No.** Surveyed: Haxe (single-inheritance front end → trivial PHP), Hack (single inheritance +
@@ -194,11 +194,11 @@ hard to reason about anyway.
   wins),
 - the **flattening property** lets you read a composed class as a flat method set — which also happens
   to be **exactly how PHP traits behave** (the transpiler gets the semantics for free).
-So Phorge choosing "compose many parents; collisions are a compile error unless the subclass resolves
+So Phorj choosing "compose many parents; collisions are a compile error unless the subclass resolves
 them (via choose-one / alias / exclude)" is not a compromise forced by PHP — it is the *academically
 preferred* model, and PHP's `insteadof`/`as` are a near-perfect lowering target for it.
-**Caveat:** PHP traits are **stateful**, breaking the paper's pure-stateless rule. Phorge must decide
-whether composed parents may carry fields. If they can, Phorge re-inherits a (weak) state-conflict
+**Caveat:** PHP traits are **stateful**, breaking the paper's pure-stateless rule. Phorj must decide
+whether composed parents may carry fields. If they can, Phorj re-inherits a (weak) state-conflict
 problem and must define a rule (PHP's default: a property collision across traits with *different*
 initial values is a fatal error / deprecation; same value is allowed). Cleanest: **require the
 composing class to resolve field collisions too**, mirroring method resolution.
@@ -210,7 +210,7 @@ composing class to resolve field collisions too**, mirroring method resolution.
   the user's resolutions as `insteadof` (choose-one) and `as` (alias). Idiomatic, native PHP 8.4. For
   the "is-a both" typing, emit matching **interfaces** + `implements` (Haxe/Hack model).
 - **Byte-identical interp+VM:** trivial because composition is **flattening** — resolve it in the
-  *front end* (the checker), exactly like Phorge already flattens `erase_generics` / `expand_aliases`
+  *front end* (the checker), exactly like Phorj already flattens `erase_generics` / `expand_aliases`
   / cross-package mangling **before any backend**. After flattening, the class is an ordinary
   single-class method table; interp + VM consume an already-merged AST with **no new `Op`, no runtime
   MRO**. Conflicts are a compile error, so there is no runtime ambiguity to keep in sync. This is the
@@ -230,7 +230,7 @@ composing class to resolve field collisions too**, mirroring method resolution.
 - **PHP lowering:** PHP has **no MRO and no `call-next-method` across multiple parents.** To reproduce
   C3 + cooperative super you must **compute the MRO in the compiler and emit explicit dispatch
   scaffolding** into the PHP (synthetic ordered method tables, manual "next method" chaining). The
-  emitted PHP would be **non-idiomatic generated glue** — a direct violation of Phorge's
+  emitted PHP would be **non-idiomatic generated glue** — a direct violation of Phorj's
   "every feature maps to *idiomatic* PHP" contract (the same reason the Java `System.out.println`
   object-path and real-MI were rejected before).
 - **Byte-identical:** the *hardest* of the three. The MRO + cooperative-super semantics must be
@@ -248,7 +248,7 @@ front-end-resolvable and lowers to native PHP traits/interfaces → top. (c) is 
 but adds no value and reduces to (a) → middle. (b) is irreducibly *runtime* (MRO + cooperative super),
 has no idiomatic PHP target, and triples the algorithm surface that must stay in lockstep → bottom.
 
-### What Phorge should steal
+### What Phorj should steal
 - **The traits-paper model wholesale:** flat, symmetric, order-independent composition; **conflicts =
   compile-time error** unless resolved; resolution via **override (subclass wins) / alias (`as`) /
   exclusion**. This is both the academically-preferred model *and* the cheapest to keep byte-identical.
@@ -260,7 +260,7 @@ has no idiomatic PHP target, and triples the algorithm surface that must stay in
   one-to-one match for the trait paper's resolution operators; emit each parent as a PHP **trait** and
   the "is-a" typing as **interfaces + `implements`** (Haxe/Hack pattern).
 - **Hack's trait *requirements* idea** — let a composed parent declare it `requires` a method/field/
-  type from the host, statically checked in the checker (Phorge already type-checks before every
+  type from the host, statically checked in the checker (Phorj already type-checks before every
   backend). Makes composition safe and gives clean diagnostics (`E-MI-CONFLICT`, `E-MI-REQUIRE`, …).
 - **Explicit field-collision resolution too** (close PHP's stateful-trait gap): require the composer
   to resolve clashing fields just like methods, restoring the paper's "no silent state merge" property.

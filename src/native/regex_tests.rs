@@ -119,11 +119,11 @@ fn php_emission_shapes() {
     assert_eq!(emit("compile", &["$p"]), "new Regex($p)");
     assert_eq!(
         emit("matches", &["$re", "$s"]),
-        "__phorge_regex_matches($re, $s)"
+        "__phorj_regex_matches($re, $s)"
     );
-    assert_eq!(emit("find", &["$re", "$s"]), "__phorge_regex_find($re, $s)");
+    assert_eq!(emit("find", &["$re", "$s"]), "__phorj_regex_find($re, $s)");
     assert_eq!(
         emit("findGroups", &["$re", "$s"]),
-        "__phorge_regex_find_groups($re, $s)"
+        "__phorj_regex_find_groups($re, $s)"
     );
 }

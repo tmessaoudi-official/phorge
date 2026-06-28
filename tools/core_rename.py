@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """M-RT Core-rename codemod: stdlib namespace `core.*` -> PascalCase `Core.*`.
 
-`.phg` files are pure Phorge -> rewrite the whole file. `.rs` files mix Rust code with inline
-Phorge program strings, and the leaves `file`/`bytes`/`text` collide with real Rust method calls
+`.phg` files are pure Phorj -> rewrite the whole file. `.rs` files mix Rust code with inline
+Phorj program strings, and the leaves `file`/`bytes`/`text` collide with real Rust method calls
 (`file.read`, `bytes.len`), so for `.rs` we rewrite ONLY inside string literals (normal "...",
 raw r#"..."#). Char literals and lifetimes are skipped. The compiler + full test gate are the
-safety net: any Rust corruption is a compile error, any missed Phorge string is a test failure.
+safety net: any Rust corruption is a compile error, any missed Phorj string is a test failure.
 """
 import re
 import sys

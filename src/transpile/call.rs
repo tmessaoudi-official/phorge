@@ -125,7 +125,7 @@ impl Transpiler {
                             .iter()
                             .map(|a| self.emit_expr(a))
                             .collect::<Result<_, _>>()?;
-                        // `Reflect.kind` emits the gated `__phorge_kind` helper; a native's `php`
+                        // `Reflect.kind` emits the gated `__phorj_kind` helper; a native's `php`
                         // closure has no `&mut self` to set the flag, so set it here (the established
                         // gated-helper pattern — see `emit_runtime_helpers`).
                         let nat = &crate::native::registry()[idx];
@@ -141,7 +141,7 @@ impl Transpiler {
                         }
                         if nat.module == "Core.Json" {
                             match nat.name {
-                                // `stringifyPretty` reuses `__phorge_json_encode` for scalars/empties,
+                                // `stringifyPretty` reuses `__phorj_json_encode` for scalars/empties,
                                 // so it gates both the pretty and the compact helper.
                                 "stringify" => self.uses_json_encode = true,
                                 "stringifyPretty" => {
@@ -181,7 +181,7 @@ impl Transpiler {
                                 _ => {}
                             }
                         }
-                        // `Convert.*` gated helpers: `toString` reuses `__phorge_str`; `toInt` /
+                        // `Convert.*` gated helpers: `toString` reuses `__phorj_str`; `toInt` /
                         // `decimalToInt` each define their own edge-safe helper (M-NUM S3).
                         if nat.module == "Core.Convert" {
                             match nat.name {
@@ -198,7 +198,7 @@ impl Transpiler {
                                 _ => {}
                             }
                         }
-                        // `Math.gcd`/`numberFormat` erase to gated `__phorge_*` helpers (M-NUM S4):
+                        // `Math.gcd`/`numberFormat` erase to gated `__phorj_*` helpers (M-NUM S4):
                         // gmp is absent under `php -n`, and `number_format` is single-sourced with the
                         // Rust kernel to dodge PHP's `-0`/locale quirks. The rest of `Core.Math` erases
                         // to a same-named PHP builtin (no helper).
@@ -209,25 +209,25 @@ impl Transpiler {
                                 _ => {}
                             }
                         }
-                        // `Core.Random` erases to gated `__phorge_rng_*` helpers (2026-06-27): a
+                        // `Core.Random` erases to gated `__phorj_rng_*` helpers (2026-06-27): a
                         // hand-rolled xorshift64 byte-identical to the Rust kernel (so seeded output
                         // matches across all backends — Random is no longer quarantined).
                         if nat.module == "Core.Random" {
                             self.uses_rng = true;
                         }
-                        // `Core.Regex` erases to gated `__phorge_regex_*` helpers (Fork A, 2026-06-28):
+                        // `Core.Regex` erases to gated `__phorj_regex_*` helpers (Fork A, 2026-06-28):
                         // the injected `Regex` holds the bare pattern; the helpers build a
                         // collision-free `~…~u` PCRE form and delegate to `preg_*`.
                         if nat.module == "Core.Regex" {
                             self.uses_regex = true;
                         }
-                        // `Core.Time` erases to gated `__phorge_now_*` helpers (M-TIME, 2026-06-28): a
+                        // `Core.Time` erases to gated `__phorj_now_*` helpers (M-TIME, 2026-06-28): a
                         // freezable process-global clock hand-rolled to match the Rust kernel, so a frozen
                         // program is byte-identical across all backends.
                         if nat.module == "Core.Time" {
                             self.uses_clock = true;
                         }
-                        // `Decimal.*` erases to gated `__phorge_dec_*` helpers (M-NUM S1/S2).
+                        // `Decimal.*` erases to gated `__phorj_dec_*` helpers (M-NUM S1/S2).
                         if nat.module == "Core.Decimal" {
                             match nat.name {
                                 "of" => self.uses_dec_of = true,

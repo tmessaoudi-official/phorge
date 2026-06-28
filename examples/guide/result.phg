@@ -7,7 +7,7 @@
 //
 // `?` is allowed only as the whole initializer of a binding (`int a = f()?;`). Anywhere else — nested
 // in a larger expression like `g(f()?)`, or a `return f()?;` — is a compile error (`E-PROPAGATE-POSITION`):
-// bind the result to a local first. On the two Phorge backends `?` early-returns mid-expression
+// bind the result to a local first. On the two Phorj backends `?` early-returns mid-expression
 // directly; transpiled to PHP it lowers to `$t = f(); if ($t instanceof Err) return $t; $x = $t->value;`
 // — byte-identical output on `run`, `runvm`, and real PHP.
 

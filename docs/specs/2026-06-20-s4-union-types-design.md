@@ -23,7 +23,7 @@ are **very different sizes**:
 
 - **Union types + `instanceof` narrowing** — type-only, reuses S1/S2 narrowing verbatim, transpiles
   to PHP `A|B`. A clean, shippable, zero-`Op`, front-end-mostly slice.
-- **match-over-union** — Phorge's `match` has **no type pattern** today (patterns are wildcard /
+- **match-over-union** — Phorj's `match` has **no type pattern** today (patterns are wildcard /
   binding / literal / null / enum-variant only). Matching `match s { Circle c => …, Square sq => … }`
   needs a brand-new `Pattern::Type` variant threaded through the parser, checker (binding + narrowing +
   exhaustiveness over the union's member set), **and all four backends** (interpreter, VM, transpiler)

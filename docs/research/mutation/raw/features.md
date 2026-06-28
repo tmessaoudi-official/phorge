@@ -1,8 +1,8 @@
 # Track 4 — Mutation + GC: Dependent-Feature Surface, Syntax/Keywords, and the Modifier Model
 
-> Research deliverable for the Phorge **mutation + garbage-collection** milestone.
+> Research deliverable for the Phorj **mutation + garbage-collection** milestone.
 > Author lens: software-craftsmanship apex (SOLID / design-patterns / best-practice), PHP as the
-> floor not the ceiling, transpile contract `Phorge : PHP :: TypeScript : JavaScript`, every feature
+> floor not the ceiling, transpile contract `Phorj : PHP :: TypeScript : JavaScript`, every feature
 > byte-identical `run ≡ runvm ≡ real PHP`, additive power coexists never replaces.
 > Every claim graded. Grounded in the repo (files read, not recalled).
 
@@ -64,22 +64,22 @@ delivers ~70% of the dependent-feature surface (every loop, every compound-assig
 
 ## 1. The dependent feature tree — each feature defined
 
-For each: **Phorge syntax** (craftsmanship-best + idiomatic-PHP target), **PHP semantics to match**,
+For each: **Phorj syntax** (craftsmanship-best + idiomatic-PHP target), **PHP semantics to match**,
 **interactions/enforcement**, **tier**, **new-Op cost**.
 
 ### 1.1 Variable reassignment — `=` as a statement  [TIER 1]
 
-- **Phorge syntax:** `x = expr;` where `x` is an already-declared **`mutable`** local. A *new* statement
+- **Phorj syntax:** `x = expr;` where `x` is an already-declared **`mutable`** local. A *new* statement
   variant `Stmt::Assign { target, value, span }`. Distinct from `VarDecl` (which introduces a binding with a
   type); `Assign` rebinds an existing one.
-  ```phorge
+  ```phorj
   mutable int n = 0;
   n = n + 1;          // OK — n is mutable
   int k = 5;
   k = 6;              // E-ASSIGN-IMMUTABLE: `k` is not mutable
   ```
 - **PHP semantics:** `$n = $n + 1;` — trivial 1:1 transpile. PHP variables are all mutable; the
-  immutable-by-default *check* is a Phorge front-end concept that simply doesn't emit (PHP has no readonly
+  immutable-by-default *check* is a Phorj front-end concept that simply doesn't emit (PHP has no readonly
   *local*). [Verified: PHP assignment manual — `=` rebinds.]
 - **Interactions / enforcement:**
   - **Immutable-by-default gate:** reassigning a non-`mutable` local is `E-ASSIGN-IMMUTABLE`. This is the
@@ -91,10 +91,10 @@ For each: **Phorge syntax** (craftsmanship-best + idiomatic-PHP target), **PHP s
   - **Smart-cast invalidation (subtle, must enforce):** S2 if-let / `instanceof` narrowing narrows a binding
     inside a block. If that binding is `mutable` and reassigned inside the narrowed region, the narrowing is
     **invalidated** — Kotlin and TS both do exactly this (a `var` smart-cast is dropped after reassignment).
-    *[Inferred: Phorge inherits S2's smart-cast; the moment a binding becomes reassignable, the
+    *[Inferred: Phorj inherits S2's smart-cast; the moment a binding becomes reassignable, the
     "narrowed-then-mutated" footgun appears — Kotlin's rule is the proven answer.]*
   - **`this` and params:** method params and `this` are immutable by default (PHP params are mutable, but
-    Phorge chooses immutable-param as the craftsmanship default; `mutable` opt-in on a param if ever wanted).
+    Phorj chooses immutable-param as the craftsmanship default; `mutable` opt-in on a param if ever wanted).
     *[Speculative — recommend params immutable-by-default, matching the value-semantics spirit.]*
 - **New Op:** **none.** VM: `resolve_local(name)` → `Op::SetLocal(slot)`. Interpreter: mutate the binding in
   the scope where `lookup` finds it (a small `assign(name, v)` that walks `scopes.iter_mut().rev()`).
@@ -102,15 +102,15 @@ For each: **Phorge syntax** (craftsmanship-best + idiomatic-PHP target), **PHP s
 
 ### 1.2 Compound assignment — `+= -= *= /= %= .=`  [TIER 1]
 
-- **Phorge syntax:** `n += expr;` etc. Pure **desugaring** in the parser/checker: `n += e` ≡ `n = n + e`,
+- **Phorj syntax:** `n += expr;` etc. Pure **desugaring** in the parser/checker: `n += e` ≡ `n = n + e`,
   reusing the existing `BinaryOp` + the new `Assign`. Target must be a `mutable` local (Tier 1) — a
   `mutable` field target is Tier 2.
-  ```phorge
+  ```phorj
   mutable int total = 0;
   for (int x in items) { total += x; }
   ```
 - **PHP semantics:** `$total += $x;` — 1:1. **`.=` (string concat-assign):** the parity matrix (l.210)
-  notes Phorge dropped `.`/`.=` in favor of interpolation / `Core.Text.join`, calling `+`-vs-`.` ambiguity a
+  notes Phorj dropped `.`/`.=` in favor of interpolation / `Core.Text.join`, calling `+`-vs-`.` ambiguity a
   footgun. **Recommendation: do NOT add `.=`** — it depends on the rejected `.` operator. String building
   uses interpolation or a future `Core.Text` builder. The arithmetic family `+= -= *= /= %=` (and, once the
   operators slice lands, `**=` `&=` `|=` `^=` `<<=` `>>=`) all desugar identically. [Verified: matrix l.210,
@@ -129,18 +129,18 @@ For each: **Phorge syntax** (craftsmanship-best + idiomatic-PHP target), **PHP s
 
 ### 1.3 Increment / decrement — `++` / `--` (pre and post)  [TIER 1]
 
-- **Phorge syntax:** `n++; ++n; n--; --n;` on a `mutable` int/float local. As a **statement** the pre/post
+- **Phorj syntax:** `n++; ++n; n--; --n;` on a `mutable` int/float local. As a **statement** the pre/post
   distinction is irrelevant; as an **expression** (`y = x++`) it matters. **Recommendation: statement-only
   first** (`n++;` desugars to `n = n + 1;`), expression-position `++`/`--` deferred or rejected — expression
   pre/post increment is a classic readability footgun and not craftsmanship-apex.
-  ```phorge
+  ```phorj
   mutable int i = 0;
   while (i < n) { process(i); i++; }   // statement form only
   ```
 - **PHP semantics:** `$i++;` 1:1. **Critical divergence to NOT replicate** (matrix l.143, 220): PHP's `++`
-  on *strings* ("a"++ → "b", "Az"++ → "Ba") is a quirk Phorge must reject — `++`/`--` are **numeric-only**
+  on *strings* ("a"++ → "b", "Az"++ → "Ba") is a quirk Phorj must reject — `++`/`--` are **numeric-only**
   (`E-INCR-TYPE` on a non-numeric target). PHP `++`/`--` on `null` yields 1/null respectively — also not
-  replicated; Phorge's target is a typed non-null `int`/`float`. [Verified: matrix l.143 "PHP
+  replicated; Phorj's target is a typed non-null `int`/`float`. [Verified: matrix l.143 "PHP
   string-increment is a quirk NOT to replicate".]
 - **Interactions / enforcement:** numeric-only; mutable-only; statement-position recommended. Overflow goes
   through `int_add`/`int_sub` kernels → `integer overflow` fault, byte-identical. [Verified: kernels in
@@ -149,9 +149,9 @@ For each: **Phorge syntax** (craftsmanship-best + idiomatic-PHP target), **PHP s
 
 ### 1.4 `??=` null-coalescing assign  [TIER 1]
 
-- **Phorge syntax:** `opt ??= fallback;` on a `mutable` local of optional type `T?` → assigns `fallback`
+- **Phorj syntax:** `opt ??= fallback;` on a `mutable` local of optional type `T?` → assigns `fallback`
   (a `T`) only when the local is currently `null`. Reuses S2's `??` (`BinaryOp::Coalesce`).
-  ```phorge
+  ```phorj
   mutable string? name = lookup(id);
   name ??= "anonymous";   // name : string? still, but now guaranteed non-null in the common path
   ```
@@ -165,9 +165,9 @@ For each: **Phorge syntax** (craftsmanship-best + idiomatic-PHP target), **PHP s
 
 ### 1.5 `while` loop  [TIER 1 — but only useful WITH mutation]
 
-- **Phorge syntax:** `while (cond) { … }`. Plus **`break;` / `continue;`** (already adopted in Wave A over
+- **Phorj syntax:** `while (cond) { … }`. Plus **`break;` / `continue;`** (already adopted in Wave A over
   `for..in`, matrix Decision Log Batch 2 — they generalize to `while` for free).
-  ```phorge
+  ```phorj
   mutable int i = 0;
   while (i < limit && !found(i)) { i++; }
   ```
@@ -183,7 +183,7 @@ For each: **Phorge syntax** (craftsmanship-best + idiomatic-PHP target), **PHP s
 
 ### 1.6 `do-while` loop  [TIER 1]
 
-- **Phorge syntax:** `do { … } while (cond);` — body runs once before the first test.
+- **Phorj syntax:** `do { … } while (cond);` — body runs once before the first test.
 - **PHP semantics:** `do { … } while ($cond);` 1:1. [Verified.]
 - **Interactions / enforcement:** same mutation coupling as `while`; same jump lowering with the test at the
   *bottom* of the loop body.
@@ -191,8 +191,8 @@ For each: **Phorge syntax** (craftsmanship-best + idiomatic-PHP target), **PHP s
 
 ### 1.7 C-style `for` loop — `for (init; cond; step)`  [TIER 1]
 
-- **Phorge syntax / craftsmanship verdict:** Phorge already has `for (T x in range)` over `a..b` ranges,
-  which the matrix (l.133) correctly calls "phorge-already-better" for the counted 90%. The C-for earns its
+- **Phorj syntax / craftsmanship verdict:** Phorj already has `for (T x in range)` over `a..b` ranges,
+  which the matrix (l.133) correctly calls "phorj-already-better" for the counted 90%. The C-for earns its
   place **only for arbitrary-step / multi-variable / non-range conditions** (`for (mutable int i = n; i > 0;
   i -= 2)`). **Recommendation: adopt it, but framed as the escape hatch**, not the default — keep `for..in`
   the idiomatic counted loop. Syntax: `for (mutable int i = 0; i < n; i = i + 1) { … }` (init is a `VarDecl`,
@@ -205,11 +205,11 @@ For each: **Phorge syntax** (craftsmanship-best + idiomatic-PHP target), **PHP s
 
 ### 1.8 `while-let`  [TIER 1 over an already-Tier-1 source; deeper forms need an iterator protocol]
 
-- **Phorge syntax:** `while (var x = optExpr) { … }` — loop while the optional re-evaluates non-null,
+- **Phorj syntax:** `while (var x = optExpr) { … }` — loop while the optional re-evaluates non-null,
   binding the unwrapped `x` (the loop dual of S2's `if (var x = opt)`). Matrix l.365 marks it `defer`
   "needs a mutating source".
 - **PHP semantics:** `while (($x = optExpr()) !== null) { … }` — 1:1 once `=` is an expression in PHP (it
-  is). Phorge's `while (var x = …)` lowers to that. [Verified: PHP assignment-as-expression.]
+  is). Phorj's `while (var x = …)` lowers to that. [Verified: PHP assignment-as-expression.]
 - **Interactions / enforcement:** the *source* (`optExpr`) must change between iterations or it loops
   forever — which it does only if it reads mutable state (a `mutable` cursor) or calls a side-effecting
   native. So while-let's *usefulness* is Tier-1-mutation-gated (you mutate a cursor in the body), but the
@@ -220,10 +220,10 @@ For each: **Phorge syntax** (craftsmanship-best + idiomatic-PHP target), **PHP s
 
 ### 1.9 `static mutable` — shared class/module state  [TIER 2 — needs the GC]
 
-- **Phorge syntax:** `static mutable int counter = 0;` as a class member (and possibly module-level). Read
-  via `ClassName.counter` (Go-qualified, matching Phorge's static-access decision, matrix l.213). The
+- **Phorj syntax:** `static mutable int counter = 0;` as a class member (and possibly module-level). Read
+  via `ClassName.counter` (Go-qualified, matching Phorj's static-access decision, matrix l.213). The
   *combination* `static mutable` is exactly the GA plan's named example (plan l.25).
-  ```phorge
+  ```phorj
   class IdGen {
     static mutable int next = 0;
     static function fresh() -> int { IdGen.next = IdGen.next + 1; return IdGen.next; }
@@ -244,11 +244,11 @@ For each: **Phorge syntax** (craftsmanship-best + idiomatic-PHP target), **PHP s
 
 ### 1.10 `clone`-with / copy-update expression  [TIER 1 — and the IMMUTABLE-FIRST star feature]
 
-- **Phorge syntax (craftsmanship-apex):** a **functional copy-update expression** producing a *new*
+- **Phorj syntax (craftsmanship-apex):** a **functional copy-update expression** producing a *new*
   immutable instance with some fields replaced — NOT in-place mutation. This is the C#-record `with` /
   Kotlin `copy()` / OCaml `{ r with … }` pattern, and it is the **idiomatic way to "change" an immutable
-  value** (matrix l.140, 285 mark it `defer`/high, "very Phorge-aligned").
-  ```phorge
+  value** (matrix l.140, 285 mark it `defer`/high, "very Phorj-aligned").
+  ```phorj
   class Point { constructor(public int x, public int y) {} }
   Point p = Point(1, 2);
   Point q = p with { y = 9 };      // q = Point(1, 9); p unchanged
@@ -277,9 +277,9 @@ For each: **Phorge syntax** (craftsmanship-best + idiomatic-PHP target), **PHP s
 
 ### 1.11 Property set-hooks (PHP 8.4 hooks)  [TIER 2 for set; get-hooks are TIER 1]
 
-- **Phorge syntax:** PHP 8.4 property hooks (`public int $x { get => …; set => …; }`). **Split by tier:**
+- **Phorj syntax:** PHP 8.4 property hooks (`public int $x { get => …; set => …; }`). **Split by tier:**
   - **get-hooks (computed/virtual properties) — TIER 1, can land sooner.** A `get` hook is a pure
-    read-side transform; it touches no mutable state (matrix l.120 "get-hooks immutability-OK"). Phorge
+    read-side transform; it touches no mutable state (matrix l.120 "get-hooks immutability-OK"). Phorj
     syntax: `int area { get => this.w * this.h; }` — a virtual field. Transpiles to PHP 8.4
     `public int $area { get => $this->w * $this->h; }`. *No mutation, no GC.*
   - **set-hooks — TIER 2, needs mutation + GC.** A `set` hook intercepts a *write* to a field
@@ -362,7 +362,7 @@ than the whole language at once.
 **Determinism warning for the GC (byte-identity spine):** a tracing GC must **never** be observable in
 program output — no finalizers, no `__destruct` (already Group-3 removed precisely because "destruction
 timing non-deterministic under Rc/Drop breaks the byte-identity spine"). Collection timing must not affect
-`run ≡ runvm ≡ PHP`. PHP's own GC is non-deterministic but unobservable; Phorge must hold the same line.
+`run ≡ runvm ≡ PHP`. PHP's own GC is non-deterministic but unobservable; Phorj must hold the same line.
 [Verified: review spec Group-3 `__destruct` removal rationale.]
 
 ---
@@ -375,14 +375,14 @@ The GA plan (l.13-29) paused on confirming four orthogonal axes. Here is the res
 
 ### 3.1 The four axes, confirmed against Rust/Swift/Kotlin/C#
 
-| Axis | Question | Phorge default | Phorge opt-in | Precedent |
+| Axis | Question | Phorj default | Phorj opt-in | Precedent |
 |---|---|---|---|---|
 | **Mutability** | reassignable / writable after init? | **immutable** | **`mutable`** | Kotlin `val`/`var`; Swift `let`/`var`; Rust `let`/`let mut` — **all three default immutable**. [Verified: searches below.] |
 | **Compile-time const** | named compile-time constant? | — (a decl *form*) | `const NAME = <const-expr>` | Kotlin `const val` (top-level/object only, compile-time); C# `const`; Rust `const`. **Distinct axis from runtime immutability everywhere.** [Verified.] |
 | **Association** | instance vs class-level? | **instance** | **`static`** | Universal (Kotlin/Swift/C#/Java/PHP all use `static` for class-level). [Verified.] |
 | **Extensibility** | class/method extendable/overridable? | **closed (final)** | **`open`** | **Kotlin: final-by-default, `open` to allow** — exactly this model. [Verified: "every class and method is final by default … use the open keyword".] |
 
-This is **not a Phorge invention** — it is the **Kotlin model almost exactly**, plus Swift's value-semantics
+This is **not a Phorj invention** — it is the **Kotlin model almost exactly**, plus Swift's value-semantics
 default, plus C#'s `with`-based immutable update. The convergence of three modern, craftsmanship-respected
 languages on *immutable-default + final-default + orthogonal const + orthogonal static* is the strongest
 possible evidence the model is right. [Verified: Kotlin `val`/`var`/`const`/`open`/`final`/`sealed` search;
@@ -391,10 +391,10 @@ Swift `let`/`var`/`mutating` search; C# `record`/`with`/`init`/`readonly`/`seale
 ### 3.2 Dropping `final` and `readonly` as VALUE modifiers — sound?  **Yes.**
 
 - **`readonly` is subsumed by immutable-default.** The matrix already says so repeatedly: "readonly is
-  Phorge's default" (l.98, 261, 262, 286). A `readonly` *value modifier* on a field is redundant when every
+  Phorj's default" (l.98, 261, 262, 286). A `readonly` *value modifier* on a field is redundant when every
   field is immutable unless marked `mutable`. **Verdict: remove `readonly` as a modifier.** The *transpiler*
   may still **emit** PHP `readonly` to signal intent (matrix l.98 "transpiler could emit it") — that's an
-  output detail, not a Phorge keyword.
+  output detail, not a Phorj keyword.
 - **`final` as an inheritance modifier becomes the default; `open` is the opt-in.** This is the Kotlin
   rule. The old PHP `final` keyword (`Modifier::Final` in `ast.rs:497`) is retired *as a user keyword*
   because closed-by-default makes it the no-op default; `open` carries the meaning. **Verdict: remove `final`
@@ -453,7 +453,7 @@ proposed**, with the §3.3 refinements recorded. The only items that could be *g
 - **`for..in` loop variable:** currently the loop var is a fresh immutable binding each iteration
   (`interpreter.rs:301-303` declares it per-iteration). With mutation, a `mutable` loop var is allowed but
   reset each iteration — define the semantics explicitly (PHP foreach `$v` is mutable and *persists* the
-  last value after the loop; Phorge should scope it to the loop body — craftsmanship over PHP-compat here).
+  last value after the loop; Phorj should scope it to the loop body — craftsmanship over PHP-compat here).
   [Verified: `interpreter.rs:301-308` per-iteration declare.]
 - **Lambdas capture by value (M3 S3):** `ast::free_vars` + by-value capture means a closure capturing a
   `mutable` local captures its *value at creation*, not a mutable cell — PHP `use ($x)` (not `use (&$x)`)
@@ -478,8 +478,8 @@ These have no single forced craftsmanship answer; the contract (plan l.59-62) sa
    `constructor(int age) { requires(age >= 0); }`), does `p with { age = -1 }` **re-run the constructor**
    (safe, but `with` becomes fallible / returns `T?`) or **bypass it** (fast, but can produce an instance
    the constructor would have rejected)? C# `with` bypasses (calls the copy-constructor, not the primary
-   ctor); but Phorge's craftsmanship lean toward "no invalid instances" argues for re-validation. *Genuine
-   fork — recommend asking.* [Speculative — both are defensible; C# precedent vs Phorge invariant-safety.]
+   ctor); but Phorj's craftsmanship lean toward "no invalid instances" argues for re-validation. *Genuine
+   fork — recommend asking.* [Speculative — both are defensible; C# precedent vs Phorj invariant-safety.]
 2. **Tracing GC algorithm + observability budget.** Mark-sweep (simple, deterministic stop points) vs
    reference-counting-with-cycle-collector (keeps `Rc`, adds a cycle detector — *less* disruptive to the
    existing `Rc` model) vs a generational collector (overkill for M-scale). The `Rc` + cycle-collector route

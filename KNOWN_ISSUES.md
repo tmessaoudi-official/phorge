@@ -1,6 +1,6 @@
 # Known Issues & Limitations
 
-Phorge is pre-1.0. This page lists current limitations and known rough edges. Most "limitations" are
+Phorj is pre-1.0. This page lists current limitations and known rough edges. Most "limitations" are
 **deliberate scope boundaries** — features that are *planned* (see [ROADMAP.md](ROADMAP.md)) rather
 than broken. The key property is that out-of-scope constructs are **rejected cleanly** (a type or
 parse error, non-zero exit) — never a crash.
@@ -26,8 +26,8 @@ not a panic:
   binding** (`static::` / `new static()`) is a deliberate non-feature (a runtime called-class concept +
   the `self::`/`static::` footgun) — override the static per subclass instead.
 
-- **PHP-reserved identifiers as symbol names — now guarded (F-m, kind-aware).** Phorge and PHP have
-  different keyword sets, so a Phorge identifier that is a *PHP* reserved word would transpile to
+- **PHP-reserved identifiers as symbol names — now guarded (F-m, kind-aware).** Phorj and PHP have
+  different keyword sets, so a Phorj identifier that is a *PHP* reserved word would transpile to
   invalid PHP when it names a symbol (a free `function`/`class`/`enum`/`interface`/`trait`/`type`).
   `is_php_reserved_symbol_name(name, kind)` now rejects the full empirically-verified set with a clean
   **`E-RESERVED-NAME`**: the function-illegal words (`var`/`list`/`print`/`array`/`unset`/`empty`/
@@ -122,8 +122,8 @@ not a panic:
   guide exercises them at their *exact* IEEE-defined points (`exp(0)`=1, `sin(0)`=0, `cos(0)`=1, …) and
   prints real values through `numberFormat`, which collapses any last-ULP libm difference. The
   `run ≡ runvm` spine is always identical (both Rust). (2) **`numberFormat` rounding is byte-identical**
-  (fixed 2026-06-27) — both `value::number_format` and `__phorge_number_format` now **digit-string
-  round** the *shortest-round-trip* decimal (`__phorge_float`, identical to Rust's `{}` Display)
+  (fixed 2026-06-27) — both `value::number_format` and `__phorj_number_format` now **digit-string
+  round** the *shortest-round-trip* decimal (`__phorj_float`, identical to Rust's `{}` Display)
   half-away-from-zero by carry, NOT `(value * 10^d).round()`. So a half-way money value rounds the
   intended decimal identically on all three backends (`numberFormat(0.285, 2) == "0.29"`); the old
   `f64::round`-vs-PHP-`round` boundary divergence is gone. (3) **`gcd` with the
@@ -132,7 +132,7 @@ not a panic:
   example set.
 
 - **`Core.Json` — shipped corners + deferrals.** (1) **Float magnitude divergence from native
-  `json_encode`:** Phorge renders a float with the positional shortest-round-trip form (`__phorge_float`)
+  `json_encode`:** Phorj renders a float with the positional shortest-round-trip form (`__phorj_float`)
   for consistency with `run`/`runvm` everywhere, so an extreme magnitude (`1e20`) stringifies as
   `100000000000000000000`, not json's `1.0e+20`. `run ≡ runvm ≡ real PHP` is always byte-identical (the
   PHP leg uses the same helper); only the comparison to PHP's *native* `json_encode` differs at
@@ -148,9 +148,9 @@ not a panic:
   names are backend-synthesized, not in the loader's function→file map; free functions + `main` get
   full `file:line`. (3) Frame lines are statement-granularity, so a fault inside a multi-line
   expression may report the statement's start line. (4) Trace text is intentionally uncolored
-  (matches Phorge's plain-diagnostic convention). (5) Stack traces do not yet print a "caused by"
+  (matches Phorj's plain-diagnostic convention). (5) Stack traces do not yet print a "caused by"
   cause chain — the *data* exists (M-faults 2c: a `cause` field is preserved and, on transpile, populates
-  PHP's native `$previous`), but the Phorge fault renderer does not walk it; folding the cause chain into
+  PHP's native `$previous`), but the Phorj fault renderer does not walk it; folding the cause chain into
   the trace output is a later refinement.
 
 - **Multiple inheritance — S6b/S6c shipped; deferrals:** `class C extends A, B` with `use`/`rename`/
@@ -228,7 +228,7 @@ not a panic:
   more concrete classes** (`Cat & Dog` → `E-INTERSECT-MULTI-CLASS`; a value has exactly one class — this
   becomes meaningful only once class `extends` lands in S6), **primitive/enum/optional/function members**
   (`E-INTERSECT-MEMBER`), a **shared method with conflicting signatures** across members
-  (`E-INTERSECT-SIG`; uninhabited because Phorge has no overloading **yet** — overloading is the next
+  (`E-INTERSECT-SIG`; uninhabited because Phorj has no overloading **yet** — overloading is the next
   M-RT slice, after which this rule is revisited), `instanceof` with an **intersection right side**
   (above), and the **whole-intersection optional** `(A & B)?`. There is no match-over-intersection
   (an intersection is not a sum type).
@@ -244,7 +244,7 @@ not a panic:
   (false side) composing those, and an **early-return guard** (`if (!(x instanceof T)) { return … }`
   narrows the rest of the block). **Not narrowed** (deferred): the *true* side of `a || b` (a
   disjunction implies no single fact); **common-member access on a raw union** without narrowing;
-  **`x == null` / equality-literal refinement** — Phorge rejects comparing an optional/union to a
+  **`x == null` / equality-literal refinement** — Phorj rejects comparing an optional/union to a
   literal (`T? == null`, `int|string == "ok"`), so there is no such narrowing source (use if-let /
   `??` / match-over-optional / match-over-union instead); **post-match scrutinee narrowing** — a
   `match` is an expression and its arms are expressions (no statement-match with diverging arms), so
@@ -320,7 +320,7 @@ an explicit non-goal, never a panic):
   bodies read and write *other* fields. **Backed hooks** (a hook with its own slot + the PHP
   `$this->name` self-reference), **hooks on `static` fields**, **hooks in interfaces**, and
   **abstract/overridable hooks** are deferred. Promoted/declared fields with no explicit visibility
-  transpile to PHP `public` (Phorge does not enforce field visibility at runtime; `readonly`/`final`
+  transpile to PHP `public` (Phorj does not enforce field visibility at runtime; `readonly`/`final`
   emission is not done — immutable fields are already write-prevented by the checker).
 
 ## Error model Slice 2a (M-faults) — deferred refinements
@@ -366,7 +366,7 @@ Checked exceptions — `throws`/`throw`/`try`/`catch`/`finally` and `?`-throws �
   unsupported) — a deliberate non-goal (PHP allows it but it is a well-known footgun).
 - **Cause-chains ship in Slice 2c** (`examples/guide/cause-chain.phg`): a conventional `cause` field of
   type `Error?` on an `Error` subtype is routed into PHP's native exception chain
-  (`parent::__construct($message, 0, $cause)` → `getPrevious()`); the Phorge backends read it back as a
+  (`parent::__construct($message, 0, $cause)` → `getPrevious()`); the Phorj backends read it back as a
   plain field, byte-identical `run ≡ runvm ≡ real PHP`. Two deliberate deferrals remain: **reading a
   cause through PHP's `getPrevious()` accessor** (a `.cause()` method form, as opposed to the field read)
   is only meaningful for a *foreign* PHP exception, so it folds into **PHP interop (M8.5)**; and
@@ -418,7 +418,7 @@ that does return on every path. The corners below are deferred (each is sound, n
 Dynamic multiple dispatch over free functions and class methods ships and is byte-identical
 `run ≡ runvm ≡ real PHP` (`examples/guide/overloading.phg`). Deliberate deferrals:
 
-- **Overloaded constructors** are not supported (PHP cannot overload a constructor either; Phorge has
+- **Overloaded constructors** are not supported (PHP cannot overload a constructor either; Phorj has
   constructor promotion and — when it lands — default arguments). Overload a static factory method.
 - **A single return type is required** across an overload set (`E-OVERLOAD-RETURN`). A union-of-returns
   result type is a future relaxation; today differing returns are rejected (use a generic function when
@@ -525,7 +525,7 @@ or simply unavailable, never a crash):
 
 ## Core.Html (Waves 1–3 — escape kernel + element builders + `html"…"` sugar)
 
-- **An `html"…"` hole cannot contain a string literal with quotes.** Like every Phorge
+- **An `html"…"` hole cannot contain a string literal with quotes.** Like every Phorj
   interpolation (`"…{e}…"`), the lexer scans to the first closing `"`, so a `"` inside a `{e}` hole
   ends the literal early — `html"<a href={url}>"` is fine, but `html"{f("x")}"` is not. Bind the
   value to a local first (`var v = f("x"); html"{v}"`). This is the shared interpolation model, not
@@ -555,7 +555,7 @@ or simply unavailable, never a crash):
   loader) but cannot yet be compiled to a standalone executable. `build` embeds one source file only
   (M2.5 Phase 1 scope), unchanged by S3.
 - **Resolution is offline by design.** `run`/`check`/`transpile` never fetch — they read the
-  committed `vendor/`. Only `phg vendor` touches the network; commit `vendor/` + `phorge.lock` so
+  committed `vendor/`. Only `phg vendor` touches the network; commit `vendor/` + `phorj.lock` so
   builds stay deterministic and reproducible (the same determinism rule that defers URL/network to M6).
 
 ## M6 W2 router & `#[Route]` attributes (in progress)
@@ -596,7 +596,7 @@ or simply unavailable, never a crash):
 ## `phg build` limitations (M2.5, in progress)
 
 - **Cross-builds: source checkout OR a published registry (Phase 3a).** `--target`/`--all` compile a
-  stub from source via `cargo-zigbuild` when run from a phorge source tree; a *distributed* (sourceless)
+  stub from source via `cargo-zigbuild` when run from a phorj source tree; a *distributed* (sourceless)
   phg instead **downloads** a prebuilt stub from the release registry and sha256-verifies it against its
   baked manifest. So a sourceless cross build works **once a tagged release has published the stubs**
   (the `stub-registry.yml` workflow); before the first such release, a sourceless binary still errors
@@ -614,7 +614,7 @@ or simply unavailable, never a crash):
   checkout" message); the primary dev host is the only cross-build origin needed now.
 - **Built binaries honor argv + the exit code (Batch-1 B).** A standalone built binary passes its
   real command-line arguments to `Core.Process.args()` / `main`'s `List<string>` parameter and exits
-  with `main`'s `int` return. (`--version`/`--help` remain features of the `phorge` CLI itself, not of
+  with `main`'s `int` return. (`--version`/`--help` remain features of the `phorj` CLI itself, not of
   built binaries — a built binary's argv belongs entirely to its embedded program.)
 - **Process exit codes follow the OS 8-bit convention (0–255).** `main`'s `int` return is passed
   verbatim to the OS exit (`std::process::exit` / PHP `exit($n)`), so a value outside 0–255 wraps the
@@ -640,7 +640,7 @@ conversion, primitive-union assertion, the bool cells, and `float`/`string as de
   exact IEEE-754 value. A float whose shortest string overflows i128 → `null` (the overflow boundary
   is not guaranteed byte-identical to PHP at the extreme edge — examples stay in range).
 - **`string as bool` is strict** (`"true"`/`"false"` only) — `"1"`, `"yes"`, `""`, `"false"`-as-true
-  are all `null`. This is deliberate: Phorge never inherits PHP's string truthiness.
+  are all `null`. This is deliberate: Phorj never inherits PHP's string truthiness.
 
 ## Maps (M-RT S3 — foundation)
 
@@ -669,7 +669,7 @@ byte-identical on `run`/`runvm` and round-tripped through real PHP. These are de
 - **A string-literal index inside a `"{…}"` interpolation nests quotes.** `"{m["k"]}"` ends the
   string early (the shared interpolation rule — see Core.Html). Bind the lookup to a local first:
   `var v = m["k"]; "{v}"`. An `int`/identifier index inside `{…}` is fine.
-- **Bool map keys: PHP coerces `true`/`false` to `1`/`0` as array keys; Phorge keeps them distinct.**
+- **Bool map keys: PHP coerces `true`/`false` to `1`/`0` as array keys; Phorj keeps them distinct.**
   A `Map<bool, V>` works and is byte-identical *as long as you don't also use `0`/`1` int keys in the
   same map* (PHP would collapse `true` and `1`). Prefer string/int keys when transpiling to PHP.
 
@@ -681,7 +681,7 @@ like a generic free function; the parameter is registry-only and never reaches a
 caveats (the `run`/`runvm` spine is always byte-identical):
 
 - **`List.sum` faults on i64 overflow; PHP `array_sum` promotes to float instead.** The checked sum
-  keeps EV-7 (never panics), so a sum exceeding `i64::MAX` is a clean Phorge fault, whereas PHP would
+  keeps EV-7 (never panics), so a sum exceeding `i64::MAX` is a clean Phorj fault, whereas PHP would
   silently widen to float. Keep sums within i64 range when transpiling (examples do).
 - **`Map.keys`/`values` key coercion** — see the *Maps* note above: PHP coerces integer-like string
   keys and bools to int keys, so use plain string keys for byte-identical PHP round-tripping.
@@ -719,12 +719,12 @@ The rule (`E-FILE-NAME`/`E-FILE-MULTI-PUBLIC`/`E-FILE-MIXED-PUBLIC`) is enforced
 
 ## Foreign PHP interop (M8.5) — scope + deferrals
 
-`declare function …;` (S1) describes a foreign PHP function so Phorge can type-check calls and transpile
+`declare function …;` (S1) describes a foreign PHP function so Phorj can type-check calls and transpile
 to `\name(...)`. Interop is a **migration bridge**, transpile-target-only by nature.
 
 - **A program using `declare` cannot run on the Rust backends** (`E-FOREIGN-RUNTIME`) — foreign PHP needs
   the PHP runtime. `check`/`transpile` work; run it via `phg transpile app.phg > app.php && php app.php`.
-  This is by design (the byte-identity spine covers pure Phorge only); such programs are quarantined from
+  This is by design (the byte-identity spine covers pure Phorj only); such programs are quarantined from
   the `differential.rs` oracle and gated by `tests/interop.rs` (transpile → real PHP golden).
 - **`declare class` (foreign PHP classes) shipped (S2):** constructor / instance methods / static
   methods / public fields → `new \Name`, `$o->m`, `\Name::s`, `$o->f`. Scope: `package Main`, no
@@ -738,7 +738,7 @@ to `\name(...)`. Interop is a **migration bridge**, transpile-target-only by nat
 
 ## Core.Time (M-TIME) — determinism + scope
 
-`Core.Time` models `Instant`/`Duration` (S1) as an injected pure-Phorge prelude, so all arithmetic is
+`Core.Time` models `Instant`/`Duration` (S1) as an injected pure-Phorj prelude, so all arithmetic is
 byte-identical by construction. The clock is the one non-deterministic surface, deliberately quarantined.
 
 - **Unfrozen `Instant.now()` is non-deterministic** and therefore cannot appear in a byte-identity-gated
@@ -789,8 +789,8 @@ only read path). Deliberate scope edges:
   type-system non-printability is the real guarantee; the lint is a convenience for the common slip.
 - **No runtime `***` redaction.** Path 1 (opaque + non-printable) was chosen over a runtime-redacting
   wrapper, so there is no `Value::Secret` and a Secret never renders as `***` — it simply can't be
-  printed. (PHP gets `#[\SensitiveParameter]` for *trace* redaction; Phorge's own traces don't dump
-  local values, so there is no in-Phorge leak vector to redact.)
+  printed. (PHP gets `#[\SensitiveParameter]` for *trace* redaction; Phorj's own traces don't dump
+  local values, so there is no in-Phorj leak vector to redact.)
 - **The lint keys on the type name `Secret`.** A user-defined class also named `Secret` with an
   `expose()` method would be linted too (harmless — the signal still applies).
 - **Multi-package transpile is a follow-up** (same boundary as `Core.Json`/`Core.Regex`): the injected
@@ -833,34 +833,34 @@ only read path). Deliberate scope edges:
   deferred. The empty/reversed-range and integer-division transpile divergences were fixed earlier in
   M7.)*
 - **Float display is byte-identical across all three backends.** A finite `float` renders identically —
-  the transpiler's `__phorge_float` runtime helper reproduces Rust's shortest-round-trip,
+  the transpiler's `__phorj_float` runtime helper reproduces Rust's shortest-round-trip,
   always-positional `f64` Display exactly (so `sqrt(2.0)` → `1.4142135623730951`,
   `1234567890123456.0` → `1234567890123456`, and `0.00001` → `0.00001` all match, with no PHP
   `precision=14` rounding or scientific-notation switch — see `guide/floats.phg`, which round-trips
   every magnitude through real PHP). **Float division by zero now FAULTS** (resolved 2026-06-27, the
   "any division by zero throws" rule): `1.0 / 0.0` → `"division by zero"` and `1.0 % 0.0` → `"modulo by
   zero"` on `run`/`runvm` (no IEEE `inf`/`NaN`), and the transpiled PHP throws `DivisionByZeroError`
-  to agree (`/` throws natively; float `%` routes through `__phorge_rem`, which guards `$b == 0`). A
+  to agree (`/` throws natively; float `%` routes through `__phorj_rem`, which guards `$b == 0`). A
   finite overflow-to-`inf` (huge ÷ tiny non-zero) is *not* a zero division and stays `inf`;
-  `__phorge_float` renders `inf`/`-inf`/`NaN` the Rust way if one is reached through other means.
+  `__phorj_float` renders `inf`/`-inf`/`NaN` the Rust way if one is reached through other means.
 - **`opt!`-on-null fault: message body matches across backends; only the source location differs.**
   A null force-unwrap faults with the body `force-unwrap of null` on **all three** backends — `run`/
   `runvm` (located, classified `FaultKind::ForceUnwrap`) and the transpiled PHP, which throws
   `RuntimeException("force-unwrap of null")` (same body, verified 2026-06-27). The only residual
-  difference is the *location*: PHP's exception carries the generated `.php` file:line, not the Phorge
-  source line — inherent to transpilation (a PHP exception has no Phorge source position) and
+  difference is the *location*: PHP's exception carries the generated `.php` file:line, not the Phorj
+  source line — inherent to transpilation (a PHP exception has no Phorj source position) and
   fault-domain (the differential harness excludes fault cases by design), so it never affects the
   byte-identity spine. The *present-value* case is fully byte-identical.
 - **`package Main` function names must avoid PHP built-in names (transpile target).** A top-level
   function in `package Main` transpiles to a *global* PHP function, so naming one `serialize`,
-  `strlen`, `header`, … collides with the PHP builtin (`Cannot redeclare function …`). The Phorge
+  `strlen`, `header`, … collides with the PHP builtin (`Cannot redeclare function …`). The Phorj
   backends are unaffected (everything is namespaced); only the PHP round-trip fails. Library packages
   are namespaced and immune. Pick non-builtin names for `package Main` functions intended to transpile
   (e.g. `serializeResponse`, not `serialize`).
 - **Member visibility is enforced (Wave 1.1 — was a byte-identity hole).** An external read/write of a
   `private`/`protected` instance field (incl. a promoted ctor param), or an external call of a
   `private`/`protected` method, is now a **compile error** (`E-FIELD-VISIBILITY`/`E-METHOD-VISIBILITY`)
-  — so `run`/`runvm`/transpiled PHP all reject it instead of the Phorge backends accepting what PHP
+  — so `run`/`runvm`/transpiled PHP all reject it instead of the Phorj backends accepting what PHP
   would throw on (`Cannot access private property`). Declare the member `public` (the default) when it
   is accessed from outside, or expose it through a public accessor (`obj.valueOf()`). A `private` member
   used only inside the declaring class — and a `protected` one inside that class or a subclass — is
@@ -868,7 +868,7 @@ only read path). Deliberate scope edges:
   noted near the declaration-visibility entry above.)
 
 - **`Core.Reflect.traits` is not provided.** `Reflect.interfaces`/`parents`/`methods`/`fields` are
-  available, but there is no `traits` enumeration native. A Phorge `trait`'s members are *folded into*
+  available, but there is no `traits` enumeration native. A Phorj `trait`'s members are *folded into*
   the using class before any backend runs (a trait is reuse, not a runtime type — unlike an
   interface), so there is no runtime trait identity to report, and PHP's `class_uses` is direct-only,
   which would not match the folded model. Use `Reflect.methods`/`fields` to inspect what a trait

@@ -5,7 +5,7 @@
 > `docs/specs/2026-06-24-member-initializers-design.md` (const + field-init),
 > `docs/specs/2026-06-24-mandatory-new-design.md` (new).
 > Each task ships green + byte-identical (`run ≡ runvm ≡ real PHP 8.5`, gate:
-> `PHORGE_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php PHORGE_REQUIRE_PHP=1 cargo test --workspace`),
+> `PHORJ_PHP=/stack/tools/phpbrew/php/php-8.5.7/bin/php PHORJ_REQUIRE_PHP=1 cargo test --workspace`),
 > TDD, with a guide example where it adds surface. **Commit pre-hook runs the ~100s build test — use a
 > 300s Bash timeout when committing.** Build binary + report path after each feature (standing rule).
 
@@ -16,7 +16,7 @@
 ## Feature A — `const` class constants ✅ DONE (`c6b1ac2`)
 
 > Landed end-to-end: shared `ast::class_consts` (own + inherited + trait consts flattened), checker
-> collection + access + visibility enforcement (the one site Phorge enforces member visibility) +
+> collection + access + visibility enforcement (the one site Phorj enforces member visibility) +
 > SCREAMING_SNAKE casing, interpreter inline, compiler `Op::Const` + `CTy` operand, transpiler PHP
 > typed class const + `Class::NAME`. 8 `E-CONST-*` codes, all `phg explain`-documented.
 > `examples/guide/constants.phg` byte-identical run≡runvm≡PHP 8.5; 710 lib + 108 differential green.
@@ -84,13 +84,13 @@ lowering), then static (one-time guarded init — the riskier PHP-timing piece).
 > Landed eager (decided): checker static-init type-check moved to post-collection pass
 > (`check_static_inits`, no `this`; `E-STATIC-INIT-CONST` retired); interpreter `eval_static_inits`
 > before `main`; compiler `SetStatic` prelude at start of `main` (literals seeded, non-literals
-> placeholder); transpiler `__phorge_init_statics()` before `main()`. `examples/guide/static-init.phg`
+> placeholder); transpiler `__phorj_init_statics()` before `main()`. `examples/guide/static-init.phg`
 > byte-identical run≡runvm≡PHP 8.5; 723 lib + 108 differential green. **Feature B COMPLETE.**
 
 - **B5 — static expression initializers:** checker — allow an arbitrary expression (not just a literal)
   for a `static` field. Interpreter/VM — evaluate **once** at program start in declaration order
   (extend the existing `static_inits` path, which today only handles literals). Transpiler — emit a
-  **one-time guarded init** (a generated `__phorge_init_statics`-style run-once, or a `??=`-guarded lazy
+  **one-time guarded init** (a generated `__phorj_init_statics`-style run-once, or a `??=`-guarded lazy
   set on first access); statics evaluate in declaration order. This is the spec's flagged risky corner —
   keep the guard mechanism single-sourced and differential-gated.
 - **B6 — example + tests + gate:** extend `field-init.phg` (or a companion) with a runtime static init;
@@ -129,7 +129,7 @@ lowering), then static (one-time guarded init — the riskier PHP-timing piece).
 ---
 
 ## Cross-cutting
-- After each feature: `cargo build --release --bin phg`, report `/stack/projects/phorge/target/release/phg`.
+- After each feature: `cargo build --release --bin phg`, report `/stack/projects/phorj/target/release/phg`.
 - Update `CHANGELOG.md` (Unreleased) + `examples/README.md` index/matrix per feature.
 - Mark each feature done in the master plan Decisions Log as it lands.
 - **Loose end (separate):** the playground `run≠runvm` parity bug needs the developer's repro code — a

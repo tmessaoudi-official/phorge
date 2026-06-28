@@ -27,33 +27,33 @@
   `all_examples_match_between_backends`) globs `examples/**/*.phg` and runs ONE file at a time via
   `cmd_run(&src)`/`cmd_runvm(&src)` — multi-file projects need a project-aware harness. run/check/
   transpile take only `src: &str` (no path); only `cmd_build` gets `input_path` (`src/cli.rs`).
-- [2026-06-18] AGREED (S2a manifest deps — Composer dialect, honest container): keep `phorge.toml`
+- [2026-06-18] AGREED (S2a manifest deps — Composer dialect, honest container): keep `phorj.toml`
   (TOML), but speak Composer's **vocabulary** so a PHP dev reads it natively — `name = "vendor/package"`
   (Composer-style; doubles as the PSR-4 namespace root, `acme/myapp` ⇒ `Acme\Myapp`), **`[require]` /
   `[require-dev]`** section names, values `{ git = "…", tag|rev = "…" }` (Go self-location — no Composer
   `repositories` side-table) plus an optional `"vendor/pkg" = "<git-url>@v1.2.0"` string shorthand.
   **Exact-pin only — no `^`/`~` ranges** (a resolver is deferred; the lockfile pins exact regardless;
   M5-10 says tag/rev only, never branch). **Rejected literal `composer.json`** — the developer's own
-  kill-shot: a file the `composer` tool can't actually process (no Packagist, no autoloader Phorge uses)
+  kill-shot: a file the `composer` tool can't actually process (no Packagist, no autoloader Phorj uses)
   is a false promise. Familiarity comes from vocabulary, not the filename/tool.
 - [2026-06-18] CONTEXT (verified): PSR-4 maps a namespace prefix → base dir; `\`=`/`; FQCN→file path
-  (PHP-FIG PSR-4, Composer schema). Phorge's mandatory folder=path = **PSR-4 promoted from convention
+  (PHP-FIG PSR-4, Composer schema). Phorj's mandatory folder=path = **PSR-4 promoted from convention
   to language rule**; transpile = emit PHP files in PSR-4 layout + a generated autoload/composer block.
-  Contract holds: Phorge package resolution : PHP/PSR-4 :: TS module resolution : JS.
+  Contract holds: Phorj package resolution : PHP/PSR-4 :: TS module resolution : JS.
 
-- [2026-06-18] AGREED: after S2d (committed `e54c919`), next = **M5 S3** — git deps + `phorge.lock`
+- [2026-06-18] AGREED: after S2d (committed `e54c919`), next = **M5 S3** — git deps + `phorj.lock`
   + `phg vendor` + auto-offline, the final M5 slice (developer chose "M5 S3 — close the milestone").
   Determinism gate: deps pinned (tag/rev → SHA in lockfile) + vendored + resolved offline-only, never
   live network in tests/examples (same rule as the M6 URL deferral). Design source for S3 details:
   `docs/specs/2026-06-18-m5-project-model-design.md` M5-10 + O-7.
 - [2026-06-18] AGREED (S3 design, 3C-converged 8/8): build the **full S3 in one slice** — git deps +
-  `phorge.lock` + `phg vendor` + auto-offline. Determinism = **vendored + offline-only in tests**
+  `phorj.lock` + `phg vendor` + auto-offline. Determinism = **vendored + offline-only in tests**
   (developer choice). Locked design:
-  - **Vendor = a flat package forest** under `vendor/` with **no nested `phorge.toml`** (required so the
+  - **Vendor = a flat package forest** under `vendor/` with **no nested `phorj.toml`** (required so the
     project-aware harness doesn't treat a dep as a standalone project). `phg vendor` clones each
     `[require]` dep, checks out its pinned tag/rev, reads the dep's own manifest source root, and copies
     that source subtree into `vendor/` preserving package dirs (folder=path validates against `vendor/`).
-  - **`phorge.lock`** (TOML subset, like the manifest): per dep `name`, `git`, resolved `rev` (full
+  - **`phorj.lock`** (TOML subset, like the manifest): per dep `name`, `git`, resolved `rev` (full
     commit SHA = the cryptographic pin), and `hash` = **FNV-1a-64** over the sorted `(rel-path \0 bytes)`
     of the vendored tree (reuses `bundle::cross::fnv1a_64`; a non-crypto integrity checksum, the SHA is
     the real pin).
@@ -68,16 +68,16 @@
     functions-only; a vendored `main` would collide with the consumer entry).
   - **Tests** (`tests/vendor.rs`) exercise the fetch path against a **`file://` local-git fixture**
     (offline, deterministic — `git` 2.54 present). The shipped example commits its `vendor/` +
-    `phorge.lock`; the differential harness loads it offline → byte-identical on run/runvm + real PHP
+    `phorj.lock`; the differential harness loads it offline → byte-identical on run/runvm + real PHP
     (exact integer/string ops only — dodges the int-`/`-vs-PHP-float-`/` gotcha).
   - **Deferred (documented, not regressions):** transitive dep resolution (vendor resolves direct
     `[require]` only); `phg build` stays single-file (won't merge `vendor/`). Both → KNOWN_ISSUES.
 - [2026-06-18] AGREED (S2d): next = **project-aware differential harness + public `examples/project/`
   showcase** (the multi-file example deferred from S2a–S2c, satisfying "examples ship with features").
   Harness lives in `tests/differential.rs`: discover every project root under `examples/` (a dir with
-  a `phorge.toml`), load via `loader::load`, run both backends, assert `Ok` + byte-identical. The
+  a `phorj.toml`), load via `loader::load`, run both backends, assert `Ok` + byte-identical. The
   single-file glob is made **project-aware** — it stops descending into any directory that contains a
-  `phorge.toml` (structural exclusion, not name-based), so project files are never run standalone and
+  `phorj.toml` (structural exclusion, not name-based), so project files are never run standalone and
   the `len() >= 3` floor still gates the flat examples. (Developer chose "S2d — harness + example".)
 - [2026-06-18] AGREED (S2c scope): library packages export **functions only** this slice — a
   `class`/`enum` in a non-`main` package is rejected (`E-PKG-TYPE`); cross-package type namespacing is
@@ -106,7 +106,7 @@
 
 ## Open items — RESOLVED in the design spec (`docs/specs/2026-06-18-m5-project-model-design.md`)
 - O-1 Source root → **convention `src/`, overridable via manifest `source =`** (M5-6).
-- O-2 Manifest → **minimal `phorge.toml`** ([package] name/version/source + [dependencies]); its
+- O-2 Manifest → **minimal `phorj.toml`** ([package] name/version/source + [dependencies]); its
   presence (walk up) is the sole project-detection signal (M5-5, §3).
 - O-3 Multi-file loader → **entry-point loader assembles a compilation unit; backends unchanged until
   qualified calls (S2c)**. Single-file `package` decl (S1) is runtime-inert → byte-safe (§5).
@@ -116,7 +116,7 @@
   `php out.php`, no Composer/autoloader (M5-7, §4). Resolves the PSR-4-can't-autoload-functions nuance.
 - O-6 Harness → **project-aware differential** (S2d): single-file `package Main` examples keep the glob;
   multi-file projects discovered + run by entry.
-- O-7 vendor/git → **pinned tag/rev + `phorge.lock` (SHA) + committed `vendor/` auto-used offline**
+- O-7 vendor/git → **pinned tag/rev + `phorj.lock` (SHA) + committed `vendor/` auto-used offline**
   (M5-10, S3). Examples resolve offline only — never network (determinism gate, like M6 URL deferral).
 - O-8 Migration → **S1 slice**: `package Main;` into ~25 examples + ~200 inline programs (mechanical,
   Wave-1-migrator pattern; distinguish program literals from help/prose strings).
@@ -142,7 +142,7 @@ Slices (each: one+ green commit, run==runvm byte-identical, PHP round-tripped, e
   process it). Example showcase deferred to S2d (when behavior is observable).
 - [x] **S2b — multi-file loader + strict folder=path enforcement** — DONE (2026-06-18). `src/loader.rs`:
   `load(entry)`/`load_loose_src(src)` → `Unit { program, diag_src }`. Project mode walks up to
-  `phorge.toml`, parses every `.phg` under the source root, validates folder=path (`E-PKG-PATH`;
+  `phorj.toml`, parses every `.phg` under the source root, validates folder=path (`E-PKG-PATH`;
   directory=package Go-model, `main` folder-exempt), merges items flat. Loose mode enforces
   `package Main`-only. Enforcement path-aware (in the loader, never `check()`) → `cmd_run(&str)` +
   differential untouched. `cli::{run,runvm,check,transpile}_program` consume the loaded program;
@@ -166,20 +166,20 @@ Slices (each: one+ green commit, run==runvm byte-identical, PHP round-tripped, e
   `examples/project/tempconv/` (two-package C→F converter) is the first public multi-file project:
   mandatory packages + folder=path, cross-package qualified call, import aliasing (`as`), same-package
   bare call across files, namespaced PHP. `tests/differential.rs` discovers every project root (dir
-  with `phorge.toml`), loads via `loader::load`, asserts `run` ≡ `runvm`; the single-file glob is made
-  project-aware (skips any dir holding a `phorge.toml` — structural, name-independent). Docs refreshed
+  with `phorj.toml`), loads via `loader::load`, asserts `run` ≡ `runvm`; the single-file glob is made
+  project-aware (skips any dir holding a `phorj.toml` — structural, name-independent). Docs refreshed
   (`examples/README.md` rows + corrected "later slice" notes; `examples/project/README.md`; `FEATURES.md`
   Modules/packages → 🚧).
-- [x] **S3 — git deps + `phorge.lock` + `phg vendor` + auto-offline** (final M5 slice). `src/lock.rs`
+- [x] **S3 — git deps + `phorj.lock` + `phg vendor` + auto-offline** (final M5 slice). `src/lock.rs`
   (strict TOML-subset lockfile, round-tripping) + `src/vendor.rs` (`phg vendor`: clone → checkout
-  pin → copy source into `vendor/<vendor>/<package>/` → FNV hash → write `phorge.lock`; idempotent,
+  pin → copy source into `vendor/<vendor>/<package>/` → FNV hash → write `phorj.lock`; idempotent,
   crash-safe, **network only here**). `loader::load_project` merges vendored packages like first-party
   libraries (mangle/resolve before any backend ⇒ run≡runvm structural; transpiler de-mangles to
   `namespace`); offline-only — `run`/`check`/`transpile` never fetch (`E-VENDOR-MISSING` if a
   `[require]` dep isn't vendored). Guards: `E-VENDOR-MAIN` (vendored `package Main`), `E-DUP-DEF`
   (duplicate `(package,name)` — was a silent overwrite). CLI: `cmd_vendor`, dispatch/USAGE/help,
   3 `explain` codes. Example `examples/project/withdeps/` (vendored `acme/strutil`) ships committed
-  `vendor/` + `phorge.lock`, byte-identical on run/runvm + real PHP. `tests/vendor.rs` drives the git
+  `vendor/` + `phorj.lock`, byte-identical on run/runvm + real PHP. `tests/vendor.rs` drives the git
   path via a `file://` fixture (offline). Deferred (KNOWN_ISSUES): transitive deps; `phg build`
   stays single-file. **421 tests green, clippy + fmt clean. M5 COMPLETE.**
 

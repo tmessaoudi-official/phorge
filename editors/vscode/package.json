@@ -1,35 +1,35 @@
 {
-  "name": "phorge",
-  "displayName": "Phorge",
-  "description": "Phorge language support — syntax highlighting plus diagnostics, hover, go-to-definition, completion, document symbols, references, rename, and formatting via the `phg lsp` language server.",
+  "name": "phorj",
+  "displayName": "Phorj",
+  "description": "Phorj language support — syntax highlighting plus diagnostics, hover, go-to-definition, completion, document symbols, references, rename, and formatting via the `phg lsp` language server.",
   "version": "0.2.0",
-  "publisher": "phorge",
+  "publisher": "phorj",
   "license": "MIT OR Apache-2.0",
-  "repository": { "type": "git", "url": "https://github.com/tmessaoudi-official/phorge" },
+  "repository": { "type": "git", "url": "https://github.com/tmessaoudi-official/phorj" },
   "engines": { "vscode": "^1.75.0" },
   "categories": ["Programming Languages"],
-  "activationEvents": ["onLanguage:phorge"],
+  "activationEvents": ["onLanguage:phorj"],
   "main": "./extension.js",
   "contributes": {
     "languages": [
       {
-        "id": "phorge",
-        "aliases": ["Phorge"],
+        "id": "phorj",
+        "aliases": ["Phorj"],
         "extensions": [".phg"],
         "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
       {
-        "language": "phorge",
-        "scopeName": "source.phorge",
-        "path": "./syntaxes/phorge.tmLanguage.json"
+        "language": "phorj",
+        "scopeName": "source.phorj",
+        "path": "./syntaxes/phorj.tmLanguage.json"
       }
     ],
     "configuration": {
-      "title": "Phorge",
+      "title": "Phorj",
       "properties": {
-        "phorge.serverPath": {
+        "phorj.serverPath": {
           "type": "string",
           "default": "phg",
           "description": "Path to the `phg` binary. The language server is started as `phg lsp`."

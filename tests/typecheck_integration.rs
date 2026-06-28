@@ -1,6 +1,6 @@
-use phorge::checker::check;
-use phorge::lexer::lex;
-use phorge::parser::Parser;
+use phorj::checker::check;
+use phorj::lexer::lex;
+use phorj::parser::Parser;
 
 /// The complete sample program from the design spec (§6), verbatim.
 const SAMPLE: &str = r#"package Main;
@@ -39,7 +39,7 @@ function main() -> void {
 }
 "#;
 
-fn check_src(src: &str) -> Result<(), Vec<phorge::diagnostic::Diagnostic>> {
+fn check_src(src: &str) -> Result<(), Vec<phorj::diagnostic::Diagnostic>> {
     let tokens = lex(src).expect("lex ok");
     let prog = Parser::new(tokens).parse_program().expect("parse ok");
     // `check` now returns the non-fatal warnings on success (M3 S2.5); this harness only cares
@@ -82,7 +82,7 @@ fn loop_variable_type_mismatch_errors() {
 
 // ── M6 W2: `#[Route(...)]` attribute validation ───────────────────────────────────────────────
 
-fn has_code(errs: &[phorge::diagnostic::Diagnostic], code: &str) -> bool {
+fn has_code(errs: &[phorj::diagnostic::Diagnostic], code: &str) -> bool {
     errs.iter().any(|e| e.code == Some(code))
 }
 

@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-24
 **Status:** Brainstorming → spec for review (not yet planned/implemented)
-**Driver:** Real ergonomic gaps surfaced while writing Phorge in the playground — get type/class of a
+**Driver:** Real ergonomic gaps surfaced while writing Phorj in the playground — get type/class of a
 value, runtime reflection of the class hierarchy, literal braces in strings, terminal args/env, and
 the PHP superglobal story.
 
@@ -18,18 +18,18 @@ goes on a quarantine seam, outside the byte-identity differential.
    *not* PHP single-quote duality).
 3. **Process I/O** — `Core.Env` (env vars) + `Core.Process` (argv) on a new quarantine seam; the
    **M-Batteries** kickoff.
-4. **Superglobal map** — documentation + routing of every PHP superglobal to its Phorge home (mostly
+4. **Superglobal map** — documentation + routing of every PHP superglobal to its Phorj home (mostly
    M6 `Request`, partly Slice 3). No new ambient-global mechanism — by design.
 
 ## Constraints & philosophy (the bar every decision is held to)
 
 - **Byte-identity spine.** Deterministic features ship gated on `run ≡ runvm ≡ PHP`. Non-deterministic
   ones (env/args) are *quarantined* off the differential (the `src/serve.rs` precedent).
-- **No ambient globals.** Phorge replaces PHP's untyped, mutable, ambient superglobals with typed
+- **No ambient globals.** Phorj replaces PHP's untyped, mutable, ambient superglobals with typed
   values passed explicitly. This is the core TS-over-PHP value proposition; it is non-negotiable.
 - **Legible over powerful.** Reflection is bounded to *read-only, name-level* introspection. Anything
   that defeats static typing (invoke-by-string, instantiate-by-string, attribute-driven magic) is
-  rejected — it would reintroduce exactly the dynamism Phorge exists to remove.
+  rejected — it would reintroduce exactly the dynamism Phorj exists to remove.
 - **No new `Op`, no `Value` change** for Slices 1 & 2 (front-end + native registry only).
 
 ---
@@ -57,7 +57,7 @@ checker/transpiler internals — Slice 1 exposes them read-only at the value lev
 `get_class` / `class_implements` / `class_parents` / `class_uses` (tier-1, `php -n`-safe).
 
 **The hard line (challenge to "full reflection"):** Slice 1 is *read-only name-level* reflection only.
-Explicitly **rejected** (they defeat the static guarantees that are Phorge's reason to exist):
+Explicitly **rejected** (they defeat the static guarantees that are Phorj's reason to exist):
 - invoke-a-method-by-string-name / call-by-reflection,
 - instantiate-a-class-by-string-name,
 - attribute (`#[Attr]`) reflection and attribute-driven dispatch,
@@ -122,10 +122,10 @@ This is the largest slice — effectively the start of the **M-Batteries** miles
 ## Slice 4 — Superglobal map (routing, mostly to M6)
 
 The request-data superglobals belong to the **M6 web model**, where the PHP front-controller reads them
-*once* at the edge to build a typed `Request`; Phorge code only ever sees the typed value. This slice
+*once* at the edge to build a typed `Request`; Phorj code only ever sees the typed value. This slice
 is **documentation + routing**, not new mechanism here — the accessors are M6 waves.
 
-| PHP | Phorge | Home |
+| PHP | Phorj | Home |
 |---|---|---|
 | `$_GET` | `req.query(name) -> string?` (+ `Core.Url` parse) | M6 (W2+) |
 | `$_POST` | `req.form(name)` / parsed body | M6 |
@@ -151,7 +151,7 @@ Each slice ships independently with its tests + (where deterministic) a guide ex
 ## Deferred / rejected (with rationale)
 
 - **Rejected:** PHP single-quote strings (footgun, no need), `$_REQUEST` (ambiguous), ambient
-  superglobals (the thing Phorge exists to remove), reflection-driven dynamic dispatch /
+  superglobals (the thing Phorj exists to remove), reflection-driven dynamic dispatch /
   instantiate-by-string / attribute magic (defeats static typing).
 - **Deferred:** `#[Attr]` attributes + attribute reflection (`A-attributes`, post-M-RT); `$_SESSION`
   (stateful, M6+); full `ReflectionClass`-style API (`Q-reflection`, v2) — Slice 1's name-level

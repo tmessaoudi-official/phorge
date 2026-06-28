@@ -1,9 +1,9 @@
 # Process & environment (`Core.Process` / `Core.Env`)
 
-These are Phorge's first **ambient-environment** natives — their result depends on the *process*
+These are Phorj's first **ambient-environment** natives — their result depends on the *process*
 (its command-line arguments and environment variables), not the program text.
 
-```phorge
+```phorj
 import Core.Process;
 import Core.Env;
 
@@ -29,12 +29,12 @@ $ echo $?
 Run [`args-env.phg`](args-env.phg) and pass arguments after the `--` terminator:
 
 ```console
-$ PHORGE_DEMO=hi phg run examples/process/args-env.phg -- alpha beta
+$ PHORJ_DEMO=hi phg run examples/process/args-env.phg -- alpha beta
 argc = 2
 arg: alpha
 arg: beta
 HOME = /home/developer
-PHORGE_DEMO = hi
+PHORJ_DEMO = hi
 env count = 987
 ```
 

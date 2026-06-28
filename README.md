@@ -1,23 +1,23 @@
-# Phorge
+# Phorj
 
-[![CI](https://github.com/tmessaoudi-official/phorge/actions/workflows/ci.yml/badge.svg)](https://github.com/tmessaoudi-official/phorge/actions/workflows/ci.yml)
+[![CI](https://github.com/tmessaoudi-official/phorj/actions/workflows/ci.yml/badge.svg)](https://github.com/tmessaoudi-official/phorj/actions/workflows/ci.yml)
 
 **A statically-typed, PHP-inspired programming language — implemented in Rust, std-only, with
 zero external crates.**
 
-Phorge takes the ergonomics that make PHP pleasant to write (familiar syntax, string interpolation,
+Phorj takes the ergonomics that make PHP pleasant to write (familiar syntax, string interpolation,
 classes) and puts them on a **statically-typed, immutable-by-default** footing with a clean compiler
 pipeline. It runs on **two byte-identical backends** — a tree-walking interpreter and a bytecode
 stack VM — transpiles to **real PHP**, and can compile a program into a **single standalone native
 executable** with no runtime to install.
 
-Phorge is built to grow into a **full, general-purpose language** — aiming to match the breadth that
+Phorj is built to grow into a **full, general-purpose language** — aiming to match the breadth that
 makes PHP productive (and then some), not a toy DSL. **Performance is a first-class goal:** programs
 run on a bytecode VM, and an early three-way benchmark (`phg bench --vs-php`) already shows the VM
 ahead of PHP on a sample workload — with rigorous, comprehensive benchmarks a tracked milestone on
 the road to GA.
 
-```phorge
+```phorj
 package Main;
 import Core.Console;
 
@@ -47,7 +47,7 @@ function main() {
 
 | Milestone | What | State |
 |---|---|---|
-| **M1** | Tree-walking interpreter + Phorge→PHP transpiler | ✅ complete |
+| **M1** | Tree-walking interpreter + Phorj→PHP transpiler | ✅ complete |
 | **M2** | Bytecode compiler + stack VM (byte-identical to the interpreter) | ✅ complete |
 | **M2.5** | `phg build` → standalone native executables | 🔨 in progress (Linux + Windows cross-builds; macOS readers shipped, stub deferred) |
 | **M3+** | Language enrichment, ecosystem, tooling | 🔲 planned — see [ROADMAP.md](ROADMAP.md) & [VISION.md](VISION.md) |
@@ -102,7 +102,7 @@ chmod +x phg-*-linux-x86_64-musl
 
 ```sh
 $ phg run examples/hello.phg
-Hello, Phorge!
+Hello, Phorj!
 
 $ echo 'package Main; import Core.Console; function main() { Console.println("{1 + 2}"); }' | phg run -
 3
@@ -130,8 +130,8 @@ phg <command> <source> [options]
 | `disasm` | type-check → compile → dump the bytecode (per-function listings + descriptor tables) | exit 1 on type error |
 | `bench` | median-of-N timing of both backends + memory (peak/current RSS, Linux), output-identity gated | exit 1 if they fault or disagree |
 | `build` | compile to a standalone native executable | exit 1 on type error / build failure |
-| `vendor` | fetch + pin git dependencies into `vendor/` (the only network-touching command), writing `phorge.lock` | exit 1 on fetch/lock failure |
-| `serve` | run an HTTP server that dispatches requests to a Phorge `handle(Request) -> Response` (M6) | exit 1 on bind/handler error |
+| `vendor` | fetch + pin git dependencies into `vendor/` (the only network-touching command), writing `phorj.lock` | exit 1 on fetch/lock failure |
+| `serve` | run an HTTP server that dispatches requests to a Phorj `handle(Request) -> Response` (M6) | exit 1 on bind/handler error |
 | `test` | discover + run `test "name" { … }` blocks (under `tests/`, or a given file/dir) with `Core.Test` assertions | exit 1 if any test fails |
 | `fmt` | format source to canonical form (`--check` for CI, `-` for stdin, in-place otherwise) | `--check`: exit 1 if any file would change; exit 2 on a parse error |
 | `explain` | look up a diagnostic code (`phg explain E-UNKNOWN-IDENT`) | exit 1 on unknown code |
@@ -152,7 +152,7 @@ No arguments → usage on stderr, exit 2. Unreadable file → exit 1.
 
 ## Standalone executables (`phg build`)
 
-`phg build foo.phg` produces a native executable that runs `foo.phg` on the VM with **no Phorge
+`phg build foo.phg` produces a native executable that runs `foo.phg` on the VM with **no Phorj
 install** required. The program source is embedded in a named object-file section (a versioned,
 CRC-guarded container); at startup the binary detects and runs it.
 
@@ -166,14 +166,14 @@ Cross-compilation uses [`cargo-zigbuild`](https://github.com/rust-cross/cargo-zi
 linker) plus `llvm-objcopy`. Supported targets today: `x86_64-unknown-linux-musl`,
 `aarch64-unknown-linux-{gnu,musl}`, `x86_64-pc-windows-gnu`. The Mach-O/macOS section reader ships and
 is tested, but macOS *stub production* (signing) is deferred to a later phase — apple targets are
-rejected with a clear message. Cross-builds require a phorge source checkout (the host build does
+rejected with a clear message. Cross-builds require a phorj source checkout (the host build does
 not). See [ROADMAP.md](ROADMAP.md) for Phase 2/3 details.
 
 ## Testing (`phg test`)
 
-Write tests *in Phorge* and run them with one command:
+Write tests *in Phorj* and run them with one command:
 
-```phorge
+```phorj
 package Main;
 import Core.Test;
 
@@ -228,14 +228,14 @@ any LSP-capable editor gets:
 - **Completion** — top-level names, in-scope locals/params, and keywords.
 - **Document symbols** — a structured outline (classes/enums/interfaces/traits expand to their members).
 
-It is dependency-free (hand-rolled JSON-RPC in `std` — no `tower-lsp`/`serde`), like the rest of Phorge.
+It is dependency-free (hand-rolled JSON-RPC in `std` — no `tower-lsp`/`serde`), like the rest of Phorj.
 
 **VS Code**: a thin client lives in [`editors/vscode/`](editors/vscode/) — see its README to run it in an
 Extension Development Host or package it. **Other editors** (Neovim, Helix, PhpStorm, …): register a
 language server for `*.phg` that launches `phg lsp` with stdio transport. For example, Neovim:
 
 ```lua
-vim.lsp.start({ name = 'phorge', cmd = { 'phg', 'lsp' }, root_dir = vim.fn.getcwd() })
+vim.lsp.start({ name = 'phorj', cmd = { 'phg', 'lsp' }, root_dir = vim.fn.getcwd() })
 ```
 
 ## Language at a glance
@@ -264,7 +264,7 @@ vim.lsp.start({ name = 'phorge', cmd = { 'phg', 'lsp' }, root_dir = vim.fn.getcw
 
 A full capability matrix (implemented vs. planned) lives in [FEATURES.md](FEATURES.md); current
 limitations in [KNOWN_ISSUES.md](KNOWN_ISSUES.md); the frozen language design in
-`docs/specs/2026-06-15-phorge-language-design.md`.
+`docs/specs/2026-06-15-phorj-language-design.md`.
 
 ## Examples
 
@@ -273,17 +273,17 @@ Every program under [`examples/`](examples/README.md) runs byte-identically on b
 `examples/realworld/` holds four real programs (a ledger, a shop, an RPG, a small library);
 `examples/guide/` holds focused tours of each feature.
 
-## Phorge → PHP transpiler
+## Phorj → PHP transpiler
 
 `phg transpile <file>` emits PHP 8.x (type-checked first): enums → an abstract base class plus a
 `final` subclass per variant; `match` → an `instanceof` chain; interpolation → concatenation;
-`println` → `echo`. The round-trip is verified against a real `php` in `tests/cli.rs`. (PHP → Phorge
+`println` → `echo`. The round-trip is verified against a real `php` in `tests/cli.rs`. (PHP → Phorj
 import is a separate future milestone.)
 
 ## Roadmap & vision
 
 - **[ROADMAP.md](ROADMAP.md)** — milestone-by-milestone plan from here to a full ecosystem.
-- **[VISION.md](VISION.md)** — what Phorge is *for*, and the long-term ambition.
+- **[VISION.md](VISION.md)** — what Phorj is *for*, and the long-term ambition.
 - **[docs/MILESTONES.md](docs/MILESTONES.md)** — living status with commit references.
 
 ## Contributing
@@ -301,6 +301,6 @@ Dual-licensed under either of:
 - MIT license ([LICENSE-MIT](LICENSE-MIT))
 
 at your option. Unless you explicitly state otherwise, any contribution intentionally submitted for
-inclusion in Phorge by you, as defined in the Apache-2.0 license, shall be dual-licensed as above,
-without any additional terms or conditions. Phorge has **no third-party runtime dependencies** — see
+inclusion in Phorj by you, as defined in the Apache-2.0 license, shall be dual-licensed as above,
+without any additional terms or conditions. Phorj has **no third-party runtime dependencies** — see
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

@@ -1,4 +1,4 @@
-//! A minimal, total, `std`-only JSON parser for inbound LSP request bodies (Item D). Phorge has no
+//! A minimal, total, `std`-only JSON parser for inbound LSP request bodies (Item D). Phorj has no
 //! internal JSON parser — `Core.Json` is the *language's* parser, not callable here — and the
 //! dependency policy forbids `serde` (an LSP server is not a security-critical primitive). This
 //! parser handles exactly what LSP message bodies need: objects, arrays, strings (with escapes),

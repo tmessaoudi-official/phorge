@@ -5,7 +5,7 @@ pub fn explain_text(code: &str) -> Option<String> {
     let body = match code {
         "E-UNKNOWN-IDENT" => {
             "E-UNKNOWN-IDENT — a name was used that is not in scope.\n\n\
-             Phorge resolves identifiers lexically: block-scope locals (including `var` bindings\n\
+             Phorj resolves identifiers lexically: block-scope locals (including `var` bindings\n\
              and `for` loop variables), parameters, top-level functions, and — inside a method —\n\
              the current class's fields. A typo or an out-of-scope reference triggers this; the\n\
              diagnostic suggests the nearest in-scope name when one is close.\n"
@@ -53,10 +53,10 @@ pub fn explain_text(code: &str) -> Option<String> {
         "E-RESERVED-NAME" => {
             "E-RESERVED-NAME — a function / class / enum / interface / trait / type was named with a\n\
              word PHP reserves for that symbol position (e.g. `var`, `list`, `print`, `array`, `int`).\n\n\
-             These words are perfectly good Phorge *value* identifiers — a variable, parameter, field,\n\
+             These words are perfectly good Phorj *value* identifiers — a variable, parameter, field,\n\
              property, or method may be named `var` / `list` / `int` (they map to a legal PHP `$list`\n\
              / `->list()`). But PHP rejects them as a *symbol* name: `function list()` or `class int {}`\n\
-             is a PHP parse error, so Phorge rejects them there rather than emitting invalid PHP. The\n\
+             is a PHP parse error, so Phorj rejects them there rather than emitting invalid PHP. The\n\
              check is kind-aware — the type words (`int`/`float`/`object`/…) are legal PHP *function*\n\
              names but illegal as *class* names. Rename the function/class/type (the value/parameter/\n\
              field/method name can keep the word).\n"
@@ -80,7 +80,7 @@ pub fn explain_text(code: &str) -> Option<String> {
              A non-`main` file exports at most one public type (class/enum/interface/trait), so its name\n\
              can identify it. Split the extra public types into their own `<TypeName>.phg` files, or mark\n\
              the helpers `private`/`internal` (those ride along free — they are single-file-scoped). This\n\
-             keeps Phorge's function-heavy model: free functions and non-public helpers are unconstrained.\n"
+             keeps Phorj's function-heavy model: free functions and non-public helpers are unconstrained.\n"
         }
         "E-FILE-MIXED-PUBLIC" => {
             "E-FILE-MIXED-PUBLIC — a file mixes a public type with public free function(s).\n\n\
@@ -225,9 +225,9 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-VENDOR-MISSING" => {
             "E-VENDOR-MISSING — a `[require]` dependency is declared but not vendored.\n\n\
-             Dependencies resolve offline from the committed `vendor/` tree — Phorge never fetches on\n\
+             Dependencies resolve offline from the committed `vendor/` tree — Phorj never fetches on\n\
              `run`/`check`/`transpile`. Run `phg vendor` to clone each `[require]` dependency at its\n\
-             pinned tag/rev into `vendor/` and write `phorge.lock`, then commit both.\n"
+             pinned tag/rev into `vendor/` and write `phorj.lock`, then commit both.\n"
         }
         "E-VENDOR-MAIN" => {
             "E-VENDOR-MAIN — a vendored dependency declared `package Main`.\n\n\
@@ -259,7 +259,7 @@ pub fn explain_text(code: &str) -> Option<String> {
             "E-NAME-CASE — a value identifier is not camelCase.\n\n\
              Functions, methods, parameters, fields, variable bindings, and lambda parameters must be\n\
              camelCase: a lowercase first letter and no underscores (e.g. `splitOnce`, `cToF`, `area`).\n\
-             This is the value half of Phorge's casing rule (types/enums/variants are PascalCase via\n\
+             This is the value half of Phorj's casing rule (types/enums/variants are PascalCase via\n\
              E-TYPE-CASE); both are front-end-only, so they never change the generated PHP. Rename the\n\
              identifier — the diagnostic suggests the converted form (`split_once` → `splitOnce`).\n"
         }
@@ -267,7 +267,7 @@ pub fn explain_text(code: &str) -> Option<String> {
             "E-TYPE-CASE — a type identifier is not PascalCase.\n\n\
              Class names, enum names, enum variant names, and `type` alias names must be PascalCase: an\n\
              uppercase first letter and no underscores (e.g. `Shape`, `Circle`, `HttpRequest`). This is\n\
-             the type half of Phorge's casing rule (functions/variables/params are camelCase via\n\
+             the type half of Phorj's casing rule (functions/variables/params are camelCase via\n\
              E-NAME-CASE); both are front-end-only, so they never change the generated PHP. Rename the\n\
              type — the diagnostic suggests the converted form (`shape` → `Shape`).\n"
         }
@@ -312,7 +312,7 @@ pub fn explain_text(code: &str) -> Option<String> {
         "E-DECIMAL-FLOAT-MIX" => {
             "E-DECIMAL-FLOAT-MIX — `decimal` and `float` were mixed in one operation.\n\n\
              `decimal` is exact fixed-point (money/fixed-point math); `float` is binary IEEE-754\n\
-             (inexact for values like `0.1`). Phorge keeps them as **distinct** types with NO\n\
+             (inexact for values like `0.1`). Phorj keeps them as **distinct** types with NO\n\
              implicit coercion — mixing a `float` into money is exactly the bug `decimal` exists to\n\
              prevent. So `1.50d + 1.5`, or comparing a `decimal` with a `float`, is rejected.\n\n\
              The one ergonomic edge is `int`: `decimal + int` (either order) widens the int to a\n\
@@ -377,7 +377,7 @@ pub fn explain_text(code: &str) -> Option<String> {
         "E-IFACE-UNIMPL" => {
             "E-IFACE-UNIMPL — a class does not implement an interface method.\n\n\
              A class that `implements I` must provide every method of `I` and its `extends` chain. PHP\n\
-             would fatal at class-declaration time, so Phorge rejects it up front. Add the missing\n\
+             would fatal at class-declaration time, so Phorj rejects it up front. Add the missing\n\
              method (matching the interface's signature) to the class.\n"
         }
         "E-IFACE-SIG" => {
@@ -393,7 +393,7 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-EXTEND-FINAL" => {
             "E-EXTEND-FINAL — a class extends a non-`open` class.\n\n\
-             Phorge is final-by-default (M-RT S6): a class can only be a parent if it is declared\n\
+             Phorj is final-by-default (M-RT S6): a class can only be a parent if it is declared\n\
              `open class`. Mark the parent `open` to allow extension, or remove the `extends`. (This is\n\
              the inheritance dual of the `mutable` opt-in — safe by default, opt into the power.)\n"
         }
@@ -410,7 +410,7 @@ pub fn explain_text(code: &str) -> Option<String> {
         "E-MI-CONFLICT" => {
             "E-MI-CONFLICT — a method is inherited from more than one parent.\n\n\
              Under multiple inheritance (`class C extends A, B`, M-RT S6b), if two parents each supply a\n\
-             method of the same name Phorge will not silently pick one. Resolve it in C's body with a\n\
+             method of the same name Phorj will not silently pick one. Resolve it in C's body with a\n\
              clause: `use P.m` (pick parent P's `m`), `rename P.m as n` (keep both under a new name),\n\
              `exclude P.m` (drop one), or override by declaring `function m(…)` in C. A diamond where\n\
              both arms reach the *same* declaring method auto-merges and is never a conflict.\n"
@@ -452,7 +452,7 @@ pub fn explain_text(code: &str) -> Option<String> {
         "E-MI-FIELD-CONFLICT" => {
             "E-MI-FIELD-CONFLICT — a field is inherited from more than one parent.\n\n\
              Under multiple inheritance (`class C extends A, B`, M-RT S6c), if two parents each declare\n\
-             an instance field of the same name Phorge will not silently pick one. Unlike a method\n\
+             an instance field of the same name Phorj will not silently pick one. Unlike a method\n\
              collision there are no `use`/`rename`/`exclude` clauses — PHP has no `insteadof` for\n\
              properties. Resolve it by redeclaring the field in C (or renaming it in a parent). A\n\
              diamond where both arms reach the *same* declaring field auto-merges and is never a\n\
@@ -592,7 +592,7 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-OVERLOAD-RETURN" => {
             "E-OVERLOAD-RETURN — overloads of one name must share a return type.\n\n\
-             Phorge overloading is dynamic multiple dispatch: the runtime argument types choose the\n\
+             Phorj overloading is dynamic multiple dispatch: the runtime argument types choose the\n\
              overload, so the compiler cannot know which one fires at a polymorphic call. Requiring a\n\
              single return type keeps every overloaded call statically typed. Overloads model one\n\
              operation over different argument types; if the return must vary with the input, use a\n\
@@ -606,11 +606,11 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-OVERLOAD-ERASE" => {
             "E-OVERLOAD-ERASE — two overloads are indistinguishable in transpiled PHP.\n\n\
-             Phorge transpiles to PHP, whose runtime cannot tell some distinct Phorge types apart:\n\
+             Phorj transpiles to PHP, whose runtime cannot tell some distinct Phorj types apart:\n\
              `string` and `bytes` both become PHP `string`, and `List`/`Map`/`Set` all become PHP\n\
              `array`. So two overloads that differ ONLY in such a position (e.g. `f(string)` vs\n\
              `f(bytes)`, or `g(List<int>)` vs `g(Set<int>)`) compile to a dispatch the PHP backend\n\
-             can't resolve — an ambiguous call would fault on the Phorge backends but silently take\n\
+             can't resolve — an ambiguous call would fault on the Phorj backends but silently take\n\
              the first matching PHP branch. Differentiate the overloads by another parameter, or merge\n\
              them into one.\n"
         }
@@ -648,13 +648,13 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-FOREIGN-RUNTIME" => {
             "E-FOREIGN-RUNTIME — a program using foreign PHP `declare` symbols was run on a Rust backend.\n\n\
-             `declare function …;` (M8.5 interop) describes an existing PHP function so Phorge can\n\
+             `declare function …;` (M8.5 interop) describes an existing PHP function so Phorj can\n\
              type-check calls into it and transpile to real PHP. But foreign PHP only exists in the PHP\n\
              runtime — the interpreter and VM (`phg run` / `phg runvm`) have no PHP runtime, so they\n\
              cannot execute it. Such a program is PHP-target-only: `phg check` and `phg transpile` work,\n\
              but to run it, transpile and execute under PHP:\n\n    \
              phg transpile app.phg > app.php && php app.php\n\n\
-             Pure Phorge (no `declare`) runs on all three backends byte-identically, as always.\n"
+             Pure Phorj (no `declare`) runs on all three backends byte-identically, as always.\n"
         }
         "E-UNKNOWN-ATTRIBUTE" => {
             "E-UNKNOWN-ATTRIBUTE — an unrecognized attribute name.\n\n\
@@ -771,7 +771,7 @@ pub fn explain_text(code: &str) -> Option<String> {
             "E-THROW-UNDECLARED — a thrown exception is neither caught nor declared.\n\n\
              A checked exception must be discharged: wrap the `throw` (or the throwing call) in a\n\
              `try { … } catch (T e) { … }`, or add `throws T` to the enclosing function so callers\n\
-             handle it. Phorge enforces this at compile time — nothing leaks silently.\n"
+             handle it. Phorj enforces this at compile time — nothing leaks silently.\n"
         }
         "E-CALL-UNHANDLED" => {
             "E-CALL-UNHANDLED — a call can throw a checked exception that isn't handled.\n\n\
@@ -839,7 +839,7 @@ pub fn explain_text(code: &str) -> Option<String> {
              A `private` field is reachable only inside the declaring class; a `protected` field only\n\
              inside that class and its subclasses (an un-annotated field is `public`). The check runs in\n\
              the type-checker so every backend agrees — without it a `private` read would pass on the\n\
-             Phorge interpreter/VM but throw in the transpiled PHP. Add a public accessor method (e.g.\n\
+             Phorj interpreter/VM but throw in the transpiled PHP. Add a public accessor method (e.g.\n\
              `function valueOf() -> int { return this.value; }`), or declare the field `public`.\n"
         }
         "E-METHOD-VISIBILITY" => {
@@ -878,7 +878,7 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-MAIN-SIGNATURE" => {
             "E-MAIN-SIGNATURE — the entry point `main` has an unsupported signature.\n\n\
-             `main` is where a Phorge program starts. It may take no parameters, or a single\n\
+             `main` is where a Phorj program starts. It may take no parameters, or a single\n\
              `List<string>` parameter (the program arguments — everything after `phg run file.phg --`).\n\
              It returns `void` (exit code 0) or `int` (the process exit code). Examples:\n\
              `function main(): void { … }`, `function main(): int { return 0; }`,\n\
@@ -917,7 +917,7 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-BARE-FIELD" => {
             "E-BARE-FIELD — an instance field was referenced without `this.`.\n\n\
-             Phorge has no bare field access: a field is always written `this.field`, exactly like\n\
+             Phorj has no bare field access: a field is always written `this.field`, exactly like\n\
              PHP's `$this->field`. A bare name inside a method resolves to a parameter, a local, or a\n\
              captured variable — never silently to a field — so that adding a local can never quietly\n\
              rebind what looked like a field. Qualify it:\n\n\

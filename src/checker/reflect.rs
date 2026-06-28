@@ -91,7 +91,7 @@ impl Checker {
             // sugar); everything synthesized uses `synth_span()`. Single-eval — no double evaluation
             // of a side-effecting argument (the reason this isn't a `value === null ? … : …` ternary).
             Ty::Optional(inner) => {
-                let binder = "__phorge_tn".to_string();
+                let binder = "__phorj_tn".to_string();
                 let bound = Expr::Ident(binder.clone(), synth_span());
                 let inner_repl = self.type_name_replacement(inner, &bound, qual);
                 Expr::Match {

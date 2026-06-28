@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Questions & discussion
-    url: https://github.com/tmessaoudi-official/phorge/discussions
+    url: https://github.com/tmessaoudi-official/phorj/discussions
     about: For usage questions, ideas, and show-and-tell. Please don't open an issue for these.
   - name: Security vulnerability
-    url: https://github.com/tmessaoudi-official/phorge/security/advisories/new
+    url: https://github.com/tmessaoudi-official/phorj/security/advisories/new
     about: Report security issues privately — do NOT open a public issue. See SECURITY.md.

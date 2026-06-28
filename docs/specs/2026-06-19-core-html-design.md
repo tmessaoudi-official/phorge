@@ -21,13 +21,13 @@ type HTML directly. That ergonomics is also PHP's most infamous footgun: `echo "
 an untrusted `$name` is a stored-XSS hole, and the language does nothing to stop it. Escaping is
 opt-in (`htmlspecialchars`), so the *unsafe* path is the *short* path.
 
-Phorge's contract is **Phorge : PHP :: TypeScript : JavaScript** — keep the ergonomics, fix the
+Phorj's contract is **Phorj : PHP :: TypeScript : JavaScript** — keep the ergonomics, fix the
 footgun at the type level. TypeScript didn't make JS templating safe by adding syntax; safety came
-from *types*. So the Phorge answer to "how do I write HTML" is not "a string" — it is **a distinct
+from *types*. So the Phorj answer to "how do I write HTML" is not "a string" — it is **a distinct
 type `Html` that you cannot produce from untrusted text except through an escaping boundary.** The
 unsafe path stops compiling.
 
-Today Phorge has **no** HTML story: a handler builds its body with `bytes`/`string` concatenation
+Today Phorj has **no** HTML story: a handler builds its body with `bytes`/`string` concatenation
 (`examples/web/handler.phg`), which is exactly PHP's unsafe path with extra ceremony.
 
 ## 2. Goals / Non-Goals
@@ -46,7 +46,7 @@ Today Phorge has **no** HTML story: a handler builds its body with `bytes`/`stri
   compiled, survives `php -n`). Honors the extension policy (`2026-06-19-extension-policy-design.md`).
 
 **Non-Goals**
-- **Not** a full templating engine (no loops/conditionals *inside* the literal — you use Phorge's own
+- **Not** a full templating engine (no loops/conditionals *inside* the literal — you use Phorj's own
   `for`/`if`/lambdas/`|>` to build `List<Html>`, then interpolate). The literal interpolates
   *values*, it is not a second language.
 - **Not** HTML *parsing*/sanitizing arbitrary markup (that needs a real HTML5 parser → a tier-3
@@ -106,7 +106,7 @@ spec pins it exactly:
   | `'`  | `&#039;` |
 
   `&` **must be replaced first** (otherwise the `&` it inserts gets double-escaped). Inputs are valid
-  UTF-8 (Phorge strings are UTF-8), so `htmlspecialchars`' invalid-byte handling never triggers — no
+  UTF-8 (Phorj strings are UTF-8), so `htmlspecialchars`' invalid-byte handling never triggers — no
   divergence there (noted in §8). A unit test asserts the Rust table equals `php -n`'s
   `htmlspecialchars($s, ENT_QUOTES, 'UTF-8')` over an adversarial fixture (`& < > " ' <script>` …).
 
@@ -128,13 +128,13 @@ escaping boundaries.
 
 **Named convenience set (Wave 2)** — thin wrappers, each one `html.el`/`html.void_el` with the tag
 baked: `div p span a h1 h2 h3 ul ol li table tr td section header footer nav button label` +
-void `br img input hr`. These are *Phorge `package Main` functions in the `core.html` module's own
+void `br img input hr`. These are *Phorj `package Main` functions in the `core.html` module's own
 `.phg`? No* — they are native registry entries (consistent with the rest of `core.*`), so they erase
-the same way and need no stdlib-in-Phorge bootstrapping.
+the same way and need no stdlib-in-Phorj bootstrapping.
 
 ### 4.1 Worked example (kernel + builders)
 
-```phorge
+```phorj
 package Main;
 import core.html;
 import core.console;
@@ -182,7 +182,7 @@ html.concat([ html.raw("<h1>"), HOLE(name), html.raw("</h1>") ])
 This is the crucial safety point: **the default hole behavior is escape.** To inject trusted markup
 you must *visibly* write `{html.raw(x)}`. Unsafe is long; safe is short — the inverse of PHP.
 
-```phorge
+```phorj
 var name = user_input();                 // untrusted string
 var rows = items |> map(render_row);      // List<Html> (built with builders/html"…")
 var page = html"
@@ -210,11 +210,11 @@ by `htmlspecialchars(…, ENT_QUOTES)`, so v1 uses one escaper for both).
 | New `Value::Html` runtime variant | Pointless runtime cost + a new divergence surface across interpreter/VM. The property is static; erase it like `bytes`. Rejected. |
 | Sugar-only (`html"…"`, no kernel) | Can't compose programmatically (build a `List<Html>` in a loop, factor a `card()` helper). Templating-in-strings is exactly PHP's dead-end. The kernel is what makes it a *library*. |
 | Kernel-only (no sugar) | Verbose for real pages — the developer explicitly asked for the "like PHP" feel. Sugar is the payoff; kernel is the foundation. Ship both, kernel first. |
-| Builders as Phorge `.phg` stdlib | Phorge has no stdlib-in-Phorge bootstrap; every `core.*` is native-registry. Stay consistent — native entries erase cleanly and need no loader bootstrap. |
+| Builders as Phorj `.phg` stdlib | Phorj has no stdlib-in-Phorj bootstrap; every `core.*` is native-registry. Stay consistent — native entries erase cleanly and need no loader bootstrap. |
 
 ## 7. Implementation waves (kernel first — sugar last)
 
-> Each wave ends green (`cargo test` + `PHORGE_REQUIRE_PHP=1`), clippy + fmt clean, and ships its
+> Each wave ends green (`cargo test` + `PHORJ_REQUIRE_PHP=1`), clippy + fmt clean, and ships its
 > example in the same change (developer rule: examples ship with features).
 
 - **Wave 1 — kernel.** `Type::Html`/`Ty::Html` + checker assignability wall; `core.html` natives
@@ -248,7 +248,7 @@ change proves thorny, Waves 1–2 already deliver safe HTML.
 - **`html.raw` audit story.** Trust opt-out is greppable by design; consider a `W-HTML-RAW` lint
   (like `W-FORCE-UNWRAP`) once the warning channel is proven worth extending. Deferred.
 - **Invalid UTF-8.** `htmlspecialchars` with a malformed string + `ENT_SUBSTITUTE` differs from naive
-  Rust replacement — but Phorge `string` is always valid UTF-8, so the case is unreachable. Noted so
+  Rust replacement — but Phorj `string` is always valid UTF-8, so the case is unreachable. Noted so
   a future `bytes`-to-html bridge re-examines it.
 - **`core.list` dependency.** Builders take `List<Html>`; `html.concat` consumes one. List literals
   exist; `map`/`filter` over them (for `items |> map(render_row)`) need `core.list` (deferred for

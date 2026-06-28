@@ -1,6 +1,6 @@
 //! The cross-stub integrity manifest (M2.5 Phase 3a): a line-based text mapping each cross target
 //! triple to the SHA-256 of its prebuilt runtime stub. The released `x86_64-linux-gnu` primary bakes
-//! this manifest in (via `build.rs` + `PHORGE_BAKE_STUB_MANIFEST`); a distributed phg verifies a
+//! this manifest in (via `build.rs` + `PHORJ_BAKE_STUB_MANIFEST`); a distributed phg verifies a
 //! downloaded stub against it before embedding (`cross::download_stub`). Format:
 //!
 //! ```text
@@ -94,11 +94,11 @@ pub fn parse(text: &str) -> Manifest {
     Manifest { entries }
 }
 
-/// The active manifest: the runtime `PHORGE_STUB_MANIFEST=<path>` override (a test/mirror seam) if set
+/// The active manifest: the runtime `PHORJ_STUB_MANIFEST=<path>` override (a test/mirror seam) if set
 /// and readable, else the baked-in manifest. An unreadable override falls back to the baked manifest.
 #[must_use]
 pub fn active() -> Manifest {
-    if let Some(path) = std::env::var_os("PHORGE_STUB_MANIFEST") {
+    if let Some(path) = std::env::var_os("PHORJ_STUB_MANIFEST") {
         if let Ok(text) = std::fs::read_to_string(&path) {
             return parse(&text);
         }
@@ -106,13 +106,13 @@ pub fn active() -> Manifest {
     parse(BAKED)
 }
 
-/// The registry base URL the download client fetches stubs from. `PHORGE_STUB_REGISTRY` overrides it
+/// The registry base URL the download client fetches stubs from. `PHORJ_STUB_REGISTRY` overrides it
 /// (trailing `/` normalised); otherwise the default is the crate's repository releases for the running
 /// version: `{CARGO_PKG_REPOSITORY}/releases/download/v{CARGO_PKG_VERSION}/`. `None` when no override
 /// is set and the crate has no `repository` (so the caller emits the "needs a source checkout" error).
 #[must_use]
 pub fn registry_base() -> Option<String> {
-    if let Some(v) = std::env::var_os("PHORGE_STUB_REGISTRY") {
+    if let Some(v) = std::env::var_os("PHORJ_STUB_REGISTRY") {
         let mut s = v.to_string_lossy().into_owned();
         if !s.ends_with('/') {
             s.push('/');
@@ -193,10 +193,10 @@ mod tests {
     #[test]
     fn registry_base_override_normalises_trailing_slash() {
         // SAFETY of test isolation: these env vars are unique to this crate's stub registry.
-        std::env::set_var("PHORGE_STUB_REGISTRY", "file:///tmp/reg");
+        std::env::set_var("PHORJ_STUB_REGISTRY", "file:///tmp/reg");
         assert_eq!(registry_base().as_deref(), Some("file:///tmp/reg/"));
-        std::env::set_var("PHORGE_STUB_REGISTRY", "file:///tmp/reg/");
+        std::env::set_var("PHORJ_STUB_REGISTRY", "file:///tmp/reg/");
         assert_eq!(registry_base().as_deref(), Some("file:///tmp/reg/"));
-        std::env::remove_var("PHORGE_STUB_REGISTRY");
+        std::env::remove_var("PHORJ_STUB_REGISTRY");
     }
 }

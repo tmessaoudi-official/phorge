@@ -2,5 +2,5 @@ package Main;
 import Core.Console;
 
 function main(): void {
-    Console.println("Hello, Phorge!");
+    Console.println("Hello, Phorj!");
 }

@@ -1,20 +1,20 @@
 //! M2.5 Phase 3a — the cross-stub download-and-verify client, tested hermetically (no network, no
-//! toolchain). A `file://` fixture registry + a `PHORGE_STUB_MANIFEST` fixture manifest drive
+//! toolchain). A `file://` fixture registry + a `PHORJ_STUB_MANIFEST` fixture manifest drive
 //! `bundle::cross::download_stub` directly: it must copy a matching stub into the cache, refuse (and
 //! not cache) a tampered one, and produce precise errors for a missing entry / missing asset.
 //!
-//! All scenarios live in ONE `#[test]` so the process-global `PHORGE_STUB_REGISTRY` /
-//! `PHORGE_STUB_MANIFEST` env vars are mutated by a single thread (no intra-binary race). The real
+//! All scenarios live in ONE `#[test]` so the process-global `PHORJ_STUB_REGISTRY` /
+//! `PHORJ_STUB_MANIFEST` env vars are mutated by a single thread (no intra-binary race). The real
 //! download→verify→embed→run path is exercised separately, toolchain-gated, in `tests/build.rs`.
 
-use phorge::bundle::cross::download_stub;
-use phorge::bundle::sha256::sha256_hex;
+use phorj::bundle::cross::download_stub;
+use phorj::bundle::sha256::sha256_hex;
 use std::fs;
 use std::path::PathBuf;
 
 fn unique_dir(tag: &str) -> PathBuf {
     let base =
-        std::env::temp_dir().join(format!("phorge_registry_test_{tag}_{}", std::process::id()));
+        std::env::temp_dir().join(format!("phorj_registry_test_{tag}_{}", std::process::id()));
     let _ = fs::remove_dir_all(&base);
     fs::create_dir_all(&base).expect("mk test dir");
     base
@@ -30,7 +30,7 @@ fn download_client_verify_cache_and_reject() {
 
     // A fixture "stub" — arbitrary bytes; the client never executes it, only hashes it.
     let target = "x86_64-unknown-linux-musl";
-    let stub_bytes = b"#!fake phorge stub bytes for the registry client test\n".to_vec();
+    let stub_bytes = b"#!fake phorj stub bytes for the registry client test\n".to_vec();
     let asset = registry.join(format!("phg-stub-{target}"));
     fs::write(&asset, &stub_bytes).unwrap();
     let real_hash = sha256_hex(&stub_bytes);
@@ -42,9 +42,9 @@ fn download_client_verify_cache_and_reject() {
         format!("# fixture\nversion 0.0.0-test\n{target} {real_hash}\n"),
     )
     .unwrap();
-    std::env::set_var("PHORGE_STUB_MANIFEST", &manifest_path);
+    std::env::set_var("PHORJ_STUB_MANIFEST", &manifest_path);
     std::env::set_var(
-        "PHORGE_STUB_REGISTRY",
+        "PHORJ_STUB_REGISTRY",
         format!("file://{}/", registry.display()),
     );
 
@@ -60,7 +60,7 @@ fn download_client_verify_cache_and_reject() {
     let bad_manifest = root.join("manifest-bad.txt");
     let wrong_hash = sha256_hex(b"different bytes entirely");
     fs::write(&bad_manifest, format!("{target} {wrong_hash}\n")).unwrap();
-    std::env::set_var("PHORGE_STUB_MANIFEST", &bad_manifest);
+    std::env::set_var("PHORJ_STUB_MANIFEST", &bad_manifest);
     let err = download_stub(target, &tampered_cache).expect_err("hash mismatch must fail");
     assert!(err.contains("integrity check failed"), "{err}");
     assert!(
@@ -77,7 +77,7 @@ fn download_client_verify_cache_and_reject() {
     );
 
     // 3) Missing manifest entry → precise "no prebuilt stub" error.
-    std::env::set_var("PHORGE_STUB_MANIFEST", &manifest_path);
+    std::env::set_var("PHORJ_STUB_MANIFEST", &manifest_path);
     let err = download_stub("aarch64-unknown-linux-gnu", &cache.join("a").join("phg"))
         .expect_err("unknown target must fail");
     assert!(err.contains("no prebuilt stub"), "{err}");
@@ -90,7 +90,7 @@ fn download_client_verify_cache_and_reject() {
         format!("{ghost} {}\n", sha256_hex(b"whatever")),
     )
     .unwrap();
-    std::env::set_var("PHORGE_STUB_MANIFEST", &missing_asset_manifest);
+    std::env::set_var("PHORJ_STUB_MANIFEST", &missing_asset_manifest);
     let err =
         download_stub(ghost, &cache.join("g").join("phg")).expect_err("missing asset must fail");
     assert!(err.contains("cannot copy stub"), "{err}");
@@ -115,7 +115,7 @@ fn download_client_verify_cache_and_reject() {
         .unwrap();
         let real_manifest = root.join("manifest-real.txt");
         fs::write(&real_manifest, format!("{real_target} {reference_hash}\n")).unwrap();
-        std::env::set_var("PHORGE_STUB_MANIFEST", &real_manifest);
+        std::env::set_var("PHORJ_STUB_MANIFEST", &real_manifest);
         let real_cached = cache.join("real").join("phg");
         download_stub(real_target, &real_cached)
             .expect("download of a reference-hashed real binary should verify and cache");
@@ -124,8 +124,8 @@ fn download_client_verify_cache_and_reject() {
         eprintln!("skipping cross-implementation sha256sum check: sha256sum unavailable");
     }
 
-    std::env::remove_var("PHORGE_STUB_MANIFEST");
-    std::env::remove_var("PHORGE_STUB_REGISTRY");
+    std::env::remove_var("PHORJ_STUB_MANIFEST");
+    std::env::remove_var("PHORJ_STUB_REGISTRY");
     let _ = fs::remove_dir_all(&root);
 }
 

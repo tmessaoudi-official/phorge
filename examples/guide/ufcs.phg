@@ -41,9 +41,9 @@ function main(): void {
     Console.println("triple     = {seven.triple()}"); // 21
 
     // String native UFCS: `s.upper()` ≡ `Text.upper(s)`, `s.repeat(n)` ≡ `Text.repeat(s, n)`.
-    var name = "phorge";
-    Console.println("upper      = {name.upper()}"); // PHORGE
-    Console.println("repeat     = {name.repeat(2)}"); // phorgephorge
+    var name = "phorj";
+    Console.println("upper      = {name.upper()}"); // PHORJ
+    Console.println("repeat     = {name.repeat(2)}"); // phorjphorj
 
     // Null-safe UFCS (`?.`): short-circuits to null on a null receiver, otherwise applies the
     // free/native fn to the unwrapped value (lowers to a `match` over the optional — no new `Op`).

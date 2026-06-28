@@ -28,7 +28,7 @@ fn package_is_mandatory_and_core_is_reserved() {
 
 #[test]
 fn var_rejected_as_symbol_name_allowed_as_value() {
-    // `var` is a PHP reserved word in symbol positions: a Phorge decl named `var` would transpile to
+    // `var` is a PHP reserved word in symbol positions: a Phorj decl named `var` would transpile to
     // invalid PHP (`function var(){}`, `class var{}`). Reject it with E-RESERVED-NAME.
     for src in [
         "package Main; function var() -> int { return 1; }",
@@ -59,8 +59,8 @@ fn var_rejected_as_symbol_name_allowed_as_value() {
 
 #[test]
 fn php_reserved_words_rejected_as_symbol_names_kind_aware() {
-    // F-m: the general PHP-reserved-word guard. A Phorge identifier that is a *PHP* reserved word
-    // (but not a Phorge keyword) transpiles to invalid PHP when it names a symbol — reject it cleanly.
+    // F-m: the general PHP-reserved-word guard. A Phorj identifier that is a *PHP* reserved word
+    // (but not a Phorj keyword) transpiles to invalid PHP when it names a symbol — reject it cleanly.
     // Kind-aware (verified vs PHP 8.5): some words are illegal only as a *class* name, not a function.
     for src in [
         "package Main; function array() -> int { return 1; }", // illegal PHP function name

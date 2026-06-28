@@ -1,7 +1,7 @@
-# Phorge M1 — Plan 5: Tree-Walking Evaluator (Design)
+# Phorj M1 — Plan 5: Tree-Walking Evaluator (Design)
 
 > Status: **frozen** (2026-06-15). Inputs: the frozen language design
-> (`2026-06-15-phorge-language-design.md`, §6 sample is the run target) and the
+> (`2026-06-15-phorj-language-design.md`, §6 sample is the run target) and the
 > type-checker design (`2026-06-15-m1-typechecker-design.md`).
 
 ## 1. Goal
@@ -15,7 +15,7 @@ area = 12.56636
 area = 12
 ```
 
-The type-checker (`phorge::checker::check`) remains a separate **gate**: the
+The type-checker (`phorj::checker::check`) remains a separate **gate**: the
 evaluator assumes type-correct input and does not re-check types. But it must
 never *panic* on the handful of faults types cannot prevent — those become
 clean `RuntimeError`s.

@@ -32,7 +32,7 @@ This is the SSOT's "restricted-subset dual-engine parity" (`php-parity-and-beyon
 "security-critical primitive **crypto**" to "security-critical primitive — **crypto, and
 untrusted-input parsers (e.g. regex) where a ReDoS-/correctness-safe engine cannot be done safely in
 `std`**". Add the table row. Feature-gate `regex` behind a new `regex` cargo feature (default on; OFF
-for `phorge-playground`, exactly like `crypto`/`argon2`). `regex` is pure-Rust, no `unsafe` exposed,
+for `phorj-playground`, exactly like `crypto`/`argon2`). `regex` is pure-Rust, no `unsafe` exposed,
 fuzzed by the Rust project — clears clause 2 (vetted) and clause 3 (no `std` path, not PHP-delegated:
 the engine runs natively on both Rust backends).
 
@@ -77,7 +77,7 @@ choice; PHP `preg_match` with `$m` array covers both, but exposing only named ke
 
 The injected PHP `final class Regex { private string $pattern; … }` stores the bare pattern. Query
 natives emit `preg_*` using a delimiter that cannot collide: build the delimited pattern **at emit
-time** with a `__phorge_regex_delim($pattern)` helper that picks a delimiter absent from the pattern
+time** with a `__phorj_regex_delim($pattern)` helper that picks a delimiter absent from the pattern
 (`~`, then `#`, `%`, …) and appends `u`. Byte-identity is gated on the regular subset (above).
 Mapping: `matches`→`preg_match`, `find`→`preg_match`+`$m[0]`, `findAll`→`preg_match_all`,
 `findGroups`→`preg_match` + filter string-keyed (named) captures, `replace`→`preg_replace`,
@@ -92,7 +92,7 @@ no extension dependency (unlike mbstring; see [[transpile-no-ini-extensions]]).
    `eval` bodies (shared by both backends), the `php` emitters, `regex_natives()`. Register in
    `native/mod.rs` (`#[cfg(feature = "regex")]`).
 3. **Prelude injection**: `cli::inject_regex_prelude` + wire into `check_and_expand`.
-4. **Transpile helper**: `__phorge_regex_delim` + the `Regex` PHP class emission.
+4. **Transpile helper**: `__phorj_regex_delim` + the `Regex` PHP class emission.
 5. **Example + tests**: `examples/guide/regex.phg` (byte-identity-gated run≡runvm≡real PHP 8.5);
    `src/native/regex_tests.rs`; a rejected-pattern case in the example README.
 

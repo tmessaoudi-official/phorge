@@ -6,7 +6,7 @@
 
 ## The core reframe — two orthogonal axes
 
-"Casting" conflates two operations that good designs keep separate; Phorge does too:
+"Casting" conflates two operations that good designs keep separate; Phorj does too:
 
 1. **Value conversion** — produce a *new* value of another type (`int→float`, `float→int`,
    `string→int?`). Runtime work.
@@ -18,7 +18,7 @@
 - **Assertion = a CHECKED `as` operator yielding an optional.** `v as T` ⇒ `T?` — `Some(v)` if `v` is
   really a `T` at runtime, else `None` (the Kotlin `as?` / Swift `as?` model). Composes with `??` /
   if-let. **TS's unchecked `<T>v` / `v as T` is declined** — it lies to the compiler and crashes later,
-  exactly the surprise Phorge removes ([[philosophy-of-phorge]]). The checked form is the honest
+  exactly the surprise Phorj removes ([[philosophy-of-phorj]]). The checked form is the honest
   version of the developer's TS `<X>` ask.
 - **No implicit coercion.** `1 + 2.0` stays a hard type error; widening is explicit
   (`Convert.toFloat(1) + 2.0`). Maximally predictable; the conversion fns make it ergonomic.
@@ -32,7 +32,7 @@ Naming follows source intent (and sidesteps native overloading — the registry 
 `(module, name)`, so one name = one signature):
 - **`to*` = from a typed value** (total or explicitly-lossy):
   - `toString(T) -> string` — **generic, runtime-dispatched**, reusing `Value::as_display` /
-    the existing `__phorge_str` PHP helper (bool→`true`/`false`, float→`__phorge_float`, else cast).
+    the existing `__phorj_str` PHP helper (bool→`true`/`false`, float→`__phorj_float`, else cast).
     Total. No new PHP helper (reuse `uses_str`).
   - `toFloat(int) -> float` — total widening (Rust `n as f64`; PHP `(float)`).
   - `truncate(float) -> int` — toward zero (Rust `as i64` saturating; PHP `(int)`). Lossy, **named** so
@@ -75,6 +75,6 @@ is platform-ish) — KNOWN_ISSUES; examples stay in range. All byte-identity-gat
   `phg explain E-CAST-TYPE` + guide example `examples/guide/as-cast.phg`. No new `Op`/`Value`.
 
 ## Byte-identity notes
-- `toString` reuses `__phorge_str` (already byte-identical). `toFloat`/`truncate`/`round` map to PHP
+- `toString` reuses `__phorj_str` (already byte-identical). `toFloat`/`truncate`/`round` map to PHP
   `(float)`/`(int)`/`(int)round` — match Rust for in-range values. `parseFloat` uses a gated helper
   matching `f64::from_str` (like `parseInt`). `as` is a pure instanceof branch (run≡runvm≡PHP).

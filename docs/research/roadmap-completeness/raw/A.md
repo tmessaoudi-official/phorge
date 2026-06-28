@@ -2,7 +2,7 @@
 
 ## Track summary
 
-Phorge has already absorbed an unusually large slice of PHP 8.0–8.4's *type-system* surface
+Phorj has already absorbed an unusually large slice of PHP 8.0–8.4's *type-system* surface
 (interfaces, enums-with-payload, `match`, generics, unions, intersections, `instanceof` + smart-cast,
 optionals + `?->` + `??`, arrow/closure lambdas, first-class callables, property hooks lowered to PHP
 8.4 hooks, asymmetric-ish *declaration* visibility, packages). The remaining PHP-parity gaps cluster
@@ -13,13 +13,13 @@ largest user-visible hole, already planned but unbuilt; **(2) class-mechanics PH
 `readonly`, asymmetric *member* visibility `private(set)`; **(3) call-convention sugar** — named
 arguments, variadics + spread `...`, `list()`/array destructuring, heredoc/nowdoc, `declare(strict_types)`.
 Two PHP features are honest *omits* under the philosophy (references `&`, fibers as a surface) because
-Phorge's value/immutability model and uncolored-concurrency plan supersede them. Backed enums and
+Phorj's value/immutability model and uncolored-concurrency plan supersede them. Backed enums and
 enum methods/interfaces are a clean, high-fit **adopt** that PHP devs expect. `json_validate`,
 SPL/`ArrayAccess`/`Countable`/`Iterator`, generators/`yield`, and streams are stdlib/runtime concerns
 that map to existing milestones (M11 stdlib, M6 concurrency). Almost every adopt item is *erase-* or
 *lower-to-idiomatic-PHP* shaped — exactly the TypeScript-over-JavaScript contract — so they earn their
 surface budget. The few rejects are PL features that would *add surprise* (operator-style coercions,
-`goto`) or capability Phorge deliberately reshapes (`&` references).
+`goto`) or capability Phorj deliberately reshapes (`&` references).
 
 ## Gap table
 
@@ -79,13 +79,13 @@ patterns. Once `extends` lands, resolving `static::` to the runtime class is exp
 it inherited factories silently return the wrong class. Maps directly to PHP LSB. Sequence with S6.
 
 **A-class-const — Class & interface constants.** PHP class constants (`const FOO = …`), now *typed*
-(PHP 8.3) and `final` (PHP 8.1), plus interface constants. Phorge has top-level `var`/immutability but
+(PHP 8.3) and `final` (PHP 8.1), plus interface constants. Phorj has top-level `var`/immutability but
 no per-class named constant surface; PHP devs reach for `self::FOO` constantly. Erase-friendly: a typed
 const checks like an immutable field and emits PHP `const`. Strong fit.
 
 **A-magic-stringable / A-magic-invoke / A-magic-clone.** The *static, type-checkable* magic methods.
 `__toString` (and the `Stringable` interface) lets a class flow into string interpolation — a very
-common, fully checkable contract; `__invoke` makes an object callable (maps to Phorge's first-class
+common, fully checkable contract; `__invoke` makes an object callable (maps to Phorj's first-class
 function story + PHP `__invoke`); `__clone` is the customization hook for the already-shipped
 `obj with { … }` / future `clone`. All three are statically dispatchable, map 1:1 to PHP, and remove a
 real surprise ("why can't I print my object?"). Adopt. (Contrast with the *dynamic* magic family below.)
@@ -94,14 +94,14 @@ real surprise ("why can't I print my object?"). Adopt. (Contrast with the *dynam
 actually overrides a parent method, catching rename drift. Pure safety win, zero runtime surprise,
 trivial to check once `extends` exists, emits `#[\Override]`. Exactly the "provably safer" sweet spot.
 
-**A-readonly — `readonly` properties & classes.** Phorge is immutable-by-default, so this largely
+**A-readonly — `readonly` properties & classes.** Phorj is immutable-by-default, so this largely
 *maps* to existing semantics, but PHP devs expect the keyword and the transpiler should emit PHP
 `readonly` for immutable fields/classes (currently fields emit plain `public`, per KNOWN_ISSUES). Low
 effort, improves the round-tripped PHP's fidelity and self-documentation. Adopt as a transpile-emission
 refinement.
 
 **A-asym-vis — Asymmetric member visibility `private(set)`.** PHP 8.4. The read-public/write-restricted
-property is a clean, sound pattern that fits "provably safer." Phorge's immutable-by-default already
+property is a clean, sound pattern that fits "provably safer." Phorj's immutable-by-default already
 covers the common case; `mutable` + `private(set)` covers the "mutable internally, read-only externally"
 case. Maps to PHP 8.4 `public private(set)`. Adopt (member-visibility axis is already noted deferred in
 KNOWN_ISSUES).
@@ -116,25 +116,25 @@ PHP. Type as `List<T>` of trailing args; spread an existing `List<T>` into a cal
 and `...$array`. Strong fit, high familiarity.
 
 **A-named-tuples — `list()` / destructuring.** `[$a, $b] = pair()` and `list($a,$b)=…` are common PHP
-idioms. Phorge has no tuple type yet (tuples are listed 🚧). Destructuring of a fixed-arity list/tuple
+idioms. Phorj has no tuple type yet (tuples are listed 🚧). Destructuring of a fixed-arity list/tuple
 maps to PHP array destructuring. Adopt alongside a small tuple type.
 
-**A-heredoc — heredoc/nowdoc.** Phorge strings are already multi-line (per memory), so this largely
+**A-heredoc — heredoc/nowdoc.** Phorj strings are already multi-line (per memory), so this largely
 *maps*, but the `<<<EOT` / `<<<'EOT'` syntax (interpolating vs literal) is a familiar PHP affordance for
 templated text/SQL/HTML. Emit as a normal interpolated/raw PHP string. Low effort, legibility win.
 
-**A-backed-enums — `enum E: int { case A = 1; }` + `from`/`tryFrom`/`cases`.** Phorge has payload enums
+**A-backed-enums — `enum E: int { case A = 1; }` + `from`/`tryFrom`/`cases`.** Phorj has payload enums
 but not *backed* enums (scalar-valued cases) nor the `from`/`tryFrom`/`cases()` API — a heavily used PHP
 8.1 feature for mapping DB/JSON values to enums. Backed enums map directly to PHP backed enums; the
 three methods erase to the PHP enum API. Strong fit, high demand.
 
 **A-enum-methods — enum methods + `implements` + enum constants.** PHP enums can declare methods,
-implement interfaces, and hold constants. Phorge enums currently can't. Pure additive OO-on-enums,
+implement interfaces, and hold constants. Phorj enums currently can't. Pure additive OO-on-enums,
 1:1 PHP mapping. Strong fit; pairs naturally with backed enums.
 
 **A-iterators / A-arrayaccess — `Iterator`/`IteratorAggregate`/`ArrayAccess`/`Countable`/`Stringable`.**
 The SPL contract interfaces that make a user object usable with `foreach`, `count()`, `[]`, and string
-context. These are *interfaces* (Phorge already has interfaces) with checkable method contracts that map
+context. These are *interfaces* (Phorj already has interfaces) with checkable method contracts that map
 1:1 to PHP. They unlock user-defined collections — a real capability PHP devs expect. Adopt (the
 container-iteration ones pair with M11 stdlib breadth; `Stringable` with A-magic-stringable).
 
@@ -151,21 +151,21 @@ familiar, legibility win. Adopt with the class-const work.
 
 ### Map / defer / reject notes (non-adopt, for completeness)
 
-- **A-strict-types (map):** Phorge is *always* strictly typed with no coercion — `declare(strict_types=1)`
+- **A-strict-types (map):** Phorj is *always* strictly typed with no coercion — `declare(strict_types=1)`
   is the floor, not an option. The transpiler should emit `declare(strict_types=1)` in generated PHP so the
-  round-trip matches Phorge semantics; no language surface needed.
+  round-trip matches Phorj semantics; no language surface needed.
 - **A-final-default (map):** the developer has chosen final-by-default (S6); PHP's `final` keyword inverts
   to an `open`/`extends`-permitted opt-in. Map the concept, don't import the keyword as-is.
 - **A-cast-ops / A-nullsafe-chain-call (map):** explicit conversion functions and the shipped `?.`/`??`
   already cover these; importing PHP's `(int)` cast operators would *add* coercion surprise — express as
   named conversion functions instead.
 - **A-magic-dynamic (reject):** `__get`/`__set`/`__call`/`__callStatic` defeat static checking — the exact
-  dynamic-dispatch surprise Phorge exists to remove. Capability is recovered via explicit interfaces /
+  dynamic-dispatch surprise Phorj exists to remove. Capability is recovered via explicit interfaces /
   generics, not magic interception.
 - **A-references (reject):** `&$x` reference params/assignment contradict immutable-by-default + the
   value/handle split (M-mut). Mutation is already expressed via mutable handles; references add aliasing
   surprise with no new capability.
-- **A-fibers / A-streams (reject):** superseded by Phorge's planned model — uncolored `spawn` + channels
+- **A-fibers / A-streams (reject):** superseded by Phorj's planned model — uncolored `spawn` + channels
   (M6) replace fibers as the concurrency surface; structured IO (M6) replaces raw stream resources.
   Importing them would duplicate capability with a lower-level, more surprising API.
 - **A-generators (defer):** `yield`/`yield from` lazy iteration is valuable but interacts with the VM call
@@ -243,10 +243,10 @@ stdlib/string-formatting surface and a few operator/literal affordances** PHP de
 - **A-spaceship — `<=>`.** The three-way comparison operator, the idiomatic PHP basis for custom sorts.
   Returns `int` (-1/0/1); pairs with a comparator-taking `Core.List.sort`. Maps 1:1 to PHP `<=>`.
   Adopt with A-corelist-breadth.
-- **A-ternary-elvis (map → defer).** PHP's `c ? a : b` and `a ?: b`. Phorge's **expression-`if`**
+- **A-ternary-elvis (map → defer).** PHP's `c ? a : b` and `a ?: b`. Phorj's **expression-`if`**
   (shipped) covers the full ternary and **`??`** covers the null-Elvis; the *value-truthy* Elvis
-  (`a ?: b` where `a` is falsy-but-non-null) has no Phorge analogue **by design** (no truthiness
-  coercion — the exact surprise Phorge removes). So the concept *maps*; the only open question is
+  (`a ?: b` where `a` is falsy-but-non-null) has no Phorj analogue **by design** (no truthiness
+  coercion — the exact surprise Phorj removes). So the concept *maps*; the only open question is
   whether to add `?:` as pure sugar for expression-`if` for familiarity. Defer (cosmetic; expr-`if`
   already reads clearly).
 - **A-anon-class / A-new-in-init (defer).** Anonymous classes (`new class implements I { … }`) are a
@@ -266,19 +266,19 @@ stdlib/string-formatting surface and a few operator/literal affordances** PHP de
 **Newly-found rejects (for completeness):**
 
 - **A-switch (reject — maps to `match`).** `switch`/`case` is fall-through-prone (the classic
-  forgotten-`break` bug) — the exact surprise Phorge removes. `match` (shipped, exhaustive, no
+  forgotten-`break` bug) — the exact surprise Phorj removes. `match` (shipped, exhaustive, no
   fall-through) is the legible replacement. Reject the C-style statement.
 - **A-isset-empty (reject — maps to optionals).** `isset`/`empty` are dynamic existence/truthiness
-  predicates; Phorge's `T?` + `??` + `if (var x = opt)` + `opt!` express the *checkable* subset and
+  predicates; Phorj's `T?` + `??` + `if (var x = opt)` + `opt!` express the *checkable* subset and
   reject the truthiness-coercion footgun (`empty("0")` is `true` in PHP — pure surprise).
-- **A-destruct (reject).** `__destruct` fires on refcount-zero / scope-exit; Phorge's `Rc`/`Drop` model
+- **A-destruct (reject).** `__destruct` fires on refcount-zero / scope-exit; Phorj's `Rc`/`Drop` model
   has **no deterministic finalization guarantee** (cycles leak until exit, per KNOWN_ISSUES), so a
   destructor contract would be a promise the runtime can't keep — a correctness surprise. Resource
   cleanup belongs to the structured-IO model (M6), not object finalizers.
 - **A-func-static / A-compact-extract (reject).** Function-`static` locals + `global` are hidden
   mutable state (closures/params/handles cover the legitimate cases); `compact`/`extract`/`$$x`
   variable-variables defeat static name resolution entirely — the canonical dynamic-PHP footguns
-  Phorge exists to remove.
+  Phorj exists to remove.
 
 **Sanity-check on the first pass's verdicts (philosophy lens):** all adopt/map/reject calls survive
 scrutiny. One nuance worth recording: **A-class-const** and **A-const-expr** overlap — class constants

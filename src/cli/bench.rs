@@ -46,8 +46,8 @@ fn php_version_line() -> Option<String> {
     )
 }
 
-/// Transpile `prog` to PHP, gate its output against `expected` (the Phorge backends' shared output),
-/// then median-time `php <file>`. Returns a report section comparing PHP to the faster Phorge backend
+/// Transpile `prog` to PHP, gate its output against `expected` (the Phorj backends' shared output),
+/// then median-time `php <file>`. Returns a report section comparing PHP to the faster Phorj backend
 /// (`tw`/`vm` medians), or a graceful note when `php` is absent or the transpiled output diverges.
 /// Each sample spawns a `php` process — that cost is part of what's measured and is called out.
 fn php_bench_section(
@@ -65,7 +65,7 @@ fn php_bench_section(
         Ok(s) => s,
         Err(e) => return format!("\nvs PHP: transpile failed ({e}) — skipping\n"),
     };
-    let path = std::env::temp_dir().join(format!("phorge_bench_{}.php", std::process::id()));
+    let path = std::env::temp_dir().join(format!("phorj_bench_{}.php", std::process::id()));
     if std::fs::write(&path, &php_src).is_err() {
         return "\nvs PHP: could not write temp file — skipping\n".to_string();
     }
@@ -85,10 +85,10 @@ fn php_bench_section(
     };
     let section = match run_php() {
         Err(e) => format!("\nvs PHP: run failed ({e}) — skipping\n"),
-        // Output-identity gate — the same parity contract used between the Phorge backends. A
+        // Output-identity gate — the same parity contract used between the Phorj backends. A
         // divergence is a transpile-bug report, not a timing result.
         Ok(out) if out != expected => format!(
-            "\nvs PHP: transpiled output differs from Phorge ({} vs {} bytes) — skipping \
+            "\nvs PHP: transpiled output differs from Phorj ({} vs {} bytes) — skipping \
              (transpile divergence, not a timing result)\n",
             out.len(),
             expected.len()
@@ -107,14 +107,14 @@ fn php_bench_section(
                 if a > 0 && b > 0 {
                     if a <= b {
                         s.push_str(&format!(
-                            "  winner: Phorge ({best_name}) — {:.2}× faster than PHP ({} → {})\n",
+                            "  winner: Phorj ({best_name}) — {:.2}× faster than PHP ({} → {})\n",
                             b as f64 / a as f64,
                             fmt_dur(php),
                             fmt_dur(best)
                         ));
                     } else {
                         s.push_str(&format!(
-                            "  winner: PHP — {:.2}× faster than Phorge ({best_name}) ({} → {})\n",
+                            "  winner: PHP — {:.2}× faster than Phorj ({best_name}) ({} → {})\n",
                             a as f64 / b as f64,
                             fmt_dur(best),
                             fmt_dur(php)
@@ -200,7 +200,7 @@ pub(super) fn bench_report(src: &str, iters: usize) -> Result<String, String> {
 }
 
 /// Bench engine with an opt-in PHP comparison (`--vs-php`, Track D). `vs_php` transpiles the program,
-/// gates its PHP output against the Phorge backends' output, and median-times `php <file>`.
+/// gates its PHP output against the Phorj backends' output, and median-times `php <file>`.
 pub(super) fn bench_report_opts(src: &str, iters: usize, vs_php: bool) -> Result<String, String> {
     on_deep_stack(|| {
         let prog = parse_checked(src)?;
@@ -274,7 +274,7 @@ pub(super) fn bench_report_opts(src: &str, iters: usize, vs_php: bool) -> Result
         out.push_str(&verdict);
         out.push('\n');
 
-        // Optional PHP comparison (Track D) — appended after the Phorge verdict, before memory.
+        // Optional PHP comparison (Track D) — appended after the Phorj verdict, before memory.
         if vs_php {
             out.push_str(&php_bench_section(&prog, iters, &tw_out, tw, vm));
         }

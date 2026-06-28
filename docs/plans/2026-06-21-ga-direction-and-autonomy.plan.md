@@ -1,4 +1,4 @@
-# Phorge GA Direction & Autonomy Contract — Plan + Resume Point
+# Phorj GA Direction & Autonomy Contract — Plan + Resume Point
 
 > Status: **PAUSED mid-discussion (2026-06-21)** — developer needed to restart the computer.
 > This file is the authoritative resume point. Plan-location sentinel: `repo`.
@@ -46,7 +46,7 @@ We were locking the **mutation / modifier model**. State:
 >
 > **DEVELOPER DIRECTIVE 2026-06-21 (post-M-mut.1, pre-compact):** build **ALL remaining mutation slices
 > (M-mut.2 → M-mut.7) AUTONOMOUSLY** — no per-slice checkpoints. For each slice: design (reuse the locked
-> spec §4–§7) → TDD implement → byte-identical `run≡runvm≡real PHP` (`PHORGE_REQUIRE_PHP=1`) → guide example
+> spec §4–§7) → TDD implement → byte-identical `run≡runvm≡real PHP` (`PHORJ_REQUIRE_PHP=1`) → guide example
 > + README → commit green (clippy+fmt clean). Honor the autonomy contract: STOP only on a genuine
 > craftsmanship fork with no clear answer (decide+document+continue when the answer is clear) or a
 > destructive/deny-listed op. Do NOT push. The open-question real-PHP checks in design spec §8 are resolved
@@ -62,10 +62,10 @@ After the modifier model is confirmed, the remaining to-dos before full autonomo
 
 ## Philosophy (LOCKED — governs everything)
 
-Full text in `~/.claude/projects/-stack-projects-phorge/memory/philosophy-of-phorge.md` and the new
+Full text in `~/.claude/projects/-stack-projects-phorj/memory/philosophy-of-phorj.md` and the new
 **VISION.md "The philosophy" section**. Essence:
 
-> *Phorge starts FROM PHP and is bound only by CRAFTSMANSHIP and effort — it keeps what respects
+> *Phorj starts FROM PHP and is bound only by CRAFTSMANSHIP and effort — it keeps what respects
 > SOLID/best-practice/design-patterns, changes what doesn't (familiarity never excuses a compromise),
 > adds power that COEXISTS with existing strengths, and the PHP bridge exists to make migration easy,
 > not to cap the language.*
@@ -96,7 +96,7 @@ Full text in `~/.claude/projects/-stack-projects-phorge/memory/philosophy-of-pho
 - **Engine: use multi-agent workflows where they clearly raise quality** (research/design/review/sweeps);
   inline for ordinary slices. Cost-mindful, quality-first.
 - **Gates to bypass (already/− to set):** the per-turn ask-human gate is bypassed via
-  `~/.claude/projects/-stack-projects-phorge/ask-human-gate-bypass` (file present — KEEP it). Run in
+  `~/.claude/projects/-stack-projects-phorj/ask-human-gate-bypass` (file present — KEEP it). Run in
   `_AUTONOMOUS_3C=1` mode (skip the 3C/6C convergence + phase plan-gates). No per-slice approval gate.
 - **Mid-flight forks with a clear craftsmanship answer:** decide + document in this plan's Decision Log +
   continue (the "decide+document+continue" half) — but a *genuine* fork (no clear answer) → STOP (per
@@ -106,7 +106,7 @@ Full text in `~/.claude/projects/-stack-projects-phorge/memory/philosophy-of-pho
 
 **Feature-complete vs PHP + differentiators.** GA = every "adopt" feature shipped + the prerequisite
 milestones (mutation+tracing-GC, exceptions + Result, Json/Any, runtime attributes, concurrency M6,
-PHP→Phorge migration M8), each **byte-identical `run≡runvm≡real PHP`**, documented, example-gated. Nothing
+PHP→Phorj migration M8), each **byte-identical `run≡runvm≡real PHP`**, documented, example-gated. Nothing
 missing vs PHP, plus the beyond-PHP wins.
 
 ## Mutation milestone — LOCKED decisions (2026-06-21, post-research)
@@ -186,7 +186,7 @@ Review deliverable + full Decision Log: **`docs/specs/2026-06-21-php-parity-and-
    mutation+tracing-GC (unblocks compound-assign, `++`/`--`, `??=`, while/do-while/C-for, static mutable,
    while-let, clone-with, property set-hooks); exceptions (try/catch/finally/throw/Throwable) — **Result+?
    is the PRIMARY recoverable-error channel, exceptions a PHP-interop bridge**; concurrency (M6
-   green-threads); PHP→Phorge migration (M8).
+   green-threads); PHP→Phorj migration (M8).
 
 ## Reject re-categorization (PENDING matrix reconciliation)
 
@@ -199,5 +199,5 @@ craftsmanship-apex framing** (familiarity is the on-ramp, NOT a reason to keep u
 
 ## Standing constraints (unchanged)
 
-- GRDF org rules: only C1/C2 data to Claude; Phorge is OSS (fine). No sensitive/strategic/RGPD data.
-- Phorge git autonomy overrides global Rule 10 (auto-commit; push needs explicit request).
+- GRDF org rules: only C1/C2 data to Claude; Phorj is OSS (fine). No sensitive/strategic/RGPD data.
+- Phorj git autonomy overrides global Rule 10 (auto-commit; push needs explicit request).

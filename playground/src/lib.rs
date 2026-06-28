@@ -1,4 +1,4 @@
-//! WASM bindings exposing the Phorge pipeline to a browser playground.
+//! WASM bindings exposing the Phorj pipeline to a browser playground.
 //!
 //! The browser cannot use the CLI runners (`cli::cmd_run` etc.): they wrap `on_deep_stack`, which
 //! spawns a 256 MB `std::thread` worker — unavailable on `wasm32-unknown-unknown`. So the wrapper
@@ -10,9 +10,9 @@
 //! The wrapper *logic* lives in plain `*_json(&str) -> String` functions (no wasm dependency) so it is
 //! unit-tested on the native target by `cargo test`. Only the thin `#[wasm_bindgen]` exports at the
 //! bottom are `wasm32`-gated. The browser bumps the wasm stack size at build time; the interpreter /
-//! checker / compiler depth guards (`phorge::limits`) keep recursion within it.
+//! checker / compiler depth guards (`phorj::limits`) keep recursion within it.
 
-use phorge::cli;
+use phorj::cli;
 use serde_json::{json, Value};
 
 /// Parse the diagnostics-array JSON string produced by [`cli::check_json_program`] back into a value
@@ -69,7 +69,7 @@ enum ExecErr {
 pub fn run_json(src: &str) -> String {
     let result = (|| {
         let prog = cli::parse_checked_program(src).map_err(ExecErr::Front)?;
-        phorge::interpreter::interpret(&prog).map_err(|d| ExecErr::Fault(d.render(src)))
+        phorj::interpreter::interpret(&prog).map_err(|d| ExecErr::Fault(d.render(src)))
     })();
     exec_json(result)
 }
@@ -78,9 +78,8 @@ pub fn run_json(src: &str) -> String {
 pub fn runvm_json(src: &str) -> String {
     let result = (|| {
         let prog = cli::parse_checked_program(src).map_err(ExecErr::Front)?;
-        let program =
-            phorge::compiler::compile(&prog).map_err(|d| ExecErr::Front(d.render(src)))?;
-        phorge::vm::Vm::new(&program)
+        let program = phorj::compiler::compile(&prog).map_err(|d| ExecErr::Front(d.render(src)))?;
+        phorj::vm::Vm::new(&program)
             .run()
             .map_err(|d| ExecErr::Fault(d.render(src)))
     })();
@@ -88,23 +87,23 @@ pub fn runvm_json(src: &str) -> String {
 }
 
 /// `transpile`: emit the PHP source. The program returned by [`cli::parse_checked_program`] is already
-/// type-checked + alias/generic-expanded, exactly what [`phorge::transpile::emit`] consumes.
+/// type-checked + alias/generic-expanded, exactly what [`phorj::transpile::emit`] consumes.
 pub fn transpile_json(src: &str) -> String {
-    match cli::parse_checked_program(src).and_then(|prog| phorge::transpile::emit(&prog)) {
+    match cli::parse_checked_program(src).and_then(|prog| phorj::transpile::emit(&prog)) {
         Ok(php) => json!({ "ok": true, "php": php, "error": Value::Null }),
         Err(e) => json!({ "ok": false, "php": Value::Null, "error": e }),
     }
     .to_string()
 }
 
-/// `lift`: read PHP source, emit a Phorge **draft** (the inverse of `transpile`). Best-effort and
+/// `lift`: read PHP source, emit a Phorj **draft** (the inverse of `transpile`). Best-effort and
 /// review-required; anything outside the Tier-1 lift subset is a clear `error` rather than a guess.
 /// `lift_source` runs the L1→L2→L4→L3 pipeline on the calling stack (its own depth guard, no
 /// `on_deep_stack` worker), so it is browser-safe like the other wrappers.
 pub fn lift_json(php_src: &str) -> String {
-    match phorge::lift::lifter::lift_source(php_src) {
-        Ok(phorge) => json!({ "ok": true, "phorge": phorge, "error": Value::Null }),
-        Err(e) => json!({ "ok": false, "phorge": Value::Null, "error": e }),
+    match phorj::lift::lifter::lift_source(php_src) {
+        Ok(phorj) => json!({ "ok": true, "phorj": phorj, "error": Value::Null }),
+        Err(e) => json!({ "ok": false, "phorj": Value::Null, "error": e }),
     }
     .to_string()
 }
@@ -253,21 +252,21 @@ mod tests {
     }
 
     #[test]
-    fn lift_php_emits_phorge_draft() {
+    fn lift_php_emits_phorj_draft() {
         let v = parse(&lift_json(
             "<?php function add(int $a, int $b): int { return $a + $b; }",
         ));
         assert_eq!(v["ok"], json!(true));
-        let phg = v["phorge"].as_str().unwrap();
+        let phg = v["phorj"].as_str().unwrap();
         assert!(phg.contains("function add(int a, int b): int {"), "{phg}");
         assert!(v["error"].is_null());
     }
 
     #[test]
-    fn lift_outside_tier1_reports_error_not_phorge() {
+    fn lift_outside_tier1_reports_error_not_phorj() {
         let v = parse(&lift_json("<?php function f(array $xs): void {}"));
         assert_eq!(v["ok"], json!(false));
-        assert!(v["phorge"].is_null());
+        assert!(v["phorj"].is_null());
         assert!(v["error"].as_str().unwrap().contains("`array` type"));
     }
 }

@@ -1,6 +1,6 @@
 # Soundness probe — static vs instance access not confused
 
-**Stage 2.** Probe whether Phorge confuses static and instance access: a static method called on an
+**Stage 2.** Probe whether Phorj confuses static and instance access: a static method called on an
 instance, and an instance method called on the class name — both should be rejected.
 
 **Verdict: GAP (multiple, one P0).** The `static` modifier on a **method** is parsed and retained on
@@ -10,7 +10,7 @@ severe consequence: a `static` method body can freely reference `this` and read 
 no diagnostic, on both backends. (The static *field* read direction IS correctly enforced — the gap is
 methods-only.)
 
-BIN = `/stack/projects/phorge/target/release/phg` (prebuilt, not rebuilt).
+BIN = `/stack/projects/phorj/target/release/phg` (prebuilt, not rebuilt).
 
 ---
 
@@ -20,7 +20,7 @@ A `static` method has no receiver (`E-OPEN-STATIC` confirms statics are not boun
 `this` must be out of scope in its body. It is not.
 
 Program `static-uses-this.phg`:
-```phorge
+```phorj
 package Main;
 import Core.Console;
 
@@ -72,10 +72,10 @@ Had the transpiler honestly emitted `static function leak()`, PHP would fatal at
 ## Finding 2 (P1) — a `static` method is callable through an instance with no diagnostic
 
 PHP issues a deprecation for `$instance::staticMethod()` and conceptually a static method is a
-class-level operation; Phorge accepts the instance call form silently and identically on both backends.
+class-level operation; Phorj accepts the instance call form silently and identically on both backends.
 
 Program `static-on-instance.phg`:
-```phorge
+```phorj
 package Main;
 import Core.Console;
 
@@ -141,7 +141,7 @@ private-constructor bug).
 The complementary direction (the probe's second half): `ClassName.instanceMethod()`.
 
 Program `instance-on-class.phg`:
-```phorge
+```phorj
 package Main;
 import Core.Console;
 

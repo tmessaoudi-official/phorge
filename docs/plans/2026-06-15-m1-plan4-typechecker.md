@@ -1665,9 +1665,9 @@ End-to-end: the verbatim §6 sample type-checks clean; broken variants produce p
 - [ ] **Step 1: Write the integration tests**
 
 ```rust
-use phorge::checker::check;
-use phorge::lexer::lex;
-use phorge::parser::Parser;
+use phorj::checker::check;
+use phorj::lexer::lex;
+use phorj::parser::Parser;
 
 /// The complete sample program from the design spec (§6), verbatim.
 const SAMPLE: &str = r#"
@@ -1706,7 +1706,7 @@ function main() {
 }
 "#;
 
-fn check_src(src: &str) -> Result<(), Vec<phorge::checker::TypeError>> {
+fn check_src(src: &str) -> Result<(), Vec<phorj::checker::TypeError>> {
     let tokens = lex(src).expect("lex ok");
     let prog = Parser::new(tokens).parse_program().expect("parse ok");
     check(&prog)
@@ -1756,7 +1756,7 @@ Create `tests/_probe.rs` with ~15 malformed-but-parseable programs (e.g. `functi
 
 ```rust
 // tests/_probe.rs — throwaway; delete after running, do not commit.
-use phorge::{checker::check, lexer::lex, parser::Parser};
+use phorj::{checker::check, lexer::lex, parser::Parser};
 fn run(src: &str) {
     if let Ok(toks) = lex(src) {
         if let Ok(p) = Parser::new(toks).parse_program() {
@@ -1804,7 +1804,7 @@ Produce the four-dimension evidence table before declaring complete:
 | Dimension | Evidence to capture |
 |---|---|
 | **Coverage** | `cargo test` summary: existing 51 + new checker unit tests (~30) + 4 integration = all green. Paste the `cargo test: N passed` line. |
-| **Docs** | Public surface added: `phorge::types::Ty`, `phorge::checker::{check, TypeError}`. Confirm design spec §1–§14 matches the implementation; update the handoff `Next` to Plan 5. |
+| **Docs** | Public surface added: `phorj::types::Ty`, `phorj::checker::{check, TypeError}`. Confirm design spec §1–§14 matches the implementation; update the handoff `Next` to Plan 5. |
 | **Config** | No config impact (no new env vars / flags / CLAUDE.md routing). State this explicitly. |
 | **Blast radius** | `grep -rn "pub fn check\|pub mod checker\|pub mod types" src/` — confirm only `lib.rs` wires the modules and nothing else depended on these names before. Parser/lexer/AST untouched: `git diff --stat` shows only `src/types.rs`, `src/checker.rs`, `src/lib.rs`, `tests/typecheck_integration.rs`. |
 

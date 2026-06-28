@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement
 > this plan task-by-task (inline; subagents deadlock on the ask-human gate in this repo).
-> Steps use checkbox (`- [ ]`) syntax. Phorge git autonomy applies (commit green,
+> Steps use checkbox (`- [ ]`) syntax. Phorj git autonomy applies (commit green,
 > self-contained waves; see `CLAUDE.md`). Read `docs/INVARIANTS.md` before touching the
 > backends, `value.rs` kernels, or the `Op` set.
 

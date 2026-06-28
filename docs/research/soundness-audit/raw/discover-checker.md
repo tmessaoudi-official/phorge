@@ -1,7 +1,7 @@
 # Soundness Audit — Stage 1 DISCOVER (checker / types)
 
 Area: checker + types (`src/checker/**`, `src/types.rs`, `src/parser/items.rs`)
-Binary probed: `/stack/projects/phorge/target/release/phg` (pre-built, not rebuilt)
+Binary probed: `/stack/projects/phorj/target/release/phg` (pre-built, not rebuilt)
 Probes written under the scratchpad audit dir; nothing written into the repo except this report.
 
 ## Method

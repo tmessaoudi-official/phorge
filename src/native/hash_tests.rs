@@ -20,7 +20,7 @@ fn h(f: fn(&[Value], &mut String) -> Result<Value, String>, s: &str) -> String {
 fn crc32_matches_php() {
     assert_eq!(h(crc32_native, ""), "00000000");
     assert_eq!(h(crc32_native, "hi"), "d8932aac");
-    assert_eq!(h(crc32_native, "Hello, Phorge!"), "7e132e35");
+    assert_eq!(h(crc32_native, "Hello, Phorj!"), "692703ce");
     assert_eq!(h(crc32_native, "The quick brown fox"), "b74574de");
 }
 
@@ -29,8 +29,8 @@ fn md5_matches_php() {
     assert_eq!(h(md5_native, ""), "d41d8cd98f00b204e9800998ecf8427e");
     assert_eq!(h(md5_native, "hi"), "49f68a5c8493ec2c0bf489821c21fc3b");
     assert_eq!(
-        h(md5_native, "Hello, Phorge!"),
-        "294415d42bae8f233fd7b481be8f6da9"
+        h(md5_native, "Hello, Phorj!"),
+        "05da00417faae4d5650c36786cd0f580"
     );
     assert_eq!(
         h(md5_native, "The quick brown fox"),
@@ -65,8 +65,8 @@ fn sha256_matches_php() {
         "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4"
     );
     assert_eq!(
-        h(sha256_native, "Hello, Phorge!"),
-        "b75303d703cc4571de11e167d06fb62e1facbb10c596ae192b407ff73407f00c"
+        h(sha256_native, "Hello, Phorj!"),
+        "3a5635b8b6bdc8097413f3e9d075a7422e893fcd4e42d29ab807eecadd914d25"
     );
 }
 

@@ -1,6 +1,6 @@
 // `Core.Convert` — explicit value conversion.
 //
-// Phorge has no implicit coercion (`1 + 2.0` is a type error), so you convert on purpose. Conversions
+// Phorj has no implicit coercion (`1 + 2.0` is a type error), so you convert on purpose. Conversions
 // are total where they can't lose data and *named* where they can — no silent `(int)` truncation.
 //
 //   toString(T) -> string     // any scalar → its text form (bool → "true"/"false")
