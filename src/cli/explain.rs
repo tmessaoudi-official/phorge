@@ -698,12 +698,29 @@ pub fn explain_text(code: &str) -> Option<String> {
             "E-PARENT-NO-METHOD — no ancestor declares the named method.\n\n\
              `parent.m(…)` / `parent(A).m(…)` found no ancestor (resp. no `A`-reachable ancestor) that\n\
              declares or inherits a method `m`. Check the method name and the ancestor. (Parent\n\
-             *constructor* forwarding — `parent.constructor(…)` — is a separate, later feature.)\n"
+             *constructor* forwarding is `parent.constructor(…)` — see `E-PARENT-CTOR-*`.)\n"
         }
         "E-PARENT-AMBIGUOUS" => {
             "E-PARENT-AMBIGUOUS — bare `parent.m()` is ambiguous under multiple inheritance.\n\n\
              The class has ≥2 parents that each resolve `m` to a different method, so the immediate\n\
              `parent.m(…)` cannot pick one. Qualify the ancestor you mean: `parent(SomeParent).m(…)`.\n"
+        }
+        "E-PARENT-CTOR-OUTSIDE" => {
+            "E-PARENT-CTOR-OUTSIDE — `parent.constructor(…)` used outside a constructor body.\n\n\
+             Forwarding to the parent constructor only makes sense while constructing the instance.\n\
+             Call `parent.constructor(…);` from inside this class's `constructor(…)` body.\n"
+        }
+        "E-PARENT-CTOR-STMT" => {
+            "E-PARENT-CTOR-STMT — `parent.constructor(…)` used as a value.\n\n\
+             A constructor produces no value, so `parent.constructor(…)` must stand alone as a\n\
+             statement (`parent.constructor(args);`) — it cannot be assigned, returned, or nested in\n\
+             an expression.\n"
+        }
+        "E-PARENT-CTOR-MI" => {
+            "E-PARENT-CTOR-MI — `parent.constructor(…)` under multiple inheritance.\n\n\
+             The class has ≥2 parents, so the immediate `parent.constructor(…)` cannot pick one.\n\
+             Per-parent constructor forwarding (`parent(P).constructor(…)` for each parent) lands with\n\
+             multiple-inheritance support in a follow-up slice.\n"
         }
         "E-OVERLOAD-STATIC-MIX" => {
             "E-OVERLOAD-STATIC-MIX — overloads of one name mix `static` and instance declarations.\n\n\

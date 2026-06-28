@@ -1,4 +1,5 @@
-//! Checker tests — super/parent dispatch (M-RT super/parent, B1a: methods, single inheritance).
+//! Checker tests — super/parent dispatch (M-RT super/parent): B1a (methods) + B1b (`parent.constructor`),
+//! single inheritance.
 
 use super::support::*;
 
@@ -66,15 +67,77 @@ fn parent_call_to_unknown_method_errors() {
 }
 
 #[test]
-fn parent_constructor_is_deferred_in_b1a() {
-    // `parent.constructor(…)` parses but is not yet implemented (methods-only slice).
+fn parent_constructor_single_inheritance_is_legal() {
+    // B1b: `parent.constructor(args)` forwards to the parent constructor (single inheritance).
     let errs = errors_of(
         "open class A { constructor(public int x) {} } \
          class C extends A { constructor() { parent.constructor(1); } } \
          function main() -> void {}",
     );
+    assert!(errs.is_empty(), "{errs:?}");
+}
+
+#[test]
+fn parent_constructor_qualified_ancestor_is_legal() {
+    // B1b: `parent(A).constructor(args)` jumps straight to a named ancestor's constructor.
+    let errs = errors_of(
+        "open class A { constructor(public int x) {} } \
+         open class B extends A { constructor() { parent.constructor(1); } } \
+         class C extends B { constructor() { parent(A).constructor(2); } } \
+         function main() -> void {}",
+    );
+    assert!(errs.is_empty(), "{errs:?}");
+}
+
+#[test]
+fn parent_constructor_outside_a_constructor_body_errors() {
+    // B1b: forwarding is valid only inside a constructor body, not an ordinary method.
+    let errs = errors_of(
+        "open class A { constructor(public int x) {} } \
+         class C extends A { constructor() { parent.constructor(1); } \
+             function m() -> void { parent.constructor(1); } } \
+         function main() -> void {}",
+    );
     assert!(
-        errs.iter().any(|e| e.code == Some("E-PARENT-NO-METHOD")),
+        errs.iter().any(|e| e.code == Some("E-PARENT-CTOR-OUTSIDE")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn parent_constructor_used_as_a_value_errors() {
+    // B1b: `parent.constructor(…)` produces no value — it is statement-only.
+    let errs = errors_of(
+        "open class A { constructor(public int x) {} } \
+         class C extends A { constructor() { int y = parent.constructor(1); } } \
+         function main() -> void {}",
+    );
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-PARENT-CTOR-STMT")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn parent_constructor_under_multiple_inheritance_errors() {
+    // B1b: bare `parent.constructor(…)` cannot pick among ≥2 parents (MI lands with B2).
+    let errs = errors_of(
+        "open class A { constructor() {} } open class B { constructor() {} } \
+         class C extends A, B { constructor() { parent.constructor(); } } \
+         function main() -> void {}",
+    );
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-PARENT-CTOR-MI")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn parent_constructor_in_class_with_no_parent_errors() {
+    let errs =
+        errors_of("class A { constructor() { parent.constructor(); } } function main() -> void {}");
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-PARENT-NO-PARENT")),
         "{errs:?}"
     );
 }

@@ -13,6 +13,7 @@ use crate::types::Ty;
 // expansion run before the backends (alias expansion, generic erasure, `html"…"` hole resolution).
 // Re-exported so callers keep using `checker::expand_aliases` etc.
 mod desugar_router;
+mod inline_parent_ctor;
 mod overloads;
 mod rewrite_alias;
 mod rewrite_generics;
@@ -20,6 +21,7 @@ mod rewrite_html;
 mod rewrite_new;
 mod rewrite_ufcs;
 pub use desugar_router::desugar_auto_router;
+pub use inline_parent_ctor::inline_parent_ctors;
 pub use overloads::rename_overload_defs;
 pub use rewrite_alias::expand_aliases;
 pub use rewrite_generics::erase_generics;
@@ -329,6 +331,15 @@ pub struct Checker {
     /// though `cur_class` stays set — static-member access (`Class.field`) and constructing the class
     /// (a static factory, whose ctor visibility is checked against `cur_class`) remain valid.
     in_static_method: bool,
+    /// Set while checking a **constructor** body (B1b). `parent.constructor(…)` forwarding is valid
+    /// only inside a constructor body (`E-PARENT-CTOR-OUTSIDE` otherwise).
+    in_constructor: bool,
+    /// Set true by [`check_stmt`] just before checking a bare `Stmt::Expr`/`Stmt::Discard` whose
+    /// expression is exactly a `parent.constructor(…)` call, then consumed (taken) by
+    /// [`check_parent_ctor_call`] (B1b). Guarantees `parent.constructor(…)` is statement-only
+    /// (`E-PARENT-CTOR-STMT` otherwise) so the front-end inline pass catches every occurrence and the
+    /// backends never see a `ParentCall{method:"constructor"}`.
+    parent_ctor_ok: bool,
     /// class currently being checked (for `this` and bare field refs)
     cur_class: Option<String>,
     /// live `check_expr` recursion depth, bounded by [`MAX_EXPR_DEPTH`]
@@ -467,6 +478,8 @@ impl Checker {
             in_static_init: false,
             test_mode: false,
             in_static_method: false,
+            in_constructor: false,
+            parent_ctor_ok: false,
             cur_class: None,
             depth: 0,
             loop_depth: 0,

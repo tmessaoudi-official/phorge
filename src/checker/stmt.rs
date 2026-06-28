@@ -23,6 +23,12 @@ impl Checker {
         }
     }
 
+    /// Whether `e` is exactly a `parent.constructor(…)` call (B1b). Used to flag the one legal
+    /// statement position for the forwarding form before checking it.
+    fn is_parent_ctor_call(e: &crate::ast::Expr) -> bool {
+        matches!(e, crate::ast::Expr::ParentCall { method, .. } if method == "constructor")
+    }
+
     pub(super) fn check_stmt(&mut self, stmt: &crate::ast::Stmt) {
         use crate::ast::Stmt;
         match stmt {
@@ -258,9 +264,14 @@ impl Checker {
             }
             Stmt::Block(stmts, _) => self.check_block(stmts),
             Stmt::Expr(e, _) => {
+                // B1b: a bare `parent.constructor(…)` statement is the only legal position for the
+                // forwarding form — flag it so `check_parent_ctor_call` accepts it (every other position
+                // is `E-PARENT-CTOR-STMT`).
+                self.parent_ctor_ok = Self::is_parent_ctor_call(e);
                 // M-must-use Slice A: a non-`void`/`Empty` result used as a bare statement would be
                 // dropped silently — forbid it (`E-UNUSED-VALUE`). `discard <expr>;` is the escape hatch.
                 let t = self.check_expr(e);
+                self.parent_ctor_ok = false;
                 if !matches!(t, Ty::Void | Ty::Empty | Ty::Error | Ty::Never) {
                     self.err_coded(
                         Self::expr_span(e),
@@ -275,7 +286,10 @@ impl Checker {
             }
             Stmt::Discard(e, _) => {
                 // Must-use escape hatch: type-check the expression; any result type may be dropped.
+                // A `discard parent.constructor(…)` is still a statement position (B1b).
+                self.parent_ctor_ok = Self::is_parent_ctor_call(e);
                 self.check_expr(e);
+                self.parent_ctor_ok = false;
             }
             // M-faults 2b.3: `throw e` — the value must implement `Error` (`E-THROW-TYPE`), and the
             // exception must be *discharged* in context: caught by an enclosing `try` or declared in

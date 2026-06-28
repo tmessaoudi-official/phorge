@@ -6,6 +6,29 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M-RT super/parent dispatch (B1b: parent-constructor forwarding, single inheritance)
+
+`parent.constructor(…)` / `parent(A).constructor(…)` — run the parent constructor's effect on the
+**existing** instance, so a subclass that declares its own constructor can finally initialize inherited
+state (closes the own-ctor-under-inheritance gap). Byte-identical `run ≡ runvm ≡ real PHP 8.5`
+(`examples/guide/parent-constructor.phg`).
+
+- **Lowering** — pure front-end *inlining* (`checker::inline_parent_ctors`, runs LAST in
+  `cli::check_and_expand`): the forwarding statement is replaced by a fresh-scoped `Stmt::Block` that
+  reproduces one constructor "plan entry" for the resolved parent — parameter bindings, promotions, the
+  parent's own field initializers, then its body (recursively inlined for grandparent chains). The same
+  lowered AST feeds every backend, so byte-identity holds by construction. **No new `Op` or `Value`.**
+- **Resolution** — single inheritance: immediate `parent.constructor(…)` targets the direct parent;
+  `parent(A).constructor(…)` targets a named transitive ancestor. The effect comes from the nearest
+  ancestor that declares a constructor (PHP's inherited `__construct`).
+- **Position** — statement-only, inside a constructor body (so every occurrence is inlined and the
+  backends never see a `ParentCall{constructor}`).
+- **Errors** `E-PARENT-CTOR-OUTSIDE` (not in a constructor) / `E-PARENT-CTOR-STMT` (used as a value) /
+  `E-PARENT-CTOR-MI` (bare form under multiple inheritance) — plus the shared `E-PARENT-NO-PARENT` /
+  `E-PARENT-NOT-ANCESTOR`. All `phg explain`-documented.
+- Scope (B1b): single inheritance. Deferred: multiple-inheritance constructor forwarding (per-parent
+  `parent(P).constructor(…)`) lands with B2. See `KNOWN_ISSUES.md`.
+
 ### Added — M-RT super/parent dispatch (B1a: methods, single inheritance)
 
 `parent.m(…)` / `parent(A).m(…)` — invoke an inherited method an override shadows (or jump to a named

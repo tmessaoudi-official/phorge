@@ -103,11 +103,40 @@
   transpile. Closed a 6C CTy-operand finding (compiler `ctype(ParentCall)` via `method_rets`) and the
   latent OverloadSelect arg-walking gap in the pre-`rewrite_ufcs` passes. 5 `E-PARENT-*` codes + explain;
   7 checker tests; `examples/guide/parent-dispatch.phg`. 1462 tests green, PHP-8.5 oracle byte-identical.
-- **NEXT: B1b** (`parent.constructor(…)`, single inh — front-end inline-the-parent-ctor-body vs. an
-  interp run-body + VM op), then **B2** (MI `parent(X)` + multi-of-multi trait lowering).
+- **B1b DONE + committed + green**: `parent.constructor(…)` / `parent(A).constructor(…)`
+  single-inheritance constructor forwarding via front-end inlining (`checker::inline_parent_ctors`, runs
+  LAST in `check_and_expand`). No new `Op`/`Value`; the inlined block = param bindings + promotions +
+  owner field inits + owner body (recursive for grandparents). Statement-only inside a ctor body
+  (`E-PARENT-CTOR-OUTSIDE`/`-STMT`/`-MI` + shared `-NO-PARENT`/`-NOT-ANCESTOR`). Checker flags
+  `in_constructor` + `parent_ctor_ok`; validates args vs `info.ctor`. Closes the own-ctor-under-inheritance
+  KNOWN_ISSUE. 6 new checker tests; `examples/guide/parent-constructor.phg`; byte-identical
+  run≡runvm≡real PHP 8.5.
+- **NEXT: B2** (MI `parent(X).m/.constructor` + multi-of-multi trait lowering), then step 5 M4 stdlib,
+  step 6 cross-file LSP + JetBrains.
 - Implementation note (must-use): `discard` `at_discard` gate fires only on statement-leading
   `discard <Ident|new>`; `Stmt::Discard` OR-combines with `Stmt::Expr` everywhere except the checker
   (must-use exemption) and the fmt printer (emits the keyword); rewrite passes mirror Discard→Discard.
+
+### B1b — concrete build (code-verified, 2026-06-29)
+- [2026-06-29] AGREED (B1b): `parent.constructor(args)` is implemented by **front-end inlining for ALL
+  backends** (run≡runvm≡PHP get the identical inlined AST ⇒ byte-identity safe by construction). The
+  inlined block (a `Stmt::Block`, new lexical scope) mirrors one `construct` plan entry for the resolved
+  parent: ① param bindings `Ty p = arg;` (verified: a let-init reads the OUTER scope, so same-name
+  forwarding `parent.constructor(x)` with parent param `x` is correct), ② promotions `this.p = p;` for
+  vis-modifier params, ③ the parent's OWN field initializers `this.f = init;` (from
+  `ast::field_initializers(prog, target)` — PHP-faithful: only the invoked-ctor class's own inits),
+  ④ the parent ctor body (from `ast::ctor_plan(prog, target)`, recursively inlined for grandparents with
+  the target as the new lexical class). NO new `Op`/`Value`.
+- **Scope: single inheritance only** (MI ctor forwarding = B2). Immediate `parent.constructor()` →
+  direct parent (≥2 parents → `E-PARENT-CTOR-MI`, deferred); qualified `parent(A).constructor()` → A
+  must be a transitive ancestor. Validation reuses `info.ctor` (effective param types) via `check_args`;
+  arity covers the ctor-less-parent case (zero-arg forward = no-op inline).
+- **Position-restricted:** `parent.constructor(…)` is allowed ONLY as a bare statement inside a
+  constructor body (new checker flags `in_constructor` + `parent_ctor_ok`) → guarantees the inline pass
+  catches every occurrence and the backends never see a `ParentCall{constructor}`. New codes
+  `E-PARENT-CTOR-OUTSIDE` (not in a ctor body), `E-PARENT-CTOR-STMT` (used as a value), `E-PARENT-CTOR-MI`.
+- **Pipeline:** `inline_parent_ctors` runs LAST in `cli::check_and_expand` (after `rename_overload_defs`)
+  so the cloned parent body is already fully de-sugared. Closes the own-ctor-under-inheritance KNOWN_ISSUE.
 
 ## Slice C (return-type overloading) — implementation approach (discovered, NOT yet built)
 **Key finding:** `Checker::check_expr(&mut self, expr) -> Ty` is purely bottom-up — no expected-type

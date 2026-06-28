@@ -1,0 +1,72 @@
+package Main;
+
+import Core.Console;
+
+// Parent-constructor forwarding (M-RT super/parent, B1b — single inheritance).
+//
+// When a subclass declares its OWN constructor, it does NOT auto-run the parent's (matching PHP, which
+// never auto-chains `parent::__construct`). To initialize the inherited state, forward explicitly with
+// `parent.constructor(…)` — the immediate parent's constructor — or `parent(A).constructor(…)` to a
+// named ancestor. It runs on the *existing* instance, so the parent's promoted parameters, its field
+// initializers, and its constructor body all apply to `this` before the subclass continues.
+//
+// `parent.constructor(…)` is a statement-only form, valid only inside a constructor body. It is lowered
+// (front-end) into the inlined parent-constructor effect, so run / runvm / real PHP stay byte-identical.
+
+open class Animal {
+    int legs = 4; // a field initializer — must also apply when a subclass forwards to this constructor
+    mutable string note;
+
+    constructor(public string kind) {
+        // a constructor *body* (not just promotion) — derives state from the argument
+        this.note = "a {this.kind}";
+    }
+
+    function describe(): string {
+        return "{this.kind} ({this.legs} legs) — {this.note}";
+    }
+}
+
+open class Dog extends Animal {
+    constructor(string name) {
+        // forward to Animal's constructor: promotes `kind`, runs `legs = 4`, runs the body (`note`)
+        parent.constructor(name);
+    }
+}
+
+class Puppy extends Dog {
+    mutable int months;
+
+    constructor(string name, int months) {
+        // `name` (Dog's param) shadows nothing here; the same-name forwarding case is exercised below
+        parent.constructor(name); // chains: Puppy → Dog → (Dog's body) parent.constructor → Animal
+        this.months = months;
+    }
+
+    function show(): string {
+        return "{this.describe()} — aged {this.months} months";
+    }
+}
+
+// Same-name forwarding: the parent parameter and the argument share the name `kind`.
+open class Base {
+    constructor(public string kind) {}
+    function k(): string { return this.kind; }
+}
+
+class Derived extends Base {
+    constructor(string kind) {
+        parent.constructor(kind); // `string kind = kind;` must read the OUTER `kind`
+    }
+}
+
+function main(): void {
+    Dog d = new Dog("husky");
+    Console.println(d.describe());
+
+    Puppy p = new Puppy("beagle", 3);
+    Console.println(p.show());
+
+    Derived x = new Derived("widget");
+    Console.println(x.k());
+}

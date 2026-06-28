@@ -215,10 +215,15 @@ impl Checker {
         args: &[crate::ast::Expr],
         span: Span,
     ) -> Ty {
-        // Type the arguments regardless, so nested errors surface.
-        let arg_tys: Vec<Ty> = args.iter().map(|a| self.check_expr(a)).collect();
+        // B1b: consume the statement-position flag set by `check_stmt` (a `parent.constructor(…)` is
+        // valid only as a bare statement — see `check_parent_ctor_call`). Taken before anything else so
+        // a nested `parent.constructor(…)` inside an argument sees it cleared.
+        let stmt_ok = std::mem::take(&mut self.parent_ctor_ok);
         // `parent` is valid only inside an instance method/constructor body.
         let Some(lexical) = self.cur_class.clone() else {
+            for a in args {
+                self.check_expr(a); // type args anyway, so nested errors surface
+            }
             return self.err_coded(
                 span,
                 "`parent` is only valid inside an instance method or constructor".to_string(),
@@ -227,6 +232,9 @@ impl Checker {
             );
         };
         if self.in_static_method || self.in_static_init || self.in_field_init {
+            for a in args {
+                self.check_expr(a);
+            }
             return self.err_coded(
                 span,
                 "`parent` is not available here — a static method, static initializer, or field initializer has no instance".to_string(),
@@ -234,16 +242,13 @@ impl Checker {
                 Some("use `parent` only inside an instance method or constructor body".into()),
             );
         }
-        // B1a: parent-constructor calls land in a follow-up slice (the parent ctor body must run on the
-        // existing instance — distinct machinery from method dispatch).
+        // B1b: parent-constructor forwarding (`parent.constructor(…)`) is a distinct, statement-only
+        // form — front-end-inlined into the existing instance, never a runtime method dispatch.
         if method == "constructor" {
-            return self.err_coded(
-                span,
-                "`parent.constructor(…)` is not yet supported".to_string(),
-                "E-PARENT-NO-METHOD",
-                Some("parent *method* dispatch (`parent.m(…)`) is available; parent-constructor forwarding lands in a follow-up".into()),
-            );
+            return self.check_parent_ctor_call(&lexical, ancestor, args, span, stmt_ok);
         }
+        // Type the arguments, so nested errors surface and the method overload is selected by them.
+        let arg_tys: Vec<Ty> = args.iter().map(|a| self.check_expr(a)).collect();
         let (decl, m) = match crate::ast::resolve_parent_method(
             &self.parent_parents,
             &self.parent_mro,
@@ -320,6 +325,108 @@ impl Checker {
                 )
             }
         }
+    }
+
+    /// Check a `parent.constructor(args)` forwarding call (B1b, single inheritance). Valid only as a
+    /// bare statement inside a constructor body; forwards to the resolved parent's *effective*
+    /// constructor (its params, promotions, field initializers, body), which the front-end
+    /// `inline_parent_ctors` pass later splices onto the existing instance. Returns `Ty::Empty` (a
+    /// constructor produces no value). Errors mirror the resolution failures + the position guards.
+    pub(super) fn check_parent_ctor_call(
+        &mut self,
+        lexical: &str,
+        ancestor: Option<&str>,
+        args: &[crate::ast::Expr],
+        span: Span,
+        stmt_ok: bool,
+    ) -> Ty {
+        // Type the args on every error path so nested errors still surface.
+        macro_rules! cascade {
+            () => {
+                for a in args {
+                    self.check_expr(a);
+                }
+            };
+        }
+        if !self.in_constructor {
+            cascade!();
+            return self.err_coded(
+                span,
+                "`parent.constructor(…)` may be called only inside a constructor body".to_string(),
+                "E-PARENT-CTOR-OUTSIDE",
+                Some(
+                    "forward to the parent constructor from inside this class's `constructor(…)` body"
+                        .into(),
+                ),
+            );
+        }
+        if !stmt_ok {
+            cascade!();
+            return self.err_coded(
+                span,
+                "`parent.constructor(…)` must be a bare statement, not a value".to_string(),
+                "E-PARENT-CTOR-STMT",
+                Some(
+                    "write `parent.constructor(…);` as its own statement; it produces no value"
+                        .into(),
+                ),
+            );
+        }
+        // Resolve the target parent class (single inheritance this slice).
+        let parents = self
+            .parent_parents
+            .get(lexical)
+            .cloned()
+            .unwrap_or_default();
+        let target: String = match ancestor {
+            None => match parents.as_slice() {
+                [] => {
+                    cascade!();
+                    return self.err_coded(
+                        span,
+                        format!("`{lexical}` has no parent class, so `parent.constructor(…)` has nothing to forward to"),
+                        "E-PARENT-NO-PARENT",
+                        Some("add an `extends` parent, or remove the `parent.constructor(…)` call".into()),
+                    );
+                }
+                [p] => p.clone(),
+                _ => {
+                    cascade!();
+                    return self.err_coded(
+                        span,
+                        format!("`parent.constructor(…)` under multiple inheritance is not yet supported (`{lexical}` has {} parents)", parents.len()),
+                        "E-PARENT-CTOR-MI",
+                        Some("multiple-inheritance constructor forwarding (one `parent(P).constructor(…)` per parent) lands in a follow-up".into()),
+                    );
+                }
+            },
+            Some(a) => {
+                let is_anc = self
+                    .parent_mro
+                    .get(lexical)
+                    .is_some_and(|mro| mro.iter().any(|c| c == a));
+                if !is_anc {
+                    cascade!();
+                    return self.err_coded(
+                        span,
+                        format!("`{a}` is not an ancestor of `{lexical}`"),
+                        "E-PARENT-NOT-ANCESTOR",
+                        Some("name a class this one transitively extends".into()),
+                    );
+                }
+                a.to_string()
+            }
+        };
+        // Validate the arguments against the resolved parent's effective constructor parameter types
+        // (`info.ctor` — own or inherited). A ctor-less parent has an empty param list, so a zero-arg
+        // forward is accepted (and lowers to an empty block); any args then fail the arity check.
+        let parent_ctor = self
+            .classes
+            .get(&target)
+            .map(|i| i.ctor.clone())
+            .unwrap_or_default();
+        self.check_args(&target, &parent_ctor, args, span);
+        Ty::Empty
     }
 
     /// Resolve a multi-overload free-function call (M-RT). Evaluates the argument types, selects the

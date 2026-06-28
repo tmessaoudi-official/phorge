@@ -976,19 +976,24 @@ pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, Strin
             // span); the resolved selector *call sites* were already merged into `ufcs` above and are
             // rewritten to the same mangled names by `rewrite_ufcs`. A no-op when no function is
             // return-overloaded (so single-overload programs stay byte-identical).
-            Ok(crate::checker::rename_overload_defs(
-                crate::checker::rewrite_ufcs(
-                    crate::checker::unwrap_new(crate::checker::erase_generics(
-                        crate::checker::resolve_html(
-                            crate::checker::inject_optional_field_defaults(
-                                crate::checker::expand_aliases(prog),
+            // B1b: inline `parent.constructor(…)` LAST, so the cloned parent body is already fully
+            // de-sugared (aliases/html/generics/new/UFCS/overload-renames all applied). A no-op unless
+            // a constructor forwards to its parent — programs without it stay byte-identical.
+            Ok(crate::checker::inline_parent_ctors(
+                crate::checker::rename_overload_defs(
+                    crate::checker::rewrite_ufcs(
+                        crate::checker::unwrap_new(crate::checker::erase_generics(
+                            crate::checker::resolve_html(
+                                crate::checker::inject_optional_field_defaults(
+                                    crate::checker::expand_aliases(prog),
+                                ),
+                                &html,
                             ),
-                            &html,
-                        ),
-                    )),
-                    &ufcs,
+                        )),
+                        &ufcs,
+                    ),
+                    &overload_renames,
                 ),
-                &overload_renames,
             ))
         }
         Err(errs) => {

@@ -356,7 +356,9 @@ impl Checker {
                     for (p, t) in params.iter().zip(ctor) {
                         self.declare(&p.name, t, p.span);
                     }
+                    let was_ctor = std::mem::replace(&mut self.in_constructor, true);
                     self.check_body(body);
+                    self.in_constructor = was_ctor;
                     self.pop_scope();
                     self.active_type_params.clear();
                     self.cur_ret = prev_ret;

@@ -9,7 +9,8 @@ import Core.Console;
 // Dispatch is non-virtual (it runs exactly that body, once); chaining further up is each method's own
 // choice. Transpiles to native PHP `parent::m(…)` / `A::m(…)`, byte-identical on run/runvm/real PHP.
 //
-// (Parent-constructor forwarding — `parent.constructor(…)` — and multiple inheritance are follow-ups.)
+// (Parent-constructor forwarding — `parent.constructor(…)` — is shown in `parent-constructor.phg`;
+// multiple inheritance is a follow-up.)
 open class Animal {
     open function describe(): string {
         return "animal";
