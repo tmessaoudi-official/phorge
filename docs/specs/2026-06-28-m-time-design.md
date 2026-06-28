@@ -63,12 +63,16 @@ machinery.
 - `isLeapYear() -> bool`, `isBefore(Date)`, `isAfter(Date)`, `compareTo(Date) -> int`
 - `toString() -> string` → `YYYY-MM-DD` (zero-padded)
 
-### `DateTime` (civil date + wall time, UTC; wraps the 7 civil fields)
-- static `of(y,mo,d,h,mi,s) -> DateTime`, `ofInstant(Instant) -> DateTime`
-- field accessors `year/month/day/hour/minute/second/millis`
-- `toDate() -> Date`, `toInstant() -> Instant`
-- `toIso() -> string` → `YYYY-MM-DDTHH:MM:SSZ` (zero-padded, always `Z`)
-- `format(string pattern) -> string` — minimal pattern set (`YYYY MM DD HH mm ss`), no locale
+### Civil (wall-time) view — **folded onto `Instant`** (not a separate class)
+
+The original plan had a `DateTime` class. That was dropped during S3: the name **collides with PHP's
+built-in `DateTime`** (a `package Main` class emits to the global PHP namespace → `Cannot redeclare
+class`), and `Instant` already *is* the point in time. So the civil fields live on `Instant`:
+- static `Instant.ofCivil(y, mo, d, h, mi, s) -> Instant` (UTC fields → instant)
+- accessors `year`/`month`/`day`/`dayOfWeek`/`hour`/`minute`/`second`/`millis`/`millisOfDay` (UTC)
+- `toIso() -> string` → `YYYY-MM-DDTHH:MM:SSZ` (zero-padded, always `Z`, second resolution)
+- a printf-style `format(pattern)` was **dropped**: Phorge has first-class string interpolation, so
+  custom layouts are just `"{i.day()}/{i.month()}/{i.year()}"` — no pattern mini-language needed.
 
 ## Native registry (`Core.Time`, new `src/native/time.rs`)
 

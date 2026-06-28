@@ -1,0 +1,36 @@
+package Main;
+
+import Core.Console;
+import Core.Time;
+
+function main() -> void {
+  Instant dt = Instant.ofCivil(2023, 11, 14, 22, 13, 20);
+  Console.println("{dt.toIso()}");
+  Console.println("{dt.year()}");
+  Console.println("{dt.month()}");
+  Console.println("{dt.day()}");
+  Console.println("{dt.hour()}");
+  Console.println("{dt.minute()}");
+  Console.println("{dt.second()}");
+  Console.println("{dt.millis()}");
+  Console.println("{dt.dayOfWeek()}");
+  Console.println("{dt.epochMillis()}");
+  Console.println("{dt.millisOfDay()}");
+  Console.println("{Instant.ofEpochSeconds(0).toIso()}");
+  Console.println("{Instant.ofEpochMillis(0).toIso()}");
+  Instant pre = Instant.ofCivil(1969, 12, 31, 23, 59, 59);
+  Console.println("{pre.toIso()}");
+  Console.println("{pre.epochMillis()}");
+  Console.println("{pre.hour()}");
+  Console.println("{pre.millis()}");
+  Instant withMs = Instant.ofEpochMillis(1700000000123);
+  Console.println("{withMs.millis()}");
+  Console.println("{withMs.toIso()}");
+  Console.println("{Instant.ofCivil(2000, 1, 1, 0, 0, 0).toIso()}");
+  Console.println("{Instant.ofCivil(1, 1, 1, 0, 0, 0).toIso()}");
+  Instant base = Instant.ofCivil(2023, 11, 14, 0, 0, 0);
+  Console.println("{base.plus(Duration.hours(25)).toIso()}");
+  Time.freeze(1700000000000);
+  Console.println("{Instant.now().toIso()}");
+  Time.unfreeze();
+}

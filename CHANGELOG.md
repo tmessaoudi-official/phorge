@@ -6,6 +6,23 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M-TIME S3: civil (wall-time) view + ISO-8601
+
+The human date-time view, **folded onto `Instant`** (no separate class), byte-identical
+`run ≡ runvm ≡ real PHP 8.5`, **no new `Op`/`Value`**:
+
+- `Instant.ofCivil(y, mo, d, h, mi, s)` builds an instant from broken-down UTC fields.
+- `year`/`month`/`day`/`dayOfWeek`/`hour`/`minute`/`second`/`millis`/`millisOfDay` accessors (UTC).
+- `toIso()` → `YYYY-MM-DDTHH:MM:SSZ` (always `Z`, second resolution). For any other layout, interpolate
+  the accessors directly — Phorge has first-class string interpolation, so a printf-style pattern is
+  unneeded (deferred in KNOWN_ISSUES).
+
+`guide/datetimes.phg` + `conformance/stdlib/datetimes.phg`. **Design note:** the planned separate
+`DateTime` class was dropped — the name collides with PHP's built-in `DateTime` (a `package Main` class
+emits to the global PHP namespace → `Cannot redeclare class`), and `Instant` already *is* the point in
+time, so the civil fields live on it. **M-TIME is now COMPLETE** (S1 instants+durations, S2 dates, S3
+civil view).
+
 ### Added — M-TIME S2: `Core.Time` civil dates
 
 `Date` — a civil calendar date (UTC, day-resolution), stored as days since 1970-01-01. Calendar math is

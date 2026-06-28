@@ -876,6 +876,36 @@ class Instant {
     int day = if (this.ms >= 0) { this.ms / 86400000 } else { (this.ms - 86399999) / 86400000 };
     return Date.ofEpochDay(day);
   }
+  // ── civil (wall-time) view, UTC ──────────────────────────────────────────────────────────────
+  // An `Instant` is also the human date-time: it exposes year/month/day/hour/minute/second/millis and
+  // an ISO-8601 string. (No separate `DateTime` class — that name collides with PHP's built-in, and
+  // `Instant` already IS the point in time; fields are derived on demand.) `ofCivil` builds an instant
+  // from broken-down UTC fields.
+  static function ofCivil(int y, int mo, int d, int h, int mi, int s) -> Instant {
+    int day = Date.daysFromCivil(y, mo, d);
+    return new Instant(day * 86400000 + h * 3600000 + mi * 60000 + s * 1000);
+  }
+  // Milliseconds within the current UTC day, always in [0, 86399999] (uses the floored epoch-day).
+  function millisOfDay() -> int {
+    int day = if (this.ms >= 0) { this.ms / 86400000 } else { (this.ms - 86399999) / 86400000 };
+    return this.ms - day * 86400000;
+  }
+  function year() -> int { return this.toDate().year(); }
+  function month() -> int { return this.toDate().month(); }
+  function day() -> int { return this.toDate().day(); }
+  function dayOfWeek() -> int { return this.toDate().dayOfWeek(); }
+  function hour() -> int { return this.millisOfDay() / 3600000; }
+  function minute() -> int { return (this.millisOfDay() / 60000) % 60; }
+  function second() -> int { return (this.millisOfDay() / 1000) % 60; }
+  function millis() -> int { return this.millisOfDay() % 1000; }
+  // ISO-8601 UTC: `YYYY-MM-DDTHH:MM:SSZ` (always `Z`; second-resolution, sub-second dropped). For any
+  // other layout, interpolate the accessors directly (Phorge has first-class string interpolation).
+  function toIso() -> string {
+    List<int> c = Date.civil(this.toDate().epochDay);
+    string date = "{Date.pad4(c[0])}-{Date.pad2(c[1])}-{Date.pad2(c[2])}";
+    string time = "{Date.pad2(this.hour())}:{Date.pad2(this.minute())}:{Date.pad2(this.second())}";
+    return "{date}T{time}Z";
+  }
 }
 "#;
 
