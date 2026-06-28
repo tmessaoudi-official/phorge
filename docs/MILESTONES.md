@@ -172,6 +172,25 @@ example `examples/guide/pattern-matching.phg`.
   (int-only; `>>` = two `Gt`), `Console.print`, byte-safe stdlib (`Text.startsWith`/`endsWith`/`repeat`,
   `Math.round`, `List.length`). M4 holds the optional-return/generic-ordering natives (`parseInt`, sort…).
 
+## M-TIME — dates, time, durations — ✅ COMPLETE (2026-06-28)
+
+A typed, deterministic, byte-identical time library, design `docs/specs/2026-06-28-m-time-design.md`.
+Architecture: an **injected pure-Phorge prelude** (`cli::inject_time_prelude`, gated on
+`import Core.Time`) defines `Instant`/`Duration`/`Date`; because the prelude runs through the same
+backends *and* transpiler as user code, all calendar/formatting math is byte-identical
+`run ≡ runvm ≡ real PHP 8.5` by construction. The only native (`src/native/time.rs`) is the **freezable
+clock seam** (`Time.freeze`/`unfreeze`/`nowMillis`), hand-rolled identically in PHP — a frozen program is
+reproducible (the `Core.Random` pattern). UTC-only; **no new `Op`/`Value`**.
+
+- **S1** (`036c9b0`) — `Instant` (epoch-millis point in time) + `Duration` (span) + the clock seam.
+- **S2** (`2bc482d`) — `Date` (civil calendar): Hinnant days-from-civil/civil-from-days, `dayOfWeek`
+  (ISO), `isLeapYear`, `toString` `YYYY-MM-DD`, `Instant.toDate`.
+- **S3** (`c2d9f6d`) — civil/wall-time view folded onto `Instant` (`ofCivil`, field accessors, `toIso`).
+  The planned `DateTime` class was dropped — the name collides with PHP's built-in.
+
+Examples `guide/time.phg`/`dates.phg`/`datetimes.phg`; conformance `stdlib/time|dates|datetimes`.
+Deferred (KNOWN_ISSUES): timezones, sub-millisecond, locale/arbitrary-format parse, printf-style format.
+
 ## M-mut — In-place mutation — ✅ FEATURE-COMPLETE (2026-06-21)
 
 Phorge began as a pure single-assignment language (no assignment statement); the mutation milestone
