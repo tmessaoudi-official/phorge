@@ -1,16 +1,24 @@
 # Phorge — VS Code extension
 
-A thin client that connects VS Code to the Phorge language server (`phg lsp`). All language features
-live in the server; this extension only registers the `phorge` language (`*.phg`) and launches the
-server over stdio.
+A thin client that connects VS Code to the Phorge language server (`phg lsp`), plus a TextMate grammar
+for syntax highlighting. The language *intelligence* lives entirely in the server; this extension
+registers the `phorge` language (`*.phg`), ships the grammar (`syntaxes/phorge.tmLanguage.json`), and
+launches the server over stdio. (The same grammar + server power the JetBrains/PhpStorm setup — see
+`../phpstorm/README.md`.)
 
 ## Features
 
-Whatever `phg lsp` provides (currently):
-
+- **Syntax highlighting** — keywords, types, strings with `{…}` interpolation, numbers, comments, and
+  `#[…]` attributes (TextMate grammar, no server needed).
 - **Diagnostics** — type/parse errors and lints, live as you type (identical to `phg check`).
 - **Hover** — the declaration signature of the symbol under the cursor.
 - **Go-to-definition** — jump to a function / class / enum / interface / trait / type declaration.
+- **Completion** — top-level symbols, in-scope locals/params, and keywords.
+- **Document symbols** — the file outline (classes/enums carry their members).
+- **Find references** + **document highlight** — every use of the symbol under the cursor
+  (scope-accurate).
+- **Rename** — rename a symbol and all its uses.
+- **Formatting** — reformat via `phg fmt` (comment- and meaning-preserving).
 
 ## Prerequisites
 
@@ -32,8 +40,8 @@ Open any `.phg` file in the dev host; diagnostics, hover, and go-to-definition a
 ```sh
 npm install -g @vscode/vsce
 cd editors/vscode
-vsce package         # produces phorge-0.1.0.vsix
-code --install-extension phorge-0.1.0.vsix
+vsce package         # produces phorge-0.2.0.vsix
+code --install-extension phorge-0.2.0.vsix
 ```
 
 ## Configuration

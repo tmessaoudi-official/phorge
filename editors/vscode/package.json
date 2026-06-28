@@ -1,8 +1,8 @@
 {
   "name": "phorge",
   "displayName": "Phorge",
-  "description": "Phorge language support — diagnostics, hover, and go-to-definition via the `phg lsp` language server.",
-  "version": "0.1.0",
+  "description": "Phorge language support — syntax highlighting plus diagnostics, hover, go-to-definition, completion, document symbols, references, rename, and formatting via the `phg lsp` language server.",
+  "version": "0.2.0",
   "publisher": "phorge",
   "license": "MIT OR Apache-2.0",
   "repository": { "type": "git", "url": "https://github.com/tmessaoudi-official/phorge" },
@@ -17,6 +17,13 @@
         "aliases": ["Phorge"],
         "extensions": [".phg"],
         "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "phorge",
+        "scopeName": "source.phorge",
+        "path": "./syntaxes/phorge.tmLanguage.json"
       }
     ],
     "configuration": {

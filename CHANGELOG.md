@@ -6,6 +6,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — editor tooling: syntax highlighting + JetBrains/PhpStorm integration
+
+- **TextMate grammar** (`editors/vscode/syntaxes/phorge.tmLanguage.json`) — keywords, primitive +
+  PascalCase types, strings with `{…}` interpolation and `\xHH`/`b"…"`/`r"…"` forms, numeric literals
+  (hex/bin/oct/`_`/`1.50d`), comments, and `#[…]` attributes. Wired into the VS Code extension
+  (`grammars`), which previously had only bracket config — `.phg` files are now highlighted.
+- **VS Code extension v0.2.0** — the thin `phg lsp` client auto-gains the new server capabilities
+  (references/rename/formatting/highlight); README + manifest refreshed.
+- **JetBrains / PhpStorm** (`editors/phpstorm/`) — a no-compile path: the `editors/vscode/` directory is
+  a native **TextMate Bundle** for highlighting, and **LSP4IJ** runs `phg lsp` for the full feature set.
+  One server + one grammar, identical behavior across editors. A natively-compiled JetBrains plugin is a
+  tracked follow-up.
+
 ### Added — LSP: references, document-highlight, rename, formatting
 
 The `phg lsp` server gains four capabilities beyond diagnostics/hover/definition/completion/symbols —
