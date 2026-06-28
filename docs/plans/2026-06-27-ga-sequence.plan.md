@@ -409,7 +409,17 @@ referenced as first-class fn values). All three backends see explicit registrati
 (d) Example (`examples/web/router.phg` or guide), conformance program, `phg explain` for new codes,
 README/CHANGELOG/KNOWN_ISSUES. (W3 socket serve runtime stays the next slice; W2 is pure + gated.)
 
-### Item 3 — M2.5 Phase 3a (CI stub registry; NO signing)
+### Item 3 — M2.5 Phase 3a (CI stub registry; NO signing) — ✅ DONE (`3d6e7bc`)
+Shipped `bundle/sha256.rs` (hand-rolled FIPS SHA-256, FIPS+cross-impl tested), `bundle/manifest.rs`
+(tolerant parser + lookup + registry_base + `phg-stub-<triple>` asset names), `build.rs` (bakes
+`PHORGE_BAKE_STUB_MANIFEST`, empty default → breaks the stub↔manifest circularity), the `bundle/cross.rs`
+3-way branch (`download_stub`/`fetch`: verify-before-cache, curl/file:// transport), `Cargo.toml`
+`repository`. CI workflow shipped as **`.github/workflows/stub-registry.yml`** (the spec's `release.yml`
+name was taken → distinct file, complements it). Tests: `tests/registry.rs` (hermetic client +
+tamper-rejection + cross-impl hash) + toolchain-gated `tests/build.rs` end-to-end (real musl stub →
+download → verify → embed → run ≡ runvm). Phase 3b (signing/macOS) deferred. **ALL 3 LOCKED ITEMS DONE.**
+
+### Item 3 (original spec) — M2.5 Phase 3a (CI stub registry; NO signing)
 Spec already exists: `docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`. Build: `bundle/
 sha256.rs` (std SHA-256), `bundle/manifest.rs` (parse + lookup + `registry_base` via Cargo.toml
 `repository` / `PHORGE_STUB_REGISTRY` / `PHORGE_STUB_MANIFEST` overrides), `download_stub()` 3-way
