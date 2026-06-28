@@ -40,6 +40,13 @@
   function-types use `=>`.
 
 ## Status
-- DONE (pre-marathon-extension): M-perf S1b slot-indexed fields (`6b71232`) + S2 VM inline cache
-  (`7152edf`, ~20% on field-heavy code). 1438 tests green w/ PHP-8.5 oracle.
-- NEXT: step 1 — spec super/parent dispatch.
+- DONE: M-perf S1b slot-indexed fields (`6b71232`) + S2 VM inline cache (`7152edf`, ~20% field-heavy).
+- DONE: both design specs (`ef086bb` must-use/overloading, `9c6e27e` super/parent).
+- DONE: **step 2 — must-use Slice A** (`53fa3af`): `Stmt::Discard` + contextual `discard` keyword;
+  E-UNUSED-VALUE on non-{void,Empty,never,Error} expression-statements; front-end-only (run≡runvm≡PHP);
+  codemod (mutable-fields, static-fields + 3 inline tests); guide example + explain. 1444 tests green.
+- NEXT: **step 3 — return-type overloading (Slice C)**, then step 4 super/parent impl, step 5 M4 stdlib,
+  step 6 cross-file LSP + JetBrains.
+- Implementation note (must-use): `discard` `at_discard` gate fires only on statement-leading
+  `discard <Ident|new>`; `Stmt::Discard` OR-combines with `Stmt::Expr` everywhere except the checker
+  (must-use exemption) and the fmt printer (emits the keyword); rewrite passes mirror Discard→Discard.
