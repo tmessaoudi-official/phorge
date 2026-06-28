@@ -1,0 +1,33 @@
+// Conformance: regex/typed route constraints `{name:regex}` (M6 W2-ext slice 2) — whole-segment
+// anchored match via Core.Regex; precedence literal > constrained > bare param. Experimental tier;
+// byte-identical run≡runvm≡real PHP (ASCII patterns).
+package Main;
+
+import Core.Console;
+import Core.Bytes;
+import Core.Http;
+
+function byId(Request req) -> Response { return Response.text(200, "id " + (req.param("id") ?? "?")); }
+function byName(Request req) -> Response { return Response.text(200, "name " + (req.param("name") ?? "?")); }
+function ymd(Request req) -> Response {
+  return Response.text(200, (req.param("y") ?? "?") + "-" + (req.param("m") ?? "?"));
+}
+
+function show(Router rt, string path) -> void {
+  Response resp = rt.handle(new Request("GET", path, b"", [], []));
+  int st = resp.status;
+  string body = Bytes.toString(resp.body) ?? "?";
+  Console.println("{path} -> {st} {body}");
+}
+
+function main() -> void {
+  Router rt = new Router([], [])
+    .route("GET", r"/u/{id:\d+}", byId)
+    .route("GET", r"/u/{name}", byName)
+    .route("GET", r"/d/{y:\d{4}}/{m:\d{2}}", ymd);
+
+  show(rt, "/u/42");        // constrained \d+ wins
+  show(rt, "/u/ada");       // \d+ fails -> bare {name}
+  show(rt, "/d/2026/06");   // \d{4}/\d{2} match
+  show(rt, "/d/26/6");      // 404 (constraint fails)
+}

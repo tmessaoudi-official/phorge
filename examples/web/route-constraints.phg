@@ -1,0 +1,47 @@
+package Main;
+
+// M6 W2-ext slice 2 — **regex / typed route constraints** on the Core.Http Router.
+//
+// A `{name:regex}` pattern segment captures `name` only if the path component matches the regex,
+// anchored to the WHOLE segment (`^(?:regex)$`, via `Core.Regex`). Precedence: a literal segment is
+// most specific, then a *constrained* param, then a bare `{name}` param — so `/users/{id:\d+}` wins
+// over `/users/{name}` for `/users/42`, while `/users/ada` (not digits) falls through to `{name}`.
+// Patterns are raw strings (`r"…"`) so `{...}` and `\d` are literal. Pure Phorge over Core.Regex; the
+// match is byte-identical on run / runvm / real PHP for ASCII patterns.
+import Core.Console;
+import Core.Bytes;
+import Core.Http;
+
+function showUser(Request req): Response {
+  return Response.text(200, "user #{req.param(\"id\") ?? \"?\"}");
+}
+
+function showProfile(Request req): Response {
+  return Response.text(200, "profile of {req.param(\"name\") ?? \"?\"}");
+}
+
+// A 4-digit year constraint on one segment, a slug on another.
+function showArchive(Request req): Response {
+  string year = req.param("year") ?? "?";
+  string month = req.param("month") ?? "?";
+  return Response.text(200, "archive {year}-{month}");
+}
+
+function show(Router rt, string method, string path): void {
+  Response resp = rt.handle(new Request(method, path, b"", [], []));
+  int st = resp.status;
+  string body = Bytes.toString(resp.body) ?? "?";
+  Console.println("{method} {path} -> {st}: {body}");
+}
+
+function main(): void {
+  Router rt = new Router([], [])
+    .route("GET", r"/users/{id:\d+}", showUser)       // numeric id only
+    .route("GET", r"/users/{name}", showProfile)      // anything else
+    .route("GET", r"/archive/{year:\d{4}}/{month:\d{2}}", showArchive);
+
+  show(rt, "GET", "/users/42");          // -> user #42 (constrained beats bare)
+  show(rt, "GET", "/users/ada");         // -> profile of ada (\d+ fails, falls to {name})
+  show(rt, "GET", "/archive/2026/06");   // -> archive 2026-06
+  show(rt, "GET", "/archive/26/6");      // -> 404 (fails \d{4}/\d{2})
+}

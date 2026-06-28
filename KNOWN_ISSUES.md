@@ -550,12 +550,16 @@ or simply unavailable, never a crash):
 - **Only `#[Route]` has semantics.** The grammar parses any `#[Name(args)]`, but every name other than
   `Route` is a hard `E-UNKNOWN-ATTRIBUTE` (no silent ignore). A general attribute/annotation facility
   is future work.
-- **Middleware + route groups shipped (W2-ext slice 1); regex/typed constraints + nested groups
-  not yet.** `router.use(mw)` and `router.group(prefix, build)` work. Still deferred: regex/typed route
-  constraints (`{id:\d+}`, slice 2), optional segments, wildcards, and `#[Route]` on class methods
-  (slice 3). A group's middleware is composed into its routes at merge time; deeply-nested group
-  middleware ordering beyond one level is not specially tested. The `handle(Request) -> Response`
-  contract does not change when the rest land.
+- **Middleware, route groups, and regex constraints shipped (W2-ext slices 1–2); `#[Route]` on methods
+  not yet.** `router.use(mw)`, `router.group(prefix, build)`, and `{name:regex}` constraints
+  (`r"/users/{id:\d+}"`) all work. Still deferred: `#[Route]` on class methods (slice 3), optional
+  segments, and wildcards. A group's middleware is composed into its routes at merge time; deeply-nested
+  group middleware ordering beyond one level is not specially tested.
+- **Route constraints depend on `Core.Regex`** — importing `Core.Http` now also pulls in `Core.Regex`
+  (the prelude matches constraints with it). With the `regex` cargo feature disabled (e.g. a custom
+  playground build), a program that imports `Core.Http` would fail to resolve `Core.Regex`. Constraint
+  matching is byte-identical run≡runvm≡PHP for ASCII patterns; exotic patterns inherit `Core.Regex`'s
+  documented regex-crate-vs-PCRE caveats.
 - **Router lives on the injected `Core.Http` types.** A program that declares its *own* `Request`/
   `Response` (the W1 examples) does not get the injected `Router`; import `Core.Http` to use it.
 

@@ -353,6 +353,11 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
 > after each feature; end every status with `GA: ~X% · Global: ~Y%`.
 
 ### Decisions Log (this round)
+- [2026-06-28] DONE: **M6 W2-ext slice 2 — regex/typed route constraints**: `{name:regex}` whole-segment
+  anchored match via Core.Regex; precedence literal > constrained > bare; prelude imports Core.Regex.
+  `examples/web/route-constraints.phg` + conformance; byte-identical 3-way. **Gotcha:** strip only OUTER
+  braces (`Text.substring(seg,1,-1)`) — a constraint may contain `{}` (`\d{4}`). **NEXT: slice 3
+  (`#[Route]` on class methods).**
 - [2026-06-28] DONE: **M6 W2-ext slice 1 — middleware + route groups** (`f01035e`): `router.use(mw)`
   (`(Request,next)->Response`, short-circuit or pass-through) + `router.group(prefix, build)`; pure
   Phorge, no new Op/Value, byte-identical 3-way. Also fixed two latent VM-compiler CTy gaps found while

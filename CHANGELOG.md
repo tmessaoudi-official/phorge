@@ -6,6 +6,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M6 W2 extensions: regex/typed route constraints
+
+A `{name:regex}` route pattern segment captures `name` only when the path component matches the regex,
+anchored to the whole segment (`^(?:regex)$`, via `Core.Regex`). `r"/users/{id:\d+}"` matches
+`/users/42` but not `/users/ada`. Precedence is **literal > constrained param > bare param**, so a
+constrained route is preferred over a bare `{name}` but still loses to an exact literal. A constrained
+segment whose component fails its regex makes the whole route not match (it falls through to the next).
+The router prelude now imports `Core.Regex`. `examples/web/route-constraints.phg` +
+`conformance/web/route-constraints.phg`, byte-identical run≡runvm≡real PHP (ASCII patterns).
+**Gotcha fixed:** a constraint regex may contain braces (`\d{4}`), so the `{name:…}` inner text is
+extracted by dropping only the **outer** braces (`Text.substring(seg, 1, -1)`), not by stripping every
+`{`/`}`.
+
 ### Added — M6 W2 extensions: router middleware + route groups
 
 The `Core.Http` `Router` gains a middleware pipeline and sub-router groups — pure Phorge over

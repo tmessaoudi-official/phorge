@@ -423,6 +423,7 @@ const HTTP_PRELUDE: &str = r#"
 import Core.Bytes;
 import Core.Text;
 import Core.List;
+import Core.Regex;
 class Request {
   constructor(public string method, public string path, public bytes body, private List<string> headerLines, private List<string> attrs) {}
   function header(string name): string? {
@@ -528,6 +529,35 @@ class Router {
     return h;
   }
   static function idStrs(List<string> xs): List<string> { return xs; }
+  // A pattern segment is a parameter iff it is `{...}`. The inner text is `name` (bare) or
+  // `name:regex` (constrained); the regex must match the WHOLE path segment.
+  static function isParam(string seg): bool {
+    return Text.startsWith(seg, "\{") && Text.endsWith(seg, "\}");
+  }
+  static function paramInner(string seg): string {
+    // Drop only the OUTER braces (substring 1..len-1) — a constraint regex may itself contain braces
+    // (`\d{4}`), so stripping every `{`/`}` would corrupt it. `substring(s, 1, -1)` = bytes[1..len-1]
+    // on both backends and PHP `substr($s, 1, -1)`.
+    return Text.substring(seg, 1, -1);
+  }
+  static function paramName(string seg): string {
+    string inner = Router.paramInner(seg);
+    if (Text.contains(inner, ":")) { List<string> kv = Text.splitOnce(inner, ":"); return kv[0]; }
+    return inner;
+  }
+  // A constrained segment matches its path component iff the (whole-segment-anchored) regex matches.
+  static function constraintOk(string seg, string component): bool {
+    string inner = Router.paramInner(seg);
+    if (Text.contains(inner, ":")) {
+      List<string> kv = Text.splitOnce(inner, ":");
+      var re = Regex.compile("^(?:" + kv[1] + ")$");
+      return Regex.matches(re, component);
+    }
+    return true; // a bare `{name}` matches any component
+  }
+  // Specificity score (higher = more specific), or -1 for no match. A literal segment scores 2, a
+  // matching CONSTRAINED param scores 1, a bare param scores 0 — so literal > constrained > param.
+  // A constrained param whose component fails its regex makes the whole route not match.
   static function segScore(string pattern, string path): int {
     List<string> ps = Text.split(pattern, "/");
     List<string> xs = Text.split(path, "/");
@@ -537,10 +567,12 @@ class Router {
     int n = List.length(ps);
     while (i < n) {
       string p = ps[i];
-      if (Text.startsWith(p, "\{") && Text.endsWith(p, "\}")) {
+      if (Router.isParam(p)) {
+        if (!Router.constraintOk(p, xs[i])) { return -1; }
+        if (Text.contains(Router.paramInner(p), ":")) { score += 1; }
       } else {
         if (p != xs[i]) { return -1; }
-        score += 1;
+        score += 2;
       }
       i += 1;
     }
@@ -554,9 +586,8 @@ class Router {
     int n = List.length(ps);
     while (i < n) {
       string p = ps[i];
-      if (Text.startsWith(p, "\{") && Text.endsWith(p, "\}")) {
-        string name = Text.replace(Text.replace(p, "\{", ""), "\}", "");
-        out = List.concat(out, [name, xs[i]]);
+      if (Router.isParam(p)) {
+        out = List.concat(out, [Router.paramName(p), xs[i]]);
       }
       i += 1;
     }
