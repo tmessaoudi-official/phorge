@@ -353,6 +353,16 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
 > after each feature; end every status with `GA: ~X% · Global: ~Y%`.
 
 ### Decisions Log (this round)
+- [2026-06-28] IN PROGRESS: **M6 W3 — serve concurrency (spec-first)**. Research finding (VERIFIED by a
+  compile-time `assert_send_sync::<ast::Program>()` probe): **`ast::Program` is `Send + Sync`**, and serve
+  runs the *interpreter* over `&Program` with a **per-request `Value` heap** (Rc values never cross
+  threads). ⇒ **bounded OS-thread-per-request is feasible** — `Arc<Program>` shared, each worker its own
+  heap; real multi-core, std-only (`std::thread`), no `unsafe`, no `Value: Send`. This **revises** the
+  long-documented "single-threaded by force → green-threads" plan: green-threads is *dominated* (hard
+  std-only — no async runtime / generators unstable / stack-switching needs unsafe — and single-core).
+  `BytecodeProgram` is NOT Send (Value constants), but serve uses the interpreter, so irrelevant. Spec:
+  `docs/specs/2026-06-28-m6-w3-serve-concurrency-design.md`. **Bringing the model + CLI defaults decision
+  back to the developer before building** (their explicit request).
 - [2026-06-28] DONE: **M6 W2-ext slice 3 — `#[Route]` on class methods → W2-ext COMPLETE**. Attribute
   parser extended to class methods; a `#[Route]` method must be **static** (`E-ROUTE-METHOD-STATIC`);
   `Http.autoRouter()` lowers each static method to a `fn(req) => Class.method(req)` handler lambda
