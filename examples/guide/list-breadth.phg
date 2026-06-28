@@ -31,4 +31,10 @@ function main(): void {
     // Empty list: min/max/find are null.
     List<int> none = List.filter(xs, fn(int x) => x > 100);
     Console.println("empty min: {List.min(none) ?? -1}");
+
+    // take / drop — prefix and suffix, clamping n to [0, len] (never fault).
+    int firstTwo = List.sum(List.take(xs, 2));
+    int afterTwo = List.sum(List.drop(xs, 2));
+    int dropAll = List.length(List.drop(xs, 999));
+    Console.println("take 2 sum={firstTwo}, drop 2 sum={afterTwo}, drop 999 len={dropAll}");
 }

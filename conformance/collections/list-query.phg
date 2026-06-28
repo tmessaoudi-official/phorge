@@ -19,4 +19,10 @@ function main() -> void {
 
     List<int> none = List.filter(xs, fn(int x) => x > 100);
     Console.println("empty {List.min(none) ?? -1},{List.max(none) ?? -1}");
+
+    // take/drop clamp n to [0, len] (n<0 ⇒ 0, n>len ⇒ len) — never fault.
+    Console.println("take2 {List.length(List.take(xs, 2))} sum {List.sum(List.take(xs, 2))}");
+    Console.println("take0 {List.length(List.take(xs, 0))} take99 {List.length(List.take(xs, 99))}");
+    Console.println("drop2 {List.length(List.drop(xs, 2))} sum {List.sum(List.drop(xs, 2))}");
+    Console.println("drop99 {List.length(List.drop(xs, 99))} dropNeg {List.length(List.drop(xs, -3))}");
 }

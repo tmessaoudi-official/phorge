@@ -110,6 +110,27 @@ fn list_slice(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("List.slice expects (List<T>, int, int)".into()),
     }
 }
+// `take`/`drop` clamp `n` to `[0, len]` (n<0 ⇒ 0, n>len ⇒ len), so they never fault. PHP
+// `array_slice` (which reindexes by default) reproduces both with `max(0, n)` (a negative `n` must be
+// clamped, else array_slice would count from the end).
+fn list_take(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), Value::Int(n)] => {
+            let k = (*n).clamp(0, xs.len() as i64) as usize;
+            Ok(Value::List(std::rc::Rc::new(xs[..k].to_vec())))
+        }
+        _ => Err("List.take expects (List<T>, int)".into()),
+    }
+}
+fn list_drop(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), Value::Int(n)] => {
+            let k = (*n).clamp(0, xs.len() as i64) as usize;
+            Ok(Value::List(std::rc::Rc::new(xs[k..].to_vec())))
+        }
+        _ => Err("List.drop expects (List<T>, int)".into()),
+    }
+}
 /// `indexOf(List<T>, T) -> int?` — the index of the first element equal to the needle (structural
 /// `eq_val`, like `contains`), else `null`. Erases to a gated `__phorge_index_of` (PHP `array_search`
 /// returns `false` on miss, mapped to `null`).
@@ -356,6 +377,24 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
                     parg(a, 2)
                 )
             },
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "take",
+            params: vec![list(t()), Ty::Int],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_take),
+            php: |a| format!("array_slice({}, 0, max(0, {}))", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "drop",
+            params: vec![list(t()), Ty::Int],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_drop),
+            php: |a| format!("array_slice({}, max(0, {}))", parg(a, 0), parg(a, 1)),
         },
         // `indexOf(List<T>, T) -> int?` — gated `__phorge_index_of` (PHP `array_search` strict → null).
         NativeFn {

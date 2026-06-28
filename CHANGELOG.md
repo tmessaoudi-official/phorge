@@ -6,6 +6,14 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M4 stdlib: `Core.List.take` / `drop`
+
+Prefix/suffix slicing, byte-identical `run ≡ runvm ≡ real PHP 8.5`, **no new `Op`/`Value`**:
+`List.take(xs, n)` (first `n`) and `List.drop(xs, n)` (skip `n`), each clamping `n` to `[0, len]`
+(`n < 0 ⇒ 0`, `n > len ⇒ len`) so they never fault. Erase to `array_slice($xs, 0, max(0, $n))` /
+`array_slice($xs, max(0, $n))` (the `max(0, …)` clamps a negative `n`, else `array_slice` would count
+from the end). `guide/list-breadth.phg` + `conformance/collections/list-query.phg` extended.
+
 ### Changed — M-perf: FNV-hashed instance field maps
 
 Instance field storage (`value::Instance.fields`) now uses a hand-rolled **FNV-1a** `BuildHasher`

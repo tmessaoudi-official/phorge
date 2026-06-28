@@ -5,3 +5,7 @@ any true all true
 any2 false all2 false
 smin 10 smax 9
 empty -1,-1
+take2 2 sum 4
+take0 0 take99 8
+drop2 6 sum 27
+drop99 0 dropNeg 8

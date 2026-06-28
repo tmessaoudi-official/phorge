@@ -563,3 +563,9 @@ offset problem never arises (slots are always runtime-resolved). Steps:
 - **S2 (the win):** VM inline cache per GetField/SetField site `(last_class, slot)`; monomorphic hit →
   `vec[slot]` no hash. Classes immutable ⇒ no cache invalidation. `phg bench` before/after.
 - **S3:** confirm clone-with/eq/reflect parity by slot; gate.
+
+### Slot-indexed S1a DONE (`6698097`); S1b deferred to fresh context (developer-approved 2026-06-28)
+`ast::class_field_layout` (single-source, tested, byte-identical) committed. S1b (Instance.fields
+HashMap→Vec<Option<Value>> + Rc<ClassLayout>, rewire both backends + clone/eq/reflect, sentinel) is
+fully specced above — execute first in a fresh session (mechanical, parity-gated). Then continue #2–#4.
+Order note: doing #4 (stdlib breadth, lowest-risk additive) first given session depth, then #2/#3.
