@@ -28,11 +28,11 @@ call results, `new` instances, and stray expressions (`x + 1;`) — the broadest
 (decision: must-use scope = "any non-void/Empty expression-statement").
 
 ```phorj
-compute();              // E-UNUSED-VALUE if compute() -> int
+compute();              // E-UNUSED-VALUE if compute(): int
 discard compute();      // OK — deliberately thrown away
 int x = compute();      // OK — used
-log("hi");              // OK — log(...) -> void
-doThing();              // OK — doThing() -> Empty
+log("hi");              // OK — log(...): void
+doThing();              // OK — doThing(): Empty
 ```
 
 ### `discard` keyword
@@ -78,11 +78,11 @@ afterward.
 Overloads of one name may differ **only in return type** (identical parameter count + types), e.g.
 
 ```phorj
-function parse(string s) -> int    { ... }
-function parse(string s) -> bool   { ... }
+function parse(string s): int    { ... }
+function parse(string s): bool   { ... }
 
-int  a = parse("7");          // resolves to -> int
-bool b = parse("yes");        // resolves to -> bool
+int  a = parse("7");          // resolves to the : int overload
+bool b = parse("yes");        // resolves to the : bool overload
 discard <int>parse("7");      // explicit selector; value dropped
 ```
 
@@ -97,7 +97,7 @@ Param-overloads stay **runtime-dispatched by argument values** (unchanged). Retu
 directly-adjacent sink** — never through a constraint solver. The expected type is read from exactly
 these **inferable sinks**:
 
-1. **Typed binding** — `int x = f()` / `var int x = f()`
+1. **Typed binding** — `int x = f()` (a typed declaration; `var x = f()` is *inferred* and therefore has no context → error for a return-overload)
 2. **Typed reassignment** — `x = f()` where `x`'s declared type is known
 3. **Typed field write** — `this.count = f()` (field `count: int`)
 4. **`return f()`** in a function/method/lambda with a declared return type
