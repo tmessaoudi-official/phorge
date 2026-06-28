@@ -8,7 +8,44 @@
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::hash::{BuildHasherDefault, Hasher};
 use std::rc::Rc;
+
+/// A hand-rolled **FNV-1a** hasher for instance field maps (M-perf). Field keys are short identifiers
+/// (`"v"`, `"x"`, `"price"`), where std's DoS-resistant SipHash is overkill: FNV-1a is a handful of
+/// XOR/multiply per byte with no keying overhead, measurably faster for short keys on the object hot
+/// path. Field-map keys come only from a program's own source (never attacker-controlled network
+/// input), so SipHash's collision-DoS resistance buys nothing here. Std-only, safe, deterministic.
+pub struct FnvHasher(u64);
+
+/// Seeded with the 64-bit FNV offset basis, so a fresh hasher (one per key via `BuildHasherDefault`)
+/// starts correct and `write` is a pure XOR/multiply loop (no in-band re-seed).
+impl Default for FnvHasher {
+    fn default() -> Self {
+        FnvHasher(0xcbf2_9ce4_8422_2325)
+    }
+}
+
+impl Hasher for FnvHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        // FNV-1a per byte: XOR, then multiply by the FNV prime (wrapping). Same constants as
+        // `bundle::cross::fnv1a_64`.
+        let mut h = self.0;
+        for &b in bytes {
+            h ^= u64::from(b);
+            h = h.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        self.0 = h;
+    }
+}
+
+/// The field map of a class instance — a `HashMap` keyed by [`FnvHasher`] (see its docs). A type alias
+/// so the (few) construction sites read `FieldMap::default()` and the rest of the `HashMap` API is
+/// unchanged. `BuildHasherDefault` builds a fresh zero-seed `FnvHasher` per hash.
+pub type FieldMap = HashMap<String, Value, BuildHasherDefault<FnvHasher>>;
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -91,7 +128,7 @@ pub enum ClosureData {
 #[derive(Debug, Clone)]
 pub struct Instance {
     pub class: String,
-    pub fields: RefCell<HashMap<String, Value>>,
+    pub fields: RefCell<FieldMap>,
 }
 
 #[derive(Debug, Clone)]
@@ -1793,7 +1830,7 @@ mod tests {
     fn as_display_is_none_for_composite() {
         let inst = Value::Instance(Rc::new(Instance {
             class: "Greeter".into(),
-            fields: RefCell::new(HashMap::new()),
+            fields: RefCell::new(FieldMap::default()),
         }));
         assert!(inst.as_display().is_none());
     }
@@ -1805,11 +1842,11 @@ mod tests {
         // aborts the process via stack overflow; with it, it terminates deterministically.
         let a = Rc::new(Instance {
             class: "Node".into(),
-            fields: RefCell::new(HashMap::new()),
+            fields: RefCell::new(FieldMap::default()),
         });
         let b = Rc::new(Instance {
             class: "Node".into(),
-            fields: RefCell::new(HashMap::new()),
+            fields: RefCell::new(FieldMap::default()),
         });
         a.fields
             .borrow_mut()

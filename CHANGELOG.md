@@ -6,6 +6,17 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — M-perf: FNV-hashed instance field maps
+
+Instance field storage (`value::Instance.fields`) now uses a hand-rolled **FNV-1a** `BuildHasher`
+(`value::FnvHasher` / `type FieldMap`) instead of std's DoS-resistant SipHash. Field keys are short,
+source-derived identifiers (never attacker-controlled), so SipHash's keying overhead bought nothing;
+FNV-1a is a few XOR/multiply per byte. **Measured** (`phg bench`, median-of-101): object-heavy workload
+**VM 15.17 ms → 12.82 ms (~15.5% faster)**; the mixed `examples/bench/workload.phg` **1.60 ms → 1.48 ms
+(~7%)**. Semantics are identical (same `HashMap` API; field-iteration order never reached output — it was
+already `RandomState`-randomized per process, yet `run ≡ runvm ≡ PHP` held). Std-only, safe, no new
+`Op`/`Value`; full PHP-8.5 oracle still byte-identical.
+
 ### Added — M4 stdlib: `Core.Text` breadth (reverse + case-insensitive)
 
 Three ASCII-oriented `Core.Text` natives (charter Rule 5 Tier-A — each maps to a PHP **core** function

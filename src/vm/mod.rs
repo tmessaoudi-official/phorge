@@ -15,7 +15,6 @@ use crate::diagnostic::Diagnostic;
 use crate::limits::MAX_CALL_DEPTH;
 use crate::value::{EnumVal, Instance, Value};
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 /// Whether the dispatch loop should fetch the next instruction or stop (the `main` frame

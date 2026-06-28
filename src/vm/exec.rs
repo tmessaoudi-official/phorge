@@ -395,7 +395,7 @@ impl<'a> Vm<'a> {
                 // before `split_off` takes `&mut self` (mirrors `MakeEnum`).
                 let desc = self.program.class_descs[idx].clone();
                 let values = self.split_off(desc.fields.len());
-                let fields: HashMap<String, Value> = desc.fields.into_iter().zip(values).collect();
+                let fields: crate::value::FieldMap = desc.fields.into_iter().zip(values).collect();
                 self.stack.push(Value::Instance(Rc::new(Instance {
                     class: desc.class,
                     fields: RefCell::new(fields),

@@ -47,7 +47,7 @@ fn compiled(pattern: &str) -> Result<Rc<::regex::Regex>, String> {
 
 /// Build the opaque `Regex` value holding the bare pattern.
 fn regex_value(pattern: &str) -> Value {
-    let mut fields = HashMap::new();
+    let mut fields = crate::value::FieldMap::default();
     fields.insert("pattern".to_string(), Value::Str(pattern.to_string()));
     Value::Instance(Rc::new(Instance {
         class: "Regex".to_string(),

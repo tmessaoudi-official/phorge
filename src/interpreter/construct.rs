@@ -54,7 +54,7 @@ impl Interp {
         let plan = self.ctor_plan(class_name);
         let mut inst = Instance {
             class: class_name.to_string(),
-            fields: RefCell::new(HashMap::new()),
+            fields: RefCell::new(crate::value::FieldMap::default()),
         };
         let total: usize = plan.iter().map(|(p, _)| p.len()).sum();
         if plan.is_empty() {

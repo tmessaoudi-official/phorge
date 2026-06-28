@@ -1,6 +1,7 @@
 use super::*;
 use crate::chunk::{BytecodeProgram, Chunk, Function, Op};
 use crate::value::Value;
+use std::collections::HashMap;
 
 /// Compile a loose program through the real front-end (loader → check → compile) for tests that
 /// need a faithful `BytecodeProgram` rather than a hand-built one.

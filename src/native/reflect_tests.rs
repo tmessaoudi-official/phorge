@@ -43,14 +43,13 @@ fn reflect_kind_php_emits_the_gated_helper() {
 
 #[test]
 fn reflect_class_name_returns_runtime_class_for_objects_null_otherwise() {
-    use crate::value::{EnumVal, Instance};
+    use crate::value::{EnumVal, FieldMap, Instance};
     use std::cell::RefCell;
-    use std::collections::HashMap;
     let mut out = String::new();
     // An instance reports its class name (≡ PHP get_class for a package-Main class).
     let inst = Value::Instance(Rc::new(Instance {
         class: "Point".into(),
-        fields: RefCell::new(HashMap::new()),
+        fields: RefCell::new(FieldMap::default()),
     }));
     assert!(matches!(reflect_class_name(&[inst], &mut out), Ok(Value::Str(s)) if s == "Point"));
     // An enum variant reports the VARIANT name — PHP get_class returns the variant subclass (Q3).
@@ -82,9 +81,9 @@ fn reflect_class_name_returns_runtime_class_for_objects_null_otherwise() {
 
 #[test]
 fn reflect_enumeration_natives_read_class_tables() {
-    use crate::value::Instance;
+    use crate::value::{FieldMap, Instance};
     use std::cell::RefCell;
-    use std::collections::{BTreeMap, HashMap};
+    use std::collections::BTreeMap;
     let mut interfaces = BTreeMap::new();
     interfaces.insert(
         "Widget".to_string(),
@@ -100,7 +99,7 @@ fn reflect_enumeration_natives_read_class_tables() {
     };
     let widget = Value::Instance(Rc::new(Instance {
         class: "Widget".into(),
-        fields: RefCell::new(HashMap::new()),
+        fields: RefCell::new(FieldMap::default()),
     }));
     let strs = |v: Value| match v {
         Value::List(items) => items
