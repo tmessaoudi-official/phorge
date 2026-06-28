@@ -1,0 +1,7 @@
+// Library package `Acme.Banner` — uses the ambient foreign `str_repeat` declared in `php.d.phg`,
+// with no `declare` of its own. The declaration is shared project-wide.
+package Acme.Banner;
+
+function rule(int width) -> string {
+    return str_repeat("=", width);
+}

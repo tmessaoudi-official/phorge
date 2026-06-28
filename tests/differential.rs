@@ -957,6 +957,12 @@ fn collect_phg(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
 
 /// Recursively collect every project root (a directory holding a `phorge.toml`) under `dir`.
 fn collect_projects(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+    // M8.5: `examples/interop/` holds foreign-PHP (`declare`) walkthroughs — including `.d.phg`
+    // declaration-file projects — that are PHP-target-only (`E-FOREIGN-RUNTIME`), so they cannot be
+    // byte-identity-gated here. `tests/interop.rs` validates them via transpile → real PHP golden.
+    if dir.file_name().and_then(|n| n.to_str()) == Some("interop") {
+        return;
+    }
     if dir.join("phorge.toml").is_file() {
         out.push(dir.to_path_buf());
         return; // projects don't nest in the example set — don't descend further

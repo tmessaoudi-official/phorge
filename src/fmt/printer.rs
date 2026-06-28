@@ -262,9 +262,18 @@ impl Printer<'_> {
         Ok(())
     }
 
-    /// Print a foreign `declare class` (M8.5 S2): bodyless member signatures terminated by `;`.
+    /// Print a foreign `declare class` (M8.5 S2/S3a): bodyless member signatures terminated by `;`,
+    /// with the optional `extends`/`implements` header (S3a — `implements Error` makes it catchable).
     fn declare_class(&mut self, c: &ClassDecl) -> Result<(), String> {
-        self.line(&format!("declare class {} {{", c.name));
+        let mut header = format!("declare class {}", c.name);
+        if !c.extends.is_empty() {
+            header.push_str(&format!(" extends {}", c.extends.join(", ")));
+        }
+        if !c.implements.is_empty() {
+            header.push_str(&format!(" implements {}", c.implements.join(", ")));
+        }
+        header.push_str(" {");
+        self.line(&header);
         self.indent += 1;
         for m in &c.members {
             match m {

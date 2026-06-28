@@ -144,6 +144,35 @@ pub(super) fn validate_public_surface(prog: &Program, file: &Path) -> Result<(),
     Ok(())
 }
 
+/// Validate a `*.d.phg` declaration file (M8.5 S3b): it describes only foreign PHP, so it must carry
+/// **no `package`** (`E-DECL-PACKAGE` — global foreign symbols have no package) and contain **only
+/// `declare` (foreign) items** (`E-DECL-NONFOREIGN`). A valid decl file's foreign items are then merged
+/// ambiently into the project. Loader-only — never touches a backend.
+pub(super) fn validate_decl_file(prog: &Program, file: &Path) -> Result<(), String> {
+    if !prog.package.is_empty() {
+        return Err(format!(
+            "{}: a `.d.phg` declaration file must not declare a `package` (it describes global foreign \
+             PHP, which has no package) — remove the `package` line [E-DECL-PACKAGE]",
+            file.display()
+        ));
+    }
+    for item in &prog.items {
+        let ok = match item {
+            Item::Function(f) => f.foreign,
+            Item::Class(c) => c.foreign,
+            _ => false,
+        };
+        if !ok {
+            return Err(format!(
+                "{}: a `.d.phg` declaration file may contain only foreign `declare` items (every \
+                 function/class must be `declare`d) [E-DECL-NONFOREIGN]",
+                file.display()
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// The path of `file` relative to `source_root`, resolving symlinks/`.`/`..` via canonicalization
 /// when possible. Returns `None` when `file` is not under `source_root`.
 pub(super) fn relative_under(file: &Path, source_root: &Path) -> Option<PathBuf> {
@@ -161,11 +190,31 @@ pub(super) fn same_file(a: &Path, b: &Path) -> bool {
     }
 }
 
-/// All `*.phg` files under `dir`, recursively, in a deterministic (sorted) order.
+/// Whether `path` is a `*.d.phg` **declaration file** (M8.5 S3b): a file of foreign `declare`s, loaded
+/// ambiently into a project (the `.d.ts` analog), carrying no `package` and not validated against
+/// folder=path. Detected by the `.d.phg` double-suffix (its `extension()` is plain `phg`).
+pub(super) fn is_decl_file(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n.ends_with(".d.phg"))
+}
+
+/// All ordinary `*.phg` source files under `dir`, recursively, sorted. **Excludes** `*.d.phg`
+/// declaration files (collected separately via [`collect_decl_phg`]) — they are not package members.
 pub(super) fn collect_phg(dir: &Path) -> Result<Vec<PathBuf>, String> {
     let mut out = Vec::new();
     if dir.is_dir() {
         walk(dir, &mut out)?;
+    }
+    out.sort();
+    Ok(out)
+}
+
+/// All `*.d.phg` declaration files under `dir`, recursively, sorted (M8.5 S3b).
+pub(super) fn collect_decl_phg(dir: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut out = Vec::new();
+    if dir.is_dir() {
+        walk_decls(dir, &mut out)?;
     }
     out.sort();
     Ok(out)
@@ -183,7 +232,26 @@ pub(super) fn walk(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
     for p in entries {
         if p.is_dir() {
             walk(&p, out)?;
-        } else if p.extension().and_then(|s| s.to_str()) == Some("phg") {
+        } else if p.extension().and_then(|s| s.to_str()) == Some("phg") && !is_decl_file(&p) {
+            out.push(p);
+        }
+    }
+    Ok(())
+}
+
+fn walk_decls(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
+    let rd = std::fs::read_dir(dir)
+        .map_err(|e| format!("cannot read directory {}: {e}", dir.display()))?;
+    let mut entries: Vec<PathBuf> = Vec::new();
+    for e in rd {
+        let e = e.map_err(|e| format!("cannot read an entry in {}: {e}", dir.display()))?;
+        entries.push(e.path());
+    }
+    entries.sort();
+    for p in entries {
+        if p.is_dir() {
+            walk_decls(&p, out)?;
+        } else if is_decl_file(&p) {
             out.push(p);
         }
     }

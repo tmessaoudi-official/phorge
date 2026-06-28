@@ -288,6 +288,10 @@ impl Transpiler {
         let mut buckets: BTreeMap<String, Vec<&Item>> = BTreeMap::new();
         for item in &program.items {
             let ns = match item {
+                // M8.5: a foreign `declare` (function or class) produces no PHP definition — PHP already
+                // has it. References emit the global `\Name` form; never bucket it into a namespace.
+                Item::Function(f) if f.foreign => continue,
+                Item::Class(c) if c.foreign => continue,
                 Item::Function(f) => namespace_of(&f.name),
                 Item::Enum(e) => namespace_of(&e.name),
                 Item::Class(c) => namespace_of(&c.name),

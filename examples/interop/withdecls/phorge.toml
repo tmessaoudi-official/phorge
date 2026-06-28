@@ -1,0 +1,2 @@
+module = "acme/withdecls"
+source = "src"

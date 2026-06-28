@@ -1,0 +1,17 @@
+// Entry — uses the ambient foreign symbols from `php.d.phg` directly (`strtoupper`, `strrev`) and a
+// library function that also relies on them (`Acme.Banner.rule`). Nothing is re-declared anywhere.
+//
+// PHP-target-only: `phg run`/`runvm` refuse it (E-FOREIGN-RUNTIME). Build it with
+//   phg transpile <project> > out.php && php out.php
+package Main;
+
+import Core.Console;
+import Acme.Banner;
+
+function main(): void {
+    string bar = Banner.rule(10);
+    Console.println(bar);
+    Console.println(strtoupper("hello, phorge"));
+    Console.println(strrev("interop"));
+    Console.println(bar);
+}

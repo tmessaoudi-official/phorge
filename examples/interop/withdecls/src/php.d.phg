@@ -1,0 +1,11 @@
+// A `*.d.phg` declaration file (M8.5 S3b) — the foreign PHP surface this project uses, declared ONCE.
+//
+// A declaration file holds only `declare`s, carries NO `package`, and is loaded ambiently: its mere
+// presence under the project source root makes these symbols available to EVERY file (the `.d.ts`
+// analog). No file repeats these signatures, and no `import` is needed. References transpile to the
+// global PHP form (`\strtoupper(...)`, `\str_repeat(...)`); the Rust backends refuse the program
+// (E-FOREIGN-RUNTIME) since foreign code needs the PHP runtime.
+
+declare function strtoupper(string s) -> string;
+declare function str_repeat(string s, int times) -> string;
+declare function strrev(string s) -> string;

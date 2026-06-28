@@ -76,6 +76,12 @@ pub(super) fn resolve_type(ty: &Type, ctx: &ResolveCtx) -> Type {
 /// are rejected upstream). Enums/imports/aliases have no call sites to rewrite.
 pub(super) fn resolve_item(item: Item, ctx: &ResolveCtx) -> Item {
     match item {
+        // M8.5: a foreign `declare` describes a *global* PHP symbol (`\strlen`, `\DateTimeImmutable`) —
+        // it has no package, so it must never be mangled to a package-FQN. Pass it through untouched.
+        // (Ambient `.d.phg` items bypass this pass entirely; this also covers an inline `declare` inside
+        // a library-package file, where mangling would otherwise corrupt the global name.)
+        Item::Function(f) if f.foreign => Item::Function(f),
+        Item::Class(c) if c.foreign => Item::Class(c),
         Item::Function(mut f) => {
             f.name = mangle(&ctx.package, &f.name);
             for p in &mut f.params {

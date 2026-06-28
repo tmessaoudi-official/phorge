@@ -58,13 +58,33 @@ fn run_php(php: &str, php_src: &str, label: &str) -> String {
     String::from_utf8(out.stdout).expect("utf-8 php stdout")
 }
 
+/// Collect single-file interop walkthroughs, **skipping project roots** (a dir with `phorge.toml`):
+/// a project's files import each other / share ambient `.d.phg` declarations and only resolve when
+/// assembled via `loader::load`, so they are gated by `interop_projects_*` instead.
 fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
+    if dir.join("phorge.toml").is_file() {
+        return;
+    }
     for entry in std::fs::read_dir(dir).expect("read_dir examples/interop") {
         let path = entry.expect("dir entry").path();
         if path.is_dir() {
             collect(&path, out);
         } else if path.extension().and_then(|e| e.to_str()) == Some("phg") {
             out.push(path);
+        }
+    }
+}
+
+/// Recursively collect every project root (a dir holding `phorge.toml`) under `dir`.
+fn collect_projects(dir: &Path, out: &mut Vec<PathBuf>) {
+    if dir.join("phorge.toml").is_file() {
+        out.push(dir.to_path_buf());
+        return;
+    }
+    for entry in std::fs::read_dir(dir).expect("read_dir examples/interop") {
+        let path = entry.expect("dir entry").path();
+        if path.is_dir() {
+            collect_projects(&path, out);
         }
     }
 }
@@ -104,6 +124,54 @@ fn interop_examples_refuse_to_run_and_match_php_golden() {
             let php_src = cli::cmd_transpile(&src).expect("transpile ok");
             let got = run_php(php, &php_src, &label);
             let golden_path = phg.with_extension("out");
+            let want = std::fs::read_to_string(&golden_path)
+                .unwrap_or_else(|_| panic!("missing golden {}", golden_path.display()));
+            assert_eq!(got, want, "{label}: transpiled-PHP output != golden");
+        }
+    }
+}
+
+/// M8.5 S3b — multi-file interop projects (a `*.d.phg` declaration file shared across packages). Each
+/// project under `examples/interop/` is assembled via `loader::load`, must be refused by the Rust
+/// backends (`E-FOREIGN-RUNTIME`), and its transpiled PHP must match the committed `expected.out`.
+#[test]
+fn interop_projects_refuse_to_run_and_match_php_golden() {
+    use phorge::loader;
+    let mut projects = Vec::new();
+    collect_projects(Path::new("examples/interop"), &mut projects);
+    projects.sort();
+    if projects.is_empty() {
+        return; // no interop projects yet — single-file test still covers the core
+    }
+    let php = php_or_gate("interop-projects");
+
+    for proj in &projects {
+        let label = proj.display().to_string();
+        let entry = proj.join("src/main.phg");
+        let unit = loader::load(&entry).unwrap_or_else(|e| panic!("{label}: load failed:\n{e}"));
+
+        // 1. check passes (foreign signatures type-check the calls).
+        cli::check_program(&unit.program, &unit.diag_src)
+            .unwrap_or_else(|e| panic!("{label}: check failed:\n{e}"));
+
+        // 2. Both Rust backends REFUSE it (foreign code needs the PHP runtime).
+        let run_err = cli::run_program(&unit).expect_err("run must refuse a foreign project");
+        assert!(
+            run_err.contains("E-FOREIGN-RUNTIME"),
+            "{label}: run should fail with E-FOREIGN-RUNTIME, got:\n{run_err}"
+        );
+        let vm_err = cli::runvm_program(&unit).expect_err("runvm must refuse a foreign project");
+        assert!(
+            vm_err.contains("E-FOREIGN-RUNTIME"),
+            "{label}: runvm should fail with E-FOREIGN-RUNTIME, got:\n{vm_err}"
+        );
+
+        // 3. transpile → real PHP → golden (project-root `expected.out`).
+        if let Some(php) = &php {
+            let php_src =
+                cli::transpile_program(&unit.program, &unit.diag_src).expect("transpile ok");
+            let got = run_php(php, &php_src, &label);
+            let golden_path = proj.join("expected.out");
             let want = std::fs::read_to_string(&golden_path)
                 .unwrap_or_else(|_| panic!("missing golden {}", golden_path.display()));
             assert_eq!(got, want, "{label}: transpiled-PHP output != golden");

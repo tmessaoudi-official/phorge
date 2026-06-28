@@ -1,0 +1,38 @@
+// M8.5 S3a interop — catching an exception thrown by foreign PHP code.
+//
+// PHP-target-only (like all of examples/interop/): `phg run`/`runvm` refuse it (E-FOREIGN-RUNTIME);
+// build with `phg transpile exceptions.phg > out.php && php out.php`.
+//
+// A foreign PHP exception is described by a `declare class … implements Error` — `Error` is Phorge's
+// built-in exception marker, so the class becomes catchable. It is caught by its own global PHP name
+// (`\DivisionByZeroError`), NOT mapped to `\Exception`, so an `\Error`-family class (a `\Throwable`
+// that is not an `\Exception`) is caught correctly. No PHP definition is emitted (PHP already has it).
+package Main;
+
+import Core.Console;
+
+declare function intdiv(int a, int b) -> int;
+
+declare class DivisionByZeroError implements Error {
+    function getMessage() -> string;
+}
+
+function main(): void {
+    // intdiv(10, 0) raises PHP's \DivisionByZeroError — caught by name.
+    try {
+        int q = intdiv(10, 0);
+        Console.println("q={q}");
+    } catch (DivisionByZeroError e) {
+        Console.println("caught: {e.getMessage()}");
+    }
+
+    // A non-failing call returns normally.
+    try {
+        int ok = intdiv(10, 3);
+        Console.println("ok={ok}");
+    } catch (DivisionByZeroError e) {
+        Console.println("unreachable: {e.getMessage()}");
+    }
+}
+// caught: Division by zero
+// ok=3

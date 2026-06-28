@@ -434,23 +434,6 @@ fn php_class_name(name: &str) -> String {
     }
 }
 
-/// Render a `catch` clause's type for PHP (M-faults 2b): a single class/interface via `php_type_ref`
-/// (FQN if cross-package), a union `A | B` as PHP 8's `A | B`. The built-in `Error` base maps to
-/// `\Exception` (a Phorge `Error` subtype transpiled to `extends \Exception`, and PHP's own `Error`
-/// is a *different* engine class — so `catch (Error e)` must catch `\Exception`, not PHP `\Error`).
-fn php_catch_type(ty: &Type) -> String {
-    match ty {
-        Type::Named { name, .. } if last_segment(name) == "Error" => "\\Exception".to_string(),
-        Type::Named { name, .. } => php_type_ref(name),
-        Type::Union(members, _) => members
-            .iter()
-            .map(php_catch_type)
-            .collect::<Vec<_>>()
-            .join(" | "),
-        _ => "\\Exception".to_string(), // defensive — the checker requires an Error-typed catch
-    }
-}
-
 /// Whether a native's PHP erasure is a global function call (`strlen(...)`, `str_replace(...)`) — an
 /// identifier immediately followed by `(`. Such calls need a leading `\` inside a namespace block so
 /// they resolve to the global PHP builtin, not `CurrentNs\strlen`. A language construct like
@@ -578,6 +561,28 @@ impl Transpiler {
     }
     fn is_local(&self, name: &str) -> bool {
         self.locals.iter().any(|s| s.contains(name))
+    }
+    /// Render a `catch` clause's type for PHP (M-faults 2b): a single class/interface via `php_type_ref`
+    /// (FQN if cross-package), a union `A | B` as PHP 8's `A | B`. The built-in `Error` base maps to
+    /// `\Exception` (a Phorge `Error` subtype transpiled to `extends \Exception`, and PHP's own `Error`
+    /// is a *different* engine class — so `catch (Error e)` must catch `\Exception`, not PHP `\Error`).
+    /// M8.5 S3a: a **foreign** exception class (`declare class … implements Error`) is caught by its own
+    /// global PHP name (`\DivisionByZeroError`) — NOT the `Error`→`\Exception` mapping — so a foreign
+    /// `\Error`-family class (a `\Throwable` that is not an `\Exception`) is caught correctly.
+    fn php_catch_type(&self, ty: &Type) -> String {
+        match ty {
+            Type::Named { name, .. } if self.foreign_classes.contains(name) => {
+                format!("\\{}", php_class_name(name))
+            }
+            Type::Named { name, .. } if last_segment(name) == "Error" => "\\Exception".to_string(),
+            Type::Named { name, .. } => php_type_ref(name),
+            Type::Union(members, _) => members
+                .iter()
+                .map(|m| self.php_catch_type(m))
+                .collect::<Vec<_>>()
+                .join(" | "),
+            _ => "\\Exception".to_string(), // defensive — the checker requires an Error-typed catch
+        }
     }
     /// Record a local/param/loop-var's scalar [`OpKind`] in the current scope (T6). Only called where
     /// the declared type is statically known; names without a kind resolve to `Other` (helper path).

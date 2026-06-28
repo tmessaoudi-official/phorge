@@ -6,6 +6,29 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M8.5 S3: `.d.phg` declaration files + foreign-exception `catch`
+
+The interop bridge's final slice (`docs/specs/2026-06-28-m8.5-s3-decl-files-foreign-catch-design.md`).
+**No new `Op`/`Value`** — foreign symbols stay PHP-target-only (quarantined from `run ≡ runvm`), so this
+is a front-end + transpiler feature; pure-Phorge spine untouched.
+
+- **Foreign-exception `catch` (S3a)** — a `declare class` now accepts an optional `extends`/`implements`
+  header. A foreign PHP exception writes `declare class DivisionByZeroError implements Error { … }` —
+  `Error` is Phorge's built-in exception marker, so the class becomes catchable. It is caught by its own
+  **global** PHP name (`catch (\DivisionByZeroError $e)`), NOT the `Error`→`\Exception` mapping, so an
+  `\Error`-family class (a `\Throwable` that is not an `\Exception`) is caught correctly. The transpiler's
+  catch-type emission is now foreign-aware (`php_catch_type` is a method consulting `foreign_classes`);
+  `phg fmt` round-trips the `extends`/`implements` header. `examples/interop/exceptions.phg`.
+- **`.d.phg` ambient declaration files (S3b)** — a file whose name ends `.d.phg` holds only `declare`s,
+  carries **no `package`**, and is loaded ambiently into a project (the `.d.ts` analog): its presence
+  under the source root makes the foreign symbols available to every file, declared once, with no
+  `import`. New loader guards `E-DECL-PACKAGE` (a decl file must not declare a package) / `E-DECL-NONFOREIGN`
+  (only `declare` items). A `.d.phg` is excluded from the ordinary `.phg` walk (never folder=path-validated)
+  and its foreign items merge unmangled (the cross-package name-mangle pass now skips every foreign item —
+  a global PHP symbol must never become a package-FQN). `examples/interop/withdecls/` (a `.d.phg` shared
+  across `Main` + a library package), validated by a project-aware `tests/interop.rs` (load → refuse →
+  transpile-golden). **M8.5 is now COMPLETE** (S1 functions + S2 classes + S3 decl-files & foreign catch).
+
 ### Added — M4 stdlib: `Core.List.take` / `drop`
 
 Prefix/suffix slicing, byte-identical `run ≡ runvm ≡ real PHP 8.5`, **no new `Op`/`Value`**:

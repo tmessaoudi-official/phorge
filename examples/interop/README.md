@@ -18,6 +18,9 @@ quarantined from the `differential.rs` example gate and validated instead by `te
 | file | shows |
 |------|-------|
 | `builtins.phg` | foreign PHP free functions: `declare function strtoupper(string) -> string;` etc.; calls transpile to `\strtoupper(...)`; the `declare` lines emit no PHP. Foreign results compose with native Phorge + `Core.*`. |
+| `classes.phg` | foreign PHP classes (S2): `declare class DateTimeImmutable { … }` — construction (`new \DateTimeImmutable`), instance methods (`$d->format(…)`), static factories (`\DateTimeImmutable::createFromFormat(…)`). |
+| `exceptions.phg` | catching a foreign PHP exception (S3a): `declare class DivisionByZeroError implements Error { … }` makes it catchable; `intdiv(10, 0)` raises it; `catch` emits `catch (\DivisionByZeroError $e)` (caught by its own global name, so an `\Error`-family class works). |
+| `withdecls/` | a project that shares its foreign surface in a `*.d.phg` declaration file (S3b) instead of repeating `declare` in every consumer. |
 
 ## How it works
 
@@ -25,7 +28,11 @@ quarantined from the `differential.rs` example gate and validated instead by `te
   is the **real PHP name** (snake_case like `str_repeat` is fine — the camelCase rule is waived for
   foreign symbols, since the name is emitted verbatim). It produces no PHP definition; a call emits the
   global form `\name(...)` so it resolves to the PHP builtin even inside a namespace.
+- `declare class Name [extends A] [implements I] { … }` — a bodyless foreign PHP class. `implements
+  Error` (the built-in exception marker) makes a foreign exception catchable; references emit the global
+  form (`new \Name`, `$o->m(…)`, `\Name::s(…)`, `catch (\Name $e)`) and no class definition.
+- A `*.d.phg` file holds only `declare`s, carries **no `package`**, and is loaded ambiently into the
+  project (the `.d.ts` analog) — its presence in the source tree is the opt-in, so foreign symbols are
+  declared once and shared by every file. See `withdecls/`.
 - `check` type-checks calls against the declared signatures; `transpile` emits the PHP; `run`/`runvm`
   refuse (foreign code needs the PHP runtime).
-
-`declare class` (foreign PHP classes) and `.d.phg` declaration files are later M8.5 slices.

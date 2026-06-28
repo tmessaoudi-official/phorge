@@ -323,6 +323,19 @@ impl Parser {
     pub(super) fn parse_declare_class(&mut self, sp: Span) -> Result<Item, Diagnostic> {
         self.expect(&TokenKind::Class, "'class' after 'declare'")?;
         let name = self.expect_ident("a foreign class name")?;
+        // S3a: an optional `extends`/`implements` header describes the *PHP* hierarchy — a foreign
+        // exception writes `implements Error` (the built-in marker), making it catchable; a foreign
+        // class may also `extends` another foreign class. Purely a type-checker input (no body).
+        let extends = if self.eat(&TokenKind::Extends) {
+            self.parse_name_list("a class name after 'extends'")?
+        } else {
+            Vec::new()
+        };
+        let implements = if self.eat(&TokenKind::Implements) {
+            self.parse_name_list("an interface name after 'implements'")?
+        } else {
+            Vec::new()
+        };
         self.expect(&TokenKind::LBrace, "'{' to open the foreign class body")?;
         let mut members = Vec::new();
         while !self.check(&TokenKind::RBrace) && !self.check(&TokenKind::Eof) {
@@ -398,8 +411,8 @@ impl Parser {
             vis: Visibility::Public,
             name,
             type_params: Vec::new(),
-            extends: Vec::new(),
-            implements: Vec::new(),
+            extends,
+            implements,
             open: false,
             is_abstract: false,
             resolutions: Vec::new(),

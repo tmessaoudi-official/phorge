@@ -335,8 +335,29 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
         }
         parsed.push((file.clone(), prog));
     }
+
+    // M8.5 S3b — ambient `*.d.phg` declaration files: a file of foreign `declare`s carrying no package,
+    // loaded into the project (the `.d.ts` analog). Parsed + validated (no package, all foreign) but
+    // NOT folder=path-validated and NOT indexed as package definitions; their foreign items merge
+    // ambiently into the unit (the checker's prebind makes merge order irrelevant) and are emitted by
+    // the transpiler as global `\Name` symbols. First-party only — vendored decl bundling is deferred.
+    // Excluded from `collect_phg`, so a decl file is never compiled as a package source.
+    let mut decl_items: Vec<Item> = Vec::new();
+    let mut decl_files = 0usize;
+    for f in collect_decl_phg(&project.source_root)? {
+        if f.starts_with(&vendor_root) {
+            continue;
+        }
+        let src = read_file(&f)?;
+        let prog = parse_at(&f, &src)?;
+        validate_decl_file(&prog, &f)?;
+        src_map.insert(f.clone(), src);
+        decl_items.extend(prog.items);
+        decl_files += 1;
+    }
+
     let stats = LoadStats {
-        files: sources.len(),
+        files: sources.len() + decl_files,
         packages: pkgset.len(),
         defs,
     };
@@ -380,6 +401,9 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
             return Err(first);
         }
     }
+
+    // Ambient foreign declarations merge unmangled (they are global PHP symbols — never namespaced).
+    merged_items.extend(decl_items);
 
     Ok(Unit {
         program: Program {

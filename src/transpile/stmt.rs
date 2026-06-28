@@ -249,7 +249,7 @@ impl Transpiler {
                 for clause in catches {
                     self.line(&format!(
                         "}} catch ({} ${}) {{",
-                        php_catch_type(&clause.ty),
+                        self.php_catch_type(&clause.ty),
                         clause.name
                     ));
                     self.indent += 1;
