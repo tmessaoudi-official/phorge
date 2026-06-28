@@ -195,25 +195,28 @@ pub fn help_for(cmd: &str) -> String {
                      phg vendor path/to/project\n"
         }
         "serve" => {
-            "serve — serve the program over HTTP/1.1 on a single thread.\n\n\
+            "serve — serve the program over HTTP/1.1.\n\n\
                     The program must define `respond(bytes) -> bytes`: the runtime frames each\n\
                     incoming request, calls `respond` (where the program's own `parse_request` /\n\
                     router / `serialize_response` live — all pure Phorge), and writes the bytes back\n\
                     (`Connection: close`, one request per connection). A request fault degrades to a\n\
                     500; a malformed request is the program's concern (→ a 400 from `respond`).\n\n\
-                    The server is SINGLE-THREADED (the Rc-shared heap is not Send), so it handles one\n\
-                    connection at a time. Bind 127.0.0.1 (the default) on untrusted networks, and use\n\
-                    --timeout so a slow/idle client cannot wedge it (slowloris). A per-connection\n\
+                    Concurrency (--workers, M6 W3): each request is handled on its own worker thread\n\
+                    with its own value heap (the Rc heap is never shared — values don't cross threads),\n\
+                    so the server scales across CPU cores. Default = number of cores; --workers 1 is the\n\
+                    single-threaded server. Bind 127.0.0.1 (the default) on untrusted networks, and use\n\
+                    --timeout so a slow/idle client cannot wedge a worker (slowloris). A per-connection\n\
                     read/write error never ends the server — it is logged and the next connection is\n\
                     served.\n\n\
-                    usage:\n  phg serve <file> [--addr 127.0.0.1:8080] [--timeout SECONDS]\n\n\
+                    usage:\n  phg serve <file> [--addr 127.0.0.1:8080] [--timeout SECONDS] [--workers N]\n\n\
                     options:\n  \
                     --addr ADDR        host:port to bind (default 127.0.0.1:8080)\n  \
                     --timeout SECONDS  per-connection read/write timeout; 0 = none (default 30)\n  \
+                    --workers N        request concurrency; 1 = single-threaded (default = CPU cores)\n  \
                     --dev              rich HTML error page on an uncaught fault (DEV ONLY; prod = bare 500)\n\n\
                     examples:\n  \
                     phg serve examples/web/server.phg\n  \
-                    phg serve app.phg --addr 0.0.0.0:3000 --timeout 15\n"
+                    phg serve app.phg --addr 0.0.0.0:3000 --timeout 15 --workers 8\n"
         }
         _ => return help_text(),
     };
@@ -970,10 +973,12 @@ pub fn serve_program(
     addr: &str,
     timeout: Option<std::time::Duration>,
     dev: bool,
+    workers: usize,
 ) -> Result<String, String> {
     on_deep_stack(|| {
         let checked = check_and_expand(prog, diag_src)?;
-        crate::serve::serve_tcp(&checked, addr, timeout, dev).map_err(|e| format!("serve: {e}"))?;
+        crate::serve::serve_tcp(&checked, addr, timeout, dev, workers)
+            .map_err(|e| format!("serve: {e}"))?;
         Ok(String::new())
     })
 }

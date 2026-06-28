@@ -353,6 +353,15 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
 > after each feature; end every status with `GA: ~X% · Global: ~Y%`.
 
 ### Decisions Log (this round)
+- [2026-06-28] DONE: **M6 W3 — concurrent `phg serve`** (`33efa7e` spec, impl next commit). Bounded
+  OS-thread pool (`serve_pool`/`worker_loop` in `src/serve.rs`), `--workers N` (default = CPU cores,
+  `--workers 1` = single-threaded), bounded-channel backpressure, `catch_unwind` per request. No new
+  Op/Value, std-only, no unsafe; single-thread Rc hot path untouched. `tests/serve.rs` concurrency test
+  (24 clients / 4 workers). Superseded green-threads. Manual smoke: `phg serve --workers 3` serves
+  concurrent requests, banner shows worker count.
+- [2026-06-28] AGREED (developer confirmed): **M6 W3 model = Option A — bounded OS-thread pool**,
+  default `--workers` = CPU cores (`available_parallelism`), `--workers 1` = today's single-threaded
+  path, **backpressure** (bounded queue) on saturation. Green-threads rejected (dominated).
 - [2026-06-28] IN PROGRESS: **M6 W3 — serve concurrency (spec-first)**. Research finding (VERIFIED by a
   compile-time `assert_send_sync::<ast::Program>()` probe): **`ast::Program` is `Send + Sync`**, and serve
   runs the *interpreter* over `&Program` with a **per-request `Value` heap** (Rc values never cross

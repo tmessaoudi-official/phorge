@@ -249,6 +249,9 @@ fn main() {
         // `--dev` opts into the rich HTML error page on an uncaught handler fault. OFF by default:
         // production must never leak a stack trace / source (a security rule) — it returns a bare 500.
         let mut dev = false;
+        // `--workers N` request concurrency (M6 W3). 0 (the sentinel) = auto = CPU cores; 1 = the
+        // single-threaded path. Resolved after parsing.
+        let mut workers: usize = 0;
         let mut i = 2;
         while i < args.len() {
             match args[i].as_str() {
@@ -273,6 +276,17 @@ fn main() {
                     dev = true;
                     i += 1;
                 }
+                "--workers" => {
+                    workers = args
+                        .get(i + 1)
+                        .and_then(|s| s.parse::<usize>().ok())
+                        .filter(|n| *n >= 1)
+                        .unwrap_or_else(|| {
+                            eprintln!("phg serve: --workers expects a positive whole number");
+                            exit(2);
+                        });
+                    i += 2;
+                }
                 a if !a.starts_with('-') && file.is_none() => {
                     file = Some(a);
                     i += 1;
@@ -284,10 +298,19 @@ fn main() {
             }
         }
         let file = file.unwrap_or_else(|| {
-            eprintln!("usage: phg serve <file> [--addr 127.0.0.1:8080] [--timeout 30]");
+            eprintln!(
+                "usage: phg serve <file> [--addr 127.0.0.1:8080] [--timeout 30] [--workers N]"
+            );
             exit(2);
         });
         let timeout = (timeout_secs > 0).then(|| std::time::Duration::from_secs(timeout_secs));
+        // Resolve the worker count: explicit `--workers N` wins; otherwise auto = available CPU cores
+        // (fall back to 1 if the platform can't report it).
+        let workers = if workers >= 1 {
+            workers
+        } else {
+            std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get)
+        };
         let unit = match loader::load(std::path::Path::new(file)) {
             Ok(u) => u,
             Err(err) => {
@@ -295,7 +318,7 @@ fn main() {
                 exit(1);
             }
         };
-        match cli::serve_program(&unit.program, &unit.diag_src, addr, timeout, dev) {
+        match cli::serve_program(&unit.program, &unit.diag_src, addr, timeout, dev, workers) {
             Ok(text) => {
                 print!("{text}");
                 return;

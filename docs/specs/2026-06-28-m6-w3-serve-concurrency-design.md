@@ -1,7 +1,11 @@
 # M6 W3 — serve concurrency (design)
 
-> Status: design — **model + CLI defaults pending developer confirmation** (the developer asked for
-> spec-first with the model decision brought back before building). Follow-on to the existing M6 serve
+> **STATUS: ✅ IMPLEMENTED (2026-06-28).** Developer confirmed Option A (bounded thread pool, default
+> `--workers` = CPU cores, backpressure). Shipped: `serve_tcp`/`serve_tcp_pool`/`serve_pool` +
+> `worker_loop` in `src/serve.rs`, `--workers` CLI flag, the `tests/serve.rs` concurrency test (24
+> clients / 4 workers). `--workers 1` keeps the verbatim single-threaded path.
+>
+> Follow-on to the existing M6 serve
 > runtime (`src/serve.rs`: `Transport` trait + `serve()` + `TcpTransport` + `serve_tcp`, single-threaded)
 > and the W2/W2-ext router. Serve is **runtime glue, outside the byte-identity spine** (the `handle`
 > contract is unchanged); tested in `tests/serve.rs`, never in `differential.rs`.

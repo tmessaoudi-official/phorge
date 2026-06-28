@@ -6,6 +6,24 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M6 W3: concurrent `phg serve` (bounded thread pool)
+
+`phg serve` now handles requests concurrently across CPU cores instead of one at a time. Each request
+runs on its own worker thread with its **own `Rc` `Value` heap** — values never cross threads, so the
+non-`Send` heap is no obstacle; only the immutable `ast::Program` is shared (verified `Send + Sync`).
+No new `Op`, no new `Value`, the single-threaded `Rc` hot path untouched, std-only, no `unsafe`.
+
+- **`--workers N`** sets request concurrency; default = number of CPU cores
+  (`available_parallelism`); `--workers 1` is the original single-threaded server (its exact path,
+  unchanged). The main thread `accept()`s and hands each connection to the pool over a **bounded
+  channel** (capacity = workers) — when all workers are busy the accept loop blocks, giving natural
+  backpressure (no unbounded thread spawn, no dropped connection). A worker panic is caught
+  (`catch_unwind`) so one bad request never shrinks the pool.
+- This **supersedes the documented "green-threads" plan** — research showed thread-per-request is
+  feasible (and superior: real multi-core vs. green-threads' single core + unstable/unsafe std
+  machinery). Design `docs/specs/2026-06-28-m6-w3-serve-concurrency-design.md`. Serve stays outside the
+  byte-identity spine; `tests/serve.rs` gains a real-socket concurrency test (24 clients / 4 workers).
+
 ### Added — M6 W2 extensions: `#[Route]` on class methods (W2-ext complete)
 
 `#[Route(...)]` may now annotate a **static** class method, so a class is a tidy namespace of route

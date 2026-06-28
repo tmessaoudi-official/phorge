@@ -331,3 +331,44 @@ fn tcp_smoke() {
     s.read_to_end(&mut resp).expect("read response");
     assert_eq!(resp, http("HTTP/1.1 200 OK", "home"));
 }
+
+/// M6 W3 — the worker pool serves many concurrent connections correctly. 24 clients hit a 4-worker
+/// pool at once; every one must get the exact `home` response (correctness under concurrency — no
+/// deadlock, no interleaved/corrupted responses, no lost connection). Real sockets on an ephemeral
+/// port. Robust by construction (asserts correctness of all responses, not flaky wall-clock overlap).
+#[test]
+fn pool_serves_concurrent_connections() {
+    use phorge::serve::serve_pool;
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+
+    let prog = program();
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
+    let addr = listener.local_addr().expect("addr");
+    // Detached 4-worker pool (blocks forever in accept; the process exits at end of test).
+    std::thread::spawn(move || {
+        let _ = serve_pool(listener, &prog, None, false, 4);
+    });
+
+    let expected = http("HTTP/1.1 200 OK", "home");
+    let clients: Vec<_> = (0..24)
+        .map(|_| {
+            std::thread::spawn(move || {
+                let mut s = TcpStream::connect(addr).expect("connect");
+                s.write_all(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n")
+                    .expect("write");
+                let mut resp = Vec::new();
+                s.read_to_end(&mut resp).expect("read");
+                resp
+            })
+        })
+        .collect();
+
+    for (i, c) in clients.into_iter().enumerate() {
+        let resp = c.join().expect("client thread");
+        assert_eq!(
+            resp, expected,
+            "concurrent client {i} got the wrong response"
+        );
+    }
+}

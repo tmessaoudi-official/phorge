@@ -254,9 +254,13 @@ Shipped: **W0** (`bytes` primitive + `b"…"` literals + `Core.Bytes`), **W1** (
 behind the `Transport` trait, tested via `tests/serve.rs` outside the spine), and **W4** (`phg serve` +
 the PHP front-controller `examples/web/server.php`, full served app `examples/web/server.phg`).
 **`Core.Json`** (parse/stringify/stringifyPretty) layers on top — `examples/web/json-api.phg` is a
-byte-identity-gated JSON endpoint over the same `handle` contract. Deferred (later M6): middleware /
-closure routes, regex route constraints, attribute targets beyond free functions, and green-threaded
-concurrency under the *unchanged* contract. Design `docs/specs/2026-06-18-m6-web-design.md`.
+byte-identity-gated JSON endpoint over the same `handle` contract. **W3 concurrency** (later add):
+`phg serve --workers N` is a bounded OS-thread pool — one request per worker, each its own `Rc` heap
+(values never cross threads; `ast::Program` is `Send + Sync`), default = CPU cores, `--workers 1` =
+single-threaded. This **superseded the planned green-threads** (dominated: single-core + unstable/unsafe
+std machinery); design `docs/specs/2026-06-28-m6-w3-serve-concurrency-design.md`. Deferred (later M6):
+optional/wildcard route segments, instance-controller routing. Design
+`docs/specs/2026-06-18-m6-web-design.md`.
 
 ## M7 — Correctness closure — ✅ COMPLETE (2026-06-19, `1c6119d` / `ac9bda8`)
 

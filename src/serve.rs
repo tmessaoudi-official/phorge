@@ -6,14 +6,20 @@
 //! runtime only shuttles raw bytes to a single Phorge entry **`respond(bytes) -> bytes`** ([`SERVE_ENTRY`])
 //! and writes the result back. HTTP/1.1, `Connection: close`, one request per accepted connection.
 //!
-//! Single-threaded by FORCE: the `Rc`-shared heap (P5a) makes `Value` non-`Send`, so a thread pool
-//! is impossible; real concurrency arrives with M6 green-threads under this unchanged contract.
+//! Concurrency (M6 W3): a bounded OS-thread pool, **one request per worker thread, each with its own
+//! `Rc` `Value` heap** — values never cross threads, so the non-`Send` heap is no obstacle (the
+//! `ast::Program` shared across workers IS `Send + Sync`). `--workers N` (default = CPU cores);
+//! `--workers 1` keeps the original single-threaded path. This supersedes the old "green-threads"
+//! plan (which would have been single-core + needs unstable/unsafe std machinery) — see
+//! `docs/specs/2026-06-28-m6-w3-serve-concurrency-design.md`.
 use crate::ast::Program;
 use crate::interpreter::call_named;
 use crate::value::Value;
 use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::rc::Rc;
+use std::sync::mpsc::sync_channel;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// The default Phorge entry the runtime calls per request: `respond(bytes) -> bytes`.
@@ -240,32 +246,154 @@ impl Transport for TcpTransport {
     }
 }
 
-/// Bind `addr` and serve until killed — the blocking accept-loop `phg serve` calls (W4). `timeout`
-/// is the per-connection read/write timeout (GA blocker B4); `None` disables it.
+/// Bind `addr` and serve until killed — the blocking accept-loop `phg serve` calls (W4/W3). `timeout`
+/// is the per-connection read/write timeout (GA blocker B4); `None` disables it. `workers` is the
+/// request concurrency: `<= 1` keeps the single-threaded path (verbatim pre-W3 behaviour); `> 1`
+/// runs an OS-thread pool, one request per worker thread, each with its own `Rc` `Value` heap
+/// (`ast::Program` is `Send + Sync` and values never cross threads — M6 W3 design).
 pub fn serve_tcp(
     program: &Program,
     addr: &str,
     timeout: Option<Duration>,
     dev: bool,
+    workers: usize,
 ) -> io::Result<()> {
-    let mut t = TcpTransport::bind(addr)?;
-    t.set_timeout(timeout);
-    eprintln!("phg serve: listening on http://{}", t.local_addr()?);
+    if workers <= 1 {
+        let mut t = TcpTransport::bind(addr)?;
+        t.set_timeout(timeout);
+        eprintln!("phg serve: listening on http://{}", t.local_addr()?);
+        serve_banner(timeout, dev, 1);
+        return serve(program, &mut t, dev);
+    }
+    serve_tcp_pool(program, addr, timeout, dev, workers)
+}
+
+/// The startup banner (bind/timeout/workers + the untrusted-network note).
+fn serve_banner(timeout: Option<Duration>, dev: bool, workers: usize) {
     if dev {
         eprintln!(
             "phg serve: --dev — rich HTML error pages on fault (DEV ONLY, leaks traces/source)"
         );
     }
+    let conc = if workers <= 1 {
+        "single-threaded".to_string()
+    } else {
+        format!("{workers} workers")
+    };
     match timeout {
         Some(d) => eprintln!(
-            "phg serve: per-connection timeout {}s; single-threaded — bind 127.0.0.1 on untrusted networks",
+            "phg serve: per-connection timeout {}s; {conc} — bind 127.0.0.1 on untrusted networks",
             d.as_secs()
         ),
         None => eprintln!(
-            "phg serve: no connection timeout (pass --timeout); single-threaded — bind 127.0.0.1 on untrusted networks"
+            "phg serve: no connection timeout (pass --timeout); {conc} — bind 127.0.0.1 on untrusted networks"
         ),
     }
-    serve(program, &mut t, dev)
+}
+
+/// The W3 concurrent server: a fixed pool of `workers` threads, each handling one request at a time
+/// with its own heap. The main thread `accept()`s and hands each `TcpStream` to the pool over a
+/// **bounded** channel (capacity = `workers`) — when every worker is busy and the queue is full,
+/// `accept` blocks, giving natural backpressure (no unbounded spawn, no dropped connection). The
+/// immutable program is shared via `Arc` (`Program: Send + Sync`); a worker panic is caught so one bad
+/// request never kills a worker.
+fn serve_tcp_pool(
+    program: &Program,
+    addr: &str,
+    timeout: Option<Duration>,
+    dev: bool,
+    workers: usize,
+) -> io::Result<()> {
+    let listener = TcpListener::bind(addr)?;
+    eprintln!("phg serve: listening on http://{}", listener.local_addr()?);
+    serve_banner(timeout, dev, workers);
+    serve_pool(listener, program, timeout, dev, workers)
+}
+
+/// The pool accept-loop over an already-bound `listener` — the testable seam (a test binds
+/// `127.0.0.1:0`, reads `local_addr`, then drives this with real concurrent clients). `workers >= 1`.
+pub fn serve_pool(
+    listener: TcpListener,
+    program: &Program,
+    timeout: Option<Duration>,
+    dev: bool,
+    workers: usize,
+) -> io::Result<()> {
+    let program = Arc::new(program.clone());
+    let (tx, rx) = sync_channel::<TcpStream>(workers);
+    let rx = Arc::new(Mutex::new(rx));
+    for _ in 0..workers {
+        let program = Arc::clone(&program);
+        let rx = Arc::clone(&rx);
+        // Each worker outlives `serve_tcp_pool` (which blocks forever in the accept loop), so it never
+        // needs joining; the process exits when killed.
+        std::thread::spawn(move || worker_loop(&program, &rx, timeout, dev));
+    }
+
+    let mut consecutive_errors = 0usize;
+    loop {
+        match listener.accept() {
+            Ok((stream, _peer)) => {
+                consecutive_errors = 0;
+                // Blocks when the bounded queue is full → backpressure. Errors only if every worker
+                // has gone (all receivers dropped) — then the pool is dead and we stop.
+                if tx.send(stream).is_err() {
+                    return Ok(());
+                }
+            }
+            Err(e) => {
+                consecutive_errors += 1;
+                eprintln!("serve: accept error (skipped): {e}");
+                if consecutive_errors >= MAX_CONSECUTIVE_TRANSPORT_ERRORS {
+                    eprintln!(
+                        "serve: {consecutive_errors} consecutive accept errors — shutting down"
+                    );
+                    return Err(e);
+                }
+            }
+        }
+    }
+}
+
+/// One pool worker: pull a connection, frame+handle+write it with this thread's own heap, repeat.
+/// `respond_once` already degrades a fault to a 500 (never panics, EV-7); the `catch_unwind` is a
+/// belt-and-suspenders guard so an unexpected interpreter panic (e.g. a stack-depth edge) recovers
+/// the worker instead of silently shrinking the pool.
+fn worker_loop(
+    program: &Program,
+    rx: &Mutex<std::sync::mpsc::Receiver<TcpStream>>,
+    timeout: Option<Duration>,
+    dev: bool,
+) {
+    loop {
+        // Hold the lock only to dequeue; release it before handling so workers run concurrently.
+        let stream = {
+            let guard = rx.lock().unwrap_or_else(|e| e.into_inner());
+            guard.recv()
+        };
+        let Ok(mut stream) = stream else {
+            return; // channel closed → the server is shutting down
+        };
+        if let Some(t) = timeout {
+            let _ = stream.set_read_timeout(Some(t));
+            let _ = stream.set_write_timeout(Some(t));
+        }
+        let handled = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            match read_http_request(&mut stream) {
+                Ok(raw) => {
+                    let response = respond_once(program, &raw, dev);
+                    if let Err(e) = stream.write_all(&response).and_then(|()| stream.flush()) {
+                        eprintln!("serve: send failed (connection dropped): {e}");
+                    }
+                }
+                Err(e) => eprintln!("serve: dropping connection (read error): {e}"),
+            }
+        }));
+        if handled.is_err() {
+            eprintln!("serve: worker recovered from a panic on one request");
+        }
+        // `stream` drops here → connection closes (Connection: close).
+    }
 }
 
 /// Cap a single request at 8 MiB — keeps a hostile or runaway client from exhausting memory (EV-7).

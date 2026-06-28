@@ -554,7 +554,10 @@ or simply unavailable, never a crash):
   `router.use(mw)`, `router.group(prefix, build)`, `{name:regex}` constraints, and `#[Route]` on
   **static** methods all work. Still deferred: optional segments / wildcards, **instance-controller
   routing** (a `#[Route]` method must be `static` — `E-ROUTE-METHOD-STATIC` — there is no
-  controller-instance lifecycle yet), and the W3 serve/concurrency runtime. A group's middleware is
+  controller-instance lifecycle yet). **W3 concurrency shipped:** `phg serve --workers N` is a bounded
+  OS-thread pool (one request per worker, each its own heap), default = CPU cores, `--workers 1` =
+  single-threaded; remaining serve work is refinement (HTTP keep-alive — today is `Connection: close`
+  one request per connection; graceful shutdown/join; per-worker metrics). A group's middleware is
   composed into its routes at merge time; deeply-nested group middleware ordering beyond one level is
   not specially tested.
 - **Route constraints depend on `Core.Regex`** — importing `Core.Http` now also pulls in `Core.Regex`
