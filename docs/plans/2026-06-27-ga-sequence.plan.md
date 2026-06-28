@@ -341,3 +341,70 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
 - [ ] 6. M-NUM S4
 - [ ] 7. lift L5
 - [ ] 8. release-readiness
+
+## Post-rock-3 locked sequence (2026-06-28, developer-chosen; fully autonomous)
+
+> The 3 locked items (overloaded statics → LSP v2 → rock 3) are DONE (commits `027f0fc`…`c71fba8`,
+> 6 ahead of origin). Developer will **compact + push** those, then I run the NEXT sequence fully
+> autonomously (persistent project bypass ON). Run order: **(1) conformance breadth → (2) M6 W2
+> router+attributes → (3) M2.5 Phase 3a**. Each: spec-first where non-trivial, TDD, byte-identity-gated
+> (run≡runvm≡real PHP 8.5), commit green, **NEVER push**, recommended-defaults at remaining sub-forks,
+> stop only for a *fundamental* design fork or a risky/destructive action. Rebuild the release binary
+> after each feature; end every status with `GA: ~X% · Global: ~Y%`.
+
+### Decisions Log (this round)
+- [2026-06-28] AGREED: sequence after push/compact = **(1) finish conformance breadth → (2) M6 W2
+  router → (3) M2.5 Phase 3**. (Developer: "we do 2 then 1 then 3" = option2→option1→option3.)
+- [2026-06-28] AGREED: **M2.5 = Phase 3a ONLY** (CI stub registry + download-and-cache + baked sha256
+  manifest + release workflow — zero credentials). **Phase 3b DEFERRED** (`--sign` Authenticode/
+  codesign/notarize + macOS stub — needs certs + a Mac SDK; can't provision autonomously).
+- [2026-06-28] AGREED: **M6 W2 = Router + FULL path params + the attribute system, NOW** (developer
+  overruled my "static-exact-match + design-attrs-next" rec; chose the full milestone). My challenges,
+  resolved:
+  - *Params now*: YES — routing is pure/deterministic (the determinism concern is W3's socket, not
+    routing); params ride **PSR-15-style as Request attributes** so the locked `handle(Request) ->
+    Response` contract is untouched. **Precedence: literal segment beats param segment**
+    (most-specific-first); first-registered breaks a true tie; 404 fallback. `req.param("id") -> string?`.
+  - *Attributes now*: built this milestone. Sub-forks pre-decided (recommended defaults, in the spec):
+    **syntax = PHP-8 `#[Route("GET", "/users/{id}")]`** (new lexer/parser/AST surface; parse `#[Name(args)]`
+    generally, wire only `Route` this milestone); **mechanism = COMPILE-TIME DESUGAR, not runtime
+    reflection** — collect `#[Route]`-annotated free functions at load/check and lower
+    `Http.autoRouter() -> Router` into explicit `new Router()` + `.route(method, path, handler)` per
+    collected handler (expand-before-backends discipline ⇒ byte-identity trivial, no runtime attr
+    machinery). [Verified 2026-06-28: Phorge has NO attribute syntax today — only Rust derives in the
+    compiler — so this is a genuinely new surface.]
+- [2026-06-28] AGREED: developer wants me **fully autonomous** for the whole sequence; asked all
+  questions up front; no further blocking forks (sub-decisions defaulted + documented).
+
+### Item 1 — conformance breadth (fork-free)
+Add the remaining stable-tier (`STABILITY.md`) constructs as golden conformance programs
+(run≡runvm≡real PHP, glob-gated by `tests/conformance.rs`): mutation/loops (while/do/C-for,
+compound-assign, ++/--), visibility (public/private/protected access), property hooks, lambdas+pipe,
+foreach (+ `with i`), text-blocks (`"""…"""`) + raw strings, default parameters, ranges. ~8 programs.
+
+### Item 2 — M6 W2 router + attributes (milestone, spec-first)
+Spec → `docs/specs/2026-06-28-m6-w2-router-attributes-design.md`. Build order:
+(a) **Router** class (pure Phorge, on the injected Core.Http Request/Response): `route(string method,
+string pattern, handler)` + `handle(Request) -> Response`; segment matcher with `{name}` capture →
+Request attributes (`req.param`); literal>param precedence; first-registered tie-break; 404 fallback.
+Byte-identity-gated + a guide/conformance example.
+(b) **`#[...]` attribute syntax**: lexer (`#[`), parser (item-level attribute list on free functions —
+`#[Route("GET","/p")]`), AST (`Attribute{name, args}` on `FunctionDecl`). General parse; only `Route`
+semantically recognized this milestone (others → a clean "unknown attribute" error or ignored — decide
+in spec, recommend a soft `W-UNKNOWN-ATTRIBUTE` or hard `E-UNKNOWN-ATTRIBUTE`; lean hard-error for
+safety).
+(c) **Auto-registration**: `Http.autoRouter()` (injected) collected + lowered at the
+`check_and_expand`/loader chokepoint into explicit registration of every `#[Route]` handler (handlers
+referenced as first-class fn values). All three backends see explicit registration ⇒ byte-identical.
+(d) Example (`examples/web/router.phg` or guide), conformance program, `phg explain` for new codes,
+README/CHANGELOG/KNOWN_ISSUES. (W3 socket serve runtime stays the next slice; W2 is pure + gated.)
+
+### Item 3 — M2.5 Phase 3a (CI stub registry; NO signing)
+Spec already exists: `docs/specs/2026-06-17-m2.5-phase3a-stub-registry-design.md`. Build: `bundle/
+sha256.rs` (std SHA-256), `bundle/manifest.rs` (parse + lookup + `registry_base` via Cargo.toml
+`repository` / `PHORGE_STUB_REGISTRY` / `PHORGE_STUB_MANIFEST` overrides), `download_stub()` 3-way
+branch in `bundle/cross.rs::build_stub` (cache→local-build→download), `build.rs` bakes the per-target
+sha256 manifest into the released `x86_64-linux-gnu` primary, `.github/workflows/release.yml`
+(build stubs → hash → bake → publish), `Cargo.toml` `repository`. Integrity gate (sha256 mismatch →
+fault), EV-7 checked arithmetic. `tests/build.rs` fixture coverage (offline; a fake manifest+stub).
+Phase 3b (signing/macOS) DEFERRED in KNOWN_ISSUES.
