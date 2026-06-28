@@ -47,6 +47,10 @@ impl Transpiler {
             if self.variants.contains(name) {
                 return Ok(format!("new {}({argv})", self.variant_ref(name)));
             }
+            // M8.5: construct a foreign PHP class as `new \Name(…)` (global).
+            if self.foreign_classes.contains(name) {
+                return Ok(format!("new \\{name}({argv})"));
+            }
             if self.classes.contains(name) {
                 return Ok(format!("new {}({argv})", php_type_ref(name)));
             }
@@ -249,6 +253,11 @@ impl Transpiler {
             // namespaced mode).
             if !*safe {
                 if let Expr::Ident(cls, _) = &**object {
+                    // M8.5: a static call on a foreign class → `\Name::method(…)` (global).
+                    if !self.is_local(cls) && self.foreign_classes.contains(cls) {
+                        let a = self.emit_args(args)?;
+                        return Ok(format!("\\{cls}::{name}({a})"));
+                    }
                     if !self.is_local(cls) && self.classes.contains(cls) {
                         let a = self.emit_args(args)?;
                         return Ok(format!("{}::{name}({a})", php_type_ref(cls)));

@@ -111,6 +111,12 @@ impl Transpiler {
                 }
                 Item::Class(c) => {
                     self.classes.insert(c.name.clone());
+                    // M8.5: a foreign class is also indexed as foreign — its definition is suppressed and
+                    // construction/static calls take the `\Name` global form. Its members' return kinds
+                    // are still recorded below so a foreign method result is a typed operand.
+                    if c.foreign {
+                        self.foreign_classes.insert(c.name.clone());
+                    }
                     // T6b: record this class's own field/hook/promoted-ctor-param operand kinds and
                     // its parents, so field reads (`p.x`, `this.x`) resolve to a native operand.
                     self.class_parents.insert(c.name.clone(), c.extends.clone());
@@ -209,6 +215,8 @@ impl Transpiler {
                     self.emit_free_fn(&program.items, f, &mut emitted_overloads)?
                 }
                 Item::Enum(e) => self.emit_enum(e)?,
+                // M8.5: a foreign `declare class` produces no PHP definition (PHP already has it).
+                Item::Class(c) if c.foreign => {}
                 Item::Class(c) => {
                     // M-RT S6b: multiple inheritance lowers to traits/interfaces (PHP has no MI).
                     if c.extends.len() >= 2 {

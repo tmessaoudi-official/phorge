@@ -1,0 +1,31 @@
+// M8.5 S2 interop — calling an existing PHP class from Phorge via `declare class`.
+//
+// PHP-target-only (like all of examples/interop/): `phg run`/`runvm` refuse it (E-FOREIGN-RUNTIME);
+// build with `phg transpile classes.phg > out.php && php out.php`. The `declare class` describes PHP's
+// built-in DateTimeImmutable so Phorge type-checks construction, instance methods, and static methods;
+// it emits no PHP class definition and references take the global form (`new \DateTimeImmutable`,
+// `$d->format(...)`, `\DateTimeImmutable::createFromFormat(...)`).
+package Main;
+
+import Core.Console;
+
+declare class DateTimeImmutable {
+    constructor(string datetime);
+    function format(string fmt): string;
+    static function createFromFormat(string fmt, string datetime): DateTimeImmutable;
+}
+
+function main(): void {
+    // Construct + instance method.
+    DateTimeImmutable d = new DateTimeImmutable("2023-11-14 22:13:20");
+    Console.println(d.format("Y-m-d"));
+    // 2023-11-14
+    Console.println(d.format("H:i:s"));
+    // 22:13:20
+    // Static factory + a chained instance call. ('D' is locale-independent English.)
+    DateTimeImmutable leap = DateTimeImmutable.createFromFormat("Y-m-d", "2024-02-29");
+    Console.println(leap.format("l"));
+    // Thursday
+    Console.println(leap.format("Y-m-d"));
+}
+// 2024-02-29

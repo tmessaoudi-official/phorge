@@ -19,6 +19,10 @@ impl Checker {
                 // does not apply. Its parameter names are never emitted, so they are exempt too.
                 Item::Function(f) if f.foreign => {}
                 Item::Function(f) => self.check_fn_casing(f),
+                // M8.5: a foreign `declare class` carries real PHP member names — exempt from casing,
+                // like a foreign function. Its type name still follows PascalCase (checked below would be
+                // wrong only if PHP used a non-Pascal class name; foreign class names are PascalCase).
+                Item::Class(c) if c.foreign => self.want_type_case(&c.name, c.span),
                 Item::Class(c) => {
                     self.want_type_case(&c.name, c.span);
                     // Generic class type parameters are type names — PascalCase (M-RT generics-all).

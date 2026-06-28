@@ -219,6 +219,10 @@ impl Printer<'_> {
     }
 
     fn class(&mut self, c: &ClassDecl) -> Result<(), String> {
+        // M8.5: a foreign `declare class` prints as bodyless member signatures.
+        if c.foreign {
+            return self.declare_class(c);
+        }
         // `abstract` implies `open`, so emit only the stronger keyword.
         let prefix = if c.is_abstract {
             "abstract "
@@ -251,6 +255,38 @@ impl Printer<'_> {
         }
         for m in &c.members {
             self.member(m)?;
+        }
+        self.indent -= 1;
+        self.line("}");
+        Ok(())
+    }
+
+    /// Print a foreign `declare class` (M8.5 S2): bodyless member signatures terminated by `;`.
+    fn declare_class(&mut self, c: &ClassDecl) -> Result<(), String> {
+        self.line(&format!("declare class {} {{", c.name));
+        self.indent += 1;
+        for m in &c.members {
+            match m {
+                ClassMember::Constructor { params, .. } => {
+                    let ps = self.ctor_params(params)?;
+                    self.line(&format!("constructor({ps});"));
+                }
+                ClassMember::Method(f) => {
+                    let sig = self.fn_signature(f)?;
+                    self.line(&format!("{sig};"));
+                }
+                ClassMember::Field {
+                    modifiers,
+                    ty: t,
+                    name,
+                    ..
+                } => {
+                    let mods = modifiers_str(modifiers);
+                    self.line(&format!("{mods}{} {name};", ty(t)?));
+                }
+                // Hooks never appear in a foreign class (only ctor/method/field signatures parse).
+                ClassMember::Hook { .. } => {}
+            }
         }
         self.indent -= 1;
         self.line("}");

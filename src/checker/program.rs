@@ -196,6 +196,10 @@ impl Checker {
         for item in &program.items {
             match item {
                 Item::Function(f) => self.check_function(f),
+                // M8.5: a foreign `declare class` has only bodyless member signatures (its bodies live
+                // in PHP) — skip body/definite-assignment/totality validation. It is still registered for
+                // member-call resolution by the collect pass, so `new Name(…)` / `o.m(…)` type-check.
+                Item::Class(c) if c.foreign => {}
                 Item::Class(c) => self.check_type_body(&c.name, &c.type_params, &c.members),
                 // M-RT S8: a trait's method/ctor/hook bodies are checked once, in trait context
                 // (correct spans, no double-reporting), with the trait's own collected members as

@@ -127,6 +127,11 @@ struct Transpiler {
     /// `\name(…)` (so it resolves to the PHP builtin even inside a namespace block). Kept separate from
     /// `funcs` so the emit loop skips them and `emit_call` routes them to the `\`-prefixed form.
     foreign_fns: HashSet<String>,
+    /// Foreign PHP classes declared via `declare class … { … }` (M8.5 S2). Also kept in `classes` so
+    /// construction and member-call resolution work; this set additionally routes construction to
+    /// `new \Name(…)` and static calls to `\Name::s(…)` (global PHP), and suppresses the class
+    /// definition (PHP already has it). Instance method/field access (`$o->m`, `$o->f`) needs no name.
+    foreign_classes: HashSet<String>,
     classes: HashSet<String>,
     /// `(class, NAME)` pairs that name a `const` class constant (Feature A), inheritance/traits already
     /// flattened (the shared [`crate::ast::class_consts`] table). A `ClassName.NAME` access whose pair
@@ -480,6 +485,7 @@ impl Transpiler {
         Transpiler {
             funcs: HashSet::new(),
             foreign_fns: HashSet::new(),
+            foreign_classes: HashSet::new(),
             classes: HashSet::new(),
             consts: HashSet::new(),
             variants: HashSet::new(),

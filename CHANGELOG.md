@@ -6,6 +6,21 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M8.5 S2: foreign-PHP classes (`declare class`)
+
+Foreign PHP **classes** — call a PHP library class (e.g. `DateTimeImmutable`, `PDO`) from Phorge,
+type-checked, transpiling to idiomatic PHP. **No new `Op`/`Value`.**
+
+- **`declare class Name { constructor(params); [static] function m(params) -> ret; [public] Type f; }`**
+  — bodyless member signatures. Construction transpiles to `new \Name(...)`, an instance method to
+  `$o->m(...)`, a static method to `\Name::s(...)`, a field read to `$o->f`; the class emits no PHP
+  definition. The checker skips body/totality/definite-assignment for a foreign class (its bodies live
+  in PHP) but registers it for member-call resolution, so `new`, method, and static calls type-check.
+- Member names keep their real PHP spelling (casing-exempt); the class name stays PascalCase. `phg fmt`
+  round-trips `declare class`. `examples/interop/classes.phg` (a `DateTimeImmutable` walkthrough, gated by
+  `tests/interop.rs`). **M8.5 is now CORE COMPLETE** (S1 functions + S2 classes); `.d.phg` declaration
+  files and foreign-exception `catch` (S3) remain deferred.
+
 ### Added — M8.5 S1: foreign-PHP interop (`declare function`)
 
 The migration bridge — call existing PHP from Phorge, type-checked, transpiling to idiomatic PHP

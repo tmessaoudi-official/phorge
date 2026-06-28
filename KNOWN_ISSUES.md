@@ -687,8 +687,11 @@ to `\name(...)`. Interop is a **migration bridge**, transpile-target-only by nat
   the PHP runtime. `check`/`transpile` work; run it via `phg transpile app.phg > app.php && php app.php`.
   This is by design (the byte-identity spine covers pure Phorge only); such programs are quarantined from
   the `differential.rs` oracle and gated by `tests/interop.rs` (transpile → real PHP golden).
-- **`declare class` (foreign PHP classes) and `.d.phg` declaration files are not yet implemented** (M8.5
-  S2/S3). Foreign-exception `catch` is S3.
+- **`declare class` (foreign PHP classes) shipped (S2):** constructor / instance methods / static
+  methods / public fields → `new \Name`, `$o->m`, `\Name::s`, `$o->f`. Scope: `package Main`, no
+  `extends`/`implements` on a foreign class, no foreign generics.
+- **`.d.phg` declaration files and foreign-exception `catch` are not yet implemented** (M8.5 S3). Inline
+  `declare` in the program covers the core today.
 - **No foreign generics, no namespaced foreign imports beyond a single leading `\`**, no automatic
   `.d.phg` generation from PHP, no Composer-package declaration bundling.
 - A `declare`d function's parameter *names* are never emitted, so they are not casing-checked; the
