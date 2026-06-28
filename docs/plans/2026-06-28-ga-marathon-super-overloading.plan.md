@@ -23,8 +23,21 @@
   names stay bare (existing programs byte-identical). Param-overloads stay runtime-dispatched.
 
 ## Specs
-- `docs/specs/2026-06-28-must-use-and-return-type-overloading-design.md` — written, committed `ef086bb`, user-approved.
-- super/parent dispatch — design pending (step 1).
+- `docs/specs/2026-06-28-must-use-and-return-type-overloading-design.md` — written, user-approved (syntax-fixed).
+- `docs/specs/2026-06-28-super-parent-dispatch-design.md` — written; pending review.
+
+## super/parent decisions (locked this session)
+- Syntax: `parent.m()` (immediate) / `parent(A).m()` (qualified, call-style). Contextual keyword.
+- Chaining: **explicit only** (no auto-chain); `parent(A)` may name **any** transitive ancestor
+  (C++-style jump allowed). Bare `parent.m()` ambiguous in MI → `E-PARENT-AMBIGUOUS`.
+- Methods **and** constructors; MI ctor = `parent(P).constructor(args)` per parent. Fields out of scope.
+- PHP emission VERIFIED against real 8.5: single-inh native (`parent::`/`A::m()`/`parent::__construct`),
+  MI via trait `use`+`insteadof`+`as` aliasing. **Prerequisite:** complete the multi-of-multi trait
+  lowering (currently a KNOWN_ISSUE) first/with the feature.
+- Error codes: `E-PARENT-AMBIGUOUS`, `E-PARENT-NOT-ANCESTOR`, `E-PARENT-NO-METHOD`,
+  `E-PARENT-OUTSIDE-METHOD`, `E-PARENT-NO-PARENT`.
+- Stale-syntax lesson: Phorj returns are `: Type` (not `-> Type`); typed local is `T x =` (no `var T x`);
+  function-types use `=>`.
 
 ## Status
 - DONE (pre-marathon-extension): M-perf S1b slot-indexed fields (`6b71232`) + S2 VM inline cache
