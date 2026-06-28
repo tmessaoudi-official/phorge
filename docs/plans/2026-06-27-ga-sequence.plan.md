@@ -353,6 +353,18 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
 > after each feature; end every status with `GA: ~X% · Global: ~Y%`.
 
 ### Decisions Log (this round)
+- [2026-06-28] DONE: **M6 W2-ext slice 1 — middleware + route groups** (`f01035e`): `router.use(mw)`
+  (`(Request,next)->Response`, short-circuit or pass-through) + `router.group(prefix, build)`; pure
+  Phorge, no new Op/Value, byte-identical 3-way. Also fixed two latent VM-compiler CTy gaps found while
+  prototyping: a native-qualified call as an arithmetic operand (`e44bc29`) and a static-method call as
+  a fn-value (folded into `f01035e`). **NEXT: slice 2 (regex/typed route constraints `{id:\d+}` via
+  Core.Regex) → slice 3 (`#[Route]` on class methods).** Spec `docs/specs/2026-06-28-m6-w2-extensions-design.md`.
+- [2026-06-28] AGREED: **after the 3 locked items (all ✅ DONE), next milestone = M6 W2 EXTENSIONS**,
+  built in slices: **(1) middleware + route groups (closure-pipeline)** → (2) regex/typed route
+  constraints (`{id:\d+}`, via Core.Regex) → (3) `#[Route]` attributes on class methods. Developer
+  picked my recommended order (web spine before stepping to other parity tracks; W3 concurrency is the
+  later capstone). `git push` + cutting a `v*` tag (to exercise `stub-registry.yml`) stays the
+  developer's action. Run fully autonomous, spec-first, byte-identity-gated, never push.
 - [2026-06-28] AGREED: sequence after push/compact = **(1) finish conformance breadth → (2) M6 W2
   router → (3) M2.5 Phase 3**. (Developer: "we do 2 then 1 then 3" = option2→option1→option3.)
 - [2026-06-28] AGREED: **M2.5 = Phase 3a ONLY** (CI stub registry + download-and-cache + baked sha256
