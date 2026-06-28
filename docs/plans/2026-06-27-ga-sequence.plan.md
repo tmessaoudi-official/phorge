@@ -17,6 +17,54 @@
   (`cmd_lift`, full `src/lift/`). M4 stdlib **breadth is largely built** (sort/map/list/text/set/
   as-cast/parseFloat). So the remaining work is lighter than the milestone titles imply.
 
+## Post-LSP autonomous run — locked plan (2026-06-28, developer front-loaded all decisions)
+> Developer will **push** the 6 commits themselves, then I run the below **fully autonomously** after a
+> compaction. Persistent project autonomy bypass set (`~/.claude/projects/-stack-projects-phorge/state/
+> autonomous-3c-bypass`). Recommended-defaults at every non-pre-decided fork; commit green slices;
+> **never push**; only stop for a fundamental design fork or a risky/destructive action.
+> **Run order: (1) overloaded statics → (2) LSP v2 → (3) rock 3.**
+- [2026-06-28] AGREED: **option 4 = BOTH** (overloaded statics + LSP v2), then rock 3.
+- [2026-06-28] AGREED: **overloaded statics (Item C Area B) = runtime VM dispatch** — add a VM
+  static-overload dispatch (new `Op` or `CallOverload` variant that pushes the dummy receiver +
+  selects by arg kinds via `dispatch::select_overload`, matching the interpreter) so `run≡runvm`.
+  Remove the checker's `sigs.len()>1` rejection (route through `check_method_sigs`/`check_overload_call`).
+  Op-coupling discipline (vm `exec_op` + chunk `validate` + compiler `stack_effect`) if a new Op. Add an
+  overloaded-static example + tests; un-defer in KNOWN_ISSUES.
+- [2026-06-28] AGREED: **LSP v2 = FULL** — locals/params resolution (precise go-to-def + hover for
+  local bindings, not just top-level names), true end-position ranges (thread the diagnostic/token
+  `Span.len` into LSP ranges), **completion**, and **document symbols** (outline). Needs a scope/symbol
+  model over the AST; advertise the new capabilities; extend `tests/`-style coverage in `src/lsp/`.
+- [2026-06-28] AGREED (autonomy): developer chose **all of options 1+2+3** — persistent project bypass
+  ON, proceed with recommended defaults, AND pre-decide the rock-3 forks (below).
+
+### Rock 3 (stability/conformance) — forks pre-decided (2026-06-28)
+- **R1 conformance corpus = BOTH layers** (developer's "DDD multi-file" instinct + my challenge for
+  localization, synthesized): (a) a **focused golden corpus** under `conformance/` — many small
+  one-feature-each `.phg` programs + expected stdout, the precise regression net; AND (b) a **flagship
+  multi-file/multi-package DDD program** (bounded contexts → packages, entities/value-objects/aggregates
+  → classes, folder=path, exercising the M5 package model) as a composition-at-scale conformance
+  **project**. Both byte-identity-gated (the differential is already project-aware + globs). Rationale:
+  small programs localize regressions; the DDD program proves features compose at realistic scale.
+- **R2 semver/BC = 0.x-may-break-documented, freeze at 1.0.** Write a SEMVER/stability policy: in 0.x,
+  minor versions MAY break but each is documented (CHANGELOG + a BREAKING section); at 1.0 the public
+  surface freezes under strict semver.
+- **R3 deprecation = `W-DEPRECATED` lint + policy doc.** A deprecation-policy doc + a minimal
+  `W-DEPRECATED` warning (rides the warning channel) when a stdlib symbol flagged deprecated is used,
+  naming the replacement + removal version. No new *user* syntax (a `deprecated` modifier is later).
+- **R4 stability surface = `STABILITY.md` with tiers** (stable / experimental / deprecated) enumerating
+  the public surface (CLI commands, stdlib modules, language constructs); the conformance corpus
+  enforces the `stable` tier.
+
+### Locked autonomous execution order (post-compaction, fully autonomous)
+1. **Overloaded statics** (runtime VM dispatch) — close Item C Area B; un-defer in KNOWN_ISSUES.
+2. **LSP v2 full** — locals/params resolution, true end-ranges, completion, document symbols.
+3. **Rock 3** — focused golden `conformance/` corpus + flagship DDD project + `SEMVER`/`STABILITY.md`
+   policy docs + `W-DEPRECATED` lint + deprecation-policy doc.
+Each: design-spec where non-trivial, TDD, byte-identity-gated (run≡runvm≡real PHP 8.5), commit green,
+**NEVER push**, recommended-defaults at every remaining fork, only stop for a fundamental design fork or
+a risky/destructive action. Rebuild the release binary after each feature; end every status with
+`GA: ~X% · Global: ~Y%`.
+
 ## Decision review — autonomous decisions re-confirmed/changed by the developer (2026-06-27)
 > Developer asked to review decisions made in prior autonomous sessions, keep-or-change, one by one.
 - [2026-06-27] CSV backslash escape → **KEEP** (RFC-4180, no backslash escape). Confirmed.
@@ -215,6 +263,14 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
   (`E-REGEX-UNSUPPORTED`). (API) **compiled `Regex` value + named groups** — `Regex.compile(p) ->
   Regex` (validates once, reusable), `r.matches/find/findAll/replace/split`, named-group typed match;
   transpiles to `preg_*` with the compiled pattern + `/u`.
+- [2026-06-28] ITEM D (LSP) **COMPLETE** (`f35d380` diagnostics core + `fe4d081` hover/go-to-def +
+  VS Code client). `phg lsp` — hand-rolled JSON-RPC over stdio in `std` (`src/lsp/`: minimal JSON
+  parser + framing + lifecycle + symbols index), diagnostics (reuses `phg check`), hover (decl
+  signature, source-sliced), go-to-definition (top-level name → decl span). VS Code thin client in
+  `editors/vscode/` + README "Editor support" (Neovim snippet). 14 LSP tests; 1377 green. No new
+  `Op`/`Value`. v2 deferrals: locals/name-collision resolution, true end-position ranges, incremental
+  sync. **ALL FOUR ITEMS of the "solve forks → statics → LSP" sequence are DONE. NOT pushed.** Next per
+  the GA sequence = rock 3 (stability/conformance).
 - [2026-06-28] ITEM D (LSP) design-first DELIVERED (`docs/specs/2026-06-28-lsp-design.md`) + scope
   locked. Hard constraint: an LSP server isn't security-critical → dependency policy excludes
   `tower-lsp`/`lsp-server`/`serde` → **hand-rolled JSON-RPC over stdio in std** (incl. a minimal
