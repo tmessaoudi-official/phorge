@@ -557,7 +557,14 @@ or simply unavailable, never a crash):
   controller-instance lifecycle yet). **W3 concurrency shipped:** `phg serve --workers N` is a bounded
   OS-thread pool (one request per worker, each its own heap), default = CPU cores, `--workers 1` =
   single-threaded; remaining serve work is refinement (HTTP keep-alive — today is `Connection: close`
-  one request per connection; graceful shutdown/join; per-worker metrics). A group's middleware is
+  one request per connection; graceful shutdown/join; per-worker metrics).
+- **`Core.Random` under `--workers > 1` shares one global stream.** The RNG state is a process-wide
+  `RwLock<u64>` (thread-safe — no data race), but concurrent requests draw from the *same* advancing
+  stream, so a given request's random values are not per-request reproducible under the pool (they are
+  with `--workers 1`). This is benign — and usually desirable — for a server (distinct randomness per
+  request). `Core.Regex`'s compiled-pattern cache is `thread_local`, so each worker compiles its own
+  (correct; a small per-worker memory cost). No other native holds unsynchronized global state. A group's
+  middleware is
   composed into its routes at merge time; deeply-nested group middleware ordering beyond one level is
   not specially tested.
 - **Route constraints depend on `Core.Regex`** — importing `Core.Http` now also pulls in `Core.Regex`
