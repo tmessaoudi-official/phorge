@@ -20,6 +20,7 @@ mod intersections;
 mod loops;
 mod matching;
 mod mtest;
+mod must_use;
 mod mutation;
 mod optionals;
 mod overloading;

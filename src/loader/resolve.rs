@@ -284,6 +284,7 @@ pub(super) fn resolve_stmt(stmt: Stmt, ctx: &ResolveCtx) -> Stmt {
         }
         Stmt::Block(stmts, span) => Stmt::Block(resolve_block(stmts, ctx), span),
         Stmt::Expr(e, span) => Stmt::Expr(resolve_expr(e, ctx), span),
+        Stmt::Discard(e, span) => Stmt::Discard(resolve_expr(e, ctx), span),
         Stmt::Throw { value, span } => Stmt::Throw {
             value: resolve_expr(value, ctx),
             span,

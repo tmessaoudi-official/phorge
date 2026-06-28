@@ -134,6 +134,13 @@ pub fn explain_text(code: &str) -> Option<String> {
              `x = …;` reassigns an existing local variable; the name must already be declared in\n\
              scope. Declare it first (`mutable int x = …;`), or check for a typo.\n"
         }
+        "E-UNUSED-VALUE" => {
+            "E-UNUSED-VALUE — a non-`void`/`Empty` result was used as a bare statement and dropped.\n\n\
+             Every value a function or expression produces must be used: bind it (`int x = f();`),\n\
+             return it, or pass it on. If you genuinely want the side effect and not the value,\n\
+             discard it explicitly with `discard f();`. Only `void` and `Empty` results (and a\n\
+             diverging `never` call like `panic(…)`) may be dropped silently.\n"
+        }
         "E-ASSIGN-TARGET" => {
             "E-ASSIGN-TARGET — an assignment target is not a simple variable.\n\n\
              Only `name = expr;` (reassigning a local) is supported in this slice. Field assignment\n\

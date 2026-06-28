@@ -55,7 +55,11 @@ fn stmt_line(s: &Stmt) -> u32 {
         | Stmt::Throw { span, .. }
         | Stmt::Try { span, .. }
         | Stmt::Destructure { span, .. } => span.line,
-        Stmt::Break(s) | Stmt::Continue(s) | Stmt::Block(_, s) | Stmt::Expr(_, s) => s.line,
+        Stmt::Break(s)
+        | Stmt::Continue(s)
+        | Stmt::Block(_, s)
+        | Stmt::Expr(_, s)
+        | Stmt::Discard(_, s) => s.line,
     }
 }
 

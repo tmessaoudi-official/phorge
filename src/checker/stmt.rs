@@ -14,6 +14,7 @@ impl Checker {
             | Stmt::While { span, .. }
             | Stmt::CFor { span, .. }
             | Stmt::Expr(_, span)
+            | Stmt::Discard(_, span)
             | Stmt::Block(_, span)
             | Stmt::Throw { span, .. }
             | Stmt::Try { span, .. }
@@ -236,6 +237,23 @@ impl Checker {
             }
             Stmt::Block(stmts, _) => self.check_block(stmts),
             Stmt::Expr(e, _) => {
+                // M-must-use Slice A: a non-`void`/`Empty` result used as a bare statement would be
+                // dropped silently — forbid it (`E-UNUSED-VALUE`). `discard <expr>;` is the escape hatch.
+                let t = self.check_expr(e);
+                if !matches!(t, Ty::Void | Ty::Empty | Ty::Error | Ty::Never) {
+                    self.err_coded(
+                        Self::expr_span(e),
+                        format!("unused `{t}` value"),
+                        "E-UNUSED-VALUE",
+                        Some(
+                            "a non-`void`/`Empty` result must be used; bind it or prefix `discard`"
+                                .into(),
+                        ),
+                    );
+                }
+            }
+            Stmt::Discard(e, _) => {
+                // Must-use escape hatch: type-check the expression; any result type may be dropped.
                 self.check_expr(e);
             }
             // M-faults 2b.3: `throw e` — the value must implement `Error` (`E-THROW-TYPE`), and the

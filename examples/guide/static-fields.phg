@@ -18,9 +18,11 @@ class Counter {
 }
 
 function main(): void {
-    new Counter();
-    new Counter();
-    new Counter();
+    // Each `new Counter()` bumps the shared static; we want only that side effect, so the instance
+    // is explicitly `discard`-ed (must-use rule).
+    discard new Counter();
+    discard new Counter();
+    discard new Counter();
     // Read the shared state through the class name — no instance needed.
     Console.println("{Counter.label}: {Counter.total}"); // counters created: 3
 

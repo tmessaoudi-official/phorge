@@ -220,7 +220,7 @@ pub(super) fn collect_free_stmt(
             collect_free_expr(target, bound, found);
             collect_free_expr(value, bound, found);
         }
-        Stmt::Expr(e, _) => collect_free_expr(e, bound, found),
+        Stmt::Expr(e, _) | Stmt::Discard(e, _) => collect_free_expr(e, bound, found),
         Stmt::Throw { value, .. } => collect_free_expr(value, bound, found),
         // Slice 5: the initializer is evaluated before any binder enters scope; the `else` block (run
         // on the destructure-failed path) sees *none* of the binders; then the binders enter the
@@ -360,7 +360,7 @@ pub fn lambda_uses_this(body: &LambdaBody) -> bool {
                 init, else_block, ..
             } => in_expr(init) || else_block.as_ref().is_some_and(|eb| in_stmts(eb)),
             Stmt::Block(stmts, _) => in_stmts(stmts),
-            Stmt::Expr(e, _) => in_expr(e),
+            Stmt::Expr(e, _) | Stmt::Discard(e, _) => in_expr(e),
             Stmt::Throw { value, .. } => in_expr(value),
             Stmt::Try {
                 body,

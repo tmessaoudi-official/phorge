@@ -234,7 +234,7 @@ fn field_set_via_this_in_method_is_ok() {
     let src = "class C { mutable int n; \
                      constructor(public mutable int seed) { this.n = seed; } \
                      function bump() -> int { this.n = this.n + 1; return this.n; } } \
-                   function main() -> void { C c = new C(10); c.bump(); }";
+                   function main() -> void { C c = new C(10); discard c.bump(); }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
 

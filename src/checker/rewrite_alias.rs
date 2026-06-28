@@ -186,6 +186,7 @@ pub fn expand_aliases(program: &Program) -> Program {
             Stmt::Throw { .. }
             | Stmt::Return { .. }
             | Stmt::Expr(..)
+            | Stmt::Discard(..)
             | Stmt::Assign { .. }
             | Stmt::Break(_)
             | Stmt::Continue(_) => s.clone(),

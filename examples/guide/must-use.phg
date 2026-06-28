@@ -1,0 +1,29 @@
+package Main;
+import Core.Console;
+
+// Must-use returns (M-must-use Slice A): every non-`void`/`Empty` result must be used — bound,
+// returned, or passed on. To keep only a side effect and drop the value, discard it explicitly with
+// `discard <expr>;`. A bare `f();` that drops a non-`void` result is a hard error (E-UNUSED-VALUE).
+
+function add(int a, int b): int { return a + b; }
+
+// Returns the value it recorded, but is usually called for the side effect (the print) — so callers
+// `discard` its result.
+function record(int n): int {
+    Console.println("recorded {n}");
+    return n;
+}
+
+// A `void` function: it produces no value, so its "result" may be dropped silently (no `discard`).
+function announce(string msg): void {
+    Console.println(msg);
+}
+
+function main(): void {
+    int sum = add(2, 3);             // used — bound to a typed local
+    Console.println("sum = {sum}");  // sum = 5
+
+    discard record(7);               // value explicitly discarded; the side effect (print) is kept
+
+    announce("done");                // void result — no `discard` needed
+}

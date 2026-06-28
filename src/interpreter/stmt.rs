@@ -174,7 +174,7 @@ impl Interp {
             Stmt::Break(_) => Err(Signal::Break),
             Stmt::Continue(_) => Err(Signal::Continue),
             Stmt::Block(stmts, _) => self.exec_scoped(stmts),
-            Stmt::Expr(e, _) => {
+            Stmt::Expr(e, _) | Stmt::Discard(e, _) => {
                 self.eval(e)?;
                 Ok(())
             }

@@ -91,7 +91,7 @@ impl Compiler<'_> {
                 }
                 _ => unreachable!("checker rejects other assignment targets"),
             },
-            Stmt::Expr(e, span) => {
+            Stmt::Expr(e, span) | Stmt::Discard(e, span) => {
                 self.expr(e)?;
                 self.emit(Op::Pop, span.line);
                 Ok(())

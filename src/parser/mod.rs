@@ -157,6 +157,15 @@ impl Parser {
         self.at_kw("var") && matches!(self.peek2(), TokenKind::Ident(_) | TokenKind::LBracket)
     }
 
+    /// `discard` is a contextual statement keyword (M-must-use): it opens `discard <expr>;` only when
+    /// it leads a statement *and* the next token begins a discardable expression — an identifier (a
+    /// call / method-call / qualified call) or `new`. Every real discard target starts that way, and
+    /// the gate never misfires on `discard` used as a value: `discard = e`, `discard.f`, `discard(…)`,
+    /// `discard[i]` all have a non-`Ident`/`New` follower and fall through to the expression path.
+    fn at_discard(&self) -> bool {
+        self.at_kw("discard") && matches!(self.peek2(), TokenKind::Ident(_) | TokenKind::New)
+    }
+
     /// Consume the contextual keyword `kw` (its presence already established by the caller) or error.
     fn eat_kw(&mut self, kw: &str, what: &str) -> Result<(), Diagnostic> {
         if self.at_kw(kw) {

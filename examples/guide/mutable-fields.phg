@@ -32,8 +32,9 @@ function main(): void {
     c.n = 100;
     Console.println("c.n = {c.n}, alias.n = {alias.n}"); // 100, 100
 
-    // A method mutating `this.f` is likewise visible everywhere.
-    c.bump();
-    c.bump();
+    // A method mutating `this.f` is likewise visible everywhere. `bump()` returns the new count;
+    // we call it only for the mutation, so the result is explicitly `discard`-ed (must-use rule).
+    discard c.bump();
+    discard c.bump();
     Console.println("c.n = {c.n}, alias.n = {alias.n}, hits = {alias.hits}"); // 102, 102, 2
 }

@@ -334,6 +334,7 @@ pub fn erase_generics(program: Program) -> Program {
                 Stmt::Block(stmts.iter().map(|s| rstmt(s, params)).collect(), *span)
             }
             Stmt::Expr(e, span) => Stmt::Expr(rexpr(e, params), *span),
+            Stmt::Discard(e, span) => Stmt::Discard(rexpr(e, params), *span),
             Stmt::Throw { value, span } => Stmt::Throw {
                 value: rexpr(value, params),
                 span: *span,

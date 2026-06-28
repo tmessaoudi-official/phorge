@@ -9,7 +9,7 @@ fn interface_conformance_and_subtyping_ok() {
     let src = "interface Speaker { function speak() -> string; } \
                    class Dog implements Speaker { function speak() -> string { return \"w\"; } } \
                    function announce(Speaker s) -> string { return s.speak(); } \
-                   function main() -> void { Speaker sp = new Dog(); announce(sp); }";
+                   function main() -> void { Speaker sp = new Dog(); discard announce(sp); }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
 
@@ -66,6 +66,6 @@ fn instanceof_against_interface_narrows() {
     let src = "interface Speaker { function speak() -> string; } \
                    class Dog implements Speaker { function speak() -> string { return \"w\"; } } \
                    function main() -> void { Dog d = new Dog(); \
-                     if (d instanceof Speaker) { d.speak(); } }";
+                     if (d instanceof Speaker) { discard d.speak(); } }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }

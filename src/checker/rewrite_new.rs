@@ -148,7 +148,7 @@ fn ue_stmt(s: &mut Stmt) {
                 ue_block(eb);
             }
         }
-        Stmt::Expr(e, _) | Stmt::Throw { value: e, .. } => ue_expr(e),
+        Stmt::Expr(e, _) | Stmt::Discard(e, _) | Stmt::Throw { value: e, .. } => ue_expr(e),
         Stmt::Try {
             body,
             catches,

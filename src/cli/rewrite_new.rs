@@ -142,7 +142,7 @@ impl Walker<'_> {
                 self.block(body);
             }
             Stmt::Block(b, _) => self.block(b),
-            Stmt::Expr(e, _) | Stmt::Throw { value: e, .. } => self.expr(e),
+            Stmt::Expr(e, _) | Stmt::Discard(e, _) | Stmt::Throw { value: e, .. } => self.expr(e),
             Stmt::Try {
                 body,
                 catches,

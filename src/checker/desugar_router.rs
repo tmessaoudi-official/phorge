@@ -436,6 +436,7 @@ fn rstmt(s: Stmt, r: &[Route]) -> Stmt {
         Stmt::Continue(span) => Stmt::Continue(span),
         Stmt::Block(stmts, span) => Stmt::Block(rblock(stmts, r), span),
         Stmt::Expr(e, span) => Stmt::Expr(rexpr(e, r), span),
+        Stmt::Discard(e, span) => Stmt::Discard(rexpr(e, r), span),
         Stmt::Throw { value, span } => Stmt::Throw {
             value: rexpr(value, r),
             span,

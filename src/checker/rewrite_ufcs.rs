@@ -308,6 +308,7 @@ pub fn rewrite_ufcs(program: Program, ufcs: &HashMap<usize, crate::ast::Expr>) -
             Stmt::Continue(span) => Stmt::Continue(span),
             Stmt::Block(stmts, span) => Stmt::Block(rblock(stmts, u), span),
             Stmt::Expr(e, span) => Stmt::Expr(rexpr(e, u), span),
+            Stmt::Discard(e, span) => Stmt::Discard(rexpr(e, u), span),
             Stmt::Throw { value, span } => Stmt::Throw {
                 value: rexpr(value, u),
                 span,

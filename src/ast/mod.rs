@@ -484,6 +484,12 @@ pub enum Stmt {
     Block(Vec<Stmt>, Span),
     /// `expr;`
     Expr(Expr, Span),
+    /// `discard expr;` (M-must-use Slice A) — evaluate `expr` for its side effects and **explicitly**
+    /// drop a non-`void`/`Empty` result. The escape hatch for the must-use rule: a bare `Stmt::Expr`
+    /// of non-`void`/`Empty` type is `E-UNUSED-VALUE`, but a `Discard` of any type is accepted. At
+    /// runtime and in PHP output it behaves exactly like `Stmt::Expr` (evaluate, drop) — the only
+    /// difference is checker-side (the must-use exemption) and in the formatter (prints `discard `).
+    Discard(Expr, Span),
     /// `throw expr;` (M-faults 2b). `value` is `never`-typed at the statement level (a `throw`
     /// diverges — it satisfies return-on-all-paths); the thrown value must be `<: Error`.
     Throw { value: Expr, span: Span },

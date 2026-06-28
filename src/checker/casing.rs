@@ -211,7 +211,7 @@ impl Checker {
                 self.check_expr_casing(target);
                 self.check_expr_casing(value);
             }
-            Stmt::Expr(e, _) => self.check_expr_casing(e),
+            Stmt::Expr(e, _) | Stmt::Discard(e, _) => self.check_expr_casing(e),
             Stmt::Throw { value, .. } => self.check_expr_casing(value),
             // Slice 5: each binder is a value name (camelCase wanted); recurse into init + `else`.
             Stmt::Destructure {

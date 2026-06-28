@@ -40,8 +40,21 @@ impl Parser {
             // A-6: `foreach` is a contextual keyword (like `as`/`when`) — only the `foreach (`
             // statement-leading form is the loop; a bare `foreach` ident elsewhere is unaffected.
             TokenKind::Ident(s) if s == "foreach" => self.parse_foreach(),
+            // M-must-use: `discard <expr>;` — the escape hatch for the must-use rule. Contextual
+            // (see `at_discard`); a bare `discard` value-use falls through to the expression path.
+            TokenKind::Ident(s) if s == "discard" && self.at_discard() => self.parse_discard(),
             _ => self.parse_var_decl_or_expr_stmt(),
         }
+    }
+
+    /// `discard expr;` (M-must-use Slice A) — evaluate `expr` for effect and drop a non-`void`/`Empty`
+    /// result, the explicit escape hatch for the must-use rule (`E-UNUSED-VALUE`).
+    pub(super) fn parse_discard(&mut self) -> Result<Stmt, Diagnostic> {
+        let sp = self.peek_span();
+        self.eat_kw("discard", "'discard'")?;
+        let value = self.parse_expr()?;
+        self.expect(&TokenKind::Semicolon, "';' after 'discard <expr>'")?;
+        Ok(Stmt::Discard(value, sp))
     }
 
     /// `throw expr;` (M-faults 2b).

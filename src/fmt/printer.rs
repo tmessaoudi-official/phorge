@@ -514,6 +514,10 @@ impl Printer<'_> {
                 self.line(&format!("{};", self.expr(e)?));
                 Ok(())
             }
+            Stmt::Discard(e, _) => {
+                self.line(&format!("discard {};", self.expr(e)?));
+                Ok(())
+            }
             Stmt::Throw { value, .. } => {
                 self.line(&format!("throw {};", self.expr(value)?));
                 Ok(())
@@ -957,6 +961,7 @@ impl Printer<'_> {
                 None => Ok("return;".to_string()),
             },
             Stmt::Expr(e, _) => Ok(format!("{};", self.expr(e)?)),
+            Stmt::Discard(e, _) => Ok(format!("discard {};", self.expr(e)?)),
             Stmt::Break(_) => Ok("break;".to_string()),
             Stmt::Continue(_) => Ok("continue;".to_string()),
             Stmt::Throw { value, .. } => Ok(format!("throw {};", self.expr(value)?)),
@@ -1327,7 +1332,11 @@ fn stmt_start(s: &Stmt) -> usize {
         | Stmt::Throw { span, .. }
         | Stmt::Try { span, .. }
         | Stmt::Destructure { span, .. } => span.start,
-        Stmt::Break(sp) | Stmt::Continue(sp) | Stmt::Block(_, sp) | Stmt::Expr(_, sp) => sp.start,
+        Stmt::Break(sp)
+        | Stmt::Continue(sp)
+        | Stmt::Block(_, sp)
+        | Stmt::Expr(_, sp)
+        | Stmt::Discard(_, sp) => sp.start,
     }
 }
 

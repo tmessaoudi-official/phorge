@@ -323,7 +323,7 @@ impl Printer {
                 Ok(())
             }
             Stmt::Block(stmts, _) => self.block_stmt("", stmts),
-            Stmt::Expr(e, _) => {
+            Stmt::Expr(e, _) | Stmt::Discard(e, _) => {
                 self.line(&format!("{};", self.expr(e)?));
                 Ok(())
             }

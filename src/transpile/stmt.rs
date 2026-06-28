@@ -218,7 +218,7 @@ impl Transpiler {
                 self.indent -= 1;
                 self.line("}");
             }
-            Stmt::Expr(e, _) => {
+            Stmt::Expr(e, _) | Stmt::Discard(e, _) => {
                 let s = self.emit_expr(e)?;
                 self.line(&format!("{s};"));
             }
