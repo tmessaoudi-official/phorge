@@ -569,3 +569,26 @@ offset problem never arises (slots are always runtime-resolved). Steps:
 HashMap→Vec<Option<Value>> + Rc<ClassLayout>, rewire both backends + clone/eq/reflect, sentinel) is
 fully specced above — execute first in a fresh session (mechanical, parity-gated). Then continue #2–#4.
 Order note: doing #4 (stdlib breadth, lowest-risk additive) first given session depth, then #2/#3.
+
+## PROJECT NAME — LOCKED 2026-06-28 → `Phorj`
+Developer locked the rename target: **Phorj** (reads "forge" — keeps Phorge's identity, PH-homage,
+verified-free on crates.io/npm/PyPI/domain/trademark; fire-theme rejected because the PH+fire root space
+is phonetically saturated — Pyre/Pyra/Pyro/PHYRN/Phlare all collide). See
+[[name-collision-rename-decision]]. **Execution (the breaking codemod — crate/lib `phorge`,
+`phorge.toml` filename, `.phorge` ELF section, `PHORGE_*` env, `~/.cache/phorge`, repo, docs) is NOT
+done** — `phg` binary + `.phg` extension stay (ripgrep model). Scope/timing pending developer.
+
+## THIRD MARATHON (2026-06-28, "all of them in order") — Decisions Log
+- [2026-06-28] AGREED: marathon #3 = (1) **M8.5 S3** → (2) **slot-indexed S1b+S2** → (3) **cross-file
+  LSP + JetBrains plugin**, fully autonomous, each green + byte-identical, developer pushes.
+- [2026-06-28] **M8.5 S3 DONE** (`c347bcc`): S3a foreign-exception catch + S3b `.d.phg` ambient decl
+  files. 1438 tests green w/ PHP 8.5 oracle. M8.5 COMPLETE.
+- [2026-06-28] AGREED (slot-indexed, native-carrier resolution — no user fork): native opaque carriers
+  (`Regex`, `Secret`, `Instant`, `Request`/`Response`, …) that build a `Value::Instance` ad-hoc get an
+  **inline `Rc<ClassLayout>` built from the field names they set** (a `ClassLayout::from_sorted_names`
+  ctor), independent of the injected prelude. Self-consistent: two carriers of the same kind share an
+  identical layout (sorted names), so eq/reflect parity holds, and it matches what `class_field_layout`
+  would produce for the same field set (sorted). Both backends build their per-class `Rc<ClassLayout>`
+  from `ast::class_field_layout` and share it on every instance. **S2 is bench-gated**: capture an
+  object-heavy `phg bench` baseline before S1b, prove the win after S2, keep only if it justifies the
+  risk.
