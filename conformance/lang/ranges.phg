@@ -1,0 +1,32 @@
+// Conformance: integer ranges — exclusive `a..b`, inclusive `a..=b`, iteration, and materialization
+// into a `List<int>`. Stable per STABILITY.md (Operators). Transpiles to PHP `range()`.
+package Main;
+
+import Core.Console;
+
+function main() -> void {
+    // Exclusive: 0,1,2,3 (4 elements, upper bound excluded).
+    mutable int exc = 0;
+    for (int i in 0..4) {
+        exc += i;
+    }
+    Console.println("exclusive {exc}");
+
+    // Inclusive: 1,2,3,4,5 (upper bound included).
+    mutable int inc = 0;
+    for (int i in 1..=5) {
+        inc += i;
+    }
+    Console.println("inclusive {inc}");
+
+    // A range materializes to a `List<int>` — indexable and iterable.
+    List<int> xs = 10..=12;
+    Console.println("materialized {xs[0]},{xs[1]},{xs[2]}");
+
+    // An empty exclusive range (a == b) yields no iterations.
+    mutable int empty = 0;
+    for (int i in 3..3) {
+        empty += 1;
+    }
+    Console.println("empty {empty}");
+}

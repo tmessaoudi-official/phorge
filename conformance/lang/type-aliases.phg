@@ -1,0 +1,34 @@
+// Conformance: `type` aliases — a compile-time-only name for a type, resolved by the checker and
+// fully erased before any backend (so the PHP output is alias-free). Stable per STABILITY.md.
+package Main;
+
+import Core.Console;
+
+type Celsius = int;
+type Name = string;
+type Scores = List<int>;
+
+function freezing() -> Celsius {
+    return 0;
+}
+
+function label(Name who, Celsius t) -> string {
+    return "{who}: {t}";
+}
+
+function total(Scores xs) -> int {
+    mutable int sum = 0;
+    for (int x in xs) {
+        sum += x;
+    }
+    return sum;
+}
+
+function main() -> void {
+    Celsius lo = freezing();
+    Celsius hi = 100;
+    Console.println(label("water", lo));
+    Console.println(label("steam", hi));
+    Scores marks = [3, 4, 5];
+    Console.println("total {total(marks)}");
+}

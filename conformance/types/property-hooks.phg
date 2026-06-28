@@ -1,0 +1,33 @@
+// Conformance: property hooks — a virtual member that runs code on read (`get`) and/or write
+// (`set`), backed by other stored fields. Transpiles 1:1 to PHP 8.4 property hooks. Stable per
+// STABILITY.md (Classes & objects). Uses only exactly-representable floats (deterministic across
+// the Rust backends' shortest-round-trip and PHP's echo).
+package Main;
+
+import Core.Console;
+
+class Account {
+    constructor(public mutable int raw) {}
+
+    // A write-validating hook: the `set` clamps negatives to zero. A read-only computed hook
+    // derives a boolean from the stored balance.
+    int balance {
+        get => this.raw;
+        set(int v) { if (v < 0) { this.raw = 0; } else { this.raw = v; } }
+    }
+
+    bool isEmpty {
+        get => this.raw == 0;
+    }
+}
+
+function main() -> void {
+    Account a = new Account(50);
+    Console.println("balance {a.balance} empty {a.isEmpty}");
+    a.balance = -10; // the set hook clamps to 0
+    Console.println("after {a.balance} empty {a.isEmpty}");
+    a.balance = 75;
+    Console.println("set {a.balance}");
+    // A computed read is a first-class arithmetic operand.
+    Console.println("plus {a.balance + 25}");
+}

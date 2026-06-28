@@ -11,11 +11,16 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 A stability story for the pre-1.0 surface: a golden-output conformance corpus, written policies, and a
 deprecation mechanism.
 
-- **Conformance corpus** (`conformance/`, gated by `tests/conformance.rs`): 19 single-feature programs
+- **Conformance corpus** (`conformance/`, gated by `tests/conformance.rs`): 32 single-feature programs
   + a flagship multi-package DDD project, each with committed golden output asserted byte-identical on
   the interpreter, the VM, **and** real PHP. Stronger than the example differential (which only checks
   the backends *agree*) — the golden pins the value, catching a regression where all backends drift
-  identically. Glob-discovered (incl. project roots via `phorge.toml`).
+  identically. Glob-discovered (incl. project roots via `phorge.toml`). Breadth covers the full stable
+  language surface: condition loops + compound-assign (`lang/loops`), `foreach … as … with i`
+  (`lang/foreach`), integer ranges (`lang/ranges`), `"""` text blocks + raw strings
+  (`lang/text-blocks`), `type` aliases (`lang/type-aliases`), member visibility (`types/visibility`),
+  property hooks (`types/property-hooks`), and fixed-length lists `[T; N]` (`types/fixed-lists`),
+  alongside the type-system, collection, stdlib, and error programs.
 - **`SEMVER.md`** — the versioning contract: in `0.x` minor versions may break but each is documented
   (`### Breaking` CHANGELOG heading); at `1.0` the *stable* tier freezes under strict SemVer.
 - **`STABILITY.md`** — every public construct, stdlib module, and CLI command sorted into

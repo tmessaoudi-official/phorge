@@ -1,0 +1,31 @@
+// Conformance: PHP-familiar `foreach (xs as x)` iteration — value form, `with int i` index counter,
+// a range source, and the typed `for (T x in xs)` form side by side. Stable per STABILITY.md.
+package Main;
+
+import Core.Console;
+
+function main() -> void {
+    List<string> langs = ["Phorge", "PHP", "TypeScript"];
+
+    // Value form — `w` is inferred as `string` from the iterable.
+    foreach (langs as w) {
+        Console.println("hello {w}");
+    }
+
+    // With a 0-based position counter.
+    foreach (langs as name with int idx) {
+        Console.println("{idx}={name}");
+    }
+
+    // A range source iterates inferred `int`s.
+    mutable int sum = 0;
+    foreach (1..=4 as n) {
+        sum = sum + n;
+    }
+    Console.println("range-sum {sum}");
+
+    // The typed `for (T x in xs)` form, unchanged.
+    for (string lang in langs) {
+        Console.println("typed {lang}");
+    }
+}

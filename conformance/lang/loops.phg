@@ -1,0 +1,62 @@
+// Conformance: condition loops + mutation — while, do-while, C-for, compound-assign, ++/--,
+// break/continue, while-let. Stable per STABILITY.md (Bindings & flow, Operators).
+package Main;
+
+import Core.Console;
+
+function main() -> void {
+    // while: test before each iteration; compound-assign accumulates.
+    mutable int i = 0;
+    mutable int sum = 0;
+    while (i < 5) {
+        sum += i;
+        i += 1;
+    }
+    Console.println("while {sum}");
+
+    // do-while: body runs once before the first test.
+    mutable int tries = 0;
+    do {
+        tries += 1;
+    } while (tries < 3);
+    Console.println("do {tries}");
+
+    // C-for with ++ ; *= product.
+    mutable int product = 1;
+    for (mutable int k = 1; k <= 4; k++) {
+        product *= k;
+    }
+    Console.println("for {product}");
+
+    // break + continue.
+    mutable int evens = 0;
+    for (mutable int n = 0; n < 100; n++) {
+        if (n == 10) {
+            break;
+        }
+        if (n % 2 == 1) {
+            continue;
+        }
+        evens += 1;
+    }
+    Console.println("evens {evens}");
+
+    // The full compound-assign family on one accumulator.
+    mutable int x = 20;
+    x += 5;
+    x -= 3;
+    x *= 2;
+    x /= 4;
+    x %= 7;
+    x--;
+    Console.println("compound {x}");
+
+    // while-let: loop while an optional is non-null, binding its inner value.
+    mutable int? next = 3;
+    mutable int drained = 0;
+    while (var v = next) {
+        drained += v;
+        next = null;
+    }
+    Console.println("while-let {drained}");
+}

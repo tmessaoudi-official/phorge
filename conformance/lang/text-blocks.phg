@@ -1,0 +1,28 @@
+// Conformance: `"""…"""` multi-line text blocks (dedent + interpolation + bare quotes) and raw
+// strings `r"…"` / `r#"…"#` (no escapes, no interpolation). Stable per STABILITY.md (Operators).
+package Main;
+
+import Core.Console;
+
+function main() -> void {
+    string name = "Ada";
+    int unread = 3;
+
+    // Text block: the common indent (and the closing delimiter column) is stripped; the relative
+    // 2-space indent on the second line is kept; `{expr}` interpolates; a bare `"` is literal.
+    string letter = """
+        Dear {name},
+          you have {unread} unread message(s).
+        Regards,
+        The Phorge Team
+        """;
+    Console.println(letter);
+
+    // Raw strings: every byte literal — no escapes, no interpolation. The `r#"…"#` form carries an
+    // embedded `"` verbatim. Ideal for JSON / regex literals.
+    string json = r#"{"unit": "px", "pattern": "\d{2,3}"}"#;
+    Console.println(json);
+
+    string plain = r"no \n escape and {no} interpolation";
+    Console.println(plain);
+}

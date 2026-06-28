@@ -1,0 +1,33 @@
+// Conformance: member visibility — `public` / `private` / `protected` on fields and methods,
+// enforced in the type-checker (all backends agree). Only legal accesses appear here, so it runs
+// byte-identically; the rejected out-of-scope accesses are documented in conformance/README.md.
+// Stable per STABILITY.md (Classes & objects).
+package Main;
+
+import Core.Console;
+
+open class Account {
+    // A private mutable field + a protected field, reached only through the public API below.
+    constructor(private mutable int balance, protected string owner) {}
+
+    function balanceOf() -> int { return this.balance; }
+    function deposit(int amount) -> void { this.balance = this.balance + amount; }
+
+    // A private helper only this class's methods may call …
+    private function audit() -> string { return "{this.owner}:{this.balance}"; }
+    // … reached here through a public method (legal: same class).
+    function statement() -> string { return this.audit(); }
+}
+
+// A subclass may read the `protected` member of its parent (but not the `private` one).
+class Savings extends Account {
+    function ownerLabel() -> string { return "saver {this.owner}"; }
+}
+
+function main() -> void {
+    Savings s = new Savings(100, "Ada");
+    s.deposit(50);
+    Console.println("{s.balanceOf()}");
+    Console.println(s.statement());
+    Console.println(s.ownerLabel());
+}
