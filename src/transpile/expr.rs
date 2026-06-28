@@ -214,6 +214,25 @@ impl Transpiler {
             Expr::Str(parts, _) => self.emit_string(parts),
             Expr::Bytes(b, _) => Ok(format!("\"{}\"", php_escape_bytes(b))),
             Expr::Call { callee, args, .. } => self.emit_call(callee, args),
+            // `parent.m(args)` / `parent(A).m(args)` — super/parent dispatch (M-RT super/parent).
+            // Single inheritance → native PHP: immediate ⇒ `parent::m(args)`, a named ancestor ⇒
+            // `A::m(args)` (PHP forwards `$this`; no 8.5 deprecation). MI's trait-aliased form is B2.
+            Expr::ParentCall {
+                ancestor,
+                method,
+                args,
+                ..
+            } => {
+                let prefix = match ancestor {
+                    Some(a) => format!("{}::", php_type_ref(a)),
+                    None => "parent::".to_string(),
+                };
+                let mut emitted = Vec::with_capacity(args.len());
+                for a in args {
+                    emitted.push(self.emit_expr(a)?);
+                }
+                Ok(format!("{prefix}{method}({})", emitted.join(", ")))
+            }
             Expr::Member {
                 object, name, safe, ..
             } => {

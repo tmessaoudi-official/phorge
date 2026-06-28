@@ -204,6 +204,124 @@ impl Checker {
         self.check_overload_call(name, &sigs, args, span, skip_throws)
     }
 
+    /// Check a `parent`/super dispatch call (M-RT super/parent). Validates the context (an instance
+    /// method/constructor body), resolves the concrete `(declaring_class, method)` via the shared
+    /// `ast::resolve_parent_method`, type-checks the arguments against the resolved method's signature,
+    /// and returns its return type. The error codes mirror the resolver's failure kinds.
+    pub(super) fn check_parent_call(
+        &mut self,
+        ancestor: Option<&str>,
+        method: &str,
+        args: &[crate::ast::Expr],
+        span: Span,
+    ) -> Ty {
+        // Type the arguments regardless, so nested errors surface.
+        let arg_tys: Vec<Ty> = args.iter().map(|a| self.check_expr(a)).collect();
+        // `parent` is valid only inside an instance method/constructor body.
+        let Some(lexical) = self.cur_class.clone() else {
+            return self.err_coded(
+                span,
+                "`parent` is only valid inside an instance method or constructor".to_string(),
+                "E-PARENT-OUTSIDE-METHOD",
+                Some("`parent.m(…)` dispatches to an inherited method; there is no parent outside a method body".into()),
+            );
+        };
+        if self.in_static_method || self.in_static_init || self.in_field_init {
+            return self.err_coded(
+                span,
+                "`parent` is not available here — a static method, static initializer, or field initializer has no instance".to_string(),
+                "E-PARENT-OUTSIDE-METHOD",
+                Some("use `parent` only inside an instance method or constructor body".into()),
+            );
+        }
+        // B1a: parent-constructor calls land in a follow-up slice (the parent ctor body must run on the
+        // existing instance — distinct machinery from method dispatch).
+        if method == "constructor" {
+            return self.err_coded(
+                span,
+                "`parent.constructor(…)` is not yet supported".to_string(),
+                "E-PARENT-NO-METHOD",
+                Some("parent *method* dispatch (`parent.m(…)`) is available; parent-constructor forwarding lands in a follow-up".into()),
+            );
+        }
+        let (decl, m) = match crate::ast::resolve_parent_method(
+            &self.parent_parents,
+            &self.parent_mro,
+            &self.parent_origins,
+            &lexical,
+            ancestor,
+            method,
+        ) {
+            Ok(t) => t,
+            Err(e) => {
+                use crate::ast::ParentResolveError as PE;
+                let (msg, code, hint): (String, &str, String) = match e {
+                    PE::NoParent => (
+                        format!("`{lexical}` has no parent class, so `parent` has nothing to dispatch to"),
+                        "E-PARENT-NO-PARENT",
+                        "add an `extends` parent, or remove the `parent` call".into(),
+                    ),
+                    PE::NotAncestor => (
+                        format!("`{}` is not an ancestor of `{lexical}`", ancestor.unwrap_or("")),
+                        "E-PARENT-NOT-ANCESTOR",
+                        "name a class this one transitively extends".into(),
+                    ),
+                    PE::NoMethod => (
+                        format!("no ancestor of `{lexical}` declares a method `{method}`"),
+                        "E-PARENT-NO-METHOD",
+                        "check the method name, or the ancestor in `parent(A).m()`".into(),
+                    ),
+                    PE::Ambiguous => (
+                        format!("`parent.{method}()` is ambiguous in `{lexical}` — two parents declare `{method}`"),
+                        "E-PARENT-AMBIGUOUS",
+                        format!("qualify the ancestor: `parent(SomeParent).{method}(…)`"),
+                    ),
+                };
+                return self.err_coded(span, msg, code, Some(hint));
+            }
+        };
+        // Type against the resolved method's signature (the declaring class declares `m`). An overloaded
+        // parent method selects the arm matching the static argument types (like a normal overloaded
+        // call); a single method is the common path.
+        let sigs = match self.classes.get(&decl).and_then(|c| c.methods.get(&m)) {
+            Some(s) => s.clone(),
+            None => {
+                return self.err(
+                    span,
+                    format!("internal: resolved parent method `{decl}.{m}` has no signature"),
+                );
+            }
+        };
+        let matched = sigs.iter().find(|s| {
+            s.params.len() == arg_tys.len()
+                && s.params
+                    .iter()
+                    .zip(&arg_tys)
+                    .all(|(p, a)| self.ty_assignable(a, p))
+        });
+        match matched {
+            Some(sig) => {
+                for e in sig.throws.clone() {
+                    self.discharge_call_throw(method, &e, span);
+                }
+                sig.ret.clone()
+            }
+            None => {
+                let got = arg_tys
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                self.err_coded(
+                    span,
+                    format!("no overload of `{decl}.{m}` accepts arguments `({got})`"),
+                    "E-OVERLOAD-NO-MATCH",
+                    Some("the argument types must match the parent method's parameters".into()),
+                )
+            }
+        }
+    }
+
     /// Resolve a multi-overload free-function call (M-RT). Evaluates the argument types, selects the
     /// statically-matching overloads (arity + assignability), reports `E-OVERLOAD-NO-MATCH` when none
     /// match, discharges the union of the matching overloads' checked exceptions, and returns the

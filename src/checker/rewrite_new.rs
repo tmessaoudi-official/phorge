@@ -242,6 +242,14 @@ fn ue_expr(e: &mut Expr) {
             }
         }
         Expr::New(inner, _) => ue_expr(inner),
+        // A return-overload selector's inner call (Slice C1) and a `parent` call's args (super/parent)
+        // carry sub-expressions that may construct (`new …`) — walk them so the `new` is unwrapped.
+        Expr::OverloadSelect { call, .. } => ue_expr(call),
+        Expr::ParentCall { args, .. } => {
+            for a in args {
+                ue_expr(a);
+            }
+        }
         // Literals / `Ident` / `This` have no sub-expressions.
         _ => {}
     }

@@ -292,6 +292,19 @@ impl Interp {
                     "overload selector resolved + rewritten before interpretation (Slice C1)"
                 )
             }
+            // `parent.m(args)` / `parent(A).m(args)` — super/parent dispatch (M-RT super/parent).
+            Expr::ParentCall {
+                ancestor,
+                method,
+                args,
+                ..
+            } => {
+                let mut argv = Vec::with_capacity(args.len());
+                for a in args {
+                    argv.push(self.eval(a)?);
+                }
+                self.eval_parent_call(ancestor.as_deref(), method, argv)
+            }
             Expr::New(..) => {
                 unreachable!("Expr::New is unwrapped before interpretation (checker::unwrap_new)")
             }

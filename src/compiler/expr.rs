@@ -4,6 +4,65 @@
 use super::*;
 
 impl Compiler<'_> {
+    /// Resolve a `parent`/super call to the baked target function index (M-RT super/parent). Uses the
+    /// `methods` table (which already encodes dispatch origins) keyed by the named ancestor (qualified
+    /// form) or, for the immediate form, the lexical class's direct parents — the unique resolved index
+    /// (a diamond's shared base collapses to one; ≥2 distinct is checker-rejected as ambiguous, so a
+    /// valid program always yields exactly one). Matches the interpreter's `resolve_parent_method`.
+    fn resolve_parent_target(&self, ancestor: Option<&str>, method: &str) -> Result<usize, String> {
+        let cur = self
+            .cur_class
+            .as_deref()
+            .ok_or("`parent` used outside a method")?;
+        let lookup = |class: &str| {
+            self.methods
+                .get(&(class.to_string(), method.to_string()))
+                .copied()
+        };
+        let func = match ancestor {
+            Some(a) => lookup(a),
+            None => {
+                let parents = self.parent_parents.and_then(|p| p.get(cur));
+                let mut found: Vec<usize> = Vec::new();
+                for p in parents.map(Vec::as_slice).unwrap_or(&[]) {
+                    if let Some(idx) = lookup(p) {
+                        if !found.contains(&idx) {
+                            found.push(idx);
+                        }
+                    }
+                }
+                found.first().copied()
+            }
+        };
+        func.ok_or_else(|| {
+            format!(
+                "internal: unresolved parent method `{method}` (checker should have caught this)"
+            )
+        })
+    }
+
+    /// The operand `CTy` of a `parent`/super call's result — the resolved target method's return type
+    /// from `method_rets` (M-RT super/parent). `CTy::Other` when not resolvable (a non-operand context;
+    /// the checker has already validated the call). Lets `parent.m(…) + 1` specialize on the VM.
+    pub(super) fn parent_ret_cty(&self, ancestor: Option<&str>, method: &str) -> CTy {
+        let Some(cur) = self.cur_class.as_deref() else {
+            return CTy::Other;
+        };
+        let lookup = |class: &str| {
+            self.method_rets
+                .get(&(class.to_string(), method.to_string()))
+                .cloned()
+        };
+        let cty = match ancestor {
+            Some(a) => lookup(a),
+            None => self
+                .parent_parents
+                .and_then(|p| p.get(cur))
+                .and_then(|parents| parents.iter().find_map(|p| lookup(p))),
+        };
+        cty.unwrap_or(CTy::Other)
+    }
+
     pub(super) fn expr(&mut self, e: &Expr) -> Result<(), String> {
         match e {
             Expr::Int(n, sp) => self.emit_const(Value::Int(*n), sp.line),
@@ -236,6 +295,24 @@ impl Compiler<'_> {
             Expr::Html(..) => unreachable!("html literal not resolved before compilation"),
             Expr::OverloadSelect { .. } => {
                 unreachable!("overload selector resolved + rewritten before compilation (Slice C1)")
+            }
+            // `parent.m(args)` / `parent(A).m(args)` — super/parent dispatch (M-RT super/parent).
+            Expr::ParentCall {
+                ancestor,
+                method,
+                args,
+                span,
+            } => {
+                let func = self.resolve_parent_target(ancestor.as_deref(), method)?;
+                // Push the current receiver (`this`) as the call's slot 0, then the args.
+                let this_slot = self
+                    .this_slot
+                    .ok_or_else(|| "`parent` used outside a method".to_string())?;
+                self.emit(Op::GetLocal(this_slot), span.line);
+                for a in args {
+                    self.expr(a)?;
+                }
+                self.emit(Op::CallParent(func, args.len()), span.line);
             }
             Expr::New(..) => {
                 unreachable!("Expr::New is unwrapped before compilation (checker::unwrap_new)")

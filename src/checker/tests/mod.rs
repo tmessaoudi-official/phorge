@@ -24,6 +24,7 @@ mod must_use;
 mod mutation;
 mod optionals;
 mod overloading;
+mod parent_dispatch;
 mod reflect;
 mod secret;
 mod static_methods;

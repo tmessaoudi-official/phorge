@@ -676,6 +676,35 @@ pub fn explain_text(code: &str) -> Option<String> {
              signature to give the value. Call the function directly, or wrap the intended overload in\n\
              a lambda (`var g = fn(int x) => f(x);`).\n"
         }
+        "E-PARENT-OUTSIDE-METHOD" => {
+            "E-PARENT-OUTSIDE-METHOD — `parent` used outside an instance method or constructor.\n\n\
+             `parent.m(…)` / `parent(A).m(…)` dispatch to an inherited method relative to the class that\n\
+             *declares* the calling body. Outside an instance method or constructor — in a free\n\
+             function, a `static` method, or a field/static initializer — there is no such context.\n\
+             Move the call into an instance method, or pass the value you need as a parameter.\n"
+        }
+        "E-PARENT-NO-PARENT" => {
+            "E-PARENT-NO-PARENT — `parent` in a class with no parents.\n\n\
+             The enclosing class does not `extends` anything, so `parent` has nothing to dispatch to.\n\
+             Add a parent class, or call the method directly.\n"
+        }
+        "E-PARENT-NOT-ANCESTOR" => {
+            "E-PARENT-NOT-ANCESTOR — `parent(A)` names a class that is not an ancestor.\n\n\
+             The qualified form `parent(A).m(…)` jumps to the ancestor `A`'s `m`. `A` must be a class\n\
+             the current one transitively `extends`. Name a real ancestor, or use the immediate form\n\
+             `parent.m(…)` (the nearest ancestor that declares `m`).\n"
+        }
+        "E-PARENT-NO-METHOD" => {
+            "E-PARENT-NO-METHOD — no ancestor declares the named method.\n\n\
+             `parent.m(…)` / `parent(A).m(…)` found no ancestor (resp. no `A`-reachable ancestor) that\n\
+             declares or inherits a method `m`. Check the method name and the ancestor. (Parent\n\
+             *constructor* forwarding — `parent.constructor(…)` — is a separate, later feature.)\n"
+        }
+        "E-PARENT-AMBIGUOUS" => {
+            "E-PARENT-AMBIGUOUS — bare `parent.m()` is ambiguous under multiple inheritance.\n\n\
+             The class has ≥2 parents that each resolve `m` to a different method, so the immediate\n\
+             `parent.m(…)` cannot pick one. Qualify the ancestor you mean: `parent(SomeParent).m(…)`.\n"
+        }
         "E-OVERLOAD-STATIC-MIX" => {
             "E-OVERLOAD-STATIC-MIX — overloads of one name mix `static` and instance declarations.\n\n\
              Every overload of a method name must be either all `static` or all instance methods. A\n\

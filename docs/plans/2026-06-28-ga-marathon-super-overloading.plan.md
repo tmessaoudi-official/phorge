@@ -54,9 +54,57 @@
   return-overload call from their declared type (shared `resolve_return_overload` core; `var` infer →
   NO-CONTEXT; no-assignable → AMBIGUOUS-RETURN). 4 C2 tests, example shows both. Remaining sinks
   (reassignment/field-write/arg-to-param) + `E-OVERLOAD-SELECT-CONFLICT` deferred (non-breaking).
-- NEXT: **step 4 — super/parent impl** (needs the multi-of-multi trait lowering first; spec
-  `docs/specs/2026-06-28-super-parent-dispatch-design.md`), then step 5 M4 stdlib, step 6 cross-file
-  LSP + JetBrains.
+- IN PROGRESS: **step 4 — super/parent impl** (spec `docs/specs/2026-06-28-super-parent-dispatch-design.md`).
+  **Decomposition (green checkpoints):**
+  - **B1 — single-inheritance `parent` (methods + ctor):** transpiles to NATIVE PHP (`parent::m()` /
+    `A::m()` / `parent::__construct()`) — needs NO trait work, so it ships first as a green checkpoint.
+    `Expr::ParentCall { ancestor: Option<String>, method, args, span }` (backend-visible, NOT erased);
+    all three resolve the target from the shared `class_mro` + `class_method_origins` + current-class
+    context (same single-source discipline as `this.m()`), so `run≡runvm`. `parent-dispatch.phg`.
+  - **B2 — MI `parent(X)` (methods + ctor) + the multi-of-multi trait-lowering prerequisite:** emit any
+    MI-parent and `parent(X)`-target as a PHP trait (incl. traits-using-traits), `use … { X::m as
+    private __super_X_m; }` + `insteadof`; call emits `$this->__super_X_m(args)`. `parent-dispatch-mi.phg`.
+  - Errors `E-PARENT-AMBIGUOUS`/`-NOT-ANCESTOR`/`-NO-METHOD`/`-OUTSIDE-METHOD`/`-NO-PARENT` (+ explain).
+  Then step 5 M4 stdlib, step 6 cross-file LSP + JetBrains.
+
+### Step 4 — concrete build (code-verified, 2026-06-29)
+- **Sub-split: B1a (methods, single inh) → B1b (`parent.constructor()`) → B2 (MI + multi-of-multi trait
+  lowering).** Each green + committed. `transpile/program.rs:221` routes `extends.len()>=2` →
+  `emit_multi_class` (traits), else `emit_class` (native PHP `extends`) — so B1a/B1b need NO trait work.
+- **Single-source resolver `ast::resolve_parent_method`** (new, in `ast/classes.rs`): given
+  parents-map + `class_method_origins` + `class_mro`, lexical class, `ancestor: Option<&str>`, method →
+  `Ok((decl_class, method))` or an error kind (NoParent / NotAncestor / NoMethod / Ambiguous). Immediate
+  (`ancestor=None`): collect distinct origins over the direct parents → 0 NoMethod / 1 ok / ≥2 Ambiguous
+  (so it already does MI). Consumed by checker (errors+typing) + interpreter (dispatch) + compiler
+  (bake func index) ⇒ `run≡runvm` by construction. `parent` is **lexical** — resolves against the
+  method's *declaring* class (= the `origin_class` each backend already knows at dispatch), NOT the
+  receiver's runtime class.
+- **AST:** `Expr::ParentCall { ancestor: Option<String>, method: String, args, span }` (backend-visible,
+  NOT erased). Parser: contextual `parent` recognized only as a call head (`parent.` / `parent(`) — safe
+  (no `.phg` uses `parent` as a value-ident). B1a parses `parent.<ident>(args)` + `parent(Type).<ident>(args)`;
+  the `constructor` keyword arm is B1b.
+- **B1a backends:** interpreter gains `cur_class: Option<String>` (lexical, set in `run_call` for a
+  method body = origin class) → resolve + run the target method body with `this`=current receiver. VM:
+  **one new `Op::CallParent(func_index, argc)`** (frame setup mirrors `CallMethod` but with a *baked*
+  func index — non-virtual; the compiler resolves via the resolver + `methods[(decl,method)]`). Coupled
+  matches: `vm/exec.rs`, `chunk.rs validate` (idx<functions.len), `compiler stack_effect` (`-(argc)`).
+  Compiler emits `GetLocal(0)` (this) + args + `CallParent`. Transpiler: `parent::m(args)` (immediate) /
+  `A::m(args)` (qualified ancestor) — native PHP, verified.
+- **B1b (`parent.constructor()`):** parent ctor body must run on the EXISTING `this` (the VM's `<Class>::new`
+  ctor functions MakeInstance a NEW instance, so they can't be reused) → decide between a front-end
+  inline-the-parent-ctor-body rewrite (no backend change) vs. an interpreter run-body + VM op. Closes the
+  own-ctor-under-inheritance KNOWN_ISSUE.
+- Overloaded *parent* methods (resolved target is in `method_overloads`) deferred to a KNOWN_ISSUE in B1a.
+
+### Step 4 status (2026-06-29)
+- **B1a DONE + committed + green**: `parent.m(…)`/`parent(A).m(…)` single-inheritance method dispatch.
+  `Expr::ParentCall` + contextual `parent` parser + `ast::resolve_parent_method` (single source) +
+  interpreter `cur_class`-threaded `run_call` + VM `Op::CallParent` + native PHP `parent::`/`A::`
+  transpile. Closed a 6C CTy-operand finding (compiler `ctype(ParentCall)` via `method_rets`) and the
+  latent OverloadSelect arg-walking gap in the pre-`rewrite_ufcs` passes. 5 `E-PARENT-*` codes + explain;
+  7 checker tests; `examples/guide/parent-dispatch.phg`. 1462 tests green, PHP-8.5 oracle byte-identical.
+- **NEXT: B1b** (`parent.constructor(…)`, single inh — front-end inline-the-parent-ctor-body vs. an
+  interp run-body + VM op), then **B2** (MI `parent(X)` + multi-of-multi trait lowering).
 - Implementation note (must-use): `discard` `at_discard` gate fires only on statement-leading
   `discard <Ident|new>`; `Stmt::Discard` OR-combines with `Stmt::Expr` everywhere except the checker
   (must-use exemption) and the fmt printer (emits the keyword); rewrite passes mirror Discard→Discard.

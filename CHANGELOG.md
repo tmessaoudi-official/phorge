@@ -6,6 +6,32 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M-RT super/parent dispatch (B1a: methods, single inheritance)
+
+`parent.m(…)` / `parent(A).m(…)` — invoke an inherited method an override shadows (or jump to a named
+ancestor). Spec `docs/specs/2026-06-28-super-parent-dispatch-design.md`. Closes part of the
+inheritance gap (a child override can now reuse + extend its parent's behaviour). Byte-identical
+`run ≡ runvm ≡ real PHP 8.5` (`examples/guide/parent-dispatch.phg`).
+
+- **Syntax** — `parent` is a contextual keyword, recognized only as a call head (`parent.` / `parent(`);
+  immediate `parent.m(…)` (nearest declaring ancestor) and qualified `parent(A).m(…)` (a C++-style jump
+  to any transitive ancestor). New `Expr::ParentCall`.
+- **Resolution is lexical + single-sourced** — a new `ast::resolve_parent_method` (over `class_mro` +
+  `class_method_origins` + direct parents) is shared by the checker (errors + typing), the interpreter
+  (dispatch), and the compiler (bakes the target), so `run ≡ runvm` by construction. Resolution is
+  relative to the class that *writes* the call (the lexical/declaring class), not the receiver's runtime
+  class — so an override reaches the version it shadows.
+- **Backends** — one new VM `Op::CallParent(func_idx, argc)` (non-virtual: a baked target, same frame
+  layout as `CallMethod`); the interpreter threads a lexical `cur_class` through `run_call`. Transpiles
+  to native PHP `parent::m(…)` (immediate) / `A::m(…)` (named ancestor). A parent-call result is a
+  first-class typed value (`parent.m(…) + 1` specializes on the VM — the compiler's `ctype` resolves it
+  via `method_rets`).
+- **Errors** `E-PARENT-OUTSIDE-METHOD` / `-NO-PARENT` / `-NOT-ANCESTOR` / `-NO-METHOD` / `-AMBIGUOUS`
+  (the last MI-only), all `phg explain`-documented.
+- Scope (B1a): methods, single inheritance. Deferred: `parent.constructor(…)` (B1b — the parent ctor
+  body must run on the existing instance) and multiple inheritance + the multi-of-multi trait lowering
+  (B2). See `KNOWN_ISSUES.md`.
+
 ### Added — M-RT return-type overloading (Slice C1)
 
 Free functions may now overload on **return type alone** — identical parameter signatures, differing

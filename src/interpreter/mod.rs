@@ -184,6 +184,14 @@ pub struct Interp {
     layouts: HashMap<String, std::rc::Rc<crate::value::ClassLayout>>,
     frame: CallScopes,
     this: Option<Value>,
+    /// The **lexical** class of the currently-executing method/constructor body (M-RT super/parent) —
+    /// the class that *declares* the running body, used to resolve a `parent` call (which is lexical,
+    /// not keyed on the receiver's runtime class). `None` in a free function. Saved/restored by
+    /// `run_call` alongside `this`.
+    cur_class: Option<String>,
+    /// Inheritance tables for `parent`/super resolution, cached once at load (mirrors `method_origins`).
+    parent_parents: std::collections::BTreeMap<String, Vec<String>>,
+    parent_mro: std::collections::BTreeMap<String, Vec<String>>,
     out: String,
     /// Logical call stack for runtime stack traces (error-handling slice 1). A frame is pushed at each
     /// `run_call` entry (function name + current line) and popped **only on success** — an error path
@@ -230,6 +238,9 @@ pub fn interpret_main(program: &Program) -> Result<(String, i64), Diagnostic> {
         layouts: HashMap::new(),
         frame: CallScopes::new(),
         this: None,
+        cur_class: None,
+        parent_parents: std::collections::BTreeMap::new(),
+        parent_mro: std::collections::BTreeMap::new(),
         out: String::new(),
         trace_stack: Vec::new(),
         depth: 0,
@@ -272,7 +283,7 @@ pub fn interpret_main(program: &Program) -> Result<(String, i64), Diagnostic> {
         Some(c) => format!("{c}::main"),
         None => "main".to_string(),
     };
-    match interp.run_call(&call_name, &names, &main.body, args, None) {
+    match interp.run_call(&call_name, &names, &main.body, args, None, None) {
         // `run_call` converts `main`'s `return n` into `Ok(Value::Int(n))` (and a fall-off-the-end
         // `void` `main` into `Ok(Value::Unit)`); `exit_code_of` maps both to the exit status.
         Ok(v) => Ok((interp.out, exit_code_of(&v))),
@@ -349,6 +360,9 @@ pub fn call_named(
         layouts: HashMap::new(),
         frame: CallScopes::new(),
         this: None,
+        cur_class: None,
+        parent_parents: std::collections::BTreeMap::new(),
+        parent_mro: std::collections::BTreeMap::new(),
         out: String::new(),
         trace_stack: Vec::new(),
         depth: 0,
@@ -374,7 +388,7 @@ pub fn call_named(
         )));
     }
     let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
-    match interp.run_call(&f.name, &names, &f.body, args, None) {
+    match interp.run_call(&f.name, &names, &f.body, args, None, None) {
         Ok(v) => Ok((v, interp.out)),
         Err(Signal::Return(v)) => Ok((v, interp.out)),
         Err(Signal::Runtime(e)) => Err(e.with_frames(interp.snapshot_frames())),
@@ -519,6 +533,10 @@ impl Interp {
         // conflict list is checker-only (E-MI-CONFLICT); a clean program reaches here conflict-free.
         let (origins, _conflicts) = crate::ast::class_method_origins(program);
         self.method_origins = origins;
+        // M-RT super/parent: cache the inheritance tables for lexical `parent` resolution (shared with
+        // the checker + compiler via `ast::resolve_parent_method`).
+        self.parent_parents = crate::ast::class_parents(program);
+        self.parent_mro = crate::ast::class_mro(program);
         // Class constants (Feature A): the shared table already flattens inheritance + traits. Drop the
         // declared `Type` — the interpreter inlines only the literal `Value` at each `ClassName.NAME`.
         self.consts = crate::ast::class_consts(program)
@@ -581,6 +599,7 @@ impl Interp {
         body: &[Stmt],
         args: Vec<Value>,
         this: Option<Value>,
+        lexical_class: Option<&str>,
     ) -> R<Value> {
         // Mirror the VM's frame cap: past the shared limit, fault cleanly instead of letting
         // native recursion abort the process. Checked before incrementing, so the guard path
@@ -599,12 +618,16 @@ impl Interp {
         });
         let saved_frame = std::mem::replace(&mut self.frame, CallScopes::new());
         let saved_this = std::mem::replace(&mut self.this, this);
+        // M-RT super/parent: the running body's lexical class (the declaring class, for `parent`
+        // resolution). `None` for a free function. Saved/restored exactly like `this`.
+        let saved_class = std::mem::replace(&mut self.cur_class, lexical_class.map(str::to_string));
         for (n, a) in names.iter().zip(args) {
             self.frame.declare(n, a);
         }
         let result = self.exec_stmts(body);
         self.frame = saved_frame;
         self.this = saved_this;
+        self.cur_class = saved_class;
         self.depth -= 1;
         match result {
             Ok(()) => {

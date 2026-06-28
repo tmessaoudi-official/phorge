@@ -165,6 +165,19 @@ pub fn rewrite_ufcs(program: Program, ufcs: &HashMap<usize, crate::ast::Expr>) -
                     span,
                 },
             },
+            // A `parent` call (super/parent): not rewritten itself, but its args may contain UFCS /
+            // resolved overload / cast / default-fill sites — recurse them.
+            Expr::ParentCall {
+                ancestor,
+                method,
+                args,
+                span,
+            } => Expr::ParentCall {
+                ancestor,
+                method,
+                args: args.into_iter().map(|a| rexpr(a, u)).collect(),
+                span,
+            },
             Expr::Propagate { inner, span } => Expr::Propagate {
                 inner: Box::new(rexpr(*inner, u)),
                 span,

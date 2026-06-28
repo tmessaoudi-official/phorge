@@ -58,6 +58,24 @@ pub fn resolve_html(program: Program, html: &HashMap<usize, crate::ast::Expr>) -
                 args: args.into_iter().map(|a| rexpr(a, h)).collect(),
                 span,
             },
+            // A return-overload selector (Slice C1) / a `parent` call (super/parent): recurse the
+            // sub-expressions so an `html"…"` literal nested in them is resolved too.
+            Expr::OverloadSelect { ty, call, span } => Expr::OverloadSelect {
+                ty,
+                call: Box::new(rexpr(*call, h)),
+                span,
+            },
+            Expr::ParentCall {
+                ancestor,
+                method,
+                args,
+                span,
+            } => Expr::ParentCall {
+                ancestor,
+                method,
+                args: args.into_iter().map(|a| rexpr(a, h)).collect(),
+                span,
+            },
             Expr::Member {
                 object,
                 name,

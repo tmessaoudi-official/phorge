@@ -118,7 +118,7 @@ impl Interp {
                     ));
                 }
                 let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
-                return self.run_call(&f.name, &names, &f.body, argv, None);
+                return self.run_call(&f.name, &names, &f.body, argv, None, None);
             }
             if let Some((enum_name, arity)) = self.variants.get(name).cloned() {
                 if argv.len() != arity {
@@ -221,7 +221,7 @@ impl Interp {
                     ));
                 }
                 let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
-                self.run_call(&f.name, &names, &f.body, args, None)
+                self.run_call(&f.name, &names, &f.body, args, None, None)
             }
             ClosureData::Byte { .. } => {
                 // A VM-compiled closure that somehow ended up in the tree-walker is a compiler
@@ -284,6 +284,75 @@ impl Interp {
         Ok(out)
     }
 
+    /// `parent.m(args)` / `parent(A).m(args)` — super/parent dispatch (M-RT super/parent). Resolves the
+    /// concrete `(declaring_class, method)` via the shared `ast::resolve_parent_method` against the
+    /// **lexical** class of the currently-running body (`cur_class`), then runs that method's body
+    /// **non-virtually** on the current receiver (`this`) — so an override calling `parent.m()` reaches
+    /// the version it shadows, not itself. The compiler bakes the same target, so `run ≡ runvm`.
+    pub(super) fn eval_parent_call(
+        &mut self,
+        ancestor: Option<&str>,
+        method: &str,
+        args: Vec<Value>,
+    ) -> R<Value> {
+        let lexical = match &self.cur_class {
+            Some(c) => c.clone(),
+            None => return rt("`parent` used outside a method"),
+        };
+        let recv = match &self.this {
+            Some(v) => v.clone(),
+            None => return rt("`parent` has no receiver"),
+        };
+        // Resolution always succeeds on a checked program (the checker reports every `E-PARENT-*`).
+        let (decl, m) = match crate::ast::resolve_parent_method(
+            &self.parent_parents,
+            &self.parent_mro,
+            &self.method_origins,
+            &lexical,
+            ancestor,
+            method,
+        ) {
+            Ok(t) => t,
+            Err(_) => return rt(format!("cannot resolve `parent.{method}()` in `{lexical}`")),
+        };
+        let candidates: Vec<FunctionDecl> = self
+            .classes
+            .get(&decl)
+            .map(|class| {
+                class
+                    .members
+                    .iter()
+                    .filter_map(|mem| match mem {
+                        ClassMember::Method(f) if f.name == m => Some(f.clone()),
+                        _ => None,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let f = match candidates.len() {
+            0 => return rt(format!("no method `{m}` on `{decl}`")),
+            1 => candidates[0].clone(),
+            _ => {
+                let kinds: Vec<Vec<crate::dispatch::ParamKind>> = candidates
+                    .iter()
+                    .map(|f| {
+                        f.params
+                            .iter()
+                            .map(|p| crate::dispatch::param_kind(&p.ty))
+                            .collect()
+                    })
+                    .collect();
+                match crate::dispatch::select_overload(&kinds, &args, &self.class_implements) {
+                    Ok(i) => candidates[i].clone(),
+                    Err(_) => return rt(format!("ambiguous overloaded call to `{m}`")),
+                }
+            }
+        };
+        let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
+        let mname = format!("{decl}::{m}");
+        self.run_call(&mname, &names, &f.body, args, Some(recv), Some(&decl))
+    }
+
     pub(super) fn call_method(&mut self, recv: Value, name: &str, args: Vec<Value>) -> R<Value> {
         let inst = match recv {
             Value::Instance(inst) => inst,
@@ -295,6 +364,13 @@ impl Interp {
         // compiler pre-flattens the identical table into the VM's `methods` table, so `run`/`runvm`
         // dispatch to the same body. The candidates are that origin class's overloads of the resolved
         // method name (which differs from `name` only for a renamed alias).
+        // The lexical (declaring) class of the resolved body — needed both to find the candidates and,
+        // for M-RT super/parent, to resolve a `parent` call inside that body (lexical, not the
+        // receiver's runtime class).
+        let origin_class: Option<String> = self
+            .method_origins
+            .get(&(inst.class.clone(), name.to_string()))
+            .map(|(oc, _)| oc.clone());
         let candidates: Vec<FunctionDecl> = {
             let key = (inst.class.clone(), name.to_string());
             match self.method_origins.get(&key) {
@@ -352,7 +428,14 @@ impl Interp {
         }
         let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
         let mname = format!("{}::{name}", inst.class);
-        self.run_call(&mname, &names, &f.body, args, Some(Value::Instance(inst)))
+        self.run_call(
+            &mname,
+            &names,
+            &f.body,
+            args,
+            Some(Value::Instance(inst)),
+            origin_class.as_deref(),
+        )
     }
 
     /// `ClassName.method(args)` — a **static** method call. Resolved through the shared
@@ -427,6 +510,6 @@ impl Interp {
         }
         let names: Vec<String> = f.params.iter().map(|p| p.name.clone()).collect();
         let mname = format!("{cls}::{name}");
-        self.run_call(&mname, &names, &f.body, args, None)
+        self.run_call(&mname, &names, &f.body, args, None, Some(cls))
     }
 }

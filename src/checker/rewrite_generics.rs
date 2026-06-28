@@ -164,6 +164,24 @@ pub fn erase_generics(program: Program) -> Program {
                 args: args.iter().map(|a| rexpr(a, params)).collect(),
                 span: *span,
             },
+            // A return-overload selector (Slice C1) / a `parent` call (super/parent): recurse the
+            // sub-expressions so a generic-typed annotation inside them is erased too.
+            Expr::OverloadSelect { ty, call, span } => Expr::OverloadSelect {
+                ty: ty.clone(),
+                call: Box::new(rexpr(call, params)),
+                span: *span,
+            },
+            Expr::ParentCall {
+                ancestor,
+                method,
+                args,
+                span,
+            } => Expr::ParentCall {
+                ancestor: ancestor.clone(),
+                method: method.clone(),
+                args: args.iter().map(|a| rexpr(a, params)).collect(),
+                span: *span,
+            },
             Expr::Member {
                 object,
                 name,

@@ -806,6 +806,20 @@ impl Printer<'_> {
             Expr::OverloadSelect { ty: t, call, .. } => {
                 Ok(format!("<{}>{}", ty(t)?, self.expr(call)?))
             }
+            // `parent.m(args)` / `parent(A).m(args)` — super/parent dispatch (M-RT super/parent).
+            Expr::ParentCall {
+                ancestor,
+                method,
+                args,
+                ..
+            } => {
+                let head = match ancestor {
+                    Some(a) => format!("parent({a})"),
+                    None => "parent".to_string(),
+                };
+                let xs: Result<Vec<_>, _> = args.iter().map(|a| self.expr(a)).collect();
+                Ok(format!("{head}.{method}({})", xs?.join(", ")))
+            }
             Expr::Call { callee, args, .. } => {
                 let a: Result<Vec<_>, _> = args.iter().map(|x| self.expr(x)).collect();
                 Ok(format!(

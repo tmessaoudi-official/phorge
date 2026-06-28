@@ -234,6 +234,98 @@ pub fn class_mro(program: &Program) -> std::collections::BTreeMap<String, Vec<St
     out
 }
 
+/// Direct parents (`extends`) of every class, keyed by class name — `Dog → [Animal]`, `Both →
+/// [Left, Right]`, a root class → `[]`. The immediate-parent view (vs. [`class_mro`]'s transitive
+/// ancestors); used by `parent`/super resolution (M-RT super/parent dispatch).
+pub fn class_parents(program: &Program) -> std::collections::BTreeMap<String, Vec<String>> {
+    let mut out = std::collections::BTreeMap::new();
+    for item in &program.items {
+        if let Item::Class(c) = item {
+            out.insert(c.name.clone(), c.extends.clone());
+        }
+    }
+    out
+}
+
+/// Why a `parent`/super call could not resolve (M-RT super/parent dispatch). Mapped to the
+/// `E-PARENT-*` diagnostics by the checker; the backends never see an error (the build fails first),
+/// but they call the same [`resolve_parent_method`] so a resolved target is byte-identical across
+/// `run`/`runvm`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParentResolveError {
+    /// The lexical class has no parents at all (`E-PARENT-NO-PARENT`).
+    NoParent,
+    /// `parent(A)` where `A` is not a transitive ancestor of the lexical class (`E-PARENT-NOT-ANCESTOR`).
+    NotAncestor,
+    /// No ancestor (or the named one) declares/inherits the method (`E-PARENT-NO-METHOD`).
+    NoMethod,
+    /// Bare `parent.m()` in a multiple-inheritance class where ≥2 parent arms resolve `m` to distinct
+    /// origins (`E-PARENT-AMBIGUOUS`); the fix is to qualify with `parent(A).m()`.
+    Ambiguous,
+}
+
+/// Resolve a `parent`/super method call to its concrete `(declaring_class, method)` target — the
+/// **single source** consumed by the checker (errors + typing), the interpreter (dispatch), and the
+/// compiler (bakes the function index), so `run ≡ runvm` by construction (the same discipline as
+/// [`class_method_origins`]). `parent` is **lexical**: `lexical_class` is the class whose method body
+/// contains the call (where the override is *written*), NOT the receiver's runtime class — so an
+/// override calling `parent.m()` reaches the version it shadows.
+///
+/// - `ancestor = Some(A)` (`parent(A).m()`): `A` must be in `mro[lexical_class]`
+///   (`NotAncestor`); the target is `origins[(A, method)]` — the `m` an instance of `A` runs
+///   (its own or its nearest ancestor's). `A` may be **any** transitive ancestor (C++-style jump).
+/// - `ancestor = None` (`parent.m()`): the nearest ancestor declaring `m`, found by collecting the
+///   distinct origins each **direct** parent resolves `m` to — exactly one ⇒ that target; zero ⇒
+///   `NoMethod`; ≥2 distinct ⇒ `Ambiguous` (only possible under multiple inheritance).
+///
+/// `method` may be `"constructor"` (a parent-constructor call); origins never contains a constructor
+/// entry, so a ctor call always resolves via the direct-parent arm against `parents`, handled by the
+/// caller — this function is method-only and the caller special-cases the constructor.
+pub fn resolve_parent_method(
+    parents: &std::collections::BTreeMap<String, Vec<String>>,
+    mro: &std::collections::BTreeMap<String, Vec<String>>,
+    origins: &std::collections::BTreeMap<(String, String), (String, String)>,
+    lexical_class: &str,
+    ancestor: Option<&str>,
+    method: &str,
+) -> Result<(String, String), ParentResolveError> {
+    let direct = parents.get(lexical_class).map_or(&[][..], Vec::as_slice);
+    if direct.is_empty() {
+        return Err(ParentResolveError::NoParent);
+    }
+    match ancestor {
+        Some(a) => {
+            let is_ancestor = mro
+                .get(lexical_class)
+                .is_some_and(|anc| anc.iter().any(|x| x == a));
+            if !is_ancestor {
+                return Err(ParentResolveError::NotAncestor);
+            }
+            origins
+                .get(&(a.to_string(), method.to_string()))
+                .cloned()
+                .ok_or(ParentResolveError::NoMethod)
+        }
+        None => {
+            // Distinct origins each direct parent resolves `method` to (a diamond's shared base
+            // collapses to one origin, so it is not ambiguous).
+            let mut found: Vec<(String, String)> = Vec::new();
+            for p in direct {
+                if let Some(t) = origins.get(&(p.clone(), method.to_string())) {
+                    if !found.contains(t) {
+                        found.push(t.clone());
+                    }
+                }
+            }
+            match found.len() {
+                0 => Err(ParentResolveError::NoMethod),
+                1 => Ok(found.into_iter().next().unwrap()),
+                _ => Err(ParentResolveError::Ambiguous),
+            }
+        }
+    }
+}
+
 /// The fully-resolved method-dispatch table for every class (M-RT S6b): for each `(class, name)` it
 /// gives the `(declaring_class, declaring_method)` a call of `name` on an instance of `class` runs.
 /// This is the **single source of dispatch** for *both* backends — the interpreter looks up the

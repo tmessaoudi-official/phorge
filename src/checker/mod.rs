@@ -422,6 +422,12 @@ pub struct Checker {
     /// Merged into the combined call-rewrite map and applied by [`rewrite_ufcs`] (whose `rexpr` gains an
     /// `OverloadSelect` arm), so no backend sees the selector wrapper. No new `Op`/`Value`.
     overload_resolutions: HashMap<usize, crate::ast::Expr>,
+    /// Inheritance tables for `parent`/super resolution (M-RT super/parent), computed once in
+    /// [`Self::collect`]: direct parents, transitive ancestors (MRO), and the method-dispatch origins.
+    /// Threaded to `ast::resolve_parent_method`, the single resolver shared with both backends.
+    parent_parents: std::collections::BTreeMap<String, Vec<String>>,
+    parent_mro: std::collections::BTreeMap<String, Vec<String>>,
+    parent_origins: std::collections::BTreeMap<(String, String), (String, String)>,
 }
 
 impl Checker {
@@ -479,6 +485,9 @@ impl Checker {
             free_fn_decls: Vec::new(),
             overload_def_renames: HashMap::new(),
             overload_resolutions: HashMap::new(),
+            parent_parents: std::collections::BTreeMap::new(),
+            parent_mro: std::collections::BTreeMap::new(),
+            parent_origins: std::collections::BTreeMap::new(),
         }
     }
 

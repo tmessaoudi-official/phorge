@@ -241,6 +241,12 @@ pub enum Op {
     /// (decision P4-6). Method existence is checker-enforced; the resolution-miss fault is a
     /// defensive backstop (byte-identical to the interpreter).
     CallMethod(usize, usize),
+    /// `parent`/super dispatch `(func_idx, argc)` (M-RT super/parent): like [`Self::CallMethod`] but
+    /// the target function index is **baked at compile time** (a non-virtual call), not resolved from
+    /// the receiver's runtime class — so an override's `parent.m()` reaches the version it shadows.
+    /// The stack is `[.., this, arg0 … arg_{argc-1}]` (the receiver is the current `this`, pushed by the
+    /// compiler); slot 0 of the new frame is the receiver, slots `1..=argc` the args.
+    CallParent(usize, usize),
     /// Build a `Value::Closure` from `functions[idx]`: pop the top `functions[idx].n_captures`
     /// values (captures, in sorted order — invariant #8), then push the closure. For a named
     /// function reference (0 captures), nothing is popped. (M3 S3, Task 4.)
@@ -457,6 +463,10 @@ impl BytecodeProgram {
                         .then(|| format!("const index {i} out of range (pool has {const_len})")),
                     Op::Call(idx) => (*idx >= nfns)
                         .then(|| format!("call target {idx} out of range ({nfns} functions)")),
+                    // M-RT super/parent: the parent target is a baked function index.
+                    Op::CallParent(idx, _) => (*idx >= nfns).then(|| {
+                        format!("parent-call target {idx} out of range ({nfns} functions)")
+                    }),
                     Op::CallOverload(sid, _) | Op::CallStaticOverload(sid, _) => {
                         if *sid >= self.overloads.len() {
                             Some(format!(

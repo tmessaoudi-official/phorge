@@ -270,6 +270,18 @@ pub enum Expr {
         inner: Box<Expr>,
         span: Span,
     },
+    /// `parent.m(args)` / `parent(A).m(args)` — a **super/parent dispatch** call (M-RT super/parent).
+    /// `ancestor` is `Some("A")` for the qualified `parent(A).…` form (jump to a named ancestor) and
+    /// `None` for the immediate `parent.…` form (nearest declaring ancestor). `method` is `"constructor"`
+    /// for a parent-constructor call. Resolved (lexically) to a concrete `(declaring_class, method)` by
+    /// `ast::resolve_parent_method` — the same single source for the checker and both backends, so it is
+    /// NOT front-end-erased (it reaches the backends as a real, non-virtual dispatch).
+    ParentCall {
+        ancestor: Option<String>,
+        method: String,
+        args: Vec<Expr>,
+        span: Span,
+    },
     /// `<Type>f(args)` — a **return-type overload selector** (M-RT return-overloading, Slice C1). It is
     /// NOT a value cast (`as` is): `ty` names which overload of `call` (a return-overloaded free
     /// function) to select by its return type. Front-end-only — the checker resolves the member and the

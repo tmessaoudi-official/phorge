@@ -165,15 +165,25 @@ not a panic:
   constructor** inherits its parents' — single-parent runs the (transitively chained) ancestor's ctor;
   **multi-parent** runs a synthesized orchestrating ctor whose params are the parents' ctor params
   concatenated in `extends` order, executing each parent's ctor (with its arg slice) on the one instance.
-  Still deferred: a class that declares **its own** constructor *under inheritance* — there is no
-  parent-forwarding mechanism (`super`/`parent` is reserved-ambiguous), so it cannot initialize inherited
-  parent state; needs the explicit per-parent init call (the `super`-replacement follow-up). Also a
+  Still deferred: a class that declares **its own** constructor *under inheritance* — parent *method*
+  dispatch (`parent.m(…)`) now ships (see (5)), but **parent-constructor forwarding**
+  (`parent.constructor(…)`) does not yet (the parent ctor body must run on the existing instance, distinct
+  machinery from method dispatch — `E-PARENT-NO-METHOD` for now; B1b follow-up), so an own-ctor subclass
+  still cannot initialize inherited parent state. Also a
   *non-promoted* ctor-param **name collision across two parents** would emit a duplicate PHP parameter
   (rare; promoted-field collisions are already `E-MI-FIELD-CONFLICT`). (4) A class that is **both a multi-parent leaf and an ancestor of another multi-parent
   class** ("multi-of-multi") takes the `implements/use` path and is not also emitted as a trait — a deep
-  edge case outside S6's `package Main` scope. (5) **`super`/`parent` is not a language construct at all**
-  (inherited methods dispatch via `this.m()`), so the planned `E-MI-SUPER-AMBIGUOUS` reservation is moot
-  until that feature lands.
+  edge case outside S6's `package Main` scope. (5) **`super`/`parent` dispatch — B1a shipped (methods, single inheritance).** `parent.m(…)`
+  (nearest declaring ancestor) and `parent(A).m(…)` (jump to a named transitive ancestor) invoke the
+  inherited method an override shadows; resolution is lexical + non-virtual + single-sourced
+  (`ast::resolve_parent_method`), one new `Op::CallParent`, transpiles to native PHP `parent::m`/`A::m`,
+  byte-identical run≡runvm≡real PHP (`guide/parent-dispatch.phg`). Errors
+  `E-PARENT-OUTSIDE-METHOD`/`-NO-PARENT`/`-NOT-ANCESTOR`/`-NO-METHOD`/`-AMBIGUOUS`. **Deferred:**
+  (a) **`parent.constructor(…)`** (B1b — see (3)); (b) **multiple inheritance** `parent(X).m(…)` + the
+  multi-of-multi trait lowering (B2 — the resolver already supports MI/ambiguity, but the trait-aliased
+  PHP emission is the remaining work); (c) an **overloaded** parent method (the compiler resolves via the
+  `methods` table, which doesn't carry the overload set — single-method parents only for now);
+  (d) cross-package parent calls (package-`Main` scope, like every M-RT slice).
 
 - **Traits — S8 shipped; deferrals (all clean compile-time, or transpile-oracle-gated):** `trait`/`use`
   composition (methods, `mutable`/`static` state, a trait constructor, abstract requirements, property

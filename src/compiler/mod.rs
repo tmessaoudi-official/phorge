@@ -194,6 +194,11 @@ struct Compiler<'a> {
     /// The class whose body is being compiled (a method or constructor), or `None` in a free
     /// function. `ctype(This)` resolves to `Class(cur_class)`.
     cur_class: Option<String>,
+    /// Direct parents (`extends`) of every class, for `parent`/super resolution (M-RT super/parent).
+    /// `Some` only when compiling a method/constructor body (set after construction, like `cur_class`);
+    /// `None` for a free function. A `parent.m()` resolves its target via this + the `methods` table
+    /// (which already encodes dispatch origins), matching the interpreter's `resolve_parent_method`.
+    parent_parents: Option<&'a std::collections::BTreeMap<String, Vec<String>>>,
     /// Active `match`-arm bindings (a stack; innermost shadows). Populated while compiling an arm
     /// body, truncated after.
     match_bindings: Vec<MatchBinding>,
@@ -424,6 +429,7 @@ impl<'a> Compiler<'a> {
             methods,
             method_overloads,
             cur_class: None,
+            parent_parents: None,
             match_bindings: Vec::new(),
             height: 0,
             ctor_return_jumps: None,
@@ -479,6 +485,8 @@ impl<'a> Compiler<'a> {
             Op::IsInstance(_) => 0, // pop value, push bool
             // Pops the receiver + `argc` args, pushes one result.
             Op::CallMethod(_, argc) => -(*argc as isize),
+            // `parent`/super dispatch (M-RT): pops `this` + `argc` args, pushes the result → net -argc.
+            Op::CallParent(_, argc) => -(*argc as isize),
             // Terminal (end/redirect the frame): height afterward is dead code, never read.
             Op::Return | Op::Fault(_) => 0,
             // MakeClosure(idx): pops `n_captures` capture values, pushes one `Value::Closure`.
@@ -777,6 +785,13 @@ impl<'a> Compiler<'a> {
                 params: params.iter().map(|p| resolve_cty(&p.ty)).collect(),
                 ret: Box::new(ret.as_ref().map_or(CTy::Other, resolve_cty)),
             }),
+            // A `parent.m(…)` / `parent(A).m(…)` result resolves to the target method's return type
+            // (M-RT super/parent) — keyed on the resolved declaring class — so a parent call used as an
+            // arithmetic operand (`parent.combine(…) + 1`) specializes on the VM, matching the
+            // interpreter (the documented CTy-operand parity trap).
+            Expr::ParentCall {
+                ancestor, method, ..
+            } => Ok(self.parent_ret_cty(ancestor.as_deref(), method)),
             other => Err(format!("cannot infer numeric type of {other:?}")),
         }
     }

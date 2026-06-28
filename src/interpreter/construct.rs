@@ -117,6 +117,7 @@ impl Interp {
                 body,
                 slice,
                 Some(Value::Instance(rc.clone())),
+                Some(rc.class.as_str()),
             )?;
         }
         Ok(Value::Instance(rc))

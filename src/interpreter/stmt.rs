@@ -83,12 +83,14 @@ impl Interp {
                             if let Some((p, body)) = self.hook_set(&inst.class, name) {
                                 // Mirror the VM's synthetic hook-setter name for trace parity.
                                 let setter = format!("{}::{name}$set", inst.class);
+                                let cls = inst.class.clone();
                                 self.run_call(
                                     &setter,
                                     &[p.name],
                                     &body,
                                     vec![v],
                                     Some(Value::Instance(inst)),
+                                    Some(cls.as_str()),
                                 )?;
                                 return Ok(());
                             }

@@ -1,0 +1,59 @@
+package Main;
+
+import Core.Console;
+
+// Super/parent dispatch (M-RT super/parent) — single inheritance, methods. An override can invoke the
+// implementation it shadows with `parent.m(…)` (the nearest ancestor that declares `m`), or jump to a
+// specific named ancestor with `parent(A).m(…)`. Resolution is LEXICAL — relative to the class that
+// *writes* the call, not the receiver's runtime class — so it always reaches "the version above me".
+// Dispatch is non-virtual (it runs exactly that body, once); chaining further up is each method's own
+// choice. Transpiles to native PHP `parent::m(…)` / `A::m(…)`, byte-identical on run/runvm/real PHP.
+//
+// (Parent-constructor forwarding — `parent.constructor(…)` — and multiple inheritance are follow-ups.)
+open class Animal {
+    open function describe(): string {
+        return "animal";
+    }
+}
+
+open class Dog extends Animal {
+    open function describe(): string {
+        // Extends the parent's behaviour by calling the version it overrides.
+        return "{parent.describe()}/dog";
+    }
+}
+
+class Puppy extends Dog {
+    function describe(): string {
+        // `parent.describe()` is the immediate ancestor (Dog, which itself chains to Animal);
+        // `parent(Animal).describe()` jumps straight past Dog to the grandparent.
+        string viaDog = parent.describe();
+        string viaAnimal = parent(Animal).describe();
+        return "{viaDog} | {viaAnimal} | puppy";
+    }
+}
+
+// A `parent.m(…)` result is an ordinary typed value, usable directly as an operand (and a parent call
+// may take another parent call as its argument).
+open class Counter {
+    open function count(): int {
+        return 1;
+    }
+}
+
+class Stepped extends Counter {
+    function count(): int {
+        return parent.count() + 10;
+    }
+}
+
+function main(): void {
+    Console.println(new Animal().describe());
+    // animal
+    Console.println(new Dog().describe());
+    // animal/dog
+    Console.println(new Puppy().describe());
+    // animal/dog | animal | puppy
+    Console.println("{new Stepped().count()}");
+}
+// 11

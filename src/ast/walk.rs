@@ -83,6 +83,12 @@ fn collect_free_expr(
         Expr::Propagate { inner, .. } => collect_free_expr(inner, bound, found),
         // A `<Type>f(args)` selector (Slice C1) captures whatever its inner call captures.
         Expr::OverloadSelect { call, .. } => collect_free_expr(call, bound, found),
+        // A `parent.m(args)` super call captures the free vars of its arguments (M-RT super/parent).
+        Expr::ParentCall { args, .. } => {
+            for a in args {
+                collect_free_expr(a, bound, found);
+            }
+        }
         Expr::CloneWith { object, fields, .. } => {
             collect_free_expr(object, bound, found);
             for (_, e) in fields {
@@ -297,6 +303,7 @@ pub fn lambda_uses_this(body: &LambdaBody) -> bool {
             Expr::Force { inner, .. } => in_expr(inner),
             Expr::Propagate { inner, .. } => in_expr(inner),
             Expr::OverloadSelect { call, .. } => in_expr(call),
+            Expr::ParentCall { args, .. } => args.iter().any(in_expr),
             Expr::CloneWith { object, fields, .. } => {
                 in_expr(object) || fields.iter().any(|(_, e)| in_expr(e))
             }

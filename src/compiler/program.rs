@@ -459,6 +459,10 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
         }
     }
 
+    // M-RT super/parent: direct parents of every class, for `parent`-call resolution inside method and
+    // constructor bodies (shared with the interpreter/checker via `ast::resolve_parent_method`).
+    let class_parents = crate::ast::class_parents(program);
+
     // Arities for *every* function index — free fns, constructors, then methods (`this` + params)
     // — so `stack_effect` can size an `Op::Call` into a constructor (methods dispatch via
     // `CallMethod`, whose arg count is in the op, so their arity entries are for completeness).
@@ -557,6 +561,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
             &method_rets,
             &methods,
             &method_overloads,
+            &class_parents,
             base,
         )?;
         functions.push(f);
@@ -592,6 +597,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
             &method_rets,
             &methods,
             &method_overloads,
+            &class_parents,
             base,
             prelude,
         )?;
@@ -660,6 +666,7 @@ pub(super) fn compile_constructor<'a>(
     method_rets: &'a HashMap<(String, String), CTy>,
     methods: &'a HashMap<(String, String), usize>,
     method_overloads: &'a HashMap<(String, String), usize>,
+    parent_parents: &'a std::collections::BTreeMap<String, Vec<String>>,
     base_fn_idx: usize,
 ) -> Result<(Function, Vec<Function>), String> {
     // M-RT S6c.2: a no-own-ctor class compiles its inherited constructor *plan* — for single
@@ -687,6 +694,7 @@ pub(super) fn compile_constructor<'a>(
         base_fn_idx,
     );
     comp.cur_class = Some(c.name.clone()); // `this` resolves to this class (ctype)
+    comp.parent_parents = Some(parent_parents); // M-RT super/parent resolution in a ctor body
     for p in &all_params {
         comp.add_local(&p.name, resolve_cty(&p.ty));
     }
@@ -761,6 +769,7 @@ pub(super) fn compile_method<'a>(
     method_rets: &'a HashMap<(String, String), CTy>,
     methods: &'a HashMap<(String, String), usize>,
     method_overloads: &'a HashMap<(String, String), usize>,
+    parent_parents: &'a std::collections::BTreeMap<String, Vec<String>>,
     base_fn_idx: usize,
     // Batch-1 D: the non-literal static-init prelude, non-empty only for a class-static `main` entry
     // (emitted before the body, exactly as a top-level `main` does it). `&[]` for every other method.
@@ -784,6 +793,7 @@ pub(super) fn compile_method<'a>(
         base_fn_idx,
     );
     comp.cur_class = Some(class_name.to_string()); // `this` resolves to this class (ctype)
+    comp.parent_parents = Some(parent_parents); // M-RT super/parent resolution in a method body
     comp.add_local("$this", CTy::Other); // slot 0 = receiver
     for p in &f.params {
         comp.add_local(&p.name, resolve_cty(&p.ty));

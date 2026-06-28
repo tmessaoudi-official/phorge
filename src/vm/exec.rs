@@ -572,6 +572,21 @@ impl<'a> Vm<'a> {
                 });
             }
 
+            // M-RT super/parent: non-virtual dispatch to a *baked* function index — same frame layout
+            // as `CallMethod` (slot 0 = the receiver/`this`, slots `1..=argc` the args) but the target
+            // is resolved at compile time (the version an override shadows), not from the receiver.
+            Op::CallParent(func, argc) => {
+                if self.frames.len() >= MAX_CALL_DEPTH {
+                    return Err("stack overflow".to_string());
+                }
+                let slot_base = self.pop_n_start(argc + 1);
+                self.frames.push(Frame {
+                    func,
+                    ip: 0,
+                    slot_base,
+                });
+            }
+
             // --- M3 S3: lambda closures ---
 
             // Pop `functions[idx].n_captures` capture values from the stack and build a

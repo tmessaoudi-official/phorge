@@ -171,6 +171,14 @@ impl Parser {
             )
     }
 
+    /// `parent` is a contextual super-dispatch keyword (M-RT super/parent), recognized ONLY as a call
+    /// head — `parent.m(…)` (immediate) or `parent(A).m(…)` (qualified ancestor). A bare `parent` not
+    /// followed by `.`/`(` stays an ordinary identifier (no `.phg` uses it as a value). The checker
+    /// rejects it outside an instance method/constructor (`E-PARENT-OUTSIDE-METHOD`).
+    fn at_parent_call(&self) -> bool {
+        self.at_kw("parent") && matches!(self.peek2(), TokenKind::Dot | TokenKind::LParen)
+    }
+
     /// Consume the contextual keyword `kw` (its presence already established by the caller) or error.
     fn eat_kw(&mut self, kw: &str, what: &str) -> Result<(), Diagnostic> {
         if self.at_kw(kw) {

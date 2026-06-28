@@ -240,7 +240,12 @@ impl Parser {
         // construction call (a primary callee + its argument list) and wrap it in `Expr::New`; the
         // postfix loop below then applies any `.`/`[]`/`!`/`?`/`with` to the constructed value (so
         // `new C().m()` is `(new C()).m()`). A bare `new` not followed by a call is a parse error.
-        let mut e = if matches!(self.peek(), TokenKind::New) {
+        let mut e = if self.at_parent_call() {
+            // M-RT super/parent: `parent.m(args)` / `parent(A).m(args)`. `parent` is contextual (a
+            // call head only); the postfix loop below still applies to the result (so `parent.m().x`
+            // chains). The resolved target is computed lexically by the checker/backends.
+            self.parse_parent_call()?
+        } else if matches!(self.peek(), TokenKind::New) {
             let sp = self.peek_span();
             self.advance();
             let callee = self.parse_primary()?;
@@ -344,6 +349,38 @@ impl Parser {
             }
         }
         Ok(e)
+    }
+
+    /// `parent.m(args)` / `parent(A).m(args)` — a super/parent dispatch call (M-RT super/parent). The
+    /// `at_parent_call` gate has confirmed the head. `A` (a bare ancestor class name) selects the
+    /// qualified form; the method may be an ordinary name or the `constructor` keyword (parent ctor).
+    pub(super) fn parse_parent_call(&mut self) -> Result<Expr, Diagnostic> {
+        let sp = self.peek_span();
+        self.advance(); // `parent`
+        let ancestor = if self.eat(&TokenKind::LParen) {
+            let a = self.expect_ident("an ancestor class name in `parent(A)`")?;
+            self.expect(&TokenKind::RParen, "')' after the ancestor in `parent(A)`")?;
+            Some(a)
+        } else {
+            None
+        };
+        self.expect(&TokenKind::Dot, "'.' after `parent` in a super call")?;
+        // The method is an ordinary name, or the `constructor` keyword (a parent-constructor call).
+        let method = if matches!(self.peek(), TokenKind::Constructor) {
+            self.advance();
+            "constructor".to_string()
+        } else {
+            self.expect_ident("a method name after `parent.`")?
+        };
+        self.expect(&TokenKind::LParen, "'(' to open the super-call arguments")?;
+        let args = self.parse_arg_list()?;
+        self.expect(&TokenKind::RParen, "')' to close arguments")?;
+        Ok(Expr::ParentCall {
+            ancestor,
+            method,
+            args,
+            span: sp,
+        })
     }
 
     /// Comma-separated expressions until the closing delimiter (caller consumes the closer).

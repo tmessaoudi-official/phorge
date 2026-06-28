@@ -85,6 +85,11 @@ impl Checker {
         // Pre-bind all type names so member/annotation resolution is order-independent (forward +
         // cross-file references). Must run before the per-item collect loop resolves any type.
         self.prebind_types(program);
+        // M-RT super/parent: cache the inheritance tables once for `parent`-call resolution (the same
+        // tables `ast::resolve_parent_method` threads to both backends).
+        self.parent_parents = crate::ast::class_parents(program);
+        self.parent_mro = crate::ast::class_mro(program);
+        self.parent_origins = crate::ast::class_method_origins(program).0;
         for item in &program.items {
             // PHP reserves a set of words in symbol positions (a free function / class / enum /
             // interface / trait / type-alias). Several are usable Phorj value identifiers (param /
