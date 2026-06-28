@@ -220,9 +220,13 @@ wrapping/width-reflow is a later addition.
 `phg lsp` is a [Language Server](https://microsoft.github.io/language-server-protocol/) over stdio, so
 any LSP-capable editor gets:
 
-- **Diagnostics** as you type — the *same* checker `phg check` runs, so editor squiggles equal the CLI.
-- **Hover** — the declaration signature of the symbol under the cursor.
-- **Go-to-definition** — jump to a function / class / enum / interface / trait / type declaration.
+- **Diagnostics** as you type — the *same* checker `phg check` runs, so editor squiggles equal the CLI
+  (highlighting the whole offending token).
+- **Hover** — the declaration signature of the symbol under the cursor (top-level *or* a local/param).
+- **Go-to-definition** — jump to a function / class / enum / interface / trait / type declaration, or to
+  a local binding (parameter, `var`, `for` variable, `if`-let, `catch`, destructure) in scope.
+- **Completion** — top-level names, in-scope locals/params, and keywords.
+- **Document symbols** — a structured outline (classes/enums/interfaces/traits expand to their members).
 
 It is dependency-free (hand-rolled JSON-RPC in `std` — no `tower-lsp`/`serde`), like the rest of Phorge.
 

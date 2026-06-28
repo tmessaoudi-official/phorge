@@ -188,3 +188,106 @@ fn warning_maps_to_severity_2() {
     assert!(body.contains("W-FORCE-UNWRAP"), "{body}");
     assert!(body.contains("\"severity\":2"));
 }
+
+// ── v2: true end-ranges, locals, completion, document symbols ──────────────────────────────────
+
+#[test]
+fn initialize_advertises_completion_and_document_symbols() {
+    let mut s = Server::default();
+    let out = s.handle(&Json::parse(r#"{"id":1,"method":"initialize"}"#).unwrap());
+    assert!(out[0].contains("completionProvider"), "{}", out[0]);
+    assert!(out[0].contains("documentSymbolProvider"), "{}", out[0]);
+}
+
+#[test]
+fn diagnostic_range_spans_the_whole_token() {
+    // The unknown ident `nope` is on line 2 (0-based), chars 10..14; v2 widens the range to the token.
+    let mut s = Server::default();
+    let out = s.handle(&did_open(
+        "file:///e.phg",
+        "package Main;\nfunction main() -> void {\n  var x = nope;\n}",
+    ));
+    let body = &out[0];
+    assert!(body.contains("E-UNKNOWN-IDENT"), "{body}");
+    assert!(
+        body.contains(
+            "\"start\":{\"line\":2,\"character\":10},\"end\":{\"line\":2,\"character\":14}"
+        ),
+        "{body}"
+    );
+}
+
+/// A program with a parameter `count` and a local `total`, used below their declarations.
+const LOCALS: &str =
+    "package Main;\nfunction f(int count) -> int {\n  var total = count;\n  return total;\n}";
+
+#[test]
+fn definition_on_a_param_use_jumps_to_the_param() {
+    let mut s = Server::default();
+    s.handle(&did_open("file:///x.phg", LOCALS));
+    // line 2, char 15 → inside `count` in `var total = count;`.
+    let out = s.handle(&req_at("definition", 2, 15));
+    let body = &out[0];
+    // The param `count` is declared on source line 1 (0-based).
+    assert!(body.contains("\"line\":1"), "{body}");
+}
+
+#[test]
+fn definition_on_a_local_use_jumps_to_the_var_decl() {
+    let mut s = Server::default();
+    s.handle(&did_open("file:///x.phg", LOCALS));
+    // line 3, char 10 → inside `total` in `return total;`.
+    let out = s.handle(&req_at("definition", 3, 10));
+    let body = &out[0];
+    // `var total` is on source line 2 (0-based).
+    assert!(body.contains("\"line\":2"), "{body}");
+}
+
+#[test]
+fn hover_on_a_local_shows_its_declaration() {
+    let mut s = Server::default();
+    s.handle(&did_open("file:///x.phg", LOCALS));
+    let out = s.handle(&req_at("hover", 2, 15)); // on `count`
+    let body = &out[0];
+    assert!(body.contains("count"), "{body}");
+}
+
+#[test]
+fn completion_lists_top_level_locals_and_keywords() {
+    let mut s = Server::default();
+    s.handle(&did_open("file:///x.phg", LOCALS));
+    // Completion inside `f`'s body (line 3).
+    let out = s.handle(&req_at("completion", 3, 4));
+    let body = &out[0];
+    assert!(
+        body.contains("\"label\":\"f\""),
+        "top-level fn missing: {body}"
+    );
+    assert!(
+        body.contains("\"label\":\"count\""),
+        "param local missing: {body}"
+    );
+    assert!(
+        body.contains("\"label\":\"total\""),
+        "var local missing: {body}"
+    );
+    assert!(
+        body.contains("\"label\":\"return\""),
+        "keyword missing: {body}"
+    );
+}
+
+#[test]
+fn document_symbols_outline_nests_class_members() {
+    let mut s = Server::default();
+    let src = "package Main;\nclass Point {\n  int x;\n  function get() -> int { return this.x; }\n}\nfunction main() -> void { }";
+    s.handle(&did_open("file:///x.phg", src));
+    let out = s.handle(&req_at("documentSymbol", 0, 0));
+    let body = &out[0];
+    assert!(body.contains("\"name\":\"Point\",\"kind\":5"), "{body}");
+    assert!(body.contains("\"name\":\"x\",\"kind\":8"), "{body}");
+    assert!(body.contains("\"name\":\"get\",\"kind\":6"), "{body}");
+    assert!(body.contains("\"name\":\"main\",\"kind\":12"), "{body}");
+    // `main` is a sibling of `Point`, not nested inside it.
+    assert!(body.contains("\"children\":["), "{body}");
+}

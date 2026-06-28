@@ -92,3 +92,36 @@ tests; the LSP test covers framing + mapping.
 1. **Scope**: v1 diagnostics-only (recommended) vs include hover/go-to-def now.
 2. **Editor client**: ship a VSCode thin client in-repo, docs-only, or both.
 3. **Document sync**: full (recommended, simplest) vs incremental.
+
+## v2 — full IDE surface (2026-06-28, locked: do all four, autonomous)
+
+Built on v1's parse-the-buffer + position helpers (`src/lsp/symbols.rs`), adding `src/lsp/scope.rs`
+(position↔offset, binding collection, enclosing-callable). Still **off the byte-identity spine** —
+pure front-end queries over the lexer/parser, no backend touched.
+
+1. **True end-ranges.** Diagnostics + hover/definition ranges now span the *token*, not a 1-char
+   caret. The `Diagnostic` struct is intentionally span-less (no renderer reads byte offsets), so the
+   LSP layer re-derives the range from the buffer: the token whose start is at the diagnostic's
+   `(line, col)` gives the end via its `Span.len` (lexer is already run for the buffer). Falls back to
+   caret+1 when no token aligns.
+
+2. **Locals / params resolution.** Hover + go-to-definition now resolve a *local* binding (parameter,
+   `var`/`Type x =`, `for` var, `if (var x = …)`, destructure binder, `catch` binder), not only
+   top-level names. The enclosing callable is found by the item-ordering heuristic (top-level items are
+   source-ordered; the cursor's item is `[item[i].start .. item[i+1].start)`, then the enclosing method
+   within a class the same way); within it, the binding collector walks the body (recursing nested
+   blocks) and resolution picks the nearest *preceding* declaration of the name (shadowing-correct for
+   the common declare-above/use-below case). Top-level resolution still wins first. **Deferred (v2.1):**
+   lambda-parameter and match-pattern binders (expr-nested, no statement span to anchor).
+
+3. **Completion** (`textDocument/completion`). Returns top-level declaration names (with the right
+   `CompletionItemKind`), the in-scope locals/params of the enclosing callable, and the language
+   keyword set. No type-directed member completion yet (needs the resolved-type index) — documented.
+
+4. **Document symbols** (`textDocument/documentSymbol`). A hierarchical outline: every top-level item,
+   with classes/enums/interfaces/traits carrying their members/variants as children. Each item's
+   `range` is `[item.start .. next_item.start)` (so children are always contained, per the LSP spec's
+   nesting rule) and its `selectionRange` is the name token.
+
+Capabilities advertised: `completionProvider`, `documentSymbolProvider` (plus v1's hover/definition).
+Tests extend `src/lsp/tests.rs` (drive `Server::handle` directly).

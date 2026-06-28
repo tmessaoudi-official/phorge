@@ -8,10 +8,13 @@
 //! carries no `run`/`runvm`/PHP parity risk. Diagnostics reuse the *exact* checker the CLI runs, so
 //! editor squiggles equal `phg check`.
 //!
-//! v1 capabilities: `publishDiagnostics` (full document sync). Hover + go-to-definition are a
-//! follow-up slice (they need a position→symbol index over the checker's resolved tables).
+//! Capabilities: `publishDiagnostics` (full document sync, token-width ranges), hover,
+//! go-to-definition, completion, and document symbols — top-level *and* local/parameter resolution
+//! (the v2 query layer lives in `scope.rs` + `symbols.rs`, all front-end-only). Member completion and
+//! lambda/match-pattern binders remain a documented follow-up.
 
 mod json;
+mod scope;
 mod symbols;
 #[cfg(test)]
 mod tests;
@@ -47,6 +50,8 @@ impl Server {
             "initialized" | "$/setTrace" => vec![],
             "textDocument/hover" => vec![response(id, &self.hover(msg))],
             "textDocument/definition" => vec![response(id, &self.definition(msg))],
+            "textDocument/completion" => vec![response(id, &self.completion(msg))],
+            "textDocument/documentSymbol" => vec![response(id, &self.document_symbols(msg))],
             "textDocument/didOpen" => self.on_open(msg),
             "textDocument/didChange" => self.on_change(msg),
             "textDocument/didClose" => {
@@ -108,29 +113,53 @@ impl Server {
         vec![self.publish(&uri)]
     }
 
-    /// Resolve a `textDocument/{hover,definition}` request to the identifier name under the cursor +
-    /// the parsed program of its buffer. `None` if the document/position/identifier can't be located.
-    fn symbol_at(&self, msg: &Json) -> Option<(String, String, crate::ast::Program)> {
+    /// Resolve a `textDocument/{hover,definition,completion}` request to the buffer text, the cursor's
+    /// byte offset, the identifier name under the cursor (if any), and the parsed program. `None` if
+    /// the document/position can't be located or the buffer doesn't parse.
+    fn symbol_at(
+        &self,
+        msg: &Json,
+    ) -> Option<(String, usize, Option<String>, crate::ast::Program)> {
         let uri = doc_uri(msg)?;
         let text = self.docs.get(&uri)?;
         let pos = msg.get("params")?.get("position")?;
         let line = num(pos.get("line"))?;
         let character = num(pos.get("character"))?;
         let offset = symbols::offset_at(text, line, character)?;
-        let name = symbols::ident_at(text, offset)?;
+        let name = symbols::ident_at(text, offset);
         let tokens = crate::lexer::lex(text).ok()?;
         let program = Parser::new(tokens).parse_program().ok()?;
-        Some((name, text.clone(), program))
+        Some((text.clone(), offset, name, program))
     }
 
-    /// `textDocument/hover` — show the declaration signature of the symbol under the cursor, or `null`.
+    /// Resolve the identifier under the cursor to its declaration span: a top-level symbol first, then
+    /// a local binding (parameter / `var` / `for` var / `if`-let / `catch` / destructure) of the
+    /// enclosing callable. `is_local` distinguishes the two for hover rendering.
+    fn resolve_decl(
+        offset: usize,
+        name: &str,
+        program: &crate::ast::Program,
+    ) -> Option<(crate::token::Span, bool)> {
+        if let Some((_kind, span)) = symbols::definition_of(program, name) {
+            return Some((span, false));
+        }
+        // No top-level match → a local of the enclosing callable (scoped + nearest-preceding).
+        scope::local_definition(program, name, offset).map(|sp| (sp, true))
+    }
+
+    /// `textDocument/hover` — show the declaration signature of the symbol under the cursor (top-level
+    /// or local), or `null`.
     fn hover(&self, msg: &Json) -> String {
-        let Some((name, text, program)) = self.symbol_at(msg) else {
+        let Some((text, offset, Some(name), program)) = self.symbol_at(msg) else {
             return "null".to_string();
         };
-        match symbols::definition_of(&program, &name) {
-            Some((_kind, span)) => {
-                let sig = symbols::signature_text(&text, span);
+        match Self::resolve_decl(offset, &name, &program) {
+            Some((span, is_local)) => {
+                let sig = if is_local {
+                    symbols::local_signature_text(&text, span)
+                } else {
+                    symbols::signature_text(&text, span)
+                };
                 format!(
                     "{{\"contents\":{{\"kind\":\"markdown\",\"value\":\"```phorge\\n{}\\n```\"}}}}",
                     escape(&sig)
@@ -140,33 +169,78 @@ impl Server {
         }
     }
 
-    /// `textDocument/definition` — the `Location` of the symbol's top-level declaration, or `null`.
+    /// `textDocument/definition` — the `Location` of the symbol's declaration (top-level or local), or
+    /// `null`. The range spans the declaration's name token (true end-position).
     fn definition(&self, msg: &Json) -> String {
         let Some(uri) = doc_uri(msg) else {
             return "null".to_string();
         };
-        let Some((name, _text, program)) = self.symbol_at(msg) else {
+        let Some((text, offset, Some(name), program)) = self.symbol_at(msg) else {
             return "null".to_string();
         };
-        match symbols::definition_of(&program, &name) {
-            Some((_kind, span)) => {
-                let line = span.line.saturating_sub(1);
-                let col = span.col.saturating_sub(1);
+        match Self::resolve_decl(offset, &name, &program) {
+            Some((span, _)) => {
+                let (sl, sc) = scope::position_at(&text, span.start);
+                let (el, ec) = scope::position_at(&text, span.start + span.len);
                 format!(
-                    "{{\"uri\":\"{}\",\"range\":{{\"start\":{{\"line\":{line},\"character\":{col}}},\"end\":{{\"line\":{line},\"character\":{}}}}}}}",
+                    "{{\"uri\":\"{}\",\"range\":{}}}",
                     escape(&uri),
-                    col + 1
+                    range_json(sl, sc, el, ec)
                 )
             }
             None => "null".to_string(),
         }
     }
 
+    /// `textDocument/completion` — top-level declaration names, the enclosing callable's in-scope
+    /// locals/params, and the language keywords. No member completion yet (needs the resolved-type
+    /// index); documented in the LSP design.
+    fn completion(&self, msg: &Json) -> String {
+        let Some((_text, offset, _name, program)) = self.symbol_at(msg) else {
+            return "{\"isIncomplete\":false,\"items\":[]}".to_string();
+        };
+        let mut items: Vec<String> = Vec::new();
+        // Top-level declarations (deduped names already unique per the checker).
+        for (name, kind) in symbols::top_level_symbols(&program) {
+            items.push(completion_item(&name, kind, "phorge symbol"));
+        }
+        // In-scope locals/params of the enclosing callable.
+        let mut seen_local: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for (name, _span) in scope::enclosing_bindings(&program, offset) {
+            if seen_local.insert(name.clone()) {
+                items.push(completion_item(&name, 6 /* Variable */, "local"));
+            }
+        }
+        // Language keywords (CompletionItemKind 14 = Keyword).
+        for kw in KEYWORDS {
+            items.push(completion_item(kw, 14, "keyword"));
+        }
+        format!("{{\"isIncomplete\":false,\"items\":[{}]}}", items.join(","))
+    }
+
+    /// `textDocument/documentSymbol` — a hierarchical outline of the buffer: every top-level item, with
+    /// classes/enums/interfaces/traits carrying their members/variants as children.
+    fn document_symbols(&self, msg: &Json) -> String {
+        let Some(uri) = doc_uri(msg) else {
+            return "[]".to_string();
+        };
+        let Some(text) = self.docs.get(&uri) else {
+            return "[]".to_string();
+        };
+        let Ok(tokens) = crate::lexer::lex(text) else {
+            return "[]".to_string();
+        };
+        let Ok(program) = Parser::new(tokens).parse_program() else {
+            return "[]".to_string();
+        };
+        symbols::document_symbols_json(text, &program)
+    }
+
     /// Build a `textDocument/publishDiagnostics` notification for `uri` from the current buffer.
     fn publish(&self, uri: &str) -> Out {
         let text = self.docs.get(uri).map(String::as_str).unwrap_or("");
         let diags = diagnostics_for(text);
-        let items: Vec<String> = diags.iter().map(lsp_diagnostic_json).collect();
+        let items: Vec<String> = diags.iter().map(|d| lsp_diagnostic_json(d, text)).collect();
         format!(
             "{{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{{\"uri\":\"{}\",\"diagnostics\":[{}]}}}}",
             escape(uri),
@@ -176,9 +250,9 @@ impl Server {
 }
 
 /// The advertised server capabilities: full-text sync (`1`) — the client sends the whole document on
-/// each change — push diagnostics, plus hover and go-to-definition.
+/// each change — push diagnostics, hover, go-to-definition, completion, and document symbols (v2).
 const INITIALIZE_RESULT: &str =
-    "{\"capabilities\":{\"textDocumentSync\":1,\"hoverProvider\":true,\"definitionProvider\":true},\"serverInfo\":{\"name\":\"phorge-lsp\"}}";
+    "{\"capabilities\":{\"textDocumentSync\":1,\"hoverProvider\":true,\"definitionProvider\":true,\"completionProvider\":{\"triggerCharacters\":[\".\"]},\"documentSymbolProvider\":true},\"serverInfo\":{\"name\":\"phorge-lsp\"}}";
 
 /// Compute the diagnostics for a document buffer — the **same** pipeline `phg check` runs (lex →
 /// parse → `check`), so editor diagnostics equal the CLI's. A lex or parse error is a single
@@ -199,12 +273,19 @@ fn diagnostics_for(text: &str) -> Vec<Diagnostic> {
 }
 
 /// Map a Phorge `Diagnostic` to an LSP `Diagnostic` JSON object. Phorge `line`/`col` are 1-based; LSP
-/// positions are 0-based. v1 highlights a single character at the caret (the flattened `Diagnostic`
-/// drops the span length — a v2 refinement threads it through for a full range). `code` carries the
-/// stable `E-…`/`W-…` code (resolvable via `phg explain`); a `hint` is appended to the message.
-fn lsp_diagnostic_json(d: &Diagnostic) -> String {
+/// positions are 0-based. v2 spans the offending **token** (the `Diagnostic` struct is span-less, so
+/// the end is re-derived from `text`: the token starting at the caret gives its `Span.len`; absent
+/// that, a 1-char caret). `code` carries the stable `E-…`/`W-…` code (resolvable via `phg explain`); a
+/// `hint` is appended to the message.
+fn lsp_diagnostic_json(d: &Diagnostic, text: &str) -> String {
     let line = d.line.saturating_sub(1);
     let col = d.col.saturating_sub(1);
+    // True end-range: the token at the caret widens the highlight to the whole identifier/keyword.
+    let (end_line, end_col) = symbols::offset_at(text, line, col)
+        .and_then(|off| symbols::token_span_at(text, off))
+        .map_or((line, col + 1), |sp| {
+            scope::position_at(text, sp.start + sp.len)
+        });
     // Warnings are stage-independent; the checker returns them via `Ok`, errors via `Err`. Here we
     // only know per-diagnostic intent through its code prefix (`W-` ⇒ warning), falling back to error.
     let severity = match d.code {
@@ -219,11 +300,75 @@ fn lsp_diagnostic_json(d: &Diagnostic) -> String {
         .code
         .map_or_else(|| String::from("null"), |c| format!("\"{}\"", escape(c)));
     format!(
-        "{{\"range\":{{\"start\":{{\"line\":{line},\"character\":{col}}},\"end\":{{\"line\":{line},\"character\":{}}}}},\"severity\":{severity},\"code\":{code},\"source\":\"phorge\",\"message\":\"{}\"}}",
-        col + 1,
+        "{{\"range\":{},\"severity\":{severity},\"code\":{code},\"source\":\"phorge\",\"message\":\"{}\"}}",
+        range_json(line, col, end_line, end_col),
         escape(&message)
     )
 }
+
+/// An LSP `Range` JSON object from 0-based start/end `(line, character)` pairs.
+fn range_json(sl: u32, sc: u32, el: u32, ec: u32) -> String {
+    format!(
+        "{{\"start\":{{\"line\":{sl},\"character\":{sc}}},\"end\":{{\"line\":{el},\"character\":{ec}}}}}"
+    )
+}
+
+/// A `CompletionItem` JSON object: a label, an LSP `CompletionItemKind`, and a short detail string.
+fn completion_item(label: &str, kind: u32, detail: &str) -> String {
+    format!(
+        "{{\"label\":\"{}\",\"kind\":{kind},\"detail\":\"{}\"}}",
+        escape(label),
+        escape(detail)
+    )
+}
+
+/// The Phorge keyword set surfaced in completion (CompletionItemKind 14 = Keyword). Not exhaustive of
+/// every contextual word, but the structural keywords a user types most.
+const KEYWORDS: &[&str] = &[
+    "package",
+    "import",
+    "function",
+    "class",
+    "enum",
+    "interface",
+    "trait",
+    "type",
+    "return",
+    "if",
+    "else",
+    "for",
+    "while",
+    "do",
+    "in",
+    "match",
+    "var",
+    "mutable",
+    "static",
+    "const",
+    "open",
+    "abstract",
+    "public",
+    "private",
+    "protected",
+    "new",
+    "this",
+    "true",
+    "false",
+    "null",
+    "throw",
+    "try",
+    "catch",
+    "finally",
+    "break",
+    "continue",
+    "instanceof",
+    "use",
+    "extends",
+    "implements",
+    "as",
+    "test",
+    "never",
+];
 
 /// Build a JSON-RPC success response for request `id` with a raw `result` JSON fragment.
 fn response(id: Option<&Json>, result: &str) -> Out {

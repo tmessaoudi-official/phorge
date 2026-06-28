@@ -31,10 +31,17 @@ A Language Server over stdio so editors get live Phorge diagnostics, hover, and 
 rock 2 — daily-use tooling). Design: `docs/specs/2026-06-28-lsp-design.md`. No new `Op`/`Value`; off
 the byte-identity spine. Ships with a VS Code thin client (`editors/vscode/`).
 
-- **Hover** — the declaration signature of the symbol under the cursor (sliced from source).
-- **Go-to-definition** — jump to a function / class / enum / interface / trait / type alias declaration.
-- Both resolve via a lightweight lexer-token + top-level-name index (`src/lsp/symbols.rs`); locals and
-  name collisions are a v2 refinement.
+- **Hover** — the declaration signature of the symbol under the cursor (top-level *or* a local/param).
+- **Go-to-definition** — jump to a function / class / enum / interface / trait / type alias declaration,
+  or to a local binding (parameter, `var`, `for` var, `if`-let, `catch`, destructure) in scope.
+- **Completion** (v2) — top-level names, the enclosing callable's in-scope locals/params, and keywords.
+- **Document symbols** (v2) — a hierarchical outline; classes/enums/interfaces/traits expand to their
+  members/variants (`range` `[item..next_item)` so children nest correctly, `selectionRange` = name).
+- **True end-ranges** (v2) — diagnostics, hover, and definition ranges span the whole token (re-derived
+  from the buffer, since the `Diagnostic` struct is span-less), not a 1-char caret.
+- Resolution lives in `src/lsp/scope.rs` (position↔offset, binding collection, enclosing-callable by
+  source ordering) + `src/lsp/symbols.rs`; all front-end-only. **Deferred:** member completion
+  (needs the resolved-type index) and lambda/match-pattern binders.
 - **VS Code thin client** (`editors/vscode/`): registers `*.phg` + launches `phg lsp`. Generic-editor
   registration (incl. a Neovim snippet) documented in the README "Editor support" section.
 
