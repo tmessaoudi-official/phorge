@@ -291,3 +291,87 @@ fn document_symbols_outline_nests_class_members() {
     // `main` is a sibling of `Point`, not nested inside it.
     assert!(body.contains("\"children\":["), "{body}");
 }
+
+// ── references / document-highlight / rename / formatting (v3) ─────────────────────────────────
+
+#[test]
+fn initialize_advertises_v3_capabilities() {
+    let mut s = Server::default();
+    let out = s.handle(&Json::parse(r#"{"id":1,"method":"initialize"}"#).unwrap());
+    assert!(out[0].contains("referencesProvider"), "{}", out[0]);
+    assert!(out[0].contains("documentHighlightProvider"), "{}", out[0]);
+    assert!(out[0].contains("renameProvider"), "{}", out[0]);
+    assert!(out[0].contains("documentFormattingProvider"), "{}", out[0]);
+}
+
+#[test]
+fn references_returns_declaration_and_use() {
+    let mut s = Server::default();
+    s.handle(&did_open("file:///x.phg", PROG));
+    // Cursor on the `helper` call (line 2). References include the decl (line 1) + the call (line 2).
+    let out = s.handle(&req_at("references", 2, 35));
+    let body = &out[0];
+    assert!(body.contains("\"line\":1"), "decl missing: {body}");
+    assert!(body.contains("\"line\":2"), "use missing: {body}");
+    // Two locations.
+    assert_eq!(body.matches("\"uri\"").count(), 2, "{body}");
+}
+
+#[test]
+fn document_highlight_marks_every_occurrence() {
+    let mut s = Server::default();
+    s.handle(&did_open("file:///x.phg", PROG));
+    let out = s.handle(&req_at("documentHighlight", 1, 9)); // on the `helper` declaration name
+    let body = &out[0];
+    assert!(body.contains("\"kind\":1"), "{body}");
+    assert_eq!(body.matches("\"range\"").count(), 2, "{body}");
+}
+
+#[test]
+fn rename_produces_a_workspace_edit_for_every_occurrence() {
+    let mut s = Server::default();
+    s.handle(&did_open("file:///x.phg", PROG));
+    let req = Json::parse(
+        r#"{"id":7,"method":"textDocument/rename","params":{"textDocument":{"uri":"file:///x.phg"},"position":{"line":2,"character":35},"newName":"helper2"}}"#,
+    )
+    .unwrap();
+    let out = s.handle(&req);
+    let body = &out[0];
+    assert!(body.contains("\"changes\""), "{body}");
+    assert!(body.contains("file:///x.phg"), "{body}");
+    assert_eq!(
+        body.matches("helper2").count(),
+        2,
+        "both occurrences renamed: {body}"
+    );
+}
+
+#[test]
+fn formatting_returns_a_whole_document_edit() {
+    let mut s = Server::default();
+    // Deliberately un-canonical spacing so the formatter produces a change.
+    s.handle(&did_open(
+        "file:///f.phg",
+        "package Main;\nfunction main() -> void {var x=1;}",
+    ));
+    let req = Json::parse(
+        r#"{"id":7,"method":"textDocument/formatting","params":{"textDocument":{"uri":"file:///f.phg"}}}"#,
+    )
+    .unwrap();
+    let out = s.handle(&req);
+    let body = &out[0];
+    assert!(body.contains("\"newText\""), "{body}");
+    assert!(body.contains("\"range\""), "{body}");
+}
+
+#[test]
+fn formatting_unparseable_buffer_yields_no_edit() {
+    let mut s = Server::default();
+    s.handle(&did_open("file:///g.phg", "package Main; function ((("));
+    let req = Json::parse(
+        r#"{"id":7,"method":"textDocument/formatting","params":{"textDocument":{"uri":"file:///g.phg"}}}"#,
+    )
+    .unwrap();
+    let out = s.handle(&req);
+    assert!(out[0].contains("\"result\":[]"), "{}", out[0]);
+}

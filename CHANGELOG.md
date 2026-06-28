@@ -6,6 +6,21 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — LSP: references, document-highlight, rename, formatting
+
+The `phg lsp` server gains four capabilities beyond diagnostics/hover/definition/completion/symbols —
+all front-end-only, off the byte-identity spine:
+
+- **`textDocument/references`** + **`textDocument/documentHighlight`** — every use of the symbol under
+  the cursor (declaration included), via a shared **scope-accurate** `occurrences` engine: same-name
+  identifiers filtered to those resolving to the *same declaration* (a shadowing local elsewhere is
+  excluded), reusing the existing `resolve_decl`.
+- **`textDocument/rename`** — a `WorkspaceEdit` renaming every occurrence (scope-accurate).
+- **`textDocument/formatting`** — a whole-document edit from `crate::fmt::format`, so editor-format
+  equals `phg fmt`; returns no edit if the buffer doesn't parse (never corrupts an in-progress file).
+
+Advertised in `initialize`; six new LSP tests. Single-document (cross-file references are a follow-up).
+
 ### Added — public-surface file-naming rule + order-independent type resolution
 
 Design `docs/specs/2026-06-28-public-surface-file-rule-design.md`. **No new `Op`/`Value`** (loader +

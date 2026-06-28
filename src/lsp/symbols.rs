@@ -74,6 +74,22 @@ pub fn name_token_span(text: &str, from: usize, name: &str) -> Option<Span> {
     })
 }
 
+/// Every identifier token in `text` named `name`, by span (in source order). The raw occurrence set
+/// for references/rename/highlight; the caller filters each occurrence to those resolving to the same
+/// declaration (scope-accurate). `[]` on a lex error.
+pub fn all_ident_spans(text: &str, name: &str) -> Vec<Span> {
+    match lex(text) {
+        Ok(tokens) => tokens
+            .into_iter()
+            .filter_map(|t| match t.kind {
+                TokenKind::Ident(ref n) if n == name => Some(t.span),
+                _ => None,
+            })
+            .collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
 /// The declaration of a top-level item named `name`: its kind label, name, and span. `None` if no such
 /// top-level symbol (a local/parameter/field is not resolved in v1).
 pub fn definition_of<'a>(program: &'a Program, name: &str) -> Option<(&'a str, Span)> {

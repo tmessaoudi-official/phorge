@@ -9,9 +9,12 @@
 //! editor squiggles equal `phg check`.
 //!
 //! Capabilities: `publishDiagnostics` (full document sync, token-width ranges), hover,
-//! go-to-definition, completion, and document symbols — top-level *and* local/parameter resolution
-//! (the v2 query layer lives in `scope.rs` + `symbols.rs`, all front-end-only). Member completion and
-//! lambda/match-pattern binders remain a documented follow-up.
+//! go-to-definition, completion, document symbols, **references, document-highlight, rename, and
+//! formatting** — top-level *and* local/parameter resolution (the query layer lives in `scope.rs` +
+//! `symbols.rs`, all front-end-only). References/highlight/rename share one scope-accurate `occurrences`
+//! engine (same-name idents filtered to those resolving to the same declaration); formatting reuses
+//! `crate::fmt::format`, so editor-format equals `phg fmt`. Member completion and lambda/match-pattern
+//! binders, and cross-file references, remain a documented follow-up.
 
 mod json;
 mod scope;
@@ -52,6 +55,10 @@ impl Server {
             "textDocument/definition" => vec![response(id, &self.definition(msg))],
             "textDocument/completion" => vec![response(id, &self.completion(msg))],
             "textDocument/documentSymbol" => vec![response(id, &self.document_symbols(msg))],
+            "textDocument/references" => vec![response(id, &self.references(msg))],
+            "textDocument/documentHighlight" => vec![response(id, &self.document_highlight(msg))],
+            "textDocument/rename" => vec![response(id, &self.rename(msg))],
+            "textDocument/formatting" => vec![response(id, &self.formatting(msg))],
             "textDocument/didOpen" => self.on_open(msg),
             "textDocument/didChange" => self.on_change(msg),
             "textDocument/didClose" => {
@@ -218,6 +225,124 @@ impl Server {
         format!("{{\"isIncomplete\":false,\"items\":[{}]}}", items.join(","))
     }
 
+    /// Every occurrence of the identifier under the cursor that resolves to the **same declaration**
+    /// (scope-accurate: a shadowing local with the same name elsewhere is excluded). The shared engine
+    /// behind references / document-highlight / rename. Returns the matching spans in source order.
+    fn occurrences(&self, msg: &Json) -> Option<(String, Vec<crate::token::Span>)> {
+        let uri = doc_uri(msg)?;
+        let (text, offset, Some(name), program) = self.symbol_at(msg)? else {
+            return None;
+        };
+        let target = Self::resolve_decl(offset, &name, &program)?.0;
+        let spans: Vec<crate::token::Span> = symbols::all_ident_spans(&text, &name)
+            .into_iter()
+            .filter(|sp| {
+                Self::resolve_decl(sp.start, &name, &program).map(|(d, _)| d) == Some(target)
+            })
+            .collect();
+        Some((uri, spans))
+    }
+
+    /// `textDocument/references` — every use of the symbol under the cursor (declaration included), as
+    /// `Location[]`. Single-document (the open buffer); cross-file references are a follow-up.
+    fn references(&self, msg: &Json) -> String {
+        let Some((uri, spans)) = self.occurrences(msg) else {
+            return "[]".to_string();
+        };
+        let text = self.docs.get(&uri).map(String::as_str).unwrap_or("");
+        let locs: Vec<String> = spans
+            .iter()
+            .map(|sp| {
+                let (sl, sc) = scope::position_at(text, sp.start);
+                let (el, ec) = scope::position_at(text, sp.start + sp.len);
+                format!(
+                    "{{\"uri\":\"{}\",\"range\":{}}}",
+                    escape(&uri),
+                    range_json(sl, sc, el, ec)
+                )
+            })
+            .collect();
+        format!("[{}]", locs.join(","))
+    }
+
+    /// `textDocument/documentHighlight` — the same occurrences as references, as `DocumentHighlight[]`
+    /// (kind 1 = Text), used by editors to highlight every use when the cursor rests on a symbol.
+    fn document_highlight(&self, msg: &Json) -> String {
+        let Some((uri, spans)) = self.occurrences(msg) else {
+            return "[]".to_string();
+        };
+        let text = self.docs.get(&uri).map(String::as_str).unwrap_or("");
+        let hs: Vec<String> = spans
+            .iter()
+            .map(|sp| {
+                let (sl, sc) = scope::position_at(text, sp.start);
+                let (el, ec) = scope::position_at(text, sp.start + sp.len);
+                format!("{{\"range\":{},\"kind\":1}}", range_json(sl, sc, el, ec))
+            })
+            .collect();
+        format!("[{}]", hs.join(","))
+    }
+
+    /// `textDocument/rename` — a `WorkspaceEdit` replacing every occurrence (declaration + uses) of the
+    /// symbol under the cursor with `newName`. Scope-accurate via [`Self::occurrences`].
+    fn rename(&self, msg: &Json) -> String {
+        let new_name = msg
+            .get("params")
+            .and_then(|p| p.get("newName"))
+            .and_then(Json::as_str)
+            .unwrap_or("");
+        let Some((uri, spans)) = self.occurrences(msg) else {
+            return "null".to_string();
+        };
+        if new_name.is_empty() || spans.is_empty() {
+            return "null".to_string();
+        }
+        let text = self.docs.get(&uri).map(String::as_str).unwrap_or("");
+        let edits: Vec<String> = spans
+            .iter()
+            .map(|sp| {
+                let (sl, sc) = scope::position_at(text, sp.start);
+                let (el, ec) = scope::position_at(text, sp.start + sp.len);
+                format!(
+                    "{{\"range\":{},\"newText\":\"{}\"}}",
+                    range_json(sl, sc, el, ec),
+                    escape(new_name)
+                )
+            })
+            .collect();
+        format!(
+            "{{\"changes\":{{\"{}\":[{}]}}}}",
+            escape(&uri),
+            edits.join(",")
+        )
+    }
+
+    /// `textDocument/formatting` — run `phg fmt`'s formatter on the buffer and return a single
+    /// whole-document `TextEdit[]`. Reuses [`crate::fmt::format`] (comment-preserving, meaning-
+    /// preserving), so editor-format equals `phg fmt`. Returns `[]` (no edit) if the buffer doesn't
+    /// parse — never corrupts an in-progress file.
+    fn formatting(&self, msg: &Json) -> String {
+        let Some(uri) = doc_uri(msg) else {
+            return "[]".to_string();
+        };
+        let Some(text) = self.docs.get(&uri) else {
+            return "[]".to_string();
+        };
+        let Ok(formatted) = crate::fmt::format(text) else {
+            return "[]".to_string();
+        };
+        if formatted == *text {
+            return "[]".to_string();
+        }
+        // One edit replacing the whole document: range [0:0, end-of-buffer).
+        let (el, ec) = scope::position_at(text, text.len());
+        format!(
+            "[{{\"range\":{},\"newText\":\"{}\"}}]",
+            range_json(0, 0, el, ec),
+            escape(&formatted)
+        )
+    }
+
     /// `textDocument/documentSymbol` — a hierarchical outline of the buffer: every top-level item, with
     /// classes/enums/interfaces/traits carrying their members/variants as children.
     fn document_symbols(&self, msg: &Json) -> String {
@@ -252,7 +377,7 @@ impl Server {
 /// The advertised server capabilities: full-text sync (`1`) — the client sends the whole document on
 /// each change — push diagnostics, hover, go-to-definition, completion, and document symbols (v2).
 const INITIALIZE_RESULT: &str =
-    "{\"capabilities\":{\"textDocumentSync\":1,\"hoverProvider\":true,\"definitionProvider\":true,\"completionProvider\":{\"triggerCharacters\":[\".\"]},\"documentSymbolProvider\":true},\"serverInfo\":{\"name\":\"phorge-lsp\"}}";
+    "{\"capabilities\":{\"textDocumentSync\":1,\"hoverProvider\":true,\"definitionProvider\":true,\"completionProvider\":{\"triggerCharacters\":[\".\"]},\"documentSymbolProvider\":true,\"referencesProvider\":true,\"documentHighlightProvider\":true,\"renameProvider\":true,\"documentFormattingProvider\":true},\"serverInfo\":{\"name\":\"phorge-lsp\"}}";
 
 /// Compute the diagnostics for a document buffer — the **same** pipeline `phg check` runs (lex →
 /// parse → `check`), so editor diagnostics equal the CLI's. A lex or parse error is a single
