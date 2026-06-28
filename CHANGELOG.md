@@ -6,6 +6,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M-TIME S2: `Core.Time` civil dates
+
+`Date` — a civil calendar date (UTC, day-resolution), stored as days since 1970-01-01. Calendar math is
+Howard Hinnant's days-from-civil / civil-from-days, written in **pure Phorge** in the same injected
+prelude, so it is byte-identical `run ≡ runvm ≡ real PHP 8.5` by construction. **No new `Op`/`Value`.**
+
+- `Date.of(y, m, d)` / `Date.ofEpochDay(n)`; `year`/`month`/`day`/`epochDay`.
+- `addDays`/`minusDays`/`daysUntil`; `dayOfWeek()` (1=Mon … 7=Sun, ISO-8601); `isLeapYear()`.
+- `isBefore`/`isAfter`/`compareTo`; `toString()` → `YYYY-MM-DD` (year zero-padded to 4).
+- `Instant.toDate()` bridges an instant to its UTC civil date (floor-divides millis by a day).
+
+`guide/dates.phg` + `conformance/stdlib/dates.phg`. **Gotcha found + worked around:** a method
+return-type annotation cannot forward-reference a class declared *later* in the same compilation unit
+(`E-UNKNOWN-TYPE`); the prelude is ordered `Duration` → `Date` → `Instant` so every `-> Type` refers to
+an already-declared class.
+
 ### Added — M-TIME S1: `Core.Time` instants + durations
 
 First slice of the time library (`docs/specs/2026-06-28-m-time-design.md`), byte-identical

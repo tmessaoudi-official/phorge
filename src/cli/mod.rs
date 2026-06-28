@@ -798,6 +798,63 @@ class Duration {
   function isZero() -> bool { return this.ms == 0; }
   function isNegative() -> bool { return this.ms < 0; }
 }
+class Date {
+  constructor(public int epochDay) {}
+  // Howard Hinnant's days-from-civil / civil-from-days (truncating-division safe; Phorge int `/` is
+  // truncate-toward-zero = PHP intdiv). `daysFromCivil`/`civil`/`pad2` are low-level building blocks
+  // reused by `DateTime`; the everyday API is `of`/`year`/`month`/`day`/`addDays`/`toString`.
+  static function daysFromCivil(int y, int m, int d) -> int {
+    int yy = y - (if (m <= 2) { 1 } else { 0 });
+    int era = (if (yy >= 0) { yy } else { yy - 399 }) / 400;
+    int yoe = yy - era * 400;
+    int doy = (153 * (if (m > 2) { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    int doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + doe - 719468;
+  }
+  static function civil(int z) -> List<int> {
+    int zz = z + 719468;
+    int era = (if (zz >= 0) { zz } else { zz - 146096 }) / 146097;
+    int doe = zz - era * 146097;
+    int yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    int y = yoe + era * 400;
+    int doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    int mp = (5 * doy + 2) / 153;
+    int d = doy - (153 * mp + 2) / 5 + 1;
+    int m = if (mp < 10) { mp + 3 } else { mp - 9 };
+    return [y + (if (m <= 2) { 1 } else { 0 }), m, d];
+  }
+  static function pad2(int n) -> string { return if (n < 10) { "0{n}" } else { "{n}" }; }
+  // Zero-pad a non-negative year to 4 digits (ISO `YYYY`); proleptic negatives are emitted verbatim.
+  static function pad4(int n) -> string {
+    return if (n < 0) { "{n}" } else { if (n < 10) { "000{n}" } else { if (n < 100) { "00{n}" } else { if (n < 1000) { "0{n}" } else { "{n}" } } } };
+  }
+  static function of(int y, int m, int d) -> Date { return new Date(Date.daysFromCivil(y, m, d)); }
+  static function ofEpochDay(int d) -> Date { return new Date(d); }
+  function year() -> int { return Date.civil(this.epochDay)[0]; }
+  function month() -> int { return Date.civil(this.epochDay)[1]; }
+  function day() -> int { return Date.civil(this.epochDay)[2]; }
+  function addDays(int n) -> Date { return new Date(this.epochDay + n); }
+  function minusDays(int n) -> Date { return new Date(this.epochDay - n); }
+  function daysUntil(Date o) -> int { return o.epochDay - this.epochDay; }
+  // 1=Mon … 7=Sun (ISO-8601). epochDay 0 = 1970-01-01 = Thursday.
+  function dayOfWeek() -> int {
+    int w = (this.epochDay + 3) % 7;
+    return (if (w < 0) { w + 7 } else { w }) + 1;
+  }
+  function isLeapYear() -> bool {
+    int y = this.year();
+    return (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
+  }
+  function isBefore(Date o) -> bool { return this.epochDay < o.epochDay; }
+  function isAfter(Date o) -> bool { return this.epochDay > o.epochDay; }
+  function compareTo(Date o) -> int {
+    return if (this.epochDay < o.epochDay) { -1 } else { if (this.epochDay > o.epochDay) { 1 } else { 0 } };
+  }
+  function toString() -> string {
+    List<int> c = Date.civil(this.epochDay);
+    return "{Date.pad4(c[0])}-{Date.pad2(c[1])}-{Date.pad2(c[2])}";
+  }
+}
 class Instant {
   constructor(public int ms) {}
   static function ofEpochMillis(int m) -> Instant { return new Instant(m); }
@@ -812,6 +869,12 @@ class Instant {
   function isAfter(Instant o) -> bool { return this.ms > o.ms; }
   function compareTo(Instant o) -> int {
     return if (this.ms < o.ms) { -1 } else { if (this.ms > o.ms) { 1 } else { 0 } };
+  }
+  // Civil-date view (UTC, day-resolution): floor-divide millis by a day (floor, not truncate, so a
+  // pre-1970 instant maps to the right civil day).
+  function toDate() -> Date {
+    int day = if (this.ms >= 0) { this.ms / 86400000 } else { (this.ms - 86399999) / 86400000 };
+    return Date.ofEpochDay(day);
   }
 }
 "#;
