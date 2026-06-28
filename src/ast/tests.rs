@@ -192,3 +192,33 @@ fn assign_free_vars_includes_target_and_value() {
     collect_free_stmt(&s, &mut bound, &mut found);
     assert!(found.contains("x") && found.contains("y"));
 }
+
+#[test]
+fn class_field_layout_unions_promoted_explicit_inherited_and_trait_fields() {
+    let src = "package Main;\n\
+        trait Timestamped { int created = 0; }\n\
+        open class Base { constructor(public int id) {} }\n\
+        class Derived extends Base { use Timestamped; int note = 0; constructor(public int id, public string name) {} function getName(): string { return this.name; } }\n\
+        function main(): void {}";
+    let tokens = crate::lexer::lex(src).expect("lex");
+    let prog = crate::parser::Parser::new(tokens)
+        .parse_program()
+        .expect("parse");
+    let layout = class_field_layout(&prog);
+    // Base: just its promoted `id`.
+    assert_eq!(layout.get("Base").unwrap(), &vec!["id".to_string()]);
+    // Derived: own promoted (id, name) + explicit field (note) + inherited Base.id + trait `created`,
+    // deduped + sorted. (`id` appears in both Base and Derived's ctor → one slot.)
+    let d = layout.get("Derived").unwrap();
+    assert_eq!(
+        d,
+        &vec![
+            "created".to_string(),
+            "id".to_string(),
+            "name".to_string(),
+            "note".to_string()
+        ]
+    );
+    // Stable slots: index lookups are deterministic.
+    assert_eq!(d.iter().position(|f| f == "name"), Some(2));
+}

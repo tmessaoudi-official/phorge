@@ -528,3 +528,38 @@ marathon's M-perf/M4 deprioritized (still pending):
   the existing VSCode client.
 
 Marathon remainder (M-perf, M4) parked behind these.
+
+---
+
+## SECOND MARATHON (locked 2026-06-28 via "what's next?" gate — "all of them in order")
+
+After the first marathon + redirect all shipped (M-TIME, M8.5, file-rule, LSP+extensions, M4-text,
+M-perf FNV), the developer chose **all four next items, in order**, fully autonomous (push handled by
+developer):
+
+1. **Slot-indexed field VM refactor** — the deferred M-perf headline. Replace per-instance
+   `HashMap<String,Value>` field storage with a `Vec<Value>` indexed by a per-class field→slot map
+   (inherited-fields-first ordering so a field's slot is hierarchy-stable → polymorphism-safe). Bake the
+   slot into `Op::GetField`/`SetField` at compile time. Spec-first; bench-gated before/after; full PHP
+   oracle after each step. Touches the shared Value model + both backends + clone-with/eq/reflect.
+2. **M8.5 S3** — importable `.d.phg` declaration files + foreign-exception `catch`.
+3. **Cross-file LSP** (project-wide references/rename) + a natively-compiled JetBrains plugin.
+4. **More stdlib breadth** — List take/drop/flatMap/groupBy/sortBy, Map entries, Math hypot/atan2/log2.
+
+Each ships green + byte-identical, no new behavior divergence. Slot-indexed fields is the riskiest;
+proceed incrementally.
+
+### Item #1 (slot-indexed fields) — APPROVED "build it now, incrementally" (2026-06-28)
+Design = **inline caches keyed on the receiver's RUNTIME class** (not static slot baking — that's
+unsound under MI-of-state + implicit upcast). **Key insight:** because BOTH construction and access
+resolve `name→slot` via the instance's own runtime `ClassLayout`, slot *order is irrelevant* and the MI
+offset problem never arises (slots are always runtime-resolved). Steps:
+- **S1 (structural, byte-identical, NO perf change):** `Instance.fields: RefCell<Vec<Option<Value>>>`
+  (sentinel `None` = unset → preserves fault-on-unset) + `Rc<ClassLayout>` (name→slot, carried by the
+  instance). Layout single-sourced from `ast::class_field_layout` (declared storage fields: promoted
+  ctor params + explicit non-static Field members + inherited base-first + trait `use` fields; EXCLUDES
+  statics/consts/property-hooks) so both backends agree. construct/access/clone-with/eq/reflect all go
+  name→slot. FULL PHP-8.5 gate (must be byte-identical).
+- **S2 (the win):** VM inline cache per GetField/SetField site `(last_class, slot)`; monomorphic hit →
+  `vec[slot]` no hash. Classes immutable ⇒ no cache invalidation. `phg bench` before/after.
+- **S3:** confirm clone-with/eq/reflect parity by slot; gate.

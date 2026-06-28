@@ -553,6 +553,105 @@ pub fn class_field_conflicts(program: &Program) -> Vec<(String, String, Span)> {
     ctx.conflicts
 }
 
+/// The **instance-field layout** of every class: each class name maps to the deterministic, sorted list
+/// of its storage field *names* (the slot order is its index in this list). The single source both
+/// backends consult to build an instance's slot-indexed `Vec` and to resolve a `name → slot` at a field
+/// access (M-perf slot-indexed fields). Because *both* construction and access go through this same
+/// layout resolved against the instance's **runtime** class, the slot order is irrelevant to
+/// correctness — so a stable sorted order suffices and the multiple-inheritance base-offset hazard never
+/// arises (slots are always runtime-resolved, never statically baked).
+///
+/// "Storage field" = every name that could ever be populated on an instance: an explicit non-`static`
+/// `Field` member, a promoted constructor parameter (`public`/`private`/`protected`), the same from each
+/// `use`d trait, and all of the above inherited transitively through `extends`. Property hooks, `static`
+/// fields, and `const`s are excluded (they are not per-instance storage). The union is intentionally a
+/// **superset-or-equal** of what construction populates — an extra never-populated slot is harmless
+/// (stays the `None` sentinel), whereas a missing slot would be fatal, so the walk errs toward
+/// inclusion. Cycle-safe via a visited set (an `extends` cycle is `E-MI-CYCLE` elsewhere).
+pub fn class_field_layout(program: &Program) -> std::collections::BTreeMap<String, Vec<String>> {
+    use std::collections::{BTreeMap, BTreeSet};
+    // Own storage field names per class OR trait (promoted ctor params + non-static `Field` members).
+    let own_fields = |members: &[ClassMember]| -> Vec<String> {
+        let mut v = Vec::new();
+        for m in members {
+            match m {
+                ClassMember::Field {
+                    name, modifiers, ..
+                } if !modifiers.contains(&Modifier::Static)
+                    && !modifiers.contains(&Modifier::Const) =>
+                {
+                    v.push(name.clone());
+                }
+                ClassMember::Constructor { params, .. } => {
+                    for p in params {
+                        if p.modifiers.iter().any(|m| {
+                            matches!(
+                                m,
+                                Modifier::Public | Modifier::Private | Modifier::Protected
+                            )
+                        }) {
+                            v.push(p.name.clone());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        v
+    };
+    let mut own: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut extends: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut uses: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for item in &program.items {
+        match item {
+            Item::Class(c) => {
+                own.insert(c.name.clone(), own_fields(&c.members));
+                extends.insert(c.name.clone(), c.extends.clone());
+                uses.insert(
+                    c.name.clone(),
+                    c.uses.iter().map(|u| u.name.clone()).collect(),
+                );
+            }
+            Item::Trait(t) => {
+                own.insert(t.name.clone(), own_fields(&t.members));
+            }
+            _ => {}
+        }
+    }
+    // Transitively gather a class's full storage-field set (own + used-trait + every ancestor's),
+    // cycle-safe. The `extends`/`uses` of a trait are empty, so a trait contributes only its own.
+    fn gather(
+        name: &str,
+        own: &BTreeMap<String, Vec<String>>,
+        extends: &BTreeMap<String, Vec<String>>,
+        uses: &BTreeMap<String, Vec<String>>,
+        seen: &mut BTreeSet<String>,
+        out: &mut BTreeSet<String>,
+    ) {
+        if !seen.insert(name.to_string()) {
+            return;
+        }
+        if let Some(fs) = own.get(name) {
+            out.extend(fs.iter().cloned());
+        }
+        for t in uses.get(name).into_iter().flatten() {
+            gather(t, own, extends, uses, seen, out);
+        }
+        for p in extends.get(name).into_iter().flatten() {
+            gather(p, own, extends, uses, seen, out);
+        }
+    }
+    let mut layout = BTreeMap::new();
+    for class in extends.keys() {
+        let mut set = BTreeSet::new();
+        let mut seen = BTreeSet::new();
+        gather(class, &own, &extends, &uses, &mut seen, &mut set);
+        // `BTreeSet` iteration is sorted ⇒ a deterministic, backend-independent slot order.
+        layout.insert(class.clone(), set.into_iter().collect());
+    }
+    layout
+}
+
 /// The flattened **class-constant** table (Feature A — `const` class constants): for each
 /// `(class, NAME)` it gives the constant's literal `Value` and its declared `Type`. Includes a class's
 /// own `const` members **plus** those inherited through `extends` and folded in from `use`d traits —
