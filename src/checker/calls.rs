@@ -165,6 +165,20 @@ impl Checker {
                 return self.err(span, format!("unknown function `{name}`"));
             }
         };
+        // M-RT Slice C1: a return-type-overloaded call reached without a `<Type>` selector has no type
+        // context to choose a member (the selector arm `check_overload_select` handles the resolved
+        // case and never funnels here). C2 will resolve these from a shallow sink; in C1 it is an error.
+        if self.return_overload_sets.contains_key(name) {
+            for a in args {
+                self.check_expr(a);
+            }
+            return self.err_coded(
+                span,
+                format!("call to return-type-overloaded `{name}` has no type context to pick an overload"),
+                "E-OVERLOAD-NO-CONTEXT",
+                Some(format!("add a return-type selector — `<Type>{name}(…)` — naming which overload's return type you want")),
+            );
+        }
         // Single overload — the common case, identical to pre-overloading behaviour (incl. generics).
         if sigs.len() == 1 {
             let sig = &sigs[0];

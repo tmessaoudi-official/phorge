@@ -306,6 +306,7 @@ impl Checker {
             }
             Expr::Force { inner, .. } => self.check_expr_casing(inner),
             Expr::Propagate { inner, .. } => self.check_expr_casing(inner),
+            Expr::OverloadSelect { call, .. } => self.check_expr_casing(call),
             Expr::CloneWith { object, fields, .. } => {
                 self.check_expr_casing(object);
                 for (_, e) in fields {

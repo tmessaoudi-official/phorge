@@ -420,9 +420,20 @@ Dynamic multiple dispatch over free functions and class methods ships and is byt
 
 - **Overloaded constructors** are not supported (PHP cannot overload a constructor either; Phorj has
   constructor promotion and — when it lands — default arguments). Overload a static factory method.
-- **A single return type is required** across an overload set (`E-OVERLOAD-RETURN`). A union-of-returns
-  result type is a future relaxation; today differing returns are rejected (use a generic function when
-  the return co-varies parametrically with the argument).
+- **Return-type overloading SHIPPED for free functions** (M-RT Slice C1, 2026-06-29): free functions
+  may share a name AND parameter signature, differing only in return type, resolved at compile time by
+  an explicit `<Type>f(args)` selector and mangled per return before any backend
+  (`examples/guide/return-overloading.phg`, byte-identical `run ≡ runvm ≡ real PHP`). Remaining C1
+  deferrals: (1) **methods** are not return-overloadable yet — the classic shared-return rule still
+  applies to class methods (`E-OVERLOAD-RETURN`); (2) the selector is the **only** resolving context —
+  the shallow sinks (typed binding / reassignment / typed field write / `return` / non-overloaded typed
+  parameter) that would make it optional are **C2** (designed, not built), so a bare return-overloaded
+  call without a selector is `E-OVERLOAD-NO-CONTEXT` and `E-OVERLOAD-SELECT-CONFLICT` is reserved for
+  C2; (3) **mixing** parameter- and return-overloading in one name is rejected (`E-OVERLOAD-RETURN`) —
+  a name is either parameter-overloaded (distinct params, shared return) or return-overloaded (identical
+  params, distinct returns); (4) the per-return mangled name (`f__ret_int`) is a slug of the return
+  type's display, so two return types with the same slug (pathological — e.g. a user type literally
+  named like another type's slug) could collide — not observed in practice.
 - **Generic overloads** are rejected (`E-OVERLOAD-GENERIC`): a generic declaration must be the sole one
   of its name. A first-class *value* of an overloaded function is also rejected (`E-OVERLOAD-FN-VALUE`)
   — call it directly or wrap the intended overload in a lambda.

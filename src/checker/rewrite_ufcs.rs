@@ -153,6 +153,18 @@ pub fn rewrite_ufcs(program: Program, ufcs: &HashMap<usize, crate::ast::Expr>) -
                 inner: Box::new(rexpr(*inner, u)),
                 span,
             },
+            // A return-overload selector `<Type>f(args)` (M-RT Slice C1): the checker recorded the
+            // resolved mangled `Call` keyed by this node's span. A successful check guarantees an
+            // entry (an unresolved selector is a hard error → the program never reaches a backend);
+            // `apply_repl` re-walks the embedded args without re-matching this key.
+            Expr::OverloadSelect { ty, call, span } => match u.get(&span.start) {
+                Some(repl) => apply_repl(repl, u),
+                None => Expr::OverloadSelect {
+                    ty,
+                    call: Box::new(rexpr(*call, u)),
+                    span,
+                },
+            },
             Expr::Propagate { inner, span } => Expr::Propagate {
                 inner: Box::new(rexpr(*inner, u)),
                 span,

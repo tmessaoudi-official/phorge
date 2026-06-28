@@ -78,3 +78,103 @@ fn overload_set_rejects_php_erasure_collisions() {
         "int vs string must NOT collide: {e3:?}"
     );
 }
+
+// ── Return-type overloading (M-RT Slice C1) ──
+
+#[test]
+fn return_overload_set_is_legal_and_resolves_via_selector() {
+    // Identical params, differing returns — a return-overload set — resolved by `<Type>` selectors.
+    let errs = errors_of(
+        "function read(string s) -> int { return 1; } \
+         function read(string s) -> bool { return true; } \
+         function main() -> void { int a = <int>read(\"x\"); bool b = <bool>read(\"y\"); \
+             discard a; discard b; }",
+    );
+    assert!(errs.is_empty(), "{errs:?}");
+}
+
+#[test]
+fn bare_return_overloaded_call_without_context_errors() {
+    let errs = errors_of(
+        "function read(string s) -> int { return 1; } \
+         function read(string s) -> bool { return true; } \
+         function main() -> void { discard read(\"x\"); }",
+    );
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-OVERLOAD-NO-CONTEXT")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn selector_naming_no_overloads_return_type_errors() {
+    let errs = errors_of(
+        "function read(string s) -> int { return 1; } \
+         function read(string s) -> bool { return true; } \
+         function main() -> void { discard <string>read(\"x\"); }",
+    );
+    assert!(
+        errs.iter()
+            .any(|e| e.code == Some("E-OVERLOAD-SELECT-UNKNOWN")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn selector_matching_two_subtypes_is_ambiguous() {
+    // Both overloads return a subtype of `Animal`, so `<Animal>` is ambiguous (no exact match, two
+    // assignable) — the fix is an exact selector (`<Dog>`/`<Cat>`).
+    let errs = errors_of(
+        "interface Animal {} \
+         class Dog implements Animal { constructor() {} } \
+         class Cat implements Animal { constructor() {} } \
+         function make(int n) -> Dog { return new Dog(); } \
+         function make(int n) -> Cat { return new Cat(); } \
+         function main() -> void { discard <Animal>make(1); }",
+    );
+    assert!(
+        errs.iter()
+            .any(|e| e.code == Some("E-OVERLOAD-AMBIGUOUS-RETURN")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn mixing_parameter_and_return_overloading_errors() {
+    // `f(string)` has two return overloads AND `f(int)` is a parameter overload — mixed, rejected.
+    let errs = errors_of(
+        "function f(string s) -> int { return 1; } \
+         function f(string s) -> bool { return true; } \
+         function f(int n) -> int { return n; } \
+         function main() -> void {}",
+    );
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-OVERLOAD-RETURN")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn selector_on_non_return_overloaded_function_errors() {
+    let errs = errors_of(
+        "function g(int n) -> int { return n; } \
+         function main() -> void { discard <int>g(1); }",
+    );
+    assert!(
+        errs.iter()
+            .any(|e| e.code == Some("E-OVERLOAD-SELECT-UNKNOWN")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn identical_param_and_return_is_still_a_duplicate() {
+    let errs = errors_of(
+        "function f(int x) -> int { return x; } \
+         function f(int y) -> int { return y; }",
+    );
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-OVERLOAD-DUPLICATE")),
+        "{errs:?}"
+    );
+}

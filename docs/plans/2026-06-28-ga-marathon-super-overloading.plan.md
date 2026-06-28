@@ -72,3 +72,54 @@ different-return overloads) and **has no small green checkpoint**. Recommended d
 - Errors: `E-OVERLOAD-NO-CONTEXT`, `E-OVERLOAD-AMBIGUOUS-RETURN` (exact→unique-assignable→else),
   `E-OVERLOAD-SELECT-UNKNOWN`, `E-OVERLOAD-SELECT-CONFLICT`. Resolution rule + PHP mangling per the spec.
 - **No small green checkpoint → implement in one focused (ideally fresh-context) session.**
+
+## Slice C1 — concrete build (this session, 2026-06-28)
+Code-verified refinements to the spec (from mapping `dispatch.rs`, `checker/{collect,calls,expr,mod}.rs`,
+`rewrite_ufcs.rs`, `cli/mod.rs check_and_expand`, parser `exprs.rs`/`types.rs`, lexer):
+- **DECISION (scope): C1 is FREE FUNCTIONS ONLY.** Return-overloaded *methods* stay rejected
+  (`E-OVERLOAD-RETURN`/`-DUPLICATE` unchanged on the method collection path). The `<T>` selector is
+  therefore only meaningful on a free-function call; a selector on anything else → `E-OVERLOAD-SELECT-UNKNOWN`.
+  Methods deferred to a follow-up (KNOWN_ISSUES).
+- **DECISION (set shape): a return-overload set = ALL members share identical parameter signatures
+  (one param-group) with ≥2 distinct return types.** Mixed (≥2 param-groups with a differing return)
+  stays `E-OVERLOAD-RETURN` (repurposed message: "cannot mix parameter- and return-overloading").
+  Rationale: identical params ⇒ no param-matching ambiguity ⇒ statically decidable; avoids the subtyping
+  ambiguity that motivated E-OVERLOAD-RETURN, and avoids feeding the backends an ambiguous
+  identical-`ParamKind` dispatch table.
+- **No `>>` trap:** lexer emits single `Gt` for `>`, two `Gt` for `>>` (lexer:1112/1154), so
+  `<List<int>>f()` parses with no split. Selector parse = `Lt` → `parse_type()` → `expect(Gt)`.
+- **AST:** new `Expr::OverloadSelect { ty: Type, call: Box<Expr>, span }`. Parsed at prefix position in
+  `parse_unary` (a leading `Lt` cannot begin an operand today → unambiguous). Erased before backends
+  (like `Expr::New`/`html`): exhaustive Expr matches in the true backends get `unreachable!` arms; `fmt`
+  printer + `ast::walk` + lift printer get real arms (`<Ty>` + recurse).
+- **Checker classification (finalize between `collect` and `check_program`):** new
+  `finalize_overloads()` reads `self.funcs`, and for each free-fn name that is a return-overload set
+  records `self.return_overload_sets: HashMap<String, Vec<(Ty ret, String mangled)>>` (consumed by call
+  checking) and `self.overload_def_renames: HashMap<usize span.start, String mangled>` (consumed by the
+  rename pass). Decl spans come from a parallel `self.free_fn_decls: Vec<(name, Span, params, ret)>`
+  accumulated in collection. Mangle = `{name}__ret_{slug(ret)}` (non-alnum→`_`).
+- **Validation (`validate_new_overload`, free-fn path only via a new `allow_return_overload` flag):**
+  same-params+same-ret → `E-OVERLOAD-DUPLICATE`; same-params+diff-ret → ALLOW (forms/extends R-set);
+  diff-params+diff-ret on a singleton → `E-OVERLOAD-RETURN` (classic, kept); any diff-params member added
+  to an R-set, or any same-params member added to a P-set → `E-OVERLOAD-RETURN` (mixed). Keep
+  STATIC-MIX/GENERIC/ERASE.
+- **Selector resolution (`check_overload_select` from the `OverloadSelect` arm of `check_expr`):**
+  resolve `ty`→`Ty`; require callee = free-fn return-overload set (else SELECT-UNKNOWN); type the args +
+  arity-check against the shared param sig (E-OVERLOAD-NO-MATCH); pick member: exact `ret==T` →
+  unique `ret<:T` → else 0 SELECT-UNKNOWN / ≥2 AMBIGUOUS-RETURN; record
+  `overload_resolutions[select_span.start] = Call{ Ident(mangled), args, call_span }`; discharge the
+  chosen member's throws; return its ret. Bare return-overload call (no selector) reaches
+  `check_named_call` → `E-OVERLOAD-NO-CONTEXT` (C2 sinks resolve these later).
+- **Wiring:** `check_resolutions` merges `overload_resolutions` into `calls` (applied by `rewrite_ufcs`,
+  whose `rexpr` gains an `Expr::OverloadSelect` arm that looks up `span.start`) AND returns
+  `overload_def_renames`; `check_and_expand` runs a new `rename_overload_defs(program, &renames)` pass
+  (renames `FunctionDecl.name` by span) before the existing chain. Single-return names stay bare ⇒
+  existing programs byte-identical.
+- **Errors:** `E-OVERLOAD-NO-CONTEXT`, `E-OVERLOAD-AMBIGUOUS-RETURN`, `E-OVERLOAD-SELECT-UNKNOWN`,
+  `E-OVERLOAD-SELECT-CONFLICT` (C2-only; conflict needs a sink) — all `phg explain`-documented.
+  `E-OVERLOAD-RETURN` repurposed (no longer "must share return"; now "different params AND returns" /
+  "mixed param+return").
+- **Example:** `examples/guide/return-overloading.phg` (selector-resolved calls + `discard <T>f()`).
+  Byte-identical run≡runvm≡real PHP 8.5; the mangled names round-trip.
+- **C2 (deferred):** the 5 shallow sinks (typed binding/reassign/field-write/return/non-overloaded
+  typed param) thread an `Option<&Ty>` expected type so the selector becomes optional there.

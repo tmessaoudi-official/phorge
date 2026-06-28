@@ -958,7 +958,7 @@ pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, Strin
     let routed = crate::checker::desugar_auto_router(injected.into_owned());
     let prog = &routed;
     match crate::checker::check_resolutions(prog) {
-        Ok((warnings, html, ufcs)) => {
+        Ok((warnings, html, ufcs, overload_renames)) => {
             for w in &warnings {
                 eprintln!("warning: {}", w.render(diag_src));
             }
@@ -972,16 +972,23 @@ pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, Strin
             // Batch D: inject `= null` defaults for optional instance fields (after aliases are
             // expanded, so an aliased optional is already `Type::Optional`) — a front-end desugar so
             // every backend initializes them identically.
-            Ok(crate::checker::rewrite_ufcs(
-                crate::checker::unwrap_new(crate::checker::erase_generics(
-                    crate::checker::resolve_html(
-                        crate::checker::inject_optional_field_defaults(
-                            crate::checker::expand_aliases(prog),
+            // Slice C1: rename each return-overload member's *definition* to its mangled name (by decl
+            // span); the resolved selector *call sites* were already merged into `ufcs` above and are
+            // rewritten to the same mangled names by `rewrite_ufcs`. A no-op when no function is
+            // return-overloaded (so single-overload programs stay byte-identical).
+            Ok(crate::checker::rename_overload_defs(
+                crate::checker::rewrite_ufcs(
+                    crate::checker::unwrap_new(crate::checker::erase_generics(
+                        crate::checker::resolve_html(
+                            crate::checker::inject_optional_field_defaults(
+                                crate::checker::expand_aliases(prog),
+                            ),
+                            &html,
                         ),
-                        &html,
-                    ),
-                )),
-                &ufcs,
+                    )),
+                    &ufcs,
+                ),
+                &overload_renames,
             ))
         }
         Err(errs) => {
@@ -1148,7 +1155,7 @@ pub fn check_program(prog: &Program, diag_src: &str) -> Result<String, String> {
 /// diagnostic, so no `diag_src` is needed.
 pub fn check_json_program(prog: &Program) -> (String, bool) {
     on_deep_stack(|| match crate::checker::check_resolutions(prog) {
-        Ok((warnings, _html, _ufcs)) => {
+        Ok((warnings, _html, _ufcs, _ovl)) => {
             (crate::diagnostic::diagnostics_json(&[], &warnings), false)
         }
         Err(errs) => (crate::diagnostic::diagnostics_json(&errs, &[]), true),

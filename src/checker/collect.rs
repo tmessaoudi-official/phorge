@@ -1039,7 +1039,12 @@ impl Checker {
             is_static: false, // free functions are never static
         };
         let existing = self.funcs.get(&f.name).cloned().unwrap_or_default();
-        self.validate_new_overload(&existing, &sig, &f.name, f.span, "function");
+        // Free functions allow return-type overloading (M-RT Slice C1).
+        self.validate_new_overload(&existing, &sig, &f.name, f.span, "function", true);
+        // Record the declaration site so `finalize_overloads` can emit a per-decl mangled rename if
+        // this name turns out to be a return-overload set (the span pins the exact `FunctionDecl`).
+        self.free_fn_decls
+            .push((f.name.clone(), f.span, sig.params.clone(), sig.ret.clone()));
         self.funcs.entry(f.name.clone()).or_default().push(sig);
     }
 
@@ -1159,6 +1164,7 @@ impl Checker {
         name: &str,
         span: Span,
         kind: &str,
+        allow_return_overload: bool,
     ) {
         if existing.is_empty() {
             return;
@@ -1188,42 +1194,105 @@ impl Checker {
                 ),
             );
         }
-        let want_ret = &existing[0].ret;
-        if &sig.ret != want_ret {
-            self.err_coded(
-                span,
-                format!(
-                    "overloaded {kind} `{name}` must return the same type as its other overloads (`{want_ret}`), found `{}`",
-                    sig.ret
-                ),
-                "E-OVERLOAD-RETURN",
-                Some("overloads model one operation over different argument types; differing returns suggest separate functions or generics".into()),
-            );
+        // The PHP-erasure-collision guard: two non-identical parameter lists that collide under PHP
+        // erasure (`string`/`bytes` → PHP `string`; `List`/`Map`/`Set` → PHP `array`). The
+        // transpiler's `instanceof`/`is_*` dispatch can't tell them apart, so an ambiguous call would
+        // fault on the Phorj backends but silently take the first PHP branch — reject at declaration.
+        let erase_collision = |this: &mut Self| {
+            if existing
+                .iter()
+                .any(|e| e.params != sig.params && overloads_erase_alike(&e.params, &sig.params))
+            {
+                this.err_coded(
+                    span,
+                    format!("overloaded {kind} `{name}` has two declarations indistinguishable in transpiled PHP"),
+                    "E-OVERLOAD-ERASE",
+                    Some("`string`/`bytes` both become PHP `string`, and `List`/`Map`/`Set` all become PHP `array`, so the dispatch can't tell these overloads apart — differentiate them by another parameter, or merge them".into()),
+                );
+            }
+        };
+        if !allow_return_overload {
+            // Methods (and any caller that opts out): the classic rule — all overloads share one
+            // return type, no two identical parameter signatures. Unchanged from pre-Slice-C.
+            let want_ret = &existing[0].ret;
+            if &sig.ret != want_ret {
+                self.err_coded(
+                    span,
+                    format!(
+                        "overloaded {kind} `{name}` must return the same type as its other overloads (`{want_ret}`), found `{}`",
+                        sig.ret
+                    ),
+                    "E-OVERLOAD-RETURN",
+                    Some("overloads model one operation over different argument types; differing returns suggest separate functions or generics".into()),
+                );
+            }
+            if existing.iter().any(|e| e.params == sig.params) {
+                self.err_coded(
+                    span,
+                    format!("overloaded {kind} `{name}` has two declarations with identical parameter types"),
+                    "E-OVERLOAD-DUPLICATE",
+                    Some("each overload must differ in its parameter types".into()),
+                );
+            } else {
+                erase_collision(self);
+            }
+            return;
         }
-        if existing.iter().any(|e| e.params == sig.params) {
-            self.err_coded(
-                span,
-                format!("overloaded {kind} `{name}` has two declarations with identical parameter types"),
-                "E-OVERLOAD-DUPLICATE",
-                Some("each overload must differ in its parameter types".into()),
-            );
-        } else if existing
-            .iter()
-            .any(|e| overloads_erase_alike(&e.params, &sig.params))
-        {
-            // Two overloads that are not *identical* but collide under PHP erasure: `string`/`bytes`
-            // both erase to PHP `string`, and `List`/`Map`/`Set` all erase to PHP `array`. The
-            // transpiler's overload dispatch is an `instanceof`/`is_*` if-chain that cannot tell them
-            // apart, so an ambiguous call would fault on the Phorj backends but silently take the
-            // first PHP branch (the documented transpile-only divergence). Reject at declaration
-            // instead (decision review, 2026-06-27).
-            self.err_coded(
-                span,
-                format!("overloaded {kind} `{name}` has two declarations indistinguishable in transpiled PHP"),
-                "E-OVERLOAD-ERASE",
-                Some("`string`/`bytes` both become PHP `string`, and `List`/`Map`/`Set` all become PHP `array`, so the dispatch can't tell these overloads apart — differentiate them by another parameter, or merge them".into()),
-            );
+        // Free functions (M-RT Slice C1): identical parameters with a DIFFERENT return type now form a
+        // return-type overload set (resolved by a `<Type>` selector, mangled per return before any
+        // backend). Two soundness guards remain: identical parameters AND return is still a true
+        // duplicate; and a name must be EITHER a parameter-overload set (distinct params, shared
+        // return) OR a pure return-overload set (identical params, distinct returns) — never both,
+        // since runtime parameter dispatch cannot tell two identical-`ParamKind` overloads apart.
+        match existing.iter().find(|e| e.params == sig.params) {
+            Some(e) if e.ret == sig.ret => {
+                self.err_coded(
+                    span,
+                    format!("overloaded {kind} `{name}` has two declarations with identical parameter types"),
+                    "E-OVERLOAD-DUPLICATE",
+                    Some("each overload must differ in its parameter types, or (return-type overloading) its return type".into()),
+                );
+            }
+            Some(_) => {
+                // Identical parameters, different return — a return-overload member. Reject only if the
+                // set already mixes in a different-parameter overload.
+                if existing.iter().any(|e| e.params != sig.params) {
+                    self.mixed_overload_err(name, span, kind);
+                }
+            }
+            None => {
+                // Different parameters — a parameter-overload member.
+                let existing_is_return_set =
+                    existing.iter().all(|e| e.params == existing[0].params)
+                        && existing.iter().any(|e| e.ret != existing[0].ret);
+                if existing_is_return_set {
+                    self.mixed_overload_err(name, span, kind);
+                } else if sig.ret != existing[0].ret {
+                    self.err_coded(
+                        span,
+                        format!(
+                            "overloaded {kind} `{name}` must return the same type as its other overloads (`{}`), found `{}`",
+                            existing[0].ret, sig.ret
+                        ),
+                        "E-OVERLOAD-RETURN",
+                        Some("parameter overloads model one operation over different argument types and share a return type; for return-type overloading keep the parameters identical".into()),
+                    );
+                } else {
+                    erase_collision(self);
+                }
+            }
         }
+    }
+
+    /// A name that mixes parameter-overloading and return-type overloading (M-RT Slice C1): rejected
+    /// because the runtime parameter dispatch cannot disambiguate two identical-`ParamKind` overloads.
+    fn mixed_overload_err(&mut self, name: &str, span: Span, kind: &str) {
+        self.err_coded(
+            span,
+            format!("overloaded {kind} `{name}` mixes parameter overloading with return-type overloading"),
+            "E-OVERLOAD-RETURN",
+            Some("a name is EITHER overloaded by parameter types (sharing one return) OR by return type (identical parameters, differing returns) — split it into differently-named functions".into()),
+        );
     }
 
     /// Validate a function's declared generic parameters: reject duplicates (`E-GENERIC-PARAM`) and
@@ -1576,7 +1645,8 @@ impl Checker {
                         is_static: f.modifiers.contains(&Modifier::Static),
                     };
                     let existing = methods.get(&f.name).cloned().unwrap_or_default();
-                    self.validate_new_overload(&existing, &sig, &f.name, f.span, "method");
+                    // Methods are not return-overloadable in C1 (the classic shared-return rule).
+                    self.validate_new_overload(&existing, &sig, &f.name, f.span, "method", false);
                     methods.entry(f.name.clone()).or_default().push(sig);
                     // First-declared overload's visibility represents the method name (Wave 1.1).
                     method_vis

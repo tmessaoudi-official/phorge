@@ -801,6 +801,11 @@ impl Printer<'_> {
                 let v = self.operand(value, 8, false, false)?;
                 Ok(format!("{v} as {type_name}"))
             }
+            // `<Type>f(args)` — a return-overload selector prefix (Slice C1). Prints the selector type
+            // in angle brackets immediately before its call (NOT a cast — `as` is the cast).
+            Expr::OverloadSelect { ty: t, call, .. } => {
+                Ok(format!("<{}>{}", ty(t)?, self.expr(call)?))
+            }
             Expr::Call { callee, args, .. } => {
                 let a: Result<Vec<_>, _> = args.iter().map(|x| self.expr(x)).collect();
                 Ok(format!(

@@ -1,0 +1,39 @@
+package Main;
+
+import Core.Console;
+
+// Return-type overloading (M-RT Slice C1): several functions may share a name AND parameter signature,
+// differing only in RETURN type. PHP has no overloading and cannot see the caller's expected type at
+// runtime, so — unlike parameter overloading (resolved by the runtime argument types) — return-type
+// overloads are resolved entirely at COMPILE TIME and emitted as distinct PHP functions. The resolving
+// context in this slice is an explicit selector `<Type>f(args)`: an angle-bracketed type immediately
+// before the call that names which overload's return type you want. (It is NOT a value cast — `as` is.)
+// `read` parses one config string into three different value types. Identical parameters (`string`),
+// distinct return types (`int` / `bool` / `string`) — a return-type overload set.
+function read(string raw): int {
+    return 42;
+}
+
+function read(string raw): bool {
+    return true;
+}
+
+function read(string raw): string {
+    return "hello {raw}";
+}
+
+function main(): void {
+    // The selector picks the overload by its return type; the result is fully statically typed.
+    int port = <int>read("port");
+    bool enabled = <bool>read("enabled");
+    string name = <string>read("name");
+    Console.println("port = {port}");
+    // port = 42
+    Console.println("enabled = {enabled}");
+    // enabled = true
+    Console.println("name = {name}");
+    // name = hello name
+    // A selector is also how you call one purely for its side effects: `discard` supplies no type
+    // context, so it needs the selector to know which overload to run.
+    discard <int>read("ignored");
+}

@@ -198,6 +198,22 @@ impl Parser {
             ));
         }
         let sp = self.peek_span();
+        // Return-type overload selector `<Type>f(args)` (M-RT Slice C1). A leading `<` cannot begin an
+        // operand anywhere else (`<` is infix-only — less-than / generic args), so it is unambiguously a
+        // selector here. Parse `< Type >` then the postfix call it applies to; the checker resolves which
+        // return-overload it names and erases this wrapper (it is NOT a cast — see `Expr::OverloadSelect`).
+        if matches!(self.peek(), TokenKind::Lt) {
+            self.advance(); // '<'
+            let ty = self.parse_type()?;
+            self.expect(&TokenKind::Gt, "'>' to close an overload selector `<Type>`")?;
+            let call = self.parse_postfix()?;
+            self.depth -= 1;
+            return Ok(Expr::OverloadSelect {
+                ty,
+                call: Box::new(call),
+                span: sp,
+            });
+        }
         let op = match self.peek() {
             TokenKind::Minus => Some(UnaryOp::Neg),
             TokenKind::Bang => Some(UnaryOp::Not),

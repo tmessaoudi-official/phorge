@@ -123,6 +123,8 @@ impl Checker {
                 span,
             } => self.check_cast(value, type_name, *span),
             Expr::Call { callee, args, span } => self.check_call(callee, args, *span), // Task 4
+            // `<Type>f(args)` — a return-type overload selector (M-RT Slice C1).
+            Expr::OverloadSelect { ty, call, span } => self.check_overload_select(ty, call, *span),
             Expr::New(inner, span) => self.check_new(inner, *span),
             Expr::Member {
                 object,
@@ -837,6 +839,7 @@ impl Checker {
             | Expr::If { span, .. }
             | Expr::Lambda { span, .. }
             | Expr::CloneWith { span, .. }
+            | Expr::OverloadSelect { span, .. }
             | Expr::New(_, span)
             | Expr::Html(_, span) => *span,
         }

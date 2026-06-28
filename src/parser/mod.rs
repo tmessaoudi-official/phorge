@@ -159,11 +159,16 @@ impl Parser {
 
     /// `discard` is a contextual statement keyword (M-must-use): it opens `discard <expr>;` only when
     /// it leads a statement *and* the next token begins a discardable expression — an identifier (a
-    /// call / method-call / qualified call) or `new`. Every real discard target starts that way, and
-    /// the gate never misfires on `discard` used as a value: `discard = e`, `discard.f`, `discard(…)`,
-    /// `discard[i]` all have a non-`Ident`/`New` follower and fall through to the expression path.
+    /// call / method-call / qualified call), `new`, or `<` (a return-overload selector `discard
+    /// <Type>f(…)`, Slice C1). Every real discard target starts one of those ways, and the gate never
+    /// misfires on `discard` used as a value: `discard = e`, `discard.f`, `discard(…)`, `discard[i]`
+    /// all have a different follower and fall through to the expression path.
     fn at_discard(&self) -> bool {
-        self.at_kw("discard") && matches!(self.peek2(), TokenKind::Ident(_) | TokenKind::New)
+        self.at_kw("discard")
+            && matches!(
+                self.peek2(),
+                TokenKind::Ident(_) | TokenKind::New | TokenKind::Lt
+            )
     }
 
     /// Consume the contextual keyword `kw` (its presence already established by the caller) or error.

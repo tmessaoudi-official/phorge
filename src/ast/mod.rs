@@ -270,6 +270,16 @@ pub enum Expr {
         inner: Box<Expr>,
         span: Span,
     },
+    /// `<Type>f(args)` — a **return-type overload selector** (M-RT return-overloading, Slice C1). It is
+    /// NOT a value cast (`as` is): `ty` names which overload of `call` (a return-overloaded free
+    /// function) to select by its return type. Front-end-only — the checker resolves the member and the
+    /// `rewrite_ufcs` pass replaces this node with the mangled `Expr::Call` it chose, so no backend ever
+    /// sees an `OverloadSelect` (only the `fmt` printer + AST walk handle it directly).
+    OverloadSelect {
+        ty: Type,
+        call: Box<Expr>,
+        span: Span,
+    },
     /// `inner?` — error propagation (M-faults Slice 2a). On a `Result<T, E>` operand it unwraps an
     /// `Ok(v)` to `v`, or early-`return`s the `Err(e)` from the enclosing function (which the checker
     /// requires to return `Result<_, E'>` with `E <: E'`). Lowers on both backends to the existing

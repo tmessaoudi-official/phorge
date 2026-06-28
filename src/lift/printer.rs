@@ -520,6 +520,11 @@ impl Printer {
                 let v = self.operand(value, 8, false, false)?;
                 Ok(format!("{v} as {type_name}"))
             }
+            // The PHP→Phorj lifter never produces a return-overload selector, but the printer's match
+            // is exhaustive; render it faithfully should one ever be hand-constructed (Slice C1).
+            Expr::OverloadSelect { ty: t, call, .. } => {
+                Ok(format!("<{}>{}", ty(t)?, self.expr(call)?))
+            }
             Expr::Call { callee, args, .. } => {
                 let a: Result<Vec<_>, _> = args.iter().map(|x| self.expr(x)).collect();
                 Ok(format!(

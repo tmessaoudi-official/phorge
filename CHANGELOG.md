@@ -6,6 +6,32 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M-RT return-type overloading (Slice C1)
+
+Free functions may now overload on **return type alone** — identical parameter signatures, differing
+returns (`function read(string): int` / `function read(string): bool`). Spec
+`docs/specs/2026-06-28-must-use-and-return-type-overloading-design.md`; the must-use slice (`discard` /
+`E-UNUSED-VALUE`) was its enabler. **No new `Op`/`Value`** — front-end only, byte-identical
+`run ≡ runvm ≡ real PHP 8.5` (`examples/guide/return-overloading.phg`).
+
+- **`<Type>f(args)` overload selector** — a new prefix expression (`Expr::OverloadSelect`) at operand
+  position naming which overload's return type to select. It is NOT a value cast (`as` is). Parses
+  cleanly (a leading `<` cannot begin an operand otherwise); nested generics need no special handling
+  (`>>` already lexes as two `Gt`). `discard <Type>f(…)` drops the result of a side-effecting call.
+- **Resolution** (compile-time, by the checker): exact return-type match → unique assignable match →
+  else `E-OVERLOAD-AMBIGUOUS-RETURN`. A selector naming no overload's return type (or on a
+  non-return-overloaded callee) is `E-OVERLOAD-SELECT-UNKNOWN`; a bare return-overloaded call with no
+  type context is `E-OVERLOAD-NO-CONTEXT`.
+- **Mangle-before-backends** — each return-overload member's definition is renamed to a distinct name
+  (`read__ret_int` / `read__ret_bool`) and the resolved call sites rewritten to match (reusing the
+  span-keyed call-rewrite map applied by `rewrite_ufcs` + a new `rename_overload_defs` pass), so the
+  interpreter / VM / transpiler see ordinary single-overload functions. Single-return names stay bare —
+  existing programs are byte-identical.
+- `E-OVERLOAD-RETURN` repurposed: it no longer means "must share a return type" but "a name mixes
+  parameter- and return-type overloading" (the parameter-overload shared-return rule is kept). All four
+  new codes self-document via `phg explain`. Scope (C1): free functions only; the selector is the sole
+  resolving context (the shallow sinks are C2). See `KNOWN_ISSUES.md`.
+
 ### Added — M8.5 S3: `.d.phg` declaration files + foreign-exception `catch`
 
 The interop bridge's final slice (`docs/specs/2026-06-28-m8.5-s3-decl-files-foreign-catch-design.md`).

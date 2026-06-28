@@ -13,12 +13,14 @@ use crate::types::Ty;
 // expansion run before the backends (alias expansion, generic erasure, `html"…"` hole resolution).
 // Re-exported so callers keep using `checker::expand_aliases` etc.
 mod desugar_router;
+mod overloads;
 mod rewrite_alias;
 mod rewrite_generics;
 mod rewrite_html;
 mod rewrite_new;
 mod rewrite_ufcs;
 pub use desugar_router::desugar_auto_router;
+pub use overloads::rename_overload_defs;
 pub use rewrite_alias::expand_aliases;
 pub use rewrite_generics::erase_generics;
 pub use rewrite_html::resolve_html;
@@ -398,6 +400,28 @@ pub struct Checker {
     /// method/constructor inside `class Box<T>`). Unioned with the method's own `type_params` so a
     /// method body sees both. Empty for free functions and non-generic classes (M-RT generics-all).
     cur_class_type_params: Vec<String>,
+    /// Return-type-overload classification (M-RT Slice C1), built by [`Self::finalize_overloads`]
+    /// between collection and body-checking. Maps a free-function name whose overload set is a *pure
+    /// return-overload set* (all members share identical parameter signatures, ≥2 distinct return
+    /// types) to the list of `(return Ty, mangled name)` members. Consumed by call-checking: a call to
+    /// such a name needs a `<Type>` selector (C1) or it is `E-OVERLOAD-NO-CONTEXT`. Empty for the common
+    /// case (no return-overloaded function in the program).
+    return_overload_sets: HashMap<String, Vec<(Ty, String)>>,
+    /// Free-function declaration sites accumulated during collection — `(name, decl span, resolved
+    /// params, resolved ret)` — so [`Self::finalize_overloads`] can emit a span-keyed rename for each
+    /// member of a return-overload set without threading a span through `FnSig`.
+    free_fn_decls: Vec<(String, Span, Vec<Ty>, Ty)>,
+    /// Span-keyed **definition renames** for return-overload members (M-RT Slice C1): a
+    /// `FunctionDecl`'s `span.start` → its mangled name (`f__ret_int`). Applied by
+    /// [`crate::checker::rename_overload_defs`] before any backend, so the backends see distinct,
+    /// single-overload functions (no ambiguous identical-`ParamKind` dispatch table). Single-return
+    /// names are never renamed ⇒ existing programs byte-identical.
+    overload_def_renames: HashMap<usize, String>,
+    /// Span-keyed `Call`-node substitutions for resolved overload selectors (M-RT Slice C1): an
+    /// [`crate::ast::Expr::OverloadSelect`]'s `span.start` → the mangled `Expr::Call` the checker chose.
+    /// Merged into the combined call-rewrite map and applied by [`rewrite_ufcs`] (whose `rexpr` gains an
+    /// `OverloadSelect` arm), so no backend sees the selector wrapper. No new `Op`/`Value`.
+    overload_resolutions: HashMap<usize, crate::ast::Expr>,
 }
 
 impl Checker {
@@ -451,6 +475,10 @@ impl Checker {
             reflect_resolutions: HashMap::new(),
             active_type_params: Vec::new(),
             cur_class_type_params: Vec::new(),
+            return_overload_sets: HashMap::new(),
+            free_fn_decls: Vec::new(),
+            overload_def_renames: HashMap::new(),
+            overload_resolutions: HashMap::new(),
         }
     }
 
@@ -641,6 +669,9 @@ fn run_checker_mode(program: &Program, test_mode: bool) -> Checker {
     let mut c = Checker::new();
     c.test_mode = test_mode;
     c.collect(program);
+    // M-RT Slice C1: classify return-overload sets (after collection sees every signature, before any
+    // body is checked, so call-checking can resolve a `<Type>` selector against the set).
+    c.finalize_overloads();
     c.check_program(program);
     c
 }
@@ -678,6 +709,7 @@ pub fn check_resolutions(
         Vec<Diagnostic>,
         HashMap<usize, crate::ast::Expr>,
         HashMap<usize, crate::ast::Expr>,
+        HashMap<usize, String>,
     ),
     Vec<Diagnostic>,
 > {
@@ -700,7 +732,16 @@ pub fn check_resolutions(
         // node's span (the `as` token — disjoint from every call/UFCS/fill/reflect span). Applied by
         // the same `rewrite_ufcs` walker (its `Cast` arm now consults this map).
         calls.extend(c.cast_resolutions);
-        Ok((c.warnings, c.html_resolutions, calls))
+        // M-RT Slice C1: resolved overload-selector call-site rewrites join the same call-rewrite map
+        // (keys are the `OverloadSelect` node spans — disjoint from every call/UFCS/fill/reflect/cast
+        // span). The definition renames are returned separately (they rename items, not call sites).
+        calls.extend(c.overload_resolutions);
+        Ok((
+            c.warnings,
+            c.html_resolutions,
+            calls,
+            c.overload_def_renames,
+        ))
     } else {
         Err(c.errors)
     }

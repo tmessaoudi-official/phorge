@@ -598,12 +598,49 @@ pub fn explain_text(code: &str) -> Option<String> {
              add it to one of the intersection's members.\n"
         }
         "E-OVERLOAD-RETURN" => {
-            "E-OVERLOAD-RETURN — overloads of one name must share a return type.\n\n\
-             Phorj overloading is dynamic multiple dispatch: the runtime argument types choose the\n\
-             overload, so the compiler cannot know which one fires at a polymorphic call. Requiring a\n\
-             single return type keeps every overloaded call statically typed. Overloads model one\n\
-             operation over different argument types; if the return must vary with the input, use a\n\
-             generic function (`f<T>(T) -> T`) or separate names.\n"
+            "E-OVERLOAD-RETURN — a name mixes parameter- and return-type overloading.\n\n\
+             A name may be overloaded one of two ways, never both:\n\
+             • PARAMETER overloading — distinct parameter signatures sharing ONE return type; the\n\
+               runtime argument types pick the overload (dynamic multiple dispatch).\n\
+             • RETURN-TYPE overloading (Slice C) — IDENTICAL parameter signatures with DIFFERENT\n\
+               return types; the call's type context (a `<Type>f(…)` selector) picks the overload at\n\
+               compile time, and each is emitted as a distinct PHP function.\n\n\
+             Mixing the two (some overloads differing in parameters, others only in return) has no\n\
+             sound dispatch — the runtime parameter dispatch cannot tell two identical-parameter\n\
+             overloads apart. Likewise, parameter overloads that differ in return type also raise this\n\
+             (keep their return type shared). Split the name into separate functions, or make all\n\
+             overloads share one parameter signature (return-type overloading) or one return type\n\
+             (parameter overloading).\n"
+        }
+        "E-OVERLOAD-NO-CONTEXT" => {
+            "E-OVERLOAD-NO-CONTEXT — a return-type-overloaded call has no type context.\n\n\
+             A function overloaded only by return type (identical parameters) is chosen by the type\n\
+             expected at the call site. In this position there is none, so the compiler cannot pick a\n\
+             member. Add a return-type selector naming the overload you want — `<Type>f(args)` — e.g.\n\
+             `discard <int>parse(\"7\");` or `int x = <int>parse(\"7\");`. (A later slice will infer the\n\
+             selector from a typed binding, return, or argument; for now it is explicit.)\n"
+        }
+        "E-OVERLOAD-AMBIGUOUS-RETURN" => {
+            "E-OVERLOAD-AMBIGUOUS-RETURN — a selector type matches more than one overload.\n\n\
+             The `<Type>` selector resolves an overload by: (1) the overload whose return type EQUALS\n\
+             the selector, else (2) the UNIQUE overload whose return type is assignable to it. When two\n\
+             or more overloads are assignable (e.g. `<Animal>` with both a `Dog`- and a `Cat`-returning\n\
+             overload) the choice is ambiguous. Name the exact return type of the overload you mean\n\
+             (`<Dog>` / `<Cat>`).\n"
+        }
+        "E-OVERLOAD-SELECT-UNKNOWN" => {
+            "E-OVERLOAD-SELECT-UNKNOWN — a `<Type>` selector names no overload's return type.\n\n\
+             `<Type>f(args)` selects the overload of `f` whose return type is `Type`. This error means\n\
+             `f` has no overload returning that type — or `f` is not a return-type-overloaded free\n\
+             function at all (the selector applies only to those; not to methods, parameter-overloaded\n\
+             names, or ordinary functions). Use a return type one of the overloads actually declares.\n"
+        }
+        "E-OVERLOAD-SELECT-CONFLICT" => {
+            "E-OVERLOAD-SELECT-CONFLICT — a `<Type>` selector disagrees with the surrounding type.\n\n\
+             Both an inferable sink (a typed binding, return, etc.) and an explicit `<Type>` selector\n\
+             are present and demand different overloads (e.g. `string x = <int>parse(\"7\")`). Drop the\n\
+             selector, or make it agree with the expected type. (Raised once the inferable sinks land;\n\
+             until then the selector is always the sole context.)\n"
         }
         "E-OVERLOAD-DUPLICATE" => {
             "E-OVERLOAD-DUPLICATE — two overloads have identical parameter types.\n\n\
