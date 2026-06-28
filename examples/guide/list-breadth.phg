@@ -1,0 +1,34 @@
+package Main;
+import Core.Console;
+import Core.List;
+
+// Stdlib breadth — `Core.List` query/aggregate ops (on top of map/filter/reduce/sort/slice/…):
+//   * `unique`         — dedupe, keeping first occurrence + order (by value equality).
+//   * `min` / `max`    — smallest / largest, or null for an empty list (`T?`). Byte-order on strings
+//                        (so `"10" < "9"`, matching the Rust backends — NOT PHP's numeric juggling).
+//   * `find(p) -> T?`  — first element satisfying the predicate, or null.
+//   * `any(p)`/`all(p)`— short-circuiting existential / universal quantifiers (`bool`).
+// All pure Phorge over the higher-order-native machinery; byte-identical run / runvm / real PHP.
+function main(): void {
+    List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6, 5];
+
+    Console.println("unique: {List.length(List.unique(xs))} of {List.length(xs)}");
+    Console.println("min={List.min(xs) ?? 0} max={List.max(xs) ?? 0}");
+
+    // `find` returns an optional — pair it with `??` (or if-let).
+    int firstBig = List.find(xs, fn(int x) => x > 4) ?? -1;
+    Console.println("first > 4: {firstBig}");
+
+    bool hasBig = List.any(xs, fn(int x) => x > 8);
+    bool allPos = List.all(xs, fn(int x) => x > 0);
+    Console.println("any > 8: {hasBig}, all > 0: {allPos}");
+
+    // `min`/`max` order strings by byte, so a list of numeric-looking strings is consistent across
+    // all three backends (PHP's bare min/max would juggle them numerically).
+    List<string> codes = ["10", "9", "100", "2"];
+    Console.println("string min={List.min(codes) ?? \"?\"} max={List.max(codes) ?? \"?\"}");
+
+    // Empty list: min/max/find are null.
+    List<int> none = List.filter(xs, fn(int x) => x > 100);
+    Console.println("empty min: {List.min(none) ?? -1}");
+}

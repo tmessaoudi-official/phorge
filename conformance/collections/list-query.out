@@ -1,0 +1,7 @@
+unique 7
+min 1 max 9
+find 5
+any true all true
+any2 false all2 false
+smin 10 smax 9
+empty -1,-1

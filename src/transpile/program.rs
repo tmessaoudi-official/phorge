@@ -984,6 +984,65 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        // `List.unique` — first-occurrence-order dedupe by strict equality (≡ Phorge value-equality;
+        // NOT `array_unique`, which stringifies).
+        if self.uses_list_unique {
+            self.line("function __phorge_unique($xs) {");
+            self.indent += 1;
+            self.line("$out = [];");
+            self.line("foreach ($xs as $x) { if (!in_array($x, $out, true)) { $out[] = $x; } }");
+            self.line("return $out;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        // `List.min` / `List.max` — byte-order compare (string via `strcmp`, NOT PHP `min`/`max`'s
+        // numeric-string juggling), null for an empty list. Same `cmp` as `__phorge_sort`.
+        if self.uses_list_min {
+            self.line("function __phorge_min($xs) {");
+            self.indent += 1;
+            self.line("if (!count($xs)) { return null; }");
+            self.line("$m = $xs[0];");
+            self.line("foreach ($xs as $x) { if ((is_string($x) ? strcmp($x, $m) : ($x <=> $m)) < 0) { $m = $x; } }");
+            self.line("return $m;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_list_max {
+            self.line("function __phorge_max($xs) {");
+            self.indent += 1;
+            self.line("if (!count($xs)) { return null; }");
+            self.line("$m = $xs[0];");
+            self.line("foreach ($xs as $x) { if ((is_string($x) ? strcmp($x, $m) : ($x <=> $m)) > 0) { $m = $x; } }");
+            self.line("return $m;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        // `List.find` / `any` / `all` — SHORT-CIRCUITING (`foreach` + early `return`), so a
+        // side-effecting predicate runs on exactly the same prefix as the Rust backends.
+        if self.uses_list_find {
+            self.line("function __phorge_find($xs, $p) {");
+            self.indent += 1;
+            self.line("foreach ($xs as $x) { if ($p($x)) { return $x; } }");
+            self.line("return null;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_list_any {
+            self.line("function __phorge_any($xs, $p) {");
+            self.indent += 1;
+            self.line("foreach ($xs as $x) { if ($p($x)) { return true; } }");
+            self.line("return false;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_list_all {
+            self.line("function __phorge_all($xs, $p) {");
+            self.indent += 1;
+            self.line("foreach ($xs as $x) { if (!$p($x)) { return false; } }");
+            self.line("return true;");
+            self.indent -= 1;
+            self.line("}");
+        }
         if self.uses_map_set {
             // A NEW map (Phorge maps are immutable). `$m` is passed by value, and PHP arrays are
             // copy-on-write, so assigning into it produces a fresh array — the caller's is untouched.

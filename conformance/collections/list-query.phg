@@ -1,0 +1,22 @@
+// Conformance: Core.List breadth — unique / min / max / find / any / all (stdlib breadth slice).
+// Includes the numeric-string min/max parity case (byte-order, not PHP numeric juggling) and the
+// empty-list null case. Byte-identical run≡runvm≡real PHP.
+package Main;
+
+import Core.Console;
+import Core.List;
+
+function main() -> void {
+    List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6];
+    Console.println("unique {List.length(List.unique(xs))}");
+    Console.println("min {List.min(xs) ?? 0} max {List.max(xs) ?? 0}");
+    Console.println("find {List.find(xs, fn(int x) => x > 4) ?? -1}");
+    Console.println("any {List.any(xs, fn(int x) => x > 8)} all {List.all(xs, fn(int x) => x > 0)}");
+    Console.println("any2 {List.any(xs, fn(int x) => x > 9)} all2 {List.all(xs, fn(int x) => x < 5)}");
+
+    List<string> codes = ["10", "9", "100", "2"];
+    Console.println("smin {List.min(codes) ?? \"?\"} smax {List.max(codes) ?? \"?\"}");
+
+    List<int> none = List.filter(xs, fn(int x) => x > 100);
+    Console.println("empty {List.min(none) ?? -1},{List.max(none) ?? -1}");
+}

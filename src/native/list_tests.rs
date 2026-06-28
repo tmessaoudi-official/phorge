@@ -354,3 +354,52 @@ fn list_higher_order_eval_and_emit() {
         index_of("Core.List", "map")
     );
 }
+
+#[test]
+fn list_unique_preserves_first_occurrence_order() {
+    let mut o = String::new();
+    let xs = Value::List(Rc::new(vec![
+        Value::Int(3),
+        Value::Int(1),
+        Value::Int(3),
+        Value::Int(2),
+        Value::Int(1),
+    ]));
+    match list_unique(&[xs], &mut o).unwrap() {
+        Value::List(ys) => assert_eq!(
+            ys.iter()
+                .map(|v| match v {
+                    Value::Int(n) => *n,
+                    _ => -99,
+                })
+                .collect::<Vec<_>>(),
+            vec![3, 1, 2]
+        ),
+        other => panic!("unique returned {other:?}"),
+    }
+}
+
+#[test]
+fn list_min_max_byte_order_and_empty() {
+    let mut o = String::new();
+    // Numeric-looking strings order by BYTE ("10" < "9"), not numerically — matches the PHP helper.
+    let codes = Value::List(Rc::new(vec![
+        Value::Str("10".into()),
+        Value::Str("9".into()),
+        Value::Str("100".into()),
+        Value::Str("2".into()),
+    ]));
+    assert!(
+        matches!(list_min(std::slice::from_ref(&codes), &mut o), Ok(Value::Str(s)) if s == "10")
+    );
+    assert!(
+        matches!(list_max(std::slice::from_ref(&codes), &mut o), Ok(Value::Str(s)) if s == "9")
+    );
+    // Empty list → null.
+    let empty = Value::List(Rc::new(vec![]));
+    assert!(matches!(
+        list_min(std::slice::from_ref(&empty), &mut o),
+        Ok(Value::Null)
+    ));
+    assert!(matches!(list_max(&[empty], &mut o), Ok(Value::Null)));
+}

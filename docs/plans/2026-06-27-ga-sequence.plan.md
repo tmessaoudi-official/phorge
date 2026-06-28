@@ -353,6 +353,12 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
 > after each feature; end every status with `GA: ~X% · Global: ~Y%`.
 
 ### Decisions Log (this round)
+- [2026-06-28] DONE: **stdlib List breadth** (developer-chosen fresh deterministic track). `Core.List` +=
+  `unique`/`min`/`max`/`find`/`any`/`all`. Pure (unique/min/max) + higher-order (find/any/all,
+  short-circuiting). All via `__phorge_*` helpers for strict parity (PHP min/max/array_unique juggle
+  numeric strings — verified: string min/max of `["10","9","100","2"]` = `"10"`/`"9"` byte-order on all
+  3 backends). No new Op/Value. `examples/guide/list-breadth.phg` + `conformance/collections/list-query.phg`
+  + 2 lib unit tests. NEXT options: more stdlib breadth (Set/Map ergonomics, Text breadth), or another track.
 - [2026-06-28] DONE: **M6 W3 — concurrent `phg serve`** (`33efa7e` spec, impl next commit). Bounded
   OS-thread pool (`serve_pool`/`worker_loop` in `src/serve.rs`), `--workers N` (default = CPU cores,
   `--workers 1` = single-threaded), bounded-channel backpressure, `catch_unwind` per request. No new

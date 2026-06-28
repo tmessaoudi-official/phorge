@@ -6,6 +6,22 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — stdlib: `Core.List` breadth (query/aggregate)
+
+Six everyday `Core.List` ops, all byte-identical `run ≡ runvm ≡ real PHP`:
+
+- **`unique(List<T>) -> List<T>`** — dedupe keeping first occurrence + order (value equality).
+- **`min` / `max`(List<T>) -> T?`** — smallest / largest, null for an empty list. Strings order by
+  **byte** (`"10" < "9"`), matching the Rust backends — *not* PHP's numeric-string juggling.
+- **`find(List<T>, (T) -> bool) -> T?`** — first element satisfying the predicate, or null.
+- **`any` / `all`(List<T>, (T) -> bool) -> bool`** — short-circuiting existential / universal.
+
+`find`/`any`/`all` **short-circuit identically on every backend** (the `__phorge_find/any/all` PHP
+helpers `foreach` + early-`return`), so a side-effecting predicate produces identical stdout; `unique`/
+`min`/`max` get `__phorge_*` helpers too (inlining PHP `array_unique`/`min`/`max` would juggle numeric
+strings). Reuses the higher-order-native + generic-call machinery — no new `Op`/`Value`.
+`examples/guide/list-breadth.phg` + `conformance/collections/list-query.phg`.
+
 ### Added — M6 W3: concurrent `phg serve` (bounded thread pool)
 
 `phg serve` now handles requests concurrently across CPU cores instead of one at a time. Each request

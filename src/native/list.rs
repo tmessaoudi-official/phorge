@@ -396,7 +396,160 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(list_last),
             php: |a| format!("({0}[count({0}) - 1] ?? null)", parg(a, 0)),
         },
+        // `unique(List<T>) -> List<T>` — dedupe, keeping first occurrence + order. Value-equality
+        // (Phorge structural ≡ the `__phorge_unique` helper's strict `in_array`); NOT PHP's
+        // `array_unique` (which stringifies / juggles numeric strings — a parity break for `List<string>`).
+        NativeFn {
+            module: "Core.List",
+            name: "unique",
+            params: vec![list(t())],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_unique),
+            php: |a| format!("__phorge_unique({})", parg(a, 0)),
+        },
+        // `min(List<T>) -> T?` / `max(List<T>) -> T?` — null for an empty list. Uses the `natural_cmp`
+        // byte-order (strings via `strcmp`, not PHP's numeric-string-juggling `min`/`max`), so the
+        // `__phorge_min`/`_max` helpers match the Rust backends exactly.
+        NativeFn {
+            module: "Core.List",
+            name: "min",
+            params: vec![list(t())],
+            ret: Ty::Optional(Box::new(t())),
+            pure: true,
+            eval: NativeEval::Pure(list_min),
+            php: |a| format!("__phorge_min({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "max",
+            params: vec![list(t())],
+            ret: Ty::Optional(Box::new(t())),
+            pure: true,
+            eval: NativeEval::Pure(list_max),
+            php: |a| format!("__phorge_max({})", parg(a, 0)),
+        },
+        // `find(List<T>, (T) -> bool) -> T?` — the first element satisfying the predicate, or null.
+        // `any` / `all` — short-circuiting existential / universal quantifiers. All three
+        // SHORT-CIRCUIT identically on every backend (the `__phorge_find/any/all` helpers `foreach`
+        // + early-`return`), so a side-effecting predicate produces byte-identical stdout.
+        NativeFn {
+            module: "Core.List",
+            name: "find",
+            params: vec![list(t()), Ty::Function(vec![t()], Box::new(Ty::Bool))],
+            ret: Ty::Optional(Box::new(t())),
+            pure: true,
+            eval: NativeEval::HigherOrder(list_find),
+            php: |a| format!("__phorge_find({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "any",
+            params: vec![list(t()), Ty::Function(vec![t()], Box::new(Ty::Bool))],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::HigherOrder(list_any),
+            php: |a| format!("__phorge_any({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "all",
+            params: vec![list(t()), Ty::Function(vec![t()], Box::new(Ty::Bool))],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::HigherOrder(list_all),
+            php: |a| format!("__phorge_all({}, {})", parg(a, 0), parg(a, 1)),
+        },
     ]
+}
+
+/// `unique` — first-occurrence-order dedupe by Phorge value-equality.
+fn list_unique(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs)] => {
+            let mut out: Vec<Value> = Vec::new();
+            for x in xs.iter() {
+                if !out.iter().any(|y| y.eq_val(x)) {
+                    out.push(x.clone());
+                }
+            }
+            Ok(Value::List(std::rc::Rc::new(out)))
+        }
+        _ => Err("List.unique expects (List<T>)".into()),
+    }
+}
+
+/// `min`/`max` — the smallest/largest by `natural_cmp`, or `Null` for an empty list.
+fn list_min(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs)] => Ok(xs
+            .iter()
+            .min_by(|a, b| natural_cmp(a, b))
+            .cloned()
+            .unwrap_or(Value::Null)),
+        _ => Err("List.min expects (List<T>)".into()),
+    }
+}
+fn list_max(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs)] => Ok(xs
+            .iter()
+            .max_by(|a, b| natural_cmp(a, b))
+            .cloned()
+            .unwrap_or(Value::Null)),
+        _ => Err("List.max expects (List<T>)".into()),
+    }
+}
+
+/// Run a `(T) -> bool` predicate over the list, short-circuiting. A non-bool result is a clean fault
+/// (matches `filter`). `find` returns the first matching element (or `Null`); `any`/`all` the verdict.
+fn list_pred(call: &mut ClosureInvoker, f: &Value, x: &Value) -> Result<bool, String> {
+    match call(f, vec![x.clone()])? {
+        Value::Bool(b) => Ok(b),
+        other => Err(format!(
+            "List predicate must return bool, got {}",
+            other.type_name()
+        )),
+    }
+}
+fn list_find(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), f] => {
+            for x in xs.iter() {
+                if list_pred(call, f, x)? {
+                    return Ok(x.clone());
+                }
+            }
+            Ok(Value::Null)
+        }
+        _ => Err("List.find expects (List<T>, (T) -> bool)".into()),
+    }
+}
+fn list_any(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), f] => {
+            for x in xs.iter() {
+                if list_pred(call, f, x)? {
+                    return Ok(Value::Bool(true));
+                }
+            }
+            Ok(Value::Bool(false))
+        }
+        _ => Err("List.any expects (List<T>, (T) -> bool)".into()),
+    }
+}
+fn list_all(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), f] => {
+            for x in xs.iter() {
+                if !list_pred(call, f, x)? {
+                    return Ok(Value::Bool(false));
+                }
+            }
+            Ok(Value::Bool(true))
+        }
+        _ => Err("List.all expects (List<T>, (T) -> bool)".into()),
+    }
 }
 
 // ---- Core.Map -----------------------------------------------------------------------------------

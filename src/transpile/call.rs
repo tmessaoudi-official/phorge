@@ -156,6 +156,12 @@ impl Transpiler {
                                 "sort" => self.uses_list_sort = true,
                                 "sortWith" => self.uses_list_sort_with = true,
                                 "indexOf" => self.uses_list_index_of = true,
+                                "unique" => self.uses_list_unique = true,
+                                "min" => self.uses_list_min = true,
+                                "max" => self.uses_list_max = true,
+                                "find" => self.uses_list_find = true,
+                                "any" => self.uses_list_any = true,
+                                "all" => self.uses_list_all = true,
                                 _ => {}
                             }
                         }

@@ -225,6 +225,17 @@ struct Transpiler {
     /// `<=>`) to match Rust's natural order, `sortWith` defers to the user closure.
     uses_list_sort: bool,
     uses_list_sort_with: bool,
+    /// Set when the matching `Core.List` breadth op is emitted — each defines a `__phorge_*` helper
+    /// once per file (List breadth slice). They exist instead of inlining PHP `min`/`max`/`array_unique`
+    /// because those juggle numeric strings, diverging from the Rust backends' byte-order; `find`/`any`/
+    /// `all` short-circuit (`foreach` + early `return`) to match the Rust short-circuit on a
+    /// side-effecting predicate.
+    uses_list_unique: bool,
+    uses_list_min: bool,
+    uses_list_max: bool,
+    uses_list_find: bool,
+    uses_list_any: bool,
+    uses_list_all: bool,
     /// Set when `Core.Map.set` / `remove` is emitted — defines the matching `__phorge_map_set` /
     /// `__phorge_map_remove` helper once per file. Both produce a NEW map (Phorge maps are immutable);
     /// PHP arrays are COW value types, so the helper's by-value `$m` is already a copy.
@@ -493,6 +504,12 @@ impl Transpiler {
             uses_text_parse_int: false,
             uses_list_sort: false,
             uses_list_sort_with: false,
+            uses_list_unique: false,
+            uses_list_min: false,
+            uses_list_max: false,
+            uses_list_find: false,
+            uses_list_any: false,
+            uses_list_all: false,
             uses_map_set: false,
             uses_map_remove: false,
             uses_list_index_of: false,
