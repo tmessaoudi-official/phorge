@@ -184,6 +184,15 @@ pub fn explain_text(code: &str) -> Option<String> {
              the sink at all. (The lint is syntactic on the direct argument; a value laundered through\n\
              a local is not flagged — the type-system non-printability is the real guarantee.)\n"
         }
+        "W-DEPRECATED" => {
+            "W-DEPRECATED — a deprecated stdlib symbol is used (lint).\n\n\
+             The symbol still works, but it is slated for removal: this lint names its replacement and\n\
+             the version in which it will be removed. Per `SEMVER.md` a deprecated symbol emits this\n\
+             warning for at least one minor release before it is removed (and the removal is a\n\
+             documented `### Breaking` CHANGELOG entry). Migrate to the named replacement; see\n\
+             `docs/DEPRECATION.md` for the policy and `STABILITY.md` for the deprecated tier. Like\n\
+             every `W-…` lint it rides the warning channel and never fails the build.\n"
+        }
         "E-LAMBDA-THIS" => {
             "E-LAMBDA-THIS — a field-initializer lambda captures `this`.\n\n\
              A method-body lambda MAY capture `this` (it is captured live, by the instance handle). The\n\

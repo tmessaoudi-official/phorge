@@ -1,0 +1,30 @@
+// Conformance: intersection types `A & B` — a value satisfying multiple interfaces at once.
+package Main;
+
+import Core.Console;
+
+interface Named {
+    function name() -> string;
+}
+
+interface Aged {
+    function age() -> int;
+}
+
+class Person implements Named, Aged {
+    constructor(public string n, public int a) {}
+    function name() -> string {
+        return this.n;
+    }
+    function age() -> int {
+        return this.a;
+    }
+}
+
+function describe(Named & Aged who) -> string {
+    return "{who.name()} is {who.age()}";
+}
+
+function main() -> void {
+    Console.println(describe(new Person("Ada", 36)));
+}

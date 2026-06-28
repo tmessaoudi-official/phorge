@@ -1,0 +1,24 @@
+// Conformance: union types `A | B` + match-over-union (type patterns).
+package Main;
+
+import Core.Console;
+
+class Cash {
+    constructor(public int amount) {}
+}
+
+class Card {
+    constructor(public string number) {}
+}
+
+function describe(Cash | Card payment) -> string {
+    return match payment {
+        Cash c => "cash {c.amount}",
+        Card k => "card {k.number}",
+    };
+}
+
+function main() -> void {
+    Console.println(describe(new Cash(100)));
+    Console.println(describe(new Card("4321")));
+}

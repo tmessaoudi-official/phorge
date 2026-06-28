@@ -6,6 +6,26 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — stability & conformance (GA rock 3)
+
+A stability story for the pre-1.0 surface: a golden-output conformance corpus, written policies, and a
+deprecation mechanism.
+
+- **Conformance corpus** (`conformance/`, gated by `tests/conformance.rs`): 19 single-feature programs
+  + a flagship multi-package DDD project, each with committed golden output asserted byte-identical on
+  the interpreter, the VM, **and** real PHP. Stronger than the example differential (which only checks
+  the backends *agree*) — the golden pins the value, catching a regression where all backends drift
+  identically. Glob-discovered (incl. project roots via `phorge.toml`).
+- **`SEMVER.md`** — the versioning contract: in `0.x` minor versions may break but each is documented
+  (`### Breaking` CHANGELOG heading); at `1.0` the *stable* tier freezes under strict SemVer.
+- **`STABILITY.md`** — every public construct, stdlib module, and CLI command sorted into
+  stable / experimental / deprecated tiers; the conformance corpus enforces the stable tier.
+- **`docs/DEPRECATION.md`** + the **`W-DEPRECATED`** lint: a deprecated stdlib symbol keeps working but
+  emits a warning naming its replacement + removal version (warning channel, never gates the build),
+  for ≥1 minor release before removal. Flagged via a `native::deprecation_of` side table (empty in the
+  shipping build — the mechanism is ready ahead of the first real deprecation; a `#[cfg(test)]` sample
+  exercises the lint). `phg explain W-DEPRECATED`.
+
 ### Added — overloaded static methods (Statics-B)
 
 A `static` method may now be **overloaded** and called by the class name: `Color.of(int)` /

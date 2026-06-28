@@ -77,6 +77,16 @@
    (needs resolved-type index), lambda/match-pattern binders. **NEXT: (3) rock 3.**
 3. **Rock 3** — focused golden `conformance/` corpus + flagship DDD project + `SEMVER`/`STABILITY.md`
    policy docs + `W-DEPRECATED` lint + deprecation-policy doc.
+   ✅ DONE (2026-06-28, not pushed). **R1** (`bba7785`): `conformance/` golden corpus — 19 single-feature
+   programs (`tests/conformance.rs` asserts run≡runvm≡PHP≡golden, glob-discovered) + a flagship
+   multi-package DDD project (`conformance/ddd/`, project-loaded golden). Golden pins the *value*
+   (stronger than the example differential's agree-only). **R2+R4+R3** (next commit): `SEMVER.md`
+   (0.x-may-break-documented → freeze at 1.0), `STABILITY.md` (stable/experimental/deprecated tiers over
+   constructs+stdlib+CLI; corpus enforces the stable tier; + `conformance/types/unions.phg` &
+   `intersections.phg` to back the stable type-system claim), `docs/DEPRECATION.md` + the `W-DEPRECATED`
+   lint (`native::deprecation_of` side table — empty in release, `#[cfg(test)]` sample; checker emits on
+   a deprecated native call; `phg explain W-DEPRECATED`). 1178 lib + conformance + all suites green;
+   clippy+fmt clean. **Locked autonomous sequence (items 1–3) COMPLETE.**
 Each: design-spec where non-trivial, TDD, byte-identity-gated (run≡runvm≡real PHP 8.5), commit green,
 **NEVER push**, recommended-defaults at every remaining fork, only stop for a fundamental design fork or
 a risky/destructive action. Rebuild the release binary after each feature; end every status with

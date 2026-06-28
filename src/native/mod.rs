@@ -77,6 +77,36 @@ pub struct NativeFn {
     pub pure: bool,
 }
 
+/// A deprecated stdlib symbol's replacement guidance (GA rock 3 / `W-DEPRECATED`). Kept in a side
+/// table ([`deprecation_of`]) rather than a [`NativeFn`] field so flagging a symbol touches one place,
+/// not all ~166 registry literals — and the common (non-deprecated) native pays nothing.
+pub struct Deprecated {
+    /// What to use instead — a fully-qualified symbol or a short phrase.
+    pub replacement: &'static str,
+    /// The version in which the symbol will be removed (per `SEMVER.md` / `docs/DEPRECATION.md`).
+    pub removed_in: &'static str,
+}
+
+/// Whether the stdlib native `(module, name)` is deprecated, with its replacement guidance. **Empty in
+/// the shipping build** — the mechanism is ready for the first real deprecation (the policy lives in
+/// `docs/DEPRECATION.md`; a deprecated symbol keeps working but emits `W-DEPRECATED` for ≥1 minor
+/// release before removal). Real entries are added here as the surface evolves, e.g.
+/// `("Core.Old", "thing") => Deprecated { replacement: "Core.New.thing", removed_in: "0.7.0" }`. A
+/// `#[cfg(test)]` sample exercises the lint end-to-end without a shipping deprecation.
+#[must_use]
+pub fn deprecation_of(module: &str, name: &str) -> Option<Deprecated> {
+    #[cfg(test)]
+    if (module, name) == ("Core.Math", "abs") {
+        // Test fixture only (never in a release build): proves the native-call → W-DEPRECATED wiring.
+        return Some(Deprecated {
+            replacement: "Math.absolute (sample — test fixture)",
+            removed_in: "0.99.0",
+        });
+    }
+    let _ = (module, name);
+    None
+}
+
 /// A backend's re-entrant closure invoker, handed to a [`NativeEval::HigherOrder`] body: given a
 /// `Value::Closure` and its call arguments, run it on the calling backend and return its result (or
 /// a fault as a plain `String`, the backend-shared contract). The interpreter wraps `call_closure`;

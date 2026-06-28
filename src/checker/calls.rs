@@ -434,6 +434,21 @@ impl Checker {
         let n = &crate::native::registry()[idx];
         let leaf = n.module.rsplit('.').next().unwrap_or(n.module);
         let label = format!("{leaf}.{}", n.name);
+        // W-DEPRECATED (rock 3): a deprecated stdlib symbol keeps working but warns, naming its
+        // replacement + removal version (a non-fatal lint on the warning channel). The flag lives in
+        // the `deprecation_of` side table — empty in a release build — so this is a no-op for every
+        // current native. `n` borrows the `'static` registry, so the `&mut self` lint doesn't alias.
+        if let Some(dep) = crate::native::deprecation_of(n.module, n.name) {
+            self.warn_coded(
+                span,
+                format!(
+                    "`{label}` is deprecated and will be removed in {}",
+                    dep.removed_in
+                ),
+                "W-DEPRECATED",
+                Some(format!("use {} instead", dep.replacement)),
+            );
+        }
         // W-SECRET (Fork B): a freshly-`expose()`d `Secret` flowing *directly* into a sink is almost
         // certainly a leak (the plaintext gets logged / persisted). Syntactic on the direct argument —
         // a value laundered through a local is not flagged (full taint analysis is out of scope; the

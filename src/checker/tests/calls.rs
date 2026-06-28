@@ -395,3 +395,28 @@ fn ufcs_safe_nav_result_is_optional() {
         "expected an optional-to-non-optional error"
     );
 }
+
+#[test]
+fn deprecated_native_emits_w_deprecated() {
+    // The `#[cfg(test)]` sample in `native::deprecation_of` flags `Core.Math.abs` as deprecated, so a
+    // call to it warns (the symbol still type-checks — W-DEPRECATED rides the warning channel, never
+    // gating). Proves the native-call → W-DEPRECATED wiring end-to-end (rock 3).
+    let src = "import Core.Math; function main() -> void { int x = Math.abs(-3); }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+    let w = warnings_of(src);
+    assert!(
+        w.iter().any(|d| d.code == Some("W-DEPRECATED")),
+        "expected W-DEPRECATED, got {w:?}"
+    );
+}
+
+#[test]
+fn non_deprecated_native_has_no_w_deprecated() {
+    // A neighboring native that is NOT flagged must not warn (guards against an over-broad lint).
+    let src = "import Core.Math; function main() -> void { int x = Math.max(1, 2); }";
+    let w = warnings_of(src);
+    assert!(
+        !w.iter().any(|d| d.code == Some("W-DEPRECATED")),
+        "unexpected W-DEPRECATED, got {w:?}"
+    );
+}
