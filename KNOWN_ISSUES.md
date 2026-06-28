@@ -550,11 +550,13 @@ or simply unavailable, never a crash):
 - **Only `#[Route]` has semantics.** The grammar parses any `#[Name(args)]`, but every name other than
   `Route` is a hard `E-UNKNOWN-ATTRIBUTE` (no silent ignore). A general attribute/annotation facility
   is future work.
-- **Middleware, route groups, and regex constraints shipped (W2-ext slices 1–2); `#[Route]` on methods
-  not yet.** `router.use(mw)`, `router.group(prefix, build)`, and `{name:regex}` constraints
-  (`r"/users/{id:\d+}"`) all work. Still deferred: `#[Route]` on class methods (slice 3), optional
-  segments, and wildcards. A group's middleware is composed into its routes at merge time; deeply-nested
-  group middleware ordering beyond one level is not specially tested.
+- **M6 W2 extensions complete** (middleware, route groups, regex constraints, `#[Route]` on methods).
+  `router.use(mw)`, `router.group(prefix, build)`, `{name:regex}` constraints, and `#[Route]` on
+  **static** methods all work. Still deferred: optional segments / wildcards, **instance-controller
+  routing** (a `#[Route]` method must be `static` — `E-ROUTE-METHOD-STATIC` — there is no
+  controller-instance lifecycle yet), and the W3 serve/concurrency runtime. A group's middleware is
+  composed into its routes at merge time; deeply-nested group middleware ordering beyond one level is
+  not specially tested.
 - **Route constraints depend on `Core.Regex`** — importing `Core.Http` now also pulls in `Core.Regex`
   (the prelude matches constraints with it). With the `regex` cargo feature disabled (e.g. a custom
   playground build), a program that imports `Core.Http` would fail to resolve `Core.Regex`. Constraint

@@ -1,0 +1,53 @@
+package Main;
+
+// M6 W2-ext slice 3 — **`#[Route]` on class methods** (the controller-as-class shape).
+//
+// A `#[Route(...)]` may sit on a **static** method; `Http.autoRouter()` collects those methods (and
+// any `#[Route]` free functions) and compile-time-desugars each into a registration whose handler is
+// a `fn(Request req) => ClassName.method(req)` lambda — so a class becomes a tidy namespace of route
+// handlers. Static is required (an instance controller has no routable receiver yet → a non-static
+// `#[Route]` method is `E-ROUTE-METHOD-STATIC`). No runtime reflection; byte-identical run/runvm/PHP.
+import Core.Console;
+import Core.Bytes;
+import Core.Http;
+
+// A controller: a class grouping related static route handlers.
+class UserController {
+  #[Route("GET", "/users")]
+  static function list(Request req): Response {
+    return Response.text(200, "all users");
+  }
+
+  #[Route("GET", r"/users/{id:\d+}")]
+  static function show(Request req): Response {
+    return Response.text(200, "user #{req.param(\"id\") ?? \"?\"}");
+  }
+
+  #[Route("POST", "/users")]
+  static function create(Request req): Response {
+    return Response.text(201, "created");
+  }
+}
+
+// A `#[Route]` free function still works alongside controller methods.
+#[Route("GET", "/")]
+function home(Request req): Response {
+  return Response.text(200, "home");
+}
+
+function show(Router rt, string method, string path): void {
+  Response resp = rt.handle(new Request(method, path, b"", [], []));
+  int st = resp.status;
+  string body = Bytes.toString(resp.body) ?? "?";
+  Console.println("{method} {path} -> {st}: {body}");
+}
+
+function main(): void {
+  // Collects home() + every #[Route] static method of UserController.
+  Router rt = Http.autoRouter();
+  show(rt, "GET", "/");
+  show(rt, "GET", "/users");
+  show(rt, "GET", "/users/42");
+  show(rt, "POST", "/users");
+  show(rt, "GET", "/users/ada"); // no bare {name} route here -> 404
+}

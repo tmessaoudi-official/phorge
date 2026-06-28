@@ -353,6 +353,13 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
 > after each feature; end every status with `GA: ~X% · Global: ~Y%`.
 
 ### Decisions Log (this round)
+- [2026-06-28] DONE: **M6 W2-ext slice 3 — `#[Route]` on class methods → W2-ext COMPLETE**. Attribute
+  parser extended to class methods; a `#[Route]` method must be **static** (`E-ROUTE-METHOD-STATIC`);
+  `Http.autoRouter()` lowers each static method to a `fn(req) => Class.method(req)` handler lambda
+  (the `Route` tuple's handler is now an `Expr`, not a name). `examples/web/controller.phg` +
+  conformance; byte-identical 3-way. **M6 W2 extensions (middleware → groups → constraints → method
+  attrs) is now COMPLETE.** Natural point to push + tag (developer action) and validate the M2.5
+  stub-registry CI; W3 serve/concurrency is the web-layer capstone after.
 - [2026-06-28] DONE: **M6 W2-ext slice 2 — regex/typed route constraints**: `{name:regex}` whole-segment
   anchored match via Core.Regex; precedence literal > constrained > bare; prelude imports Core.Regex.
   `examples/web/route-constraints.phg` + conformance; byte-identical 3-way. **Gotcha:** strip only OUTER

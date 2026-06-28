@@ -669,6 +669,20 @@ impl Checker {
                     Some("declare `function name(Request req) -> Response { … }`".into()),
                 );
             }
+            // A `#[Route]` on a *method* (checked inside a class — `cur_class` is set) must be `static`:
+            // `Http.autoRouter()` lowers it to `fn(req) => ClassName.method(req)`, a static call. An
+            // instance method has no routable receiver this slice (M6 W2-ext slice 3).
+            if self.cur_class.is_some() && !f.modifiers.contains(&crate::ast::Modifier::Static) {
+                self.err_coded(
+                    f.span,
+                    "a `#[Route]` method must be `static`".to_string(),
+                    "E-ROUTE-METHOD-STATIC",
+                    Some(
+                        "mark it `static function …`; an instance controller has no routable receiver yet"
+                            .into(),
+                    ),
+                );
+            }
         }
     }
 

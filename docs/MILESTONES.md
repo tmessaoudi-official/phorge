@@ -247,8 +247,9 @@ Shipped: **W0** (`bytes` primitive + `b"…"` literals + `Core.Bytes`), **W1** (
 404 fallback, `examples/web/router.phg`, plus the PHP-8 **`#[Route(...)]` attribute** + the
 `Http.autoRouter()` compile-time desugar, `examples/web/router-attrs.phg`; **W2-ext slice 1:**
 `router.use(mw)` middleware + `router.group(prefix, build)` sub-routers (`examples/web/middleware.phg`)
-+ **slice 2:** `{name:regex}` route constraints via `Core.Regex` (`examples/web/route-constraints.phg`),
-design `docs/specs/2026-06-28-m6-w2-extensions-design.md`; design
++ **slice 2:** `{name:regex}` route constraints via `Core.Regex` (`examples/web/route-constraints.phg`)
++ **slice 3:** `#[Route]` on static class methods, the controller shape (`examples/web/controller.phg`)
+— **W2-ext complete**; design `docs/specs/2026-06-28-m6-w2-extensions-design.md`; design
 `docs/specs/2026-06-28-m6-w2-router-attributes-design.md`), **W3** (`src/serve.rs` socket transport
 behind the `Transport` trait, tested via `tests/serve.rs` outside the spine), and **W4** (`phg serve` +
 the PHP front-controller `examples/web/server.php`, full served app `examples/web/server.phg`).

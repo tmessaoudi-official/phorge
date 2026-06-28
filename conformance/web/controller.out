@@ -1,0 +1,4 @@
+/ -> 200 root
+/ping -> 200 pong
+/items/7 -> 200 item 7
+/items/x -> 404 Not Found: GET /items/x

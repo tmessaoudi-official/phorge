@@ -15,13 +15,16 @@
 //! `Expr::Call` arm, which substitutes a freshly built router for an `Http.autoRouter()` shape.
 
 use crate::ast::{
-    CatchClause, ClassMember, Expr, Item, LambdaBody, MatchArm, Program, Stmt, StrPart,
+    CatchClause, ClassMember, Expr, Item, LambdaBody, MatchArm, Modifier, Param, Program, Stmt,
+    StrPart, Type,
 };
 use crate::token::Span;
 
 /// One collected route: the `#[Route]` method literal, the pattern literal (both kept as the original
-/// argument `Expr`s, so a raw-string pattern survives), and the handler function name.
-type Route = (Expr, Expr, String);
+/// argument `Expr`s, so a raw-string pattern survives), and the **handler expression** — a bare
+/// `Ident` for a free function, or a `fn(Request req) => Class.method(req)` lambda for a (static)
+/// method (M6 W2-ext slice 3).
+type Route = (Expr, Expr, Expr);
 
 /// Rewrite `Http.autoRouter()` calls into explicit `Router` construction. A no-op (returns the program
 /// unchanged) unless `Core.Http` is imported — so a user's own unrelated `Http.autoRouter()` is never
@@ -83,25 +86,80 @@ pub fn desugar_auto_router(program: Program) -> Program {
     }
 }
 
-/// Every free function carrying a well-formed `#[Route(method, pattern)]`, in source order. A
-/// malformed `Route` (wrong arg count) is skipped here — the checker reports it (`E-ROUTE-ARGS`).
+/// Every well-formed `#[Route(method, pattern)]` handler, in source order: free functions (handler =
+/// a bare `Ident`) and **static** class methods (handler = a `fn(Request req) => Class.method(req)`
+/// lambda). A malformed `Route` (wrong arg count) is skipped — the checker reports `E-ROUTE-ARGS`; a
+/// non-`static` `#[Route]` method is skipped here and reported `E-ROUTE-METHOD-STATIC`.
 fn collect_routes(program: &Program) -> Vec<Route> {
     let mut out = Vec::new();
     for it in &program.items {
-        if let Item::Function(f) = it {
-            for attr in &f.attrs {
-                if attr.name == "Route" && attr.args.len() == 2 {
-                    out.push((attr.args[0].clone(), attr.args[1].clone(), f.name.clone()));
+        match it {
+            Item::Function(f) => {
+                for attr in &f.attrs {
+                    if attr.name == "Route" && attr.args.len() == 2 {
+                        let handler = Expr::Ident(f.name.clone(), f.span);
+                        out.push((attr.args[0].clone(), attr.args[1].clone(), handler));
+                    }
                 }
             }
+            Item::Class(c) => {
+                for m in &c.members {
+                    let ClassMember::Method(f) = m else { continue };
+                    if !f.modifiers.contains(&Modifier::Static) {
+                        continue; // a non-static #[Route] method is an E-ROUTE-METHOD-STATIC error
+                    }
+                    for attr in &f.attrs {
+                        if attr.name == "Route" && attr.args.len() == 2 {
+                            let handler = method_handler_lambda(&c.name, &f.name, f.span);
+                            out.push((attr.args[0].clone(), attr.args[1].clone(), handler));
+                        }
+                    }
+                }
+            }
+            _ => {}
         }
     }
     out
 }
 
-/// `new Router([]).route(m1, p1, fn1).route(m2, p2, fn2) …` — built fresh at each call site (the
-/// handler refs are bare `Ident`s = first-class function values). All synthesized wrapper nodes carry
-/// the `Http.autoRouter()` call's span, so any downstream type error points at the call site.
+/// `fn(Request req) -> Response { return Class.method(req); }` — the handler value for a `#[Route]`
+/// static method (a static call isn't itself a first-class value, so it's wrapped in a lambda).
+fn method_handler_lambda(class: &str, method: &str, sp: Span) -> Expr {
+    let named = |n: &str| Type::Named {
+        name: n.to_string(),
+        args: Vec::new(),
+        span: sp,
+    };
+    let call = Expr::Call {
+        callee: Box::new(Expr::Member {
+            object: Box::new(Expr::Ident(class.to_string(), sp)),
+            name: method.to_string(),
+            safe: false,
+            span: sp,
+        }),
+        args: vec![Expr::Ident("req".to_string(), sp)],
+        span: sp,
+    };
+    Expr::Lambda {
+        params: vec![Param {
+            ty: named("Request"),
+            name: "req".to_string(),
+            default: None,
+            span: sp,
+        }],
+        ret: Some(named("Response")),
+        body: LambdaBody::Block(vec![Stmt::Return {
+            value: Some(call),
+            span: sp,
+        }]),
+        span: sp,
+    }
+}
+
+/// `new Router([], []).route(m1, p1, h1).route(m2, p2, h2) …` — built fresh at each call site. Each
+/// handler `hN` is the collected handler `Expr` (a bare `Ident` for a free function, or a
+/// `fn(Request req) => Class.method(req)` lambda for a static method). The `new`/`.route` wrapper nodes
+/// carry the `Http.autoRouter()` call's span, so a downstream type error points at the call site.
 fn build_router(routes: &[Route], sp: Span) -> Expr {
     let mut e = Expr::New(
         Box::new(Expr::Call {
@@ -112,7 +170,7 @@ fn build_router(routes: &[Route], sp: Span) -> Expr {
         }),
         sp,
     );
-    for (method, pattern, name) in routes {
+    for (method, pattern, handler) in routes {
         e = Expr::Call {
             callee: Box::new(Expr::Member {
                 object: Box::new(e),
@@ -120,11 +178,7 @@ fn build_router(routes: &[Route], sp: Span) -> Expr {
                 safe: false,
                 span: sp,
             }),
-            args: vec![
-                method.clone(),
-                pattern.clone(),
-                Expr::Ident(name.clone(), sp),
-            ],
+            args: vec![method.clone(), pattern.clone(), handler.clone()],
             span: sp,
         };
     }

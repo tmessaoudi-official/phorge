@@ -6,6 +6,23 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M6 W2 extensions: `#[Route]` on class methods (W2-ext complete)
+
+`#[Route(...)]` may now annotate a **static** class method, so a class is a tidy namespace of route
+handlers (the controller shape). `Http.autoRouter()` collects `#[Route]` static methods (alongside
+`#[Route]` free functions) and compile-time-desugars each into a registration whose handler is a
+`fn(Request req) => ClassName.method(req)` lambda — no runtime reflection. Byte-identical
+run≡runvm≡real PHP.
+
+- The attribute parser now accepts `#[…]` on class methods (a `#[…]` on a constructor/field/hook is
+  `E-ATTR-TARGET`); a non-`static` `#[Route]` method is `E-ROUTE-METHOD-STATIC` (an instance
+  controller has no routable receiver this slice). `phg explain E-ROUTE-METHOD-STATIC`.
+- `examples/web/controller.phg` + `conformance/web/controller.phg`.
+
+This **completes the M6 W2 extensions** milestone (middleware + groups → constraints → method
+attributes). Still deferred: optional segments / wildcards, instance-controller routing, and the W3
+serve/concurrency runtime.
+
 ### Added — M6 W2 extensions: regex/typed route constraints
 
 A `{name:regex}` route pattern segment captures `name` only when the path component matches the regex,

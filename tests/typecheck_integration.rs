@@ -125,6 +125,22 @@ fn route_handler_wrong_shape_is_rejected() {
 }
 
 #[test]
+fn route_on_static_method_checks_clean() {
+    // `#[Route]` on a static method is valid; Request/Response need not resolve in the raw `check`
+    // path (no Core.Http injection here), so use a non-Http handler shape — the attribute + static
+    // checks are what this exercises.
+    let src = "package Main;\nclass C {\n  #[Route(\"GET\", \"/x\")]\n  static function h(int r) -> int { return r; }\n}\nfunction main() -> void {}\n";
+    assert!(check_src(src).is_ok(), "{:?}", check_src(src));
+}
+
+#[test]
+fn route_on_instance_method_requires_static() {
+    let src = "package Main;\nclass C {\n  #[Route(\"GET\", \"/x\")]\n  function h(int r) -> int { return r; }\n}\nfunction main() -> void {}\n";
+    let errs = check_src(src).expect_err("instance #[Route] method must fail");
+    assert!(has_code(&errs, "E-ROUTE-METHOD-STATIC"), "{errs:?}");
+}
+
+#[test]
 fn attribute_on_non_function_is_a_parse_error() {
     // E-ATTR-TARGET is a parse-stage error, so it surfaces before the checker.
     let src = "package Main;\n#[Route(\"GET\", \"/\")]\nclass Foo {}\nfunction main() -> void {}\n";

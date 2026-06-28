@@ -1,0 +1,33 @@
+// Conformance: `#[Route]` on static class methods + Http.autoRouter() (M6 W2-ext slice 3). A class is
+// a namespace of static route handlers; methods + free functions register together. Experimental tier;
+// byte-identical run≡runvm≡real PHP.
+package Main;
+
+import Core.Console;
+import Core.Bytes;
+import Core.Http;
+
+class Api {
+  #[Route("GET", "/ping")]
+  static function ping(Request req) -> Response { return Response.text(200, "pong"); }
+
+  #[Route("GET", r"/items/{id:\d+}")]
+  static function item(Request req) -> Response { return Response.text(200, "item " + (req.param("id") ?? "?")); }
+}
+
+#[Route("GET", "/")]
+function root(Request req) -> Response { return Response.text(200, "root"); }
+
+function show(Router rt, string path) -> void {
+  Response resp = rt.handle(new Request("GET", path, b"", [], []));
+  int st = resp.status;
+  Console.println("{path} -> {st} " + (Bytes.toString(resp.body) ?? "?"));
+}
+
+function main() -> void {
+  Router rt = Http.autoRouter();
+  show(rt, "/");
+  show(rt, "/ping");
+  show(rt, "/items/7");
+  show(rt, "/items/x");
+}

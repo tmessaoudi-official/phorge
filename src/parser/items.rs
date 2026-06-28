@@ -603,7 +603,21 @@ impl Parser {
     /// construction site and rejects non-visibility modifiers (Soundness Batch A).
     pub(super) fn parse_class_member(&mut self) -> Result<ClassMember, Diagnostic> {
         let sp = self.peek_span();
+        // Leading member attributes `#[Route(…)]` (M6 W2-ext slice 3) — before modifiers, PHP order.
+        // Allowed only on a method; on a constructor/field/hook they are `E-ATTR-TARGET`.
+        let attrs = self.parse_attributes()?;
         let modifiers = self.parse_modifiers();
+        if !attrs.is_empty() && !self.check(&TokenKind::Function) {
+            let asp = attrs[0].span;
+            return Err(Diagnostic::new(
+                Stage::Parse,
+                "attributes (`#[…]`) are only allowed on a method".to_string(),
+                asp.line,
+                asp.col,
+            )
+            .with_code("E-ATTR-TARGET")
+            .with_hint("place the `#[…]` attribute directly above a `function` member"));
+        }
         match self.peek() {
             TokenKind::Constructor => {
                 self.advance();
@@ -618,11 +632,9 @@ impl Parser {
                     span: sp,
                 })
             }
-            TokenKind::Function => Ok(ClassMember::Method(self.parse_function(
-                modifiers,
-                Vec::new(),
-                sp,
-            )?)),
+            TokenKind::Function => Ok(ClassMember::Method(
+                self.parse_function(modifiers, attrs, sp)?,
+            )),
             _ => {
                 // field or property hook: [modifiers] Type name …
                 let ty = self.parse_type()?;

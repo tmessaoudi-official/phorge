@@ -48,8 +48,8 @@ are allowed when — is defined in [`SEMVER.md`](SEMVER.md).
 - **HTTP router, middleware & route attributes** — the `Core.Http` `Router` (path params, literal>param
   precedence, `use` middleware, `group` sub-routers) + the `#[Route(...)]` attribute +
   `Http.autoRouter()` desugar (M6 W2 + W2-ext: path params, `use` middleware, `group` sub-routers,
-  `{name:regex}` route constraints; the web layer is in progress — `#[Route]` on methods is still to
-  come).
+  `{name:regex}` route constraints, `#[Route]` on static methods; the web layer is in progress — the
+  W3 serve/concurrency runtime is still to come).
 
 ## Stdlib modules
 
