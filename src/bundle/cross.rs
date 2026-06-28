@@ -177,15 +177,18 @@ pub(crate) fn build_stub(target: &str) -> Result<std::path::PathBuf, String> {
     if cached.is_file() {
         return Ok(cached);
     }
-    // Cache miss → cross-compile from source. A distributed (sourceless) phorge has no Cargo.toml and
-    // cannot self-cross-build until Phase 3's prebuilt-stub download (design §4 / decision P2-9).
-    if !std::path::Path::new("Cargo.toml").is_file() {
-        return Err(format!(
-            "cross-building for '{target}' needs a phorge source checkout (no Cargo.toml in the \
-             working directory); run from the phorge source tree, or wait for Phase 3's prebuilt \
-             stub download. The host build (no --target) works without source."
-        ));
+    // Cache miss → a 3-way branch (Phase 3a). A source checkout cross-builds locally; a distributed
+    // (sourceless) phorge downloads a prebuilt, sha256-verified stub from the release registry.
+    if std::path::Path::new("Cargo.toml").is_file() {
+        build_stub_local(target, &cached)
+    } else {
+        download_stub(target, &cached)
     }
+}
+
+/// Cross-compile the stub from a phorge source checkout via `cargo-zigbuild` (Phase 2, unchanged), then
+/// cache it. Reached only when a `Cargo.toml` is present.
+fn build_stub_local(target: &str, cached: &std::path::Path) -> Result<std::path::PathBuf, String> {
     // --cap-lints=warn so target-specific lints don't trip the deny gate; --bin phg pins the one
     // intended binary (future-proof against added [[bin]] targets).
     let status = std::process::Command::new("cargo-zigbuild")
@@ -214,8 +217,100 @@ pub(crate) fn build_stub(target: &str) -> Result<std::path::PathBuf, String> {
         .parent()
         .ok_or_else(|| "cache path has no parent".to_string())?;
     std::fs::create_dir_all(parent).map_err(|e| format!("cannot create cache dir: {e}"))?;
-    std::fs::copy(&built, &cached).map_err(|e| format!("cannot cache stub: {e}"))?;
-    Ok(cached)
+    std::fs::copy(&built, cached).map_err(|e| format!("cannot cache stub: {e}"))?;
+    Ok(cached.to_path_buf())
+}
+
+/// Download a prebuilt stub for `target` from the release registry, verify its SHA-256 against the
+/// baked manifest, and cache it (Phase 3a). The hash is checked on the *temp* file before it is moved
+/// into the cache, so a corrupt/tampered/partial download never poisons the cache. Reached only on a
+/// distributed (sourceless) phorge. `pub` so `tests/registry.rs` can drive the client hermetically
+/// (fixture registry via `PHORGE_STUB_REGISTRY`, fixture manifest via `PHORGE_STUB_MANIFEST`).
+pub fn download_stub(target: &str, cached: &std::path::Path) -> Result<std::path::PathBuf, String> {
+    use crate::bundle::{manifest, sha256};
+
+    let manifest = manifest::active();
+    let expected = manifest.lookup(target).ok_or_else(|| {
+        format!(
+            "no prebuilt stub for '{target}' in phg v{} — cross-building from this host needs a \
+             phorge source checkout",
+            env!("CARGO_PKG_VERSION")
+        )
+    })?;
+    let base = manifest::registry_base().ok_or_else(|| {
+        format!(
+            "no stub registry configured for '{target}' — set PHORGE_STUB_REGISTRY, or build from a \
+             phorge source checkout"
+        )
+    })?;
+    let url = format!("{base}{}", manifest::asset_name(target));
+
+    let parent = cached
+        .parent()
+        .ok_or_else(|| "cache path has no parent".to_string())?;
+    std::fs::create_dir_all(parent).map_err(|e| format!("cannot create cache dir: {e}"))?;
+    // A sibling temp in the same dir → the final rename is same-filesystem (atomic publish).
+    let tmp = parent.join(format!(".download-{}", std::process::id()));
+
+    let fetch_result = fetch(&url, &tmp);
+    if let Err(e) = fetch_result {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+
+    let bytes = std::fs::read(&tmp).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("cannot read downloaded stub {}: {e}", tmp.display())
+    })?;
+    let got = sha256::sha256_hex(&bytes);
+    if got != expected {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!(
+            "integrity check failed for '{target}' stub: expected {expected}, got {got} — refusing \
+             to embed"
+        ));
+    }
+    std::fs::rename(&tmp, cached).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("cannot publish verified stub into cache: {e}")
+    })?;
+    Ok(cached.to_path_buf())
+}
+
+/// Fetch `url` into `dest`. `http(s)://` shells out to `curl` (std has no TLS — a host-tool exemption
+/// like zig/objcopy; `PHORGE_CURL` overrides the binary); `file://` or a bare local path is a
+/// `std::fs::copy` (the hermetic-test path — a fixture-dir registry needs no network or curl).
+fn fetch(url: &str, dest: &std::path::Path) -> Result<(), String> {
+    if let Some(local) = url.strip_prefix("file://").or_else(|| {
+        // A bare path (no scheme) is a local registry too — recognised by the absence of `://`.
+        if url.contains("://") {
+            None
+        } else {
+            Some(url)
+        }
+    }) {
+        std::fs::copy(local, dest)
+            .map(|_| ())
+            .map_err(|e| format!("cannot copy stub from {local}: {e}"))?;
+        return Ok(());
+    }
+
+    let curl = std::env::var("PHORGE_CURL").unwrap_or_else(|_| "curl".into());
+    let status = std::process::Command::new(&curl)
+        .args(["-fSL", "--proto", "=https,http", "-o"])
+        .arg(dest)
+        .arg(url)
+        .status()
+        .map_err(|e| {
+            format!(
+                "cannot run '{curl}' — needed to download prebuilt stubs; install curl, or build \
+                 from a phorge source checkout ({e})"
+            )
+        })?;
+    if !status.success() {
+        return Err(format!("download failed ({status}) for {url}"));
+    }
+    Ok(())
 }
 
 /// FNV-1a-64 of a byte slice — a cache-key identity hash (NOT a security hash). std-only, ~10 lines.

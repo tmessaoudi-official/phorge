@@ -558,13 +558,23 @@ or simply unavailable, never a crash):
 
 ## `phg build` limitations (M2.5, in progress)
 
-- **macOS targets are rejected.** The Mach-O/fat section *reader* ships and is tested, but producing a
-  signed macOS *stub* is deferred to Phase 3. An apple/darwin `--target` errors with a clear message
-  rather than emitting a broken binary.
-- **Cross-builds need a source checkout.** `--target`/`--all` compile a stub from source via
-  `cargo-zigbuild`, so they must run from a phorge source tree. A *distributed* (sourceless) phorge
-  can still do a **host** build (it reuses the running binary as the stub) but not a cross build until
-  the Phase 3 prebuilt-stub registry lands.
+- **Cross-builds: source checkout OR a published registry (Phase 3a).** `--target`/`--all` compile a
+  stub from source via `cargo-zigbuild` when run from a phorge source tree; a *distributed* (sourceless)
+  phg instead **downloads** a prebuilt stub from the release registry and sha256-verifies it against its
+  baked manifest. So a sourceless cross build works **once a tagged release has published the stubs**
+  (the `stub-registry.yml` workflow); before the first such release, a sourceless binary still errors
+  with the "needs a source checkout" message (its baked manifest is empty). Host builds always work
+  offline (the running binary is the stub).
+- **No code signing (Phase 3b deferred).** Downloaded/produced binaries are unsigned. Windows
+  Authenticode + macOS codesign/notarize (and the macOS stub itself) need certs + a Mac SDK the
+  maintainer does not currently have; `--sign` is not a flag yet. Integrity rests on the sha256 manifest
+  (tamper-evident), not signatures.
+- **macOS `--target` is rejected.** The Mach-O/fat section *reader* ships and is tested, but producing a
+  macOS *stub* needs a macOS SDK for zig (Phase 3b). An apple/darwin `--target` errors with a clear
+  message rather than emitting a broken binary.
+- **The manifest is baked only into the `x86_64-linux-gnu` primary.** Cross-building *from* a Windows or
+  aarch64 host isn't supported in v1 (those binaries carry an empty manifest → the "needs a source
+  checkout" message); the primary dev host is the only cross-build origin needed now.
 - **Built binaries honor argv + the exit code (Batch-1 B).** A standalone built binary passes its
   real command-line arguments to `Core.Process.args()` / `main`'s `List<string>` parameter and exits
   with `main`'s `int` return. (`--version`/`--help` remain features of the `phorge` CLI itself, not of

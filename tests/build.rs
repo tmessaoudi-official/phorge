@@ -40,6 +40,108 @@ fn objcopy_available() -> bool {
     ok
 }
 
+/// Tier 3 (Phase 3a) — the full *distributed* path: a sourceless phg DOWNLOADS a prebuilt musl stub
+/// from a fixture registry, sha256-verifies it (hand-rolled SHA-256 vs the host `sha256sum` that wrote
+/// the manifest — a cross-implementation check), embeds the program, and the produced musl binary runs
+/// byte-identically to `runvm`. Forces the download branch by running `phg build` from a dir with no
+/// `Cargo.toml` and a fresh `XDG_CACHE_HOME`. Reuses the musl stub the cache already holds (built by
+/// `phg build --target` here) so this adds no second full cross-compile. Toolchain-gated graceful skip.
+#[test]
+fn distributed_download_embed_run_matches_runvm() {
+    let target = "x86_64-unknown-linux-musl";
+    if !cross_toolchain_ready(target) || !objcopy_available() {
+        return;
+    }
+    if !matches!(Command::new("sha256sum").arg("--version").output(), Ok(o) if o.status.success()) {
+        eprintln!("skipping: sha256sum unavailable");
+        return;
+    }
+    let src = "examples/guide/operators.phg";
+
+    // 1) Populate the standard cache with a real musl stub via the local build branch (we have
+    //    Cargo.toml at the repo root), then locate that cached stub via the public `cache_dir`.
+    let warm = std::env::temp_dir().join("phorge-dist-warm");
+    let built = Command::new(BIN)
+        .args(["build", src, "--target", target, "-o"])
+        .arg(&warm)
+        .output()
+        .expect("warm build");
+    assert!(
+        built.status.success(),
+        "warm build failed: {}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    let _ = std::fs::remove_file(&warm);
+    let bin_bytes = std::fs::read(BIN).expect("read phg bin");
+    let cached_stub = phorge::bundle::cross::cache_dir(&bin_bytes)
+        .expect("cache dir")
+        .join(target)
+        .join("phg");
+    assert!(
+        cached_stub.is_file(),
+        "expected a cached musl stub to reuse"
+    );
+
+    // 2) Build a fixture registry from the cached stub + a manifest with its host-sha256sum hash.
+    let root = std::env::temp_dir().join(format!("phorge-dist-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let reg = root.join("reg");
+    let fresh_cache = root.join("cache");
+    std::fs::create_dir_all(&reg).unwrap();
+    std::fs::create_dir_all(&fresh_cache).unwrap();
+    std::fs::copy(&cached_stub, reg.join(format!("phg-stub-{target}"))).unwrap();
+    let sum = Command::new("sha256sum")
+        .arg(reg.join(format!("phg-stub-{target}")))
+        .output()
+        .expect("sha256sum");
+    let hash = String::from_utf8_lossy(&sum.stdout)
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .to_string();
+    std::fs::write(root.join("manifest.txt"), format!("{target} {hash}\n")).unwrap();
+
+    // 3) A standalone program in a working dir WITHOUT Cargo.toml → forces the download branch; a
+    //    fresh XDG_CACHE_HOME guarantees a cache miss so the download actually runs.
+    let work = root.join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    std::fs::copy(src, work.join("prog.phg")).unwrap();
+    let out = root.join("prog-musl");
+    let dist = Command::new(BIN)
+        .args(["build", "prog.phg", "--target", target, "-o"])
+        .arg(&out)
+        .current_dir(&work)
+        .env("XDG_CACHE_HOME", &fresh_cache)
+        .env("PHORGE_STUB_REGISTRY", format!("file://{}/", reg.display()))
+        .env("PHORGE_STUB_MANIFEST", root.join("manifest.txt"))
+        .output()
+        .expect("distributed build");
+    assert!(
+        dist.status.success(),
+        "distributed build failed: {}",
+        String::from_utf8_lossy(&dist.stderr)
+    );
+    // The downloaded stub must have been verified and cached under the fresh cache.
+    assert!(
+        fresh_cache.join("phorge").join("stubs").is_dir(),
+        "download did not populate the fresh cache"
+    );
+
+    // 4) The produced musl binary runs byte-identically to runvm.
+    let ran = Command::new(&out)
+        .output()
+        .expect("run downloaded-stub binary");
+    let runvm = Command::new(BIN)
+        .args(["runvm", src])
+        .output()
+        .expect("runvm");
+    assert_eq!(
+        ran.stdout, runvm.stdout,
+        "downloaded-stub binary output != runvm"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 #[test]
 fn cross_musl_binary_matches_runvm() {
     // Tier 3 — native execution: x86_64-musl runs on this x86_64-linux box.

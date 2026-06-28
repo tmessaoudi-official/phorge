@@ -5,8 +5,10 @@ pub mod container;
 pub mod cross;
 mod elf;
 mod macho;
+pub mod manifest;
 mod pe;
 pub mod section;
+pub mod sha256;
 
 pub use container::encode_container;
 pub use section::{find_section, ELF_PE_SECTION as SECTION_NAME};

@@ -376,7 +376,17 @@ into the GA sequence: `as`→primitives (cast/convert reconciliation) · passwor
 - [2026-06-28] AGREED: developer wants me **fully autonomous** for the whole sequence; asked all
   questions up front; no further blocking forks (sub-decisions defaulted + documented).
 
-### Item 1 — conformance breadth (fork-free)
+### Item 1 — conformance breadth (fork-free) — ✅ DONE (`86db429`)
+8 golden programs added (loops, foreach, ranges, text-blocks, type-aliases, visibility, property-hooks,
+fixed-lists); corpus 24→32 single-file. (lambdas+pipe + default-params were already in `functions.phg`.)
+
+### Item 2 — M6 W2 router + attributes — ✅ DONE (`32d77f4` spec, `8c5d073` router, `986a9f0` attrs)
+Core.Http `Router` + path params (`req.param`, literal>param precedence, 404) + `#[Route]` attribute
+(new `#[` lexer token, parser, `FunctionDecl.attrs`, checker `E-UNKNOWN-ATTRIBUTE`/`E-ROUTE-*`/
+`E-ATTR-TARGET`, `phg explain`) + `Http.autoRouter()` compile-time desugar (`src/checker/desugar_router.rs`,
+pre-check injection). fmt printer emits attrs. Byte-identical run≡runvm≡real PHP 8.5; full gate green.
+
+### Item 1 (original spec) — conformance breadth (fork-free)
 Add the remaining stable-tier (`STABILITY.md`) constructs as golden conformance programs
 (run≡runvm≡real PHP, glob-gated by `tests/conformance.rs`): mutation/loops (while/do/C-for,
 compound-assign, ++/--), visibility (public/private/protected access), property hooks, lambdas+pipe,

@@ -6,6 +6,32 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M2.5 Phase 3a: cross-stub registry (distributed `phg build --target`)
+
+A **distributed** (sourceless) `phg` can now `build --target <triple>` / `--all` for the Phase-2 cross
+targets by downloading a prebuilt runtime stub from the release registry, verifying it, caching it, and
+embedding the program — closing the Phase-2 "needs a source checkout" limitation. No signing yet
+(Phase 3b); no new runtime dependency.
+
+- **`bundle/sha256.rs`** — hand-rolled FIPS-180-4 SHA-256 (std-only, same ethos as the CRC-32),
+  known-vector tested; cross-checked against the host `sha256sum` on a real binary in the tests.
+- **`bundle/manifest.rs`** — the per-target sha256 manifest (tolerant line parser, `lookup`,
+  `registry_base` via `Cargo.toml` `repository` + version, `PHORGE_STUB_REGISTRY`/`PHORGE_STUB_MANIFEST`
+  overrides, the `phg-stub-<triple>` asset-name convention).
+- **`build.rs`** — bakes `PHORGE_BAKE_STUB_MANIFEST` into the binary (empty when unset), breaking the
+  stub↔manifest circularity so cross stubs have manifest-independent, stable hashes.
+- **`bundle/cross.rs`** — the cache-miss path is now a 3-way branch: cache hit → local `cargo-zigbuild`
+  (source checkout) → **download + sha256-verify + cache** (distributed). Verify-before-cache: a
+  tampered/partial download never poisons the cache. Transport is `curl` for `http(s)` (std has no TLS;
+  `PHORGE_CURL` override) and `fs::copy` for `file://`/local (the hermetic-test path).
+- **`.github/workflows/stub-registry.yml`** — a 2-pass, secret-free CI workflow (build stubs env-unset
+  → hash → bake manifest into the Linux primary → publish), complementing the existing `release.yml`
+  human archives.
+- **Tests:** `tests/registry.rs` (hermetic client: verify/cache, tamper-rejection, missing entry/asset,
+  cross-implementation hash check) + a toolchain-gated `tests/build.rs` end-to-end (real musl stub →
+  download → verify → embed → run, byte-identical to `runvm`). No user-visible flag change. Phase 3b
+  (signing + macOS stub) deferred — see KNOWN_ISSUES.
+
 ### Added — M6 W2 `#[Route(...)]` attributes
 
 A PHP-8-style **attribute** surface — `#[Route("GET", r"/users/{id}")]` on a handler — that

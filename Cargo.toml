@@ -6,6 +6,9 @@ name = "phorge"
 # playground. `-v`/`--version` reads this value via CARGO_PKG_VERSION.
 version = "0.5.0-alpha.1"
 edition = "2021"
+# Single-sources the cross-stub registry base (M2.5 Phase 3a): the download client derives
+# `{repository}/releases/download/v{version}/` as the default registry. `PHORGE_STUB_REGISTRY` overrides.
+repository = "https://github.com/tmessaoudi-official/phorge"
 # Cargo floor for the `[lints]` table below (stabilised in Cargo 1.74); older Cargo silently
 # ignores `[lints]`, which would drop the warnings=deny / clippy=deny quality gate. The crate is
 # developed and verified on the toolchain pinned in `rust-toolchain.toml`.
