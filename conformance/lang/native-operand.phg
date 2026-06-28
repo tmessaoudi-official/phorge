@@ -1,0 +1,33 @@
+// Conformance: a native module-qualified call used as an ARITHMETIC OPERAND (`List.length(xs) - 1`,
+// `Math.abs(n) + 1`, …). The compiler must resolve the call's operand CTy from the native's return
+// type; otherwise the VM rejects what the interpreter accepts (a run↔runvm break — the documented
+// CTy-operand trap). Regression for that fix. Byte-identical run≡runvm≡real PHP.
+package Main;
+
+import Core.Console;
+import Core.List;
+import Core.Math;
+import Core.Text;
+
+function main() -> void {
+    List<int> xs = [10, 20, 30, 40];
+
+    // List.length(...) as the left operand of every arithmetic form.
+    Console.println("{List.length(xs) - 1}");
+    Console.println("{List.length(xs) + 2}");
+    Console.println("{List.length(xs) * 3}");
+
+    // The classic loop-counter form that first surfaced the bug.
+    mutable int i = List.length(xs) - 1;
+    mutable int sum = 0;
+    while (i >= 0) {
+        sum += xs[i];
+        i -= 1;
+    }
+    Console.println("rev-sum {sum}");
+
+    // Other int-returning natives as operands.
+    Console.println("{Math.abs(-7) + 1}");
+    Console.println("{Math.max(3, 9) - 4}");
+    Console.println("{Text.length(\"hello\") * 2}");
+}

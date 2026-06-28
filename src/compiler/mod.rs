@@ -342,6 +342,36 @@ fn resolve_cty(ty: &Type) -> CTy {
     }
 }
 
+/// A checker [`crate::types::Ty`] → operand [`CTy`], mirroring [`resolve_cty`] (which maps the AST
+/// `Type`). Used to give a native module-qualified call (`List.length(xs)`, `Text.parseInt(s)`) its
+/// return operand type, so its result is a valid arithmetic operand (`List.length(xs) - 1`) on the VM —
+/// without it `ctype` would recurse into the bare module qualifier `List` and error, a `run`↔`runvm`
+/// break (the documented CTy-operand trap). Only the operand-relevant shapes are tracked; the rest
+/// collapse to `Other`.
+fn ty_to_cty(ty: &crate::types::Ty) -> CTy {
+    use crate::types::Ty;
+    match ty {
+        Ty::Int => CTy::Int,
+        Ty::Float => CTy::Float,
+        Ty::Decimal => CTy::Decimal,
+        Ty::String => CTy::Str,
+        Ty::List(e) => CTy::List(Box::new(ty_to_cty(e))),
+        Ty::Map(k, v) => CTy::Map(Box::new(ty_to_cty(k)), Box::new(ty_to_cty(v))),
+        // A native that returns `T?` (e.g. `Text.parseInt -> int?`) yields the inner `T` once narrowed
+        // — same discipline as `resolve_cty(Optional)`; the checker forbids a bare `T?` as an operand.
+        Ty::Optional(inner) => ty_to_cty(inner),
+        Ty::Named(n, _) => CTy::Class(n.clone()),
+        _ => CTy::Other,
+    }
+}
+
+/// The operand [`CTy`] of native registry entry `idx`'s return type.
+fn native_ret_cty(idx: usize) -> CTy {
+    crate::native::registry()
+        .get(idx)
+        .map_or(CTy::Other, |n| ty_to_cty(&n.ret))
+}
+
 // impl/free cohesion split (M-Decomp W4.1): program driver + stmt/expr/match clusters.
 mod expr;
 mod matches;
@@ -660,6 +690,28 @@ impl<'a> Compiler<'a> {
                     } else {
                         Err(format!("cannot infer numeric type of {e:?}"))
                     }
+                }
+                // Native module-qualified call (`List.length(xs)`, `Text.parseInt(s)`, …): resolve to
+                // the native's return operand type. Checked BEFORE `ctype(object)` — the qualifier is a
+                // bare module name (`List`), not a value, so `ctype(Ident("List"))` would error. Mirror
+                // the emit-path guard in `compiler/expr.rs`: a head that is not a local/match-binding,
+                // resolvable via `index_of_by_leaf`. Without this, `List.length(xs) - 1` compiles on
+                // the interpreter but the VM rejects it ("undefined variable `List`") — a parity break.
+                Expr::Member {
+                    object,
+                    name,
+                    safe: false,
+                    ..
+                } if matches!(&**object, Expr::Ident(q, _)
+                    if self.resolve_local(q).is_none() && self.resolve_binding(q).is_none()
+                        && crate::native::index_of_by_leaf(q, name).is_some()) =>
+                {
+                    let Expr::Ident(q, _) = &**object else {
+                        unreachable!()
+                    };
+                    Ok(native_ret_cty(
+                        crate::native::index_of_by_leaf(q, name).unwrap(),
+                    ))
                 }
                 // Method call: the return type is keyed on the receiver's runtime class.
                 Expr::Member { object, name, .. } => match self.ctype(object)? {
