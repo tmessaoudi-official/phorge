@@ -36,4 +36,11 @@ function main(): void {
     string ew = if (Text.endsWith(greeting, "Phorge")) { "yes" } else { "no" };
     string bar = Text.repeat("=", 5);
     Console.println("startsWith 'Hello' = {sw}, endsWith 'Phorge' = {ew}, bar = {bar}");
+
+    // M4 breadth (ASCII): reverse (→ strrev), and case-insensitive compare/contains
+    // (→ strcasecmp/stripos). Non-ASCII is a documented edge (no mbstring under `php -n`).
+    string rev = Text.reverse("phorge");
+    bool sameCi = Text.equalsIgnoreCase("PHORGE", "phorge");
+    bool hasCi = Text.containsIgnoreCase("Hello, Phorge", "phorge");
+    Console.println("reverse = {rev}, equalsIgnoreCase = {sameCi}, containsIgnoreCase = {hasCi}");
 }

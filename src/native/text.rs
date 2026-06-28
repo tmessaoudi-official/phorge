@@ -32,6 +32,29 @@ fn text_contains(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("Text.contains expects (string, string)".into()),
     }
 }
+// ASCII-oriented like the rest of Core.Text (PHP under `-n` has no mbstring). `reverse` reverses by
+// chars (== bytes for ASCII, matching PHP `strrev`); `equalsIgnoreCase`/`containsIgnoreCase` fold only
+// ASCII letters (== PHP `strcasecmp`/`stripos` in the C locale). Non-ASCII is a documented edge.
+fn text_reverse(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => Ok(Value::Str(s.chars().rev().collect())),
+        _ => Err("Text.reverse expects (string)".into()),
+    }
+}
+fn text_equals_ignore_case(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(a), Value::Str(b)] => Ok(Value::Bool(a.eq_ignore_ascii_case(b))),
+        _ => Err("Text.equalsIgnoreCase expects (string, string)".into()),
+    }
+}
+fn text_contains_ignore_case(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(h), Value::Str(n)] => Ok(Value::Bool(
+            h.to_ascii_lowercase().contains(&n.to_ascii_lowercase()),
+        )),
+        _ => Err("Text.containsIgnoreCase expects (string, string)".into()),
+    }
+}
 fn text_split(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(s), Value::Str(sep)] => {
@@ -309,6 +332,33 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(text_contains),
             php: |a| format!("str_contains({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.Text",
+            name: "reverse",
+            params: vec![s()],
+            ret: Ty::String,
+            pure: true,
+            eval: NativeEval::Pure(text_reverse),
+            php: |a| format!("strrev({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Text",
+            name: "equalsIgnoreCase",
+            params: vec![s(), s()],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::Pure(text_equals_ignore_case),
+            php: |a| format!("strcasecmp({}, {}) === 0", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.Text",
+            name: "containsIgnoreCase",
+            params: vec![s(), s()],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::Pure(text_contains_ignore_case),
+            php: |a| format!("stripos({}, {}) !== false", parg(a, 0), parg(a, 1)),
         },
         NativeFn {
             module: "Core.Text",

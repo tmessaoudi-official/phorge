@@ -6,6 +6,18 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — M4 stdlib: `Core.Text` breadth (reverse + case-insensitive)
+
+Three ASCII-oriented `Core.Text` natives (charter Rule 5 Tier-A — each maps to a PHP **core** function
+under `-n`), byte-identical `run ≡ runvm ≡ real PHP 8.5`, **no new `Op`/`Value`**:
+
+- `Text.reverse(string) -> string` (→ `strrev`) — reverses by chars (== bytes for ASCII).
+- `Text.equalsIgnoreCase(string, string) -> bool` (→ `strcasecmp(...) === 0`).
+- `Text.containsIgnoreCase(string, string) -> bool` (→ `stripos(...) !== false`).
+
+ASCII folding only (no mbstring under `php -n`); non-ASCII is a documented edge (KNOWN_ISSUES).
+`guide/text.phg` extended + `conformance/stdlib/text-breadth.phg`.
+
 ### Added — editor tooling: syntax highlighting + JetBrains/PhpStorm integration
 
 - **TextMate grammar** (`editors/vscode/syntaxes/phorge.tmLanguage.json`) — keywords, primitive +

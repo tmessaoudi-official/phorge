@@ -678,6 +678,15 @@ SORT_STRING dedupe matches `HKey` equality. Set union/intersection and iteration
 Still pending on this path: the higher-order `Core.List` `map`/`filter`/`reduce` (the
 closure-from-native mechanism — `NativeEval::HigherOrder` + a re-entrant VM closure invoker).
 
+## Core.Text breadth (M4) — ASCII only
+
+`Text.reverse`/`equalsIgnoreCase`/`containsIgnoreCase` (like all of `Core.Text`) are **ASCII-oriented** —
+the PHP oracle runs `php -n` (no mbstring), so they map to byte/ASCII core functions
+(`strrev`/`strcasecmp`/`stripos`). `reverse` reverses by chars (== bytes for ASCII; a non-ASCII string
+would byte-reverse differently in PHP `strrev`); the case-insensitive pair folds only ASCII letters.
+Shipped examples keep ASCII subjects, where all three backends agree. Codepoint-aware (Unicode) text ops
+are deferred to a future M-text milestone (would need an mbstring-or-equivalent strategy).
+
 ## Public-surface file-naming rule — scope
 
 The rule (`E-FILE-NAME`/`E-FILE-MULTI-PUBLIC`/`E-FILE-MIXED-PUBLIC`) is enforced by the loader in
