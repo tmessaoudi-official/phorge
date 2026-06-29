@@ -434,6 +434,54 @@ fn pool_serves_concurrent_connections() {
     }
 }
 
+/// S4.2 — graceful shutdown: after a request is served, flipping the shutdown flag makes
+/// `serve_pool_with` stop accepting, drain in-flight work, **join every worker**, and return `Ok` —
+/// no abrupt cut, no hang. (The `join` blocks the test until the drain completes, so a regression that
+/// failed to drain/return would surface as a hang the harness times out.)
+#[test]
+fn pool_graceful_shutdown_drains_and_returns() {
+    use phorj::serve::serve_pool_with;
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    let prog = program();
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
+    let addr = listener.local_addr().expect("addr");
+    let flag = Arc::new(AtomicBool::new(false));
+    let server_flag = Arc::clone(&flag);
+    let server = std::thread::spawn(move || {
+        serve_pool_with(
+            listener,
+            &prog,
+            Some(Duration::from_secs(5)),
+            false,
+            2,
+            Some(server_flag),
+        )
+    });
+
+    // One request completes normally before shutdown.
+    {
+        let mut s = TcpStream::connect(addr).expect("connect");
+        s.write_all(b"GET / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+            .expect("write");
+        let mut resp = Vec::new();
+        s.read_to_end(&mut resp).expect("read");
+        assert_eq!(resp, http("HTTP/1.1 200 OK", "home"));
+    }
+
+    // Signal shutdown; the pool must drain, join workers, and return Ok.
+    flag.store(true, Ordering::SeqCst);
+    let joined = server.join().expect("server thread panicked");
+    assert!(
+        joined.is_ok(),
+        "graceful shutdown returns Ok, got {joined:?}"
+    );
+}
+
 /// S4.1 — the worker pool also keeps connections alive (when a timeout is configured): two requests on
 /// one socket served by the same worker get two responses. Exercises the pool's per-connection
 /// keep-alive loop (a separate code path from the single-threaded `TcpTransport`).

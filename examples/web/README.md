@@ -61,6 +61,11 @@ timeout is the idle-socket guard: **without `--timeout`, keep-alive is off** and
 serves one request then closes (so an idle client can never pin the single-threaded server or a pool
 worker). Both the single-threaded path and the `--workers N` pool keep connections alive.
 
+**Graceful shutdown (M6 W4 / S4.2):** `Ctrl-C` (SIGINT) or SIGTERM stops the server accepting new
+connections, lets in-flight requests finish, joins the worker pool, and exits `0` — no request is cut
+mid-flight. (A second `Ctrl-C` while draining hard-kills.) This needs the `signals` build feature
+(on by default; off only for the WASM playground, which has no sockets).
+
 ```console
 $ phg serve examples/web/server.phg --addr 127.0.0.1:8080
 phg serve: listening on http://127.0.0.1:8080

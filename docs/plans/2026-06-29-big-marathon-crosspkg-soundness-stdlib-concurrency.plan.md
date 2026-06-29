@@ -7,6 +7,14 @@
 > + `cargo clippy --all-targets` + `cargo fmt --check`.
 
 ## Decisions Log
+- [2026-06-29] AGREED (session 3, Spine-4 forks): **S4.2 = add the `ctrlc` dependency + build graceful
+  shutdown now** (developer authorized spending dependency-policy budget; SIGINT/SIGTERM → shutdown flag
+  → stop accepting → drain in-flight → exit 0; NOT the unsafe handler). **S4.3 = build the green-thread
+  runtime now, Rust-backend-only + quarantined from the PHP oracle** (like `serve`; rejected
+  transpile→sync-PHP because it breaks the byte-identical spine on concurrent programs). Design-spec
+  first, then build incrementally. **The `spawn`/channels example SHIPS even with no PHP equivalent** —
+  byte-identical `run≡runvm`, added to the differential PHP-oracle SKIP/quarantine list (like
+  `dates.phg`).
 - [2026-06-29] AGREED (session 3): developer set the **project-scoped ask-human-gate bypass** ("Yes — set bypass, run it all") + the autonomous-3c bypass — run the remaining marathon (S2.1-broad remainder → S2.3 must-use B/C → Spine-4 M6 W4 concurrency capstone) **fully autonomously, back-to-back**, gating each slice on the full PHP-oracle + differential + clippy/fmt before commit; stop only on a genuine design fork.
 - [2026-06-29] AGREED: Marathon = **all four spines**, in the recommended dependency order, **fully autonomous** (full 30/8).
 - [2026-06-29] AGREED: Order = (1) Cross-package M-RT lift → (2) Soundness long-tail close → (3) Stdlib charter + breadth → (4) Concurrency + server (M6 W4). Rationale: #1 unifies type system ↔ modules and unblocks core.json multi-package + cross-package stdlib; #2 cleans the now-unified base; #3 writes the charter then breadth (multi-package core.json now possible); #4 capstone capability on a solid foundation.
@@ -93,6 +101,19 @@
 > 3-way oracle for `spawn` specifically — a genuine design decision, not autonomous).
 
 ## Progress
+
+- **Marathon checkpoint #11 (session 3): Spine-4 S4.2 graceful shutdown DONE.** Added `ctrlc` (3rd
+  dependency, developer-authorized; dependency policy amended with a narrowly-scoped "OS-signal
+  handling" 3rd domain + ctrlc's unsafe stays inside the crate so phorj keeps `forbid(unsafe_code)`).
+  `install_shutdown_handler()` (cfg `signals`) flips an `Arc<AtomicBool>` on SIGINT/SIGTERM; both serve
+  paths poll it via a non-blocking listener + `ACCEPT_POLL_INTERVAL` (std has no accept-timeout):
+  single-threaded `TcpTransport::recv` returns `Ok(None)` (clean exhaustion → serve loop exits); the
+  pool's new `serve_pool_with` stops accepting, drops the work channel, and **joins** all workers
+  (in-flight drains). `signals`-off (playground) = run-until-killed, verbatim pre-S4.2. New
+  `tests/serve.rs::pool_graceful_shutdown_drains_and_returns` (+ both signals-on/off builds verified).
+  `examples/web/README.md` + dependency-policy doc updated. Serve-layer only (OUTSIDE the byte-identity
+  spine). Commit pending gate-green. **Next: S4.3 green-thread runtime (design-spec → incremental build,
+  Rust-only quarantine).**
 
 - **Marathon checkpoint #10 (session 3): Spine-4 S4.1 HTTP/1.1 keep-alive DONE.** Transport-internal —
   NO `Transport` trait change (my earlier worry was overstated): the keep-alive decision is made from the

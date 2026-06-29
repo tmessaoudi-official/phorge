@@ -20,9 +20,35 @@ use crate::value::Value;
 use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::sync_channel;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
+/// How often a poll-accept loop wakes to check the shutdown flag (S4.2). std `TcpListener` has no
+/// accept-timeout, so the accept loops run non-blocking and sleep this long between empty polls —
+/// bounding shutdown latency without busy-spinning.
+const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(100);
+
+/// Install the graceful-shutdown signal handler (S4.2) and return the flag it flips. With the
+/// `signals` feature, SIGINT (Ctrl-C) and SIGTERM set the flag; the accept loops then stop taking new
+/// connections, drain in-flight work, and exit cleanly. Without the feature (the WASM playground), the
+/// flag is never set and the server runs until killed — verbatim pre-S4.2. `ctrlc`'s own `unsafe`
+/// signal registration is confined to that crate, so phorj's code stays `#![forbid(unsafe_code)]`.
+#[must_use]
+pub fn install_shutdown_handler() -> Arc<AtomicBool> {
+    let flag = Arc::new(AtomicBool::new(false));
+    #[cfg(feature = "signals")]
+    {
+        let f = Arc::clone(&flag);
+        // A second Ctrl-C while draining still hard-kills (the handler only fires once; the default
+        // disposition is restored after). Errors (handler already set) are non-fatal — log and proceed.
+        if let Err(e) = ctrlc::set_handler(move || f.store(true, Ordering::SeqCst)) {
+            eprintln!("serve: could not install shutdown handler ({e}); Ctrl-C will hard-kill");
+        }
+    }
+    flag
+}
 
 /// The default Phorj entry the runtime calls per request: `respond(bytes) -> bytes`.
 pub const SERVE_ENTRY: &str = "respond";
@@ -195,6 +221,11 @@ pub struct TcpTransport {
     req_wants_keepalive: bool,
     /// Requests already served on the currently-kept-alive socket (capped at [`MAX_REQUESTS_PER_CONN`]).
     served_on_current: usize,
+    /// S4.2 graceful shutdown: when set (by the signal handler), `recv` stops accepting and returns
+    /// `Ok(None)`, which the `serve` loop treats as clean exhaustion. `None` ⇒ never shuts down (the
+    /// pre-S4.2 blocking-accept behaviour). A single-threaded server has ≤1 in-flight request (already
+    /// sent before the next `recv`), so "drain" is automatic.
+    shutdown: Option<Arc<AtomicBool>>,
 }
 
 impl TcpTransport {
@@ -206,6 +237,7 @@ impl TcpTransport {
             timeout: None,
             req_wants_keepalive: false,
             served_on_current: 0,
+            shutdown: None,
         })
     }
     /// Set the per-connection read/write timeout (GA blocker B4 — bounds a slow/idle client on the
@@ -213,6 +245,11 @@ impl TcpTransport {
     /// indefinitely — only appropriate for trusted/loopback use).
     pub fn set_timeout(&mut self, timeout: Option<Duration>) {
         self.timeout = timeout;
+    }
+    /// Set the graceful-shutdown flag (S4.2). When it flips, `recv` stops accepting and returns
+    /// `Ok(None)` (clean exhaustion). When `None` (the default), the server accepts forever.
+    pub fn set_shutdown(&mut self, shutdown: Arc<AtomicBool>) {
+        self.shutdown = Some(shutdown);
     }
     /// The actually-bound address (useful when binding to port 0).
     pub fn local_addr(&self) -> io::Result<std::net::SocketAddr> {
@@ -238,13 +275,32 @@ impl Transport for TcpTransport {
                 _ => {}
             }
         }
+        // S4.2: when a shutdown flag is present, poll-accept (non-blocking listener + sleep) so the loop
+        // can notice the flag and return `Ok(None)` for a clean shutdown — std has no accept-timeout. The
+        // listener stays non-blocking only while a flag is set; accepted streams are restored to blocking
+        // so their reads use the normal timeout path. With no flag, accept blocks exactly as pre-S4.2.
+        let polling = self.shutdown.is_some();
+        let _ = self.listener.set_nonblocking(polling);
         // Accept connections until one yields a request. An `accept()` error propagates to the serve
         // loop's circuit breaker (it decides if the listener is unrecoverable). A per-connection read
         // error — a read timeout from a slow/idle client (B4), or a reset mid-headers — is logged and
         // the *next* connection is accepted, so one bad client cannot wedge the single-threaded
         // server (B3 + B4 together).
         loop {
-            let (mut stream, _peer) = self.listener.accept()?;
+            if let Some(flag) = &self.shutdown {
+                if flag.load(Ordering::SeqCst) {
+                    return Ok(None); // graceful shutdown — the serve loop exits cleanly
+                }
+            }
+            let (mut stream, _peer) = match self.listener.accept() {
+                Ok(pair) => pair,
+                Err(e) if polling && e.kind() == io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(ACCEPT_POLL_INTERVAL);
+                    continue;
+                }
+                Err(e) => return Err(e),
+            };
+            let _ = stream.set_nonblocking(false); // blocking reads (timeout-bounded) for this conn
             if let Some(t) = self.timeout {
                 // Best-effort: a platform that rejects the timeout must not crash the server.
                 let _ = stream.set_read_timeout(Some(t));
@@ -297,14 +353,17 @@ pub fn serve_tcp(
     dev: bool,
     workers: usize,
 ) -> io::Result<()> {
+    // S4.2: SIGINT/SIGTERM → graceful shutdown (drain in-flight, exit 0). Installed once for either path.
+    let shutdown = install_shutdown_handler();
     if workers <= 1 {
         let mut t = TcpTransport::bind(addr)?;
         t.set_timeout(timeout);
+        t.set_shutdown(Arc::clone(&shutdown));
         eprintln!("phg serve: listening on http://{}", t.local_addr()?);
         serve_banner(timeout, dev, 1);
         return serve(program, &mut t, dev);
     }
-    serve_tcp_pool(program, addr, timeout, dev, workers)
+    serve_tcp_pool(program, addr, timeout, dev, workers, shutdown)
 }
 
 /// The startup banner (bind/timeout/workers + the untrusted-network note).
@@ -342,15 +401,17 @@ fn serve_tcp_pool(
     timeout: Option<Duration>,
     dev: bool,
     workers: usize,
+    shutdown: Arc<AtomicBool>,
 ) -> io::Result<()> {
     let listener = TcpListener::bind(addr)?;
     eprintln!("phg serve: listening on http://{}", listener.local_addr()?);
     serve_banner(timeout, dev, workers);
-    serve_pool(listener, program, timeout, dev, workers)
+    serve_pool_with(listener, program, timeout, dev, workers, Some(shutdown))
 }
 
 /// The pool accept-loop over an already-bound `listener` — the testable seam (a test binds
 /// `127.0.0.1:0`, reads `local_addr`, then drives this with real concurrent clients). `workers >= 1`.
+/// Runs until killed (no shutdown flag); for the graceful-shutdown path use [`serve_pool_with`].
 pub fn serve_pool(
     listener: TcpListener,
     program: &Program,
@@ -358,27 +419,55 @@ pub fn serve_pool(
     dev: bool,
     workers: usize,
 ) -> io::Result<()> {
+    serve_pool_with(listener, program, timeout, dev, workers, None)
+}
+
+/// [`serve_pool`] plus the S4.2 graceful-shutdown flag. When the flag flips, the accept loop stops,
+/// the work channel is dropped (so each worker finishes its in-flight connection then exits as
+/// `recv` errors), and every worker is **joined** before returning — a clean drain, no abrupt cut.
+/// With `shutdown = None` the loop runs forever (blocking accept, verbatim pre-S4.2). When a flag is
+/// present the listener is non-blocking and the loop polls it every [`ACCEPT_POLL_INTERVAL`].
+pub fn serve_pool_with(
+    listener: TcpListener,
+    program: &Program,
+    timeout: Option<Duration>,
+    dev: bool,
+    workers: usize,
+    shutdown: Option<Arc<AtomicBool>>,
+) -> io::Result<()> {
     let program = Arc::new(program.clone());
     let (tx, rx) = sync_channel::<TcpStream>(workers);
     let rx = Arc::new(Mutex::new(rx));
+    let mut handles = Vec::with_capacity(workers);
     for _ in 0..workers {
         let program = Arc::clone(&program);
         let rx = Arc::clone(&rx);
-        // Each worker outlives `serve_tcp_pool` (which blocks forever in the accept loop), so it never
-        // needs joining; the process exits when killed.
-        std::thread::spawn(move || worker_loop(&program, &rx, timeout, dev));
+        handles.push(std::thread::spawn(move || {
+            worker_loop(&program, &rx, timeout, dev);
+        }));
     }
 
+    let polling = shutdown.is_some();
+    let _ = listener.set_nonblocking(polling);
     let mut consecutive_errors = 0usize;
-    loop {
+    let result = loop {
+        if let Some(flag) = &shutdown {
+            if flag.load(Ordering::SeqCst) {
+                break Ok(()); // graceful shutdown → drain + join below
+            }
+        }
         match listener.accept() {
             Ok((stream, _peer)) => {
                 consecutive_errors = 0;
-                // Blocks when the bounded queue is full → backpressure. Errors only if every worker
-                // has gone (all receivers dropped) — then the pool is dead and we stop.
+                let _ = stream.set_nonblocking(false); // workers do blocking, timeout-bounded reads
+                                                       // Blocks when the bounded queue is full → backpressure. Errors only if every worker
+                                                       // has gone (all receivers dropped) — then the pool is dead and we stop.
                 if tx.send(stream).is_err() {
-                    return Ok(());
+                    break Ok(());
                 }
+            }
+            Err(e) if polling && e.kind() == io::ErrorKind::WouldBlock => {
+                std::thread::sleep(ACCEPT_POLL_INTERVAL);
             }
             Err(e) => {
                 consecutive_errors += 1;
@@ -387,11 +476,18 @@ pub fn serve_pool(
                     eprintln!(
                         "serve: {consecutive_errors} consecutive accept errors — shutting down"
                     );
-                    return Err(e);
+                    break Err(e);
                 }
             }
         }
+    };
+    // Drain: dropping the sender closes the channel; each worker finishes the connection it is on, then
+    // its next `recv` errors and it returns. Join them so in-flight requests complete before we exit.
+    drop(tx);
+    for h in handles {
+        let _ = h.join();
     }
+    result
 }
 
 /// One pool worker: pull a connection, frame+handle+write it with this thread's own heap, repeat.
