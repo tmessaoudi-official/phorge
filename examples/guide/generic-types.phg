@@ -57,7 +57,15 @@ function main(): void {
   int a = p.left();
   string b = p.right();
 
+  // S2.1-broad: a generic member result is a first-class arithmetic operand — `bi.get()` (a method
+  // returning the class `T`) and `bi.orElse(0)` (a `T`-typed-parameter result) both erase to `mixed`
+  // statically, but the VM recovers the operand type the checker proved, so these specialize and run
+  // byte-identically on both backends (no need to bind to a typed local first).
+  int viaMethod = bi.get() + 1;
+  int viaParam = bi.orElse(0) + 1;
+
   Console.println("box int: {x} {y}");
   Console.println("box str: {s}");
   Console.println("pair: {a} {b}");
+  Console.println("operands: {viaMethod} {viaParam}");
 }

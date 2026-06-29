@@ -191,6 +191,11 @@ struct Compiler<'a> {
     /// `u.pick(7, 8) + 1` from that argument — the method analog of `FnMeta.generic_ret_from_param`
     /// (S2.1). Empty unless a generic method echoes a param, so non-generic programs are untouched.
     method_generic_ret_from_param: &'a HashMap<(String, String), usize>,
+    /// Checker reified-operand side-table (S2.1-broad): `expr span.start → operand CTy` for
+    /// `Call`/`Member`/`Index` results. `ctype` consults this FIRST, so a generic method result / field
+    /// read / `List<T>` return specializes as the operand the checker proved (closing the run↔runvm
+    /// CTy-operand trap for erased-to-`mixed` results). Empty on the run-family `compile` path.
+    reified_operands: &'a HashMap<usize, CTy>,
     /// Program-wide `(class, method) → function index` table (slice B0). A non-overloaded static call
     /// `ClassName.method(args)` lowers to a dummy-receiver push + `Op::Call(idx)` via this index —
     /// the class is known at compile time, so no runtime dispatch is needed.
@@ -259,6 +264,25 @@ pub fn compile(program: &Program) -> Result<BytecodeProgram, Diagnostic> {
     // The compiler tracks no source position yet, so every fault becomes a position-less
     // compile-stage `Diagnostic` (renders `compile error: …`, unchanged from before).
     compile_program(program).map_err(Diagnostic::compile)
+}
+
+/// Like [`compile`], but seeded with the checker's **reified-operand side-table** (S2.1-broad):
+/// `expr span.start -> Ty`. Each entry is converted to its operand [`CTy`] (dropping `Other`, so a
+/// non-operand result never overrides `ctype`'s normal resolution) and consulted FIRST in `ctype`, so a
+/// generic method result / field read specializes as the arithmetic operand the checker proved. Empty
+/// map ⇒ byte-identical to [`compile`] (the run-family `compile` path stays unchanged).
+pub fn compile_with(
+    program: &Program,
+    reified: &std::collections::HashMap<usize, crate::types::Ty>,
+) -> Result<BytecodeProgram, Diagnostic> {
+    let reified_ctys: std::collections::HashMap<usize, CTy> = reified
+        .iter()
+        .filter_map(|(&span, ty)| match ty_to_cty(ty) {
+            CTy::Other => None,
+            cty => Some((span, cty)),
+        })
+        .collect();
+    compile_program_with(program, &reified_ctys).map_err(Diagnostic::compile)
 }
 
 /// A ctor param is *promoted* to a field iff it carries a visibility modifier (matching
@@ -412,6 +436,7 @@ impl<'a> Compiler<'a> {
         class_field_ctys: &'a HashMap<String, HashMap<String, CTy>>,
         method_rets: &'a HashMap<(String, String), CTy>,
         method_generic_ret_from_param: &'a HashMap<(String, String), usize>,
+        reified_operands: &'a HashMap<usize, CTy>,
         methods: &'a HashMap<(String, String), usize>,
         method_overloads: &'a HashMap<(String, String), usize>,
         base_fn_idx: usize,
@@ -437,6 +462,7 @@ impl<'a> Compiler<'a> {
             class_field_ctys,
             method_rets,
             method_generic_ret_from_param,
+            reified_operands,
             methods,
             method_overloads,
             cur_class: None,
@@ -607,6 +633,23 @@ impl<'a> Compiler<'a> {
     /// method return type. Anything it can name but isn't numeric/class collapses to `Other`; only a
     /// genuinely unresolvable operand errors (the same surface that errored pre-Wave-4).
     fn ctype(&self, e: &Expr) -> Result<CTy, String> {
+        // S2.1-broad: consult the checker's reified-operand side-table FIRST. It holds only
+        // `Call`/`Member`/`Index` entries whose result the checker proved concrete (and only ones that
+        // map to a real operand `CTy`, the rest dropped at the compile boundary), so a generic method
+        // result (`box.get() + 1`), a generic field read (`box.value + 1`), or a `List<T>`/`Map`-typed
+        // return specializes as the operand the checker proved — even though the static shape erased to
+        // `mixed`. Empty on the run-family `compile` path ⇒ zero overhead, byte-identical.
+        if !self.reified_operands.is_empty() {
+            let key = match e {
+                Expr::Call { span, .. } | Expr::Member { span, .. } | Expr::Index { span, .. } => {
+                    Some(span.start)
+                }
+                _ => None,
+            };
+            if let Some(cty) = key.and_then(|k| self.reified_operands.get(&k)) {
+                return Ok(cty.clone());
+            }
+        }
         match e {
             Expr::Int(..) => Ok(CTy::Int),
             Expr::Float(..) => Ok(CTy::Float),

@@ -18,8 +18,44 @@ impl Checker {
         } else {
             self.check_expr_inner(expr)
         };
+        // S2.1-broad: record the reified operand type of a call / method-call / field-read / index whose
+        // result is concrete, so the VM compiler can specialize `box.get() + 1`, `box.value + 1`,
+        // `xs[i] + 1` as the operand the checker proved (the static shape may erase to `mixed`). Keyed by
+        // the node's own span; only `Call`/`Member`/`Index` (the shapes `ctype` can fail to specialize)
+        // and only when the type carries operand information (not `Error`/`Void`/a type parameter), so
+        // the map stays small. Non-operand types (e.g. a function-returning call) are dropped at the
+        // compile boundary by `ty_to_cty`, so this never overrides `ctype`'s fn-value/class resolution.
+        if matches!(
+            expr,
+            crate::ast::Expr::Call { .. }
+                | crate::ast::Expr::Member { .. }
+                | crate::ast::Expr::Index { .. }
+        ) && Self::is_reifiable_operand(&ty)
+        {
+            self.reified_operands
+                .insert(Self::expr_span(expr).start, ty.clone());
+        }
         self.depth -= 1;
         ty
+    }
+
+    /// Whether `ty` carries operand information worth recording for the VM compiler's `ctype` (S2.1-broad)
+    /// — a concrete scalar/container/instance whose erased static shape would otherwise collapse to
+    /// `CTy::Other`. Excludes `Error`/`Void`/`Unit`/`Never`/`Null`/a bare type parameter (`Ty::Param`),
+    /// which carry no useful operand type.
+    fn is_reifiable_operand(ty: &Ty) -> bool {
+        matches!(
+            ty,
+            Ty::Int
+                | Ty::Float
+                | Ty::Decimal
+                | Ty::String
+                | Ty::Bool
+                | Ty::List(_)
+                | Ty::Map(_, _)
+                | Ty::Named(_, _)
+                | Ty::Optional(_)
+        )
     }
 
     pub(super) fn check_expr_inner(&mut self, expr: &crate::ast::Expr) -> Ty {

@@ -533,12 +533,18 @@ type argument (`instanceof Box<int>` ≡ `instanceof Box`). These refinements ar
   for class methods, threaded into the compiler as `method_generic_ret_from_param` and recovered in the
   method-call `ctype` arm, so **`u.pick(7, 8) + 1`** (a method `pick<T>(T a, T b) -> T`) specializes on
   the VM (`examples/guide/generic-methods.phg`, differential `generic_method_result_echoing_param_is_vm_operand`).
-  [Verified: `run` ≡ `runvm` ≡ real PHP.] **Still deferred** (the result does *not* echo a single
-  parameter, so it stays `CTy::Other` and the VM rejects a bare arithmetic use — bind to a typed local
-  first): a method returning the *class*'s type parameter via a field (`box.get() + 1` where `get()`
-  returns the class `T`, not a method param), a generic **field** read, a `List<T>`-element or container
-  return, and a return computed from *several* parameters. The full fix is the reified-result side-table
-  threaded into the compiler (still deferred).
+  [Verified: `run` ≡ `runvm` ≡ real PHP.] **S2.1-broad CLOSED** (2026-06-29) — the general fix shipped:
+  the checker records a **reified-operand side-table** (`expr span.start → Ty` for `Call`/`Member`/`Index`
+  results whose resolved type is concrete) returned from `check_resolutions`, threaded to the VM compiler
+  via `check_and_expand_reified` + `compile_with`, and consulted FIRST in `ctype` (entries that map to
+  `CTy::Other` are dropped at the compile boundary, so a non-operand result never overrides the normal
+  path). This closes **every** previously-deferred case: a method returning the *class* `T` via a field
+  (`box.get() + 1`), a generic **field** read (`box.value + 1`), a `List<T>`/`Map`-typed return
+  (`List.sum(g.all()) + 1`), and a multi-param-derived return — all specialize on the VM exactly as the
+  interpreter evaluates them (the checker is authoritative on the runtime type; erasure doesn't change
+  it). `examples/guide/generic-types.phg`, differential `generic_class_member_results_are_vm_operands`;
+  byte-identical `run ≡ runvm ≡ real PHP`. The field-based `generic_ret_from_param` paths still work (the
+  side-table just wins first). No new `Op`/`Value`.
 - **Generic *interface* methods** are a non-parse — an interface method's signature is built with an
   empty type-parameter list, so a `<T>` there is never consumed. Generic methods on *classes* work.
 - **Cross-package generic *library* types now ship** (validated 2026-06-29) — a generic class

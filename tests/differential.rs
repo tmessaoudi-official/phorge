@@ -1733,6 +1733,34 @@ fn generic_method_result_echoing_param_is_vm_operand() {
 }
 
 #[test]
+fn generic_class_member_results_are_vm_operands() {
+    // S2.1-broad: a generic method returning the CLASS type parameter via a field (`box.get()`), and a
+    // generic FIELD read (`box.value`), both erase to `mixed` statically — yet their results are
+    // specialized arithmetic operands on the VM, recovered from the checker's reified-operand
+    // side-table. Without it the VM rejected (`cannot infer numeric type`) what the interpreter
+    // accepts — a run↔runvm parity break (the documented CTy-operand trap).
+    agree_out_php(
+        "import Core.Console; \
+           class Box<T> { constructor(public T value) {} function get()->T { return this.value; } } \
+           function main()-> void { Box<int> b=new Box(10); \
+             int viaMethod = b.get() + 1; int viaField = b.value + 2; \
+             Console.println(\"{viaMethod} {viaField}\"); }",
+        "11 12\n",
+        "generic_class_member_operands",
+    );
+    // A generic method returning a `List<T>` (element read through it) and a float field — the operand
+    // recovery descends container and float types alike.
+    agree_out_php(
+        "import Core.Console; import Core.List; \
+           class Bag<T> { constructor(public List<T> items) {} function all()->List<T> { return this.items; } } \
+           function main()-> void { Bag<int> g=new Bag([4, 5, 6]); \
+             int s = List.sum(g.all()) + 1; Console.println(\"{s}\"); }",
+        "16\n",
+        "generic_method_list_return_operand",
+    );
+}
+
+#[test]
 fn transpiles_generic_method_to_mixed() {
     // A generic method erases to `mixed`-typed PHP (params and return), exactly as a generic free
     // function does; `List<T>` → `array`, `(T)->T` → `\Closure`. No type variable reaches the output.

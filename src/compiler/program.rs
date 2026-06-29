@@ -4,6 +4,16 @@
 use super::*;
 
 pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, String> {
+    compile_program_with(program, &HashMap::new())
+}
+
+/// Compile a program seeded with the checker's reified-operand side-table (`expr span.start -> CTy`),
+/// consulted FIRST in `ctype` (S2.1-broad). `compile_program` delegates here with an empty map, so the
+/// run-family path is byte-identical.
+pub(super) fn compile_program_with(
+    program: &Program,
+    reified: &HashMap<usize, CTy>,
+) -> Result<BytecodeProgram, String> {
     let mut order: Vec<&FunctionDecl> = Vec::new();
     let mut fns: HashMap<String, FnMeta> = HashMap::new();
     // M-RT overloading: name → every function index declared under it (declaration order). Names with
@@ -520,6 +530,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
             &class_field_ctys,
             &method_rets,
             &method_generic_ret_from_param,
+            reified,
             &methods,
             &method_overloads,
             base,
@@ -574,6 +585,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
             &class_field_ctys,
             &method_rets,
             &method_generic_ret_from_param,
+            reified,
             &methods,
             &method_overloads,
             &class_parents,
@@ -611,6 +623,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
             &class_field_ctys,
             &method_rets,
             &method_generic_ret_from_param,
+            reified,
             &methods,
             &method_overloads,
             &class_parents,
@@ -681,6 +694,7 @@ pub(super) fn compile_constructor<'a>(
     class_field_ctys: &'a HashMap<String, HashMap<String, CTy>>,
     method_rets: &'a HashMap<(String, String), CTy>,
     method_generic_ret_from_param: &'a HashMap<(String, String), usize>,
+    reified_operands: &'a HashMap<usize, CTy>,
     methods: &'a HashMap<(String, String), usize>,
     method_overloads: &'a HashMap<(String, String), usize>,
     parent_parents: &'a std::collections::BTreeMap<String, Vec<String>>,
@@ -707,6 +721,7 @@ pub(super) fn compile_constructor<'a>(
         class_field_ctys,
         method_rets,
         method_generic_ret_from_param,
+        reified_operands,
         methods,
         method_overloads,
         base_fn_idx,
@@ -786,6 +801,7 @@ pub(super) fn compile_method<'a>(
     class_field_ctys: &'a HashMap<String, HashMap<String, CTy>>,
     method_rets: &'a HashMap<(String, String), CTy>,
     method_generic_ret_from_param: &'a HashMap<(String, String), usize>,
+    reified_operands: &'a HashMap<usize, CTy>,
     methods: &'a HashMap<(String, String), usize>,
     method_overloads: &'a HashMap<(String, String), usize>,
     parent_parents: &'a std::collections::BTreeMap<String, Vec<String>>,
@@ -808,6 +824,7 @@ pub(super) fn compile_method<'a>(
         class_field_ctys,
         method_rets,
         method_generic_ret_from_param,
+        reified_operands,
         methods,
         method_overloads,
         base_fn_idx,

@@ -441,6 +441,15 @@ pub struct Checker {
     /// `E-OVERLOAD-NO-CONTEXT`; the selector path mangles per return before any backend. Empty for the
     /// common case (no return-overloaded method).
     return_overload_methods: HashMap<(String, String), Vec<(Ty, String)>>,
+    /// S2.1-broad: per-expression *reified operand type*, keyed by the expression's `span.start`, for
+    /// `Call`/`Member`/`Index` nodes whose checker-resolved `Ty` is concrete. The VM compiler's `ctype`
+    /// consults this FIRST so a generic method result (`box.get() + 1`), a generic field read
+    /// (`box.value + 1`), or a `List<T>`/`Map`-typed return specializes as the arithmetic operand the
+    /// checker proved — closing the run↔runvm "CTy-operand trap" for results the static shape erases to
+    /// `mixed`. The checker is authoritative on the value's runtime type (erasure doesn't change it), so
+    /// overriding `ctype` with it is sound; entries that map to `CTy::Other` are dropped at the compile
+    /// boundary, so non-operand results never override `ctype`'s normal (fn-value/class) resolution.
+    reified_operands: HashMap<usize, Ty>,
     /// Method declaration sites accumulated during collection — `(class, method, decl span, resolved
     /// params, resolved ret)` — so [`Self::finalize_method_overloads`] can emit a span-keyed rename for
     /// each member of a return-overload method set (reusing [`Self::overload_def_renames`], the same map
@@ -513,6 +522,7 @@ impl Checker {
             overload_resolutions: HashMap::new(),
             return_overload_methods: HashMap::new(),
             method_fn_decls: Vec::new(),
+            reified_operands: HashMap::new(),
             parent_parents: std::collections::BTreeMap::new(),
             parent_mro: std::collections::BTreeMap::new(),
             parent_origins: std::collections::BTreeMap::new(),
@@ -749,6 +759,7 @@ pub fn check_resolutions(
         HashMap<usize, crate::ast::Expr>,
         HashMap<usize, crate::ast::Expr>,
         HashMap<usize, String>,
+        HashMap<usize, Ty>,
     ),
     Vec<Diagnostic>,
 > {
@@ -780,6 +791,7 @@ pub fn check_resolutions(
             c.html_resolutions,
             calls,
             c.overload_def_renames,
+            c.reified_operands,
         ))
     } else {
         Err(c.errors)

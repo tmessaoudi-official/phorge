@@ -7,6 +7,7 @@
 > + `cargo clippy --all-targets` + `cargo fmt --check`.
 
 ## Decisions Log
+- [2026-06-29] AGREED (session 3): developer set the **project-scoped ask-human-gate bypass** ("Yes — set bypass, run it all") + the autonomous-3c bypass — run the remaining marathon (S2.1-broad remainder → S2.3 must-use B/C → Spine-4 M6 W4 concurrency capstone) **fully autonomously, back-to-back**, gating each slice on the full PHP-oracle + differential + clippy/fmt before commit; stop only on a genuine design fork.
 - [2026-06-29] AGREED: Marathon = **all four spines**, in the recommended dependency order, **fully autonomous** (full 30/8).
 - [2026-06-29] AGREED: Order = (1) Cross-package M-RT lift → (2) Soundness long-tail close → (3) Stdlib charter + breadth → (4) Concurrency + server (M6 W4). Rationale: #1 unifies type system ↔ modules and unblocks core.json multi-package + cross-package stdlib; #2 cleans the now-unified base; #3 writes the charter then breadth (multi-package core.json now possible); #4 capstone capability on a solid foundation.
 - [2026-06-29] AGREED (session 3, "new big thing + marathon"): developer chose **"all of 1 and 2 and 4 in the recommended order autonomously"** = full Spine-2 soundness long-tail → Spine-4 M6 W4 concurrency capstone, with Spine-3 breadth interleaved as low-risk warm-ups. Pacing: **one heavy slice per context window, commit green, let compaction carry the marathon.** Immediate next = S2.2 method return-overloading (design recorded checkpoint #4).
@@ -51,6 +52,19 @@
 > Scope: still `package Main`; no new `Op`/`Value`. **Do in a fresh context — multi-site + byte-identity-critical.**
 
 ## Progress
+
+- **Marathon checkpoint #8 (session 3 cont., fully autonomous — bypass set): S2.1-broad CLOSED.** The
+  reified-operand side-table shipped exactly per the design above: checker records `expr span.start → Ty`
+  for concrete `Call`/`Member`/`Index` results (`Checker::reified_operands`, hooked in `check_expr`),
+  returned as a 5th element from `check_resolutions`, threaded via new `check_and_expand_reified` +
+  `compile_with`/`compile_program_with` (the run-family `compile` path delegates with an empty map →
+  byte-identical), and consulted FIRST in the compiler's `ctype` (guarded by `!is_empty()`; `Other`
+  entries dropped at the `ty_to_cty` boundary so non-operands never override). Closes `box.get() + 1`,
+  `box.value + 1`, `List<T>`/`Map` returns, multi-param returns. **Span-stability verified** by the full
+  example glob (the only failure was my own example reading a *private* field — fixed, not a regression).
+  `examples/guide/generic-types.phg` + differential `generic_class_member_results_are_vm_operands`;
+  KNOWN_ISSUES S2.1 marked CLOSED. **Spine-2 soundness is now effectively complete** (S2.1 full, S2.2,
+  S2.4, S2.5; only S2.3 must-use B/C remains). Commit pending gate-green. **Next: S2.3 → Spine-4 capstone.**
 
 - **Marathon checkpoint #7 (session 3 cont.): `Core.Math.lcm`** — pairs with `gcd` (`|a|/gcd*|b|`,
   `lcm(_,0)=0`, EV-7 overflow fault), gated `__phorj_lcm` (inlines Euclid). Byte-identical;

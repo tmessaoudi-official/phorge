@@ -5,7 +5,7 @@
 
 use crate::ast::Program;
 use crate::chunk::{BytecodeProgram, Chunk, Op};
-use crate::compiler::compile;
+use crate::compiler::{compile, compile_with};
 use crate::interpreter::{interpret, interpret_main};
 use crate::lexer::lex;
 use crate::parser::Parser;
@@ -945,6 +945,18 @@ fn inject_time_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
 }
 
 pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, String> {
+    check_and_expand_reified(prog, diag_src).map(|(p, _)| p)
+}
+
+/// Like [`check_and_expand`], but also returns the checker's **reified-operand side-table** (S2.1-broad):
+/// `expr span.start -> resolved Ty` for `Call`/`Member`/`Index` results, fed to the VM compiler
+/// ([`crate::compiler::compile_with`]) so a generic method result / field read specializes as the
+/// arithmetic operand the checker proved. The interpreter paths use the map-dropping wrapper above.
+#[allow(clippy::type_complexity)]
+pub fn check_and_expand_reified(
+    prog: &Program,
+    diag_src: &str,
+) -> Result<(Program, std::collections::HashMap<usize, crate::types::Ty>), String> {
     let json_injected = inject_json_prelude(prog);
     let rm_injected = inject_rounding_mode_prelude(json_injected.as_ref());
     let http_injected = inject_http_prelude(rm_injected.as_ref());
@@ -958,7 +970,7 @@ pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, Strin
     let routed = crate::checker::desugar_auto_router(injected.into_owned());
     let prog = &routed;
     match crate::checker::check_resolutions(prog) {
-        Ok((warnings, html, ufcs, overload_renames)) => {
+        Ok((warnings, html, ufcs, overload_renames, reified)) => {
             for w in &warnings {
                 eprintln!("warning: {}", w.render(diag_src));
             }
@@ -979,8 +991,8 @@ pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, Strin
             // B1b: inline `parent.constructor(…)` LAST, so the cloned parent body is already fully
             // de-sugared (aliases/html/generics/new/UFCS/overload-renames all applied). A no-op unless
             // a constructor forwards to its parent — programs without it stay byte-identical.
-            Ok(crate::checker::inline_parent_ctors(
-                crate::checker::rename_overload_defs(
+            Ok((
+                crate::checker::inline_parent_ctors(crate::checker::rename_overload_defs(
                     crate::checker::rewrite_ufcs(
                         crate::checker::unwrap_new(crate::checker::erase_generics(
                             crate::checker::resolve_html(
@@ -993,7 +1005,8 @@ pub fn check_and_expand(prog: &Program, diag_src: &str) -> Result<Program, Strin
                         &ufcs,
                     ),
                     &overload_renames,
-                ),
+                )),
+                reified,
             ))
         }
         Err(errs) => {
@@ -1050,9 +1063,10 @@ pub fn cmd_run(src: &str) -> Result<String, String> {
 /// The bytecode backend; must produce byte-identical output to `cmd_run` (differential).
 pub fn cmd_runvm(src: &str) -> Result<String, String> {
     on_deep_stack(|| {
-        let prog = parse_checked(src)?;
+        let parsed = lex_parse(src)?;
+        let (prog, reified) = check_and_expand_reified(&parsed, src)?;
         foreign_runtime_gate(&prog)?;
-        let program = compile(&prog).map_err(|e| e.to_string())?;
+        let program = compile_with(&prog, &reified).map_err(|e| e.to_string())?;
         Vm::new(&program).run().map_err(|e| e.to_string())
     })
 }
@@ -1070,9 +1084,10 @@ pub fn cmd_run_exit(src: &str) -> Result<(String, i64), String> {
 /// Like [`cmd_runvm`], but also returns `main`'s exit code (Batch-1 B).
 pub fn cmd_runvm_exit(src: &str) -> Result<(String, i64), String> {
     on_deep_stack(|| {
-        let prog = parse_checked(src)?;
+        let parsed = lex_parse(src)?;
+        let (prog, reified) = check_and_expand_reified(&parsed, src)?;
         foreign_runtime_gate(&prog)?;
-        let program = compile(&prog).map_err(|e| e.to_string())?;
+        let program = compile_with(&prog, &reified).map_err(|e| e.to_string())?;
         Vm::new(&program).run_main().map_err(|e| e.to_string())
     })
 }
@@ -1108,9 +1123,9 @@ pub fn run_program(unit: &crate::loader::Unit) -> Result<String, String> {
 /// `runvm` on a loaded [`Unit`] (bytecode + VM backend). Same trace rendering as [`run_program`].
 pub fn runvm_program(unit: &crate::loader::Unit) -> Result<String, String> {
     on_deep_stack(|| {
-        let checked = check_and_expand(&unit.program, &unit.diag_src)?;
+        let (checked, reified) = check_and_expand_reified(&unit.program, &unit.diag_src)?;
         foreign_runtime_gate(&checked)?;
-        let program = compile(&checked).map_err(|e| e.to_string())?;
+        let program = compile_with(&checked, &reified).map_err(|e| e.to_string())?;
         Vm::new(&program).run().map_err(|mut e| {
             let src = unit.attribute_frames(&mut e);
             e.render(&src)
@@ -1134,9 +1149,9 @@ pub fn run_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64), Str
 /// Like [`runvm_program`], but also returns `main`'s exit code (Batch-1 B).
 pub fn runvm_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64), String> {
     on_deep_stack(|| {
-        let checked = check_and_expand(&unit.program, &unit.diag_src)?;
+        let (checked, reified) = check_and_expand_reified(&unit.program, &unit.diag_src)?;
         foreign_runtime_gate(&checked)?;
-        let program = compile(&checked).map_err(|e| e.to_string())?;
+        let program = compile_with(&checked, &reified).map_err(|e| e.to_string())?;
         Vm::new(&program).run_main().map_err(|mut e| {
             let src = unit.attribute_frames(&mut e);
             e.render(&src)
@@ -1160,7 +1175,7 @@ pub fn check_program(prog: &Program, diag_src: &str) -> Result<String, String> {
 /// diagnostic, so no `diag_src` is needed.
 pub fn check_json_program(prog: &Program) -> (String, bool) {
     on_deep_stack(|| match crate::checker::check_resolutions(prog) {
-        Ok((warnings, _html, _ufcs, _ovl)) => {
+        Ok((warnings, _html, _ufcs, _ovl, _reified)) => {
             (crate::diagnostic::diagnostics_json(&[], &warnings), false)
         }
         Err(errs) => (crate::diagnostic::diagnostics_json(&errs, &[]), true),

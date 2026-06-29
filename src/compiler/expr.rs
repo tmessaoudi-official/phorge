@@ -919,6 +919,7 @@ impl Compiler<'_> {
             self.class_field_ctys,
             self.method_rets,
             self.method_generic_ret_from_param,
+            self.reified_operands,
             self.methods,
             self.method_overloads,
             sub_base,
