@@ -129,7 +129,13 @@
   `Text.isEmpty`/`trimStart`/`trimEnd`/`count`, `Math.isEven`/`isOdd`). Additive natives via the
   established recipe (no plumbing change); float-algorithm-mismatch ops deliberately avoided; bare-arg
   binary PHP parenthesized. Two guide examples + 5 unit tests; byte-identical run≡runvm≡real PHP 8.5.
-- **NEXT: step 6 cross-file LSP + JetBrains** (last marathon step).
+- **step 6 cross-file LSP DONE + committed + green** (`3b7a39d`): `phg lsp` go-to-definition + hover now
+  resolve across the open buffer set (a name not local/same-file → searched in other open docs via
+  `Server::cross_file_decl`, sorted-uri deterministic). VSCode + JetBrains (LSP4IJ) consume it
+  transparently (no client change; nothing to compile). Off the byte-identity spine; 3 new lsp tests.
+  Cross-file *references* deferred (needs project-aware file merging). **MARATHON COMPLETE** — all steps
+  (super/parent B1a→B1b→B2, must-use, return-overloading, M-perf, M4 stdlib ×2, LSP cross-file) shipped
+  green + committed.
 
 ### B2 — scoped (code-verified probe, 2026-06-29; built per this scope)
 **B2 is a TRANSPILER-ONLY gap — much narrower than feared.** Probed with two MI programs:
