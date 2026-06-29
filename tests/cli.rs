@@ -407,3 +407,32 @@ fn mi_transitive_parent_jump_is_a_clean_transpile_error() {
         String::from_utf8_lossy(&tr.stderr)
     );
 }
+
+/// Regression: every inline-source command that builds a `BytecodeProgram` (`disasm`, `bench`) must
+/// thread the checker's reified-operand side-table into the VM compile (`check_and_expand_reified` +
+/// `compile_with`), exactly like `runvm`. The concurrency example uses `a.join() + b.join()` — a
+/// method result as an arithmetic operand — which the VM compiler's `ctype` can only resolve from
+/// that side-table; with the old map-dropping `compile` path these commands rejected it with
+/// "no method `join` on `Task`" while `run`/`runvm` accepted it (the same root cause that broke the
+/// playground's runvm). Guards all three surfaces against re-diverging.
+#[test]
+fn disasm_and_bench_accept_reified_operand_program() {
+    let ex = "examples/guide/concurrency.phg";
+    for cmd in ["disasm", "bench"] {
+        let out = Command::new(BIN)
+            .args([cmd, ex])
+            .output()
+            .expect("spawn phorj");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            out.status.success(),
+            "`{cmd}` must accept a reified-operand program; exit {:?}\nstdout: {stdout}\nstderr: {stderr}",
+            out.status.code()
+        );
+        assert!(
+            !stdout.contains("no method") && !stderr.contains("no method"),
+            "`{cmd}` must not reject `Task.join()` used as an operand\nstdout: {stdout}\nstderr: {stderr}"
+        );
+    }
+}

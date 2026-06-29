@@ -5,7 +5,7 @@
 
 use crate::ast::Program;
 use crate::chunk::{BytecodeProgram, Chunk, Op};
-use crate::compiler::{compile, compile_with};
+use crate::compiler::compile_with;
 use crate::interpreter::{interpret, interpret_main};
 use crate::lexer::lex;
 use crate::parser::Parser;
@@ -1022,6 +1022,20 @@ fn parse_checked(src: &str) -> Result<Program, String> {
     check_and_expand(&prog, src)
 }
 
+/// Like [`parse_checked`], but also returns the checker's **reified-operand side-table** so a
+/// VM-running caller can [`compile_with`] it — the byte-identical path [`cmd_runvm`] uses. Without it,
+/// a method-call/field-read result used as an arithmetic operand (`a.join() + b.join()`,
+/// `box.get() + 1`) is rejected by the VM compiler (`ctype` falls through to `method_rets`) while the
+/// interpreter accepts it — a `run ≠ runvm` divergence. Any inline-source path that builds a
+/// `BytecodeProgram` (`disasm`, `bench`) MUST use this, not `parse_checked` + `compile`.
+#[allow(clippy::type_complexity)]
+fn parse_checked_reified(
+    src: &str,
+) -> Result<(Program, std::collections::HashMap<usize, crate::types::Ty>), String> {
+    let prog = lex_parse(src)?;
+    check_and_expand_reified(&prog, src)
+}
+
 /// Public lex + parse + check of a single source string into a checked, alias-expanded `Program`.
 /// Exposes the private [`parse_checked`] pipeline for callers that need a ready-to-run program from
 /// inline source — e.g. `tests/serve.rs`, which builds a serve program then drives it through
@@ -1275,8 +1289,8 @@ pub fn cmd_transpile(src: &str) -> Result<String, String> {
 /// fall-through, so an un-annotated new op simply shows no comment rather than failing to compile.
 pub fn cmd_disasm(src: &str) -> Result<String, String> {
     on_deep_stack(|| {
-        let prog = parse_checked(src)?;
-        let program = compile(&prog).map_err(|e| e.to_string())?;
+        let (prog, reified) = parse_checked_reified(src)?;
+        let program = compile_with(&prog, &reified).map_err(|e| e.to_string())?;
         Ok(disasm_program(&program))
     })
 }

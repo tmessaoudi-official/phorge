@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use crate::compiler::compile;
+use crate::compiler::compile_with;
 use crate::interpreter::interpret;
 use crate::mem;
 use crate::vm::Vm;
@@ -203,8 +203,12 @@ pub(super) fn bench_report(src: &str, iters: usize) -> Result<String, String> {
 /// gates its PHP output against the Phorj backends' output, and median-times `php <file>`.
 pub(super) fn bench_report_opts(src: &str, iters: usize, vs_php: bool) -> Result<String, String> {
     on_deep_stack(|| {
-        let prog = parse_checked(src)?;
-        let program = compile(&prog).map_err(|e| e.to_string())?;
+        // Thread the checker's reified-operand side-table into the VM compile (the byte-identical
+        // path `cmd_runvm` uses) so a program whose arithmetic operand is a method/field result
+        // (`a.join() + b.join()`, `box.get() + 1`) compiles here exactly as it runs — not rejected
+        // by `ctype` falling through to `method_rets` (a run≠runvm divergence).
+        let (prog, reified) = parse_checked_reified(src)?;
+        let program = compile_with(&prog, &reified).map_err(|e| e.to_string())?;
 
         // Cold memory probe — measured *first*, before the parity gate and timing loops warm the
         // allocator. Peak-RSS growth is only meaningful from a cold heap: once glibc has mapped
@@ -229,7 +233,9 @@ pub(super) fn bench_report_opts(src: &str, iters: usize, vs_php: bool) -> Result
         }
 
         let front = median_of(iters, || parse_checked(src))?;
-        let comp = median_of(iters, || compile(&prog).map_err(|e| e.to_string()))?;
+        let comp = median_of(iters, || {
+            compile_with(&prog, &reified).map_err(|e| e.to_string())
+        })?;
         let tw = median_of(iters, || interpret(&prog).map_err(|e| e.to_string()))?;
         let vm = median_of(iters, || Vm::new(&program).run().map_err(|e| e.to_string()))?;
 

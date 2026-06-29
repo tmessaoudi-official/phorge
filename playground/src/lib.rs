@@ -5,7 +5,8 @@
 //! functions here call the **public inner pipeline directly** on the calling stack:
 //!
 //!   parse → `cli::check_and_expand` (via `cli::parse_checked_program`) → `interpreter::interpret`
-//!         / `compiler::compile` + `vm::Vm::run` / `transpile::emit`.
+//!         / `cli::check_and_expand_reified` + `compiler::compile_with` + `vm::Vm::run` (runvm threads
+//!           the reified-operand side-table, exactly like `cli::cmd_runvm`) / `transpile::emit`.
 //!
 //! The wrapper *logic* lives in plain `*_json(&str) -> String` functions (no wasm dependency) so it is
 //! unit-tested on the native target by `cargo test`. Only the thin `#[wasm_bindgen]` exports at the
@@ -75,10 +76,19 @@ pub fn run_json(src: &str) -> String {
 }
 
 /// `runvm`: the bytecode compiler + stack VM backend. Must be byte-identical to [`run_json`].
+///
+/// Threads the checker's **reified-operand side-table** (`check_and_expand_reified` → `compile_with`)
+/// exactly like the CLI's `cli::cmd_runvm` — NOT the map-dropping `parse_checked_program` + `compile`.
+/// Without it, a method-call/field-read result used as an arithmetic operand (e.g. `a.join() + b.join()`,
+/// `box.get() + 1`) makes the VM compiler's `ctype` miss the side-table and reject what the interpreter
+/// accepts — a playground-only `run ≠ runvm` divergence the CLI differential harness never exercises.
 pub fn runvm_json(src: &str) -> String {
     let result = (|| {
-        let prog = cli::parse_checked_program(src).map_err(ExecErr::Front)?;
-        let program = phorj::compiler::compile(&prog).map_err(|d| ExecErr::Front(d.render(src)))?;
+        let parsed = cli::parse_program(src).map_err(ExecErr::Front)?;
+        let (prog, reified) =
+            cli::check_and_expand_reified(&parsed, src).map_err(ExecErr::Front)?;
+        let program = phorj::compiler::compile_with(&prog, &reified)
+            .map_err(|d| ExecErr::Front(d.render(src)))?;
         phorj::vm::Vm::new(&program)
             .run()
             .map_err(|d| ExecErr::Fault(d.render(src)))
@@ -213,6 +223,33 @@ mod tests {
         let vm = parse(&runvm_json(HELLO));
         assert_eq!(r["stdout"], vm["stdout"], "run and runvm must agree");
         assert_eq!(vm["ok"], json!(true));
+    }
+
+    #[test]
+    fn runvm_threads_reified_operands_like_run() {
+        // Regression (reported: the concurrency example ran on the playground's interpreter but the
+        // VM rejected it with "no method `join` on `Task`"). The VM wrapper MUST thread the checker's
+        // reified-operand side-table (S2.1-broad) exactly like the CLI's `cmd_runvm` — otherwise a
+        // method-call result used as an arithmetic operand (`a.join() + b.join()`) makes the VM
+        // compiler's `ctype` miss the side-table and fall through to `method_rets`, rejecting what the
+        // interpreter accepts: a playground-only run≠runvm divergence the CLI differential never saw.
+        let src = "package Main;\nimport Core.Console;\n\
+            function sq(int n): int { return n * n; }\n\
+            function f(): int { Task<int> a = spawn sq(2); Task<int> b = spawn sq(3); return a.join() + b.join(); }\n\
+            function main() -> void { Console.println(\"{f()}\"); }\n";
+        let r = parse(&run_json(src));
+        let vm = parse(&runvm_json(src));
+        assert_eq!(r["ok"], json!(true), "run must accept the program: {r}");
+        assert_eq!(
+            vm["ok"],
+            json!(true),
+            "runvm must accept it too (reified operands threaded): {vm}"
+        );
+        assert_eq!(
+            r["stdout"], vm["stdout"],
+            "run and runvm must agree byte-for-byte"
+        );
+        assert_eq!(vm["stdout"], json!("13\n"));
     }
 
     #[test]
