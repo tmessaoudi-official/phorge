@@ -370,7 +370,11 @@ impl Compiler<'_> {
         line: u32,
     ) -> Result<(), String> {
         self.begin_scope();
-        self.expr(iter)?; // [list]
+        self.expr(iter)?; // [iterable]
+                          // B1 iteration protocol: normalize the source collection (`List`/`Set`) to a plain element
+                          // list once, so the loop body below indexes a list regardless of the source kind. Shared with
+                          // the interpreter via `value::iter_elements` ⇒ byte-identical iteration order.
+        self.emit(Op::IterElems, line); // [list]
         let s_list = self.add_local("$for_list", CTy::Other);
         self.emit_const(Value::Int(0), line); // [list, 0]
         let s_idx = self.add_local("$for_idx", CTy::Int);

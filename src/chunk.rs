@@ -158,6 +158,11 @@ pub enum Op {
     SetIndex,
     /// Pop a list; push its length as an `Int`.
     Len,
+    /// Pop an iterable (`List`/`Set`); push a `List` of its elements in iteration order (B1 iteration
+    /// protocol). Emitted once at the top of a `for`-`in` loop so the loop body indexes a plain list
+    /// regardless of the source collection. Single-sourced with the interpreter via
+    /// [`crate::value::iter_elements`], so iteration order is byte-identical (`run≡runvm`).
+    IterElems,
     /// Pop two ints (`end` on top, then `start`) and push a `List<int>` materialization of the
     /// range: `[start, …, end-1]` exclusive, or `[start, …, end]` inclusive (the `bool` flag). Empty
     /// when `start >= end` (exclusive) / `start > end` (inclusive). Built via Rust's native
@@ -588,6 +593,7 @@ impl BytecodeProgram {
                     | Op::Index
                     | Op::SetIndex
                     | Op::Len
+                    | Op::IterElems
                     | Op::MakeRange(_)
                     | Op::Return
                     | Op::GetEnumField(_)

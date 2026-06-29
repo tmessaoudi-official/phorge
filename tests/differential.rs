@@ -1447,6 +1447,26 @@ fn mutation_element_set_agrees() {
 }
 
 #[test]
+fn b1_for_in_over_set_agrees() {
+    // B1 iteration protocol: `for (x in set)` walks a Set's insertion-ordered, deduped elements via
+    // the shared `value::iter_elements` kernel (`Op::IterElems` on the VM) — byte-identical run≡runvm.
+    agree(
+        "import Core.Console; import Core.Set; \
+         function main() -> void { \
+             Set<int> s = Set.of([3, 1, 3, 2, 1]); \
+             mutable int total = 0; \
+             for (int x in s) { total = total + x; } \
+             Console.println(\"{total}\"); \
+         }",
+    );
+    // A list still iterates identically through the same normalized path.
+    agree(
+        "import Core.Console; \
+         function main() -> void { mutable int t = 0; for (int x in [10, 20, 30]) { t = t + x; } Console.println(\"{t}\"); }",
+    );
+}
+
+#[test]
 fn mutation_element_set_oob_faults_agree() {
     // M-mut.5: an out-of-range list element SET faults identically on both Rust backends
     // (FaultKind::IndexOob). NOT PHP-gated — PHP would *extend* the array instead (KNOWN_ISSUES).

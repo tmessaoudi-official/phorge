@@ -285,6 +285,13 @@ impl<'a> Vm<'a> {
                 self.coop.borrow_mut().results.insert(id, result);
                 self.stack.push(Value::Task(id));
             }
+            Op::IterElems => {
+                // B1 iteration protocol: normalize the iterable on top to a plain element list (shared
+                // `value::iter_elements` kernel — byte-identical order to the interpreter's `for`-`in`).
+                let v = self.pop();
+                let elems = crate::value::iter_elements(&v)?;
+                self.stack.push(Value::List(Rc::new(elems)));
+            }
             Op::ChannelNew => {
                 let id = self.coop.borrow_mut().sched.new_channel();
                 self.stack.push(Value::Channel(

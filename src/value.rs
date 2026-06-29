@@ -285,6 +285,21 @@ impl HKey {
     }
 }
 
+/// The element sequence a single-binding `for (x in iter)` walks (B1 iteration protocol),
+/// single-sourced so the interpreter and the VM (`Op::IterElems`) materialize the SAME ordered list
+/// ⇒ byte-identical iteration. A `List` passes through; a `Set` yields its insertion-ordered elements
+/// as values (matching the PHP-array `foreach` the transpiler emits). Any other value is a clean fault.
+///
+/// # Errors
+/// `Err` with a `"cannot iterate over <type>"` body when `v` is not an iterable collection.
+pub fn iter_elements(v: &Value) -> Result<Vec<Value>, String> {
+    match v {
+        Value::List(items) => Ok((**items).clone()),
+        Value::Set(elems) => Ok(elems.iter().map(HKey::to_value).collect()),
+        other => Err(format!("cannot iterate over {}", other.type_name())),
+    }
+}
+
 /// Build an **insertion-ordered** map from evaluated `(key, value)` pairs, matching PHP literal
 /// semantics: a duplicate key keeps its **first position** but takes the **last value**
 /// (`["a" => 1, "a" => 2]` ⇒ `["a" => 2]`, position of the first `"a"`). Single-sourced so the

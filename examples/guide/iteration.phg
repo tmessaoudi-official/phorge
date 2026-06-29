@@ -1,0 +1,40 @@
+package Main;
+import Core.Console;
+import Core.Set;
+
+// Iteration protocol (B1) — `for (x in iterable)` walks any collection, not just a `List`. A `Set<T>`
+// iterates its insertion-ordered, deduplicated elements; the same loop shape works over a `List<T>`
+// and an integer range. All three are byte-identical on the interpreter (`run`), the VM (`runvm`), and
+// transpiled PHP (a `Set` is a deduped array, so PHP's `foreach` yields the same elements in order).
+
+function sumList(List<int> xs): int {
+    mutable int total = 0;
+    for (int x in xs) {
+        total = total + x;
+    }
+    return total;
+}
+
+function sumSet(Set<int> s): int {
+    mutable int total = 0;
+    for (int x in s) {
+        total = total + x;
+    }
+    return total;
+}
+
+function main(): void {
+    // A plain list.
+    Console.println("list sum = {sumList([10, 20, 30])}");
+
+    // A set: duplicates are removed, insertion order preserved → {3, 1, 2}.
+    Set<int> s = Set.of([3, 1, 3, 2, 1]);
+    Console.println("set sum = {sumSet(s)}");
+
+    // An integer range iterates its materialized elements, like any list.
+    mutable int product = 1;
+    for (int n in 1..=4) {
+        product = product * n;
+    }
+    Console.println("4! = {product}");
+}

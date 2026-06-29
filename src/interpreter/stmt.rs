@@ -142,9 +142,13 @@ impl<'c> Interp<'c> {
             Stmt::For {
                 name, iter, body, ..
             } => {
-                let items = match self.eval(iter)? {
-                    Value::List(items) => items,
-                    other => return rt(format!("cannot iterate over {}", other.type_name())),
+                // B1 iteration protocol: normalize the source (`List`/`Set`) to its element sequence
+                // via the shared `value::iter_elements` kernel (byte-identical order to the VM's
+                // `Op::IterElems`).
+                let iterable = self.eval(iter)?;
+                let items = match crate::value::iter_elements(&iterable) {
+                    Ok(v) => v,
+                    Err(e) => return rt(e),
                 };
                 for item in items.iter() {
                     self.frame.push_scope();

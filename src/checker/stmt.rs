@@ -747,12 +747,13 @@ impl Checker {
         {
             let iter_ty = self.check_expr(iter);
             let elem = match iter_ty {
-                Ty::List(e) => *e,
+                // B1 iteration protocol: a `List<T>` or `Set<T>` iterates its elements (`T`).
+                Ty::List(e) | Ty::Set(e) => *e,
                 Ty::Error => Ty::Error,
                 other => {
                     self.err(
                         *span,
-                        format!("`for`-`in` requires a List, found `{other}`"),
+                        format!("`for`-`in` requires a List or Set, found `{other}`"),
                     );
                     Ty::Error
                 }
