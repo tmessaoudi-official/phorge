@@ -47,6 +47,28 @@ fn list_sort_natural_ascending() {
 }
 
 #[test]
+fn list_fill_fills_and_faults() {
+    let mut o = String::new();
+    // 3 copies of 7 → [7, 7, 7].
+    match list_fill(&[Value::Int(7), Value::Int(3)], &mut o).unwrap() {
+        Value::List(xs) => {
+            assert_eq!(xs.len(), 3);
+            assert!(xs.iter().all(|v| matches!(v, Value::Int(7))));
+        }
+        other => panic!("fill returned {other:?}"),
+    }
+    // count 0 → empty list.
+    assert!(
+        matches!(list_fill(&[Value::Str("x".into()), Value::Int(0)], &mut o), Ok(Value::List(g)) if g.is_empty())
+    );
+    // A negative count faults cleanly (PHP array_fill ValueError; EV-7).
+    match list_fill(&[Value::Int(1), Value::Int(-1)], &mut o) {
+        Err(msg) => assert_eq!(msg, "List.fill count must be >= 0"),
+        other => panic!("expected a fault, got {other:?}"),
+    }
+}
+
+#[test]
 fn list_chunk_groups_and_faults() {
     let ints = |ns: &[i64]| Value::List(Rc::new(ns.iter().map(|n| Value::Int(*n)).collect()));
     let mut o = String::new();

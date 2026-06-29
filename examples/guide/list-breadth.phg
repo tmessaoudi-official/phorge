@@ -43,4 +43,9 @@ function main(): void {
     if (var lastGroup = List.last(groups)) {
         Console.println("chunk 4: {List.length(groups)} groups, last has {List.length(lastGroup)}");
     }
+
+    // fill — `count` copies of a value (the element type is inferred); count 0 → empty list.
+    List<int> zeros = List.fill(0, 5);
+    int empty = List.length(List.fill(9, 0));
+    Console.println("fill: {List.length(zeros)} zeros, sum={List.sum(zeros)}, empty len={empty}");
 }

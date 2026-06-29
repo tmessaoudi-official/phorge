@@ -73,6 +73,26 @@ fn list_reverse(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("List.reverse expects (List<T>)".into()),
     }
 }
+/// `fill(value, count) -> List<T>` — a list of `count` copies of `value` (PHP `array_fill(0, …)`;
+/// cf. JS `Array(n).fill(v)`, Dart `List.filled`). `count == 0` is the empty list; a negative count
+/// faults cleanly (PHP `array_fill` `ValueError`, EV-7 — never an over-large alloc from `n as usize`).
+/// Generic: the element type is inferred from `value` at the call site. Named `fill` (not `repeat`) so
+/// its leaf does not collide with `Text.repeat` under UFCS (a generic-subject native matches every
+/// receiver, so a shared leaf would make `x.repeat(n)` ambiguous).
+fn list_fill(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [value, Value::Int(n)] => {
+            if *n < 0 {
+                return Err("List.fill count must be >= 0".into());
+            }
+            Ok(Value::List(std::rc::Rc::new(vec![
+                value.clone();
+                *n as usize
+            ])))
+        }
+        _ => Err("List.fill expects (T, int)".into()),
+    }
+}
 fn list_length(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         // Generic over the element type — the count of any list, byte-identical to PHP `count`.
@@ -334,6 +354,16 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(list_reverse),
             // array_reverse re-indexes a list (sequential keys) — byte-identical to the Rust Vec.
             php: |a| format!("array_reverse({})", parg(a, 0)),
+        },
+        // `fill(value, count) -> List<T>` — `count` copies of `value` (PHP `array_fill`, value last).
+        NativeFn {
+            module: "Core.List",
+            name: "fill",
+            params: vec![t(), Ty::Int],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_fill),
+            php: |a| format!("array_fill(0, {}, {})", parg(a, 1), parg(a, 0)),
         },
         NativeFn {
             module: "Core.List",
