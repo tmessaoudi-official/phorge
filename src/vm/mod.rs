@@ -94,6 +94,20 @@ pub struct Vm<'a> {
     /// `join` reads it); the cooperative driver shares one `Coop` across every task-`Vm` instead.
     /// `Value::Channel`/`Task` carry the `ChanId`/`TaskId` allocated from this scheduler.
     coop: std::rc::Rc<std::cell::RefCell<crate::green::exec::Coop>>,
+    /// Green-thread cooperative cutover (S4.3): the suspension handle of the coroutine *this* task-VM
+    /// runs on. `Some` only inside the cooperative driver ([`coop::run_cooperative_vm`]); `None` on the
+    /// ordinary synchronous run path, where `spawn` is eager and `recv`/`join` fault. The borrow is a
+    /// closure-local of the driver's coroutine body (it shares the program-borrow lifetime `'a`).
+    coop_suspend: Option<&'a dyn crate::green::exec::Suspend>,
+    /// The owning bytecode program, held only by a **cooperative** task-VM so a `SpawnCall` can build a
+    /// fresh child task-VM coroutine (which captures a `'static` `Rc`). `None` on the synchronous path.
+    /// The `program` field above borrows from this same program; this `Rc` keeps it alive for the
+    /// coroutine and clones cheaply into each spawned child.
+    #[cfg_attr(
+        not(all(feature = "green", not(target_arch = "wasm32"))),
+        allow(dead_code)
+    )]
+    program_rc: Option<std::rc::Rc<BytecodeProgram>>,
 }
 
 /// One inline-cache slot (M-perf S2): the `ClassLayout` pointer last seen at a field site and the
@@ -104,6 +118,13 @@ type FieldCache = std::cell::Cell<(*const crate::value::ClassLayout, u32)>;
 // cohesion split (M-Decomp W4): exec/closure clusters.
 mod closure;
 mod exec;
+
+// Cooperative green-thread driver (M6 W4 / S4.3) — native + `green` only (stackful coroutines, which
+// corosensei cannot provide on wasm32; the wasm VM keeps the eager model).
+#[cfg(all(feature = "green", not(target_arch = "wasm32")))]
+mod coop;
+#[cfg(all(feature = "green", not(target_arch = "wasm32")))]
+pub use coop::run_cooperative_vm;
 
 impl<'a> Vm<'a> {
     pub fn new(program: &'a BytecodeProgram) -> Self {
@@ -130,7 +151,25 @@ impl<'a> Vm<'a> {
                 })
                 .collect(),
             coop: std::rc::Rc::new(std::cell::RefCell::new(crate::green::exec::Coop::new())),
+            coop_suspend: None,
+            program_rc: None,
         }
+    }
+
+    /// Build a VM for a cooperative green task (S4.3): same as [`new`](Vm::new) but with a suspension
+    /// handle, sharing `coop` (the scheduler + task results + spawn queue) with every sibling task so
+    /// the shared `green::sched` kernel drives identical interleaving on both backends. The caller sets
+    /// [`program_rc`](Vm::program_rc) so this task can itself `spawn`. Native + `green` only.
+    #[cfg(all(feature = "green", not(target_arch = "wasm32")))]
+    pub(super) fn new_cooperative(
+        program: &'a BytecodeProgram,
+        coop: std::rc::Rc<std::cell::RefCell<crate::green::exec::Coop>>,
+        suspend: &'a dyn crate::green::exec::Suspend,
+    ) -> Self {
+        let mut vm = Vm::new(program);
+        vm.coop = coop;
+        vm.coop_suspend = Some(suspend);
+        vm
     }
 
     /// Execute the program from `main`, returning captured output (`Ok`) or a runtime

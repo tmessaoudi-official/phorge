@@ -270,10 +270,16 @@ impl<'a> Vm<'a> {
                 self.stack.push(Value::Task(id));
             }
             Op::SpawnCall(func_idx, argc) => {
-                // Eager (synchronous path): the call has NOT run yet — run the free function inline now
-                // and register the finished task, byte-identical to the former `<call>; Op::Spawn`. The
-                // cooperative driver (S4.3) overrides this to defer the function as a scheduler task.
                 let args = self.split_off(argc);
+                // Cooperative path (S4.3): defer the free function as a scheduler task rooted at its own
+                // frame (no lambda → trace-identical to the interpreter). Eager path: run it inline now
+                // and register the finished task, byte-identical to the former `<call>; Op::Spawn`.
+                #[cfg(all(feature = "green", not(target_arch = "wasm32")))]
+                if self.coop_suspend.is_some() {
+                    let id = self.spawn_call_cooperative(func_idx, args);
+                    self.stack.push(Value::Task(id));
+                    return Ok(Flow::Next);
+                }
                 let result = self.call_function_value(func_idx, args)?;
                 let id = self.coop.borrow_mut().sched.spawn();
                 self.coop.borrow_mut().results.insert(id, result);
@@ -289,32 +295,59 @@ impl<'a> Vm<'a> {
             Op::ChannelSend => {
                 let value = self.pop();
                 match self.pop() {
-                    Value::Channel(_, buf) => {
+                    Value::Channel(id, buf) => {
                         buf.borrow_mut().push_back(value);
+                        // Cooperative cutover (S4.3): wake the first task blocked receiving on this
+                        // channel (no-op when none waits / on the synchronous path). Mirrors the interp.
+                        if self.coop_suspend.is_some() {
+                            self.coop.borrow_mut().sched.on_send(id);
+                        }
                         self.stack.push(Value::Unit);
                     }
                     v => return Err(format!("cannot send on a {}", v.type_name())),
                 }
             }
             Op::ChannelRecv => match self.pop() {
-                Value::Channel(_, buf) => {
+                // Empty channel: the synchronous path faults; the cooperative path SUSPENDS
+                // (`Trap::Recv`) until a `send` wakes this task, then retries — byte-identical to the
+                // interpreter (`interpreter::coop`) via the shared `green::sched` kernel.
+                Value::Channel(id, buf) => loop {
                     let front = buf.borrow_mut().pop_front();
                     match front {
-                        Some(v) => self.stack.push(v),
-                        // No scheduler to yield to in the eager path — cooperative suspends instead.
-                        None => return Err("recv from empty channel".to_string()),
+                        Some(v) => {
+                            self.stack.push(v);
+                            break;
+                        }
+                        None => match self.coop_suspend {
+                            Some(s) => {
+                                let frag = std::mem::take(&mut self.out);
+                                s.suspend(crate::green::sched::Trap::Recv(id), frag);
+                            }
+                            None => return Err("recv from empty channel".to_string()),
+                        },
                     }
-                }
+                },
                 v => return Err(format!("cannot recv from a {}", v.type_name())),
             },
             Op::Join => match self.pop() {
-                Value::Task(id) => {
+                // Incomplete task: synchronous faults; cooperative SUSPENDS (`Trap::Join`) until the
+                // target completes and the scheduler wakes this joiner, then reads its result.
+                Value::Task(id) => loop {
                     let result = self.coop.borrow().results.get(&id).cloned();
                     match result {
-                        Some(v) => self.stack.push(v),
-                        None => return Err("join on an incomplete task".to_string()),
+                        Some(v) => {
+                            self.stack.push(v);
+                            break;
+                        }
+                        None => match self.coop_suspend {
+                            Some(s) => {
+                                let frag = std::mem::take(&mut self.out);
+                                s.suspend(crate::green::sched::Trap::Join(id), frag);
+                            }
+                            None => return Err("join on an incomplete task".to_string()),
+                        },
                     }
-                }
+                },
                 v => return Err(format!("cannot join a {}", v.type_name())),
             },
 
