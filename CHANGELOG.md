@@ -6,6 +6,14 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `Core.List.chunk` (M4 breadth, charter-compliant)
+
+`Core.List.chunk(List<T>, int) -> List<List<T>>` splits a list into consecutive groups of `size` (the
+last may be shorter); an empty list yields `[]`. The first charter-era addition: subject-first, Tier-1
+deterministic (byte-identity-gated guide example `examples/guide/list-breadth.phg`), and `size < 1`
+faults (a programmer error, not `T?`) byte-identically on both backends. Erases to PHP `array_chunk`.
+No new `Op`/`Value`.
+
 ### Added — M4 standard-library charter (governing policy)
 
 Adopted `docs/specs/2026-06-29-m4-stdlib-charter.md`: the governing policy for every `Core.*` module

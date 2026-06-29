@@ -131,6 +131,27 @@ fn list_drop(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("List.drop expects (List<T>, int)".into()),
     }
 }
+// `chunk(List<T>, int) -> List<List<T>>` — split into consecutive groups of `size`; the last group
+// may be shorter. `size < 1` is a programmer error (charter: fault, not `T?`) — byte-identical
+// `"List.chunk size must be at least 1"` on both backends; PHP `array_chunk` likewise throws on
+// size < 1 (a fault-domain case, excluded from the example oracle). The Ok path mirrors PHP
+// `array_chunk` (re-indexed groups), so an empty list yields `[]`.
+fn list_chunk(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), Value::Int(n)] => {
+            if *n < 1 {
+                return Err("List.chunk size must be at least 1".into());
+            }
+            let size = *n as usize;
+            let groups: Vec<Value> = xs
+                .chunks(size)
+                .map(|g| Value::List(std::rc::Rc::new(g.to_vec())))
+                .collect();
+            Ok(Value::List(std::rc::Rc::new(groups)))
+        }
+        _ => Err("List.chunk expects (List<T>, int)".into()),
+    }
+}
 /// `indexOf(List<T>, T) -> int?` — the index of the first element equal to the needle (structural
 /// `eq_val`, like `contains`), else `null`. Erases to a gated `__phorj_index_of` (PHP `array_search`
 /// returns `false` on miss, mapped to `null`).
@@ -438,6 +459,17 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(list_drop),
             php: |a| format!("array_slice({}, max(0, {}))", parg(a, 0), parg(a, 1)),
+        },
+        // `chunk(List<T>, int) -> List<List<T>>` — consecutive groups of `size` (last may be shorter).
+        // PHP `array_chunk` (re-indexed); `size < 1` faults on both backends (charter §3).
+        NativeFn {
+            module: "Core.List",
+            name: "chunk",
+            params: vec![list(t()), Ty::Int],
+            ret: list(list(t())),
+            pure: true,
+            eval: NativeEval::Pure(list_chunk),
+            php: |a| format!("array_chunk({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `indexOf(List<T>, T) -> int?` — gated `__phorj_index_of` (PHP `array_search` strict → null).
         NativeFn {

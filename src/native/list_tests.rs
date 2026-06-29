@@ -47,6 +47,35 @@ fn list_sort_natural_ascending() {
 }
 
 #[test]
+fn list_chunk_groups_and_faults() {
+    let ints = |ns: &[i64]| Value::List(Rc::new(ns.iter().map(|n| Value::Int(*n)).collect()));
+    let mut o = String::new();
+    // 5 elements / size 2 → [[1,2],[3,4],[5]] (last shorter).
+    match list_chunk(&[ints(&[1, 2, 3, 4, 5]), Value::Int(2)], &mut o).unwrap() {
+        Value::List(groups) => {
+            let lens: Vec<usize> = groups
+                .iter()
+                .map(|g| match g {
+                    Value::List(xs) => xs.len(),
+                    _ => 999,
+                })
+                .collect();
+            assert_eq!(lens, vec![2, 2, 1]);
+        }
+        other => panic!("chunk returned {other:?}"),
+    }
+    // Empty list → no groups.
+    assert!(
+        matches!(list_chunk(&[ints(&[]), Value::Int(3)], &mut o), Ok(Value::List(g)) if g.is_empty())
+    );
+    // size < 1 is a clean fault (charter §3), byte-identical on both backends.
+    match list_chunk(&[ints(&[1, 2]), Value::Int(0)], &mut o) {
+        Err(msg) => assert_eq!(msg, "List.chunk size must be at least 1"),
+        other => panic!("expected a fault, got {other:?}"),
+    }
+}
+
+#[test]
 fn list_sort_with_comparator_and_fault_parity() {
     let nums = Value::List(Rc::new(vec![Value::Int(3), Value::Int(1), Value::Int(2)]));
     let placeholder = Value::Int(0); // stands in for the closure value (eval passes it to `call`)

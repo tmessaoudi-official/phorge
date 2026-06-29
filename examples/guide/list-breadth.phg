@@ -37,4 +37,10 @@ function main(): void {
     int afterTwo = List.sum(List.drop(xs, 2));
     int dropAll = List.length(List.drop(xs, 999));
     Console.println("take 2 sum={firstTwo}, drop 2 sum={afterTwo}, drop 999 len={dropAll}");
+
+    // chunk — consecutive groups of N (last may be shorter); returns List<List<T>>.
+    List<List<int>> groups = List.chunk(xs, 4);
+    if (var lastGroup = List.last(groups)) {
+        Console.println("chunk 4: {List.length(groups)} groups, last has {List.length(lastGroup)}");
+    }
 }
