@@ -262,6 +262,9 @@ struct Transpiler {
     /// Set when `Core.List.indexOf` is emitted — defines `__phorj_index_of`, which maps PHP
     /// `array_search`'s `false`-on-miss to `null` (the `int?` return).
     uses_list_index_of: bool,
+    /// Set when `Core.List.lastIndexOf` is emitted — defines `__phorj_last_index_of`, the LAST-match
+    /// companion to `__phorj_index_of` (PHP `array_keys($xs, $needle, true)` → last key, or `null`).
+    uses_list_last_index_of: bool,
     /// Set when `Core.Text.indexOf` is emitted — defines `__phorj_text_index_of`, mapping PHP
     /// `strpos`'s `false`-on-miss to `null` (the `int?` return).
     uses_text_index_of: bool,
@@ -522,6 +525,7 @@ impl Transpiler {
             uses_map_set: false,
             uses_map_remove: false,
             uses_list_index_of: false,
+            uses_list_last_index_of: false,
             uses_text_index_of: false,
             uses_text_parse_float: false,
             uses_dec_add: false,

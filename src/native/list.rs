@@ -184,6 +184,19 @@ fn list_index_of(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("List.indexOf expects (List<T>, T)".into()),
     }
 }
+/// `lastIndexOf(List<T>, T) -> int?` — the index of the LAST element equal to the needle (structural
+/// `eq_val`, like `indexOf`/`contains`), else `null`. The symmetric companion to `indexOf` (mirrors
+/// `Core.Text.lastIndexOf`). Erases to a gated `__phorj_last_index_of` (PHP `array_keys($xs, $needle,
+/// true)` → last key, or `null` when none match).
+fn list_last_index_of(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), needle] => Ok(xs
+            .iter()
+            .rposition(|x| x.eq_val(needle))
+            .map_or(Value::Null, |i| Value::Int(i as i64))),
+        _ => Err("List.lastIndexOf expects (List<T>, T)".into()),
+    }
+}
 /// `concat(List<T>, List<T>) -> List<T>` — the two lists joined (PHP `array_merge`, which re-indexes
 /// sequential lists). A fresh list; both inputs are untouched (immutability).
 fn list_concat(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -510,6 +523,17 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(list_index_of),
             php: |a| format!("__phorj_index_of({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        // `lastIndexOf(List<T>, T) -> int?` — gated `__phorj_last_index_of` (PHP `array_keys` strict →
+        // last key, or null). The symmetric companion to `indexOf`.
+        NativeFn {
+            module: "Core.List",
+            name: "lastIndexOf",
+            params: vec![list(t()), t()],
+            ret: Ty::Optional(Box::new(Ty::Int)),
+            pure: true,
+            eval: NativeEval::Pure(list_last_index_of),
+            php: |a| format!("__phorj_last_index_of({}, {})", parg(a, 0), parg(a, 1)),
         },
         // `concat(List<T>, List<T>) -> List<T>` — PHP `array_merge` (re-indexes sequential lists).
         NativeFn {

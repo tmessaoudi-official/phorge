@@ -48,4 +48,9 @@ function main(): void {
     List<int> zeros = List.fill(0, 5);
     int empty = List.length(List.fill(9, 0));
     Console.println("fill: {List.length(zeros)} zeros, sum={List.sum(zeros)}, empty len={empty}");
+
+    // indexOf / lastIndexOf — first vs last position of a value (structural match), null when absent.
+    // `1` appears at indices 1 and 3; `5` at 4 and 8; `7` is absent.
+    Console.println("first 1={List.indexOf(xs, 1) ?? -1}, last 1={List.lastIndexOf(xs, 1) ?? -1}");
+    Console.println("last 5={List.lastIndexOf(xs, 5) ?? -1}, last 7={List.lastIndexOf(xs, 7) ?? -1}");
 }

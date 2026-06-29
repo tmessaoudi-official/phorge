@@ -265,6 +265,27 @@ fn list_breadth_slice_indexof_concat_first_last() {
         list_index_of(&[nums(), Value::Int(99)], &mut o).unwrap(),
         Value::Null
     ));
+    // lastIndexOf: LAST match → int (vs indexOf's first), miss → null. `[10,20,30,20,50]`: 20 first
+    // at 1, last at 3.
+    let dups = Value::List(std::rc::Rc::new(vec![
+        Value::Int(10),
+        Value::Int(20),
+        Value::Int(30),
+        Value::Int(20),
+        Value::Int(50),
+    ]));
+    assert!(matches!(
+        list_index_of(&[dups.clone(), Value::Int(20)], &mut o).unwrap(),
+        Value::Int(1)
+    ));
+    assert!(matches!(
+        list_last_index_of(&[dups.clone(), Value::Int(20)], &mut o).unwrap(),
+        Value::Int(3)
+    ));
+    assert!(matches!(
+        list_last_index_of(&[dups, Value::Int(99)], &mut o).unwrap(),
+        Value::Null
+    ));
     // concat: joins; both inputs unchanged.
     let a = Value::List(std::rc::Rc::new(vec![Value::Int(1), Value::Int(2)]));
     let b = Value::List(std::rc::Rc::new(vec![Value::Int(3)]));

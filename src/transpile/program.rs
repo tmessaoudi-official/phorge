@@ -1138,6 +1138,16 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        if self.uses_list_last_index_of {
+            // PHP `array_keys($xs, $needle, true)` returns every strict-matching key; the last one is
+            // the last index (or `null` when none match) — the LAST-match companion to `__phorj_index_of`.
+            self.line("function __phorj_last_index_of($xs, $needle) {");
+            self.indent += 1;
+            self.line("$ks = array_keys($xs, $needle, true);");
+            self.line("return empty($ks) ? null : end($ks);");
+            self.indent -= 1;
+            self.line("}");
+        }
         if self.uses_text_index_of {
             // PHP `strpos` returns the byte offset or `false` (note: 0 is a valid offset); map only
             // `false` to `null` for the `int?` return.
