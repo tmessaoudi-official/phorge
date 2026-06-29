@@ -433,6 +433,19 @@ pub struct Checker {
     /// Merged into the combined call-rewrite map and applied by [`rewrite_ufcs`] (whose `rexpr` gains an
     /// `OverloadSelect` arm), so no backend sees the selector wrapper. No new `Op`/`Value`.
     overload_resolutions: HashMap<usize, crate::ast::Expr>,
+    /// Return-type-overload classification for **methods** (M-RT S2.2), built by
+    /// [`Self::finalize_method_overloads`] — the method analog of [`Self::return_overload_sets`],
+    /// keyed by `(class, method)`. A `(class, method)` is a *pure return-overload method set* when it
+    /// has ≥2 overloads sharing one parameter signature with pairwise-distinct returns. A bare call to
+    /// such a method needs a `<Type>` selector (C1, like free functions without a sink) or it is
+    /// `E-OVERLOAD-NO-CONTEXT`; the selector path mangles per return before any backend. Empty for the
+    /// common case (no return-overloaded method).
+    return_overload_methods: HashMap<(String, String), Vec<(Ty, String)>>,
+    /// Method declaration sites accumulated during collection — `(class, method, decl span, resolved
+    /// params, resolved ret)` — so [`Self::finalize_method_overloads`] can emit a span-keyed rename for
+    /// each member of a return-overload method set (reusing [`Self::overload_def_renames`], the same map
+    /// the free-fn members use; method and free-fn decl spans are disjoint).
+    method_fn_decls: Vec<(String, String, Span, Vec<Ty>, Ty)>,
     /// Inheritance tables for `parent`/super resolution (M-RT super/parent), computed once in
     /// [`Self::collect`]: direct parents, transitive ancestors (MRO), and the method-dispatch origins.
     /// Threaded to `ast::resolve_parent_method`, the single resolver shared with both backends.
@@ -498,6 +511,8 @@ impl Checker {
             free_fn_decls: Vec::new(),
             overload_def_renames: HashMap::new(),
             overload_resolutions: HashMap::new(),
+            return_overload_methods: HashMap::new(),
+            method_fn_decls: Vec::new(),
             parent_parents: std::collections::BTreeMap::new(),
             parent_mro: std::collections::BTreeMap::new(),
             parent_origins: std::collections::BTreeMap::new(),
@@ -694,6 +709,8 @@ fn run_checker_mode(program: &Program, test_mode: bool) -> Checker {
     // M-RT Slice C1: classify return-overload sets (after collection sees every signature, before any
     // body is checked, so call-checking can resolve a `<Type>` selector against the set).
     c.finalize_overloads();
+    // M-RT S2.2: classify return-overload *method* sets too (same timing/discipline as free fns).
+    c.finalize_method_overloads();
     c.check_program(program);
     c
 }

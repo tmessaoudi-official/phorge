@@ -1,0 +1,58 @@
+package Main;
+
+import Core.Console;
+
+// Method return-type overloading (M-RT S2.2): like free functions (see `return-overloading.phg`), a
+// class METHOD may overload on return type alone — several methods sharing a name AND parameter
+// signature, differing only in RETURN type. PHP has no overloading and cannot see the caller's
+// expected type at runtime, so a return-overload is resolved entirely at COMPILE TIME and each member
+// is emitted as a distinct PHP method (`read__ret_int` / `read__ret_bool` / …). No new bytecode op —
+// `run`, `runvm`, and the transpiled PHP stay byte-identical.
+//
+// Unlike free functions (which can resolve a bare call from a typed binding or `return`), a method
+// return-overload is resolved ONLY by an explicit `<Type>` selector this slice (C1 scope): an
+// angle-bracketed type immediately before the call. It is NOT a value cast — `as` is.
+class Config {
+    constructor(public string env) {}
+
+    // One key, parsed into three different value types — identical parameter (`string`), distinct
+    // return types (`int` / `bool` / `string`). A return-type overload set.
+    function read(string key) -> int {
+        return 8080;
+    }
+
+    function read(string key) -> bool {
+        return true;
+    }
+
+    function read(string key) -> string {
+        return "{this.env}:{key}";
+    }
+
+    // A selector works on a `this`-receiver too, from inside another method — it picks the `: string`
+    // member regardless of the surrounding context.
+    function label(string key) -> string {
+        return <string>this.read(key);
+    }
+}
+
+function main() -> void {
+    Config c = new Config("prod");
+
+    // Each selector names which overload's return type the call must produce.
+    int port = <int>c.read("port");
+    bool debug = <bool>c.read("debug");
+    string raw = <string>c.read("name");
+
+    Console.println("port = {port}");
+    // port = 8080
+    Console.println("debug = {debug}");
+    // debug = true
+    Console.println("raw = {raw}");
+    // raw = prod:name
+
+    // `label` shows a selector on `this` from inside another method (no surrounding typed sink).
+    string viaThis = c.label("db");
+    Console.println("via this = {viaThis}");
+    // via this = prod:db
+}

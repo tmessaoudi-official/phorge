@@ -13,7 +13,11 @@
 //! parameter signature; mixing parameter- and return-overloading is rejected (`E-OVERLOAD-RETURN`).
 
 use super::*;
-use crate::ast::{Expr, Item, Program, Type};
+use crate::ast::{ClassMember, Expr, Item, Program, Type};
+
+/// One method declaration grouped by `(class, method)` for return-overload classification:
+/// `(decl span, resolved params, resolved return)`. See [`Checker::finalize_method_overloads`].
+type MethodOverloadDecl = (Span, Vec<Ty>, Ty);
 
 impl Checker {
     /// Deterministic mangled name for one return-overload member: `f__ret_<slug(ret)>`. The slug keeps
@@ -79,6 +83,230 @@ impl Checker {
         }
     }
 
+    /// Classify return-overload **method** sets (M-RT S2.2), the method analog of
+    /// [`Self::finalize_overloads`]. Grouped by `(class, method)`: a set with ≥2 overloads sharing one
+    /// parameter signature and pairwise-distinct returns is a *pure return-overload method set* — its
+    /// `(ret, mangled)` members are recorded for selector resolution and each declaration is queued for
+    /// a per-decl mangled rename in the shared `overload_def_renames` map (method decl spans are
+    /// disjoint from free-fn ones, so the two never collide). A different-parameter set is a normal
+    /// runtime-dispatched parameter-overload set and is left untouched; a repeated return is a
+    /// duplicate (already an error) and is never classified. Runs after [`Self::finalize_overloads`].
+    pub(super) fn finalize_method_overloads(&mut self) {
+        use std::collections::BTreeMap;
+        let mut groups: BTreeMap<(String, String), Vec<MethodOverloadDecl>> = BTreeMap::new();
+        for (cls, m, span, params, ret) in &self.method_fn_decls {
+            groups.entry((cls.clone(), m.clone())).or_default().push((
+                *span,
+                params.clone(),
+                ret.clone(),
+            ));
+        }
+        for ((cls, m), decls) in groups {
+            if decls.len() < 2 {
+                continue;
+            }
+            let first = &decls[0].1;
+            if !decls.iter().all(|(_, p, _)| p == first) {
+                continue; // parameter-overload set — runtime dispatched, not return-overloaded
+            }
+            let rets: Vec<Ty> = decls.iter().map(|(_, _, r)| r.clone()).collect();
+            if !rets.iter().enumerate().all(|(i, r)| !rets[..i].contains(r)) {
+                continue; // a repeated return is a duplicate (already an error) — do not classify
+            }
+            let members: Vec<(Ty, String)> = rets
+                .iter()
+                .map(|r| (r.clone(), Self::ret_overload_mangle(&m, r)))
+                .collect();
+            self.return_overload_methods
+                .insert((cls, m.clone()), members);
+            for (span, _, ret) in &decls {
+                self.overload_def_renames
+                    .insert(span.start, Self::ret_overload_mangle(&m, ret));
+            }
+        }
+    }
+
+    /// Whether `(class, method)` is a return-overload method set (M-RT S2.2) — consulted by
+    /// `check_method_call` so a *bare* (selector-less) call to such a method is `E-OVERLOAD-NO-CONTEXT`
+    /// (C1 scope: methods need an explicit `<Type>` selector, like free functions without a sink).
+    pub(super) fn is_return_overload_method(&self, cls: &str, method: &str) -> bool {
+        self.return_overload_methods
+            .contains_key(&(cls.to_string(), method.to_string()))
+    }
+
+    /// Resolve a method return-overload selector `<Type>obj.m(args)` (M-RT S2.2). Resolves the
+    /// receiver's static class, picks the member of `(class, m)` whose (instance-substituted) return
+    /// type the selector names, type-checks the arguments against the shared parameter signature,
+    /// discharges the chosen member's checked exceptions, records a rewrite to a *method* call on the
+    /// mangled name (`obj.m__ret_int(args)`, preserving the receiver), and returns the chosen return
+    /// type. The receiver must be a class instance whose method is return-overloaded — anything else is
+    /// `E-OVERLOAD-SELECT-UNKNOWN`.
+    #[allow(clippy::too_many_arguments)]
+    fn resolve_method_return_overload(
+        &mut self,
+        object: &Expr,
+        method: &str,
+        safe: bool,
+        args: &[Expr],
+        call_span: Span,
+        rewrite_key: usize,
+        sel: &Ty,
+        skip_throws: bool,
+    ) -> Ty {
+        let obj_ty = self.check_expr(object);
+        let (cls, cargs) = match &obj_ty {
+            Ty::Named(c, a) => (c.clone(), a.clone()),
+            Ty::Error => {
+                for a in args {
+                    self.check_expr(a);
+                }
+                return Ty::Error;
+            }
+            _ => {
+                for a in args {
+                    self.check_expr(a);
+                }
+                return self.err_coded(
+                    call_span,
+                    format!("`<{sel}>` selects a method return-overload, but the receiver `{obj_ty}` is not a class instance"),
+                    "E-OVERLOAD-SELECT-UNKNOWN",
+                    Some("a method overload selector applies to `<Type>instance.method(args)` where `method` is return-type-overloaded".into()),
+                );
+            }
+        };
+        let members = match self
+            .return_overload_methods
+            .get(&(cls.clone(), method.to_string()))
+        {
+            Some(m) => m.clone(),
+            None => {
+                for a in args {
+                    self.check_expr(a);
+                }
+                return self.err_coded(
+                    call_span,
+                    format!("`<{sel}>` selects a return-overload, but method `{method}` on `{cls}` is not return-type-overloaded"),
+                    "E-OVERLOAD-SELECT-UNKNOWN",
+                    Some("a method overload selector applies only to a method declared with several return types over identical parameters".into()),
+                );
+            }
+        };
+        // A `private`/`protected` method called from outside its scope is rejected exactly as on the
+        // bare-call path (the selector must not bypass visibility).
+        let v = self
+            .classes
+            .get(&cls)
+            .and_then(|i| i.method_vis.get(method).cloned());
+        self.enforce_member_vis(v, method, call_span, false);
+        // Arity + assignability against the shared parameter signature, substituting the instance's
+        // class type arguments (`Box<int>` ⇒ `{T → int}`) — the identity for a non-generic class.
+        let theta = self.class_subst(&cls, &cargs);
+        let params: Vec<Ty> = self.classes[&cls].methods[method][0]
+            .params
+            .iter()
+            .map(|p| apply_subst(p, &theta))
+            .collect();
+        let arg_tys: Vec<Ty> = args.iter().map(|a| self.check_expr(a)).collect();
+        let arity_ok = params.len() == arg_tys.len()
+            && params
+                .iter()
+                .zip(&arg_tys)
+                .all(|(p, a)| self.ty_assignable(a, p));
+        if !arity_ok {
+            let got = arg_tys
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ");
+            return self.err_coded(
+                call_span,
+                format!("no overload of method `{method}` accepts arguments `({got})`"),
+                "E-OVERLOAD-NO-MATCH",
+                Some("the argument types must match the overload's parameter types".into()),
+            );
+        }
+        // Pick the member by the *substituted* return type (exact → unique assignable). The mangled
+        // name stays keyed on the DECLARED return (matching `finalize_method_overloads`/the rename), so
+        // carry the declared return alongside for throws discharge.
+        let cands: Vec<(Ty, Ty, String)> = members
+            .iter()
+            .map(|(decl_ret, mangled)| {
+                (
+                    apply_subst(decl_ret, &theta),
+                    decl_ret.clone(),
+                    mangled.clone(),
+                )
+            })
+            .collect();
+        let exact: Vec<&(Ty, Ty, String)> = cands.iter().filter(|(s, _, _)| s == sel).collect();
+        let chosen = if exact.len() == 1 {
+            exact[0].clone()
+        } else {
+            let assignable: Vec<&(Ty, Ty, String)> = cands
+                .iter()
+                .filter(|(s, _, _)| self.ty_assignable(s, sel))
+                .collect();
+            match assignable.len() {
+                1 => assignable[0].clone(),
+                0 => {
+                    let have = members
+                        .iter()
+                        .map(|(r, _)| r.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    return self.err_coded(
+                        call_span,
+                        format!("method `{method}` on `{cls}` has no overload returning `{sel}` (returns: {have})"),
+                        "E-OVERLOAD-SELECT-UNKNOWN",
+                        Some("name a return type one of the overloads actually has".into()),
+                    );
+                }
+                _ => {
+                    let have = members
+                        .iter()
+                        .map(|(r, _)| r.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    return self.err_coded(
+                        call_span,
+                        format!("method `{method}` on `{cls}` has no unique overload whose return type is `{sel}` (returns: {have})"),
+                        "E-OVERLOAD-AMBIGUOUS-RETURN",
+                        Some("add an explicit `<Type>` selector naming the exact return type you want".into()),
+                    );
+                }
+            }
+        };
+        // Discharge the chosen member's checked exceptions (the sig whose DECLARED return matches),
+        // unless under `?`-propagation.
+        if !skip_throws {
+            if let Some(sig) = self.classes[&cls].methods[method]
+                .iter()
+                .find(|s| s.ret == chosen.1)
+            {
+                for e in sig.throws.clone() {
+                    self.discharge_call_throw(method, &apply_subst(&e, &theta), call_span);
+                }
+            }
+        }
+        // Record the resolved rewrite: a method call on the mangled name, preserving the receiver and
+        // null-safety. Keyed by `rewrite_key` (the selector node's span). `apply_repl` re-walks the
+        // embedded receiver/args without re-matching the key.
+        self.overload_resolutions.insert(
+            rewrite_key,
+            Expr::Call {
+                callee: Box::new(Expr::Member {
+                    object: Box::new(object.clone()),
+                    name: chosen.2.clone(),
+                    safe,
+                    span: call_span,
+                }),
+                args: args.to_vec(),
+                span: call_span,
+            },
+        );
+        chosen.0
+    }
+
     /// Resolve a `<Type>f(args)` overload selector (M-RT Slice C1). The selector picks the
     /// return-overload of the free function `f` whose return type the selector names, records the
     /// mangled call-site rewrite, and returns the chosen member's return type. The selector is valid
@@ -95,13 +323,32 @@ impl Checker {
         let (name, args, call_span) = match call {
             Expr::Call { callee, args, span } => match &**callee {
                 Expr::Ident(n, _) => (n.clone(), args.clone(), *span),
+                // M-RT S2.2: `<Type>obj.m(args)` — a method return-overload selector. Resolved against
+                // the receiver's class (the free-fn arms below never see a method callee).
+                Expr::Member {
+                    object,
+                    name: m,
+                    safe,
+                    ..
+                } => {
+                    return self.resolve_method_return_overload(
+                        object,
+                        m,
+                        *safe,
+                        args,
+                        *span,
+                        select_span.start,
+                        &sel,
+                        skip_throws,
+                    );
+                }
                 _ => {
                     self.check_expr(call);
                     return self.err_coded(
                         select_span,
-                        format!("`<{sel}>` is a return-overload selector and applies only to a direct function call"),
+                        format!("`<{sel}>` is a return-overload selector and applies only to a direct function or method call"),
                         "E-OVERLOAD-SELECT-UNKNOWN",
-                        Some("method-call and indirect selectors are not supported — call a return-overloaded free function directly".into()),
+                        Some("indirect selectors are not supported — call a return-overloaded free function or method directly".into()),
                     );
                 }
             },
@@ -316,8 +563,22 @@ pub fn rename_overload_defs(program: Program, renames: &HashMap<usize, String>) 
                 }
                 Item::Function(f)
             }
-            // Methods are never return-overloaded in C1; classes (and every other item) are returned
-            // untouched. (A future return-overloaded-method slice would extend this pass.)
+            // M-RT S2.2: a class may hold return-overloaded *methods*; rename each method member whose
+            // declaration span is in the map to its mangled name (`m__ret_int`). The resolved selector
+            // call sites were rewritten to the same mangled names by `rewrite_ufcs`, so dispatch on the
+            // mangled `(class, name)` stays consistent across all backends. A no-op for a class with no
+            // return-overloaded method.
+            Item::Class(mut c) => {
+                for member in &mut c.members {
+                    if let ClassMember::Method(f) = member {
+                        if let Some(mangled) = renames.get(&f.span.start) {
+                            f.name = mangled.clone();
+                        }
+                    }
+                }
+                Item::Class(c)
+            }
+            // Every other item (enum, interface, trait, type alias, …) is returned untouched.
             other => other,
         })
         .collect();

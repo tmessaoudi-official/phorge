@@ -1656,6 +1656,43 @@ fn overloaded_methods_agree() {
 }
 
 #[test]
+fn overloaded_methods_return_type_agree() {
+    // M-RT S2.2: method return-type overloading — a method may overload on return type alone
+    // (identical params, distinct returns), resolved at compile time by a `<Type>` selector and
+    // mangled per return type before any backend (no new Op/Value). Byte-identical on both backends
+    // AND real PHP — and the program actually RUNS (output asserted, not merely backend agreement).
+    agree_out_php(
+        "import Core.Console; \
+           class Config { \
+             constructor(public string tag) {} \
+             function read(string k)->int { return 42; } \
+             function read(string k)->bool { return true; } \
+             function read(string k)->string { return \"{this.tag}:{k}\"; } \
+           } \
+           function main()-> void { Config c=new Config(\"C\"); \
+             int i = <int>c.read(\"a\"); bool b = <bool>c.read(\"b\"); string s = <string>c.read(\"c\"); \
+             Console.println(\"{i} {b} {s}\"); }",
+        "42 true C:c\n",
+        "method_return_overload_basic",
+    );
+    // The selector also works directly in an interpolation (no surrounding typed sink) and on a
+    // `this`-receiver from inside another method — both resolve to distinct mangled methods.
+    agree_out_php(
+        "import Core.Console; \
+           class Box { \
+             constructor(public int v) {} \
+             function get()->int { return this.v; } \
+             function get()->string { return \"v={this.v}\"; } \
+             function describe()->string { return <string>this.get(); } \
+           } \
+           function main()-> void { Box b=new Box(9); \
+             Console.println(\"{<int>b.get()} / {b.describe()}\"); }",
+        "9 / v=9\n",
+        "method_return_overload_this_and_interp",
+    );
+}
+
+#[test]
 fn ambiguous_overloaded_call_faults_on_both_backends() {
     // A multi-argument cross-cutting overload set with no unique most-specific match for the call is
     // a clean runtime fault — and the SAME fault on both backends (byte-identical message → same

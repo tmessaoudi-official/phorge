@@ -1089,6 +1089,21 @@ impl Checker {
                 let theta = self.class_subst(&cls, &cargs);
                 match sigs {
                     Some(sigs) => {
+                        // M-RT S2.2: a bare (selector-less) return-overloaded method call has no type
+                        // context to pick a member — C1 requires a `<Type>` selector at the call site.
+                        // The selector path resolves via `resolve_method_return_overload` and never
+                        // funnels here, so any return-overload method reaching this point is bare.
+                        if self.is_return_overload_method(&cls, name) {
+                            for a in args {
+                                self.check_expr(a);
+                            }
+                            return self.err_coded(
+                                span,
+                                format!("call to return-type-overloaded method `{name}` has no type context to pick an overload"),
+                                "E-OVERLOAD-NO-CONTEXT",
+                                Some(format!("add a return-type selector — `<Type>receiver.{name}(…)` — naming which overload's return type you want")),
+                            );
+                        }
                         // Wave 1.1: a `private`/`protected` method called from outside its scope is
                         // rejected (interface methods have no `method_vis` entry ⇒ public ⇒ no-op).
                         let v = self

@@ -86,6 +86,50 @@ fn has_code(errs: &[phorj::diagnostic::Diagnostic], code: &str) -> bool {
     errs.iter().any(|e| e.code == Some(code))
 }
 
+// ── M-RT S2.2: method return-type overloading ─────────────────────────────────────────────────
+
+#[test]
+fn bare_return_overloaded_method_call_needs_selector() {
+    // A bare return-overloaded method call has no type context to pick a member — C1 scope requires
+    // a `<Type>` selector at the call site (same rule free functions have without a sink).
+    let src = "package Main;\n\
+        class C { constructor() {} function f()->int { return 1; } function f()->bool { return true; } }\n\
+        function main() -> void { var c = new C(); discard c.f(); }\n";
+    let errs = check_src(src).expect_err("bare return-overloaded method call");
+    assert!(has_code(&errs, "E-OVERLOAD-NO-CONTEXT"), "{errs:?}");
+}
+
+#[test]
+fn selector_picks_return_overloaded_method() {
+    // The `<Type>` selector resolves the method overload by return type — clean check.
+    let src = "package Main;\n\
+        class C { constructor() {} function f()->int { return 1; } function f()->bool { return true; } }\n\
+        function main() -> void { var c = new C(); int n = <int>c.f(); bool b = <bool>c.f(); }\n";
+    assert!(check_src(src).is_ok(), "{:?}", check_src(src));
+}
+
+#[test]
+fn static_methods_cannot_return_overload() {
+    // Return-overloading is instance-only this slice: a `static` call `ClassName.m(args)` has no
+    // `<Type>` selector path, so a static return-overload would mangle its def with no call rewrite.
+    // Statics keep the classic shared-return rule → E-OVERLOAD-RETURN.
+    let src = "package Main;\n\
+        class C { static function f()->int { return 1; } static function f()->bool { return true; } }\n\
+        function main() -> void {}\n";
+    let errs = check_src(src).expect_err("static return-overload");
+    assert!(has_code(&errs, "E-OVERLOAD-RETURN"), "{errs:?}");
+}
+
+#[test]
+fn selector_unknown_return_on_method_is_rejected() {
+    // A selector naming a return type no overload has is E-OVERLOAD-SELECT-UNKNOWN.
+    let src = "package Main;\n\
+        class C { constructor() {} function f()->int { return 1; } function f()->bool { return true; } }\n\
+        function main() -> void { var c = new C(); string s = <string>c.f(); }\n";
+    let errs = check_src(src).expect_err("unknown return selector");
+    assert!(has_code(&errs, "E-OVERLOAD-SELECT-UNKNOWN"), "{errs:?}");
+}
+
 #[test]
 fn route_attribute_well_formed_checks_clean() {
     // The raw `check` path does not inject the Core.Http prelude (that is `cli::check_and_expand`),

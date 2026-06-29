@@ -468,8 +468,16 @@ Dynamic multiple dispatch over free functions and class methods ships and is byt
   may share a name AND parameter signature, differing only in return type, resolved at compile time by
   an explicit `<Type>f(args)` selector and mangled per return before any backend
   (`examples/guide/return-overloading.phg`, byte-identical `run ≡ runvm ≡ real PHP`). Remaining C1
-  deferrals: (1) **methods** are not return-overloadable yet — the classic shared-return rule still
-  applies to class methods (`E-OVERLOAD-RETURN`); (2) **C2 sink-widening is partial** — a *typed
+  deferrals: (1) **methods SHIPPED** (M-RT S2.2, 2026-06-29): a class method may now return-overload too
+  (`examples/guide/method-return-overloading.phg`), resolved by a `<Type>receiver.m(args)` selector and
+  mangled per return (`read__ret_int`), byte-identical `run ≡ runvm ≡ real PHP`, no new `Op`. Method
+  scope is **C1-equivalent** (deliberately tighter than free fns): the selector is the ONLY resolving
+  context — a bare method overload call is `E-OVERLOAD-NO-CONTEXT` even at a typed binding/`return`
+  (no C2 sink for methods yet); a **single declaring class** only — a return-overloaded method
+  overridden across an `extends`/interface hierarchy (a base-typed receiver resolving the mangled name
+  through a subclass) is not yet handled and is a follow-up; and a return-overloaded method on a
+  *generic* class works for concrete-return members (the type param is substituted at the selector) but
+  a member returning the bare class param is not selectable; (2) **C2 sink-widening is partial** — a *typed
   binding* and a *`return`* now resolve a selector-less call from their declared type, but the remaining
   sinks (typed *reassignment* `x = f()`, typed *field write* `this.f = f()`, *argument* to a
   non-overloaded typed parameter) still need a `<Type>` selector, and `E-OVERLOAD-SELECT-CONFLICT`

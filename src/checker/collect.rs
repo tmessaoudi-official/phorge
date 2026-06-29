@@ -1650,8 +1650,32 @@ impl Checker {
                         is_static: f.modifiers.contains(&Modifier::Static),
                     };
                     let existing = methods.get(&f.name).cloned().unwrap_or_default();
-                    // Methods are not return-overloadable in C1 (the classic shared-return rule).
-                    self.validate_new_overload(&existing, &sig, &f.name, f.span, "method", false);
+                    // M-RT S2.2: INSTANCE methods may return-overload (identical params, distinct
+                    // returns), resolved by a `<Type>` selector and mangled per return before any
+                    // backend — exactly like free functions. The same soundness guards apply (a set is
+                    // EITHER a parameter-overload set OR a pure return-overload set, never mixed;
+                    // identical params AND return is still a duplicate). `static` methods are excluded
+                    // (`allow_return_overload = !is_static`): a static call is `ClassName.m(args)`,
+                    // dispatched by `check_static_method_call` which has no `<Type>` selector path — a
+                    // return-overloaded static would mangle its definition with no matching call-site
+                    // rewrite. So statics keep the classic shared-return rule (`E-OVERLOAD-RETURN`).
+                    self.validate_new_overload(
+                        &existing,
+                        &sig,
+                        &f.name,
+                        f.span,
+                        "method",
+                        !sig.is_static,
+                    );
+                    // Record the declaration site so `finalize_method_overloads` can emit a per-decl
+                    // mangled rename (reuses `overload_def_renames`; method/free-fn spans are disjoint).
+                    self.method_fn_decls.push((
+                        c.name.clone(),
+                        f.name.clone(),
+                        f.span,
+                        sig.params.clone(),
+                        sig.ret.clone(),
+                    ));
                     methods.entry(f.name.clone()).or_default().push(sig);
                     // First-declared overload's visibility represents the method name (Wave 1.1).
                     method_vis
