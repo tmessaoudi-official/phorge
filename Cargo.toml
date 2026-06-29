@@ -26,18 +26,36 @@ path = "src/main.rs"
 # rolling-your-own is the anti-pattern: audited crypto, and a ReDoS-safe regex engine. Each is behind
 # a feature so the WASM playground builds without it (docs/specs/2026-06-27-dependency-policy.md).
 [features]
-default = ["crypto", "regex", "signals"]
+default = ["crypto", "regex", "signals", "green"]
 crypto = ["dep:argon2"]
 regex = ["dep:regex"]
 # `phg serve` graceful shutdown (M6 W4 / S4.2): SIGINT/SIGTERM → drain in-flight → exit 0. Off for the
 # WASM playground (no sockets, no signals). See docs/specs/2026-06-27-dependency-policy.md (3rd domain).
 signals = ["dep:ctrlc"]
+# Green-thread cooperative concurrency (M6 W4 / S4.3): `spawn` + channels run each task on a stackful
+# coroutine driven by the shared `green::sched` scheduler. The coroutine primitive is `corosensei`
+# (4th dependency) — std has no stackful-coroutine primitive and the only std-native path is hand-rolled
+# `unsafe` stack-switching, which `corosensei` confines out of phorj's `#![forbid(unsafe_code)]` (the
+# same ctrlc criterion). NATIVE-ONLY: corosensei does not compile on wasm32 (no native stack to switch),
+# so the feature is off for the WASM playground, where the interpreter delegates task execution to the
+# VM's frame-swap instead. See docs/specs/2026-06-29-m6-w4-green-threads-design.md §4b.
+green = ["dep:corosensei"]
 
 [dependencies]
 # FIRST external dependency (RustCrypto, audited). Powers `Core.Crypto` (Argon2id password hashing) —
 # a domain where rolling your own is the security anti-pattern and std has no equivalent. `std` enables
 # the OS RNG (`OsRng`) for salt generation; feature-gated off for the playground.
 argon2 = { version = "0.5", optional = true, features = ["std"] }
+
+# FOURTH external dependency (Amanieu d'Antras — author of hashbrown/parking_lot, in the Rust nursery;
+# stackful coroutines with miri-tested context switching). Powers green-thread task suspension (M6 W4):
+# each `spawn`ned task runs on its own stack and yields at `recv`/`join`/`yield`. std has no
+# stackful-coroutine primitive; the alternative is hand-rolled `unsafe` register/stack switching, which
+# this crate confines outside phorj's `#![forbid(unsafe_code)]`. A low-level *primitive*, NOT an async
+# runtime (tokio et al. stay disallowed). Native-only — wasm32 has no native stack to switch (verified:
+# corosensei fails to compile there), so the dep is gated to non-wasm targets and the `green` feature.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+corosensei = { version = "0.3", optional = true }
 
 # SECOND external dependency (Rust project / BurntSushi, exhaustively fuzzed). Powers `Core.Regex` —
 # a RE2-style finite-automaton engine with guaranteed linear-time matching (ReDoS-immune by

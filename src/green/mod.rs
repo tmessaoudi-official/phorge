@@ -13,3 +13,7 @@
 //! This module currently contains only the kernel; the executor wiring lands in the next build steps.
 
 pub mod sched;
+
+// S4.3 step-3 gating spike (feasibility probe; compiled only under `green` + non-wasm + test).
+#[cfg(all(feature = "green", not(target_arch = "wasm32"), test))]
+mod spike;

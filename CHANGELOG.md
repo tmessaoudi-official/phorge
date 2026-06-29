@@ -25,6 +25,16 @@ still usable as an identifier). New diagnostics: `E-SPAWN-NOT-CALL`, `E-SPAWN-VO
 `E-CHANNEL-ANNOTATION`, `E-CHANNEL-NEW-ARITY`, `E-CHANNEL-NEW-TYPE`, `E-CONCURRENCY-METHOD`,
 `E-CONCURRENCY-ARITY`, `E-CONCURRENCY-NO-PHP`.
 
+### Dependencies — `corosensei` admitted (4th, feature-gated, for green-thread suspension)
+
+`corosensei` (stackful coroutines, MIT OR Apache-2.0, miri-tested) is admitted under the dependency
+policy's 4th domain (`docs/specs/2026-06-27-dependency-policy.md`): suspending a green task deep in the
+interpreter/VM call stack needs hand-rolled `unsafe` stack switching that `std` lacks, and the crate
+confines that `unsafe` outside phorj's `#![forbid(unsafe_code)]`. Behind the **`green`** feature
+(default-on, **non-wasm only** — wasm32 has no native stack; the playground delegates to VM frame-swap).
+A gating spike proves the deep-stack suspend works with **no `unsafe` in phorj's own code** (a yielder
+borrowed into a lifetime-parameterized worker). The cooperative executor that uses it is the next slice.
+
 ### Added — `Core.Text.capitalize` (M4 breadth, charter-compliant)
 
 `Core.Text.capitalize(string) -> string` uppercases the first character when it is an ASCII lowercase

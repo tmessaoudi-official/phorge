@@ -10,7 +10,7 @@ Phorj's core (lexer, parser, checker, interpreter, VM, transpiler, loader, bundl
 `std`-only**. The build admits an external crate **only** when ALL of these hold:
 
 1. **Domain is a primitive `std` lacks where the responsible implementation is a vetted crate, not
-   hand-rolled code.** Three sub-domains qualify, no others:
+   hand-rolled code.** Four sub-domains qualify, no others:
    - **Crypto** (password hashing, AEAD, signatures, constant-time comparison) — *"never roll your
      own."*
    - **Untrusted-input parsers where a safe engine cannot be built in `std`** — specifically a
@@ -24,6 +24,14 @@ Phorj's core (lexer, parser, checker, interpreter, VM, transpiler, loader, bundl
      `unsafe` to vetted dependency code, keeping phorj's own code unsafe-free. This is the same shape as
      the other two — *a capability `std` cannot provide safely from phorj's own code* — narrowly scoped
      to signal handling (NOT general OS integration, async runtimes, or I/O frameworks).
+   - **Stackful coroutines** (added 2026-06-29, developer-authorized) — green-thread task suspension
+     (`spawn` + channels, M6 W4): a `recv`/`join` must suspend a task *mid-evaluation, deep in the
+     interpreter/VM call stack*, and resume it later. `std` has **no** stackful-coroutine primitive, and
+     the only `std`-native path is hand-rolled `unsafe` register/stack switching — which would pierce
+     `#![forbid(unsafe_code)]`. A vetted crate (`corosensei`, by the hashbrown/parking_lot author,
+     miri-tested) confines that `unsafe`. A low-level **primitive**, NOT an async runtime/framework
+     (tokio et al. remain disallowed). Native-only — wasm32 has no native stack to switch (verified),
+     so on wasm the interpreter delegates task execution to the VM's frame-swap instead.
 
    Convenience, performance, general-purpose, or *parsing-for-formats* crates (JSON, TOML, YAML,
    HTTP) do **not** qualify — those are done in `std` today. The bar is *a primitive `std` lacks that
@@ -42,11 +50,11 @@ Phorj's core (lexer, parser, checker, interpreter, VM, transpiler, loader, bundl
 
 If a candidate fails any clause, the feature is deferred — it does not justify a dependency.
 
-## Why these three domains, and nothing wider
+## Why these four domains, and nothing wider
 
 All admitted domains share one shape: **a primitive `std` does not provide that phorj's own code
 cannot implement safely by hand** — either dangerous to hand-roll (crypto, regex) or impossible
-without `unsafe` (signals).
+without `unsafe` (signals, stackful coroutines).
 
 - *Crypto* — rolling your own password hash / AEAD is the canonical security anti-pattern; `std`
   ships no crypto. One responsible source: a vetted crate.
@@ -58,6 +66,10 @@ without `unsafe` (signals).
   shutdown requires `unsafe` OS calls. A vetted crate (`ctrlc`) keeps that `unsafe` out of phorj's
   `#![forbid(unsafe_code)]` code. It touches only the serve runtime, which is already quarantined
   outside the byte-identity spine — so it can never affect `run≡runvm≡PHP`.
+- *Stackful coroutines* — suspending a task deep in the interpreter/VM call stack and resuming it is
+  impossible in `std` without hand-rolled `unsafe` stack switching. A vetted crate (`corosensei`)
+  confines that `unsafe`. Green threads are quarantined from the PHP oracle (PHP has no green threads),
+  so this never affects `run≡runvm≡PHP` either; the shared deterministic scheduler keeps `run≡runvm`.
 
 Clauses 1–3 keep this principled, not a slippery slope: format parsers (JSON/TOML/HTTP) are done in
 `std` and do **not** qualify, and the signals exception is scoped to *signal handling*, not async
@@ -72,6 +84,7 @@ backends** — the PHP transpile is a migration/test bridge, never a runtime Pho
 | `argon2` (RustCrypto) | 0.5.x | Argon2id password hashing | `Core.Crypto` | `crypto` (default; off for `phorj-playground`) | OWASP #1 password KDF; audited; no `std` equivalent; must run on the Rust backends (not PHP-delegated). Emits standard PHC strings → interoperates with PHP `password_verify`. |
 | `regex` (Rust project / BurntSushi) | 1.x | ReDoS-safe regex engine | `Core.Regex` | `regex` (default; off for `phorj-playground`) | RE2-style finite automaton, **guaranteed linear-time / ReDoS-immune**, exhaustively fuzzed; no `std` regex; runs on the Rust backends. Its restricted feature set (no backref/lookaround) is exactly the regular subset PHP `preg_*` matches identically, so the byte-identity spine holds; unsupported patterns are rejected at `Regex.compile`. |
 | `ctrlc` | 3.x | OS-signal handling (SIGINT/SIGTERM) | `phg serve` graceful shutdown (S4.2) | `signals` (default; off for `phorj-playground`) | `std` has **no** signal API; the only `std`-native alternative is a hand-rolled `unsafe` handler that would pierce `#![forbid(unsafe_code)]`. `ctrlc` is tiny, cross-platform, and widely used; its `unsafe` is confined to the crate. Serve is **outside** the byte-identity spine (quarantined like sockets), so this never touches `run≡runvm≡PHP`. Narrowly scoped to signal handling — not a precedent for async runtimes or I/O frameworks. |
+| `corosensei` | 0.3.x | Stackful coroutines (green-thread suspension) | `spawn` / channels (M6 W4 / S4.3) | `green` (default; off for `phorj-playground` + non-wasm only) | `std` has **no** stackful-coroutine primitive; suspending a task deep in the interpreter/VM call stack needs hand-rolled `unsafe` stack switching, which `corosensei` (miri-tested, by the hashbrown/parking_lot author) confines. A low-level primitive, NOT an async runtime. Native-only (wasm32 has no native stack — verified); on wasm the interpreter delegates to VM frame-swap. Green threads are quarantined from the PHP oracle, so this never touches `run≡runvm≡PHP`. |
 
 Transitive (argon2): `password-hash`, `base64ct`, `rand_core`/`getrandom` (salt entropy) — same audit
 umbrella. Transitive (regex): `regex-automata`, `regex-syntax`, `aho-corasick` — all Rust-project/BurntSushi,
@@ -81,5 +94,5 @@ same umbrella.
 
 A new crate requires: (1) an entry in the table above with the clause-by-clause justification, (2) a
 note in `CHANGELOG.md`, (3) feature-gating verified against the playground build. Anything outside the
-two admitted domains (crypto, ReDoS-safe regex) requires revisiting this policy itself, not just
-adding a row.
+four admitted domains (crypto, ReDoS-safe regex, OS-signal handling, stackful coroutines) requires
+revisiting this policy itself, not just adding a row.

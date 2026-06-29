@@ -17,6 +17,11 @@
   differential tests; 8 codes in `phg explain`. 1517 tests green, clippy+fmt clean, PHP-8.5 oracle.
   **Steps 1+2 landed together.** Constructor renamed `Channel.new()`→`Channel.create()` (`new` is a
   keyword token). `Task`/`Channel` reservation forced renaming `field-init.phg`'s `class Task`→`Parcel`.
+- [2026-06-29] AGREED (S4.3 step 3 executor): developer chose **Option A — the locked uniform-coroutine
+  design** (uniform stackful coroutines on BOTH backends native + interpreter→VM on wasm; adds
+  corosensei) over my simplification (B). Proceed with A. First action = the spec-mandated coroutine
+  spike: prove corosensei suspends from deep in a nested call **without unsafe in phorj's crate**
+  (`#![forbid(unsafe_code)]` × deep-stack-suspend is the crux); resolve before committing the model.
 - [2026-06-29] OPEN FORK (S4.3 **step 3 — coroutine executor**, surfaced to developer): the
   byte-identity-critical scheduler-wiring step. Recommendation pending developer choice — see the
   session's recommendation: VM frame-swap (target-independent, no coroutine, the "natural" path the
