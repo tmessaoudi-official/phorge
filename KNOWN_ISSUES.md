@@ -291,7 +291,8 @@ not a panic:
   literal (`T? == null`, `int|string == "ok"`), so there is no such narrowing source (use if-let /
   `??` / match-over-optional / match-over-union instead); **post-match scrutinee narrowing** — a
   `match` is an expression and its arms are expressions (no statement-match with diverging arms), so
-  there is no fall-through to narrow. **while-let `when` guards** are not implemented (if-let only).
+  there is no fall-through to narrow. (**if-let and while-let `when` guards both ship** — see the
+  pattern-cluster note below.)
 - ~~interfaces/classes/enums in a library (non-`main`) package~~ — **now supported** (M-RT
   cross-package types): a library package exports types, consumed via `import type Pkg.Path.Type [as
   A]`; `E-PKG-TYPE` is retired. Remaining limits: the **module-qualified** type form (`import
@@ -305,11 +306,11 @@ not a panic:
 
 ## Pattern cluster (M-RT S5.1 / S5.2) — deferred refinements
 - **Match-arm guards ship** (`pat when <cond> => …`, contextual `when`, byte-identical, no new `Op`).
-  **if-let / while-let guards** (`if (var u = opt when u.active)`) are **deferred to a follow-up**:
-  the match-arm machinery doesn't apply (the binding is statement-level, not an arm), so it needs
-  either a new `Stmt::If.guard` field threaded through ~18 construction/consumer sites (incl. the
-  `rewrite_*`/loader AST-rebuild passes) or a synthetic-local desugar — disproportionate to its
-  marginal value. Workaround today: bind, then test inside the block (`if (var u = opt) { if (u.active) … }`).
+  **if-let `when` guards ship** (S5.3 — `if (var u = opt when u.active) { … } else { … }`, desugared to
+  a nested `if (guard)` in the bound then-scope, the else shared by bind-fail and guard-false) and
+  **while-let `when` guards ship** (S2.4 — `while (var x = opt when g) { … }`, desugared so a false
+  guard `break`s the loop). Both are pure parser desugars (no `Stmt::If.guard` field, no backend
+  change), byte-identical run≡runvm≡real PHP.
 - **Struct destructuring ships** (S5.2: shorthand `Point { x, y }`, rename `Point { x: px }`, full
   nesting, plus nested type patterns in variant payloads `W(Circle c)`). Deferred corners:
   (1) a struct pattern reads instance fields by name, so it assumes **initialized fields** — fine for

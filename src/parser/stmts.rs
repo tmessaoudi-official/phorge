@@ -579,9 +579,13 @@ impl Parser {
         self.finish_assign_or_expr(expr, sp)
     }
 
-    /// `while (cond) BLOCK` or while-let `while (var name = opt) BLOCK`. The while-let form is
-    /// desugared here into `while (true) { if (var name = opt) { BODY } else { break; } }`, reusing
-    /// the if-let lowering and `break` — so no backend learns a while-let-specific shape (M-mut.3).
+    /// `while (cond) BLOCK` or while-let `while (var name = opt [when guard]) BLOCK`. The while-let
+    /// form is desugared here into `while (true) { if (var name = opt) { BODY } else { break; } }`,
+    /// reusing the if-let lowering and `break` — so no backend learns a while-let-specific shape
+    /// (M-mut.3). A `when` guard (S2.4, mirroring the if-let guard) wraps BODY in
+    /// `if (guard) { BODY } else { break; }` — a false guard exits the loop (like Rust
+    /// `while let Some(x) = .. { if !g { break } .. }`); the guard is checked in the bound,
+    /// narrowed-non-null then-scope, so it is front-end-only (no `Stmt::While`/backend change).
     pub(super) fn parse_while(&mut self) -> Result<Stmt, Diagnostic> {
         let sp = self.peek_span();
         self.expect(&TokenKind::While, "'while'")?;
@@ -592,12 +596,31 @@ impl Parser {
             let name = self.expect_ident("a binding name after 'var'")?;
             self.expect(&TokenKind::Eq, "'=' in 'while (var name = …)'")?;
             let cond = self.parse_expr()?;
+            // Optional `when` guard (contextual, recognized only in the while-let form — exactly like
+            // the if-let guard above). Desugared into the bound then-scope below.
+            let guard = if matches!(self.peek(), TokenKind::Ident(k) if k.as_str() == "when") {
+                self.advance();
+                Some(self.parse_expr()?)
+            } else {
+                None
+            };
             self.expect(&TokenKind::RParen, "')' after while condition")?;
             let body = self.parse_block()?;
+            // With a guard, a false guard exits the loop: wrap BODY in `if (guard) { BODY } else break`.
+            let then_block = match guard {
+                Some(g) => vec![Stmt::If {
+                    cond: g,
+                    bind: None,
+                    then_block: body,
+                    else_block: Some(vec![Stmt::Break(sp)]),
+                    span: sp,
+                }],
+                None => body,
+            };
             let if_let = Stmt::If {
                 cond,
                 bind: Some(name),
-                then_block: body,
+                then_block,
                 else_block: Some(vec![Stmt::Break(sp)]),
                 span: sp,
             };

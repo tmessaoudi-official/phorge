@@ -9,6 +9,7 @@
 ## Decisions Log
 - [2026-06-29] AGREED: Marathon = **all four spines**, in the recommended dependency order, **fully autonomous** (full 30/8).
 - [2026-06-29] AGREED: Order = (1) Cross-package M-RT lift → (2) Soundness long-tail close → (3) Stdlib charter + breadth → (4) Concurrency + server (M6 W4). Rationale: #1 unifies type system ↔ modules and unblocks core.json multi-package + cross-package stdlib; #2 cleans the now-unified base; #3 writes the charter then breadth (multi-package core.json now possible); #4 capstone capability on a solid foundation.
+- [2026-06-29] AGREED (session 2, post-breadth): developer pushed the 13 marathon commits; directive = **do all the rest**, in this **confirmed order** — **Spine 2 soundness first (tractable→heaviest): S2.4 while-let guards → S2.2 method return-overloading → S2.1 generic-result VM operand → S2.3 must-use B/C; then Spine 4 W4 concurrency (capstone) on the cleaned base; Spine-3 breadth interleaved as low-risk warm-ups.** Rationale: don't build the concurrency layer atop known run↔runvm parity gaps; ramp difficulty up rather than opening on the heaviest item.
 
 ## Progress
 - [2026-06-29] S1.4 cross-package generic library types — DONE `718fa3d` (example-only, already worked).
@@ -20,7 +21,7 @@
   - **S2.1 generic-result VM operand (`id(7)+1`)** — the compiler re-derives types from the *erased* AST and `compile_program(&Program)` takes no checker annotations. Fix: a span-keyed side-table of checker-reified call/field result types (`Ty`→`CTy`), populated in `check_generic_call`/member-resolution, threaded through `cli::check_and_expand` into `compile_program`/`Compiler::new`, consumed in `ctype`'s `Call`/`Member` arms. Multi-file; do it deliberately. (Narrower partial: add `generic_ret_from_param: Option<usize>` to `FunctionDecl`, set pre-erasure, infer from arg CTy — but only covers `-> T` free fns, not methods/fields/`List<T>`.)
   - **S2.2 method return-overloading** — extend C1's `OverloadSelect`/per-return mangle from free fns to methods (method dispatch table doesn't carry the overload-by-return set).
   - **S2.3 must-use B/C** — bidirectional must-use propagation (flagged a real arch change in the 4th marathon).
-  - **S2.4 while-let guards** — needs `Stmt::If.guard` through ~18 construction/consumer sites, or a synthetic-local desugar.
+  - ~~**S2.4 while-let guards**~~ — **DONE** (session 2): `while (var x = opt when g)` — a pure parser desugar mirroring the if-let guard (wrap BODY in `if (g) { BODY } else { break }`, so a false guard exits the loop). No `Stmt::If.guard` field, no backend change; byte-identical run≡runvm≡real PHP. Tractable-first pick paid off. `examples/guide/loops.phg`, KNOWN_ISSUES updated (both if-let + while-let guards now ship).
 - [2026-06-29] S3.1 stdlib charter — DONE `3a6d2ea` (`docs/specs/2026-06-29-m4-stdlib-charter.md`, ROADMAP M4 adopted).
 - [2026-06-29] S3.2 `Core.List.chunk` — DONE `ddfabc4` (charter-compliant; `List<List<T>>`, `array_chunk`, size<1 faults).
 - [2026-06-29] S3.3 `Core.Text.lines` — DONE `8ea0b67` (split on `\n`, `explode` semantics).

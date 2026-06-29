@@ -61,4 +61,15 @@ function main(): void {
         next = null; // a real queue would hand back the next element
     }
     Console.println("while-let drained = {drained}"); // 3
+
+    // while-let with a `when` guard: loop while the optional is non-null AND the bound value
+    // satisfies the guard. A false guard exits the loop (like a match-arm `when`, but on the loop
+    // binding). Here the guard `x <= 3` stops the walk before the optional itself goes null.
+    mutable int? cursor = 1;
+    mutable int taken = 0;
+    while (var x = cursor when x <= 3) {
+        taken += x;
+        cursor = x + 1; // 1, 2, 3 pass; x = 4 fails the guard → exit
+    }
+    Console.println("while-let guard taken = {taken}"); // 1+2+3 = 6
 }
