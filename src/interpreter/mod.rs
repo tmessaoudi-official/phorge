@@ -221,6 +221,12 @@ pub struct Interp<'c> {
     /// The owning program AST, held only by a **cooperative** task interpreter so it can build a fresh
     /// child task interpreter when it evaluates a `spawn` (each green task = its own `Interp` over the
     /// same program, sharing only `coop`). `None` on the synchronous path (where `spawn` never defers).
+    /// Read only by the native cooperative driver (`coop` module); legitimately dead when that module is
+    /// absent (wasm, or a `--no-default-features` build without `green`).
+    #[cfg_attr(
+        not(all(feature = "green", not(target_arch = "wasm32"))),
+        allow(dead_code)
+    )]
     program: Option<std::rc::Rc<Program>>,
 }
 
