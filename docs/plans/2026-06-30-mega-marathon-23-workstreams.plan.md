@@ -62,9 +62,17 @@ items, but do not let them displace the phase order.
 
 ### A1. Green-threads cooperative cutover — S4.3 steps 2–5  *(THE CRUX — start here)*
 **Size:** Large. **Status:** infra built+tested (`src/green/{sched,exec,coro}.rs`,
-corosensei dep, `ast::uses_concurrency` gate at `27a3381`). Cutover steps 2–5 remain.
-Today `spawn` is still **eager** ("concurrency by name"): litmus
-`spawn consume(ch); send(42)` faults `recv from empty channel`.
+corosensei dep, `ast::uses_concurrency` gate at `27a3381`). **Interpreter half DONE + green
+(`7cfa30c`)** — `src/interpreter/coop.rs`: each task runs its own `Interp` in a corosensei coroutine
+driven by the shared scheduler; `spawn` defers (free-fn body as the coroutine root, no lambda);
+`recv`/`join` suspend via the yielder; `Interp` gained lifetime `<'c>` for the optional `&dyn Suspend`
+(closure-local, no-unsafe deep-suspend per `green::spike`). Gated OFF (`#[allow(dead_code)]`) — the flip
+needs BOTH backends. **Found:** the `Vm<'a>→Rc` refactor is NOT needed (the `'static` closure captures
+the `Rc<program>` and builds the engine inside). **REMAINS = VM half + flip** — full pickup design in
+memory [[marathon-a1-interp-coop-engine]]: VM cooperative driver (run a fn via `run_until` capturing the
+value), VM recv/join suspend, the **hard part = VM spawn-defer co-design** (compiler emits a
+function-index spawn, NOT a lambda — the reverted `b5053a4` trace bug), then the same-commit flip of
+`cmd_run`/`cmd_runvm` + differential litmus.
 
 **The crux:** thread the borrowed coroutine yielder into the recursive interpreter
 **without a lifetime on `Interp`** and **without `unsafe`** (crate is
