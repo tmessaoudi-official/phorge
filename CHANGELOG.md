@@ -6,6 +6,20 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Changed — green threads: cooperative cutover **DONE** (M6 W4 / S4.3)
+
+`spawn`/channels are now **genuinely cooperative**, not synchronous-degenerate. A spawned single-overload
+free-function call is **deferred** (it no longer runs at `spawn`); each green task runs its own engine
+inside a stackful `corosensei` coroutine (native), and a `recv` on an empty channel — or a `join` on an
+unfinished task — **suspends** the task until a `send`/completion wakes it. Both backends (tree-walking
+`run`, bytecode `runvm`) drive the *same* deterministic `green::sched` scheduler, so task interleaving is
+**byte-identical** (`run≡runvm`). New `Op::SpawnCall(func_idx, argc)` (deferrable free-fn spawn);
+`Interp` and `Vm` gained an optional coroutine-suspension handle (closure-local, no `unsafe` — the crate
+stays `#![forbid(unsafe_code)]`). `spawn consume(ch); send(42)` — which the eager model faulted on — now
+prints `got 42`/`done 42` on both backends. **wasm keeps the eager model** (corosensei has no native
+stack to switch). Follow-ups (KNOWN_ISSUES): deferral for method/overloaded/closure spawns, cooperative
+fault-trace frames, cross-task statics.
+
 ### Added — green threads: `spawn` + channels (M6 W4 / S4.3, step 2)
 
 The concurrency **surface and value model** — uncolored cooperative concurrency: `spawn <call>` (a

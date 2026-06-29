@@ -60,7 +60,17 @@ items, but do not let them displace the phase order.
 
 ## PHASE A — Concurrency core (the locked crux + dependents)
 
-### A1. Green-threads cooperative cutover — S4.3 steps 2–5  *(THE CRUX — start here)*
+### A1. Green-threads cooperative cutover — S4.3 steps 2–5  ✅ **DONE** (`15a756b`)
+Cooperative cutover complete + byte-identical end-to-end (`phg run`≡`phg runvm`): both backends host
+each green task in a corosensei coroutine driven by the shared `green::sched`; `spawn` defers a
+single-overload free-fn call (VM `Op::SpawnCall`, interp deferred task), `recv`/`join` suspend via the
+yielder, the flip routes `uses_concurrency` programs (all 8 entry points incl. the project loader).
+`spawn consume(ch); send(42)` → `got 42`/`done 42` (eager faulted). 1282 lib / differential 125 / PHP
+8.5 / clippy+fmt / wasm. Commits: `7cfa30c` `260292d` `2d4a2c1` `6bd1b0a` `15a756b`. Follow-ups
+(KNOWN_ISSUES): method/overloaded/closure-spawn deferral, cooperative fault-trace frames, per-task statics.
+
+<details><summary>original plan</summary>
+
 **Size:** Large. **Status:** infra built+tested (`src/green/{sched,exec,coro}.rs`,
 corosensei dep, `ast::uses_concurrency` gate at `27a3381`). **Interpreter half DONE + green
 (`7cfa30c`)** — `src/interpreter/coop.rs`: each task runs its own `Interp` in a corosensei coroutine
@@ -94,6 +104,8 @@ function-index spawn, NOT a lambda — the reverted `b5053a4` trace bug), then t
 byte-identical `run ≡ runvm`; `examples/concurrency*.phg` green on both backends + (where
 deterministic) PHP. Plan detail: the existing
 `2026-06-29-big-marathon-...-concurrency.plan.md` → "S4.3 COOPERATIVE CUTOVER" section.
+
+</details>
 
 ### A2. Generator `yield` + lazy sequences
 Lazy generators that pair naturally with the A1 coroutine engine — `function gen() yields int { yield 1; yield 2; }`,
