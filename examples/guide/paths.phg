@@ -1,0 +1,44 @@
+// Core.Path (M4 stdlib breadth) — pure filesystem-*path* string manipulation. These functions never
+// touch the disk; they slice a path-as-string, so they are Tier 1 (byte-identical run / runvm / real
+// PHP). Each maps to a PHP core builtin (basename / dirname / pathinfo), separator `/`.
+//
+//   basename(p)   the final component (trailing slash stripped)
+//   dirname(p)    the directory part
+//   extension(p)  the chars after the last dot in the basename (no dot → "")
+//   stem(p)       the basename with its extension removed
+//   join(a, b)    glue two segments with a single `/` (collapsing dup separators)
+package Main;
+
+import Core.Console;
+import Core.Path;
+
+function main(): void {
+    var p = "/var/log/app.log";
+    Console.println("path      = {p}");
+    Console.println("basename  = {Path.basename(p)}");
+    Console.println("dirname   = {Path.dirname(p)}");
+    Console.println("extension = {Path.extension(p)}");
+    Console.println("stem      = {Path.stem(p)}");
+
+    // A multi-dot name: only the final segment is the extension.
+    var archive = "backup.tar.gz";
+    var ext = Path.extension(archive);
+    var stem = Path.stem(archive);
+    Console.println("ext of {archive}  = {ext}");
+    Console.println("stem of {archive} = {stem}");
+
+    // No extension, and a relative path with a bare component.
+    var readme = "README";
+    Console.println("dirname of README = {Path.dirname(readme)}");
+    Console.println("ext of README     = {Path.extension(readme)}");
+
+    // join collapses a trailing/leading slash to exactly one separator.
+    var a = Path.join("/usr/local", "bin");
+    var b = Path.join("dir/", "/file.txt");
+    Console.println("join a    = {a}");
+    Console.println("join b    = {b}");
+
+    // Compose: relocate a file's directory while keeping its basename.
+    var moved = Path.join("/tmp", Path.basename(p));
+    Console.println("moved     = {moved}");
+}

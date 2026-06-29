@@ -24,7 +24,8 @@
 - [2026-06-29] S3.1 stdlib charter — DONE `3a6d2ea` (`docs/specs/2026-06-29-m4-stdlib-charter.md`, ROADMAP M4 adopted).
 - [2026-06-29] S3.2 `Core.List.chunk` — DONE `ddfabc4` (charter-compliant; `List<List<T>>`, `array_chunk`, size<1 faults).
 - [2026-06-29] S3.3 `Core.Text.lines` — DONE `8ea0b67` (split on `\n`, `explode` semantics).
-- **Spine 3 has a charter + 2 breadth natives** (more breadth — core.json encode/safe-parse already shipped; sprintf/path/url — remain for a follow-up).
+- [2026-06-29] S3.4 **`Core.Path`** (new module) — DONE (basename/dirname/extension/stem/join; pure path-string manipulation, Tier 1; PHP `basename`/`dirname`/`pathinfo`; `src/native/path.rs` + `path_tests.rs`, `examples/guide/paths.phg`). Algorithms derived from PHP 8.5 ground truth, oracle-verified byte-identical run≡runvm≡real PHP.
+- **Spine 3 has a charter + a new module + breadth natives** (`Core.Path` new; `List.chunk`/`Text.lines`/`Text.capitalize`; core.json encode/safe-parse earlier; sprintf — remains for a follow-up).
 - **Spine 4 (M6 W4 concurrency/server) NOT started** — a large milestone (keep-alive, graceful shutdown, then uncolored `spawn`+channels green threads on the VM's reified frames, Tier-3 quarantined per the charter). Start fresh.
 - **Marathon checkpoint (8 commits): Spine 1 complete, Spine 3 charter+2 natives; Spine 2 deferred (architectural), Spine 4 pending.**
 
