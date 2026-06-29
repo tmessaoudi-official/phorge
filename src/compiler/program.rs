@@ -382,6 +382,10 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
 
     let mut methods: HashMap<(String, String), usize> = HashMap::new();
     let mut method_rets: HashMap<(String, String), CTy> = HashMap::new();
+    // S2.1 (methods): `(class, method) -> echoed-param index` for a generic method whose result is
+    // exactly one of its own params (`pick<T>(T a, T b) -> T` ⇒ 0). Lets `ctype` recover the operand
+    // type of `u.pick(7, 8) + 1` from the argument — the method analog of `FnMeta.generic_ret_from_param`.
+    let mut method_generic_ret_from_param: HashMap<(String, String), usize> = HashMap::new();
     let mut methods_to_compile: Vec<(usize, &FunctionDecl)> = Vec::new();
     let mut next_idx = nfree + nclasses;
     // M-RT overloading: per (class, method), every overload's `(ParamKinds, fn index)` in declaration
@@ -395,6 +399,9 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
                     (c.name.clone(), f.name.clone()),
                     f.ret.as_ref().map_or(CTy::Other, resolve_cty),
                 );
+                if let Some(i) = f.generic_ret_from_param {
+                    method_generic_ret_from_param.insert((c.name.clone(), f.name.clone()), i);
+                }
                 let kinds = f
                     .params
                     .iter()
@@ -456,7 +463,10 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
                     method_rets.insert(key.clone(), rty);
                 }
                 if let Some(set_id) = method_overloads.get(&anc_key).copied() {
-                    method_overloads.insert(key, set_id);
+                    method_overloads.insert(key.clone(), set_id);
+                }
+                if let Some(i) = method_generic_ret_from_param.get(&anc_key).copied() {
+                    method_generic_ret_from_param.insert(key, i);
                 }
             }
         }
@@ -509,6 +519,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
             &empty_fields,
             &class_field_ctys,
             &method_rets,
+            &method_generic_ret_from_param,
             &methods,
             &method_overloads,
             base,
@@ -562,6 +573,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
             &class_field_ctys[&cd.name],
             &class_field_ctys,
             &method_rets,
+            &method_generic_ret_from_param,
             &methods,
             &method_overloads,
             &class_parents,
@@ -598,6 +610,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
             &class_field_ctys[class_name],
             &class_field_ctys,
             &method_rets,
+            &method_generic_ret_from_param,
             &methods,
             &method_overloads,
             &class_parents,
@@ -667,6 +680,7 @@ pub(super) fn compile_constructor<'a>(
     field_tags: &'a HashMap<String, CTy>,
     class_field_ctys: &'a HashMap<String, HashMap<String, CTy>>,
     method_rets: &'a HashMap<(String, String), CTy>,
+    method_generic_ret_from_param: &'a HashMap<(String, String), usize>,
     methods: &'a HashMap<(String, String), usize>,
     method_overloads: &'a HashMap<(String, String), usize>,
     parent_parents: &'a std::collections::BTreeMap<String, Vec<String>>,
@@ -692,6 +706,7 @@ pub(super) fn compile_constructor<'a>(
         field_tags,
         class_field_ctys,
         method_rets,
+        method_generic_ret_from_param,
         methods,
         method_overloads,
         base_fn_idx,
@@ -770,6 +785,7 @@ pub(super) fn compile_method<'a>(
     field_tags: &'a HashMap<String, CTy>,
     class_field_ctys: &'a HashMap<String, HashMap<String, CTy>>,
     method_rets: &'a HashMap<(String, String), CTy>,
+    method_generic_ret_from_param: &'a HashMap<(String, String), usize>,
     methods: &'a HashMap<(String, String), usize>,
     method_overloads: &'a HashMap<(String, String), usize>,
     parent_parents: &'a std::collections::BTreeMap<String, Vec<String>>,
@@ -791,6 +807,7 @@ pub(super) fn compile_method<'a>(
         field_tags,
         class_field_ctys,
         method_rets,
+        method_generic_ret_from_param,
         methods,
         method_overloads,
         base_fn_idx,

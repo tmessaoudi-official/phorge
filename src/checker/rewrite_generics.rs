@@ -473,7 +473,12 @@ pub fn erase_generics(program: Program) -> Program {
                                 throws: f.throws.iter().map(|t| rty(t, &set)).collect(),
                                 body: f.body.iter().map(|s| rstmt(s, &set)).collect(),
                                 foreign: f.foreign,
-                                generic_ret_from_param: f.generic_ret_from_param,
+                                // S2.1 (methods): recover, before erasing the method's `<T>`, which
+                                // argument the result echoes — so the VM compiler can specialize
+                                // `u.pick(7, 8) + 1` exactly as the interpreter evaluates it. Computed
+                                // from the pre-erasure signature (`generic_ret_echo_param` keys on the
+                                // method's own `type_params`, so it never fires for a class-`T` return).
+                                generic_ret_from_param: generic_ret_echo_param(&f),
                                 span: f.span,
                             })
                         }

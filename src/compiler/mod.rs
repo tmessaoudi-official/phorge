@@ -186,6 +186,11 @@ struct Compiler<'a> {
     /// Program-wide `(class, method) → return type` table (M2 Wave 4). `ctype` reads it to resolve
     /// a method-call result (`c.get() + 1`).
     method_rets: &'a HashMap<(String, String), CTy>,
+    /// Program-wide `(class, method) → echoed-param index` for a generic method whose result is exactly
+    /// one of its own params (`pick<T>(T a, T b) -> T` ⇒ 0). `ctype` recovers the operand type of
+    /// `u.pick(7, 8) + 1` from that argument — the method analog of `FnMeta.generic_ret_from_param`
+    /// (S2.1). Empty unless a generic method echoes a param, so non-generic programs are untouched.
+    method_generic_ret_from_param: &'a HashMap<(String, String), usize>,
     /// Program-wide `(class, method) → function index` table (slice B0). A non-overloaded static call
     /// `ClassName.method(args)` lowers to a dummy-receiver push + `Op::Call(idx)` via this index —
     /// the class is known at compile time, so no runtime dispatch is needed.
@@ -406,6 +411,7 @@ impl<'a> Compiler<'a> {
         field_tags: &'a HashMap<String, CTy>,
         class_field_ctys: &'a HashMap<String, HashMap<String, CTy>>,
         method_rets: &'a HashMap<(String, String), CTy>,
+        method_generic_ret_from_param: &'a HashMap<(String, String), usize>,
         methods: &'a HashMap<(String, String), usize>,
         method_overloads: &'a HashMap<(String, String), usize>,
         base_fn_idx: usize,
@@ -430,6 +436,7 @@ impl<'a> Compiler<'a> {
             field_tags,
             class_field_ctys,
             method_rets,
+            method_generic_ret_from_param,
             methods,
             method_overloads,
             cur_class: None,
@@ -758,11 +765,26 @@ impl<'a> Compiler<'a> {
                 }
                 // Method call: the return type is keyed on the receiver's runtime class.
                 Expr::Member { object, name, .. } => match self.ctype(object)? {
-                    CTy::Class(cls) => self
-                        .method_rets
-                        .get(&(cls.clone(), name.clone()))
-                        .cloned()
-                        .ok_or_else(|| format!("no method `{name}` on `{cls}`")),
+                    CTy::Class(cls) => {
+                        // S2.1 (methods): a generic method whose result echoes one of its own params
+                        // (`pick<T>(T a, T b) -> T`) is erased to `Other` in `method_rets`; recover the
+                        // operand type from the echoed argument so `u.pick(7, 8) + 1` specializes on the
+                        // VM exactly as the interpreter evaluates it. Falls through to the (erased)
+                        // declared return for any other shape.
+                        if let Some(i) = self
+                            .method_generic_ret_from_param
+                            .get(&(cls.clone(), name.clone()))
+                            .copied()
+                        {
+                            if let Some(arg) = args.get(i) {
+                                return self.ctype(arg);
+                            }
+                        }
+                        self.method_rets
+                            .get(&(cls.clone(), name.clone()))
+                            .cloned()
+                            .ok_or_else(|| format!("no method `{name}` on `{cls}`"))
+                    }
                     _ => Err(format!("cannot infer numeric type of {e:?}")),
                 },
                 _ => Err(format!("cannot infer numeric type of {e:?}")),

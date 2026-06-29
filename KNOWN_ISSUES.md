@@ -521,11 +521,17 @@ type argument (`instanceof Box<int>` ≡ `instanceof Box`). These refinements ar
   (`FunctionDecl::generic_ret_from_param`, set in `erase_generics`); the VM compiler's `ctype` recovers
   the erased result's operand type from that argument, so **`identity(7) + 1` and `firstOr(xs, -1) * 2`
   now specialize on the VM** exactly as the interpreter evaluates them (byte-identical, gated by
-  `examples/guide/generics.phg`). [Verified: both `run` and `runvm` print `8`.] **Still deferred** (the
-  result does *not* echo a single parameter, so it stays `CTy::Other` and the VM rejects a bare
-  arithmetic use — bind to a typed local first): generic **methods**/**fields** (`box.get() + 1`),
-  a `List<T>`-element or container return, and a return computed from *several* parameters. The full
-  fix is the reified-result side-table threaded into the compiler (still deferred).
+  `examples/guide/generics.phg`). [Verified: both `run` and `runvm` print `8`.] **Generic *methods*
+  echoing a param now work too** (S2.1-methods, 2026-06-29): `erase_generics` computes the echo index
+  for class methods, threaded into the compiler as `method_generic_ret_from_param` and recovered in the
+  method-call `ctype` arm, so **`u.pick(7, 8) + 1`** (a method `pick<T>(T a, T b) -> T`) specializes on
+  the VM (`examples/guide/generic-methods.phg`, differential `generic_method_result_echoing_param_is_vm_operand`).
+  [Verified: `run` ≡ `runvm` ≡ real PHP.] **Still deferred** (the result does *not* echo a single
+  parameter, so it stays `CTy::Other` and the VM rejects a bare arithmetic use — bind to a typed local
+  first): a method returning the *class*'s type parameter via a field (`box.get() + 1` where `get()`
+  returns the class `T`, not a method param), a generic **field** read, a `List<T>`-element or container
+  return, and a return computed from *several* parameters. The full fix is the reified-result side-table
+  threaded into the compiler (still deferred).
 - **Generic *interface* methods** are a non-parse — an interface method's signature is built with an
   empty type-parameter list, so a `<T>` there is never consumed. Generic methods on *classes* work.
 - **Cross-package generic *library* types now ship** (validated 2026-06-29) — a generic class

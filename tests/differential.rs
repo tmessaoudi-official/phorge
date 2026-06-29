@@ -1709,6 +1709,30 @@ fn ambiguous_overloaded_call_faults_on_both_backends() {
 }
 
 #[test]
+fn generic_method_result_echoing_param_is_vm_operand() {
+    // S2.1 (methods): a generic method whose result is exactly one of its own params
+    // (`pick<T>(T a, T b) -> T`) erases to `mixed`/`Other`, but its call result is a specialized
+    // arithmetic operand on the VM — recovered from the echoed argument — so `u.pick(7, 8) + 1` runs
+    // byte-identically. Without the fix the VM rejected (`cannot infer numeric type`) what the
+    // interpreter accepts — a run↔runvm parity break (the documented CTy-operand trap).
+    agree_out_php(
+        "import Core.Console; \
+           class U { constructor() {} function pick<T>(T a, T b)->T { return a; } } \
+           function main()-> void { U u=new U(); int n = u.pick(7, 8) + 1; Console.println(\"{n}\"); }",
+        "8\n",
+        "generic_method_echo_first_arg",
+    );
+    // The echoed argument may be the SECOND param, and the operand may be a float — both recover.
+    agree_out_php(
+        "import Core.Console; \
+           class U { constructor() {} function snd<T>(T a, T b)->T { return b; } } \
+           function main()-> void { U u=new U(); float f = u.snd(1.0, 2.5) * 2.0; Console.println(\"{f}\"); }",
+        "5\n",
+        "generic_method_echo_second_arg_float",
+    );
+}
+
+#[test]
 fn transpiles_generic_method_to_mixed() {
     // A generic method erases to `mixed`-typed PHP (params and return), exactly as a generic free
     // function does; `List<T>` → `array`, `(T)->T` → `\Closure`. No type variable reaches the output.

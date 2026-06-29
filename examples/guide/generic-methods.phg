@@ -50,7 +50,14 @@ function main(): void {
   // A generic method taking an inline lambda: increments 5 twice → 7.
   int bumped = u.applyTwice(5, fn(int v) => v + 1);
 
+  // A generic-method result used DIRECTLY as an arithmetic operand (S2.1): the return `T` erases to
+  // `mixed`, but because the result echoes a parameter the VM recovers its operand type from that
+  // argument — so `u.identity(20) + u.firstOr(xs, 0)` specializes and runs byte-identically on both
+  // backends (no typed-binding sink needed). 20 + 10 = 30.
+  int operand = u.identity(20) + u.firstOr(xs, 0);
+
   Console.println("identity: {n} {s} {flag}");
   Console.println("firstOr head: {head}");
   Console.println("applyTwice: {bumped}");
+  Console.println("operand: {operand}");
 }

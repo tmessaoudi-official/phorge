@@ -14,6 +14,22 @@
 
 ## Progress
 
+- **Marathon checkpoint #6 (session 3 cont.): two more commits.**
+  - **`a38ff45` Spine-3 breadth: `Core.List.lastIndexOf`** — last structural-match index → `int?`,
+    symmetric companion to `indexOf` (gated `__phorj_last_index_of` over `array_keys(…, true)`); unique
+    leaf, no UFCS clash; byte-identical, `examples/guide/list-breadth.phg` extended.
+  - **S2.1-methods (generic-method-param-echo) — the tractable half of S2.1-broad.** A generic *method*
+    whose result is exactly one of its own params (`pick<T>(T a, T b) -> T`) now specializes as a VM
+    arithmetic operand (`u.pick(7, 8) + 1`), closing a real run↔runvm parity gap (was: VM "cannot infer
+    numeric type", interpreter fine). Mirror of the free-fn S2.1-narrow: `erase_generics` computes the
+    echo index for class methods (`generic_ret_echo_param`, keyed on the method's own `<T>` so it never
+    fires for a class-`T` return), threaded into the compiler as a new `method_generic_ret_from_param`
+    map, recovered in the method-call `ctype` arm before the erased `method_rets` fallback. No new
+    `Op`/`Value`; `examples/guide/generic-methods.phg` extended (operand line) + differential
+    `generic_method_result_echoing_param_is_vm_operand`. **Still deferred (the genuinely heavy remainder,
+    needs the reified-result side-table threaded through `compile_program`):** `box.get() + 1` (method
+    returns the *class* `T` via a field), generic field reads, `List<T>`-element/container returns,
+    multi-param-derived returns. **Commit pending gate-green.**
 - **Marathon checkpoint #5 (session 3, fresh context): S2.2 method return-overloading DONE + committed
   `9b1864a`** — full gate green (1259 lib + 115 differential + 16 typecheck, PHP-8.5 oracle), clippy+fmt
   clean, release binary rebuilt. Zero backend changes (the free-fn pipeline was already parameterized).
