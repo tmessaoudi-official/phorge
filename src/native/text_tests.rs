@@ -1,6 +1,24 @@
 use super::*;
 
 #[test]
+fn text_capitalize_ascii_ucfirst() {
+    let mut o = String::new();
+    let mut cap = |s: &str| match text_capitalize(&[Value::Str(s.into())], &mut o).unwrap() {
+        Value::Str(r) => r.to_string(),
+        other => panic!("capitalize returned {other:?}"),
+    };
+    assert_eq!(cap("hello"), "Hello");
+    assert_eq!(cap("Hello"), "Hello"); // already uppercase → unchanged
+    assert_eq!(cap(""), ""); // empty → empty
+    assert_eq!(cap("123"), "123"); // non-letter first byte → unchanged
+                                   // PHP mapping is ucfirst.
+    assert_eq!(
+        (registry()[index_of("Core.Text", "capitalize").unwrap()].php)(&["$s".into()]),
+        "ucfirst($s)"
+    );
+}
+
+#[test]
 fn text_lines_splits_on_newline() {
     let mut o = String::new();
     let collect = |v: Value| match v {

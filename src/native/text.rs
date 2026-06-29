@@ -81,6 +81,25 @@ fn text_split_once(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("Text.split_once expects (string, string)".into()),
     }
 }
+// `capitalize(string) -> string` — uppercase the first character if it is an ASCII lowercase letter,
+// else unchanged. Byte-for-byte PHP `ucfirst` (which only upcases a leading a-z byte; a multibyte first
+// codepoint is left as-is). ASCII-scoped, like `upper`/`reverse` — documented (no mbstring under `php -n`).
+fn text_capitalize(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => {
+            let out = match s.as_bytes().first() {
+                Some(b) if b.is_ascii_lowercase() => {
+                    let mut v = s.as_bytes().to_vec();
+                    v[0] = b - 32;
+                    String::from_utf8(v).expect("only a leading ASCII byte was changed")
+                }
+                _ => s.clone(),
+            };
+            Ok(Value::Str(out))
+        }
+        _ => Err("Text.capitalize expects (string)".into()),
+    }
+}
 // `lines(string) -> List<string>` — split on `\n` (an embedded `\r` is left in the line, matching PHP
 // `explode("\n", s)`). An empty string → `[""]`; a trailing `\n` → a trailing `""` (explode semantics).
 fn text_lines(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -453,6 +472,16 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(text_split),
             // PHP `explode(separator, string)` — separator first.
             php: |a| format!("explode({}, {})", parg(a, 1), parg(a, 0)),
+        },
+        // `capitalize(string) -> string` — ASCII `ucfirst` (Tier-1, byte-identical).
+        NativeFn {
+            module: "Core.Text",
+            name: "capitalize",
+            params: vec![s()],
+            ret: Ty::String,
+            pure: true,
+            eval: NativeEval::Pure(text_capitalize),
+            php: |a| format!("ucfirst({})", parg(a, 0)),
         },
         // `lines(string) -> List<string>` — split on `\n` (charter §2 subject-first; Tier-1).
         NativeFn {

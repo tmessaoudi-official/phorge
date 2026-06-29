@@ -31,6 +31,10 @@ function main(): void {
     List<string> rows = Text.lines("one\ntwo\nthree");
     Console.println("first row = {rows[0]}, third row = {rows[2]}");
 
+    // capitalize → ASCII ucfirst (uppercase the first letter; multibyte first char unchanged).
+    string capped = Text.capitalize("phorj");
+    Console.println("capitalize = {capped}");
+
     string swapped = Text.replace(greeting, "Phorj", "World");
     Console.println("replaced = {swapped}");
 

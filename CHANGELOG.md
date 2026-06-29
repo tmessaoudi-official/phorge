@@ -6,6 +6,12 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `Core.Text.capitalize` (M4 breadth, charter-compliant)
+
+`Core.Text.capitalize(string) -> string` uppercases the first character when it is an ASCII lowercase
+letter (else unchanged) — byte-for-byte PHP `ucfirst`, ASCII-scoped like `upper`/`reverse`. Tier-1,
+byte-identical `run ≡ runvm ≡ real PHP`; guide demo in `examples/guide/text.phg`, +1 unit test.
+
 ### Added — `Core.Text.lines` (M4 breadth, charter-compliant)
 
 `Core.Text.lines(string) -> List<string>` splits on `\n` (an embedded `\r` stays in the line; an empty
