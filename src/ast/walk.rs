@@ -392,6 +392,141 @@ pub fn lambda_uses_this(body: &LambdaBody) -> bool {
     }
 }
 
+/// Whether the program contains any `spawn` expression anywhere — the M6 W4 green-thread **gate**.
+/// The run/runvm entry points branch on it: a program with **no** `spawn` takes the unchanged
+/// synchronous path (byte-identical to today, zero risk to non-concurrent examples); one **with**
+/// `spawn` takes the cooperative scheduler driver. Soundness note: we return `true` only on a real
+/// [`Expr::Spawn`], so there are **no false positives** (the only risky direction — it would route a
+/// non-spawning program through the cooperative driver). A false *negative* (a missed `spawn`) merely
+/// degrades to the eager path, which still satisfies `run≡runvm` — so completeness is best-effort but
+/// not load-bearing. Mirrors the exhaustive [`lambda_uses_this`] walker.
+#[must_use]
+pub fn uses_concurrency(program: &Program) -> bool {
+    fn in_expr(e: &Expr) -> bool {
+        match e {
+            Expr::Spawn { .. } => true,
+            Expr::Int(..)
+            | Expr::Float(..)
+            | Expr::Decimal { .. }
+            | Expr::Bool(..)
+            | Expr::Null(..)
+            | Expr::Bytes(..)
+            | Expr::Ident(..)
+            | Expr::This(_) => false,
+            Expr::Str(parts, _) | Expr::Html(parts, _) => parts.iter().any(|p| match p {
+                StrPart::Expr(inner) => in_expr(inner),
+                _ => false,
+            }),
+            Expr::List(items, _) => items.iter().any(in_expr),
+            Expr::Map(pairs, _) => pairs.iter().any(|(k, v)| in_expr(k) || in_expr(v)),
+            Expr::Unary { expr, .. } => in_expr(expr),
+            Expr::Binary { lhs, rhs, .. } => in_expr(lhs) || in_expr(rhs),
+            Expr::InstanceOf { value, .. } => in_expr(value),
+            Expr::Cast { value, .. } => in_expr(value),
+            Expr::Call { callee, args, .. } => in_expr(callee) || args.iter().any(in_expr),
+            Expr::Member { object, .. } => in_expr(object),
+            Expr::Index { object, index, .. } => in_expr(object) || in_expr(index),
+            Expr::Force { inner, .. } => in_expr(inner),
+            Expr::Propagate { inner, .. } => in_expr(inner),
+            Expr::OverloadSelect { call, .. } => in_expr(call),
+            Expr::ParentCall { args, .. } => args.iter().any(in_expr),
+            Expr::CloneWith { object, fields, .. } => {
+                in_expr(object) || fields.iter().any(|(_, e)| in_expr(e))
+            }
+            Expr::Match {
+                scrutinee, arms, ..
+            } => {
+                in_expr(scrutinee)
+                    || arms
+                        .iter()
+                        .any(|a| a.guard.as_ref().is_some_and(in_expr) || in_expr(&a.body))
+            }
+            Expr::Range { start, end, .. } => in_expr(start) || in_expr(end),
+            Expr::If {
+                cond,
+                then_expr,
+                else_expr,
+                ..
+            } => in_expr(cond) || in_expr(then_expr) || in_expr(else_expr),
+            Expr::Lambda { body, .. } => match body {
+                LambdaBody::Expr(e) => in_expr(e),
+                LambdaBody::Block(stmts) => in_stmts(stmts),
+            },
+            Expr::New(inner, _) => in_expr(inner),
+        }
+    }
+    fn in_stmts(stmts: &[Stmt]) -> bool {
+        stmts.iter().any(|s| match s {
+            Stmt::VarDecl { init, .. } => in_expr(init),
+            Stmt::Return { value, .. } => value.as_ref().is_some_and(in_expr),
+            Stmt::If {
+                cond,
+                then_block,
+                else_block,
+                ..
+            } => {
+                in_expr(cond)
+                    || in_stmts(then_block)
+                    || else_block.as_ref().is_some_and(|eb| in_stmts(eb))
+            }
+            Stmt::For { iter, body, .. } => in_expr(iter) || in_stmts(body),
+            Stmt::While { cond, body, .. } => in_expr(cond) || in_stmts(body),
+            Stmt::CFor {
+                init,
+                cond,
+                step,
+                body,
+                ..
+            } => {
+                init.as_deref()
+                    .is_some_and(|s| in_stmts(std::slice::from_ref(s)))
+                    || cond.as_ref().is_some_and(in_expr)
+                    || step
+                        .as_deref()
+                        .is_some_and(|s| in_stmts(std::slice::from_ref(s)))
+                    || in_stmts(body)
+            }
+            Stmt::Break(_) | Stmt::Continue(_) => false,
+            Stmt::Assign { target, value, .. } => in_expr(target) || in_expr(value),
+            Stmt::Destructure {
+                init, else_block, ..
+            } => in_expr(init) || else_block.as_ref().is_some_and(|eb| in_stmts(eb)),
+            Stmt::Block(stmts, _) => in_stmts(stmts),
+            Stmt::Expr(e, _) | Stmt::Discard(e, _) => in_expr(e),
+            Stmt::Throw { value, .. } => in_expr(value),
+            Stmt::Try {
+                body,
+                catches,
+                finally_block,
+                ..
+            } => {
+                in_stmts(body)
+                    || catches.iter().any(|c| in_stmts(&c.body))
+                    || finally_block.as_ref().is_some_and(|fb| in_stmts(fb))
+            }
+        })
+    }
+    fn member_spawns(m: &ClassMember) -> bool {
+        match m {
+            ClassMember::Field { init, .. } => init.as_ref().is_some_and(in_expr),
+            ClassMember::Constructor { body, .. } => in_stmts(body),
+            ClassMember::Method(f) => in_stmts(&f.body),
+            ClassMember::Hook { get, set, .. } => {
+                get.as_ref().is_some_and(in_expr)
+                    || set.as_ref().is_some_and(|(_, stmts)| in_stmts(stmts))
+            }
+        }
+    }
+    program.items.iter().any(|item| match item {
+        Item::Function(f) => in_stmts(&f.body),
+        Item::Class(c) => c.members.iter().any(member_spawns),
+        Item::Trait(t) => t.members.iter().any(member_spawns),
+        Item::Test { body, .. } => in_stmts(body),
+        // Interface methods are bodyless; enums/aliases/imports carry no executable body.
+        Item::Interface(_) | Item::Enum(_) | Item::TypeAlias { .. } | Item::Import { .. } => false,
+    })
+}
+
 fn collect_pattern_bindings(pat: &Pattern, bound: &mut std::collections::HashSet<String>) {
     match pat {
         Pattern::Binding { name, .. } => {
@@ -418,5 +553,55 @@ fn collect_pattern_bindings(pat: &Pattern, bound: &mut std::collections::HashSet
             }
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod uses_concurrency_tests {
+    use super::uses_concurrency;
+
+    fn parse(src: &str) -> crate::ast::Program {
+        crate::loader::load_loose_src(src).expect("parse").program
+    }
+
+    #[test]
+    fn no_spawn_is_false() {
+        assert!(!uses_concurrency(&parse(
+            "package Main;\nimport Core.Console;\n\
+             function main() -> void { Console.println(\"hi\"); }\n"
+        )));
+    }
+
+    #[test]
+    fn spawn_in_main_is_true() {
+        assert!(uses_concurrency(&parse(
+            "package Main;\n\
+             function sq(int n) -> int { return n * n; }\n\
+             function main() -> void { var t = spawn sq(3); }\n"
+        )));
+    }
+
+    #[test]
+    fn spawn_nested_in_a_helper_body_is_true() {
+        // spawn buried in a non-main free function, inside an `if` inside a `for` — exercises the
+        // statement recursion (a false negative here would silently route to the eager path).
+        assert!(uses_concurrency(&parse(
+            "package Main;\n\
+             function sq(int n) -> int { return n * n; }\n\
+             function work() -> void {\n\
+                 for (int i in 0..3) { if (i > 0) { var t = spawn sq(i); } }\n\
+             }\n\
+             function main() -> void { work(); }\n"
+        )));
+    }
+
+    #[test]
+    fn spawn_in_a_method_body_is_true() {
+        assert!(uses_concurrency(&parse(
+            "package Main;\n\
+             function sq(int n) -> int { return n * n; }\n\
+             class Runner { function go() -> void { var t = spawn sq(2); } }\n\
+             function main() -> void { new Runner().go(); }\n"
+        )));
     }
 }
