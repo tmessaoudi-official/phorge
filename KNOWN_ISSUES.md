@@ -686,22 +686,34 @@ or simply unavailable, never a crash):
 - **Router lives on the injected `Core.Http` types.** A program that declares its *own* `Request`/
   `Response` (the W1 examples) does not get the injected `Router`; import `Core.Http` to use it.
 
-## M6 W4 green threads (`spawn` / channels) — step 2 (synchronous-degenerate)
+## M6 W4 green threads (`spawn` / channels) — S4.3 cooperative cutover **DONE**
 
-The concurrency *surface* and value model are in (`docs/specs/2026-06-29-m6-w4-green-threads-design.md`,
-build step 2): `spawn <call>` → `Task<T>`, `t.join()`, typed `Channel<T>` (`Channel.create()` /
-`ch.send(v)` / `ch.recv()`). Both backends run it **byte-identically** (`run≡runvm`); it is **quarantined
-from the PHP oracle** (PHP has no green threads — the transpiler emits `E-CONCURRENCY-NO-PHP`, never a
-misleading synchronous lowering).
+The concurrency *surface* and value model (`docs/specs/2026-06-29-m6-w4-green-threads-design.md`):
+`spawn <call>` → `Task<T>`, `t.join()`, typed `Channel<T>` (`Channel.create()` / `ch.send(v)` /
+`ch.recv()`). Both backends run it **byte-identically** (`run≡runvm`); it is **quarantined from the PHP
+oracle** (PHP has no green threads — the transpiler emits `E-CONCURRENCY-NO-PHP`, never a misleading
+synchronous lowering).
 
-- **Cooperative scheduling is not wired yet (the synchronous-degenerate model).** A `spawn`ned task runs
-  to **completion immediately** at `spawn` (so `join` always has its result, and a producer must fill a
-  channel *before* a consumer drains it). A `recv` on an **empty** channel is a clean fault (`recv from
-  empty channel`) rather than a suspension. This is the byte-identical step-2 foundation; the shared
-  deterministic scheduler (`green::sched`, kernel already landed) that **interleaves** tasks and
-  **suspends** a blocked `recv`/`join` until a `send`/completion wakes it is **build step 4** (the
-  stackful-coroutine executor on native; the VM frame-swap fallback on wasm). Until then, programs that
-  need true interleaving (e.g. a `recv` *before* the matching `send`) deadlock-fault instead of yielding.
+- **Cooperative scheduling is LIVE (S4.3 cutover).** A `spawn`ned single-overload free-function call is
+  **deferred** (it does NOT run at `spawn`); tasks run on stackful coroutines (`corosensei`, native) or
+  the eager model (wasm) driven by the single deterministic `green::sched` scheduler — both backends, so
+  interleaving is byte-identical. A `recv` on an **empty** channel (or a `join` on an unfinished task)
+  **suspends** the task until a `send`/completion wakes it. Programs that need true interleaving (a `recv`
+  *before* the matching `send`) now work instead of fault. **wasm keeps the eager model** (corosensei has
+  no native stack to switch); the playground concurrency demo is synchronous-degenerate until a wasm
+  frame-swap executor (tracked).
+- **Cooperative `spawn` defers only a single-overload free-function call.** A spawned *method* call, an
+  *overloaded* free function, a *closure* value, or a *variant* constructor runs **inline** in the
+  spawning task (synchronous-degenerate) on both backends — identical `run≡runvm`, but not yet truly
+  concurrent. True deferral for those forms is a follow-up (the VM needs an overload-dispatching /
+  receiver-bound spawn op).
+- **A cooperative task fault renders without its stack-trace frames.** The cooperative driver propagates
+  a task fault as a bare message (the coroutine boundary doesn't yet thread the interpreter's
+  `trace_stack` / the VM's frame attribution out). Fault *kind* + message are byte-identical `run≡runvm`;
+  only the rendered backtrace is absent (follow-up). The synchronous path's traces are unchanged.
+- **Statics are per-task in cooperative mode.** Each green task builds its own engine, so a `static`
+  field written in one task is not observed in another. No shipped program relies on cross-task static
+  mutation; a shared static cell is a follow-up.
 - **`Channel`/`Task` are reserved built-in type names** (like `List`/`Map`/`Set`/`Error`) — a user
   program cannot declare a `class`/`enum`/`interface`/`type` named `Channel` or `Task`.
 - **`Channel.create()` requires a `Channel<T>` annotation** to fix its element type (the static
@@ -713,12 +725,12 @@ misleading synchronous lowering).
   follow-up.
 - **Unbounded channels.** `send` never blocks (the buffer grows without limit this slice); a
   bounded/closeable channel is a follow-up.
-- **`spawn` compiles its call inline (no thunk frame).** A `spawn f(x)` runs `f(x)` inline rather than
-  wrapping it in a thunk closure, so a fault inside a spawned call traces through the real call
-  (`f → caller`) **identically** on `run` and `runvm`. (A thunk lambda would surface as a synthetic
+- **`spawn` roots a task at the function's own frame (no thunk frame).** A free-function `spawn f(x)`
+  lowers to `Op::SpawnCall(func_idx, argc)` (VM) / defers `f`'s body as the coroutine root
+  (interpreter) — *not* a thunk closure — so a fault inside a spawned call traces through the real call
+  (`f → …`) **identically** on `run` and `runvm`. (A thunk lambda would surface as a synthetic
   `<lambda@N>` frame on the VM only — closures are real call frames there but invisible in the
-  tree-walker — a `run`≢`runvm` trace divergence. The cooperative cutover, when it needs to *defer* the
-  call, must preserve this trace transparency.) This sits on a **broader pre-existing asymmetry**: a
+  tree-walker — a `run`≢`runvm` trace divergence, the reverted `b5053a4` bug.) This sits on a **broader pre-existing asymmetry**: a
   fault inside *any* lambda/closure call shows the closure frame (`<lambda@N>`) on `runvm` but not on
   `run` (the interpreter pushes no trace frame for closure calls). The differential `agree_err` oracle
   classifies faults by *kind* (body substring), so it tolerates this trace-text difference; the

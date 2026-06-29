@@ -2903,6 +2903,40 @@ fn m6w4_spawned_call_fault_agrees() {
 }
 
 #[test]
+fn m6w4_cooperative_cutover_interleaves_identically() {
+    // S4.3 cutover litmus: a `recv`-ing consumer is SPAWNED, so the eager model would run it at
+    // `spawn` and fault `recv from empty channel`. The cooperative driver defers it — `main` sends
+    // first, then the consumer runs and finds the value — so the program succeeds, and must do so
+    // byte-identically on `run` (coroutine-hosted interpreter) and `runvm` (coroutine-hosted VM), both
+    // driven by the shared `green::sched` scheduler. PHP-quarantined (no green threads in PHP).
+    agree(
+        "import Core.Console; \
+         function consume(Channel<int> ch) -> int { int v = ch.recv(); Console.println(\"got {v}\"); return v; } \
+         function main() -> void { \
+             Channel<int> ch = Channel.create(); \
+             Task<int> t = spawn consume(ch); \
+             ch.send(42); \
+             int got = t.join(); \
+             Console.println(\"done {got}\"); \
+         }",
+    );
+    // Genuine suspend/resume: `main` recvs on an empty channel (producer spawned, not yet run), blocks,
+    // is woken by the producer's `send`, resumes — no deadlock, identical on both backends.
+    agree(
+        "import Core.Console; \
+         function produce(Channel<int> ch) -> int { ch.send(99); return 1; } \
+         function main() -> void { \
+             Channel<int> ch = Channel.create(); \
+             Task<int> p = spawn produce(ch); \
+             int v = ch.recv(); \
+             Console.println(\"recv {v}\"); \
+             int r = p.join(); \
+             Console.println(\"done {r}\"); \
+         }",
+    );
+}
+
+#[test]
 fn m6w4_spawn_is_a_usable_identifier() {
     // `spawn` is contextual: still usable as an ordinary variable name when not leading a call.
     agree(

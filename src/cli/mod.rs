@@ -1069,6 +1069,16 @@ pub fn cmd_run(src: &str) -> Result<String, String> {
     on_deep_stack(|| {
         let prog = parse_checked(src)?;
         foreign_runtime_gate(&prog)?;
+        // S4.3 cutover: a program that uses `spawn` runs on the cooperative green-thread driver (real
+        // task interleaving); every other program stays on the unchanged synchronous interpreter. wasm
+        // (and a `--no-default-features` build without `green`) keeps the eager path — the cfg gate
+        // makes the cooperative driver absent there. Byte-identical to `runvm` via the shared scheduler.
+        #[cfg(all(feature = "green", not(target_arch = "wasm32")))]
+        if crate::ast::uses_concurrency(&prog) {
+            return crate::interpreter::run_cooperative_interp(&prog)
+                .map(|(out, _exit)| out)
+                .map_err(|e| e.to_string());
+        }
         interpret(&prog).map_err(|e| e.to_string())
     })
 }
@@ -1081,6 +1091,12 @@ pub fn cmd_runvm(src: &str) -> Result<String, String> {
         let (prog, reified) = check_and_expand_reified(&parsed, src)?;
         foreign_runtime_gate(&prog)?;
         let program = compile_with(&prog, &reified).map_err(|e| e.to_string())?;
+        #[cfg(all(feature = "green", not(target_arch = "wasm32")))]
+        if crate::ast::uses_concurrency(&prog) {
+            return crate::vm::run_cooperative_vm(&program)
+                .map(|(out, _exit)| out)
+                .map_err(|e| e.to_string());
+        }
         Vm::new(&program).run().map_err(|e| e.to_string())
     })
 }
@@ -1091,6 +1107,10 @@ pub fn cmd_run_exit(src: &str) -> Result<(String, i64), String> {
     on_deep_stack(|| {
         let prog = parse_checked(src)?;
         foreign_runtime_gate(&prog)?;
+        #[cfg(all(feature = "green", not(target_arch = "wasm32")))]
+        if crate::ast::uses_concurrency(&prog) {
+            return crate::interpreter::run_cooperative_interp(&prog).map_err(|e| e.to_string());
+        }
         interpret_main(&prog).map_err(|e| e.to_string())
     })
 }
@@ -1102,6 +1122,10 @@ pub fn cmd_runvm_exit(src: &str) -> Result<(String, i64), String> {
         let (prog, reified) = check_and_expand_reified(&parsed, src)?;
         foreign_runtime_gate(&prog)?;
         let program = compile_with(&prog, &reified).map_err(|e| e.to_string())?;
+        #[cfg(all(feature = "green", not(target_arch = "wasm32")))]
+        if crate::ast::uses_concurrency(&prog) {
+            return crate::vm::run_cooperative_vm(&program).map_err(|e| e.to_string());
+        }
         Vm::new(&program).run_main().map_err(|e| e.to_string())
     })
 }
@@ -1127,6 +1151,15 @@ pub fn run_program(unit: &crate::loader::Unit) -> Result<String, String> {
     on_deep_stack(|| {
         let checked = check_and_expand(&unit.program, &unit.diag_src)?;
         foreign_runtime_gate(&checked)?;
+        #[cfg(all(feature = "green", not(target_arch = "wasm32")))]
+        if crate::ast::uses_concurrency(&checked) {
+            return crate::interpreter::run_cooperative_interp(&checked)
+                .map(|(out, _exit)| out)
+                .map_err(|mut e| {
+                    let src = unit.attribute_frames(&mut e);
+                    e.render(&src)
+                });
+        }
         interpret(&checked).map_err(|mut e| {
             let src = unit.attribute_frames(&mut e);
             e.render(&src)
@@ -1140,6 +1173,15 @@ pub fn runvm_program(unit: &crate::loader::Unit) -> Result<String, String> {
         let (checked, reified) = check_and_expand_reified(&unit.program, &unit.diag_src)?;
         foreign_runtime_gate(&checked)?;
         let program = compile_with(&checked, &reified).map_err(|e| e.to_string())?;
+        #[cfg(all(feature = "green", not(target_arch = "wasm32")))]
+        if crate::ast::uses_concurrency(&checked) {
+            return crate::vm::run_cooperative_vm(&program)
+                .map(|(out, _exit)| out)
+                .map_err(|mut e| {
+                    let src = unit.attribute_frames(&mut e);
+                    e.render(&src)
+                });
+        }
         Vm::new(&program).run().map_err(|mut e| {
             let src = unit.attribute_frames(&mut e);
             e.render(&src)
@@ -1153,6 +1195,13 @@ pub fn run_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64), Str
     on_deep_stack(|| {
         let checked = check_and_expand(&unit.program, &unit.diag_src)?;
         foreign_runtime_gate(&checked)?;
+        #[cfg(all(feature = "green", not(target_arch = "wasm32")))]
+        if crate::ast::uses_concurrency(&checked) {
+            return crate::interpreter::run_cooperative_interp(&checked).map_err(|mut e| {
+                let src = unit.attribute_frames(&mut e);
+                e.render(&src)
+            });
+        }
         interpret_main(&checked).map_err(|mut e| {
             let src = unit.attribute_frames(&mut e);
             e.render(&src)
@@ -1166,6 +1215,13 @@ pub fn runvm_program_exit(unit: &crate::loader::Unit) -> Result<(String, i64), S
         let (checked, reified) = check_and_expand_reified(&unit.program, &unit.diag_src)?;
         foreign_runtime_gate(&checked)?;
         let program = compile_with(&checked, &reified).map_err(|e| e.to_string())?;
+        #[cfg(all(feature = "green", not(target_arch = "wasm32")))]
+        if crate::ast::uses_concurrency(&checked) {
+            return crate::vm::run_cooperative_vm(&program).map_err(|mut e| {
+                let src = unit.attribute_frames(&mut e);
+                e.render(&src)
+            });
+        }
         Vm::new(&program).run_main().map_err(|mut e| {
             let src = unit.attribute_frames(&mut e);
             e.render(&src)

@@ -9,9 +9,9 @@
 //! that `Rc` ([`Vm::program_rc`]) so a `SpawnCall` can build a child task-VM coroutine. `spawn` defers
 //! (the function body is the coroutine root — no lambda); `recv`/`join` suspend via the yielder.
 //!
-//! Gated off until the entry-point flip (the run≡runvm spine needs both backends flipped together);
-//! `run_cooperative_vm` is built + unit-tested here. Hence `#[allow(dead_code)]` — removed by the flip.
-#![allow(dead_code)]
+//! Wired into `cmd_runvm`/`cmd_runvm_exit` (S4.3 flip): a `uses_concurrency` program routes here, in
+//! the same step `cmd_run` routes to the interpreter twin — so the byte-identity spine (`run≡runvm`)
+//! holds. Every non-concurrent program stays on the unchanged synchronous [`run_main`](Vm::run_main).
 
 use super::*;
 use crate::green::coro::{CoroutineTask, TaskCoroutine, TaskYielder, YielderSuspend};

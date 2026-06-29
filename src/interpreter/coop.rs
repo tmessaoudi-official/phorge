@@ -10,11 +10,9 @@
 //! that, `b5053a4`); `recv`-on-empty / `join`-on-incomplete suspend via the coroutine yielder until the
 //! scheduler wakes the task. wasm keeps the eager model (corosensei has no native stack to switch).
 //!
-//! **Gated off until the flip.** `run_cooperative_interp` is built + unit-tested here but not yet wired
-//! into `cmd_run`: the byte-identity spine requires `run≡runvm`, so the entry-point flip must route
-//! *both* backends to their cooperative drivers in the same commit (the VM driver is the next step).
-//! Hence the `#[allow(dead_code)]` — removed by that flip.
-#![allow(dead_code)]
+//! Wired into `cmd_run`/`cmd_run_exit` (S4.3 flip): a `uses_concurrency` program routes here, every
+//! other program stays on the unchanged synchronous interpreter. `cmd_runvm` routes to the VM twin
+//! [`vm::coop`](crate::vm) in the same step, so the byte-identity spine (`run≡runvm`) holds.
 
 use super::*;
 use crate::green::coro::{CoroutineTask, TaskCoroutine, TaskYielder, YielderSuspend};
@@ -62,36 +60,40 @@ impl<'c> Interp<'c> {
         interp
     }
 
-    /// Defer a `spawn`ed call as a new scheduler task (cooperative path). The args are evaluated
-    /// **now**, in this (the spawning) task — the new task interpreter has a fresh scope and cannot see
-    /// the spawner's locals — and the resolved function body becomes the new coroutine's root call, so
-    /// a fault inside it traces exactly like a direct call. Returns the `Task` handle; the task runs
-    /// when the scheduler next picks it.
+    /// `spawn` on the cooperative path. **Defers** only a single-overload **free-function** call — the
+    /// exact form the VM compiler lowers to `Op::SpawnCall` and defers — so the two backends agree on
+    /// what runs as a separate task. The args are evaluated **now**, in the spawning task (the new task
+    /// interpreter has a fresh scope and cannot see the spawner's locals), and the function body is the
+    /// new coroutine's root call (no synthetic lambda → fault traces match a direct call). Every other
+    /// operand (method / overloaded / closure / variant call) runs **inline** here, matching the VM
+    /// (whose compiler emits `<call>; Op::Spawn`, run inline) — so `run≡runvm`; those forms are
+    /// synchronous-degenerate for now (true concurrency for them is a documented follow-up).
     pub(super) fn spawn_cooperative(&mut self, call: &Expr) -> R<Value> {
-        let (callee, args) = match call {
-            Expr::Call { callee, args, .. } => (callee, args),
-            // The checker guarantees `spawn`'s operand is a call; defensive otherwise.
-            _ => return rt("spawn expects a function call"),
-        };
-        // Cooperative spawn currently targets a free-function call (the litmus + `concurrency.phg`
-        // surface); a spawned method call is a documented follow-up (KNOWN_ISSUES).
-        let name = match &**callee {
-            Expr::Ident(n, _) => n.clone(),
-            _ => return rt("cooperative `spawn` supports a free-function call only (for now)"),
-        };
-        let argv = self.eval_args(args)?;
-        let set = match self.funcs.get(&name) {
-            Some(s) => s.clone(),
-            None => return rt(format!("`{name}` is not a function")),
-        };
-        let f = self.select_free_overload(&name, &set, &argv)?;
-        if argv.len() != f.params.len() {
-            return rt(format!(
-                "`{name}` expects {} args, got {}",
-                f.params.len(),
-                argv.len()
-            ));
+        // Defer iff the operand is a call to a bare identifier naming a single-overload free function.
+        if let Expr::Call { callee, args, .. } = call {
+            if let Expr::Ident(name, _) = &**callee {
+                if let Some(set) = self.funcs.get(name) {
+                    if set.len() == 1 {
+                        let f = set[0].clone();
+                        let argv = self.eval_args(args)?;
+                        if argv.len() == f.params.len() {
+                            return self.defer_free_fn_task(f, argv);
+                        }
+                    }
+                }
+            }
         }
+        // Fallback: run the call inline in this task (synchronous-degenerate), then register it as a
+        // finished task — byte-identical to the VM's cooperative `Op::Spawn`.
+        let result = self.eval(call)?;
+        let id = self.coop.borrow_mut().sched.spawn();
+        self.coop.borrow_mut().results.insert(id, result);
+        Ok(Value::Task(id))
+    }
+
+    /// Queue a single-overload free function (with already-evaluated args) as a new scheduler task whose
+    /// coroutine root is the function body itself, and return its `Task` handle.
+    fn defer_free_fn_task(&mut self, f: FunctionDecl, argv: Vec<Value>) -> R<Value> {
         let id = self.coop.borrow_mut().sched.spawn();
         let program = self
             .program

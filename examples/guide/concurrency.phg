@@ -1,14 +1,15 @@
 package Main;
 import Core.Console;
 
-// Green threads (M6 W4) — uncolored cooperative concurrency: a `spawn` that starts a task, typed
-// `Channel<T>` FIFOs to communicate, and `join` to collect a task's result. No `async`/`await`
+// Green threads (M6 W4 / S4.3) — uncolored COOPERATIVE concurrency. `spawn` starts a green task, typed
+// `Channel<T>` FIFOs communicate between tasks, and `join` collects a task's result. No `async`/`await`
 // colouring — any function can be `spawn`ed.
 //
-// This is the synchronous-degenerate foundation (build step 2): a spawned task runs to completion at
-// `spawn`, so `join` always has its result and a producer fills a channel before a consumer drains it.
-// The cooperative scheduler (build step 4) keeps this exact surface but interleaves tasks, so a
-// `recv` on an empty channel suspends the receiver until a `send` arrives.
+// As of the S4.3 cutover this is GENUINELY cooperative: a spawned call is deferred (it does NOT run at
+// `spawn`), tasks run on stackful coroutines driven by a single deterministic scheduler, and a `recv`
+// on an empty channel (or a `join` on an unfinished task) SUSPENDS the task until a `send` / completion
+// wakes it. Both backends — the tree-walking interpreter (`run`) and the bytecode VM (`runvm`) — drive
+// the SAME scheduler, so task interleaving is byte-identical (the run≡runvm spine).
 //
 // Green threads have NO PHP target (PHP has no green threads), so this program is quarantined from the
 // PHP oracle — it runs on the Phorj interpreter and VM, byte-identically. The transpiler rejects it
@@ -22,6 +23,30 @@ function sumOfSquares(): int {
     Task<int> b = spawn square(3);
     Task<int> c = spawn square(4);
     return a.join() + b.join() + c.join();
+}
+
+// A genuinely-interleaving producer: it runs only after `main` blocks on an empty `recv`, then its
+// `send`s wake the consumer. Under the old eager model a spawned consumer would have run at `spawn` and
+// faulted on the empty channel; cooperative scheduling makes the blocked recv suspend instead.
+function producer(Channel<int> ch): int {
+    for (int i in 1..=3) {
+        ch.send(i * 10);
+    }
+    return 3;
+}
+
+// `main`'s consumer recvs on an empty channel FIRST — it blocks, the scheduler runs the spawned
+// producer, whose sends wake the consumer, which then drains the buffered values. Deterministic ⇒
+// identical on both backends.
+function interleave(): int {
+    Channel<int> ch = Channel.create();
+    Task<int> p = spawn producer(ch);
+    mutable int total = 0;
+    for (int i in 1..=3) {
+        total = total + ch.recv();
+    }
+    Console.println("producer sent {p.join()} values");
+    return total;
 }
 
 function main(): void {
@@ -39,14 +64,7 @@ function main(): void {
     words.send("threads");
     Console.println("{words.recv()} {words.recv()} {words.recv()}");
 
-    // 4. channels carry any type; a small producer/consumer over ints.
-    Channel<int> nums = Channel.create();
-    for (int i in 1..=5) {
-        nums.send(i * 10);
-    }
-    mutable int total = 0;
-    for (int j in 1..=5) {
-        total = total + nums.recv();
-    }
-    Console.println("channel total = {total}");
+    // 4. genuine cooperative interleave: a blocked `recv` suspends the consumer until the spawned
+    //    producer sends (impossible under the old eager model — it would have faulted at `spawn`).
+    Console.println("interleaved total = {interleave()}");
 }
