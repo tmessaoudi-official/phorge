@@ -199,8 +199,15 @@ not a panic:
   `run`/`runvm` backends handle it); (c) the **multi-of-multi** trait lowering — a class that is both an
   MI leaf and an MI ancestor takes the `implements`/`use` path and is not also emitted as a trait (a deep
   edge outside `package Main` scope); (d) an **overloaded** parent method (the compiler resolves via the
-  `methods` table, which doesn't carry the overload set — single-method parents only for now);
-  (e) cross-package parent calls (package-`Main` scope, like every M-RT slice).
+  `methods` table, which doesn't carry the overload set — single-method parents only for now).
+  **(e) Cross-package single inheritance + parent calls now ship** (validated 2026-06-29): a
+  `package Main` class may `extends` a library-package class (imported via `import type`), inherit its
+  constructor + fields, override its `open` methods, and call up with both `parent.m(…)` and the named
+  `parent(Ancestor).m(…)` form — the loader mangles the `extends` parent name and the
+  `parent(Ancestor)` reference to the library FQN, the transpiler emits `extends \Acme\Zoo\Animal` +
+  `parent::m()`. Byte-identical `run ≡ runvm ≡ real PHP` over a two-level chain
+  (`examples/project/inherit/`). Cross-package **multiple** inheritance (a class decomposed to PHP
+  traits across packages) is still out of scope (the MI transpile path is `package Main`-only).
 
 - **Traits — S8 shipped; deferrals (all clean compile-time, or transpile-oracle-gated):** `trait`/`use`
   composition (methods, `mutable`/`static` state, a trait constructor, abstract requirements, property

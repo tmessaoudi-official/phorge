@@ -1,0 +1,17 @@
+// A base class in a *library* package, extended cross-package (M-RT S6 + B1a, cross-package).
+//
+// A `package Main` class can now `extends` a class declared in a dotted library package (imported via
+// `import type`), override its `open` methods, inherit its constructor + fields, and call up to it
+// with `parent.m(…)` (nearest ancestor) and `parent(Animal).m(…)` (named ancestor). The loader mangles
+// the `extends` parent name AND the `parent(Ancestor)` reference to the library FQN; the transpiler
+// emits `extends \Acme\Zoo\Animal` and `parent::m()`. Phorj is final-by-default, so a method meant to
+// be overridden is marked `open`.
+package Acme.Zoo;
+
+open class Animal {
+  constructor(public string name) {}
+
+  open function speak(): string {
+    return "(generic animal sound)";
+  }
+}

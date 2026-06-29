@@ -93,6 +93,14 @@ pub(super) fn resolve_item(item: Item, ctx: &ResolveCtx) -> Item {
         }
         Item::Class(mut c) => {
             c.name = mangle(&ctx.package, &c.name);
+            // A cross-package parent class (`class Dog extends Animal` where `Animal` is imported via
+            // `import type`) must be mangled to its FQN so the checker's inheritance tables, the
+            // backends' ancestor resolution, and the transpiler's `extends \FQN` all line up.
+            for ext in &mut c.extends {
+                if let Some(m) = resolve_type_ref(ext, ctx) {
+                    *ext = m;
+                }
+            }
             for imp in &mut c.implements {
                 if let Some(m) = resolve_type_ref(imp, ctx) {
                     *imp = m;
@@ -530,6 +538,21 @@ pub(super) fn resolve_expr(expr: Expr, ctx: &ResolveCtx) -> Expr {
         // callee is mangled to its FQN (`new Rect(…)` ⇒ `new \Acme\Geometry\Rect(…)`); the checker
         // later validates + unwraps it. Without this it would fall into the `leaf` arm unresolved.
         Expr::New(inner, span) => Expr::New(Box::new(resolve_expr(*inner, ctx)), span),
+        // A `parent(Ancestor).m(args)` / `parent.m(args)` call: mangle the named ancestor to its FQN
+        // (a cross-package parent class imported via `import type`) so the lexical ancestor lookup
+        // matches the mangled `extends` chain, and resolve the call arguments. Without this arm it
+        // fell into the `leaf` catch-all and a cross-package `parent(Animal)` failed E-PARENT-NOT-ANCESTOR.
+        Expr::ParentCall {
+            ancestor,
+            method,
+            args,
+            span,
+        } => Expr::ParentCall {
+            ancestor: ancestor.map(|a| resolve_type_ref(&a, ctx).unwrap_or(a)),
+            method,
+            args: args.into_iter().map(|e| resolve_expr(e, ctx)).collect(),
+            span,
+        },
         // Leaves carry no nested call site or type name: Int / Float / Bool / Null / Bytes / This.
         leaf => leaf,
     }

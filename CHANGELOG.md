@@ -6,6 +6,17 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — Cross-package single inheritance + parent dispatch (M-RT S6/B1a, cross-package)
+
+A `package Main` class can now `extends` a class declared in a library package (imported via
+`import type`), inheriting its constructor and fields, overriding its `open` methods, and calling up
+with both `parent.m(…)` (nearest ancestor) and the named `parent(Ancestor).m(…)` form — all resolved
+across the package boundary. The loader's cross-package resolution pass now mangles the `extends` parent
+name (the missing piece) and the `parent(Ancestor)` reference + arguments inside an `Expr::ParentCall`;
+the transpiler emits `extends \Acme\Zoo\Animal` and `parent::m()`. Byte-identical
+`run ≡ runvm ≡ real PHP 8.5` over a two-level chain (`examples/project/inherit/`, +2 project tests).
+Cross-package *multiple* inheritance remains out of scope.
+
 ### Fixed — `Core.Json` in multi-package projects + cross-package map literals
 
 A multi-package project that imports `Core.Json` now round-trips byte-identically

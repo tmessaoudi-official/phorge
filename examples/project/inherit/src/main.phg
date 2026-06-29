@@ -1,0 +1,27 @@
+// Cross-package INHERITANCE + parent dispatch (M-RT S6/B1a, cross-package): a `package Main` class
+// extends a library-package base, inherits its constructor and field, overrides an `open` method, and
+// calls up with both the bare and the named-ancestor `parent` forms across the package boundary.
+package Main;
+
+import Core.Console;
+import type Acme.Zoo.Animal;
+
+// `Dog` inherits `Animal`'s constructor (so `new Dog("rex")` sets `name`) and its `name` field.
+open class Dog extends Animal {
+  open function speak(): string {
+    // bare `parent.speak()` → nearest ancestor (Animal)
+    return "woof, says {this.name} — over [{parent.speak()}]";
+  }
+}
+
+class Puppy extends Dog {
+  open function speak(): string {
+    // named `parent(Animal)` → jump past Dog straight to the library base
+    return "yip! (base: {parent(Animal).speak()})";
+  }
+}
+
+function main(): void {
+  Console.println(new Dog("rex").speak());
+  Console.println(new Puppy("milo").speak());
+}

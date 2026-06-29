@@ -365,3 +365,47 @@ fn cross_package_call_inside_map_literal_resolves() {
     assert_eq!(run, "42\n");
     assert_eq!(run, runvm, "run and runvm must be byte-identical");
 }
+
+/// A `package Main` class `extends` a library-package class (imported via `import type`), inheriting
+/// its constructor + field, overriding an `open` method, and calling up with the named
+/// `parent(Ancestor).m()` form — all resolved across the package boundary, byte-identical.
+#[test]
+fn cross_package_inheritance_and_parent_calls_run_byte_identically() {
+    let tmp = TempDir::new();
+    tmp.write("phorj.toml", "module = \"acme/zoo\"\nsource = \"src\"");
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main;\nimport Core.Console;\nimport type Acme.Zoo.Animal;\n\
+         class Dog extends Animal {\n  open function speak() -> string { return \"woof/\" + parent(Animal).speak(); }\n}\n\
+         function main() -> void {\n  Console.println(new Dog(\"rex\").speak());\n}",
+    );
+    tmp.write(
+        "src/Acme/Zoo/Animal.phg",
+        "package Acme.Zoo;\nopen class Animal {\n  constructor(public string name) {}\n  open function speak() -> string { return \"(animal)\"; }\n}",
+    );
+    let (run, runvm) = run_both(&entry);
+    assert_eq!(run, "woof/(animal)\n");
+    assert_eq!(run, runvm, "run and runvm must be byte-identical");
+}
+
+/// The cross-package parent class is emitted as `extends \Acme\Zoo\Animal` and the parent call as
+/// `parent::speak()` in the using class's namespace block.
+#[test]
+fn cross_package_inheritance_transpiles_to_qualified_extends() {
+    let tmp = TempDir::new();
+    tmp.write("phorj.toml", "module = \"acme/zoo\"\nsource = \"src\"");
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main;\nimport Core.Console;\nimport type Acme.Zoo.Animal;\n\
+         class Dog extends Animal {\n  open function speak() -> string { return parent.speak(); }\n}\n\
+         function main() -> void {\n  Console.println(new Dog(\"rex\").speak());\n}",
+    );
+    tmp.write(
+        "src/Acme/Zoo/Animal.phg",
+        "package Acme.Zoo;\nopen class Animal {\n  constructor(public string name) {}\n  open function speak() -> string { return \"(animal)\"; }\n}",
+    );
+    let unit = loader::load(&entry).expect("project loads");
+    let php = cli::transpile_program(&unit.program, &unit.diag_src).expect("transpiles");
+    assert!(php.contains("extends \\Acme\\Zoo\\Animal"), "got:\n{php}");
+    assert!(php.contains("parent::speak()"), "got:\n{php}");
+}
