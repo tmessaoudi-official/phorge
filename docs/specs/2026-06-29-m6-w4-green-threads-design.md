@@ -73,7 +73,25 @@ by construction:
   playground falls back to the VM-runs-tasks model *only in wasm* (documented), while native keeps the
   full uniform-coroutine model.
 
-### Original analysis (superseded by §4 above, kept for context)
+### §4b — VERIFIED wasm constraint + final hybrid (developer-locked 2026-06-29)
+
+**[Verified]** `corosensei` (and stackful coroutine crates generally) compile on native but **fail on
+`wasm32-unknown-unknown`** (no native stack to switch — confirmed by a scratch `cargo build --target
+wasm32-unknown-unknown`, 5 errors). The playground runs BOTH `pg_run` (interpreter) and `pg_runvm` (VM)
+in-browser, and the interpreter is the backend needing coroutines → uniform-coroutines cannot run green
+threads in the playground.
+
+**LOCKED resolution — Hybrid (matches mechanism to where correctness is gated):**
+- **Native:** uniform stackful coroutines on both backends + the shared scheduler kernel — full
+  independence, byte-identical `run≡runvm`, enforced by the **native** differential gate.
+- **`#[cfg(target_arch="wasm32")]`:** the interpreter delegates task *execution* to the VM's frame-swap
+  suspension (no coroutine). Green threads run in the playground; `pg_run≡pg_runvm` holds. Independence
+  is reduced ONLY in the browser demo — which never gated correctness, so this is principled, not a
+  bandaid. The shared scheduler kernel is identical on both targets; only the *executor wiring* differs.
+- The **scheduler kernel (`green::sched`) is target-independent** and built/tested first (this is the
+  safe, decoupled first increment — pure logic, wired to no backend).
+
+### Original analysis (superseded by §4/§4b above, kept for context)
 
 **Cooperative, deterministic, single-threaded.** A run-queue of ready tasks (FIFO). The "main" program
 is task 0. `spawn` enqueues a new task. A task runs until it **yields** (calls `recv` on an empty

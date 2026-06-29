@@ -114,6 +114,16 @@
 
 ## Progress
 
+- **Marathon checkpoint #13 (session 3): S4.3 build STARTED — scheduler kernel landed.** VERIFIED
+  `corosensei` fails `wasm32` compile (scratch build, 5 errors) ⇒ locked the **Hybrid** (coroutines
+  native both backends + interpreter-delegates-to-VM in wasm only; correctness gate is native, so
+  browser-only independence reduction is principled). First safe increment: **`src/green/sched.rs`** —
+  the single-sourced, backend-agnostic scheduler kernel (`Scheduler`, `TaskId`/`ChanId`/`Trap`;
+  FIFO run-queue, per-channel FIFO recv wait-lists, join-wake-in-order, deadlock detect). Pure logic,
+  wired to NO backend ⇒ zero byte-identity-spine risk; 6 unit tests green. Next increments (spec §7):
+  surface+value model → channels → coroutine executor (native) + VM-frame-swap (wasm) driven by this
+  kernel → join/yield/example/quarantine. Commit pending gate-green.
+
 - **Marathon checkpoint #12 (session 3): Spine-4 S4.3 DESIGN-SPEC written** (`docs/specs/2026-06-29-m6-w4-green-threads-design.md`),
   Rust-only-quarantine model locked. **It surfaced a genuine architectural fork (escalated to developer):**
   the VM side of a cooperative scheduler is tractable (swap reified frame stacks, building on `run_until`),

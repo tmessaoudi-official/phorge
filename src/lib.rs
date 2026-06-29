@@ -11,6 +11,7 @@ pub mod compiler;
 pub mod diagnostic;
 pub mod dispatch;
 pub mod fmt;
+pub mod green;
 pub mod interpreter;
 pub mod lexer;
 pub mod lift;
