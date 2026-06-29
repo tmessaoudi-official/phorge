@@ -256,6 +256,49 @@ fn list_reduce(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, Strin
 /// The `Core.List` registry entries (M-RT S7b). `reverse` is generic over the element type; `sum` is
 /// concrete `List<int> -> int`; `map`/`filter`/`reduce` are the higher-order ops (S7b-3). All erase
 /// to the PHP array builtin of the same shape (D-L9).
+fn list_is_empty(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs)] => Ok(Value::Bool(xs.is_empty())),
+        _ => Err("List.isEmpty expects (List<T>)".into()),
+    }
+}
+
+/// `List.flatten(List<List<T>>) -> List<T>` — concatenate the inner lists in order (PHP
+/// `array_merge(...)`). A non-list element is a type error the checker prevents; defensively ignored.
+fn list_flatten(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs)] => {
+            let mut out = Vec::new();
+            for x in xs.iter() {
+                if let Value::List(inner) = x {
+                    out.extend(inner.iter().cloned());
+                }
+            }
+            Ok(Value::List(std::rc::Rc::new(out)))
+        }
+        _ => Err("List.flatten expects (List<List<T>>)".into()),
+    }
+}
+
+/// `List.count(List<T>, (T) -> bool) -> int` — how many elements satisfy the predicate. The predicate
+/// runs on the calling backend via the re-entrant invoker; a fault (or non-bool result) is propagated.
+fn list_count(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), f] => {
+            let mut n: i64 = 0;
+            for x in xs.iter() {
+                match call(f, vec![x.clone()])? {
+                    Value::Bool(true) => n += 1,
+                    Value::Bool(false) => {}
+                    _ => return Err("List.count predicate must return bool".into()),
+                }
+            }
+            Ok(Value::Int(n))
+        }
+        _ => Err("List.count expects (List<T>, (T) -> bool)".into()),
+    }
+}
+
 pub(crate) fn list_natives() -> Vec<NativeFn> {
     let t = || Ty::Param("T".into());
     let u = || Ty::Param("U".into());
@@ -498,6 +541,35 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::HigherOrder(list_all),
             php: |a| format!("__phorj_all({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "isEmpty",
+            params: vec![list(t())],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::Pure(list_is_empty),
+            php: |a| format!("count({}) === 0", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "flatten",
+            params: vec![list(list(t()))],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_flatten),
+            // `array_merge(...$xss)` concatenates + re-indexes; `...[]` ⇒ `array_merge()` ⇒ `[]`.
+            php: |a| format!("array_merge(...{})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.List",
+            name: "count",
+            params: vec![list(t()), Ty::Function(vec![t()], Box::new(Ty::Bool))],
+            ret: Ty::Int,
+            pure: true,
+            eval: NativeEval::HigherOrder(list_count),
+            // array_filter keeps the predicate-true elements; count them.
+            php: |a| format!("count(array_filter({}, {}))", parg(a, 0), parg(a, 1)),
         },
     ]
 }

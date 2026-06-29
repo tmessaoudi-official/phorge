@@ -149,12 +149,28 @@ fn map_filter(args: &[Value], call: &mut ClosureInvoker) -> Result<Value, String
 
 /// The `Core.Map` registry entries (M-RT S7b). All generic over `K`/`V`; each erases to a PHP array
 /// builtin (D-L9). NOTE the PHP arg order for `has`: `array_key_exists(key, array)` — key first.
+fn map_is_empty(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Map(m)] => Ok(Value::Bool(m.is_empty())),
+        _ => Err("Map.isEmpty expects (Map<K, V>)".into()),
+    }
+}
+
 pub(crate) fn map_natives() -> Vec<NativeFn> {
     let k = || Ty::Param("K".into());
     let v = || Ty::Param("V".into());
     let w = || Ty::Param("W".into());
     let map = || Ty::Map(Box::new(k()), Box::new(v()));
     vec![
+        NativeFn {
+            module: "Core.Map",
+            name: "isEmpty",
+            params: vec![map()],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::Pure(map_is_empty),
+            php: |a| format!("count({}) === 0", parg(a, 0)),
+        },
         NativeFn {
             module: "Core.Map",
             name: "keys",

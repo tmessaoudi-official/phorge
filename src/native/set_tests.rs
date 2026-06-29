@@ -1,4 +1,5 @@
 use super::*;
+use std::rc::Rc;
 
 #[test]
 fn set_natives_eval_and_emit() {
@@ -112,4 +113,32 @@ fn set_algebra_union_intersection_difference() {
         registry()[index_of("Core.Set", "union").unwrap()].ret,
         Ty::Set(Box::new(Ty::Param("T".into())))
     );
+}
+
+#[test]
+fn set_is_empty_and_to_list() {
+    use crate::value::HKey;
+    let mut o = String::new();
+    assert!(matches!(
+        set_is_empty(&[Value::Set(Rc::new(vec![]))], &mut o).unwrap(),
+        Value::Bool(true)
+    ));
+    // toList preserves insertion order
+    let s = Value::Set(Rc::new(vec![HKey::Int(3), HKey::Int(1), HKey::Int(2)]));
+    assert!(matches!(
+        set_is_empty(std::slice::from_ref(&s), &mut o).unwrap(),
+        Value::Bool(false)
+    ));
+    match set_to_list(&[s], &mut o).unwrap() {
+        Value::List(xs) => assert_eq!(
+            xs.iter()
+                .map(|v| match v {
+                    Value::Int(n) => *n,
+                    _ => -99,
+                })
+                .collect::<Vec<_>>(),
+            vec![3, 1, 2]
+        ),
+        other => panic!("toList returned {other:?}"),
+    }
 }

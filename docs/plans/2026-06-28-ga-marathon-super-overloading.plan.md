@@ -1,6 +1,10 @@
 # GA Marathon — super/parent + must-use/overloading + tooling/stdlib
 
 ## Decisions Log
+- [2026-06-29] AGREED (post-B2, "all of them!"): marathon continues through **all** remaining steps —
+  M4 collections batch (Core.List/Map/Set/Text additive ops) → M4 numeric/string batch (Core.Math/Text)
+  → step 6 cross-file LSP + JetBrains. Each additive batch ships green + byte-identical + a guide example,
+  following the established native-recipe.
 - [2026-06-28] AGREED: marathon order (user-confirmed) —
   1. **Spec super/parent dispatch** (design + doc)
   2. **must-use returns (Slice A)** + breaking codemod

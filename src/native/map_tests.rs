@@ -1,4 +1,5 @@
 use super::*;
+use std::rc::Rc;
 
 #[test]
 fn map_natives_eval_and_emit() {
@@ -128,4 +129,21 @@ fn map_get_set_remove_eval_and_emit() {
         registry()[index_of("Core.Map", "get").unwrap()].ret,
         Ty::Optional(Box::new(Ty::Param("V".into())))
     );
+}
+
+#[test]
+fn map_is_empty_op() {
+    let mut o = String::new();
+    assert!(matches!(
+        map_is_empty(&[Value::Map(Rc::new(vec![]))], &mut o).unwrap(),
+        Value::Bool(true)
+    ));
+    let m = Value::Map(Rc::new(vec![(
+        crate::value::HKey::Str("a".into()),
+        Value::Int(1),
+    )]));
+    assert!(matches!(
+        map_is_empty(&[m], &mut o).unwrap(),
+        Value::Bool(false)
+    ));
 }

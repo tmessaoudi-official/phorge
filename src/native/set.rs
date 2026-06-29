@@ -102,10 +102,46 @@ fn set_is_subset(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
+fn set_is_empty(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Set(s)] => Ok(Value::Bool(s.is_empty())),
+        _ => Err("Set.isEmpty expects (Set<T>)".into()),
+    }
+}
+
+/// `Set.toList(Set<T>) -> List<T>` — the elements as a list in insertion order (the set's stored order).
+fn set_to_list(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Set(s)] => Ok(Value::List(std::rc::Rc::new(
+            s.iter().map(crate::value::HKey::to_value).collect(),
+        ))),
+        _ => Err("Set.toList expects (Set<T>)".into()),
+    }
+}
+
 /// The `Core.Set` registry entries (M-RT S7b). All generic over the element type `T`.
 pub(crate) fn set_natives() -> Vec<NativeFn> {
     let t = || Ty::Param("T".into());
     vec![
+        NativeFn {
+            module: "Core.Set",
+            name: "isEmpty",
+            params: vec![Ty::Set(Box::new(t()))],
+            ret: Ty::Bool,
+            pure: true,
+            eval: NativeEval::Pure(set_is_empty),
+            php: |a| format!("count({}) === 0", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Set",
+            name: "toList",
+            params: vec![Ty::Set(Box::new(t()))],
+            ret: Ty::List(Box::new(t())),
+            pure: true,
+            eval: NativeEval::Pure(set_to_list),
+            // The set is already a sequential array; array_values is a defensive re-index.
+            php: |a| format!("array_values({})", parg(a, 0)),
+        },
         NativeFn {
             module: "Core.Set",
             name: "of",

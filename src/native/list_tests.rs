@@ -403,3 +403,53 @@ fn list_min_max_byte_order_and_empty() {
     ));
     assert!(matches!(list_max(&[empty], &mut o), Ok(Value::Null)));
 }
+
+#[test]
+fn list_is_empty_flatten_and_count() {
+    let mut o = String::new();
+    // isEmpty
+    assert!(matches!(
+        list_is_empty(&[Value::List(Rc::new(vec![]))], &mut o).unwrap(),
+        Value::Bool(true)
+    ));
+    assert!(matches!(
+        list_is_empty(&[Value::List(Rc::new(vec![Value::Int(1)]))], &mut o).unwrap(),
+        Value::Bool(false)
+    ));
+    // flatten — order preserved, inner empties dropped
+    let nested = Value::List(Rc::new(vec![
+        Value::List(Rc::new(vec![Value::Int(1), Value::Int(2)])),
+        Value::List(Rc::new(vec![])),
+        Value::List(Rc::new(vec![Value::Int(3)])),
+    ]));
+    match list_flatten(&[nested], &mut o).unwrap() {
+        Value::List(xs) => assert_eq!(
+            xs.iter()
+                .map(|v| match v {
+                    Value::Int(n) => *n,
+                    _ => -99,
+                })
+                .collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        ),
+        other => panic!("flatten returned {other:?}"),
+    }
+    // count — predicate true on evens; a fault propagates
+    let nums = Value::List(Rc::new(vec![
+        Value::Int(1),
+        Value::Int(2),
+        Value::Int(3),
+        Value::Int(4),
+    ]));
+    let placeholder = Value::Int(0);
+    let mut even = |_f: &Value, a: Vec<Value>| match a.as_slice() {
+        [Value::Int(n)] => Ok(Value::Bool(n % 2 == 0)),
+        _ => Err("bad arity".to_string()),
+    };
+    assert!(matches!(
+        list_count(&[nums.clone(), placeholder.clone()], &mut even).unwrap(),
+        Value::Int(2)
+    ));
+    let mut boom = |_f: &Value, _a: Vec<Value>| Err("kaboom".to_string());
+    assert!(list_count(&[nums, placeholder], &mut boom).is_err());
+}
