@@ -7,6 +7,18 @@
 > + `cargo clippy --all-targets` + `cargo fmt --check`.
 
 ## Decisions Log
+- [2026-06-29] FIXED (playground/disasm/bench reified-operand drop, `25e34e6`): `runvm_json`,
+  `cmd_disasm`, `bench_report_opts` threaded the reified-operand side-table via
+  `check_and_expand_reified` + `compile_with` (was plain `compile` → `run≠runvm` on those surfaces;
+  the concurrency example failed in the playground with "no method `join` on `Task`"). +2 regression
+  tests; `examples.js` regenerated (adds `concurrency`); wasm rebuilt + verified in-browser. See
+  [[reified-operands-must-thread-all-vm-compile-paths]].
+- [2026-06-29] AGREED (developer, post-bug): order = **S4.3 cooperative cutover FIRST, then stdlib
+  breadth (#3)**. Developer pointedly noted the concurrency is currently "by name" — a litmus
+  (`spawn consume(ch); send(42)`) FAULTS today (`recv from empty channel`) because `spawn` runs
+  eagerly; a real cooperative runtime must suspend the consumer, let main send, then resume. That
+  litmus passing byte-identically on `run`≡`runvm` is the cutover's acceptance test. Native-only
+  (wasm keeps eager, documented); commit green increments only.
 - [2026-06-29] DONE (S4.3 **step 2 — surface + value model + synchronous channels**, `ce2b2c3` +
   `2ce715e`): `spawn <call>`→`Task<T>` (contextual kw, `Expr::Spawn`), `t.join()`, typed `Channel<T>`
   (`Channel.create()`/`send`/`recv`). `Value::Channel`/`Task`; `Channel`/`Task` reserved built-ins
@@ -67,6 +79,61 @@
 - [2026-06-29] AGREED: Order = (1) Cross-package M-RT lift → (2) Soundness long-tail close → (3) Stdlib charter + breadth → (4) Concurrency + server (M6 W4). Rationale: #1 unifies type system ↔ modules and unblocks core.json multi-package + cross-package stdlib; #2 cleans the now-unified base; #3 writes the charter then breadth (multi-package core.json now possible); #4 capstone capability on a solid foundation.
 - [2026-06-29] AGREED (session 3, "new big thing + marathon"): developer chose **"all of 1 and 2 and 4 in the recommended order autonomously"** = full Spine-2 soundness long-tail → Spine-4 M6 W4 concurrency capstone, with Spine-3 breadth interleaved as low-risk warm-ups. Pacing: **one heavy slice per context window, commit green, let compaction carry the marathon.** Immediate next = S2.2 method return-overloading (design recorded checkpoint #4).
 - [2026-06-29] AGREED (session 2, post-breadth): developer pushed the 13 marathon commits; directive = **do all the rest**, in this **confirmed order** — **Spine 2 soundness first (tractable→heaviest): S2.4 while-let guards → S2.2 method return-overloading → S2.1 generic-result VM operand → S2.3 must-use B/C; then Spine 4 W4 concurrency (capstone) on the cleaned base; Spine-3 breadth interleaved as low-risk warm-ups.** Rationale: don't build the concurrency layer atop known run↔runvm parity gaps; ramp difficulty up rather than opening on the heaviest item.
+
+## S4.3 COOPERATIVE CUTOVER — implementation plan (pick-up-ready)
+
+> Goal: make `spawn`/`Channel`/`join` *actually interleave*, replacing the synchronous-degenerate
+> placeholder. Acceptance = the litmus `spawn consume(ch); send(42)` prints `got 42`/`done 42`
+> **byte-identical on `run`≡`runvm`** (currently it FAULTS `recv from empty channel` because spawn is
+> eager). Native-only; wasm keeps eager (documented). Spine rule: **both backends land in the same
+> commit that flips the gate** — the spine is never red.
+
+**Gate (zero risk to the 159 non-spawning examples):** `ast::uses_concurrency(&Program) -> bool` (any
+`Expr::Spawn` reachable in any item body). The run/runvm entry points branch on it: `false` → the
+existing synchronous path, **unchanged** (byte-identical); `true` → the new cooperative driver. A false
+*negative* degrades safely to today's eager behavior (still `run≡runvm`); a false *positive* is the only
+risk and cannot occur (we only return true on a real `Expr::Spawn`).
+
+**Per-task engine context (correctness-first; perf later per philosophy):** each task = one coroutine
+owning its **own** engine instance, sharing only the scheduler (`coop: Rc<RefCell<Coop>>`, already held
+by both engines) and channel buffers (`Value::Channel`'s `Rc<RefCell<VecDeque>>`, already shared).
+- Interpreter: `Interp` owns its tables (no lifetime) ⇒ a fresh `Interp` per task built from the program
+  is movable into a `'static` coroutine closure. Program must outlive coroutines ⇒ wrap the `&Program`
+  the driver holds in `Rc<Program>` (or `Box::leak` for the CLI-exits-anyway case; prefer `Rc`).
+- VM: `Vm<'a>` **borrows** `&'a BytecodeProgram` ⇒ the driver holds an `Rc<BytecodeProgram>` (or leaks
+  one) so each task-VM borrows `'static`-ish program data. (Confirm: refactor `Vm` to hold
+  `Rc<BytecodeProgram>` instead of `&'a` — touches `Vm::new` + field; ~20 sites, mechanical.)
+
+**Steps (each green; only the last commit flips behavior, and flips it for both backends at once):**
+1. `ast::uses_concurrency` + unit tests (green, unused-but-pub so no dead-code warning). Wire the
+   entry-point branch as a **no-op** first: `true` still routes to the synchronous path. (behavior-identical)
+2. `green::exec` driver entry per backend: `run_cooperative_interp(program) -> Result<String,_>` and
+   `run_cooperative_vm(program) -> Result<String,_>` that seed task 0 = `main` as a `CoroutineTask`,
+   then `run_loop`. Each coroutine builds its task engine, runs the call, drains its `out` fragment at
+   each suspend (the `Suspend` handle), returns `(result, final_fragment)`.
+3. Spawn-defer (trace-transparent): `Expr::Spawn`/`Op::Spawn` in the cooperative path evaluate the
+   call's **args eagerly** in the current task, allocate a `TaskId`, push a `CoroutineTask` that calls
+   the function with those args **as the task root** (NOT wrapped in a lambda — that was the reverted
+   thunk's trace bug; the call's own frame is the coroutine root, traced identically on both backends),
+   queue it to `coop.spawned`, and return `Value::Task(id)`.
+4. recv/join/yield suspend via the `CoopCtx.suspend` handle (`Trap::Recv/Join/Yield`); `send` calls
+   `coop.sched.on_send`. Threaded into both engines as `ctx: Option<CoopCtx>` (`Some` only on the
+   cooperative path; `None` keeps the synchronous op bodies for the gated-off path / non-spawning use).
+5. **Flip:** entry points route `uses_concurrency` programs to the cooperative driver. Gate:
+   - litmus byte-identical `run≡runvm` (new differential case; quarantined from PHP).
+   - `examples/guide/concurrency.phg` still byte-identical `run≡runvm` (now via the cooperative path).
+   - full workspace + clippy + fmt; rebuild playground wasm (native coroutines are non-wasm — the wasm
+     build keeps the eager path via `#[cfg(target_arch="wasm32")]`, documented; concurrency example on
+     the playground stays synchronous-degenerate until a wasm frame-swap executor, tracked).
+6. Update `concurrency.phg` to a genuinely-interleaving program (producer/consumer where the consumer
+   recvs before the producer sends) + KNOWN_ISSUES (wasm eager) + docs. Memory:
+   [[reified-operands-must-thread-all-vm-compile-paths]] sibling on the cutover.
+
+**Open risk to confirm during build:** the VM `Rc<BytecodeProgram>` refactor + the coroutine `'static`
+bound interplay (the corosensei closure is `'static`; a task-VM borrowing an `Rc`-cloned program is fine
+since the `Rc` is moved into the closure). If the VM-on-coroutine proves heavier than budget, the
+fallback (per design §4b, NOT this plan's default) is VM-frame-swap — but that's the wasm path, so
+prefer finishing native coroutines on both.
 
 ## S2.1-broad REMAINDER — implementation design (pick-up-ready, for a fresh context)
 
