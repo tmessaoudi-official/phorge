@@ -102,6 +102,17 @@
 
 ## Progress
 
+- **Marathon checkpoint #12 (session 3): Spine-4 S4.3 DESIGN-SPEC written** (`docs/specs/2026-06-29-m6-w4-green-threads-design.md`),
+  Rust-only-quarantine model locked. **It surfaced a genuine architectural fork (escalated to developer):**
+  the VM side of a cooperative scheduler is tractable (swap reified frame stacks, building on `run_until`),
+  but the **tree-walking interpreter cannot suspend mid-stack without coroutines**, and `Value` is `!Send`
+  (no OS-thread-per-task). So deterministic byte-identical `run≡runvm` green threads need one of: (A)
+  restricted spawned-body subset the interpreter runs as a state machine; (B) run tasks on the VM even
+  under `run` (breaks backend independence); (C) a stackful-coroutine dependency (dep-policy fork); (D)
+  ship only steps 1–2 (surface + synchronous channels, byte-identical, bounded) now and spike the scheduler
+  fresh. Incremental build plan (steps 1–5) in the spec; **step-4 interpreter-coroutine spike is the gating
+  risk.** Awaiting the developer's call on A/B/C/D before coding the scheduler.
+
 - **Marathon checkpoint #11 (session 3): Spine-4 S4.2 graceful shutdown DONE.** Added `ctrlc` (3rd
   dependency, developer-authorized; dependency policy amended with a narrowly-scoped "OS-signal
   handling" 3rd domain + ctrlc's unsafe stays inside the crate so phorj keeps `forbid(unsafe_code)`).
