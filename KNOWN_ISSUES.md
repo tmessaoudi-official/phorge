@@ -23,8 +23,15 @@ not a panic:
   `static`-ness (`E-OVERLOAD-STATIC-MIX`), matching PHP. **Remaining deferrals** (each rejected cleanly,
   never a runtime divergence): (1) A static method using the **class's own type parameter** (a static on
   a generic class) is out of scope — no instance binds the class type argument. (2) **Late static
-  binding** (`static::` / `new static()`) is a deliberate non-feature (a runtime called-class concept +
-  the `self::`/`static::` footgun) — override the static per subclass instead.
+  binding** (`static::` / `new static()`) is a deliberate non-feature (decision: statics-research
+  design §C, M-RT S2.5). LSB threads a *runtime called-class* through static dispatch — the first static
+  feature that isn't pure compile-time resolution — and `new static()` has type "the called class", an
+  `F`-bounded-polymorphism shape Phorj lacks; together with the classic `self::`-vs-`static::` footgun it
+  cuts against Phorj's legible/no-surprises stance. **Clean path** (explicit > magic): the everyday cases
+  are covered by inherited + overloaded statics (A+B, shipped); for the *factory-returns-subclass* idiom
+  (`Base::create()` yielding the right subclass), **override the static factory in each subclass** so each
+  returns its own type — the same behavior, named explicitly at each site instead of resolved by a hidden
+  runtime class. Revisit LSB as its own milestone only if a concrete need appears.
 
 - **PHP-reserved identifiers as symbol names — now guarded (F-m, kind-aware).** Phorj and PHP have
   different keyword sets, so a Phorj identifier that is a *PHP* reserved word would transpile to
