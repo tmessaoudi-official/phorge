@@ -81,6 +81,17 @@ fn text_split_once(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("Text.split_once expects (string, string)".into()),
     }
 }
+// `lines(string) -> List<string>` — split on `\n` (an embedded `\r` is left in the line, matching PHP
+// `explode("\n", s)`). An empty string → `[""]`; a trailing `\n` → a trailing `""` (explode semantics).
+fn text_lines(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => {
+            let parts: Vec<Value> = s.split('\n').map(|p| Value::Str(p.into())).collect();
+            Ok(Value::List(std::rc::Rc::new(parts)))
+        }
+        _ => Err("Text.lines expects (string)".into()),
+    }
+}
 fn text_join(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::List(items), Value::Str(sep)] => {
@@ -442,6 +453,16 @@ pub(crate) fn text_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(text_split),
             // PHP `explode(separator, string)` — separator first.
             php: |a| format!("explode({}, {})", parg(a, 1), parg(a, 0)),
+        },
+        // `lines(string) -> List<string>` — split on `\n` (charter §2 subject-first; Tier-1).
+        NativeFn {
+            module: "Core.Text",
+            name: "lines",
+            params: vec![s()],
+            ret: Ty::List(Box::new(Ty::String)),
+            pure: true,
+            eval: NativeEval::Pure(text_lines),
+            php: |a| format!("explode(\"\\n\", {})", parg(a, 0)),
         },
         NativeFn {
             module: "Core.Text",

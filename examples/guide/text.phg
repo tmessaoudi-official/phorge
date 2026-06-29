@@ -27,6 +27,10 @@ function main(): void {
     string rejoined = Text.join(parts, " - ");
     Console.println("rejoined = {rejoined}");
 
+    // lines → split on "\n" (→ explode). Index the resulting List<string> directly.
+    List<string> rows = Text.lines("one\ntwo\nthree");
+    Console.println("first row = {rows[0]}, third row = {rows[2]}");
+
     string swapped = Text.replace(greeting, "Phorj", "World");
     Console.println("replaced = {swapped}");
 

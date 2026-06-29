@@ -6,6 +6,13 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — `Core.Text.lines` (M4 breadth, charter-compliant)
+
+`Core.Text.lines(string) -> List<string>` splits on `\n` (an embedded `\r` stays in the line; an empty
+string → `[""]`; a trailing `\n` → a trailing `""`) — `explode("\n", s)` semantics, byte-identical
+`run ≡ runvm ≡ real PHP`. Tier-1, subject-first; guide example in `examples/guide/text.phg`, +1 unit
+test. No new `Op`/`Value`.
+
 ### Added — `Core.List.chunk` (M4 breadth, charter-compliant)
 
 `Core.List.chunk(List<T>, int) -> List<List<T>>` splits a list into consecutive groups of `size` (the

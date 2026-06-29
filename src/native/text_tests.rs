@@ -1,6 +1,41 @@
 use super::*;
 
 #[test]
+fn text_lines_splits_on_newline() {
+    let mut o = String::new();
+    let collect = |v: Value| match v {
+        Value::List(xs) => xs
+            .iter()
+            .map(|e| match e {
+                Value::Str(s) => s.to_string(),
+                _ => "?".into(),
+            })
+            .collect::<Vec<_>>(),
+        other => panic!("lines returned {other:?}"),
+    };
+    // Three lines, no trailing newline.
+    assert_eq!(
+        collect(text_lines(&[Value::Str("a\nbb\nccc".into())], &mut o).unwrap()),
+        vec!["a", "bb", "ccc"]
+    );
+    // Trailing newline yields a trailing empty string (explode semantics).
+    assert_eq!(
+        collect(text_lines(&[Value::Str("x\n".into())], &mut o).unwrap()),
+        vec!["x", ""]
+    );
+    // Empty string → one empty line.
+    assert_eq!(
+        collect(text_lines(&[Value::Str("".into())], &mut o).unwrap()),
+        vec![""]
+    );
+    // PHP mapping is explode on a literal "\n".
+    assert_eq!(
+        (registry()[index_of("Core.Text", "lines").unwrap()].php)(&["$s".into()]),
+        "explode(\"\\n\", $s)"
+    );
+}
+
+#[test]
 fn text_parse_int_matches_rust_i64_fromstr() {
     let p = |s: &str| {
         let mut o = String::new();
