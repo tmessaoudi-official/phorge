@@ -13,6 +13,14 @@
 - [2026-06-29] AGREED (session 2, post-breadth): developer pushed the 13 marathon commits; directive = **do all the rest**, in this **confirmed order** — **Spine 2 soundness first (tractable→heaviest): S2.4 while-let guards → S2.2 method return-overloading → S2.1 generic-result VM operand → S2.3 must-use B/C; then Spine 4 W4 concurrency (capstone) on the cleaned base; Spine-3 breadth interleaved as low-risk warm-ups.** Rationale: don't build the concurrency layer atop known run↔runvm parity gaps; ramp difficulty up rather than opening on the heaviest item.
 
 ## Progress
+
+- **Marathon checkpoint #5 (session 3, fresh context): S2.2 method return-overloading DONE + committed
+  `9b1864a`** — full gate green (1259 lib + 115 differential + 16 typecheck, PHP-8.5 oracle), clippy+fmt
+  clean, release binary rebuilt. Zero backend changes (the free-fn pipeline was already parameterized).
+  P0 caught in Phase-6 sweep: gated to instance methods (`!is_static`) so statics keep the classic
+  shared-return rule. **Next in recommended order: S2.1-broad (generic-result VM operand — heavy,
+  needs the checker→compiler type side-table) → S2.3 must-use B/C → S2.5 LSB → Spine-4 W4 concurrency
+  (capstone); Spine-3 breadth interleaved as low-risk warm-ups. One heavy slice per fresh context.**
 - [2026-06-29] S1.4 cross-package generic library types — DONE `718fa3d` (example-only, already worked).
 - [2026-06-29] S1.1 cross-package traits — DONE `cc711b9` (loader symbol-table + resolve `Item::Trait`/`uses` rewrite + transpiler namespace bucketing).
 - [2026-06-29] S1.2 lambdas/fn-values in library packages — DONE `5d7beb9` (loader `Expr::Ident` value-resolution arm; Main no-op).
