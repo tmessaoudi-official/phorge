@@ -50,6 +50,37 @@ impl<'a> Vm<'a> {
         Ok(self.pop())
     }
 
+    /// Invoke a plain (capture-less) function by its table index re-entrantly and return its result —
+    /// the `Op::SpawnCall` analogue of [`call_closure_value`] (S4.3). Used by the eager `spawn` path to
+    /// run a free function inline, and by the cooperative driver to run a task's root call. Pushes the
+    /// function's frame `[args..]` and drives a nested `run_until` to exactly that frame's return.
+    pub(super) fn call_function_value(
+        &mut self,
+        func_idx: usize,
+        args: Vec<Value>,
+    ) -> Result<Value, String> {
+        let func_arity = self.program.functions[func_idx].arity;
+        if args.len() != func_arity {
+            return Err(format!(
+                "wrong number of arguments: expected {func_arity}, got {}",
+                args.len()
+            ));
+        }
+        if self.frames.len() >= MAX_CALL_DEPTH {
+            return Err("stack overflow".to_string());
+        }
+        let slot_base = self.stack.len();
+        self.stack.extend(args);
+        let target_depth = self.frames.len();
+        self.frames.push(Frame {
+            func: func_idx,
+            ip: 0,
+            slot_base,
+        });
+        self.run_until(target_depth)?;
+        Ok(self.pop())
+    }
+
     /// Drive `exec_op` until the frame stack shrinks back to `target_depth` (the depth *before* the
     /// frame to run was pushed). Used only by [`Vm::call_closure_value`] for re-entrant native
     /// callbacks; the top-level `run` loop is the `target_depth == 0` analogue that additionally

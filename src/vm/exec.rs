@@ -269,6 +269,16 @@ impl<'a> Vm<'a> {
                 self.coop.borrow_mut().results.insert(id, result);
                 self.stack.push(Value::Task(id));
             }
+            Op::SpawnCall(func_idx, argc) => {
+                // Eager (synchronous path): the call has NOT run yet — run the free function inline now
+                // and register the finished task, byte-identical to the former `<call>; Op::Spawn`. The
+                // cooperative driver (S4.3) overrides this to defer the function as a scheduler task.
+                let args = self.split_off(argc);
+                let result = self.call_function_value(func_idx, args)?;
+                let id = self.coop.borrow_mut().sched.spawn();
+                self.coop.borrow_mut().results.insert(id, result);
+                self.stack.push(Value::Task(id));
+            }
             Op::ChannelNew => {
                 let id = self.coop.borrow_mut().sched.new_channel();
                 self.stack.push(Value::Channel(

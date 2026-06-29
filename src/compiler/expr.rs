@@ -186,9 +186,38 @@ impl Compiler<'_> {
             // identical to the interpreter's — a synthetic thunk frame would show as `<lambda@N>` only
             // on the VM (closures are real frames there, invisible in the tree-walker), breaking the
             // run≡runvm trace. The cooperative cutover will introduce deferral with trace consistency.
+            // `spawn <call>` (M6 W4 / S4.3). A single-overload **free-function** call lowers to
+            // args-push + `Op::SpawnCall(func_idx, argc)` — the call body is NOT run before the op, so
+            // the cooperative driver can defer it as a task rooted at the function's own frame (no
+            // synthetic lambda → fault traces match the interpreter). Any other operand (method,
+            // overloaded, closure, variant) keeps the eager `<call>; Op::Spawn` form; the cooperative
+            // driver rejects those on both backends (a free-function-only restriction, matching the
+            // interpreter), so `run≡runvm`.
             Expr::Spawn { call, span } => {
-                self.expr(call)?;
-                self.emit(Op::Spawn, span.line);
+                let deferred = if let Expr::Call { callee, args, .. } = &**call {
+                    if let Expr::Ident(name, _) = &**callee {
+                        self.fns
+                            .get(name)
+                            .filter(|m| m.overload.is_none())
+                            .map(|m| (m.index, args))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                match deferred {
+                    Some((index, args)) => {
+                        for a in args {
+                            self.expr(a)?;
+                        }
+                        self.emit(Op::SpawnCall(index, args.len()), span.line);
+                    }
+                    None => {
+                        self.expr(call)?;
+                        self.emit(Op::Spawn, span.line);
+                    }
+                }
             }
             Expr::Null(sp) => self.emit_const(Value::Null, sp.line),
             Expr::This(sp) => match self.this_slot {

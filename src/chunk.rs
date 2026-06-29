@@ -173,8 +173,18 @@ pub enum Op {
     /// Quarantined from the PHP oracle — the transpiler never emits these (`E-CONCURRENCY-NO-PHP`).
     ///
     /// `Spawn`: pop the spawned call's result and push a `Task` wrapping it (step-2 eager: the call has
-    /// already run, leaving its value on top).
+    /// already run, leaving its value on top). The general form — used when the spawned operand is a
+    /// method/overloaded/closure call whose function index isn't known at compile time. The cooperative
+    /// driver (S4.3) rejects this form (a non-free-function `spawn` is a documented follow-up), matching
+    /// the interpreter, so `run≡runvm`.
     Spawn,
+    /// `SpawnCall(func_idx, argc)`: spawn the **free function** at `func_idx`, taking the top `argc`
+    /// values as its arguments (the call is *not* run before this op — the compiler lowers a
+    /// single-overload `spawn f(args)` to args-push + this, so the function body is the task's root). On
+    /// the synchronous path this runs the function inline and registers the finished task (byte-identical
+    /// to `<call>; Spawn`); the cooperative driver (S4.3) instead defers it as a scheduler task whose
+    /// coroutine root is `func_idx`'s own frame — traced identically to the interpreter (no lambda frame).
+    SpawnCall(usize, usize),
     /// `ChannelNew`: push a fresh empty `Channel`.
     ChannelNew,
     /// `ChannelSend`: pop the value (top) then the channel; enqueue the value; push `Unit` (the void
@@ -484,6 +494,10 @@ impl BytecodeProgram {
                         .then(|| format!("const index {i} out of range (pool has {const_len})")),
                     Op::Call(idx) => (*idx >= nfns)
                         .then(|| format!("call target {idx} out of range ({nfns} functions)")),
+                    // Green-thread `spawn f(args)` (S4.3): the deferred free-function index.
+                    Op::SpawnCall(idx, _) => (*idx >= nfns).then(|| {
+                        format!("spawn target {idx} out of range ({nfns} functions)")
+                    }),
                     // M-RT super/parent: the parent target is a baked function index.
                     Op::CallParent(idx, _) => (*idx >= nfns).then(|| {
                         format!("parent-call target {idx} out of range ({nfns} functions)")

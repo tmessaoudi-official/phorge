@@ -553,6 +553,9 @@ impl<'a> Compiler<'a> {
             Op::Spawn | Op::ChannelRecv | Op::Join => 0,
             Op::ChannelNew => 1,
             Op::ChannelSend => -1,
+            // `SpawnCall(_, argc)` pops the `argc` args (the call did not run before it) and pushes one
+            // `Task` — net `1 - argc`.
+            Op::SpawnCall(_, argc) => 1 - *argc as isize,
         }
     }
 
