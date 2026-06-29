@@ -51,8 +51,16 @@ function main(): void {
   // `lastOfTwo` over strings.
   string last = lastOfTwo("alpha", "omega");
 
+  // S2.1: a generic result whose return *echoes a parameter* (`identity<T>(T) -> T`, `firstOr` →
+  // its fallback `T`) can be used **directly as an arithmetic operand** — the VM recovers the
+  // erased result's operand type from the argument, so this specializes exactly as the interpreter
+  // evaluates it (previously `runvm` rejected `identity(7) + 1`).
+  int incd = identity(7) + 1;          // 8
+  int doubled = firstOr(xs, -1) * 2;   // 20
+
   Console.println("identity: {n} {s} {flag}");
   Console.println("firstOr head: {head}");
   Console.println("applyTwice: {bumped}");
   Console.println("lastOfTwo: {last}");
+  Console.println("operand use: {incd} {doubled}");
 }

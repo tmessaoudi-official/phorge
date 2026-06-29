@@ -507,13 +507,17 @@ parameters are erased to PHP `mixed` before any backend; a generic class/enum va
 type argument (`instanceof Box<int>` ≡ `instanceof Box`). These refinements are deliberately deferred
 (each rejected cleanly or simply unavailable, never a crash):
 
-- **A generic-typed *result* is not a specialized arithmetic operand.** Because a `T` erases to PHP
-  `mixed`, the bytecode compiler types any generic-function/method/field result as the opaque
-  `CTy::Other`, which is not a numeric operand. So `id(7) + 1` (or `box.get() + 1`) type-checks (the
-  checker reifies the result as `int`) and runs on the interpreter, but the VM rejects it with
-  *"`id` does not return a numeric type"* — a `run`↔`runvm` mismatch. Bind the result to a typed local
-  first (`int n = id(7); n + 1`), which the examples do. [Verified: `id(7) + 1` → `run` prints `8`,
-  `runvm` errors.] Fixing this needs the compiler to thread reified generic result types (deferred).
+- **A generic-typed *result* is a specialized operand only when the return *echoes a parameter*
+  (S2.1 — partial).** A generic free function whose declared return is *exactly* one of its own
+  parameters (`id<T>(T x) -> T`, `firstOr<T>(List<T>, T) -> T`) now records that parameter index
+  (`FunctionDecl::generic_ret_from_param`, set in `erase_generics`); the VM compiler's `ctype` recovers
+  the erased result's operand type from that argument, so **`identity(7) + 1` and `firstOr(xs, -1) * 2`
+  now specialize on the VM** exactly as the interpreter evaluates them (byte-identical, gated by
+  `examples/guide/generics.phg`). [Verified: both `run` and `runvm` print `8`.] **Still deferred** (the
+  result does *not* echo a single parameter, so it stays `CTy::Other` and the VM rejects a bare
+  arithmetic use — bind to a typed local first): generic **methods**/**fields** (`box.get() + 1`),
+  a `List<T>`-element or container return, and a return computed from *several* parameters. The full
+  fix is the reified-result side-table threaded into the compiler (still deferred).
 - **Generic *interface* methods** are a non-parse — an interface method's signature is built with an
   empty type-parameter list, so a `<T>` there is never consumed. Generic methods on *classes* work.
 - **Cross-package generic *library* types now ship** (validated 2026-06-29) — a generic class

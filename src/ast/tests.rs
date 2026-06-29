@@ -89,6 +89,7 @@ fn builds_function_item() {
         throws: vec![],
         body: vec![],
         foreign: false,
+        generic_ret_from_param: None,
         span: sp(),
     };
     match Item::Function(f) {

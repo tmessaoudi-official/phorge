@@ -81,6 +81,7 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
             throws: Vec::new(),
             body: top_stmts,
             foreign: false,
+            generic_ret_from_param: None,
             span: SP,
         }));
     }
@@ -129,6 +130,7 @@ impl Lifter {
             throws: Vec::new(),
             body: self.lift_block(&f.body, &mut declared)?,
             foreign: false,
+            generic_ret_from_param: None,
             span: SP,
         })
     }
@@ -268,6 +270,7 @@ impl Lifter {
             throws: Vec::new(),
             body,
             foreign: false,
+            generic_ret_from_param: None,
             span: SP,
         }))
     }

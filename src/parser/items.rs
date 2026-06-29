@@ -271,6 +271,7 @@ impl Parser {
             throws,
             body,
             foreign: false,
+            generic_ret_from_param: None,
             span: sp,
         })
     }
@@ -311,6 +312,7 @@ impl Parser {
             throws: Vec::new(),
             body: Vec::new(),
             foreign: true,
+            generic_ret_from_param: None,
             span: sp,
         }))
     }
@@ -388,6 +390,7 @@ impl Parser {
                         // its body/totality wholesale (the foreign class is not body-checked), and the
                         // formatter prints it via the `declare class` path.
                         foreign: false,
+                        generic_ret_from_param: None,
                         span: msp,
                     }));
                 }
@@ -742,6 +745,7 @@ impl Parser {
                 throws,
                 body: Vec::new(),
                 foreign: false,
+                generic_ret_from_param: None,
                 span: msp,
             });
         }

@@ -98,6 +98,10 @@ struct FnMeta {
     /// argc)` (runtime dynamic dispatch) instead of a direct `Op::Call(index)`. `None` — the common
     /// single-overload case — keeps using `index`. Filled in a post-pass once all overloads are seen.
     overload: Option<usize>,
+    /// `Some(i)` when this (erased generic) function's result echoes its `i`-th argument's type
+    /// (`id<T>(T x) -> T`); copied from `FunctionDecl::generic_ret_from_param`. Lets `ctype` recover
+    /// the erased result's operand type from the argument so `id(7) + 1` specializes on the VM (S2.1).
+    generic_ret_from_param: Option<usize>,
 }
 
 /// Per-variant metadata gathered in the pre-pass: its index into the `enum_descs` table (for
@@ -681,9 +685,18 @@ impl<'a> Compiler<'a> {
                     _ => Err(format!("cannot infer type of field `{name}`")),
                 }
             }
-            Expr::Call { callee, .. } => match &**callee {
+            Expr::Call { callee, args, .. } => match &**callee {
                 Expr::Ident(name, _) => {
                     if let Some(meta) = self.fns.get(name) {
+                        // An erased generic whose result echoes argument `i` (`id<T>(T x) -> T`):
+                        // recover the operand type from that argument so `id(7) + 1` specializes on
+                        // the VM exactly as the interpreter evaluates it (S2.1). Falls back to the
+                        // (erased → `Other`) declared return for any other shape.
+                        if let Some(i) = meta.generic_ret_from_param {
+                            if let Some(arg) = args.get(i) {
+                                return self.ctype(arg);
+                            }
+                        }
                         Ok(meta.ret.clone())
                     } else if self.classes.contains_key(name) {
                         Ok(CTy::Class(name.clone())) // a constructor returns its instance

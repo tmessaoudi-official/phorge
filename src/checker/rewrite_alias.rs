@@ -204,6 +204,7 @@ pub fn expand_aliases(program: &Program) -> Program {
             throws: f.throws.iter().map(|t| rt(t, a, 0)).collect(),
             body: f.body.iter().map(|s| rstmt(s, a)).collect(),
             foreign: f.foreign,
+            generic_ret_from_param: f.generic_ret_from_param,
             span: f.span,
         }
     }

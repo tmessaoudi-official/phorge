@@ -51,6 +51,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
                     ret: f.ret.as_ref().map_or(CTy::Other, resolve_cty),
                     params: f.params.iter().map(|p| resolve_cty(&p.ty)).collect(),
                     overload: None,
+                    generic_ret_from_param: f.generic_ret_from_param,
                 });
                 overload_order
                     .entry(f.name.clone())
@@ -351,6 +352,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
                                 span: *span,
                             }],
                             foreign: false,
+                            generic_ret_from_param: None,
                             span: *span,
                         },
                     ));
@@ -369,6 +371,7 @@ pub(super) fn compile_program(program: &Program) -> Result<BytecodeProgram, Stri
                             throws: Vec::new(),
                             body: body.clone(),
                             foreign: false,
+                            generic_ret_from_param: None,
                             span: *span,
                         },
                     ));

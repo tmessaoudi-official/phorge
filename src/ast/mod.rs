@@ -634,6 +634,15 @@ pub struct FunctionDecl {
     /// (`E-FOREIGN-RUNTIME` — foreign code needs the PHP runtime); the transpiler emits references as the
     /// global PHP form (`\name(…)`) and emits no definition. `false` for every ordinary function.
     pub foreign: bool,
+    /// `Some(i)` when this (generic) function's declared return type is *exactly* its `i`-th
+    /// parameter's type parameter — `id<T>(T x) -> T` ⇒ `Some(0)`, `firstOr<T>(List<T>, T) -> T` ⇒
+    /// `Some(1)`. Set by `erase_generics` (computed from the pre-erasure signature, since the type
+    /// parameters are cleared there) and read **only** by the VM compiler's `ctype`, which recovers
+    /// the erased result's operand type from the argument so `id(7) + 1` specializes on the VM exactly
+    /// as the interpreter already evaluates it (S2.1 — closes the documented generic-result run↔runvm
+    /// gap for this common shape). Front-end-only and inert to the byte-identity spine (`None` for
+    /// every non-generic function and every generic function whose return is not a bare own parameter).
+    pub generic_ret_from_param: Option<usize>,
     pub span: Span,
 }
 

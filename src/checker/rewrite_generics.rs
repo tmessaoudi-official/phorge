@@ -24,6 +24,23 @@ pub fn erase_generics(program: Program) -> Program {
         matches!(m, ClassMember::Method(f) if !f.type_params.is_empty())
     }
 
+    /// `Some(i)` when `f`'s return type is *exactly* a bare own type parameter (`-> T`, no args) and
+    /// parameter `i` is annotated with that same parameter — `id<T>(T x) -> T` ⇒ 0,
+    /// `firstOr<T>(List<T>, T) -> T` ⇒ 1, `applyTwice<T>(T, (T)->T) -> T` ⇒ 0. `None` otherwise (a
+    /// container/concrete return, or no parameter directly carries the returned parameter). Computed
+    /// from the *pre-erasure* signature; consumed only by the VM compiler's `ctype` (S2.1).
+    fn generic_ret_echo_param(f: &FunctionDecl) -> Option<usize> {
+        let ret_name = match f.ret.as_ref()? {
+            Type::Named { name, args, .. } if args.is_empty() && f.type_params.contains(name) => {
+                name
+            }
+            _ => return None,
+        };
+        f.params.iter().position(|p| {
+            matches!(&p.ty, Type::Named { name, args, .. } if args.is_empty() && name == ret_name)
+        })
+    }
+
     fn rty(ty: &Type, params: &Params) -> Type {
         match ty {
             Type::Named { name, args, span } => {
@@ -406,6 +423,9 @@ pub fn erase_generics(program: Program) -> Program {
         .map(|item| match item {
             Item::Function(f) if !f.type_params.is_empty() => {
                 let params: Params = f.type_params.iter().map(String::as_str).collect();
+                // Recover, before erasing the type parameters, which argument (if any) the result
+                // echoes — so the VM compiler can later specialize `id(7) + 1` (S2.1).
+                let generic_ret_from_param = generic_ret_echo_param(&f);
                 Item::Function(FunctionDecl {
                     modifiers: f.modifiers.clone(),
                     attrs: f.attrs.clone(),
@@ -417,6 +437,7 @@ pub fn erase_generics(program: Program) -> Program {
                     throws: f.throws.iter().map(|t| rty(t, &params)).collect(),
                     body: f.body.iter().map(|s| rstmt(s, &params)).collect(),
                     foreign: f.foreign,
+                    generic_ret_from_param,
                     span: f.span,
                 })
             }
@@ -452,6 +473,7 @@ pub fn erase_generics(program: Program) -> Program {
                                 throws: f.throws.iter().map(|t| rty(t, &set)).collect(),
                                 body: f.body.iter().map(|s| rstmt(s, &set)).collect(),
                                 foreign: f.foreign,
+                                generic_ret_from_param: f.generic_ret_from_param,
                                 span: f.span,
                             })
                         }
