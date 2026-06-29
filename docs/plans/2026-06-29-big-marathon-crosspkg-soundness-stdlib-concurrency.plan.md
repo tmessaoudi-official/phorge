@@ -7,6 +7,25 @@
 > + `cargo clippy --all-targets` + `cargo fmt --check`.
 
 ## Decisions Log
+- [2026-06-29] DONE (S4.3 **step 2 — surface + value model + synchronous channels**, `ce2b2c3` +
+  `2ce715e`): `spawn <call>`→`Task<T>` (contextual kw, `Expr::Spawn`), `t.join()`, typed `Channel<T>`
+  (`Channel.create()`/`send`/`recv`). `Value::Channel`/`Task`; `Channel`/`Task` reserved built-ins
+  (modeled `Ty::Named`, dispatch via `CTy::Class` — NO new `Ty`/`CTy`); 5 new ops
+  `Spawn`/`ChannelNew`/`ChannelSend`/`ChannelRecv`/`Join` (3 coupled matches). **Synchronous-degenerate:**
+  spawn runs eagerly (byte-identical by construction — no scheduler to drift); recv-on-empty faults.
+  Quarantined from PHP (`E-CONCURRENCY-NO-PHP` + harness skip). `examples/guide/concurrency.phg`; +6
+  differential tests; 8 codes in `phg explain`. 1517 tests green, clippy+fmt clean, PHP-8.5 oracle.
+  **Steps 1+2 landed together.** Constructor renamed `Channel.new()`→`Channel.create()` (`new` is a
+  keyword token). `Task`/`Channel` reservation forced renaming `field-init.phg`'s `class Task`→`Parcel`.
+- [2026-06-29] OPEN FORK (S4.3 **step 3 — coroutine executor**, surfaced to developer): the
+  byte-identity-critical scheduler-wiring step. Recommendation pending developer choice — see the
+  session's recommendation: VM frame-swap (target-independent, no coroutine, the "natural" path the
+  spec calls tractable) + interpreter stackful-coroutine on native / interpreter-delegates-to-VM on
+  wasm. This is a simplification of the locked "uniform coroutines on both backends" (§4b) that removes
+  the riskiest piece (VM-on-coroutine, impossible on wasm anyway) with zero correctness/independence
+  cost. Adds the 4th dependency (corosensei) — a hard-to-reverse step worth confirming before sinking
+  the integration. Per the design spec's own guidance ("stop and surface if the interpreter-coroutine
+  cost is higher than the feature warrants").
 - [2026-06-29] AGREED (session 3, S4.3 architecture — developer wanted "the most complete, no half-
   solution"): green threads = **uniform stackful coroutines on BOTH backends + a single-sourced
   deterministic scheduler kernel.** One shared `green::sched` (run-queue, channel wait-lists, wake/pick)
