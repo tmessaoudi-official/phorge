@@ -17,6 +17,17 @@
   differential tests; 8 codes in `phg explain`. 1517 tests green, clippy+fmt clean, PHP-8.5 oracle.
   **Steps 1+2 landed together.** Constructor renamed `Channel.new()`→`Channel.create()` (`new` is a
   keyword token). `Task`/`Channel` reservation forced renaming `field-init.phg`'s `class Task`→`Parcel`.
+- [2026-06-29] DONE (S4.3 **step 3a** `694567b` + **step 3b-1** `d0e79bb`): both hardest UNKNOWNS
+  resolved + green. 3a: admitted `corosensei` (4th dep, `green` feature, non-wasm) + spike proving a
+  coroutine suspends deep-in-stack with NO unsafe in our crate (`&Yielder` in a lifetime-param worker).
+  3b-1: engine-agnostic cooperative executor `src/green/exec.rs` (`Coop` + `Task` trait + `run_loop`),
+  mock-tested (interleave/output-order/recv-wake/deadlock/fault). Key insight proven: **output ordering
+  needs NO shared buffer** — each resume yields a contiguous output fragment, appended in resume order
+  (engines keep their own `out`). Tasks take `&RefCell<Coop>` as a resume param (not stored) → no
+  self-referential borrow. **Remaining = 3b-2** (atomic, focused session): wire the real engines —
+  interpreter `<'y>` + yielder via ScopedCoroutine, VM the same; `spawn` defers (queue to `Coop.spawned`),
+  `recv`/`join` suspend via the yielder, `send` calls `on_send`; `Value::Channel`/`Task` carry their
+  ChanId/TaskId; top-level run path switches to `run_loop` when the program spawns; wasm = VM frame-swap.
 - [2026-06-29] AGREED (S4.3 step 3 executor): developer chose **Option A — the locked uniform-coroutine
   design** (uniform stackful coroutines on BOTH backends native + interpreter→VM on wasm; adds
   corosensei) over my simplification (B). Proceed with A. First action = the spec-mandated coroutine
