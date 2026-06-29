@@ -30,6 +30,27 @@ pub enum Step {
     Finished(Result<Value, String>, String),
 }
 
+/// The suspension capability an engine uses to hand control back to the scheduler from deep in its
+/// own call stack (a `recv` on an empty channel / a `join` on an incomplete task / an explicit yield).
+/// Feature-agnostic on purpose: the native executor implements it over a `corosensei` yielder
+/// (`green::coro`), while the type stays free of any coroutine-crate dependency so the engines that
+/// hold a `&dyn Suspend` compile on every target (the wasm build supplies a frame-swap implementor).
+/// `suspend` takes the engine's output fragment accumulated since the last resume (see the module-level
+/// output-ordering note) and returns once the scheduler resumes this task.
+pub trait Suspend {
+    fn suspend(&self, trap: Trap, out_fragment: String);
+}
+
+/// The cooperative-execution context an engine borrows while running a task: the shared [`Coop`] (to
+/// allocate channel/task ids, queue spawns, wake receivers via `on_send`, and read join results) and
+/// the [`Suspend`] handle (to block at `recv`/`join`). Bundled behind one lifetime so an engine gains a
+/// single `Option<CoopCtx>` field — `Some` while running cooperatively, `None` on the ordinary
+/// (non-concurrent) run path where the concurrency ops never execute.
+pub struct CoopCtx<'ctx> {
+    pub coop: &'ctx std::cell::RefCell<Coop>,
+    pub suspend: &'ctx dyn Suspend,
+}
+
 /// One green task the loop can drive. Implemented by the per-backend executors (a coroutine-hosted
 /// interpreter / VM on native; a VM frame-swap on wasm) and by the mock in this module's tests.
 ///

@@ -15,6 +15,11 @@
 pub mod exec;
 pub mod sched;
 
+// Native coroutine bridge (S4.3 step 3b-2a) — corosensei↔run_loop glue; native + `green` only
+// (corosensei doesn't compile on wasm32; the wasm playground uses VM frame-swap instead).
+#[cfg(all(feature = "green", not(target_arch = "wasm32")))]
+pub mod coro;
+
 // S4.3 step-3 gating spike (feasibility probe; compiled only under `green` + non-wasm + test).
 #[cfg(all(feature = "green", not(target_arch = "wasm32"), test))]
 mod spike;
