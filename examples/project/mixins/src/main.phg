@@ -1,0 +1,26 @@
+// Cross-package TRAITS (M-RT S8, cross-package): compose two traits declared in a library package
+// into a `package Main` class. `import type Pkg.Path.TraitName` binds the trait name (a trait is still
+// not a type — `Loud x` as an annotation is `E-USE-AS-TYPE`), and `use TraitName;` composes it.
+package Main;
+
+import Core.Console;
+import type Acme.Mixins.Loud;
+import type Acme.Mixins.Identified;
+
+class Speaker {
+  use Loud; // method reuse + a private helper
+  use Identified; // abstract requirement: we must provide `id()`
+
+  constructor(public int serial, public string name) {}
+
+  // Satisfies the `Identified` abstract requirement.
+  function id(): int {
+    return this.serial;
+  }
+}
+
+function main(): void {
+  var s = new Speaker(7, "ada");
+  Console.println(s.announce(s.name)); // ** ada **
+  Console.println(s.tag()); // #7
+}

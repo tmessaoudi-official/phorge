@@ -98,50 +98,23 @@ pub(super) fn resolve_item(item: Item, ctx: &ResolveCtx) -> Item {
                     *imp = m;
                 }
             }
-            for m in &mut c.members {
-                match m {
-                    ClassMember::Method(f) => {
-                        for p in &mut f.params {
-                            p.ty = resolve_type(&p.ty, ctx);
-                        }
-                        f.ret = f.ret.as_ref().map(|r| resolve_type(r, ctx));
-                        let body = std::mem::take(&mut f.body);
-                        f.body = resolve_block(body, ctx);
-                    }
-                    ClassMember::Constructor { params, body, .. } => {
-                        for p in params.iter_mut() {
-                            p.ty = resolve_type(&p.ty, ctx);
-                        }
-                        let b = std::mem::take(body);
-                        *body = resolve_block(b, ctx);
-                    }
-                    ClassMember::Field { ty, .. } => {
-                        *ty = resolve_type(ty, ctx);
-                    }
-                    // A property hook (M-mut.7b) carries a type plus a `get` expression and/or a
-                    // `set` block — each of which may name cross-package types or call cross-package
-                    // functions, so resolve them exactly like a method body (mangle + type-rewrite).
-                    ClassMember::Hook { ty, get, set, .. } => {
-                        *ty = resolve_type(ty, ctx);
-                        if let Some(e) = get.take() {
-                            *get = Some(resolve_expr(e, ctx));
-                        }
-                        if let Some((p, body)) = set.take() {
-                            let pty = resolve_type(&p.ty, ctx);
-                            *set = Some((
-                                Param {
-                                    ty: pty,
-                                    name: p.name,
-                                    default: p.default,
-                                    span: p.span,
-                                },
-                                resolve_block(body, ctx),
-                            ));
-                        }
-                    }
+            // A `use T;` trait-composition clause names a trait by its (possibly cross-package) name;
+            // mangle it to the trait's FQN so the checker's by-name flatten (`trait.name == use.name`)
+            // and the transpiler's `use \FQN` both line up with the mangled trait declaration.
+            for u in &mut c.uses {
+                if let Some(m) = resolve_type_ref(&u.name, ctx) {
+                    u.name = m;
                 }
             }
+            resolve_members(&mut c.members, ctx);
             Item::Class(c)
+        }
+        // A trait's members are resolved exactly like a class's (it carries no `implements`/`uses` and
+        // is not a subtype). Mangling its name lets a cross-package `use` and `import type` find it.
+        Item::Trait(mut t) => {
+            t.name = mangle(&ctx.package, &t.name);
+            resolve_members(&mut t.members, ctx);
+            Item::Trait(t)
         }
         Item::Enum(mut e) => {
             e.name = mangle(&ctx.package, &e.name);
@@ -168,6 +141,55 @@ pub(super) fn resolve_item(item: Item, ctx: &ResolveCtx) -> Item {
             Item::Interface(i)
         }
         other => other,
+    }
+}
+
+/// Resolve every member body + type annotation of a class or trait (shared by both `resolve_item`
+/// arms): mangle/qualify cross-package type names and rewrite call sites inside method/constructor
+/// bodies, field types, and property-hook get/set bodies.
+pub(super) fn resolve_members(members: &mut [ClassMember], ctx: &ResolveCtx) {
+    for m in members {
+        match m {
+            ClassMember::Method(f) => {
+                for p in &mut f.params {
+                    p.ty = resolve_type(&p.ty, ctx);
+                }
+                f.ret = f.ret.as_ref().map(|r| resolve_type(r, ctx));
+                let body = std::mem::take(&mut f.body);
+                f.body = resolve_block(body, ctx);
+            }
+            ClassMember::Constructor { params, body, .. } => {
+                for p in params.iter_mut() {
+                    p.ty = resolve_type(&p.ty, ctx);
+                }
+                let b = std::mem::take(body);
+                *body = resolve_block(b, ctx);
+            }
+            ClassMember::Field { ty, .. } => {
+                *ty = resolve_type(ty, ctx);
+            }
+            // A property hook (M-mut.7b) carries a type plus a `get` expression and/or a
+            // `set` block — each of which may name cross-package types or call cross-package
+            // functions, so resolve them exactly like a method body (mangle + type-rewrite).
+            ClassMember::Hook { ty, get, set, .. } => {
+                *ty = resolve_type(ty, ctx);
+                if let Some(e) = get.take() {
+                    *get = Some(resolve_expr(e, ctx));
+                }
+                if let Some((p, body)) = set.take() {
+                    let pty = resolve_type(&p.ty, ctx);
+                    *set = Some((
+                        Param {
+                            ty: pty,
+                            name: p.name,
+                            default: p.default,
+                            span: p.span,
+                        },
+                        resolve_block(body, ctx),
+                    ));
+                }
+            }
+        }
     }
 }
 

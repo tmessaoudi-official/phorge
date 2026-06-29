@@ -6,6 +6,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — Cross-package traits (M-RT S8, cross-package)
+
+A `trait` declared in a library package can now be composed into a class in another package. It is
+imported with the terminal `import type Pkg.Path.Trait [as A];` form (a trait stays NOT a type —
+`Trait x` as an annotation is still `E-USE-AS-TYPE`) and composed with `use Trait;`. No backend change
+— the loader registers traits in its type symbol table and mangles both the trait declaration and the
+class's `use` clause to the same FQN, so the checker's by-name trait flatten and the transpiler's
+emission line up. The transpiler now also detects, buckets, and emits a `\`-mangled trait into its
+package `namespace` block; the using class composes it via a fully-qualified `use \Acme\Mix\Greet`.
+Method reuse, a private trait helper, and an abstract requirement satisfied by the using class all work
+byte-identically `run ≡ runvm ≡ real PHP 8.5` (`examples/project/mixins/`). Lifts the prior
+`package Main`-only note in `KNOWN_ISSUES.md`.
+
 ### Added — Cross-package generic library types (M-RT generics-all, cross-package)
 
 A generic class declared in a *library* package (`Box<T>`, `Pair<A, B>`) is now a validated,

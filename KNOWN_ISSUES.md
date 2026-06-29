@@ -202,8 +202,17 @@ not a panic:
   hooks) is in, byte-identical across backends + real PHP 8.4. Deferred: (1) **traits as types** —
   intentional and permanent; a trait is reuse, not a type (`E-USE-AS-TYPE`/`E-INSTANCEOF-TYPE`). Use an
   interface for the type side. (2) **generic traits** (`trait T<X>`) — mirror the generic-method gate;
-  not yet parsed. (3) **cross-package traits** — this slice is `package Main`-only (like every M-RT
-  slice); a library-package trait + cross-package `use` is a follow-up. (4) **trait-vs-trait
+  not yet parsed. (3) **cross-package traits now ship** (validated 2026-06-29) — a `trait` declared in a
+  library package is imported with `import type Pkg.Path.Trait [as A];` (it is still NOT a type —
+  `Trait x` as an annotation stays `E-USE-AS-TYPE`) and composed with `use Trait;`. The loader registers
+  the trait in the type symbol table and mangles both the declaration and the `use` clause to the same
+  FQN, so the checker's by-name trait flatten lines up; the transpiler emits a native PHP `trait` in its
+  package namespace and the using class composes it via `use \Acme\Mix\Greet`. Method reuse, a private
+  helper, and an abstract requirement satisfied by the using class all work byte-identically
+  `run ≡ runvm ≡ real PHP` (`examples/project/mixins/`). Narrower remaining edge: a cross-package
+  trait-vs-trait *conflict-resolution* clause (`use P.m` across packages) is not yet exercised, and a
+  trait whose member calls another *cross-package* free function inside its own body inherits the same
+  loader-rewrite scope as a class. (4) **trait-vs-trait
   conflict-resolution transpilation — SHIPPED (Wave 1.3).** A collision resolved by `use P.m`/`rename`/
   `exclude` now lowers to a combined PHP `use P, Q { P::m insteadof Q; P::m as n; }` block (mirroring the
   MI-decomposition path), byte-identical run≡runvm≡real PHP (`guide/trait-conflicts.phg`). Narrower

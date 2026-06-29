@@ -1,0 +1,2 @@
+module = "acme/mixins"
+source = "src"

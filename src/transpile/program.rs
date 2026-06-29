@@ -203,6 +203,9 @@ impl Transpiler {
             Item::Class(c) => c.name.contains('\\'),
             Item::Enum(e) => e.name.contains('\\'),
             Item::Interface(i) => i.name.contains('\\'),
+            // A cross-package *trait* is mangled too (a class composes it via `use \FQN`), so a
+            // project may carry only a library trait + a `package Main` consumer — switch on it.
+            Item::Trait(t) => t.name.contains('\\'),
             _ => false,
         });
         if self.namespaced {
@@ -300,6 +303,9 @@ impl Transpiler {
                 Item::Enum(e) => namespace_of(&e.name),
                 Item::Class(c) => namespace_of(&c.name),
                 Item::Interface(i) => namespace_of(&i.name),
+                // A `use`d trait is bucketed into its own package namespace, exactly like a class
+                // (its FQN is the mangled prefix); the using class emits `use \Acme\Mix\Greet`.
+                Item::Trait(t) => namespace_of(&t.name),
                 _ => continue,
             };
             buckets.entry(ns).or_default().push(item);
@@ -330,6 +336,8 @@ impl Transpiler {
                     Item::Enum(e) => self.emit_enum(e)?,
                     Item::Class(c) => self.emit_class(c, program)?,
                     Item::Interface(i) => self.emit_interface(i)?,
+                    // M-RT S8 cross-package: a native PHP `trait` declared in its package's block.
+                    Item::Trait(t) => self.emit_trait(t)?,
                     _ => {}
                 }
             }

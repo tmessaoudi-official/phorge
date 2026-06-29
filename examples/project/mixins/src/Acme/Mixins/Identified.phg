@@ -1,0 +1,13 @@
+// A trait with an *abstract requirement* (M-RT S8): the using class must supply `id()`, and the trait
+// builds the `tag()` convenience on top of it. Composed cross-package exactly like `Loud`.
+package Acme.Mixins;
+
+trait Identified {
+  // The using class must provide this — the trait does not store the id itself.
+  abstract function id(): int;
+
+  // Built on the required method.
+  function tag(): string {
+    return "#{this.id()}";
+  }
+}

@@ -276,3 +276,71 @@ fn loose_non_main_file_is_rejected() {
     let err = loader::load(&entry).unwrap_err();
     assert!(err.contains("requires a phorj.toml project"), "got: {err}");
 }
+
+// --- Cross-package traits (M-RT S8, cross-package) ---
+
+/// A `trait` declared in a library package is composed into a `package Main` class via
+/// `import type Pkg.Trait;` + `use Trait;`, and runs byte-identically on both backends. The loader
+/// mangles the trait declaration and the `use` clause to the same FQN, so the by-name flatten lines up.
+#[test]
+fn cross_package_trait_composition_runs_byte_identically() {
+    let tmp = TempDir::new();
+    tmp.write("phorj.toml", "module = \"acme/mix\"\nsource = \"src\"");
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main;\nimport Core.Console;\nimport type Acme.Mix.Greet;\n\
+         class Person {\n  use Greet;\n  constructor(public string name) {}\n}\n\
+         function main() -> void {\n  var p = new Person(\"ada\");\n  Console.println(\"{p.name}: {p.hello()}\");\n}",
+    );
+    tmp.write(
+        "src/Acme/Mix/Greet.phg",
+        "package Acme.Mix;\ntrait Greet {\n  function hello() -> string { return \"hi\"; }\n}",
+    );
+    let (run, runvm) = run_both(&entry);
+    assert_eq!(run, "ada: hi\n");
+    assert_eq!(run, runvm, "run and runvm must be byte-identical");
+}
+
+/// The cross-package trait transpiles to a native PHP `trait` in its package namespace, composed by
+/// the using class via a fully-qualified `use \Acme\Mix\Greet`.
+#[test]
+fn cross_package_trait_transpiles_to_namespaced_trait() {
+    let tmp = TempDir::new();
+    tmp.write("phorj.toml", "module = \"acme/mix\"\nsource = \"src\"");
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main;\nimport Core.Console;\nimport type Acme.Mix.Greet;\n\
+         class Person {\n  use Greet;\n  constructor(public string name) {}\n}\n\
+         function main() -> void {\n  var p = new Person(\"ada\");\n  Console.println(p.hello());\n}",
+    );
+    tmp.write(
+        "src/Acme/Mix/Greet.phg",
+        "package Acme.Mix;\ntrait Greet {\n  function hello() -> string { return \"hi\"; }\n}",
+    );
+    let unit = loader::load(&entry).expect("project loads");
+    let php = cli::transpile_program(&unit.program, &unit.diag_src).expect("transpiles");
+    assert!(php.contains("namespace Acme\\Mix {"), "got:\n{php}");
+    assert!(php.contains("trait Greet {"), "got:\n{php}");
+    assert!(php.contains("use \\Acme\\Mix\\Greet;"), "got:\n{php}");
+}
+
+/// A trait is reuse, not a type — typing a value as a cross-package trait is `E-USE-AS-TYPE`, exactly
+/// as for a same-package trait. (A check-time error: the project loads, the checker rejects it.)
+#[test]
+fn cross_package_trait_used_as_type_is_rejected() {
+    let tmp = TempDir::new();
+    tmp.write("phorj.toml", "module = \"acme/mix\"\nsource = \"src\"");
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main;\nimport Core.Console;\nimport type Acme.Mix.Greet;\n\
+         function f(Greet x) -> void { Console.println(\"no\"); }\n\
+         function main() -> void { Console.println(\"hi\"); }",
+    );
+    tmp.write(
+        "src/Acme/Mix/Greet.phg",
+        "package Acme.Mix;\ntrait Greet {\n  function hello() -> string { return \"hi\"; }\n}",
+    );
+    let unit = loader::load(&entry).expect("project loads (trait import resolves)");
+    let err = cli::run_program(&unit).unwrap_err();
+    assert!(err.contains("E-USE-AS-TYPE"), "got: {err}");
+}

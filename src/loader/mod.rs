@@ -298,6 +298,10 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
                 Item::Class(c) => (&c.name, true, c.vis),
                 Item::Enum(e) => (&e.name, true, e.vis),
                 Item::Interface(i) => (&i.name, true, i.vis),
+                // A trait is a public named symbol in the type namespace (it carries no visibility
+                // modifier — always public reuse). Register it so a cross-package `import type` +
+                // `use T;` can resolve and mangle it to its FQN, exactly like a class/interface.
+                Item::Trait(t) => (&t.name, true, crate::ast::Visibility::Public),
                 _ => continue,
             };
             let table = if is_type { &mut types } else { &mut defined };
@@ -518,6 +522,7 @@ fn build_type_imports(
             Item::Class(c) => Some(c.name.as_str()),
             Item::Enum(e) => Some(e.name.as_str()),
             Item::Interface(i) => Some(i.name.as_str()),
+            Item::Trait(t) => Some(t.name.as_str()),
             _ => None,
         })
         .collect();
