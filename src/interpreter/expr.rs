@@ -3,6 +3,35 @@
 use super::*;
 
 impl Interp {
+    /// Build the zero-arg thunk closure `() => call` a `spawn` defers/invokes (M6 W4): a
+    /// `ClosureData::Tree` whose body is the spawned call, capturing the call's free locals by value
+    /// (and `this`, if used) at spawn time — exactly as a `fn() => call` lambda would. Single-sources
+    /// the capture logic with the `Expr::Lambda` arm.
+    fn make_spawn_thunk(&self, call: &Expr) -> Rc<ClosureData> {
+        let body = LambdaBody::Expr(Box::new(call.clone()));
+        let env: Vec<(String, Value)> = crate::ast::free_vars(&[], &body)
+            .into_iter()
+            .filter(|name| {
+                !self.funcs.contains_key(name.as_str())
+                    && !self.classes.contains_key(name.as_str())
+                    && !self.variants.contains_key(name.as_str())
+            })
+            .filter_map(|name| self.frame.lookup(&name).map(|v| (name, v.clone())))
+            .collect();
+        let this_capture = if crate::ast::lambda_uses_this(&body) {
+            self.this.clone()
+        } else {
+            None
+        };
+        Rc::new(ClosureData::Tree {
+            params: Vec::new(),
+            ret: None,
+            body,
+            env,
+            this_capture,
+        })
+    }
+
     pub(super) fn eval(&mut self, e: &Expr) -> R<Value> {
         match e {
             Expr::Int(n, _) => Ok(Value::Int(*n)),
@@ -17,7 +46,11 @@ impl Interp {
             // `spawn <call>` (M6 W4): step-2 synchronous-degenerate — run the call now and wrap its
             // result in a completed `Task`. Step 4 will enqueue a coroutine via `green::sched` instead.
             Expr::Spawn { call, .. } => {
-                let result = self.eval(call)?;
+                // Build a zero-arg thunk closure `() => call` (capturing the call's free locals by
+                // value at spawn time), then — eager path — invoke it now and store the result by a
+                // fresh task id. The cooperative cutover defers the thunk as a coroutine instead.
+                let thunk = self.make_spawn_thunk(call);
+                let result = self.call_closure(thunk, Vec::new())?;
                 let id = self.coop.borrow_mut().sched.spawn();
                 self.coop.borrow_mut().results.insert(id, result);
                 Ok(Value::Task(id))

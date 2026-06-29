@@ -261,9 +261,11 @@ impl<'a> Vm<'a> {
             // scheduler ids (allocated from `self.coop`); a task's result lives in `coop.results`. The
             // fault strings MUST match the interpreter's exactly (run≡runvm + `agree_err` parity).
             Op::Spawn => {
-                // The spawned call already ran (its result is on top); register a finished task and
-                // store the result by id. (Cooperative `Spawn` will instead enqueue a coroutine.)
-                let result = self.pop();
+                // Eager: invoke the spawned thunk closure (on top of the stack) to completion now,
+                // register a finished task, and store its result by id. (Cooperative `Spawn` will
+                // instead enqueue the thunk as a coroutine task without running it here.)
+                let thunk = self.pop();
+                let result = self.call_closure_value(&thunk, Vec::new())?;
                 let id = self.coop.borrow_mut().sched.spawn();
                 self.coop.borrow_mut().results.insert(id, result);
                 self.stack.push(Value::Task(id));

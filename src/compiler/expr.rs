@@ -180,11 +180,14 @@ impl Compiler<'_> {
                 self.height = h_merge;
             }
             Expr::Call { callee, args, span } => self.compile_call(callee, args, span.line)?,
-            // `spawn <call>` (M6 W4): step-2 synchronous-degenerate — compile the call (it runs,
-            // leaving its result on top), then `Op::Spawn` wraps it in a completed `Task`. Step 4 will
-            // instead capture a thunk and enqueue it with `green::sched`.
+            // `spawn <call>` (M6 W4): compile the call as a zero-arg **thunk closure** `() => call`
+            // (capturing the call's free locals by value at spawn time), then `Op::Spawn`. The eager
+            // path invokes the thunk immediately (behavior-identical to running `call` inline); the
+            // cooperative path (the cutover) instead enqueues the thunk as a `green::sched` task. Using
+            // the closure form uniformly handles any call shape (free fn / method / closure value).
             Expr::Spawn { call, span } => {
-                self.expr(call)?;
+                let body = LambdaBody::Expr(Box::new((**call).clone()));
+                self.compile_lambda(&[], &body, None, span.line)?;
                 self.emit(Op::Spawn, span.line);
             }
             Expr::Null(sp) => self.emit_const(Value::Null, sp.line),
