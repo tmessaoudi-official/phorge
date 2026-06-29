@@ -1095,6 +1095,48 @@ pub fn explain_text(code: &str) -> Option<String> {
              `N` elements: `var [a, b] = pair;` needs `pair: [T; 2]`. Bind exactly `N` elements, or\n\
              destructure a `List<T>` with an `else` if the length is not statically known.\n"
         }
+        "E-CONCURRENCY-NO-PHP" => {
+            "E-CONCURRENCY-NO-PHP — green threads (`spawn` / channels) cannot be transpiled to PHP.\n\n\
+             PHP has no green threads, and a synchronous lowering would make a concurrent program\n\
+             behave differently under PHP than on the Phorj VM/interpreter — breaking the byte-identical\n\
+             spine. So `spawn`/channel programs run on `phg run` / `phg runvm` only (byte-identically),\n\
+             and `phg transpile` rejects them rather than emitting misleading PHP (M6 W4).\n"
+        }
+        "E-SPAWN-NOT-CALL" => {
+            "E-SPAWN-NOT-CALL — `spawn` was applied to something that is not a call.\n\n\
+             `spawn` starts a green task from a function/method call: `spawn work(x)`. It cannot wrap a\n\
+             plain value or expression — wrap the work in a function and `spawn` the call (M6 W4).\n"
+        }
+        "E-SPAWN-VOID" => {
+            "E-SPAWN-VOID — a `spawn`ned call returns no value.\n\n\
+             `spawn f()` evaluates to a `Task<T>` whose `join()` yields the call's result, so the call\n\
+             must return a value. A `void`/`never` call has nothing to join. Fire-and-forget void tasks\n\
+             are a follow-up (M6 W4).\n"
+        }
+        "E-CHANNEL-ANNOTATION" => {
+            "E-CHANNEL-ANNOTATION — `Channel.create()` needs a `Channel<T>` annotation.\n\n\
+             The channel constructor takes no argument, so its element type cannot be inferred. Bind it\n\
+             to an annotated local first: `Channel<int> ch = Channel.create();` (M6 W4).\n"
+        }
+        "E-CHANNEL-NEW-ARITY" => {
+            "E-CHANNEL-NEW-ARITY — `Channel.create()` was given arguments.\n\n\
+             The channel constructor takes none — `Channel<int> ch = Channel.create();`. The element\n\
+             type comes from the `Channel<T>` annotation, not an argument (M6 W4).\n"
+        }
+        "E-CHANNEL-NEW-TYPE" => {
+            "E-CHANNEL-NEW-TYPE — `Channel.create()` bound to a non-`Channel` type.\n\n\
+             `Channel.create()` produces a `Channel<T>`; the binding's declared type must be a\n\
+             `Channel<…>` (M6 W4).\n"
+        }
+        "E-CONCURRENCY-METHOD" => {
+            "E-CONCURRENCY-METHOD — unknown method on a concurrency handle.\n\n\
+             `Channel<T>` has `send(v)` and `recv()`; `Task<T>` has `join()`; the channel constructor is\n\
+             `Channel.create()`. No other built-in method exists on these handles (M6 W4).\n"
+        }
+        "E-CONCURRENCY-ARITY" => {
+            "E-CONCURRENCY-ARITY — a concurrency-handle method got the wrong number of arguments.\n\n\
+             `ch.send(v)` takes exactly one argument; `ch.recv()` and `t.join()` take none (M6 W4).\n"
+        }
         _ => return None,
     };
     Some(body.to_string())
@@ -1105,7 +1147,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-PKG-CASE, E-INSTANCEOF-TYPE, E-CAST-TYPE, E-DECIMAL-DIV, E-DECIMAL-FLOAT-MIX, E-DECIMAL-LITERAL, E-DEFAULT-PARAM-ORDER, E-DEFAULT-PARAM-EXPR, E-DEFAULT-PARAM-TYPE, E-DEFAULT-PARAM-CONTEXT, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-FIELD-VISIBILITY, E-METHOD-VISIBILITY, E-CTOR-VISIBILITY, E-CTOR-MODIFIER, E-FIELD-UNINITIALIZED, E-MAIN-SIGNATURE, E-MULTIPLE-MAIN, E-TEST-OUTSIDE-TESTS, E-STATIC-CALL, E-STATIC-THIS, E-DUP-PARAM, E-DUP-FIELD, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE, E-STRUCT-PAT-TYPE, E-STRUCT-FIELD-UNKNOWN, E-PATTERN-DUP-BIND, E-OR-PATTERN-BIND, E-FIXEDLIST-LEN, E-FIXEDLIST-BOUNDS, E-DESTRUCTURE-TYPE, E-DESTRUCTURE-NOT-CLASS, E-DESTRUCTURE-FIELD-UNKNOWN, E-DESTRUCTURE-NOT-LIST, E-DESTRUCTURE-NEEDS-ELSE, E-DESTRUCTURE-ELSE-IRREFUTABLE, E-DESTRUCTURE-ELSE-FALLTHROUGH, E-DESTRUCTURE-DUP-BIND, E-FIXEDLIST-DESTRUCTURE-LEN, E-ATTR-TARGET, E-UNKNOWN-ATTRIBUTE, E-ROUTE-ARGS, E-ROUTE-SPEC, E-ROUTE-HANDLER, E-ROUTE-METHOD-STATIC, E-FOREIGN-RUNTIME, E-FILE-NAME, E-FILE-MULTI-PUBLIC, E-FILE-MIXED-PUBLIC)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-PKG-CASE, E-INSTANCEOF-TYPE, E-CAST-TYPE, E-DECIMAL-DIV, E-DECIMAL-FLOAT-MIX, E-DECIMAL-LITERAL, E-DEFAULT-PARAM-ORDER, E-DEFAULT-PARAM-EXPR, E-DEFAULT-PARAM-TYPE, E-DEFAULT-PARAM-CONTEXT, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-FIELD-VISIBILITY, E-METHOD-VISIBILITY, E-CTOR-VISIBILITY, E-CTOR-MODIFIER, E-FIELD-UNINITIALIZED, E-MAIN-SIGNATURE, E-MULTIPLE-MAIN, E-TEST-OUTSIDE-TESTS, E-STATIC-CALL, E-STATIC-THIS, E-DUP-PARAM, E-DUP-FIELD, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE, E-STRUCT-PAT-TYPE, E-STRUCT-FIELD-UNKNOWN, E-PATTERN-DUP-BIND, E-OR-PATTERN-BIND, E-FIXEDLIST-LEN, E-FIXEDLIST-BOUNDS, E-DESTRUCTURE-TYPE, E-DESTRUCTURE-NOT-CLASS, E-DESTRUCTURE-FIELD-UNKNOWN, E-DESTRUCTURE-NOT-LIST, E-DESTRUCTURE-NEEDS-ELSE, E-DESTRUCTURE-ELSE-IRREFUTABLE, E-DESTRUCTURE-ELSE-FALLTHROUGH, E-DESTRUCTURE-DUP-BIND, E-FIXEDLIST-DESTRUCTURE-LEN, E-ATTR-TARGET, E-UNKNOWN-ATTRIBUTE, E-ROUTE-ARGS, E-ROUTE-SPEC, E-ROUTE-HANDLER, E-ROUTE-METHOD-STATIC, E-FOREIGN-RUNTIME, E-FILE-NAME, E-FILE-MULTI-PUBLIC, E-FILE-MIXED-PUBLIC, E-CONCURRENCY-NO-PHP, E-SPAWN-NOT-CALL, E-SPAWN-VOID, E-CHANNEL-ANNOTATION, E-CHANNEL-NEW-ARITY, E-CHANNEL-NEW-TYPE, E-CONCURRENCY-METHOD, E-CONCURRENCY-ARITY)"
         )
     })
 }
