@@ -256,48 +256,49 @@ impl<'a> Vm<'a> {
                 self.stack.push(Value::List(Rc::new(list)));
             }
 
-            // Green-thread concurrency (M6 W4 / S4.3) — step-2 synchronous-degenerate bodies. The fault
-            // strings MUST match the interpreter's exactly (run≡runvm + `agree_err` FaultKind parity).
+            // Green-thread concurrency (M6 W4 / S4.3) — synchronous-degenerate bodies (the cooperative
+            // driver, 3b-2b/c, reuses the same ops but defers/suspends). Channels/tasks carry their
+            // scheduler ids (allocated from `self.coop`); a task's result lives in `coop.results`. The
+            // fault strings MUST match the interpreter's exactly (run≡runvm + `agree_err` parity).
             Op::Spawn => {
-                // The spawned call already ran (its result is on top); wrap it in a completed task.
-                // Step 4 will instead enqueue a coroutine driven by `green::sched`.
+                // The spawned call already ran (its result is on top); register a finished task and
+                // store the result by id. (Cooperative `Spawn` will instead enqueue a coroutine.)
                 let result = self.pop();
-                self.stack.push(Value::Task(Rc::new(std::cell::RefCell::new(
-                    crate::value::TaskState {
-                        result: Some(result),
-                    },
-                ))));
+                let id = self.coop.borrow_mut().sched.spawn();
+                self.coop.borrow_mut().results.insert(id, result);
+                self.stack.push(Value::Task(id));
             }
             Op::ChannelNew => {
-                self.stack
-                    .push(Value::Channel(Rc::new(std::cell::RefCell::new(
-                        std::collections::VecDeque::new(),
-                    ))));
+                let id = self.coop.borrow_mut().sched.new_channel();
+                self.stack.push(Value::Channel(
+                    id,
+                    Rc::new(std::cell::RefCell::new(std::collections::VecDeque::new())),
+                ));
             }
             Op::ChannelSend => {
                 let value = self.pop();
                 match self.pop() {
-                    Value::Channel(ch) => {
-                        ch.borrow_mut().push_back(value);
+                    Value::Channel(_, buf) => {
+                        buf.borrow_mut().push_back(value);
                         self.stack.push(Value::Unit);
                     }
                     v => return Err(format!("cannot send on a {}", v.type_name())),
                 }
             }
             Op::ChannelRecv => match self.pop() {
-                Value::Channel(ch) => {
-                    let front = ch.borrow_mut().pop_front();
+                Value::Channel(_, buf) => {
+                    let front = buf.borrow_mut().pop_front();
                     match front {
                         Some(v) => self.stack.push(v),
-                        // No scheduler to yield to in step 2 — step 4 suspends the coroutine instead.
+                        // No scheduler to yield to in the eager path — cooperative suspends instead.
                         None => return Err("recv from empty channel".to_string()),
                     }
                 }
                 v => return Err(format!("cannot recv from a {}", v.type_name())),
             },
             Op::Join => match self.pop() {
-                Value::Task(t) => {
-                    let result = t.borrow().result.clone();
+                Value::Task(id) => {
+                    let result = self.coop.borrow().results.get(&id).cloned();
                     match result {
                         Some(v) => self.stack.push(v),
                         None => return Err("join on an incomplete task".to_string()),

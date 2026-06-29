@@ -207,6 +207,10 @@ pub struct Interp {
     /// closure passed to `List.map`/etc. throws, the invoker stows the value here and returns
     /// [`THROW_SENTINEL`]; the `CallNative` site rebuilds the `Throw` from it. `None` otherwise.
     pending_throw: Option<Value>,
+    /// Green-thread coordination (M6 W4): the scheduler/id-allocator + finished-task results, mirroring
+    /// the VM's `coop`. In the synchronous-degenerate path `spawn` runs eagerly and stores its result
+    /// here (read by `join`); the cooperative driver shares one `Coop` across task interpreters.
+    coop: std::rc::Rc<std::cell::RefCell<crate::green::exec::Coop>>,
 }
 
 /// Run a whole program: collect declarations, locate `main`, call it, and return
@@ -245,6 +249,7 @@ pub fn interpret_main(program: &Program) -> Result<(String, i64), Diagnostic> {
         trace_stack: Vec::new(),
         depth: 0,
         pending_throw: None,
+        coop: std::rc::Rc::new(std::cell::RefCell::new(crate::green::exec::Coop::new())),
     };
     interp.collect(program);
     // Feature B-static: runtime static initializers run once, before `main`. A fault here surfaces
@@ -367,6 +372,7 @@ pub fn call_named(
         trace_stack: Vec::new(),
         depth: 0,
         pending_throw: None,
+        coop: std::rc::Rc::new(std::cell::RefCell::new(crate::green::exec::Coop::new())),
     };
     interp.collect(program);
     let set = match interp.funcs.get(name) {

@@ -82,7 +82,7 @@ fn reflect_kind(args: &[Value], _: &mut String) -> Result<Value, String> {
             // Green-thread handles (M6 W4) are not transpilable — they never reach the PHP `kind`
             // helper. Mapped to "object" defensively so this arm stays total (the checker excludes
             // a channel/task from arithmetic/display; reflection over one is an edge, not a goal).
-            Value::Channel(_) | Value::Task(_) => "object",
+            Value::Channel(..) | Value::Task(_) => "object",
             // `null` is its own kind; `unit` (void) never reaches here (uncapturable), but map it
             // to PHP's `null` defensively so the arm is total.
             Value::Null | Value::Unit => "null",
@@ -134,7 +134,7 @@ fn reflect_type_name(args: &[Value], _: &mut String) -> Result<Value, String> {
             Value::Closure(_) => "function",
             // Green-thread handles (M6 W4) — precise names; defensive (a channel/task is excluded
             // from `typeName`'s UFCS and never transpiles, so this arm is effectively dead).
-            Value::Channel(_) => "Channel",
+            Value::Channel(..) => "Channel",
             Value::Task(_) => "Task",
             Value::Null | Value::Unit => "null",
         },

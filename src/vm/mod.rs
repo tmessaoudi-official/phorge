@@ -89,6 +89,11 @@ pub struct Vm<'a> {
     /// a raw-pointer compare is an exact, allocation-free monomorphism test. Classes are immutable, so
     /// a filled entry never goes stale. Built empty per run (a fresh `Vm`), so no cross-run leakage.
     field_caches: Vec<Vec<FieldCache>>,
+    /// Green-thread coordination (M6 W4): the scheduler/id-allocator + finished-task results. Owned
+    /// per-`Vm` in the synchronous-degenerate path (`spawn` runs eagerly, storing its result here;
+    /// `join` reads it); the cooperative driver shares one `Coop` across every task-`Vm` instead.
+    /// `Value::Channel`/`Task` carry the `ChanId`/`TaskId` allocated from this scheduler.
+    coop: std::rc::Rc<std::cell::RefCell<crate::green::exec::Coop>>,
 }
 
 /// One inline-cache slot (M-perf S2): the `ClassLayout` pointer last seen at a field site and the
@@ -124,6 +129,7 @@ impl<'a> Vm<'a> {
                         .collect()
                 })
                 .collect(),
+            coop: std::rc::Rc::new(std::cell::RefCell::new(crate::green::exec::Coop::new())),
         }
     }
 

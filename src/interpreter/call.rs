@@ -76,9 +76,11 @@ impl Interp {
             if !*safe {
                 if let Expr::Ident(h, _) = &**object {
                     if h == "Channel" && name == "create" && self.frame.lookup(h).is_none() {
-                        return Ok(Value::Channel(Rc::new(std::cell::RefCell::new(
-                            std::collections::VecDeque::new(),
-                        ))));
+                        let id = self.coop.borrow_mut().sched.new_channel();
+                        return Ok(Value::Channel(
+                            id,
+                            Rc::new(std::cell::RefCell::new(std::collections::VecDeque::new())),
+                        ));
                     }
                 }
             }
@@ -370,23 +372,23 @@ impl Interp {
         // Synchronous-degenerate (step 2): recv-on-empty / join-on-incomplete fault — the fault
         // strings match the VM's `exec_op` exactly (run≡runvm + `agree_err` FaultKind parity).
         match &recv {
-            Value::Channel(ch) => {
+            Value::Channel(_, buf) => {
                 return match name {
                     "send" => {
-                        ch.borrow_mut()
+                        buf.borrow_mut()
                             .push_back(args.into_iter().next().expect("send arity checked"));
                         Ok(Value::Unit)
                     }
-                    "recv" => match ch.borrow_mut().pop_front() {
+                    "recv" => match buf.borrow_mut().pop_front() {
                         Some(v) => Ok(v),
                         None => rt("recv from empty channel".to_string()),
                     },
                     _ => rt(format!("`Channel<T>` has no method `{name}`")),
                 };
             }
-            Value::Task(t) => {
+            Value::Task(id) => {
                 return match name {
-                    "join" => match t.borrow().result.clone() {
+                    "join" => match self.coop.borrow().results.get(id).cloned() {
                         Some(v) => Ok(v),
                         None => rt("join on an incomplete task".to_string()),
                     },
