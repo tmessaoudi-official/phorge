@@ -42,7 +42,38 @@ lesson (contextual = fix, hard-reserve = bug). `Channel`/`Task` are reserved typ
   `+`/`==`/interpolation as operands (checker forbids it). So `value::` kernels are untouched → the
   single-sourcing invariant ([[value-kernels-single-sourced]]) holds.
 
-## 4. Scheduler model (the hard part)
+## 4. LOCKED ARCHITECTURE (developer decision, 2026-06-29): uniform coroutines + single-sourced scheduler
+
+The chosen model — the complete one, no capability restriction, both backends independent, byte-identical
+by construction:
+
+- **One shared, deterministic SCHEDULER kernel** in a neutral module (`src/green/sched.rs` or
+  `value`-adjacent), single-sourced exactly like the `value.rs` arithmetic/compare kernels
+  ([[value-kernels-single-sourced]]). It owns: the ready run-queue (FIFO), per-channel wait-lists, the
+  wake order on `send`/task-completion, and the round-robin pick. **Both backends call the SAME
+  scheduler**, so scheduling decisions cannot drift → `run` and `runvm` produce identical task
+  interleaving → byte-identical output. This is the load-bearing invariant.
+- **Executor stays per-backend and independent** — each task is a **stackful coroutine** running *that
+  backend's own* engine: the interpreter walks the AST inside its coroutine; the VM runs bytecode
+  inside its coroutine. Same suspension *mechanism* (coroutine yield at `recv`-on-empty / `join`-on-
+  incomplete / explicit `yield`), same scheduler driving both, but two genuinely independent executors
+  the differential still cross-checks. Stacks switch on **one OS thread**, so the `!Send` `Rc` `Value`
+  heap never moves between threads — the reason real OS-thread parallelism is impossible is exactly why
+  same-thread coroutines are the fit.
+- **Coroutine crate = the 4th dependency** (a stackful-coroutine primitive — candidates `corosensei`
+  (modern, maintained) or `generator`; pick by: maintenance, audit, `no_std`-not-required, miri-clean).
+  Admitted under the SAME amended dependency-policy criterion as `ctrlc`: std has no stackful-coroutine
+  primitive, the only std-native path is hand-rolled `unsafe` stack-switching, and a vetted crate
+  confines that `unsafe` out of phorj's `#![forbid(unsafe_code)]`. It is a low-level *primitive*, NOT an
+  async runtime/framework (tokio et al. remain disallowed). Feature-gated (`green`/`signals`-style) off
+  for the playground? — **NO**: green threads must run in the playground (cooperative, in-browser), so
+  the coroutine crate must support `wasm32` OR the playground uses a wasm-friendly fallback. **VERIFY
+  wasm32 support of the chosen crate FIRST** — this is a hard gate on the crate choice (corosensei has
+  limited wasm support; may need a wasm fallback path). If no crate supports wasm cleanly, the
+  playground falls back to the VM-runs-tasks model *only in wasm* (documented), while native keeps the
+  full uniform-coroutine model.
+
+### Original analysis (superseded by §4 above, kept for context)
 
 **Cooperative, deterministic, single-threaded.** A run-queue of ready tasks (FIFO). The "main" program
 is task 0. `spawn` enqueues a new task. A task runs until it **yields** (calls `recv` on an empty
@@ -101,11 +132,21 @@ stack_effect` — in the same commit. The scheduler lives in `vm.rs` around the 
    + surface in; byte-identical (synchronous degenerate case).
 2. **Channels (synchronous):** `Channel.new`, `send`, `recv` over the `VecDeque` — single-task, no
    yielding (recv on empty = fault for now). Proves the value/op plumbing.
-3. **Scheduler (VM first):** the run-queue + frame-stack swap in `vm.rs`; `recv`-on-empty yields, task
-   completion wakes joiners. **Spike the interpreter model here (§4) — the gating risk.**
-4. **Interpreter parity:** make `run` agree byte-for-byte with `runvm` on the scheduled model (the
-   documented subset from the §4 spike).
-5. **`join`, `yield`, example, quarantine wiring, docs, KNOWN_ISSUES.**
+3. **Coroutine crate spike (GATING):** pick the stackful-coroutine crate, add it (4th dep + policy
+   row), and prove a minimal native spike (spawn a coroutine, yield, resume, drop) AND **verify wasm32
+   support** (the playground gate — §4). If wasm is unsupported, decide the wasm fallback before going
+   further. Land nothing user-facing until this spike is green on native + wasm.
+4. **Shared scheduler kernel + uniform coroutine executor:** build `green::sched` (run-queue, channel
+   wait-lists, deterministic wake/pick) ONCE; wire BOTH backends to run each task as a coroutine driven
+   by it. `recv`-on-empty / `join`-on-incomplete / `yield` suspend the coroutine back to the scheduler.
+   Gate: `run≡runvm` byte-identical on a producer/consumer program (quarantined from PHP).
+5. **`join`, explicit `yield`, the `examples/guide/concurrency.phg` example (+ regenerate playground
+   `examples.js`), transpiler `E-CONCURRENCY-NO-PHP`, quarantine wiring, docs, KNOWN_ISSUES.**
+
+> Steps 1–2 (surface + value model + synchronous channels) are byte-identical foundations and can land
+> first; the COMPLETE concurrency arrives at step 4. This is incremental delivery of the complete
+> design — NOT a permanent half-solution (the developer rejected restricted-subset / synchronous-only /
+> independence-losing models; this model has none of those compromises).
 
 > Each step: design-check → TDD → full gate (`run≡runvm`; the concurrency example quarantined from PHP)
 > → clippy/fmt → commit. Stop and surface to the developer if the §4 interpreter-coroutine spike shows

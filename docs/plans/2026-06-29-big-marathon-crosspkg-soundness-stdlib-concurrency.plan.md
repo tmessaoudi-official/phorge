@@ -7,6 +7,18 @@
 > + `cargo clippy --all-targets` + `cargo fmt --check`.
 
 ## Decisions Log
+- [2026-06-29] AGREED (session 3, S4.3 architecture — developer wanted "the most complete, no half-
+  solution"): green threads = **uniform stackful coroutines on BOTH backends + a single-sourced
+  deterministic scheduler kernel.** One shared `green::sched` (run-queue, channel wait-lists, wake/pick)
+  drives both — like `value.rs` kernels are single-sourced, so scheduling can't drift → byte-identical
+  `run≡runvm`. Each task is a stackful coroutine running that backend's own engine (interpreter walks
+  AST / VM runs bytecode), suspending at `recv`/`join`/`yield` — preserves backend independence AND full
+  capability (no restricted subset). Adds a **4th dependency** (stackful-coroutine crate, e.g.
+  corosensei/generator) under the ctrlc criterion (std lacks it; confines unsafe). **HARD GATES before
+  user-facing code:** (1) crate must support **wasm32** (playground runs green threads in-browser) or a
+  wasm fallback is decided; (2) a native+wasm coroutine spike must be green. Rejected literal "1+3" as
+  incoherent (coroutines + VM-delegation = worst of both). Full design: `docs/specs/2026-06-29-m6-w4-
+  green-threads-design.md` §4 (LOCKED) + §7 build steps. **Milestone-scale implementation — begins fresh.**
 - [2026-06-29] AGREED (session 3, Spine-4 forks): **S4.2 = add the `ctrlc` dependency + build graceful
   shutdown now** (developer authorized spending dependency-policy budget; SIGINT/SIGTERM → shutdown flag
   → stop accepting → drain in-flight → exit 0; NOT the unsafe handler). **S4.3 = build the green-thread
