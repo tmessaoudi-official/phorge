@@ -2,7 +2,7 @@
 
 use super::*;
 
-impl Interp {
+impl<'c> Interp<'c> {
     pub(super) fn eval_call(&mut self, callee: &Expr, args: &[Expr]) -> R<Value> {
         // method call: `object.name(args)`
         if let Expr::Member {
@@ -372,25 +372,55 @@ impl Interp {
         // Synchronous-degenerate (step 2): recv-on-empty / join-on-incomplete fault — the fault
         // strings match the VM's `exec_op` exactly (run≡runvm + `agree_err` FaultKind parity).
         match &recv {
-            Value::Channel(_, buf) => {
+            Value::Channel(id, buf) => {
                 return match name {
                     "send" => {
                         buf.borrow_mut()
                             .push_back(args.into_iter().next().expect("send arity checked"));
+                        // Cooperative cutover (S4.3): wake the first task blocked receiving on this
+                        // channel. A no-op when none is waiting or on the synchronous path (where a
+                        // `recv`-on-empty faults instead of blocking, so the wait-list is always empty).
+                        if self.coop_suspend.is_some() {
+                            self.coop.borrow_mut().sched.on_send(*id);
+                        }
                         Ok(Value::Unit)
                     }
-                    "recv" => match buf.borrow_mut().pop_front() {
-                        Some(v) => Ok(v),
-                        None => rt("recv from empty channel".to_string()),
+                    // `recv` on an empty channel: the synchronous path faults; the cooperative path
+                    // SUSPENDS the task (`Trap::Recv`) until a `send` on this channel wakes it, then
+                    // retries — byte-identical interleaving to the VM (the shared `green::sched` kernel).
+                    "recv" => loop {
+                        let front = buf.borrow_mut().pop_front();
+                        match front {
+                            Some(v) => return Ok(v),
+                            None => match self.coop_suspend {
+                                Some(s) => {
+                                    let frag = std::mem::take(&mut self.out);
+                                    s.suspend(crate::green::sched::Trap::Recv(*id), frag);
+                                }
+                                None => return rt("recv from empty channel".to_string()),
+                            },
+                        }
                     },
                     _ => rt(format!("`Channel<T>` has no method `{name}`")),
                 };
             }
             Value::Task(id) => {
                 return match name {
-                    "join" => match self.coop.borrow().results.get(id).cloned() {
-                        Some(v) => Ok(v),
-                        None => rt("join on an incomplete task".to_string()),
+                    // `join` on an incomplete task: the synchronous path faults (the eager `spawn`
+                    // already finished it); the cooperative path SUSPENDS (`Trap::Join`) until the
+                    // target completes and the scheduler wakes this joiner, then reads its result.
+                    "join" => loop {
+                        let result = self.coop.borrow().results.get(id).cloned();
+                        match result {
+                            Some(v) => return Ok(v),
+                            None => match self.coop_suspend {
+                                Some(s) => {
+                                    let frag = std::mem::take(&mut self.out);
+                                    s.suspend(crate::green::sched::Trap::Join(*id), frag);
+                                }
+                                None => return rt("join on an incomplete task".to_string()),
+                            },
+                        }
                     },
                     _ => rt(format!("`Task<T>` has no method `{name}`")),
                 };

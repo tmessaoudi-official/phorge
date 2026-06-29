@@ -2,7 +2,7 @@
 
 use super::*;
 
-impl Interp {
+impl<'c> Interp<'c> {
     pub(super) fn eval(&mut self, e: &Expr) -> R<Value> {
         match e {
             Expr::Int(n, _) => Ok(Value::Int(*n)),
@@ -17,9 +17,15 @@ impl Interp {
             // `spawn <call>` (M6 W4): step-2 synchronous-degenerate — run the call now and wrap its
             // result in a completed `Task`. Step 4 will enqueue a coroutine via `green::sched` instead.
             Expr::Spawn { call, .. } => {
-                // Synchronous-degenerate: run the call inline now and store its result by a fresh task
-                // id (so a fault traces through the real call, identical to the VM — no synthetic thunk
-                // frame). The cooperative cutover will defer the call as a scheduler task instead.
+                // Cooperative cutover (S4.3): when running inside the cooperative driver, DEFER the
+                // call as a scheduler task (args eval'd eagerly here, the function body run as the
+                // task's coroutine root — no synthetic lambda frame, so traces stay run≡runvm). On the
+                // synchronous path (and on wasm, which keeps the eager model) run the call inline now
+                // and store its result by a fresh task id, so `join` always has it.
+                #[cfg(all(feature = "green", not(target_arch = "wasm32")))]
+                if self.coop_suspend.is_some() {
+                    return self.spawn_cooperative(call);
+                }
                 let result = self.eval(call)?;
                 let id = self.coop.borrow_mut().sched.spawn();
                 self.coop.borrow_mut().results.insert(id, result);

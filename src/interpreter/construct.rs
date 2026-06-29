@@ -2,7 +2,7 @@
 
 use super::*;
 
-impl Interp {
+impl<'c> Interp<'c> {
     /// The ordered constructor plan `class_name` runs (M-RT S6c.2) — mirrors `ast::ctor_plan`: its own
     /// ctor if declared, else (single inheritance) the parent's plan, else (multiple inheritance) every
     /// parent's plan concatenated in `extends` order. Empty when no own/inherited ctor applies. Each

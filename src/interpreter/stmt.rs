@@ -2,7 +2,7 @@
 
 use super::*;
 
-impl Interp {
+impl<'c> Interp<'c> {
     pub(super) fn exec_stmt(&mut self, s: &Stmt) -> R<()> {
         // Track the current source line on the active trace frame, so a fault reports the right line
         // (and a non-top frame reports its call-site line — the call statement currently executing).

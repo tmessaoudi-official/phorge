@@ -145,7 +145,7 @@ impl CallScopes {
     }
 }
 
-pub struct Interp {
+pub struct Interp<'c> {
     /// Free-function overload sets (M-RT overloading): a name maps to one *or more* declarations.
     /// Length 1 in the common case; dynamic dispatch selects among >1 by the argument values.
     funcs: HashMap<String, Vec<FunctionDecl>>,
@@ -211,6 +211,17 @@ pub struct Interp {
     /// the VM's `coop`. In the synchronous-degenerate path `spawn` runs eagerly and stores its result
     /// here (read by `join`); the cooperative driver shares one `Coop` across task interpreters.
     coop: std::rc::Rc<std::cell::RefCell<crate::green::exec::Coop>>,
+    /// Green-thread cooperative cutover (S4.3): the suspension handle of the coroutine *this* task runs
+    /// on. `Some` only while a task interpreter executes inside the cooperative driver
+    /// ([`run_cooperative_interp`]); `None` on the ordinary synchronous run path, where `spawn` is eager
+    /// and `recv`/`join` fault instead of blocking. The borrow is a closure-local of the driver's
+    /// coroutine body (never escapes it), so it keeps `Interp` `'static`-movable into that `'static`
+    /// closure — the deep-suspend mechanism the spike (`green::spike`) proved works without `unsafe`.
+    coop_suspend: Option<&'c dyn crate::green::exec::Suspend>,
+    /// The owning program AST, held only by a **cooperative** task interpreter so it can build a fresh
+    /// child task interpreter when it evaluates a `spawn` (each green task = its own `Interp` over the
+    /// same program, sharing only `coop`). `None` on the synchronous path (where `spawn` never defers).
+    program: Option<std::rc::Rc<Program>>,
 }
 
 /// Run a whole program: collect declarations, locate `main`, call it, and return
@@ -250,6 +261,8 @@ pub fn interpret_main(program: &Program) -> Result<(String, i64), Diagnostic> {
         depth: 0,
         pending_throw: None,
         coop: std::rc::Rc::new(std::cell::RefCell::new(crate::green::exec::Coop::new())),
+        coop_suspend: None,
+        program: None,
     };
     interp.collect(program);
     // Feature B-static: runtime static initializers run once, before `main`. A fault here surfaces
@@ -373,6 +386,8 @@ pub fn call_named(
         depth: 0,
         pending_throw: None,
         coop: std::rc::Rc::new(std::cell::RefCell::new(crate::green::exec::Coop::new())),
+        coop_suspend: None,
+        program: None,
     };
     interp.collect(program);
     let set = match interp.funcs.get(name) {
@@ -415,7 +430,14 @@ mod construct;
 mod expr;
 mod stmt;
 
-impl Interp {
+// Cooperative green-thread driver (M6 W4 / S4.3) — native + `green` only (uses stackful coroutines,
+// which corosensei cannot provide on wasm32; the wasm interpreter keeps the eager model).
+#[cfg(all(feature = "green", not(target_arch = "wasm32")))]
+mod coop;
+#[cfg(all(feature = "green", not(target_arch = "wasm32")))]
+pub use coop::run_cooperative_interp;
+
+impl<'c> Interp<'c> {
     fn collect(&mut self, program: &Program) {
         for item in &program.items {
             match item {
