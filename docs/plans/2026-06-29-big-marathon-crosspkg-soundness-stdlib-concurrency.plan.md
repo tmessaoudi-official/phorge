@@ -30,6 +30,7 @@
 - **Spine 3 has a charter + a new module + breadth natives** (`Core.Path` new; `Text.lastIndexOf`/`removePrefix`/`removeSuffix`; `List.chunk`/`fill`; `Text.lines`/`Text.capitalize`; core.json encode/safe-parse earlier; sprintf — genuine design fork (variadic vs list / `%` vs `{}`), deferred for an explicit design call).
 - **Spine 4 (M6 W4 concurrency/server) NOT started** — a large milestone (keep-alive, graceful shutdown, then uncolored `spawn`+channels green threads on the VM's reified frames, Tier-3 quarantined per the charter). Start fresh.
 - **Marathon checkpoint (8 commits): Spine 1 complete, Spine 3 charter+2 natives; Spine 2 deferred (architectural), Spine 4 pending.**
+- **Marathon checkpoint #2 (13 commits, all green, NOT pushed): + Spine-3 breadth this session** — `48a8f03` Core.Path (new module, 5 fns), `c59bf51` Core.Text `lastIndexOf`/`removePrefix`/`removeSuffix`, `5954a2f` Core.List.fill. Each byte-identical run≡runvm≡real-PHP-8.5, 1259 lib + workspace green, clippy+fmt clean. **Spine 2 (soundness) + Spine 4 (M6 W4 concurrency) still pending — both deliberately deferred to a fresh context (Spine 4 is milestone-scale; the handoff says start it fresh).**
 
 ## Formal Plan
 
