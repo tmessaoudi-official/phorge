@@ -332,6 +332,67 @@ fn tcp_smoke() {
     assert_eq!(resp, http("HTTP/1.1 200 OK", "home"));
 }
 
+/// S4.1 — HTTP/1.1 keep-alive: two requests on ONE socket get two responses (the connection is reused,
+/// not closed after the first). Keep-alive requires a configured timeout (the idle-socket guard), so the
+/// transport is bound with one. Each response is self-delimiting (`Content-Length`), so the client reads
+/// exactly one response's worth of bytes per request.
+#[test]
+fn tcp_keepalive_serves_two_requests_on_one_socket() {
+    use phorj::serve::TcpTransport;
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+    use std::time::Duration;
+
+    let prog = program();
+    let mut t = TcpTransport::bind("127.0.0.1:0").expect("bind ephemeral port");
+    t.set_timeout(Some(Duration::from_secs(5))); // keep-alive only with a timeout (idle guard)
+    let addr = t.local_addr().expect("addr");
+    std::thread::spawn(move || {
+        let _ = serve(&prog, &mut t, false);
+    });
+
+    let expected = http("HTTP/1.1 200 OK", "home");
+    let mut s = TcpStream::connect(addr).expect("connect");
+    s.set_read_timeout(Some(Duration::from_secs(5)))
+        .expect("client timeout");
+    // Two HTTP/1.1 requests (no `Connection: close`) on the SAME socket.
+    for i in 0..2 {
+        s.write_all(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n")
+            .unwrap_or_else(|e| panic!("write request {i}: {e}"));
+        let mut resp = vec![0u8; expected.len()];
+        s.read_exact(&mut resp)
+            .unwrap_or_else(|e| panic!("read response {i} on the kept-alive socket: {e}"));
+        assert_eq!(resp, expected, "response {i}");
+    }
+}
+
+/// S4.1 — `Connection: close` closes the socket after one response even with keep-alive available: the
+/// client's `read_to_end` returns exactly one response and then EOF (the server drops the socket).
+#[test]
+fn tcp_connection_close_closes_after_one_response() {
+    use phorj::serve::TcpTransport;
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+    use std::time::Duration;
+
+    let prog = program();
+    let mut t = TcpTransport::bind("127.0.0.1:0").expect("bind ephemeral port");
+    t.set_timeout(Some(Duration::from_secs(5)));
+    let addr = t.local_addr().expect("addr");
+    std::thread::spawn(move || {
+        let _ = serve(&prog, &mut t, false);
+    });
+
+    let mut s = TcpStream::connect(addr).expect("connect");
+    s.set_read_timeout(Some(Duration::from_secs(5)))
+        .expect("client timeout");
+    s.write_all(b"GET / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+        .expect("write request");
+    let mut resp = Vec::new();
+    s.read_to_end(&mut resp).expect("read response then EOF");
+    assert_eq!(resp, http("HTTP/1.1 200 OK", "home"));
+}
+
 /// M6 W3 — the worker pool serves many concurrent connections correctly. 24 clients hit a 4-worker
 /// pool at once; every one must get the exact `home` response (correctness under concurrency — no
 /// deadlock, no interleaved/corrupted responses, no lost connection). Real sockets on an ephemeral
@@ -370,5 +431,36 @@ fn pool_serves_concurrent_connections() {
             resp, expected,
             "concurrent client {i} got the wrong response"
         );
+    }
+}
+
+/// S4.1 — the worker pool also keeps connections alive (when a timeout is configured): two requests on
+/// one socket served by the same worker get two responses. Exercises the pool's per-connection
+/// keep-alive loop (a separate code path from the single-threaded `TcpTransport`).
+#[test]
+fn pool_keepalive_serves_two_requests_on_one_socket() {
+    use phorj::serve::serve_pool;
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::time::Duration;
+
+    let prog = program();
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
+    let addr = listener.local_addr().expect("addr");
+    std::thread::spawn(move || {
+        let _ = serve_pool(listener, &prog, Some(Duration::from_secs(5)), false, 2);
+    });
+
+    let expected = http("HTTP/1.1 200 OK", "home");
+    let mut s = TcpStream::connect(addr).expect("connect");
+    s.set_read_timeout(Some(Duration::from_secs(5)))
+        .expect("client timeout");
+    for i in 0..2 {
+        s.write_all(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n")
+            .unwrap_or_else(|e| panic!("write request {i}: {e}"));
+        let mut resp = vec![0u8; expected.len()];
+        s.read_exact(&mut resp)
+            .unwrap_or_else(|e| panic!("read response {i} on the kept-alive pool socket: {e}"));
+        assert_eq!(resp, expected, "pool response {i}");
     }
 }

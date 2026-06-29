@@ -50,10 +50,16 @@ function main(): void {
 ## Run it natively — `phg serve`
 
 `server.phg` defines `respond(bytes) -> bytes`. `phg serve` binds a socket, frames each HTTP/1.1
-request (`Connection: close`, one request per connection), calls `respond` once, and writes the
-bytes back. All HTTP logic — parsing, routing, the 400-on-malformed — lives in `respond`, in pure
-Phorj; the runtime (`src/serve.rs`) is the thinnest possible glue and knows nothing about the
-`Request`/`Response` layout.
+request, calls `respond` once per request, and writes the bytes back. All HTTP logic — parsing,
+routing, the 400-on-malformed — lives in `respond`, in pure Phorj; the runtime (`src/serve.rs`) is
+the thinnest possible glue and knows nothing about the `Request`/`Response` layout.
+
+**HTTP/1.1 keep-alive (M6 W4 / S4.1):** with a `--timeout` set, a connection is reused for multiple
+requests (every response carries `Content-Length`, so it is self-delimiting) until the client sends
+`Connection: close`, the per-connection cap (100) is reached, or the idle read-timeout fires. The
+timeout is the idle-socket guard: **without `--timeout`, keep-alive is off** and each connection
+serves one request then closes (so an idle client can never pin the single-threaded server or a pool
+worker). Both the single-threaded path and the `--workers N` pool keep connections alive.
 
 ```console
 $ phg serve examples/web/server.phg --addr 127.0.0.1:8080

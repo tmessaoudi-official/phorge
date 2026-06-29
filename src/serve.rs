@@ -4,7 +4,9 @@
 //!
 //! The portable unit stays `handle(Request) -> Response` (W1) *inside* the served program; the
 //! runtime only shuttles raw bytes to a single Phorj entry **`respond(bytes) -> bytes`** ([`SERVE_ENTRY`])
-//! and writes the result back. HTTP/1.1, `Connection: close`, one request per accepted connection.
+//! and writes the result back. HTTP/1.1 with **keep-alive** (S4.1) when a `--timeout` is configured —
+//! a connection is reused until `Connection: close`, the per-connection cap, or the idle timeout; with
+//! no timeout it is one request per connection (the idle-socket guard).
 //!
 //! Concurrency (M6 W3): a bounded OS-thread pool, **one request per worker thread, each with its own
 //! `Rc` `Value` heap** — values never cross threads, so the non-`Send` heap is no obstacle (the
@@ -188,6 +190,11 @@ pub struct TcpTransport {
     current: Option<TcpStream>,
     /// Per-connection read/write timeout (slowloris guard, GA blocker B4). `None` = no timeout.
     timeout: Option<Duration>,
+    /// S4.1 keep-alive: whether the request just `recv`'d asked to keep the connection open (decided in
+    /// `recv`, consumed in `send` together with the response's own `Connection` header).
+    req_wants_keepalive: bool,
+    /// Requests already served on the currently-kept-alive socket (capped at [`MAX_REQUESTS_PER_CONN`]).
+    served_on_current: usize,
 }
 
 impl TcpTransport {
@@ -197,6 +204,8 @@ impl TcpTransport {
             listener: TcpListener::bind(addr)?,
             current: None,
             timeout: None,
+            req_wants_keepalive: false,
+            served_on_current: 0,
         })
     }
     /// Set the per-connection read/write timeout (GA blocker B4 — bounds a slow/idle client on the
@@ -213,6 +222,22 @@ impl TcpTransport {
 
 impl Transport for TcpTransport {
     fn recv(&mut self) -> io::Result<Option<Vec<u8>>> {
+        // S4.1: first try the kept-alive socket from the previous exchange (if `send` kept it). A
+        // subsequent request reuses the connection; EOF/timeout on it just drops it and we accept a new
+        // one — so an idle keep-alive client can never wedge the single-threaded server (it is reaped by
+        // the read timeout, which is why keep-alive is only kept when a timeout is configured).
+        if let Some(mut stream) = self.current.take() {
+            match read_http_request(&mut stream) {
+                Ok(raw) if !raw.is_empty() => {
+                    self.req_wants_keepalive = request_wants_keepalive(&raw);
+                    self.current = Some(stream);
+                    return Ok(Some(raw));
+                }
+                // Empty (client closed) or a read error (idle timeout / reset) → this connection is
+                // done; fall through to accept a fresh one.
+                _ => {}
+            }
+        }
         // Accept connections until one yields a request. An `accept()` error propagates to the serve
         // loop's circuit breaker (it decides if the listener is unrecoverable). A per-connection read
         // error — a read timeout from a slow/idle client (B4), or a reset mid-headers — is logged and
@@ -227,6 +252,8 @@ impl Transport for TcpTransport {
             }
             match read_http_request(&mut stream) {
                 Ok(raw) => {
+                    self.req_wants_keepalive = request_wants_keepalive(&raw);
+                    self.served_on_current = 0;
                     self.current = Some(stream);
                     return Ok(Some(raw));
                 }
@@ -241,8 +268,20 @@ impl Transport for TcpTransport {
         if let Some(mut stream) = self.current.take() {
             stream.write_all(response)?;
             stream.flush()?;
+            // S4.1: keep the socket for the next request only when a timeout is configured (so an idle
+            // client is reaped, never wedging the single-threaded server), the request and response both
+            // permit it, and we are under the per-connection cap. Otherwise the stream drops here →
+            // `Connection: close` (verbatim pre-S4.1 behaviour when keep-alive does not apply).
+            self.served_on_current += 1;
+            let keep = self.timeout.is_some()
+                && self.served_on_current < MAX_REQUESTS_PER_CONN
+                && self.req_wants_keepalive
+                && response_keeps_alive(response);
+            if keep {
+                self.current = Some(stream);
+            }
         }
-        Ok(()) // dropping the stream closes the connection (Connection: close)
+        Ok(())
     }
 }
 
@@ -282,11 +321,11 @@ fn serve_banner(timeout: Option<Duration>, dev: bool, workers: usize) {
     };
     match timeout {
         Some(d) => eprintln!(
-            "phg serve: per-connection timeout {}s; {conc} — bind 127.0.0.1 on untrusted networks",
+            "phg serve: per-connection timeout {}s; HTTP/1.1 keep-alive; {conc} — bind 127.0.0.1 on untrusted networks",
             d.as_secs()
         ),
         None => eprintln!(
-            "phg serve: no connection timeout (pass --timeout); {conc} — bind 127.0.0.1 on untrusted networks"
+            "phg serve: no connection timeout (pass --timeout to enable keep-alive); {conc} — bind 127.0.0.1 on untrusted networks"
         ),
     }
 }
@@ -378,21 +417,47 @@ fn worker_loop(
             let _ = stream.set_read_timeout(Some(t));
             let _ = stream.set_write_timeout(Some(t));
         }
+        // S4.1: serve multiple requests on this socket when keep-alive applies. Keep-alive is only
+        // entered when a timeout is configured, so an idle client is reaped by the read timeout and can
+        // never pin a worker (with no timeout this serves exactly one request, verbatim pre-S4.1).
+        let keepalive = timeout.is_some();
         let handled = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            match read_http_request(&mut stream) {
-                Ok(raw) => {
-                    let response = respond_once(program, &raw, dev);
-                    if let Err(e) = stream.write_all(&response).and_then(|()| stream.flush()) {
-                        eprintln!("serve: send failed (connection dropped): {e}");
+            let mut served = 0usize;
+            loop {
+                match read_http_request(&mut stream) {
+                    // Empty buffer = the client closed (EOF before any bytes) — only meaningful on a
+                    // kept-alive socket; on a fresh one it flows to `parse_request` → 400 (served == 0).
+                    Ok(raw) if served > 0 && raw.is_empty() => break,
+                    Ok(raw) => {
+                        let response = respond_once(program, &raw, dev);
+                        if let Err(e) = stream.write_all(&response).and_then(|()| stream.flush()) {
+                            eprintln!("serve: send failed (connection dropped): {e}");
+                            break;
+                        }
+                        served += 1;
+                        if !(keepalive
+                            && served < MAX_REQUESTS_PER_CONN
+                            && request_wants_keepalive(&raw)
+                            && response_keeps_alive(&response))
+                        {
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        // A read error after ≥1 request is the expected idle keep-alive timeout (not
+                        // worth logging); on the first read it is a genuine dropped/slow connection.
+                        if served == 0 {
+                            eprintln!("serve: dropping connection (read error): {e}");
+                        }
+                        break;
                     }
                 }
-                Err(e) => eprintln!("serve: dropping connection (read error): {e}"),
             }
         }));
         if handled.is_err() {
             eprintln!("serve: worker recovered from a panic on one request");
         }
-        // `stream` drops here → connection closes (Connection: close).
+        // `stream` drops here → connection closes.
     }
 }
 
@@ -438,6 +503,61 @@ fn read_http_request<R: Read>(stream: &mut R) -> io::Result<Vec<u8>> {
         buf.extend_from_slice(&chunk[..n]);
     }
     Ok(buf)
+}
+
+/// Max requests served on one kept-alive connection before it is closed (EV-7 — bounds a client that
+/// pins a connection/worker forever). The client simply reconnects for more.
+const MAX_REQUESTS_PER_CONN: usize = 100;
+
+/// Whether the **request** asks to keep the connection open (HTTP/1.1 S4.1 keep-alive). HTTP/1.1
+/// defaults to keep-alive unless `Connection: close`; HTTP/1.0 defaults to close unless
+/// `Connection: keep-alive`. Header value matched case-insensitively (a comma-list like
+/// `keep-alive, foo` counts). Framing-only parse over the raw bytes — mirrors `parse_content_length`.
+fn request_wants_keepalive(raw: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(raw);
+    let head = text.split("\r\n\r\n").next().unwrap_or("");
+    let mut lines = head.split("\r\n");
+    let is_http11 = lines
+        .next()
+        .is_some_and(|req_line| req_line.contains("HTTP/1.1"));
+    let conn = head_value(head, "connection");
+    match conn {
+        Some(v) if v.eq_ignore_ascii_case("close") || token_list_has(&v, "close") => false,
+        Some(v) if token_list_has(&v, "keep-alive") => true,
+        _ => is_http11, // no Connection header → HTTP/1.1 keeps alive, HTTP/1.0 closes
+    }
+}
+
+/// Whether the **response** permits keep-alive — false when the server's own headers say
+/// `Connection: close` (the `http_500`/error responses do, so a faulted exchange always closes). A
+/// kept-alive response must be self-delimiting; every Phorj response carries `Content-Length` (set by
+/// `serialize_response` / the error helpers), so reuse is safe.
+fn response_keeps_alive(resp: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(resp);
+    let head = text.split("\r\n\r\n").next().unwrap_or("");
+    match head_value(head, "connection") {
+        Some(v) => !(v.eq_ignore_ascii_case("close") || token_list_has(&v, "close")),
+        None => true,
+    }
+}
+
+/// The (trimmed) value of header `name` (case-insensitive) in an HTTP head, or `None`.
+fn head_value(head: &str, name: &str) -> Option<String> {
+    head.split("\r\n").skip(1).find_map(|line| {
+        line.split_once(':').and_then(|(k, v)| {
+            k.trim()
+                .eq_ignore_ascii_case(name)
+                .then(|| v.trim().to_string())
+        })
+    })
+}
+
+/// Whether a comma-separated header value contains `token` (case-insensitive, trimmed) — e.g.
+/// `Connection: keep-alive, Upgrade` contains `keep-alive`.
+fn token_list_has(value: &str, token: &str) -> bool {
+    value
+        .split(',')
+        .any(|t| t.trim().eq_ignore_ascii_case(token))
 }
 
 /// Parse the `Content-Length` header from a request head (0 if absent or unparseable).

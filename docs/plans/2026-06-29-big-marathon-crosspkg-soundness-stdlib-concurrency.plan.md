@@ -94,6 +94,18 @@
 
 ## Progress
 
+- **Marathon checkpoint #10 (session 3): Spine-4 S4.1 HTTP/1.1 keep-alive DONE.** Transport-internal —
+  NO `Transport` trait change (my earlier worry was overstated): the keep-alive decision is made from the
+  request's `Connection` header (`request_wants_keepalive`) + the response's (`response_keeps_alive`,
+  false on the `Connection: close` 500s), in BOTH paths. Single-threaded `TcpTransport`: `recv` retries
+  the kept `self.current` first, `send` keeps it when permitted. Pool `worker_loop`: an inner per-stream
+  keep-alive loop. **Safety rule: keep-alive only when a `--timeout` is set** (the idle-socket guard — no
+  timeout ⇒ one request per connection, verbatim pre-S4.1, so an idle client can't pin a thread/worker).
+  Per-connection cap `MAX_REQUESTS_PER_CONN=100` (EV-7). Serve-layer only (OUTSIDE the byte-identity
+  spine); 3 new `tests/serve.rs` (single-threaded 2-req, `Connection: close` closes-after-one, pool
+  2-req); `examples/web/README.md` updated. Commit pending gate-green. **Next: S4.2 graceful shutdown,
+  then the S4.3 green-thread fork (needs the developer's PHP-target call).**
+
 - **Marathon checkpoint #9 (session 3): SPINE-2 SOUNDNESS COMPLETE.** S2.1 full (narrow `1163e47` +
   methods `3a95755` + broad `d210c62`), S2.2 method return-overloading `9b1864a`, S2.4 while-let guards
   `33f4d0d`, S2.5 LSB closed `3d3faf9`, **S2.3 must-use B/C closed as moot** (subsumed by Slice A's
