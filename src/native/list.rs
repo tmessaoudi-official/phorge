@@ -73,6 +73,22 @@ fn list_reverse(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("List.reverse expects (List<T>)".into()),
     }
 }
+/// `enumerate(xs) -> Map<int, T>` — pair each element with its 0-based index, ready for the
+/// two-binding `for (int i, T x in List.enumerate(xs))` form (B1). Insertion-ordered, so iteration
+/// is index order. A PHP list array is already 0-keyed, so this erases to `array_values` (identity).
+fn list_enumerate(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs)] => {
+            let pairs: Vec<(crate::value::HKey, Value)> = xs
+                .iter()
+                .enumerate()
+                .map(|(i, v)| (crate::value::HKey::Int(i as i64), v.clone()))
+                .collect();
+            Ok(Value::Map(std::rc::Rc::new(pairs)))
+        }
+        _ => Err("List.enumerate expects (List<T>)".into()),
+    }
+}
 /// `fill(value, count) -> List<T>` — a list of `count` copies of `value` (PHP `array_fill(0, …)`;
 /// cf. JS `Array(n).fill(v)`, Dart `List.filled`). `count == 0` is the empty list; a negative count
 /// faults cleanly (PHP `array_fill` `ValueError`, EV-7 — never an over-large alloc from `n as usize`).
@@ -367,6 +383,17 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(list_reverse),
             // array_reverse re-indexes a list (sequential keys) — byte-identical to the Rust Vec.
             php: |a| format!("array_reverse({})", parg(a, 0)),
+        },
+        // `enumerate(xs) -> Map<int, T>` — index→element pairs for `for (int i, T x in …)` (B1).
+        NativeFn {
+            module: "Core.List",
+            name: "enumerate",
+            params: vec![list(t())],
+            ret: Ty::Map(Box::new(Ty::Int), Box::new(t())),
+            pure: true,
+            eval: NativeEval::Pure(list_enumerate),
+            // A PHP list is already 0-keyed; array_values guarantees sequential int keys.
+            php: |a| format!("array_values({})", parg(a, 0)),
         },
         // `fill(value, count) -> List<T>` — `count` copies of `value` (PHP `array_fill`, value last).
         NativeFn {

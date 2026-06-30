@@ -1,6 +1,7 @@
 package Main;
 import Core.Output;
 import Core.Set;
+import Core.List;
 
 // Iteration protocol (B1) — `for (x in iterable)` walks any collection, not just a `List`. A `Set<T>`
 // iterates its insertion-ordered, deduplicated elements; a `string` iterates its characters (each a
@@ -62,4 +63,11 @@ function main(): void {
         cart = cart + price;
     }
     Output.printLine("cart total = {cart}");
+
+    // `List.enumerate` pairs each element with its 0-based index → a `Map<int, T>`, consumed by the
+    // same two-binding form. The Pythonic `for (i, x in enumerate(xs))`.
+    List<string> names = ["alice", "bob", "carol"];
+    for (int i, string name in List.enumerate(names)) {
+        Output.printLine("{i}: {name}");
+    }
 }

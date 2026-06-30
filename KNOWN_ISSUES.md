@@ -840,6 +840,20 @@ SORT_STRING dedupe matches `HKey` equality. Set union/intersection and iteration
 Still pending on this path: the higher-order `Core.List` `map`/`filter`/`reduce` (the
 closure-from-native mechanism — `NativeEval::HigherOrder` + a re-entrant VM closure invoker).
 
+## Iteration protocol (B1) — deferred
+
+`for (x in …)` walks a `List<T>`, a `Set<T>`, an integer range, a `string` (its characters, ASCII
+domain), and a `Map<K, V>` via the two-binding `for (K k, V v in map)` form; `List.enumerate(xs)`
+gives the Pythonic `for (int i, T x in enumerate(xs))` (index→element `Map<int, T>`). Deferred:
+
+- **`zip(a, b)`** — canonically yields heterogeneous `(A, B)` pairs, whose natural representation is a
+  tuple. Deferred to **B3 (tuples + multiple return values)**; a `Map<A, B>` interim was rejected (it
+  requires `A` hashable *and* unique, which a general `zip` does not guarantee). Once tuples land, `zip`
+  returns `List<(A, B)>` and `enumerate` may gain a tuple-returning form alongside the `Map` one.
+- **String iteration is ASCII-domain** (Unicode scalars on the Rust backends; PHP `str_split` is
+  byte-wise) — they agree for ASCII. Non-ASCII char iteration would diverge run-vs-PHP, consistent with
+  the rest of the String stdlib's tier-1 ASCII contract.
+
 ## Core.String breadth (M4) — ASCII only
 
 `String.reverse`/`equalsIgnoreCase`/`containsIgnoreCase` (like all of `Core.String`) are **ASCII-oriented** —
