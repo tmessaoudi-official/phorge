@@ -2,7 +2,7 @@
 //
 // `as` is honest and LOUD — it never inherits PHP's loose coercion. The result type tracks
 // fallibility: a lossless conversion is total `T`; a lossy or fallible one is `T?` (so a loss is
-// never silent — you must unwrap). `Convert.truncate` stays the named tool for "I want truncation".
+// never silent — you must unwrap). `Conversion.truncate` stays the named tool for "I want truncation".
 //
 //   lossless / total →  int as float, int as decimal, decimal as float, any as string
 //   lossy / fallible → `T?`:  float/decimal as int (exact-or-null), string as int/float (parse)

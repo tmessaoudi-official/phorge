@@ -8,7 +8,7 @@
 //                                                      //   so exercise them through the predicates)
 //     integerDivide(int, int) -> int                          // truncating-toward-zero division
 //
-//   Core.Convert:
+//   Core.Conversion:
 //     toFloat(int) -> float            // total widening
 //     toInt(float) -> int?             // truncate toward zero; null on NaN/Inf/out-of-range
 //     intToDecimal(int) -> decimal     // exact, scale 0
@@ -18,7 +18,7 @@ package Main;
 
 import Core.Console;
 import Core.Math;
-import Core.Convert;
+import Core.Conversion;
 
 function main(): void {
     // --- Float predicates. The special values are detected, not printed (printing NAN/INF would
@@ -37,19 +37,19 @@ function main(): void {
     Console.println("integerDivide(17, 5)  = {Math.integerDivide(17, 5)}");   // 3
 
     // --- int -> float (total). Stays exactly representable, so it prints cleanly.
-    float f = Convert.toFloat(7);
+    float f = Conversion.toFloat(7);
     Console.println("toFloat(7)     = {f}");   // 7
 
     // --- float -> int? (truncate toward zero; null on NaN/Inf/out-of-range). Use `??` for the null.
-    Console.println("toInt(3.9)     = {Convert.toInt(3.9) ?? -1}");    // 3
-    Console.println("toInt(-3.9)    = {Convert.toInt(-3.9) ?? -1}");   // -3
-    Console.println("toInt(nan())   = {Convert.toInt(Math.nan()) ?? -1}");  // -1 (null → fallback)
-    Console.println("toInt(1e30)    = {Convert.toInt(1000000000000000000000000000000.0) ?? -1}"); // -1 (out of range)
+    Console.println("toInt(3.9)     = {Conversion.toInt(3.9) ?? -1}");    // 3
+    Console.println("toInt(-3.9)    = {Conversion.toInt(-3.9) ?? -1}");   // -3
+    Console.println("toInt(nan())   = {Conversion.toInt(Math.nan()) ?? -1}");  // -1 (null → fallback)
+    Console.println("toInt(1e30)    = {Conversion.toInt(1000000000000000000000000000000.0) ?? -1}"); // -1 (out of range)
 
     // --- int <-> decimal and decimal -> int/float.
-    decimal d = Convert.intToDecimal(42);
+    decimal d = Conversion.intToDecimal(42);
     Console.println("intToDecimal(42)        = {d}");                       // 42
-    Console.println("decimalToFloat(12.5d)   = {Convert.decimalToFloat(12.5d)}"); // 12.5 (representable)
-    Console.println("decimalToInt(19.99d)    = {Convert.decimalToInt(19.99d) ?? -1}");  // 19
-    Console.println("decimalToInt(-19.99d)   = {Convert.decimalToInt(-19.99d) ?? -1}"); // -19 (toward zero)
+    Console.println("decimalToFloat(12.5d)   = {Conversion.decimalToFloat(12.5d)}"); // 12.5 (representable)
+    Console.println("decimalToInt(19.99d)    = {Conversion.decimalToInt(19.99d) ?? -1}");  // 19
+    Console.println("decimalToInt(-19.99d)   = {Conversion.decimalToInt(-19.99d) ?? -1}"); // -19 (toward zero)
 }

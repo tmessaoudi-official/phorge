@@ -1,4 +1,4 @@
-// `Core.Convert` — explicit value conversion.
+// `Core.Conversion` — explicit value conversion.
 //
 // Phorj has no implicit coercion (`1 + 2.0` is a type error), so you convert on purpose. Conversions
 // are total where they can't lose data and *named* where they can — no silent `(int)` truncation.
@@ -8,28 +8,28 @@
 //   truncate(float) -> int     // toward zero (lossy — named)
 //   round(float) -> int        // half away from zero (lossy — named)
 //
-// Because UFCS ships, `Convert.toFloat(n)` and `n.toFloat()` are the same call — module API and
+// Because UFCS ships, `Conversion.toFloat(n)` and `n.toFloat()` are the same call — module API and
 // method API in one. (The type *cast* — reinterpreting a value's type — is the separate `as` operator.)
 package Main;
 import Core.Console;
-import Core.Convert;
+import Core.Conversion;
 
 function main(): void {
   // Stringify any scalar.
-  Console.println(Convert.toString(42));     // 42
-  Console.println(Convert.toString(true));    // true
-  Console.println(Convert.toString(3.5));     // 3.5
+  Console.println(Conversion.toString(42));     // 42
+  Console.println(Conversion.toString(true));    // true
+  Console.println(Conversion.toString(3.5));     // 3.5
 
   // Widening int -> float (total). 7.0 prints as "7" (shortest round-trip).
-  float f = Convert.toFloat(7);
-  Console.println(Convert.toString(f));       // 7
+  float f = Conversion.toFloat(7);
+  Console.println(Conversion.toString(f));       // 7
 
   // Lossy float -> int is explicit and named.
-  Console.println(Convert.toString(Convert.truncate(3.9)));  // 3
-  Console.println(Convert.toString(Convert.round(2.5)));     // 3
-  Console.println(Convert.toString(Convert.round(2.4)));     // 2
+  Console.println(Conversion.toString(Conversion.truncate(3.9)));  // 3
+  Console.println(Conversion.toString(Conversion.round(2.5)));     // 3
+  Console.println(Conversion.toString(Conversion.round(2.4)));     // 2
 
   // UFCS: the module function is also a method — same call.
   int n = 5;
-  Console.println(Convert.toString(n.toFloat()));   // 5
+  Console.println(Conversion.toString(n.toFloat()));   // 5
 }

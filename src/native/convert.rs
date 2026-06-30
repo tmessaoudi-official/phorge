@@ -218,7 +218,7 @@ fn convert_bool_to_decimal(args: &[Value], _: &mut String) -> Result<Value, Stri
 pub(crate) fn convert_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
-            module: "Core.Convert",
+            module: "Core.Conversion",
             name: "toString",
             params: vec![Ty::Param("T".into())],
             ret: Ty::String,
@@ -228,7 +228,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             php: |a| format!("__phorj_str({})", parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Convert",
+            module: "Core.Conversion",
             name: "toFloat",
             params: vec![Ty::Int],
             ret: Ty::Float,
@@ -237,7 +237,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             php: |a| format!("(float)({})", parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Convert",
+            module: "Core.Conversion",
             name: "truncate",
             params: vec![Ty::Float],
             ret: Ty::Int,
@@ -246,7 +246,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             php: |a| format!("(int)({})", parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Convert",
+            module: "Core.Conversion",
             name: "round",
             params: vec![Ty::Float],
             ret: Ty::Int,
@@ -256,7 +256,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
         },
         // --- Numeric conversions (M-NUM S3) ---
         NativeFn {
-            module: "Core.Convert",
+            module: "Core.Conversion",
             name: "toInt",
             params: vec![Ty::Float],
             ret: Ty::Optional(Box::new(Ty::Int)),
@@ -267,7 +267,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(convert_to_int),
         },
         NativeFn {
-            module: "Core.Convert",
+            module: "Core.Conversion",
             name: "intToDecimal",
             params: vec![Ty::Int],
             ret: Ty::Decimal,
@@ -277,7 +277,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(convert_int_to_decimal),
         },
         NativeFn {
-            module: "Core.Convert",
+            module: "Core.Conversion",
             name: "decimalToFloat",
             params: vec![Ty::Decimal],
             ret: Ty::Float,
@@ -287,7 +287,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(convert_decimal_to_float),
         },
         NativeFn {
-            module: "Core.Convert",
+            module: "Core.Conversion",
             name: "decimalToInt",
             params: vec![Ty::Decimal],
             ret: Ty::Optional(Box::new(Ty::Int)),
@@ -299,7 +299,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
         },
         // --- exact int conversions (M4 `as`-matrix `float/decimal as int`) ---
         NativeFn {
-            module: "Core.Convert",
+            module: "Core.Conversion",
             name: "floatToIntExact",
             params: vec![Ty::Float],
             ret: Ty::Optional(Box::new(Ty::Int)),
@@ -308,7 +308,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(convert_float_to_int_exact),
         },
         NativeFn {
-            module: "Core.Convert",
+            module: "Core.Conversion",
             name: "decimalToIntExact",
             params: vec![Ty::Decimal],
             ret: Ty::Optional(Box::new(Ty::Int)),
@@ -318,7 +318,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
         },
         // --- float → decimal (M4 as-matrix S4) — shortest-string parse, optional ---
         NativeFn {
-            module: "Core.Convert",
+            module: "Core.Conversion",
             name: "floatToDecimal",
             params: vec![Ty::Float],
             ret: Ty::Optional(Box::new(Ty::Decimal)),
@@ -330,7 +330,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
         },
         // --- bool conversions (M4 as-matrix S3) — total, explicit `!= 0` / `1`/`0` rules ---
         NativeFn {
-            module: "Core.Convert",
+            module: "Core.Conversion",
             name: "intToBool",
             params: vec![Ty::Int],
             ret: Ty::Bool,
@@ -339,7 +339,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(convert_int_to_bool),
         },
         NativeFn {
-            module: "Core.Convert",
+            module: "Core.Conversion",
             name: "floatToBool",
             params: vec![Ty::Float],
             ret: Ty::Bool,
@@ -348,7 +348,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(convert_float_to_bool),
         },
         NativeFn {
-            module: "Core.Convert",
+            module: "Core.Conversion",
             name: "decimalToBool",
             params: vec![Ty::Decimal],
             ret: Ty::Bool,
@@ -359,7 +359,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(convert_decimal_to_bool),
         },
         NativeFn {
-            module: "Core.Convert",
+            module: "Core.Conversion",
             name: "boolToInt",
             params: vec![Ty::Bool],
             ret: Ty::Int,
@@ -368,7 +368,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(convert_bool_to_int),
         },
         NativeFn {
-            module: "Core.Convert",
+            module: "Core.Conversion",
             name: "boolToFloat",
             params: vec![Ty::Bool],
             ret: Ty::Float,
@@ -377,7 +377,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(convert_bool_to_float),
         },
         NativeFn {
-            module: "Core.Convert",
+            module: "Core.Conversion",
             name: "boolToDecimal",
             params: vec![Ty::Bool],
             ret: Ty::Decimal,
@@ -388,7 +388,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
         },
         // --- runtime type assertions (M4 as-matrix S2: union source `as int/float/bool`) ---
         NativeFn {
-            module: "Core.Convert",
+            module: "Core.Conversion",
             name: "asInt",
             params: vec![Ty::Param("T".into())],
             ret: Ty::Optional(Box::new(Ty::Int)),
@@ -398,7 +398,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(convert_as_int),
         },
         NativeFn {
-            module: "Core.Convert",
+            module: "Core.Conversion",
             name: "asFloat",
             params: vec![Ty::Param("T".into())],
             ret: Ty::Optional(Box::new(Ty::Float)),
@@ -407,7 +407,7 @@ pub(crate) fn convert_natives() -> Vec<NativeFn> {
             eval: NativeEval::Pure(convert_as_float),
         },
         NativeFn {
-            module: "Core.Convert",
+            module: "Core.Conversion",
             name: "asBool",
             params: vec![Ty::Param("T".into())],
             ret: Ty::Optional(Box::new(Ty::Bool)),

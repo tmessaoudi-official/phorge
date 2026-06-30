@@ -527,7 +527,7 @@ impl Checker {
     /// `instanceof` (a class/union/intersection value on the left; a class or interface name on the
     /// right) but types the result `TypeName?` (the cast yields the value when it really is a
     /// `TypeName` at runtime, else `null`). A *primitive* `as` (e.g. `x as int`) is rejected with a
-    /// hint toward `Core.Convert`/`parse*` — value conversion is a different axis from type assertion.
+    /// hint toward `Core.Conversion`/`parse*` — value conversion is a different axis from type assertion.
     pub(super) fn check_cast(
         &mut self,
         value: &crate::ast::Expr,
@@ -554,8 +554,8 @@ impl Checker {
         if !is_class && !self.interfaces.contains_key(type_name) {
             // Tailor the hint for a primitive target: `as` is *assertion*, not conversion.
             let hint = if is_builtin_type_name(type_name) {
-                "`as` is a checked downcast, not a value conversion — use `Core.Convert` (e.g. \
-                 `Convert.toFloat`/`truncate`) or `Core.Text.parseInt`/`parseFloat` to change a value's type"
+                "`as` is a checked downcast, not a value conversion — use `Core.Conversion` (e.g. \
+                 `Conversion.toFloat`/`truncate`) or `Core.Text.parseInt`/`parseFloat` to change a value's type"
             } else {
                 "only a declared class or interface can be a cast target"
             };
@@ -601,7 +601,7 @@ impl Checker {
     /// `value as <primitive>` (M4 as-matrix, S1 — concrete-primitive sources). Types the result per
     /// the **Unified, fallibility-typed** model (lossless → total `T`, lossy/fallible → `T?`) and, for
     /// a real conversion, records a span-keyed rewrite to a leaf-qualified native call
-    /// (`Convert.toFloat(v)` / `Text.parseInt(v)` …) that the backends resolve by `index_of_by_leaf`
+    /// (`Conversion.toFloat(v)` / `Text.parseInt(v)` …) that the backends resolve by `index_of_by_leaf`
     /// without an import. **Identity** (`T as T`) is total, fires `W-REDUNDANT-CAST`, and is NOT
     /// rewritten — the `Cast` node survives and each backend emits the value unchanged. Bool cells,
     /// `float as decimal`, `string as decimal`, and union/erased *assertion* sources land in later
@@ -647,11 +647,11 @@ impl Checker {
                 _ => None,
             };
             if let Some(name) = assert_cell {
-                self.record_cast_call("Convert", name, value, span);
+                self.record_cast_call("Conversion", name, value, span);
                 return Ty::Optional(Box::new(target_ty));
             }
             if target == "string" {
-                self.record_cast_call("Convert", "toString", value, span);
+                self.record_cast_call("Conversion", "toString", value, span);
                 return Ty::String;
             }
             // `as decimal` on a union — deferred (carrier conflation).
@@ -669,27 +669,27 @@ impl Checker {
         // (source, target) → (qualifier leaf, native name, result type). `opt(t)` = `T?`.
         let opt = |t: Ty| Ty::Optional(Box::new(t));
         let cell: Option<(&str, &str, Ty)> = match (v, target) {
-            (Ty::Int, "float") => Some(("Convert", "toFloat", Ty::Float)),
-            (Ty::Int, "decimal") => Some(("Convert", "intToDecimal", Ty::Decimal)),
-            (Ty::Float, "int") => Some(("Convert", "floatToIntExact", opt(Ty::Int))),
-            (Ty::Decimal, "int") => Some(("Convert", "decimalToIntExact", opt(Ty::Int))),
-            (Ty::Decimal, "float") => Some(("Convert", "decimalToFloat", Ty::Float)),
+            (Ty::Int, "float") => Some(("Conversion", "toFloat", Ty::Float)),
+            (Ty::Int, "decimal") => Some(("Conversion", "intToDecimal", Ty::Decimal)),
+            (Ty::Float, "int") => Some(("Conversion", "floatToIntExact", opt(Ty::Int))),
+            (Ty::Decimal, "int") => Some(("Conversion", "decimalToIntExact", opt(Ty::Int))),
+            (Ty::Decimal, "float") => Some(("Conversion", "decimalToFloat", Ty::Float)),
             (Ty::String, "int") => Some(("Text", "parseInt", opt(Ty::Int))),
             (Ty::String, "float") => Some(("Text", "parseFloat", opt(Ty::Float))),
             // S4 decimal extras — float via the shortest-string parse; string via `Decimal.of`.
-            (Ty::Float, "decimal") => Some(("Convert", "floatToDecimal", opt(Ty::Decimal))),
+            (Ty::Float, "decimal") => Some(("Conversion", "floatToDecimal", opt(Ty::Decimal))),
             (Ty::String, "decimal") => Some(("Decimal", "of", opt(Ty::Decimal))),
             // S3 bool cells — total numeric↔bool (explicit `!= 0` / `1`/`0`), strict string parse.
-            (Ty::Int, "bool") => Some(("Convert", "intToBool", Ty::Bool)),
-            (Ty::Float, "bool") => Some(("Convert", "floatToBool", Ty::Bool)),
-            (Ty::Decimal, "bool") => Some(("Convert", "decimalToBool", Ty::Bool)),
-            (Ty::Bool, "int") => Some(("Convert", "boolToInt", Ty::Int)),
-            (Ty::Bool, "float") => Some(("Convert", "boolToFloat", Ty::Float)),
-            (Ty::Bool, "decimal") => Some(("Convert", "boolToDecimal", Ty::Decimal)),
+            (Ty::Int, "bool") => Some(("Conversion", "intToBool", Ty::Bool)),
+            (Ty::Float, "bool") => Some(("Conversion", "floatToBool", Ty::Bool)),
+            (Ty::Decimal, "bool") => Some(("Conversion", "decimalToBool", Ty::Bool)),
+            (Ty::Bool, "int") => Some(("Conversion", "boolToInt", Ty::Int)),
+            (Ty::Bool, "float") => Some(("Conversion", "boolToFloat", Ty::Float)),
+            (Ty::Bool, "decimal") => Some(("Conversion", "boolToDecimal", Ty::Decimal)),
             (Ty::String, "bool") => Some(("Text", "parseBool", opt(Ty::Bool))),
             // any primitive → string is total (Convert.toString is generic).
             (Ty::Int | Ty::Float | Ty::Decimal | Ty::Bool, "string") => {
-                Some(("Convert", "toString", Ty::String))
+                Some(("Conversion", "toString", Ty::String))
             }
             _ => None,
         };
@@ -705,7 +705,7 @@ impl Checker {
                     format!("`{v} as {target}` is not a supported conversion"),
                     "E-CAST-TYPE",
                     Some(
-                        "convert via `Core.Convert` / `Core.Text.parse*`; bool/decimal-from-float/string \
+                        "convert via `Core.Conversion` / `Core.Text.parse*`; bool/decimal-from-float/string \
                          casts ship in a later slice"
                             .into(),
                     ),

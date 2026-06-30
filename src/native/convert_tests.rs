@@ -164,12 +164,12 @@ fn convert_natives_registered_and_emit() {
         "decimalToInt",
     ] {
         assert!(
-            crate::native::index_of("Core.Convert", name).is_some(),
+            crate::native::index_of("Core.Conversion", name).is_some(),
             "Core.Convert.{name} not registered"
         );
     }
     let php = |name: &str, args: &[&str]| {
-        let i = crate::native::index_of("Core.Convert", name).unwrap();
+        let i = crate::native::index_of("Core.Conversion", name).unwrap();
         let a: Vec<String> = args.iter().map(|s| (*s).to_string()).collect();
         (crate::native::registry()[i].php)(&a)
     };
@@ -204,7 +204,7 @@ fn convert_exact_int_is_integral_or_null() {
 
     // PHP emission of the two exact converters.
     let php = |name: &str, args: &[&str]| {
-        let i = crate::native::index_of("Core.Convert", name).unwrap();
+        let i = crate::native::index_of("Core.Conversion", name).unwrap();
         let a: Vec<String> = args.iter().map(|s| (*s).to_string()).collect();
         (crate::native::registry()[i].php)(&a)
     };
@@ -243,7 +243,7 @@ fn convert_runtime_assertions_keep_or_null() {
 
     // PHP emission is an arrow-IIFE (single-eval of the operand).
     let php = |name: &str| {
-        let i = crate::native::index_of("Core.Convert", name).unwrap();
+        let i = crate::native::index_of("Core.Conversion", name).unwrap();
         (crate::native::registry()[i].php)(&["$x".to_string()])
     };
     assert_eq!(php("asInt"), "(fn($__a) => is_int($__a) ? $__a : null)($x)");

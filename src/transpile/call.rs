@@ -109,7 +109,7 @@ impl Transpiler {
                     // because (a) the checker rejects any user-written un-imported stdlib call
                     // (E-UNKNOWN-IDENT), and (b) we skip the fallback when `q` is a user class — so a
                     // user `Convert`/`Text` static call still wins.
-                    let cast_leaf = matches!(q.as_str(), "Convert" | "Text" | "Decimal")
+                    let cast_leaf = matches!(q.as_str(), "Conversion" | "Text" | "Decimal")
                         && !self.classes.contains(q);
                     let resolved = self
                         .imports
@@ -184,7 +184,7 @@ impl Transpiler {
                         }
                         // `Convert.*` gated helpers: `toString` reuses `__phorj_str`; `toInt` /
                         // `decimalToInt` each define their own edge-safe helper (M-NUM S3).
-                        if nat.module == "Core.Convert" {
+                        if nat.module == "Core.Conversion" {
                             match nat.name {
                                 "toString" => self.uses_str = true,
                                 "toInt" => self.uses_float_to_int = true,

@@ -8,7 +8,7 @@
 //
 // This file shows the CLASS/INTERFACE axis of `as` — type assertion (reinterpret an existing value).
 // `as` over PRIMITIVES is value conversion (`int as float`, `float as int` ⇒ `int?`, …) — see
-// `as-primitives.phg`. The named `Core.Convert` / `Core.Text.parse*` functions remain available too.
+// `as-primitives.phg`. The named `Core.Conversion` / `Core.Text.parse*` functions remain available too.
 package Main;
 import Core.Console;
 
