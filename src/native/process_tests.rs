@@ -31,7 +31,7 @@ fn every_other_native_is_pure() {
     let impure_modules = ["Core.Process", "Core.Env", "Core.Time"];
     for n in registry() {
         let impure = impure_modules.contains(&n.module)
-            || (n.module == "Core.Crypto" && n.name == "hashPassword");
+            || (n.module == "Core.Cryptography" && n.name == "hashPassword");
         assert_eq!(
             n.pure, !impure,
             "{}.{} purity flag disagrees with its module",

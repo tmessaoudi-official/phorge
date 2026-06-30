@@ -1,4 +1,4 @@
-// Core.Validate — syntactic string predicates (native-stdlib wave).
+// Core.Validation — syntactic string predicates (native-stdlib wave).
 //
 // Format checks, each `string -> bool`: `isInt`, `isNumber` (int or fixed-point), `isAlpha`,
 // `isAlnum`, `isHex`. Phorj is std-only (no regex crate), so each check is hand-rolled in Rust and
@@ -7,20 +7,20 @@
 package Main;
 
 import Core.Console;
-import Core.Validate;
+import Core.Validation;
 
 function report(string label, bool ok): void {
     Console.println("{label}: {ok}");
 }
 
 function main(): void {
-    report("isInt(-42)", Validate.isInt("-42"));
-    report("isInt(3.14)", Validate.isInt("3.14"));
-    report("isNumber(3.14)", Validate.isNumber("3.14"));
-    report("isNumber(.5)", Validate.isNumber(".5"));
-    report("isAlpha(Phorj)", Validate.isAlpha("Phorj"));
-    report("isAlpha(Phorj9)", Validate.isAlpha("Phorj9"));
-    report("isAlnum(abc123)", Validate.isAlnum("abc123"));
-    report("isHex(DEADbeef)", Validate.isHex("DEADbeef"));
-    report("isHex(0xFF)", Validate.isHex("0xFF"));
+    report("isInt(-42)", Validation.isInt("-42"));
+    report("isInt(3.14)", Validation.isInt("3.14"));
+    report("isNumber(3.14)", Validation.isNumber("3.14"));
+    report("isNumber(.5)", Validation.isNumber(".5"));
+    report("isAlpha(Phorj)", Validation.isAlpha("Phorj"));
+    report("isAlpha(Phorj9)", Validation.isAlpha("Phorj9"));
+    report("isAlnum(abc123)", Validation.isAlnum("abc123"));
+    report("isHex(DEADbeef)", Validation.isHex("DEADbeef"));
+    report("isHex(0xFF)", Validation.isHex("0xFF"));
 }

@@ -79,10 +79,10 @@ fn verify_a_committed_php_argon2id_hash() {
 
 #[test]
 fn crypto_natives_registered_and_emit() {
-    assert!(crate::native::index_of("Core.Crypto", "hashPassword").is_some());
-    assert!(crate::native::index_of("Core.Crypto", "verifyPassword").is_some());
+    assert!(crate::native::index_of("Core.Cryptography", "hashPassword").is_some());
+    assert!(crate::native::index_of("Core.Cryptography", "verifyPassword").is_some());
     let php = |name: &str, args: &[&str]| {
-        let i = crate::native::index_of("Core.Crypto", name).unwrap();
+        let i = crate::native::index_of("Core.Cryptography", name).unwrap();
         let a: Vec<String> = args.iter().map(|s| (*s).to_string()).collect();
         (crate::native::registry()[i].php)(&a)
     };
@@ -96,6 +96,6 @@ fn crypto_natives_registered_and_emit() {
     );
     // hashPassword is non-deterministic (quarantined); verifyPassword is deterministic (gateable).
     let reg = crate::native::registry();
-    assert!(!reg[crate::native::index_of("Core.Crypto", "hashPassword").unwrap()].pure);
-    assert!(reg[crate::native::index_of("Core.Crypto", "verifyPassword").unwrap()].pure);
+    assert!(!reg[crate::native::index_of("Core.Cryptography", "hashPassword").unwrap()].pure);
+    assert!(reg[crate::native::index_of("Core.Cryptography", "verifyPassword").unwrap()].pure);
 }

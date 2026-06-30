@@ -58,7 +58,7 @@ fn crypto_verify_password(args: &[Value], _: &mut String) -> Result<Value, Strin
 pub(crate) fn crypto_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
-            module: "Core.Crypto",
+            module: "Core.Cryptography",
             name: "hashPassword",
             params: vec![Ty::String],
             ret: Ty::String,
@@ -67,7 +67,7 @@ pub(crate) fn crypto_natives() -> Vec<NativeFn> {
             php: |a| format!("password_hash({}, PASSWORD_ARGON2ID)", parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Crypto",
+            module: "Core.Cryptography",
             name: "verifyPassword",
             params: vec![Ty::String, Ty::String],
             ret: Ty::Bool,

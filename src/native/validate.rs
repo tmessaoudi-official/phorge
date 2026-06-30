@@ -80,7 +80,7 @@ pub(crate) fn validate_natives() -> Vec<NativeFn> {
         php: fn(&[String]) -> String,
     ) -> NativeFn {
         NativeFn {
-            module: "Core.Validate",
+            module: "Core.Validation",
             name,
             params: vec![Ty::String],
             ret: Ty::Bool,
