@@ -60,11 +60,11 @@ impl Transpiler {
                 // return position, which is where a `-> never` function uses it.
                 "never" => "never".into(),
                 // The two-type nothing model (S0a). `void` → PHP `: void` (forbids capture, matching
-                // Phorj's uncapturable `void`). `Empty` → `mixed` (capturable: a `-> Empty` function
+                // Phorj's uncapturable `void`). `empty` → `mixed` (capturable: a `-> empty` function
                 // returns PHP `null`, which `: mixed` accepts — `: void` would make the result
                 // uncapturable in PHP and break byte-identity for the holdable case).
                 "void" => "void".into(),
-                "Empty" => "mixed".into(),
+                "empty" => "mixed".into(),
                 "List" | "Map" | "Set" => "array".into(),
                 // enum / class / interface name (FQN if cross-package; `I<name>` if a decomposed
                 // multi-inheritance ancestor — M-RT S6c.3).
@@ -112,18 +112,18 @@ impl Transpiler {
 
     pub(super) fn ret_hint(&self, ret: &Option<Type>) -> String {
         match ret {
-            // `Empty` return → NO PHP return hint (empty string). PHP then accepts a fall-off, a bare
+            // `empty` return → NO PHP return hint (empty string). PHP then accepts a fall-off, a bare
             // `return;`, or `return null;` — all yielding a capturable `null`, the holdable-nothing
             // value. (`: mixed` would reject a fall-off — "none returned"; `: null` would reject a
             // bare `return;`.) `ret_suffix` drops the `:` entirely for this case.
-            Some(Type::Named { name, .. }) if name == "Empty" => String::new(),
+            Some(Type::Named { name, .. }) if name == "empty" => String::new(),
             Some(t) => self.emit_type(t),
             None => "void".into(),
         }
     }
 
     /// The PHP return-type suffix for a signature — `": int"`, `": void"`, … — or the empty string
-    /// when there is no hint (an `Empty` return, see [`Self::ret_hint`]), so the `:` is dropped and
+    /// when there is no hint (an `empty` return, see [`Self::ret_hint`]), so the `:` is dropped and
     /// PHP infers a capturable `null`.
     pub(super) fn ret_suffix(&self, ret: &Option<Type>) -> String {
         let hint = self.ret_hint(ret);

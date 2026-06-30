@@ -135,10 +135,10 @@ pub fn explain_text(code: &str) -> Option<String> {
              scope. Declare it first (`mutable int x = …;`), or check for a typo.\n"
         }
         "E-UNUSED-VALUE" => {
-            "E-UNUSED-VALUE — a non-`void`/`Empty` result was used as a bare statement and dropped.\n\n\
+            "E-UNUSED-VALUE — a non-`void`/`empty` result was used as a bare statement and dropped.\n\n\
              Every value a function or expression produces must be used: bind it (`int x = f();`),\n\
              return it, or pass it on. If you genuinely want the side effect and not the value,\n\
-             discard it explicitly with `discard f();`. Only `void` and `Empty` results (and a\n\
+             discard it explicitly with `discard f();`. Only `void` and `empty` results (and a\n\
              diverging `never` call like `panic(…)`) may be dropped silently.\n"
         }
         "E-ASSIGN-TARGET" => {
@@ -497,6 +497,13 @@ pub fn explain_text(code: &str) -> Option<String> {
              optional/function members complicate the PHP `A|B` emission. Replace the member, or model\n\
              the case differently.\n"
         }
+        "E-VOID-IN-UNION" => {
+            "E-VOID-IN-UNION — `void` cannot be a union member.\n\n\
+             `void` is the *uncapturable* nothing: a value of type `void` can never be held, so a union\n\
+             containing it (`int | void`) would be uninhabited. Use `empty` — the *holdable* nothing — if\n\
+             you need a nothing-or-something union (`int | empty` is allowed). `void` must stand alone as a\n\
+             return type. (`void` widens to `empty`, so a `-> void` function still flows into an `empty` slot.)\n"
+        }
         "E-UNION-ARITY" => {
             "E-UNION-ARITY — a union needs two or more distinct types.\n\n\
              `A | A` (or any union whose members are all the same after normalization) collapses to a\n\
@@ -784,12 +791,12 @@ pub fn explain_text(code: &str) -> Option<String> {
              `return` (or diverge) on *every* control-flow path. The classic leak is an `if` with no\n\
              `else`: the false branch falls through to the end. Add a trailing `return`, give the `if`\n\
              an `else` that also returns, or diverge (an infinite loop / a `-> never` call). A `-> void`\n\
-             or `-> Empty` function carries no value and is exempt.\n"
+             or `-> empty` function carries no value and is exempt.\n"
         }
         "E-MISSING-RETURN-TYPE" => {
             "E-MISSING-RETURN-TYPE — a function or method declares no return type.\n\n\
              Every function and method must declare its return type — including `main`. Add `-> void`\n\
-             for a side-effecting function that returns nothing, `-> Empty` to return the holdable\n\
+             for a side-effecting function that returns nothing, `-> empty` to return the holdable\n\
              empty value, or the concrete type it returns (`-> int`, `-> Shape`, …). Constructors have\n\
              no return slot and property hooks are typed by their property, so neither needs one;\n\
              expression-body lambdas (`function(x) => e`) infer their return from the expression.\n"
@@ -799,8 +806,8 @@ pub fn explain_text(code: &str) -> Option<String> {
              `void` is the type of an expression that produces *nothing* (a side-effecting call like\n\
              `Output.printLine(…)`), so there is nothing to bind: `var x = note(\"hi\");` is rejected.\n\
              Call it as a statement instead (drop the binding). If you genuinely need to hold the\n\
-             empty value — e.g. to satisfy a generic slot — annotate it `Empty` (`Empty x = note(…);`):\n\
-             `void` widens to the holdable `Empty`.\n"
+             empty value — e.g. to satisfy a generic slot — annotate it `empty` (`empty x = note(…);`):\n\
+             `void` widens to the holdable `empty`.\n"
         }
         "E-NEVER-RETURN" => {
             "E-NEVER-RETURN — a `-> never` function can return normally.\n\n\
@@ -1147,7 +1154,7 @@ pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
         format!(
             "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-PKG-CASE, E-INSTANCEOF-TYPE, E-CAST-TYPE, E-DECIMAL-DIV, E-DECIMAL-FLOAT-MIX, E-DECIMAL-LITERAL, E-DEFAULT-PARAM-ORDER, E-DEFAULT-PARAM-EXPR, E-DEFAULT-PARAM-TYPE, E-DEFAULT-PARAM-CONTEXT, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-FIELD-VISIBILITY, E-METHOD-VISIBILITY, E-CTOR-VISIBILITY, E-CTOR-MODIFIER, E-FIELD-UNINITIALIZED, E-MAIN-SIGNATURE, E-MULTIPLE-MAIN, E-TEST-OUTSIDE-TESTS, E-STATIC-CALL, E-STATIC-THIS, E-DUP-PARAM, E-DUP-FIELD, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE, E-STRUCT-PAT-TYPE, E-STRUCT-FIELD-UNKNOWN, E-PATTERN-DUP-BIND, E-OR-PATTERN-BIND, E-FIXEDLIST-LEN, E-FIXEDLIST-BOUNDS, E-DESTRUCTURE-TYPE, E-DESTRUCTURE-NOT-CLASS, E-DESTRUCTURE-FIELD-UNKNOWN, E-DESTRUCTURE-NOT-LIST, E-DESTRUCTURE-NEEDS-ELSE, E-DESTRUCTURE-ELSE-IRREFUTABLE, E-DESTRUCTURE-ELSE-FALLTHROUGH, E-DESTRUCTURE-DUP-BIND, E-FIXEDLIST-DESTRUCTURE-LEN, E-ATTR-TARGET, E-UNKNOWN-ATTRIBUTE, E-ROUTE-ARGS, E-ROUTE-SPEC, E-ROUTE-HANDLER, E-ROUTE-METHOD-STATIC, E-FOREIGN-RUNTIME, E-FILE-NAME, E-FILE-MULTI-PUBLIC, E-FILE-MIXED-PUBLIC, E-CONCURRENCY-NO-PHP, E-SPAWN-NOT-CALL, E-SPAWN-VOID, E-CHANNEL-ANNOTATION, E-CHANNEL-NEW-ARITY, E-CHANNEL-NEW-TYPE, E-CONCURRENCY-METHOD, E-CONCURRENCY-ARITY)"
+             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-PKG-CASE, E-INSTANCEOF-TYPE, E-CAST-TYPE, E-DECIMAL-DIV, E-DECIMAL-FLOAT-MIX, E-DECIMAL-LITERAL, E-DEFAULT-PARAM-ORDER, E-DEFAULT-PARAM-EXPR, E-DEFAULT-PARAM-TYPE, E-DEFAULT-PARAM-CONTEXT, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-VOID-IN-UNION, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-FIELD-VISIBILITY, E-METHOD-VISIBILITY, E-CTOR-VISIBILITY, E-CTOR-MODIFIER, E-FIELD-UNINITIALIZED, E-MAIN-SIGNATURE, E-MULTIPLE-MAIN, E-TEST-OUTSIDE-TESTS, E-STATIC-CALL, E-STATIC-THIS, E-DUP-PARAM, E-DUP-FIELD, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE, E-STRUCT-PAT-TYPE, E-STRUCT-FIELD-UNKNOWN, E-PATTERN-DUP-BIND, E-OR-PATTERN-BIND, E-FIXEDLIST-LEN, E-FIXEDLIST-BOUNDS, E-DESTRUCTURE-TYPE, E-DESTRUCTURE-NOT-CLASS, E-DESTRUCTURE-FIELD-UNKNOWN, E-DESTRUCTURE-NOT-LIST, E-DESTRUCTURE-NEEDS-ELSE, E-DESTRUCTURE-ELSE-IRREFUTABLE, E-DESTRUCTURE-ELSE-FALLTHROUGH, E-DESTRUCTURE-DUP-BIND, E-FIXEDLIST-DESTRUCTURE-LEN, E-ATTR-TARGET, E-UNKNOWN-ATTRIBUTE, E-ROUTE-ARGS, E-ROUTE-SPEC, E-ROUTE-HANDLER, E-ROUTE-METHOD-STATIC, E-FOREIGN-RUNTIME, E-FILE-NAME, E-FILE-MULTI-PUBLIC, E-FILE-MIXED-PUBLIC, E-CONCURRENCY-NO-PHP, E-SPAWN-NOT-CALL, E-SPAWN-VOID, E-CHANNEL-ANNOTATION, E-CHANNEL-NEW-ARITY, E-CHANNEL-NEW-TYPE, E-CONCURRENCY-METHOD, E-CONCURRENCY-ARITY)"
         )
     })
 }

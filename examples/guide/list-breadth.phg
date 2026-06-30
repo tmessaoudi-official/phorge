@@ -28,7 +28,7 @@ function main(): void {
     List<string> codes = ["10", "9", "100", "2"];
     Output.printLine("string min={List.min(codes) ?? \"?\"} max={List.max(codes) ?? \"?\"}");
 
-    // Empty list: min/max/find are null.
+    // empty list: min/max/find are null.
     List<int> none = List.filter(xs, function(int x) => x > 100);
     Output.printLine("empty min: {List.min(none) ?? -1}");
 

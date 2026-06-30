@@ -128,9 +128,9 @@ fn explicit_void_return_emits_php_void() {
 
 #[test]
 fn empty_return_emits_no_php_hint() {
-    // `Empty` must NOT emit `: void`/`: mixed`/`: null` — PHP would reject a fall-off or a bare
+    // `empty` must NOT emit `: void`/`: mixed`/`: null` — PHP would reject a fall-off or a bare
     // `return;`. No hint → PHP infers a capturable `null`.
-    let out = php("function f() -> Empty { } function main() -> void { Empty x = f(); }");
+    let out = php("function f() -> empty { } function main() -> void { empty x = f(); }");
     assert!(
         out.contains("function f() {"),
         "expected no return hint:\n{out}"

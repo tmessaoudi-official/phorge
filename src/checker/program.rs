@@ -91,7 +91,7 @@ impl Checker {
         // Reshape slice 2a: identifier casing is a hard, front-end-only rule. Run it first so its
         // diagnostics surface regardless of body-level errors (it is purely declaration-shaped).
         self.check_casing(program);
-        // M5 S1: every file is packaged, never inferred. Empty ⇒ no declaration; a `core` root is
+        // M5 S1: every file is packaged, never inferred. empty ⇒ no declaration; a `core` root is
         // reserved for the standard library. (Strict folder=path and loose-mode `main`-only land
         // with the project model in S2 — `docs/specs/2026-06-18-m5-project-model-design.md`.)
         if program.package.is_empty() {
@@ -573,7 +573,7 @@ impl Checker {
                 format!("`{}` must declare a return type", f.name),
                 "E-MISSING-RETURN-TYPE",
                 Some(
-                    "every function and method declares its return type — add `-> void` for a side-effecting function (or `-> Empty` to return the holdable empty value)"
+                    "every function and method declares its return type — add `-> void` for a side-effecting function (or `-> empty` to return the holdable empty value)"
                         .into(),
                 ),
             );
@@ -879,7 +879,7 @@ impl Checker {
 
     /// Return-on-all-paths gate (M-RT totality cluster). A function whose declared return type carries
     /// a value must return (or diverge) on every path; `never` is the inverse — it must provably
-    /// diverge. `void` (the no-annotation default), `Empty`, and `<error>` (poison) are exempt.
+    /// diverge. `void` (the no-annotation default), `empty`, and `<error>` (poison) are exempt.
     pub(super) fn check_return_totality(
         &mut self,
         ret: &Ty,
@@ -887,7 +887,7 @@ impl Checker {
         span: Span,
     ) {
         match ret {
-            // `void` (the common nothing, incl. the no-annotation default) and `Empty` (the holdable
+            // `void` (the common nothing, incl. the no-annotation default) and `empty` (the holdable
             // nothing) are both value-less: a function may fall off the end (it implicitly produces
             // the empty value), so neither requires a `return` on all paths. `<error>` is poison.
             Ty::Void | Ty::Empty | Ty::Error => {}
@@ -952,7 +952,7 @@ impl Checker {
     /// The narrowings a *guard* statement imposes on the rest of its block: an `if (cond) { … }` (no
     /// if-let binding) whose then-block diverges (`return`/`throw`/…) leaves `cond` false on the
     /// fall-through path, so the rest of the block sees the `polarity = false` narrowing (S5.3-T3).
-    /// Empty for any other statement.
+    /// empty for any other statement.
     fn guard_if_narrowings(&self, s: &crate::ast::Stmt) -> Vec<(String, Ty)> {
         use crate::ast::Stmt;
         if let Stmt::If {

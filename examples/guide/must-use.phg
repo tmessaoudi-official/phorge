@@ -1,7 +1,7 @@
 package Main;
 import Core.Output;
 
-// Must-use returns (M-must-use Slice A): every non-`void`/`Empty` result must be used — bound,
+// Must-use returns (M-must-use Slice A): every non-`void`/`empty` result must be used — bound,
 // returned, or passed on. To keep only a side effect and drop the value, discard it explicitly with
 // `discard <expr>;`. A bare `f();` that drops a non-`void` result is a hard error (E-UNUSED-VALUE).
 

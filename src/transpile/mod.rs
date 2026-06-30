@@ -77,7 +77,7 @@ fn kind_of_type(ty: &Type) -> OpKind {
                 Box::new(args.get(1).map_or(OpKind::Other, kind_of_type)),
             ),
             // Non-arithmetic primitives — no native operand specialization.
-            "void" | "never" | "Empty" | "bytes" | "Set" => OpKind::Other,
+            "void" | "never" | "empty" | "bytes" | "Set" => OpKind::Other,
             // A user-defined class/enum/interface name → `Class`, so field reads on a value of this
             // type resolve through `class_field_kinds` (T6b).
             other => OpKind::Class(other.to_string()),

@@ -521,8 +521,8 @@ pub enum Stmt {
     /// `expr;`
     Expr(Expr, Span),
     /// `discard expr;` (M-must-use Slice A) — evaluate `expr` for its side effects and **explicitly**
-    /// drop a non-`void`/`Empty` result. The escape hatch for the must-use rule: a bare `Stmt::Expr`
-    /// of non-`void`/`Empty` type is `E-UNUSED-VALUE`, but a `Discard` of any type is accepted. At
+    /// drop a non-`void`/`empty` result. The escape hatch for the must-use rule: a bare `Stmt::Expr`
+    /// of non-`void`/`empty` type is `E-UNUSED-VALUE`, but a `Discard` of any type is accepted. At
     /// runtime and in PHP output it behaves exactly like `Stmt::Expr` (evaluate, drop) — the only
     /// difference is checker-side (the must-use exemption) and in the formatter (prints `discard `).
     Discard(Expr, Span),
@@ -622,7 +622,7 @@ pub struct FunctionDecl {
     /// Item-level attributes (`#[Route("GET", "/p")]`, M6 W2) on a free function. **Front-end-only**:
     /// the checker validates them (`E-UNKNOWN-ATTRIBUTE`/`E-ROUTE-*`) and the `Http.autoRouter()`
     /// desugar consumes the `Route` ones; no backend ever reads this field, so it is inert with
-    /// respect to the byte-identity spine (like `throws`). Empty for a function with no attributes
+    /// respect to the byte-identity spine (like `throws`). empty for a function with no attributes
     /// (the common case) and always empty on a method (attributes are free-function-only this slice).
     pub attrs: Vec<Attribute>,
     /// Declaration-level visibility. Meaningful only for a free (top-level) function; a method or an
@@ -630,13 +630,13 @@ pub struct FunctionDecl {
     pub vis: Visibility,
     pub name: String,
     /// Generic type parameters, in declaration order — `["T", "U"]` for
-    /// `function pair<T, U>(T a, U b) -> …` (M-RT S7). Empty for a non-generic function. A type
+    /// `function pair<T, U>(T a, U b) -> …` (M-RT S7). empty for a non-generic function. A type
     /// annotation naming one of these (e.g. `T`) resolves to `Ty::Param("T")` while checking this
     /// function, and is erased to `Type::Erased` before any backend runs.
     pub type_params: Vec<String>,
     pub params: Vec<Param>,
     pub ret: Option<Type>,
-    /// Declared checked-exception set: the `throws T (| T)*` clause (M-faults 2b). Empty for a
+    /// Declared checked-exception set: the `throws T (| T)*` clause (M-faults 2b). empty for a
     /// function that throws nothing. Each member must be a specific subtype of the built-in `Error`
     /// (the bare root is `E-THROWS-TOO-BROAD`). Erased before any backend — the `throws` declaration
     /// is checker-only (PHP has no checked exceptions).
@@ -685,7 +685,7 @@ pub struct EnumDecl {
     pub vis: Visibility,
     pub name: String,
     /// Generic type parameters, in declaration order — `["T"]` for `enum Option<T>`, `["T", "E"]` for
-    /// `enum Result<T, E>` (M-RT generic enums). Empty for a non-generic enum — the common case. While
+    /// `enum Result<T, E>` (M-RT generic enums). empty for a non-generic enum — the common case. While
     /// checking the enum, a bare type name in this set resolves to `Ty::Param` in a variant's field
     /// types; a generic value's arguments are inferred at the variant constructor and these parameters
     /// are **erased** (rewritten to `Type::Erased` across every variant) before any backend runs —
@@ -747,12 +747,12 @@ pub struct ClassDecl {
     pub vis: Visibility,
     pub name: String,
     /// Generic type parameters, in declaration order — `["T"]` for `class Box<T>`, `["A", "B"]` for
-    /// `class Pair<A, B>` (M-RT generics-all). Empty for a non-generic class — the common case. While
+    /// `class Pair<A, B>` (M-RT generics-all). empty for a non-generic class — the common case. While
     /// checking the class, a bare type name in this set resolves to `Ty::Param`; a generic instance's
     /// arguments are inferred at construction and these parameters are **erased** (rewritten to
     /// `Type::Erased` across every member) before any backend runs.
     pub type_params: Vec<String>,
-    /// Parent classes this class `extends` (M-RT S6). Empty for a root class; one entry for single
+    /// Parent classes this class `extends` (M-RT S6). empty for a root class; one entry for single
     /// inheritance (`class Dog extends Animal`); two or more for multiple inheritance
     /// (`class Duck extends Swimmer, Flyer`). Each parent must be an `open` class
     /// (`E-EXTEND-FINAL` otherwise); a cycle is `E-MI-CYCLE`. The checker flattens the transitive
@@ -773,7 +773,7 @@ pub struct ClassDecl {
     pub is_abstract: bool,
     /// Explicit multi-inheritance resolution clauses (M-RT S6b), declared in the class body before/among
     /// members: `use P.m` (pick `P`'s `m` for the colliding name), `rename P.m as n` (rebind `P`'s `m`
-    /// under a fresh name `n`, removing it from the collision), `exclude P.m` (drop `P`'s `m`). Empty
+    /// under a fresh name `n`, removing it from the collision), `exclude P.m` (drop `P`'s `m`). empty
     /// for a single-parent or collision-free class. Consumed by `ast::class_method_origins` (dispatch)
     /// and the transpiler (`insteadof`/`as` emission). An unresolved cross-parent method collision is
     /// `E-MI-CONFLICT`.
@@ -783,7 +783,7 @@ pub struct ClassDecl {
     /// folded in) **before any backend runs** — a trait is reuse, not a supertype, so it never enters
     /// the `instanceof`/subtype tables. Trait-vs-trait collisions reuse the same `resolutions` clauses
     /// as multi-parent collisions (a clause's "parent" may name a `use`d trait). The transpiler emits a
-    /// native PHP `trait`/`use`. Empty for a class that composes no traits.
+    /// native PHP `trait`/`use`. empty for a class that composes no traits.
     pub uses: Vec<UseTrait>,
     pub members: Vec<ClassMember>,
     /// `declare class …` — a **foreign** PHP class (M8.5 interop): a signature-only description of an
@@ -907,7 +907,7 @@ pub enum Item {
 /// A whole parsed program.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
-    /// The file's package path (`package App.Util;` ⇒ `["App", "Util"]`). Empty only for a
+    /// The file's package path (`package App.Util;` ⇒ `["App", "Util"]`). empty only for a
     /// malformed file with no declaration — the checker rejects that as `E-NO-PACKAGE` (M5: every
     /// file is packaged, never inferred). The reserved `["Main"]` is the runnable entry (M5 S1).
     pub package: Vec<String>,

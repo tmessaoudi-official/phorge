@@ -163,7 +163,7 @@ fn good_var_decl_and_arithmetic_ok() {
     assert!(errors_of("function main() -> void { int a = 1; int b = a + 2; }").is_empty());
 }
 
-// --- S0a: the two-type nothing model (`void` + `Empty`) ---
+// --- S0a: the two-type nothing model (`void` + `empty`) ---
 
 #[test]
 fn capturing_a_void_value_is_an_error() {
@@ -187,9 +187,9 @@ fn explicit_void_annotation_on_a_binding_is_also_a_capture_error() {
 
 #[test]
 fn holding_a_void_value_as_empty_is_the_escape_hatch() {
-    // `Empty x = noop();` is the explicit way to hold the empty value — `void <: Empty`.
+    // `empty x = noop();` is the explicit way to hold the empty value — `void <: empty`.
     assert!(
-        errors_of("function noop() -> void {} function main() -> void { Empty x = noop(); }")
+        errors_of("function noop() -> void {} function main() -> void { empty x = noop(); }")
             .is_empty()
     );
 }
@@ -197,15 +197,15 @@ fn holding_a_void_value_as_empty_is_the_escape_hatch() {
 #[test]
 fn empty_returning_function_may_be_captured() {
     assert!(errors_of(
-        "function nothing() -> Empty {} function main() -> void { Empty x = nothing(); }"
+        "function nothing() -> empty {} function main() -> void { empty x = nothing(); }"
     )
     .is_empty());
 }
 
 #[test]
 fn empty_returning_function_need_not_return_on_all_paths() {
-    // `Empty` is value-less like `void`: falling off the end is fine (no E-MISSING-RETURN).
-    let errs = errors_of("function nothing() -> Empty {} function main() -> void {}");
+    // `empty` is value-less like `void`: falling off the end is fine (no E-MISSING-RETURN).
+    let errs = errors_of("function nothing() -> empty {} function main() -> void {}");
     assert!(
         !errs.iter().any(|e| e.code == Some("E-MISSING-RETURN")),
         "{errs:?}"
@@ -214,9 +214,9 @@ fn empty_returning_function_need_not_return_on_all_paths() {
 
 #[test]
 fn void_returning_callback_flows_into_an_empty_slot() {
-    // The widening edge `void <: Empty`: a void value is assignable to an `Empty` binding.
+    // The widening edge `void <: empty`: a void value is assignable to an `empty` binding.
     assert!(
-        errors_of("function fx() -> void {} function main() -> void { Empty e = fx(); }")
+        errors_of("function fx() -> void {} function main() -> void { empty e = fx(); }")
             .is_empty()
     );
 }

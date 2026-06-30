@@ -596,7 +596,7 @@ fn build_type_imports(
 fn is_builtin_type_leaf(name: &str) -> bool {
     matches!(
         name,
-        "int" | "float" | "bool" | "string" | "bytes" | "void" | "Empty" | "List" | "Map" | "Set"
+        "int" | "float" | "bool" | "string" | "bytes" | "void" | "empty" | "List" | "Map" | "Set"
     )
 }
 

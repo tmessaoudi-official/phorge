@@ -69,6 +69,28 @@ fn union_rejects_enum_member() {
 }
 
 #[test]
+fn union_rejects_void_member() {
+    // `void` is the uncapturable nothing — a union containing it is uninhabited (E-VOID-IN-UNION),
+    // distinct from the generic E-UNION-MEMBER so the diagnostic can point at `empty` as the fix.
+    let bad = errors_of("function f(int | void x) -> void {} function main() -> void {}");
+    assert!(
+        bad.iter().any(|e| e.code == Some("E-VOID-IN-UNION")),
+        "{bad:?}"
+    );
+}
+
+#[test]
+fn union_allows_empty_member() {
+    // `empty` — the holdable nothing — IS inhabited, so `int | empty` is a valid union.
+    let ok = errors_of("function f(int | empty x) -> void {} function main() -> void {}");
+    assert!(
+        !ok.iter()
+            .any(|e| e.code == Some("E-VOID-IN-UNION") || e.code == Some("E-UNION-MEMBER")),
+        "{ok:?}"
+    );
+}
+
+#[test]
 fn union_arity_collapse_is_error() {
     let bad = errors_of(&format!(
         "{SHAPES} function f(Circle | Circle x) -> void {{}} function main() -> void {{}}"

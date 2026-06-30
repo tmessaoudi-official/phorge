@@ -18,7 +18,7 @@ function main(): void {
         Output.printLine("field: {field}");
     }
 
-    // Empty input parses to zero fields (a clean empty list — deviates from PHP
+    // empty input parses to zero fields (a clean empty list — deviates from PHP
     // str_getcsv's `[null]` so the type stays a plain List<string>).
     var empty = Csv.parse("");
     Output.printLine("empty field count: {List.length(empty)}");

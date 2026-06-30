@@ -47,7 +47,7 @@ impl Parser {
         }
     }
 
-    /// `discard expr;` (M-must-use Slice A) — evaluate `expr` for effect and drop a non-`void`/`Empty`
+    /// `discard expr;` (M-must-use Slice A) — evaluate `expr` for effect and drop a non-`void`/`empty`
     /// result, the explicit escape hatch for the must-use rule (`E-UNUSED-VALUE`).
     pub(super) fn parse_discard(&mut self) -> Result<Stmt, Diagnostic> {
         let sp = self.peek_span();

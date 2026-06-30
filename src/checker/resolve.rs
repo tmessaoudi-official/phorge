@@ -16,6 +16,18 @@ impl Checker {
                 // collapses to one member after dedupe is `E-UNION-ARITY`.
                 let resolved: Vec<Ty> = members.iter().map(|m| self.resolve_type(m)).collect();
                 for ty in &resolved {
+                    // `void` is the uncapturable nothing: a union containing it is uninhabited at the
+                    // value level (you can never hold a `void`), so it is rejected with a dedicated
+                    // code. `empty` — the *holdable* nothing — is inhabited and IS allowed (`int|empty`).
+                    if matches!(ty, Ty::Void) {
+                        self.err_coded(
+                            *span,
+                            "`void` cannot be a union member — it is the uncapturable nothing, so the union would be uninhabited".to_string(),
+                            "E-VOID-IN-UNION",
+                            Some("use `empty` for the holdable nothing (`int|string|empty` is allowed); `void` must stand alone".into()),
+                        );
+                        continue;
+                    }
                     let ok = match ty {
                         Ty::Int
                         | Ty::Float
@@ -25,6 +37,7 @@ impl Checker {
                         | Ty::Bytes
                         | Ty::Html
                         | Ty::Attr
+                        | Ty::Empty
                         | Ty::Error => true,
                         Ty::Named(n, _) => {
                             self.classes.contains_key(n) || self.interfaces.contains_key(n)
@@ -178,11 +191,11 @@ impl Checker {
                 // meaningful in return position, but resolvable anywhere a type name appears.
                 "never" => self.no_args(name, args, *span, Ty::Never),
                 // The two-type "nothing" model (S0a). `void` = uncapturable (the implicit return
-                // type); `Empty` = the holdable nothing. Both resolve here; the *position* rules
+                // type); `empty` = the holdable nothing. Both resolve here; the *position* rules
                 // (void rejected as a param/field type, void value uncapturable) are enforced at the
                 // collection / var-decl sites, not here.
                 "void" => self.no_args(name, args, *span, Ty::Void),
-                "Empty" => self.no_args(name, args, *span, Ty::Empty),
+                "empty" => self.no_args(name, args, *span, Ty::Empty),
                 "Html" => self.no_args(name, args, *span, Ty::Html),
                 "Attr" => self.no_args(name, args, *span, Ty::Attr),
                 "List" => Ty::List(Box::new(self.one_arg(name, args, *span))),

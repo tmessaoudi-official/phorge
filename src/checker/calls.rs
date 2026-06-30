@@ -1240,7 +1240,7 @@ impl Checker {
                     });
                 // Substitute the *class* type parameters with this instance's type arguments
                 // (`Box<int>` ⇒ `{T → int}`), so a method returning/taking `T` is checked at the
-                // concrete type (M-RT generics-all). Empty for a non-generic class/interface, so this
+                // concrete type (M-RT generics-all). empty for a non-generic class/interface, so this
                 // is the identity in the common case. Any *method-level* `<U>` that survives is then
                 // inferred from the call's arguments below.
                 let theta = self.class_subst(&cls, &cargs);
@@ -1616,7 +1616,7 @@ impl Checker {
     }
 
     /// Build the substitution mapping a generic class's type parameters to a concrete instance's type
-    /// arguments — `{T → int}` for a `Box<int>` receiver (M-RT generics-all). Empty (the identity
+    /// arguments — `{T → int}` for a `Box<int>` receiver (M-RT generics-all). empty (the identity
     /// substitution) for a non-generic class or any non-class name, so member/method access on a
     /// non-generic type is unchanged. `zip` tolerates an arity mismatch defensively.
     pub(super) fn class_subst(&self, cls: &str, cargs: &[Ty]) -> HashMap<String, Ty> {
@@ -1716,7 +1716,7 @@ impl Checker {
 
     /// The substitution mapping a generic enum's type parameters to a scrutinee's type arguments
     /// (`Option<int>` ⇒ `{T → int}`), so a `match` binds a variant payload at the concrete type
-    /// (`Some(n)` ⇒ `n: int`). Empty for a non-generic enum, so it is the identity in the common case
+    /// (`Some(n)` ⇒ `n: int`). empty for a non-generic enum, so it is the identity in the common case
     /// (M-RT generic enums). Mirror of [`class_subst`].
     pub(super) fn enum_subst(&self, enum_name: &str, eargs: &[Ty]) -> HashMap<String, Ty> {
         match self.enums.get(enum_name) {

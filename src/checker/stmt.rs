@@ -141,8 +141,8 @@ impl Checker {
                     }
                 };
                 // S0a: a `void` value is uncapturable. Binding one into a variable is an error —
-                // *unless* the declared type is the holdable `Empty` (`Empty x = noop();`), the
-                // explicit escape hatch (`void <: Empty`). This catches both `var x = noop()`
+                // *unless* the declared type is the holdable `empty` (`empty x = noop();`), the
+                // explicit escape hatch (`void <: empty`). This catches both `var x = noop()`
                 // (inferred `declared` = `Void`) and `void x = noop()` (declared = `Void`).
                 let declared = if actual == Ty::Void && declared != Ty::Empty {
                     self.err_coded(
@@ -150,7 +150,7 @@ impl Checker {
                         "a `void` value cannot be captured — the expression produces nothing",
                         "E-VOID-CAPTURE",
                         Some(
-                            "drop the binding and call it as a statement; or, to hold the empty value, annotate it `Empty` (e.g. `Empty x = …;`)"
+                            "drop the binding and call it as a statement; or, to hold the empty value, annotate it `empty` (e.g. `empty x = …;`)"
                                 .into(),
                         ),
                     )
@@ -302,7 +302,7 @@ impl Checker {
                 // forwarding form — flag it so `check_parent_ctor_call` accepts it (every other position
                 // is `E-PARENT-CTOR-STMT`).
                 self.parent_ctor_ok = Self::is_parent_ctor_call(e);
-                // M-must-use Slice A: a non-`void`/`Empty` result used as a bare statement would be
+                // M-must-use Slice A: a non-`void`/`empty` result used as a bare statement would be
                 // dropped silently — forbid it (`E-UNUSED-VALUE`). `discard <expr>;` is the escape hatch.
                 let t = self.check_expr(e);
                 self.parent_ctor_ok = false;
@@ -312,7 +312,7 @@ impl Checker {
                         format!("unused `{t}` value"),
                         "E-UNUSED-VALUE",
                         Some(
-                            "a non-`void`/`Empty` result must be used; bind it or prefix `discard`"
+                            "a non-`void`/`empty` result must be used; bind it or prefix `discard`"
                                 .into(),
                         ),
                     );
