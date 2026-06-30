@@ -14,7 +14,7 @@ package Main;
 //     scan). The method-call API is the public surface — a typed `Header` value arrives with S3.
 //   * No mutation / no `core.list` yet, so the serializer folds headers via `String.join` (a native that
 //     iterates internally) rather than a mutable accumulator.
-import Core.Console;
+import Core.Output;
 import Core.Bytes;
 import Core.String;
 
@@ -102,28 +102,28 @@ function main(): void {
   if (var req = parseRequest(raw)) {
     string m = req.method;
     string p = req.path;
-    Console.println("method={m} path={p}");
+    Output.printLine("method={m} path={p}");
     string host = req.header("Host") ?? "(none)";
-    Console.println("host={host}");
+    Output.printLine("host={host}");
     string accept = req.header("Accept") ?? "(none)";
-    Console.println("accept={accept}");
+    Output.printLine("accept={accept}");
     string reqBody = Bytes.toString(req.body) ?? "(binary)";
-    Console.println("reqbody={reqBody}");
+    Output.printLine("reqbody={reqBody}");
 
     Response resp = handle(req);
     int st = resp.status;
     string reason = reasonPhrase(st);
-    Console.println("response status={st} {reason}");
+    Output.printLine("response status={st} {reason}");
     string respBody = Bytes.toString(resp.body) ?? "(binary)";
-    Console.println("respbody={respBody}");
+    Output.printLine("respbody={respBody}");
 
     // The full serialized response, with CRLFs shown as " | " so the output stays one clean ASCII line.
     bytes wire = serializeResponse(resp);
     int wireLen = Bytes.length(wire);
     string wireStr = Bytes.toString(wire) ?? "(binary)";
     string oneLine = String.replace(wireStr, nl, " | ");
-    Console.println("wire ({wireLen}B): {oneLine}");
+    Output.printLine("wire ({wireLen}B): {oneLine}");
   } else {
-    Console.println("malformed request");
+    Output.printLine("malformed request");
   }
 }

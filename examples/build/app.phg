@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // A self-contained program built into a standalone executable with `phg build`.
 // The produced binary embeds this source (in a CRC-guarded `.phorj` object-file
@@ -13,8 +13,8 @@ function fib(int n): int {
 }
 
 function main(): void {
-    Console.println("phorj standalone build");
+    Output.printLine("phorj standalone build");
     for (int i in 0..10) {
-        Console.println("fib({i}) = {fib(i)}");
+        Output.printLine("fib({i}) = {fib(i)}");
     }
 }

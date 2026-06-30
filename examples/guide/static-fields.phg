@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // M-mut.7 — `static` class fields: program-lifetime state that belongs to the class, not to any one
 // instance. Accessed as `ClassName.field` (Phorj uses `.` everywhere, not `::`). A static field is
@@ -24,9 +24,9 @@ function main(): void {
     discard new Counter();
     discard new Counter();
     // Read the shared state through the class name — no instance needed.
-    Console.println("{Counter.label}: {Counter.total}"); // counters created: 3
+    Output.printLine("{Counter.label}: {Counter.total}"); // counters created: 3
 
     // A static is also writable directly (when `mutable`), and reads as an arithmetic operand.
     Counter.total = Counter.total + 10;
-    Console.println("after +10: {Counter.total}"); // after +10: 13
+    Output.printLine("after +10: {Counter.total}"); // after +10: 13
 }

@@ -1,6 +1,6 @@
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.String;
 import Core.Math;
 
@@ -11,19 +11,19 @@ function main(): void {
     // String.isEmpty
     string blank = "";
     string padded = "  hi  ";
-    Console.println("blank empty = {String.isEmpty(blank)}, padded empty = {String.isEmpty(padded)}");
+    Output.printLine("blank empty = {String.isEmpty(blank)}, padded empty = {String.isEmpty(padded)}");
 
     // String.trimStart / trimEnd (one-sided trims; ASCII whitespace, like String.trim)
-    Console.println("trimStart = [{String.trimStart(padded)}]");
-    Console.println("trimEnd   = [{String.trimEnd(padded)}]");
+    Output.printLine("trimStart = [{String.trimStart(padded)}]");
+    Output.printLine("trimEnd   = [{String.trimEnd(padded)}]");
 
     // String.count — non-overlapping substring occurrences
     string word = "banana";
     string a = "a";
     int n = String.count(word, a);
-    Console.println("'a' in 'banana' = {n}");
+    Output.printLine("'a' in 'banana' = {n}");
 
     // Math.isEven / isOdd (work for negatives too)
-    Console.println("4 even = {Math.isEven(4)}, 7 even = {Math.isEven(7)}");
-    Console.println("7 odd = {Math.isOdd(7)}, -3 odd = {Math.isOdd(-3)}");
+    Output.printLine("4 even = {Math.isEven(4)}, 7 even = {Math.isEven(7)}");
+    Output.printLine("7 odd = {Math.isOdd(7)}, -3 odd = {Math.isOdd(-3)}");
 }

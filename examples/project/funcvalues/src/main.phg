@@ -3,12 +3,12 @@
 // from `Main`. Both surfaces now resolve across the package boundary.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.List;
 import Acme.Calc;
 
 function main(): void {
   var ys = Calc.doubleAll([1, 2, 3]); // [2, 4, 6]
-  Console.println("sum: {List.sum(ys)}"); // sum: 12
-  Console.println("applyDouble: {Calc.applyDouble(5)}"); // applyDouble: 10
+  Output.printLine("sum: {List.sum(ys)}"); // sum: 12
+  Output.printLine("applyDouble: {Calc.applyDouble(5)}"); // applyDouble: 10
 }

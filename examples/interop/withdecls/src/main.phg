@@ -5,13 +5,13 @@
 //   phg transpile <project> > out.php && php out.php
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Acme.Banner;
 
 function main(): void {
     string bar = Banner.rule(10);
-    Console.println(bar);
-    Console.println(strtoupper("hello, phorj"));
-    Console.println(strrev("interop"));
-    Console.println(bar);
+    Output.printLine(bar);
+    Output.printLine(strtoupper("hello, phorj"));
+    Output.printLine(strrev("interop"));
+    Output.printLine(bar);
 }

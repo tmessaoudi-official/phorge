@@ -16,7 +16,7 @@ fn parses_return_stmt() {
 
 #[test]
 fn parses_expr_stmt() {
-    match stmt("Console.println(x);") {
+    match stmt("Output.printLine(x);") {
         Stmt::Expr(Expr::Call { .. }, _) => {}
         other => panic!("got {other:?}"),
     }
@@ -401,7 +401,7 @@ fn parses_if_let_when_guard_desugars_to_nested_if() {
 
 #[test]
 fn parses_for_in() {
-    match stmt("for (Shape s in shapes) { Console.println(s); }") {
+    match stmt("for (Shape s in shapes) { Output.printLine(s); }") {
         Stmt::For {
             ty,
             name,
@@ -528,7 +528,7 @@ fn var_is_usable_as_a_value_identifier() {
     assert!(matches!(stmt("var++;"), Stmt::Assign { .. }));
     // Interpolation hole referencing `var`.
     assert!(matches!(
-        stmt("Console.println(\"{var}\");"),
+        stmt("Output.printLine(\"{var}\");"),
         Stmt::Expr(..)
     ));
 }
@@ -552,7 +552,7 @@ fn var_is_usable_as_a_parameter_and_field_name() {
 #[test]
 fn parses_foreach_value_form() {
     // `foreach (xs as x) { … }` desugars to a for-in with an inferred element type.
-    match stmt("foreach (xs as x) { Console.println(\"{x}\"); }") {
+    match stmt("foreach (xs as x) { Output.printLine(\"{x}\"); }") {
         Stmt::For { ty, name, .. } => {
             assert!(
                 matches!(ty, Type::Infer(_)),
@@ -568,7 +568,7 @@ fn parses_foreach_value_form() {
 fn parses_foreach_with_counter() {
     // `foreach (xs as x with int i) { … }` desugars to a Block: a counter VarDecl + a for-in whose
     // body increments the counter.
-    match stmt("foreach (xs as x with int i) { Console.println(\"{x}\"); }") {
+    match stmt("foreach (xs as x with int i) { Output.printLine(\"{x}\"); }") {
         Stmt::Block(stmts, _) => {
             assert!(
                 matches!(stmts[0], Stmt::VarDecl { mutable: true, .. }),

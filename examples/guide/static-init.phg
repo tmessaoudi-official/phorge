@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // Feature B-static — runtime static-field initializers. PHP static property defaults must be constant
 // expressions; Phorj lifts that: a `static` field may be initialized by ANY expression, evaluated
@@ -17,9 +17,9 @@ class Registry {
 }
 
 function main(): void {
-    Console.println("{Registry.answer}");   // 42
-    Console.println("{Registry.derived}");   // 43
+    Output.printLine("{Registry.answer}");   // 42
+    Output.printLine("{Registry.derived}");   // 43
     Registry.hits = Registry.hits + 1;
     Registry.hits = Registry.hits + 1;
-    Console.println("{Registry.hits}");      // 2
+    Output.printLine("{Registry.hits}");      // 2
 }

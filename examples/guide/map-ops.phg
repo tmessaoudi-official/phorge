@@ -10,7 +10,7 @@
 // on run / runvm / real PHP.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Map;
 
 function main(): void {
@@ -19,25 +19,25 @@ function main(): void {
     // get: present → value (via `??` to unwrap the optional), absent → fallback.
     var alice = Map.get(ages, "alice") ?? -1;
     var dave = Map.get(ages, "dave") ?? -1;
-    Console.println("alice = {alice}"); // 30
-    Console.println("dave  = {dave}");  // -1  (absent)
+    Output.printLine("alice = {alice}"); // 30
+    Output.printLine("dave  = {dave}");  // -1  (absent)
 
     // set: a new map; the original is unchanged. Update an existing key, then add a fresh one.
     var older = Map.set(ages, "alice", 31);
     var withCarol = Map.set(older, "carol", 41);
     var aliceNow = Map.get(withCarol, "alice") ?? -1;
     var carol = Map.get(withCarol, "carol") ?? -1;
-    Console.println("alice now   = {aliceNow}"); // 31
-    Console.println("carol       = {carol}");    // 41
-    Console.println("size        = {Map.size(withCarol)}"); // 3
+    Output.printLine("alice now   = {aliceNow}"); // 31
+    Output.printLine("carol       = {carol}");    // 41
+    Output.printLine("size        = {Map.size(withCarol)}"); // 3
     // the original map is untouched (immutability).
     var origAlice = Map.get(ages, "alice") ?? -1;
-    Console.println("orig alice  = {origAlice}");           // 30
-    Console.println("orig size   = {Map.size(ages)}");      // 2
+    Output.printLine("orig alice  = {origAlice}");           // 30
+    Output.printLine("orig size   = {Map.size(ages)}");      // 2
 
     // remove: a new map without the key; the original keeps it.
     var dropped = Map.remove(withCarol, "bob");
     var hasBob = Map.has(dropped, "bob");
-    Console.println("has bob     = {hasBob}");              // false
-    Console.println("dropped size = {Map.size(dropped)}");  // 2
+    Output.printLine("has bob     = {hasBob}");              // false
+    Output.printLine("dropped size = {Map.size(dropped)}");  // 2
 }

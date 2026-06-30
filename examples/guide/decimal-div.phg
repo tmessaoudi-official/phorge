@@ -6,50 +6,50 @@
 // — a seven-variant enum injected when you import `Core.Decimal`.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Decimal;
 
 function main(): void {
     // Round the tie value 2.345 to scale 2 under every mode (the third digit is an exact half).
     decimal tie = 2.345d;
-    Console.println("rounding 2.345 to 2 places:");
-    Console.println("  HalfUp   = {Decimal.round(tie, 2, new HalfUp())}");    // 2.35 (tie away)
-    Console.println("  HalfDown = {Decimal.round(tie, 2, new HalfDown())}");  // 2.34 (tie toward 0)
-    Console.println("  HalfEven = {Decimal.round(tie, 2, new HalfEven())}");  // 2.34 (q=234 even)
-    Console.println("  Up       = {Decimal.round(tie, 2, new Up())}");        // 2.35 (away from 0)
-    Console.println("  Down     = {Decimal.round(tie, 2, new Down())}");      // 2.34 (toward 0)
-    Console.println("  Ceiling  = {Decimal.round(tie, 2, new Ceiling())}");   // 2.35 (toward +inf)
-    Console.println("  Floor    = {Decimal.round(tie, 2, new Floor())}");     // 2.34 (toward -inf)
+    Output.printLine("rounding 2.345 to 2 places:");
+    Output.printLine("  HalfUp   = {Decimal.round(tie, 2, new HalfUp())}");    // 2.35 (tie away)
+    Output.printLine("  HalfDown = {Decimal.round(tie, 2, new HalfDown())}");  // 2.34 (tie toward 0)
+    Output.printLine("  HalfEven = {Decimal.round(tie, 2, new HalfEven())}");  // 2.34 (q=234 even)
+    Output.printLine("  Up       = {Decimal.round(tie, 2, new Up())}");        // 2.35 (away from 0)
+    Output.printLine("  Down     = {Decimal.round(tie, 2, new Down())}");      // 2.34 (toward 0)
+    Output.printLine("  Ceiling  = {Decimal.round(tie, 2, new Ceiling())}");   // 2.35 (toward +inf)
+    Output.printLine("  Floor    = {Decimal.round(tie, 2, new Floor())}");     // 2.34 (toward -inf)
 
     // The same seven modes on a NEGATIVE tie value (-2.345) — the sign flips Up/Ceiling/Floor.
     decimal nt = -2.345d;
-    Console.println("rounding -2.345 to 2 places:");
-    Console.println("  HalfUp   = {Decimal.round(nt, 2, new HalfUp())}");    // -2.35
-    Console.println("  HalfDown = {Decimal.round(nt, 2, new HalfDown())}");  // -2.34
-    Console.println("  HalfEven = {Decimal.round(nt, 2, new HalfEven())}");  // -2.34
-    Console.println("  Up       = {Decimal.round(nt, 2, new Up())}");        // -2.35
-    Console.println("  Down     = {Decimal.round(nt, 2, new Down())}");      // -2.34
-    Console.println("  Ceiling  = {Decimal.round(nt, 2, new Ceiling())}");   // -2.34
-    Console.println("  Floor    = {Decimal.round(nt, 2, new Floor())}");     // -2.35
+    Output.printLine("rounding -2.345 to 2 places:");
+    Output.printLine("  HalfUp   = {Decimal.round(nt, 2, new HalfUp())}");    // -2.35
+    Output.printLine("  HalfDown = {Decimal.round(nt, 2, new HalfDown())}");  // -2.34
+    Output.printLine("  HalfEven = {Decimal.round(nt, 2, new HalfEven())}");  // -2.34
+    Output.printLine("  Up       = {Decimal.round(nt, 2, new Up())}");        // -2.35
+    Output.printLine("  Down     = {Decimal.round(nt, 2, new Down())}");      // -2.34
+    Output.printLine("  Ceiling  = {Decimal.round(nt, 2, new Ceiling())}");   // -2.34
+    Output.printLine("  Floor    = {Decimal.round(nt, 2, new Floor())}");     // -2.35
 
     // A real (non-terminating) division: 10.00 / 3 to 2 places, banker's rounding.
     decimal unit = Decimal.divide(10.00d, 3d, 2, new HalfEven());
-    Console.println("10.00 / 3 (scale 2, HalfEven) = {unit}");   // 3.33
+    Output.printLine("10.00 / 3 (scale 2, HalfEven) = {unit}");   // 3.33
 
     // Higher precision picks up more digits exactly.
     decimal unit4 = Decimal.divide(10.00d, 3d, 4, new HalfUp());
-    Console.println("10.00 / 3 (scale 4, HalfUp)   = {unit4}");  // 3.3333
+    Output.printLine("10.00 / 3 (scale 4, HalfUp)   = {unit4}");  // 3.3333
 
     // Exact division needs rounding only nominally: 1 / 8 = 0.125, scale 2.
-    Console.println("1 / 8 (scale 2, HalfEven) = {Decimal.divide(1d, 8d, 2, new HalfEven())}");  // 0.12
-    Console.println("1 / 8 (scale 2, HalfUp)   = {Decimal.divide(1d, 8d, 2, new HalfUp())}");    // 0.13
+    Output.printLine("1 / 8 (scale 2, HalfEven) = {Decimal.divide(1d, 8d, 2, new HalfEven())}");  // 0.12
+    Output.printLine("1 / 8 (scale 2, HalfUp)   = {Decimal.divide(1d, 8d, 2, new HalfUp())}");    // 0.13
 
     // Re-scaling UP is exact (no rounding): pad 2.5 to scale 3.
-    Console.println("round 2.5 up to scale 3 = {Decimal.round(2.5d, 3, new Down())}");  // 2.500
+    Output.printLine("round 2.5 up to scale 3 = {Decimal.round(2.5d, 3, new Down())}");  // 2.500
 
     // Division composes with the rest of decimal math: split a bill 3 ways, then tax it.
     decimal bill = 100.00d;
     decimal share = Decimal.divide(bill, 3d, 2, new HalfUp());  // 33.33
     decimal total = share * 3;                                // 99.99 (rounding leaves a 0.01 remainder)
-    Console.println("bill split 3 ways = {share} each, total billed = {total}");
+    Output.printLine("bill split 3 ways = {share} each, total billed = {total}");
 }

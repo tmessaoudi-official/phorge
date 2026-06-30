@@ -3,7 +3,7 @@
 // not a type — `Loud x` as an annotation is `E-USE-AS-TYPE`), and `use TraitName;` composes it.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import type Acme.Mixins.Loud;
 import type Acme.Mixins.Identified;
 
@@ -21,6 +21,6 @@ class Speaker {
 
 function main(): void {
   var s = new Speaker(7, "ada");
-  Console.println(s.announce(s.name)); // ** ada **
-  Console.println(s.tag()); // #7
+  Output.printLine(s.announce(s.name)); // ** ada **
+  Output.printLine(s.tag()); // #7
 }

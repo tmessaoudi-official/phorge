@@ -8,7 +8,7 @@
 // plain string keys are kept verbatim. Integer arithmetic only (PHP's float `/` never enters).
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.List;
 import Core.Map;
 
@@ -17,32 +17,32 @@ function main(): void {
     var nums = [1, 2, 3, 4, 5];
     var rev = List.reverse(nums);
     var head = rev[0];
-    Console.println("sum        = {List.sum(nums)}");
-    Console.println("reversed[0] = {head}");
-    Console.println("sum(rev)   = {List.sum(rev)}");
+    Output.printLine("sum        = {List.sum(nums)}");
+    Output.printLine("reversed[0] = {head}");
+    Output.printLine("sum(rev)   = {List.sum(rev)}");
 
     // contains (generic, PHP `in_array` strict) — membership over a scalar list.
-    Console.println("has 3      = {List.contains(nums, 3)}");
-    Console.println("has 9      = {List.contains(nums, 9)}");
+    Output.printLine("has 3      = {List.contains(nums, 3)}");
+    Output.printLine("has 9      = {List.contains(nums, 9)}");
     var words = ["alpha", "beta"];
     var hasBeta = List.contains(words, "beta");
-    Console.println("has beta   = {hasBeta}");
+    Output.printLine("has beta   = {hasBeta}");
 
     // --- Core.Map: size / has / keys / values, insertion-ordered ---
     var ages = ["alice" => 30, "bob" => 25, "carol" => 41];
     var hasBob = Map.has(ages, "bob");
     var hasDave = Map.has(ages, "dave");
-    Console.println("size       = {Map.size(ages)}");
-    Console.println("has bob    = {hasBob}");
-    Console.println("has dave   = {hasDave}");
+    Output.printLine("size       = {Map.size(ages)}");
+    Output.printLine("has bob    = {hasBob}");
+    Output.printLine("has dave   = {hasDave}");
 
     // keys() preserves insertion order; index back into the map by each key.
     for (string name in Map.keys(ages)) {
         var age = ages[name];
-        Console.println("{name} -> {age}");
+        Output.printLine("{name} -> {age}");
     }
 
     // values() feeds straight into List.sum.
     var total = List.sum(Map.values(ages));
-    Console.println("total age  = {total}");
+    Output.printLine("total age  = {total}");
 }

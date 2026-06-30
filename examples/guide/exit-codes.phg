@@ -13,11 +13,11 @@
 // `phg explain E-MAIN-SIGNATURE`. The argv-as-a-parameter form is shown in `examples/process/`.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 function main(): int {
-    Console.println("starting up");
-    Console.println("work done");
+    Output.printLine("starting up");
+    Output.printLine("work done");
     // 0 = success. Returning a non-zero value here would set the process exit code instead.
     return 0;
 }

@@ -3,7 +3,7 @@
 // calls up with both the bare and the named-ancestor `parent` forms across the package boundary.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import type Acme.Zoo.Animal;
 
 // `Dog` inherits `Animal`'s constructor (so `new Dog("rex")` sets `name`) and its `name` field.
@@ -22,6 +22,6 @@ class Puppy extends Dog {
 }
 
 function main(): void {
-  Console.println(new Dog("rex").speak());
-  Console.println(new Puppy("milo").speak());
+  Output.printLine(new Dog("rex").speak());
+  Output.printLine(new Puppy("milo").speak());
 }

@@ -13,7 +13,7 @@
 
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // Absent-or-present. `Some` carries a `T`; `None` carries nothing.
 enum Option<T> {
@@ -54,8 +54,8 @@ function main(): void {
     var some = new Some(7); // Option<int> — T inferred from `7`
     Option<int> none = new None(); // None mentions no T — annotate to fix Option<int>
 
-    Console.println(describe(some)); // some 7
-    Console.println(describe(none)); // none
+    Output.printLine(describe(some)); // some 7
+    Output.printLine(describe(none)); // none
 
     // A bound payload is *type-checked* at its concrete type (here `n: int`), so the front end accepts
     // it anywhere an int is expected. It does carry the erased-generics limitation: a generic payload
@@ -67,8 +67,8 @@ function main(): void {
         Some(s) => "label {s}",
         None()  => "label none",
     };
-    Console.println(label); // label phorj
+    Output.printLine(label); // label phorj
 
-    Console.println(report(safeDiv(10, 2))); // ok 5
-    Console.println(report(safeDiv(1, 0))); // err divide by zero
+    Output.printLine(report(safeDiv(10, 2))); // ok 5
+    Output.printLine(report(safeDiv(1, 0))); // err divide by zero
 }

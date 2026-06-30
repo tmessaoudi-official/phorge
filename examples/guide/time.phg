@@ -6,7 +6,7 @@
 // example reproducible (the `Core.Random` determinism pattern).
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Time;
 
 function main() -> void {
@@ -14,30 +14,30 @@ function main() -> void {
   Time.freeze(1700000000000);
 
   Instant now = Instant.now();
-  Console.println("now epoch-millis  = {now.epochMillis()}");
-  Console.println("now epoch-seconds = {now.epochSeconds()}");
+  Output.printLine("now epoch-millis  = {now.epochMillis()}");
+  Output.printLine("now epoch-seconds = {now.epochSeconds()}");
 
   // Durations: build from units, combine, convert.
   Duration d = Duration.hours(1).plus(Duration.minutes(30));
-  Console.println("1h30m in millis   = {d.toMillis()}");
-  Console.println("1h30m in minutes  = {d.toMinutes()}");
+  Output.printLine("1h30m in millis   = {d.toMillis()}");
+  Output.printLine("1h30m in minutes  = {d.toMinutes()}");
 
   // Instant arithmetic.
   Instant later = now.plus(d);
-  Console.println("later - now (s)   = {later.durationSince(now).toSeconds()}");
-  Console.println("now isBefore later= {now.isBefore(later)}");
-  Console.println("compareTo (now,later) = {now.compareTo(later)}");
+  Output.printLine("later - now (s)   = {later.durationSince(now).toSeconds()}");
+  Output.printLine("now isBefore later= {now.isBefore(later)}");
+  Output.printLine("compareTo (now,later) = {now.compareTo(later)}");
 
   // Construct from seconds, subtract a day.
   Instant epoch = Instant.ofEpochSeconds(0);
   Instant yesterday = now.minus(Duration.days(1));
-  Console.println("epoch millis      = {epoch.epochMillis()}");
-  Console.println("a day earlier (s) = {yesterday.epochSeconds()}");
+  Output.printLine("epoch millis      = {epoch.epochMillis()}");
+  Output.printLine("a day earlier (s) = {yesterday.epochSeconds()}");
 
   // Negative and zero durations.
   Duration back = d.negate();
-  Console.println("negated isNegative= {back.isNegative()}");
-  Console.println("zero isZero       = {Duration.millis(0).isZero()}");
+  Output.printLine("negated isNegative= {back.isNegative()}");
+  Output.printLine("zero isZero       = {Duration.millis(0).isZero()}");
 
   Time.unfreeze();
 }

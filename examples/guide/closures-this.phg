@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 import Core.List;
 
 // `this`-capture in closures (Phase 1 closures slice). A method-body lambda may reference `this`:
@@ -26,11 +26,11 @@ class Counter {
 function main(): void {
     var c = new Counter(5);
     var read = c.reader();
-    Console.println("before={read()}");   // 5
+    Output.printLine("before={read()}");   // 5
 
     c.n = 99;                              // mutate the field after the closure was built
-    Console.println("after={read()}");    // 99 — live capture
+    Output.printLine("after={read()}");    // 99 — live capture
 
     var shifted = c.shiftAll([1, 2, 3]);   // each + 99
-    Console.println("shifted={shifted[0]},{shifted[1]},{shifted[2]}");
+    Output.printLine("shifted={shifted[0]},{shifted[1]},{shifted[2]}");
 }

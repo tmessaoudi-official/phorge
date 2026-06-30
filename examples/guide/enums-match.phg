@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // Variant patterns (with bindings) over a payload + zero-payload enum.
 // Zero-payload variants use call form `JNull()` to construct AND to match —
@@ -31,8 +31,8 @@ function sign(int n): string {
 function main(): void {
     List<Json> vals = [new JNull(), new JBool(true), new JNum(42), new JStr("hi")];
     for (Json j in vals) {
-        Console.println(show(j));
+        Output.printLine(show(j));
     }
-    Console.println(sign(0));
-    Console.println(sign(7));
+    Output.printLine(sign(0));
+    Output.printLine(sign(7));
 }

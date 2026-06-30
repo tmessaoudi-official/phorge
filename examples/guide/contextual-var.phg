@@ -8,7 +8,7 @@
 // Byte-identical on run / runvm / real PHP.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // `var` as a parameter name.
 function tagged(string var): string {
@@ -26,14 +26,14 @@ class Holder {
 function main(): void {
     // `var name = …` is still the inference keyword (here `label` is inferred `string`).
     var label = tagged("phorj");
-    Console.println(label);
+    Output.printLine(label);
 
     // `var` as a mutable local value name: declared with its type, then reassigned.
     mutable int var = 10;
     var = var + 5;
-    Console.println("var = {var}");
+    Output.printLine("var = {var}");
 
     // `var` as a field name.
     var h = new Holder(41);
-    Console.println("h.var = {h.var}, bumped = {h.bumped()}");
+    Output.printLine("h.var = {h.var}, bumped = {h.bumped()}");
 }

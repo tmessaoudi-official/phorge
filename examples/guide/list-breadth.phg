@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 import Core.List;
 
 // Stdlib breadth — `Core.List` query/aggregate ops (on top of map/filter/reduce/sort/slice/…):
@@ -12,45 +12,45 @@ import Core.List;
 function main(): void {
     List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6, 5];
 
-    Console.println("unique: {List.length(List.unique(xs))} of {List.length(xs)}");
-    Console.println("min={List.min(xs) ?? 0} max={List.max(xs) ?? 0}");
+    Output.printLine("unique: {List.length(List.unique(xs))} of {List.length(xs)}");
+    Output.printLine("min={List.min(xs) ?? 0} max={List.max(xs) ?? 0}");
 
     // `find` returns an optional — pair it with `??` (or if-let).
     int firstBig = List.find(xs, fn(int x) => x > 4) ?? -1;
-    Console.println("first > 4: {firstBig}");
+    Output.printLine("first > 4: {firstBig}");
 
     bool hasBig = List.any(xs, fn(int x) => x > 8);
     bool allPos = List.all(xs, fn(int x) => x > 0);
-    Console.println("any > 8: {hasBig}, all > 0: {allPos}");
+    Output.printLine("any > 8: {hasBig}, all > 0: {allPos}");
 
     // `min`/`max` order strings by byte, so a list of numeric-looking strings is consistent across
     // all three backends (PHP's bare min/max would juggle them numerically).
     List<string> codes = ["10", "9", "100", "2"];
-    Console.println("string min={List.min(codes) ?? \"?\"} max={List.max(codes) ?? \"?\"}");
+    Output.printLine("string min={List.min(codes) ?? \"?\"} max={List.max(codes) ?? \"?\"}");
 
     // Empty list: min/max/find are null.
     List<int> none = List.filter(xs, fn(int x) => x > 100);
-    Console.println("empty min: {List.min(none) ?? -1}");
+    Output.printLine("empty min: {List.min(none) ?? -1}");
 
     // take / drop — prefix and suffix, clamping n to [0, len] (never fault).
     int firstTwo = List.sum(List.take(xs, 2));
     int afterTwo = List.sum(List.drop(xs, 2));
     int dropAll = List.length(List.drop(xs, 999));
-    Console.println("take 2 sum={firstTwo}, drop 2 sum={afterTwo}, drop 999 len={dropAll}");
+    Output.printLine("take 2 sum={firstTwo}, drop 2 sum={afterTwo}, drop 999 len={dropAll}");
 
     // chunk — consecutive groups of N (last may be shorter); returns List<List<T>>.
     List<List<int>> groups = List.chunk(xs, 4);
     if (var lastGroup = List.last(groups)) {
-        Console.println("chunk 4: {List.length(groups)} groups, last has {List.length(lastGroup)}");
+        Output.printLine("chunk 4: {List.length(groups)} groups, last has {List.length(lastGroup)}");
     }
 
     // fill — `count` copies of a value (the element type is inferred); count 0 → empty list.
     List<int> zeros = List.fill(0, 5);
     int empty = List.length(List.fill(9, 0));
-    Console.println("fill: {List.length(zeros)} zeros, sum={List.sum(zeros)}, empty len={empty}");
+    Output.printLine("fill: {List.length(zeros)} zeros, sum={List.sum(zeros)}, empty len={empty}");
 
     // indexOf / lastIndexOf — first vs last position of a value (structural match), null when absent.
     // `1` appears at indices 1 and 3; `5` at 4 and 8; `7` is absent.
-    Console.println("first 1={List.indexOf(xs, 1) ?? -1}, last 1={List.lastIndexOf(xs, 1) ?? -1}");
-    Console.println("last 5={List.lastIndexOf(xs, 5) ?? -1}, last 7={List.lastIndexOf(xs, 7) ?? -1}");
+    Output.printLine("first 1={List.indexOf(xs, 1) ?? -1}, last 1={List.lastIndexOf(xs, 1) ?? -1}");
+    Output.printLine("last 5={List.lastIndexOf(xs, 5) ?? -1}, last 7={List.lastIndexOf(xs, 7) ?? -1}");
 }

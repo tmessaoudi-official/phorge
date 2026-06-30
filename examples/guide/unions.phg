@@ -9,7 +9,7 @@
 // Primitive unions (`int | string`) accept either type and match by literal value. Transpiles to
 // PHP 8.0 native `A|B`.
 package Main;
-import Core.Console;
+import Core.Output;
 
 class Circle {
     constructor(public int radius) {}
@@ -58,16 +58,16 @@ function main(): void {
     Square s = new Square(3);
     Triangle t = new Triangle(4, 3);
 
-    Console.println("area circle = {area(c)}");     // 4
-    Console.println("area square = {area(s)}");     // 9
-    Console.println("area triangle = {area(t)}");   // 12
+    Output.printLine("area circle = {area(c)}");     // 4
+    Output.printLine("area square = {area(s)}");     // 9
+    Output.printLine("area triangle = {area(t)}");   // 12
 
-    Console.println(name(c));                        // circle r=2
-    Console.println(name(s));                        // square s=3
-    Console.println(name(t));                        // triangle
+    Output.printLine(name(c));                        // circle r=2
+    Output.printLine(name(s));                        // square s=3
+    Output.printLine(name(t));                        // triangle
 
     string okay = classify("ok");
-    Console.println("classify 0 = {classify(0)}"); // zero
-    Console.println("classify ok = {okay}");        // okay
-    Console.println("classify 7 = {classify(7)}"); // other
+    Output.printLine("classify 0 = {classify(0)}"); // zero
+    Output.printLine("classify ok = {okay}");        // okay
+    Output.printLine("classify 7 = {classify(7)}"); // other
 }

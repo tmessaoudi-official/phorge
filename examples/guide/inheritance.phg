@@ -9,7 +9,7 @@
 // (Constructors and inherited fields land in a later slice; this guide stays field-free.)
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 open class Greeter {
     // Not `open`: subclasses inherit it unchanged and cannot replace it. It calls `kind()`, which a
@@ -34,10 +34,10 @@ class LoudGreeter extends Greeter {
 
 function main(): void {
     LoudGreeter g = new LoudGreeter();
-    Console.println(g.greet()); // inherited greet() dispatches to the overridden kind()
-    Console.println(g.kind());
+    Output.printLine(g.greet()); // inherited greet() dispatches to the overridden kind()
+    Output.printLine(g.kind());
 
     // A LoudGreeter flows into a Greeter-typed binding (subtyping); dispatch stays dynamic.
     Greeter base = g;
-    Console.println(base.greet());
+    Output.printLine(base.greet());
 }

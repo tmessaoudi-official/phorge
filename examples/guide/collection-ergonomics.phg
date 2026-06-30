@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 import Core.Set;
 import Core.Map;
 
@@ -15,20 +15,20 @@ function main(): void {
     Set<int> base = Set.of([1, 2, 3]);
     Set<int> grown = Set.add(base, 4);
     Set<int> shrunk = Set.remove(grown, 2);
-    Console.println("set sizes: {Set.size(base)} {Set.size(grown)} {Set.size(shrunk)}");
-    Console.println("[1,3] subset of base: {Set.isSubset(Set.of([1, 3]), base)}");
-    Console.println("base subset of shrunk: {Set.isSubset(base, shrunk)}"); // false (2 removed)
+    Output.printLine("set sizes: {Set.size(base)} {Set.size(grown)} {Set.size(shrunk)}");
+    Output.printLine("[1,3] subset of base: {Set.isSubset(Set.of([1, 3]), base)}");
+    Output.printLine("base subset of shrunk: {Set.isSubset(base, shrunk)}"); // false (2 removed)
 
     // --- Map ergonomics ---
     Map<string, int> prices = ["apple" => 3, "pear" => 5];
-    Console.println("apple={Map.getOrDefault(prices, \"apple\", 0)} kiwi={Map.getOrDefault(prices, \"kiwi\", 0)}");
+    Output.printLine("apple={Map.getOrDefault(prices, \"apple\", 0)} kiwi={Map.getOrDefault(prices, \"kiwi\", 0)}");
 
     // merge: the second map wins a shared key ("pear"), new keys append.
     Map<string, int> updated = Map.merge(prices, ["pear" => 6, "plum" => 4]);
-    Console.println("pear={Map.getOrDefault(updated, \"pear\", 0)} plum={Map.getOrDefault(updated, \"plum\", 0)}");
+    Output.printLine("pear={Map.getOrDefault(updated, \"pear\", 0)} plum={Map.getOrDefault(updated, \"plum\", 0)}");
 
     // map over values (keys preserved), then filter the result.
     Map<string, int> cents = Map.map(updated, fn(int p) => p * 100);
     Map<string, int> dear = Map.filter(cents, fn(int c) => c >= 500);
-    Console.println("apple cents={Map.getOrDefault(cents, \"apple\", 0)} dear count={Map.size(dear)}");
+    Output.printLine("apple cents={Map.getOrDefault(cents, \"apple\", 0)} dear count={Map.size(dear)}");
 }

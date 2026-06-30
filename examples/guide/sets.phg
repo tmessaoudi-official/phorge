@@ -7,7 +7,7 @@
 // dedup matches PHP `array_unique(..., SORT_STRING)` for homogeneous element types.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Set;
 
 function main(): void {
@@ -15,15 +15,15 @@ function main(): void {
     var s = Set.of([3, 1, 4, 1, 5, 9, 2, 6, 5, 3]);
     var has4 = Set.contains(s, 4);
     var has7 = Set.contains(s, 7);
-    Console.println("size  = {Set.size(s)}");
-    Console.println("has 4 = {has4}");
-    Console.println("has 7 = {has7}");
+    Output.printLine("size  = {Set.size(s)}");
+    Output.printLine("has 4 = {has4}");
+    Output.printLine("has 7 = {has7}");
 
     // A string set — same ops, different element type (generics inferred at the call site).
     var names = Set.of(["ada", "bob", "ada", "cleo", "bob"]);
     var hasAda = Set.contains(names, "ada");
     var hasZoe = Set.contains(names, "zoe");
-    Console.println("names size = {Set.size(names)}");
-    Console.println("has ada    = {hasAda}");
-    Console.println("has zoe    = {hasZoe}");
+    Output.printLine("names size = {Set.size(names)}");
+    Output.printLine("has ada    = {hasAda}");
+    Output.printLine("has zoe    = {hasZoe}");
 }

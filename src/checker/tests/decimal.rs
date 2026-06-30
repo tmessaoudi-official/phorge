@@ -132,7 +132,7 @@ fn decimal_interpolates_into_a_string() {
     let src = "function main() -> void { decimal d = 1.50d; }";
     assert!(errors_of(src).is_empty());
     let src2 =
-        "import Core.Console; function main() -> void { decimal d = 1.50d; Console.println(\"d = {d}\"); }";
+        "import Core.Output; function main() -> void { decimal d = 1.50d; Output.printLine(\"d = {d}\"); }";
     // Console import lives at the package level — prepend it raw.
     let full = format!("package Main; {src2}");
     assert!(

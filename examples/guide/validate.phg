@@ -6,11 +6,11 @@
 // construction. These check shape, not range (e.g. `isInt("007")` is true).
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Validation;
 
 function report(string label, bool ok): void {
-    Console.println("{label}: {ok}");
+    Output.printLine("{label}: {ok}");
 }
 
 function main(): void {

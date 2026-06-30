@@ -20,7 +20,7 @@
 
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 class Point {
     constructor(public int x, public int y) {}
@@ -51,12 +51,12 @@ function swap(int a, int b): string {
 
 function main(): void {
     var p = new Point(3, 4);
-    Console.println(describe(p));
+    Output.printLine(describe(p));
 
     // Length matches → 10 + 20 = 30.
-    Console.println("sum2={firstTwoSum([10, 20])}");
+    Output.printLine("sum2={firstTwoSum([10, 20])}");
     // Length differs → the `else` bails out with -1.
-    Console.println("sum3={firstTwoSum([1, 2, 3])}");
+    Output.printLine("sum3={firstTwoSum([1, 2, 3])}");
 
-    Console.println(swap(7, 9));
+    Output.printLine(swap(7, 9));
 }

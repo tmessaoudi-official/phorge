@@ -1,6 +1,6 @@
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // Super/parent dispatch (M-RT super/parent) — single inheritance, methods. An override can invoke the
 // implementation it shadows with `parent.m(…)` (the nearest ancestor that declares `m`), or jump to a
@@ -49,12 +49,12 @@ class Stepped extends Counter {
 }
 
 function main(): void {
-    Console.println(new Animal().describe());
+    Output.printLine(new Animal().describe());
     // animal
-    Console.println(new Dog().describe());
+    Output.printLine(new Dog().describe());
     // animal/dog
-    Console.println(new Puppy().describe());
+    Output.printLine(new Puppy().describe());
     // animal/dog | animal | puppy
-    Console.println("{new Stepped().count()}");
+    Output.printLine("{new Stepped().count()}");
 }
 // 11

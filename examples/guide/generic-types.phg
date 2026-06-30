@@ -16,7 +16,7 @@
 
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // A one-field generic container. `T` flows through the promoted constructor field and the methods.
 class Box<T> {
@@ -64,8 +64,8 @@ function main(): void {
   int viaMethod = bi.get() + 1;
   int viaParam = bi.orElse(0) + 1;
 
-  Console.println("box int: {x} {y}");
-  Console.println("box str: {s}");
-  Console.println("pair: {a} {b}");
-  Console.println("operands: {viaMethod} {viaParam}");
+  Output.printLine("box int: {x} {y}");
+  Output.printLine("box str: {s}");
+  Output.printLine("pair: {a} {b}");
+  Output.printLine("operands: {viaMethod} {viaParam}");
 }

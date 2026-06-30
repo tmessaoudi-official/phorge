@@ -11,7 +11,7 @@
 // on run / runvm / real PHP.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 trait English {
     function hello(): string { return "hello"; }
@@ -33,7 +33,7 @@ class Greeter {
 
 function main(): void {
     Greeter g = new Greeter();
-    Console.println(g.hello()); // English wins  -> hello
-    Console.println(g.bye()); // English (French.bye renamed away) -> bye
-    Console.println(g.goodbyeFr()); // French's bye under its new name -> au revoir
+    Output.printLine(g.hello()); // English wins  -> hello
+    Output.printLine(g.bye()); // English (French.bye renamed away) -> bye
+    Output.printLine(g.goodbyeFr()); // French's bye under its new name -> au revoir
 }

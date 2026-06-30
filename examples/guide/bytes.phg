@@ -2,42 +2,42 @@ package Main;
 
 // M6 W0 — the `bytes` type: raw octet sequences distinct from UTF-8 `string`.
 // `b"…"` literals (with `\xHH`), and the `Core.Bytes` interop module.
-import Core.Console;
+import Core.Output;
 import Core.Bytes;
 
 function main(): void {
   // fromString + length (BYTE count) + toString round-trip.
   bytes hello = Bytes.fromString("hello");
   int n = Bytes.length(hello);
-  Console.println("len={n}");                         // len=5
-  Console.println(Bytes.toString(hello) ?? "?");     // hello
+  Output.printLine("len={n}");                         // len=5
+  Output.printLine(Bytes.toString(hello) ?? "?");     // hello
 
   // A `b"…"` literal with \xHH escapes — 0x48 0x69 = "Hi".
   bytes raw = b"\x48\x69";
-  Console.println(Bytes.toString(raw) ?? "?");       // Hi
+  Output.printLine(Bytes.toString(raw) ?? "?");       // Hi
   int rn = Bytes.length(raw);
-  Console.println("rawlen={rn}");                     // rawlen=2
+  Output.printLine("rawlen={rn}");                     // rawlen=2
 
   // Invalid UTF-8 decodes to `null` (never a fault) — composes with `??`.
   bytes bad = b"\xff\xfe";
-  Console.println(Bytes.toString(bad) ?? "<non-utf8>"); // <non-utf8>
+  Output.printLine(Bytes.toString(bad) ?? "<non-utf8>"); // <non-utf8>
 
   // concat + slice (half-open, bounds-clamped).
   bytes ab = Bytes.concat(b"foo", b"bar");
-  Console.println(Bytes.toString(ab) ?? "?");        // foobar
+  Output.printLine(Bytes.toString(ab) ?? "?");        // foobar
   int abn = Bytes.length(ab);
-  Console.println("ablen={abn}");                     // ablen=6
+  Output.printLine("ablen={abn}");                     // ablen=6
 
   bytes sl = Bytes.slice(ab, 1, 4);
-  Console.println(Bytes.toString(sl) ?? "?");        // oob
+  Output.printLine(Bytes.toString(sl) ?? "?");        // oob
 
   // start > end clamps to an empty slice (total, no fault).
   bytes empty = Bytes.slice(ab, 5, 2);
   int en = Bytes.length(empty);
-  Console.println("slempty={en}");                    // slempty=0
+  Output.printLine("slempty={en}");                    // slempty=0
 
   // byte-vector equality.
   bytes eq1 = b"abc";
   bytes eq2 = Bytes.fromString("abc");
-  if (eq1 == eq2) { Console.println("eq"); } else { Console.println("ne"); } // eq
+  if (eq1 == eq2) { Output.printLine("eq"); } else { Output.printLine("ne"); } // eq
 }

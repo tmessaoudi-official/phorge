@@ -6,7 +6,7 @@
 // at most one concrete class — a value has exactly one class). Transpiles 1:1 to PHP 8.1 `A&B`.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // Two independent contracts.
 interface Drawable {
@@ -46,10 +46,10 @@ function main(): void {
     var sticker = new Sticker("hi");
 
     // Both implement Drawable AND Named, so both flow into `Drawable & Named`.
-    Console.println(describe(badge));   // ok => [ok]
-    Console.println(describe(sticker)); // hi => <hi>
+    Output.printLine(describe(badge));   // ok => [ok]
+    Output.printLine(describe(sticker)); // hi => <hi>
 
     // A & B narrows out to a single member without a cast.
-    Console.println(justDraw(badge));   // [ok]
-    Console.println(justDraw(sticker)); // <hi>
+    Output.printLine(justDraw(badge));   // [ok]
+    Output.printLine(justDraw(sticker)); // <hi>
 }

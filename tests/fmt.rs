@@ -33,7 +33,7 @@ impl Drop for TempDir {
     }
 }
 
-const MESSY: &str = "package Main;import Core.Console;\nfunction  main()->void{int  x=1+2 ;Console.println(\"{x}\");}\n";
+const MESSY: &str = "package Main;import Core.Output;\nfunction  main()->void{int  x=1+2 ;Output.printLine(\"{x}\");}\n";
 
 #[test]
 fn check_reports_unformatted_then_clean_after_write() {

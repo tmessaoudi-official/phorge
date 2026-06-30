@@ -38,8 +38,8 @@ fn unknown_function_call_errors() {
 #[test]
 fn println_accepts_string() {
     assert!(errors_of(
-        r#"import Core.Console;
-function main() -> void { Console.println("hi"); }"#
+        r#"import Core.Output;
+function main() -> void { Output.printLine("hi"); }"#
     )
     .is_empty());
 }
@@ -48,11 +48,11 @@ function main() -> void { Console.println("hi"); }"#
 fn console_println_rejects_non_string() {
     // The native's signature is `(string)`, so an `int` argument is a type error (M3 Wave 1).
     let errs = errors_of(
-        r#"import Core.Console;
-function main() -> void { Console.println(42); }"#,
+        r#"import Core.Output;
+function main() -> void { Output.printLine(42); }"#,
     );
     assert!(
-        errs.iter().any(|e| e.message.contains("Console.println")),
+        errs.iter().any(|e| e.message.contains("Output.printLine")),
         "{errs:?}"
     );
 }
@@ -70,9 +70,9 @@ fn bare_println_is_unknown_function() {
 
 #[test]
 fn console_println_without_import_errors() {
-    // "nothing in the wind": without `import Core.Console;`, the qualifier is unbound, so the
+    // "nothing in the wind": without `import Core.Output;`, the qualifier is unbound, so the
     // member call cannot resolve to the native and is an error.
-    let errs = errors_of(r#"function main() -> void { Console.println("hi"); }"#);
+    let errs = errors_of(r#"function main() -> void { Output.printLine("hi"); }"#);
     assert!(!errs.is_empty(), "expected an error without the import");
 }
 

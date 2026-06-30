@@ -7,9 +7,9 @@
 //!   * `php` — the transpile-time PHP emission (a `core.*` native erases to PHP's flat builtins;
 //!     the namespace is a compile-time organizing layer, decisions N-2/D-L9).
 //!
-//! The registry is the load-bearing target of `import Core.Console;` (M3 namespace reshape, Wave 1,
+//! The registry is the load-bearing target of `import Core.Output;` (M3 namespace reshape, Wave 1,
 //! `docs/specs/2026-06-18-m3-namespace-system-design.md`). The former free global `println` is
-//! retired in favor of `Core.Console.println`, and `Op::Print` in favor of
+//! retired in favor of `Core.Output.printLine`, and `Op::Print` in favor of
 //! `Op::CallNative(index, argc)` indexing this table.
 
 use crate::ast::Item;
@@ -55,7 +55,7 @@ pub use process::{process_args_value, set_process_args};
 
 /// One built-in function, addressed by `(module, name)`. See the module docs for the four facets.
 pub struct NativeFn {
-    /// Dotted module path the native lives under — e.g. `"Core.Console"`.
+    /// Dotted module path the native lives under — e.g. `"Core.Output"`.
     pub module: &'static str,
     /// Bare function name — e.g. `"println"`.
     pub name: &'static str,
@@ -67,7 +67,7 @@ pub struct NativeFn {
     /// one body, two callers). See [`NativeEval`].
     pub eval: NativeEval,
     /// PHP emission: given the already-emitted PHP for each argument, return the PHP snippet this
-    /// native erases to (decision N-2). For `Console.println`: `echo {a}, "\n"`.
+    /// native erases to (decision N-2). For `Output.printLine`: `echo {a}, "\n"`.
     pub php: fn(&[String]) -> String,
     /// Whether this native is **deterministic** w.r.t. the program text (`true` for all but the
     /// ambient-environment natives — `Core.Process`/`Core.Env`, whose result depends on the process,
@@ -117,7 +117,7 @@ pub type ClosureInvoker<'a> = dyn FnMut(&Value, Vec<Value>) -> Result<Value, Str
 
 /// How a native computes its result (M-RT S7b-3). Most natives are [`Pure`](NativeEval::Pure): a
 /// function of their argument values, threading the program output buffer so a side-effecting native
-/// (`Console.println`) can append to it. A [`HigherOrder`](NativeEval::HigherOrder) native instead
+/// (`Output.printLine`) can append to it. A [`HigherOrder`](NativeEval::HigherOrder) native instead
 /// needs to *call back* into the calling backend to invoke a `Value::Closure` argument
 /// (`Core.List.map`/`filter`/`reduce`); the backend supplies the invoker so the one `eval` body
 /// drives both the interpreter and the VM — exactly the parity discipline of the pure path. Both
@@ -244,7 +244,7 @@ impl ClassTables {
     }
 }
 
-/// Pinned registry slot for `Core.Console.println` — the migrated former `Op::Print`. The compiler
+/// Pinned registry slot for `Core.Output.printLine` — the migrated former `Op::Print`. The compiler
 /// bakes `Op::CallNative(CONSOLE_PRINTLN, 1)`; [`build`] self-checks this slot so the constant can
 /// never silently drift from the table.
 pub const CONSOLE_PRINTLN: usize = 0;
@@ -269,7 +269,7 @@ fn console_println(args: &[Value], out: &mut String) -> Result<Value, String> {
     Ok(Value::Unit)
 }
 
-/// `Console.print` — like `println` but with no trailing newline (primitives P3). Space-joins multiple
+/// `Output.print` — like `println` but with no trailing newline (primitives P3). Space-joins multiple
 /// args, same as `println`; transpiles to a bare PHP `echo`.
 fn console_print(args: &[Value], out: &mut String) -> Result<Value, String> {
     for (i, a) in args.iter().enumerate() {
@@ -295,8 +295,8 @@ fn parg(args: &[String], i: usize) -> &str {
 /// free. Modules are grouped by `*_natives()` builders (one per `core.*` leaf).
 fn build() -> Vec<NativeFn> {
     let mut registry = vec![NativeFn {
-        module: "Core.Console",
-        name: "println",
+        module: "Core.Output",
+        name: "printLine",
         params: vec![Ty::String],
         ret: Ty::Void,
         pure: true,
@@ -310,9 +310,9 @@ fn build() -> Vec<NativeFn> {
             format!(r#"echo {a}, "\n""#)
         },
     }];
-    // `Console.print` — no trailing newline (primitives P3). Not slot-pinned; resolved by (module,name).
+    // `Output.print` — no trailing newline (primitives P3). Not slot-pinned; resolved by (module,name).
     registry.push(NativeFn {
-        module: "Core.Console",
+        module: "Core.Output",
         name: "print",
         params: vec![Ty::String],
         ret: Ty::Void,
@@ -354,10 +354,10 @@ fn build() -> Vec<NativeFn> {
     // Pinned-slot invariant: the constant the compiler bakes into `Op::CallNative` must address the
     // entry it names. Cheap one-time check at first `registry()` access.
     assert_eq!(
-        registry[CONSOLE_PRINTLN].module, "Core.Console",
+        registry[CONSOLE_PRINTLN].module, "Core.Output",
         "CONSOLE_PRINTLN slot drifted"
     );
-    assert_eq!(registry[CONSOLE_PRINTLN].name, "println");
+    assert_eq!(registry[CONSOLE_PRINTLN].name, "printLine");
     registry
 }
 
@@ -413,7 +413,7 @@ pub fn index_of_by_leaf(leaf: &str, name: &str) -> Option<usize> {
 }
 
 /// Build the active import map (leaf qualifier → full dotted module path) from a program's items:
-/// `import Core.Console;` binds the call-site qualifier `console` to module `Core.Console`. Carried
+/// `import Core.Output;` binds the call-site qualifier `console` to module `Core.Console`. Carried
 /// by the checker (import-required + shadowing enforcement) and the transpiler (which has no
 /// variable-scope tracking to tell a qualifier from a value).
 pub fn import_map(items: &[Item]) -> HashMap<String, String> {

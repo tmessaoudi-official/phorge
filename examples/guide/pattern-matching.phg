@@ -10,7 +10,7 @@
 // `Circle c =>`. Guards use a contextual `when` (a normal identifier elsewhere), lower to the existing
 // branch ops (no new VM op), and fold into the transpiled PHP if/elseif chain.
 package Main;
-import Core.Console;
+import Core.Output;
 
 enum Status {
     Code(int n)
@@ -152,35 +152,35 @@ function action(Light l): string {
 }
 
 function main(): void {
-    Console.println(classify(new Code(503)));
-    Console.println(classify(new Code(404)));
-    Console.println(classify(new Code(200)));
-    Console.println(classify(new Code(100)));
-    Console.println(describe(new Circle(2.0)));
-    Console.println(describe(new Circle(0.5)));
-    Console.println(describe(new Square(3.0)));
+    Output.printLine(classify(new Code(503)));
+    Output.printLine(classify(new Code(404)));
+    Output.printLine(classify(new Code(200)));
+    Output.printLine(classify(new Code(100)));
+    Output.printLine(describe(new Circle(2.0)));
+    Output.printLine(describe(new Circle(0.5)));
+    Output.printLine(describe(new Square(3.0)));
 
     // struct destructuring: shorthand, rename, nested
     float ac = areaOf(new Circle(2.5));
     float aq = areaOf(new Square(4.0));
     int d = originSum(new Line(new Point(1, 2), new Point(10, 20)));
-    Console.println("areaOf circle = {ac}, square = {aq}, origin sum = {d}");
+    Output.printLine("areaOf circle = {ac}, square = {aq}, origin sum = {d}");
 
     // nested type pattern in a variant payload
-    Console.println(speak(new Holds(new Cat("Tom"))));
-    Console.println(speak(new Holds(new Dog("Rex"))));
+    Output.printLine(speak(new Holds(new Cat("Tom"))));
+    Output.printLine(speak(new Holds(new Dog("Rex"))));
 
     // if-let with a `when` guard
-    Console.println(greet(1));  // Ada, 36 → welcome
-    Console.println(greet(2));  // Bob, 15 → guard false → denied
-    Console.println(greet(3));  // null → bind fails → denied
+    Output.printLine(greet(1));  // Ada, 36 → welcome
+    Output.printLine(greet(2));  // Bob, 15 → guard false → denied
+    Output.printLine(greet(3));  // null → bind fails → denied
 
     // flow-narrowing (early-return guard)
     float r = radiusOrZero(new Circle(3.0));
     float z = radiusOrZero(new Square(5.0));
-    Console.println("r={r} z={z}");
+    Output.printLine("r={r} z={z}");
 
     // or-patterns: grouped literal cases + grouped enum variants
-    Console.println("band: {band(0)} {band(2)} {band(8)} {band(5)}");
-    Console.println("action: {action(new Red())} {action(new Yellow())} {action(new Green())}");
+    Output.printLine("band: {band(0)} {band(2)} {band(8)} {band(5)}");
+    Output.printLine("action: {action(new Red())} {action(new Yellow())} {action(new Green())}");
 }

@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 enum Grade {
     Pass(int score),
@@ -31,12 +31,12 @@ class Counter {
 function main(): void {
     Counter c = new Counter(100);
     int t = c.add(23);
-    Console.println("counter total = {t}");
+    Output.printLine("counter total = {t}");
 
     List<int> scores = [80, 30, 55];
     for (int s in scores) {
         Grade g = classify(s);
         string line = describe(g);
-        Console.println(line);
+        Output.printLine(line);
     }
 }

@@ -5,35 +5,35 @@
 // real backends and is byte-identical on `run`/`runvm`/transpiled PHP by construction.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Time;
 
 function main() -> void {
   Date d = Date.of(2023, 11, 14);
-  Console.println("date     = {d.toString()}");
-  Console.println("y/m/d    = {d.year()}/{d.month()}/{d.day()}");
-  Console.println("epochDay = {d.epochDay}");
-  Console.println("dayOfWeek= {d.dayOfWeek()}");          // 1=Mon … 7=Sun → 2 (Tuesday)
-  Console.println("leap?    = {d.isLeapYear()}");
+  Output.printLine("date     = {d.toString()}");
+  Output.printLine("y/m/d    = {d.year()}/{d.month()}/{d.day()}");
+  Output.printLine("epochDay = {d.epochDay}");
+  Output.printLine("dayOfWeek= {d.dayOfWeek()}");          // 1=Mon … 7=Sun → 2 (Tuesday)
+  Output.printLine("leap?    = {d.isLeapYear()}");
 
   // Arithmetic.
   Date plus3w = d.addDays(21);
-  Console.println("+3 weeks = {plus3w.toString()}");
-  Console.println("daysUntil= {d.daysUntil(plus3w)}");
-  Console.println("backTen  = {d.minusDays(10).toString()}");
+  Output.printLine("+3 weeks = {plus3w.toString()}");
+  Output.printLine("daysUntil= {d.daysUntil(plus3w)}");
+  Output.printLine("backTen  = {d.minusDays(10).toString()}");
 
   // Leap day and comparison.
   Date leap = Date.of(2024, 2, 29);
-  Console.println("leap day = {leap.toString()} leap?={leap.isLeapYear()} dow={leap.dayOfWeek()}");
-  Console.println("before?  = {d.isBefore(leap)}");
-  Console.println("compare  = {d.compareTo(leap)}");
+  Output.printLine("leap day = {leap.toString()} leap?={leap.isLeapYear()} dow={leap.dayOfWeek()}");
+  Output.printLine("before?  = {d.isBefore(leap)}");
+  Output.printLine("compare  = {d.compareTo(leap)}");
 
   // Far past — the algorithm is exact across centuries (Gregorian proleptic).
   Date past = Date.of(1900, 1, 1);
-  Console.println("1900-01-01 dow = {past.dayOfWeek()} leap? = {past.isLeapYear()}");
+  Output.printLine("1900-01-01 dow = {past.dayOfWeek()} leap? = {past.isLeapYear()}");
 
   // Bridge from an instant (clock frozen for determinism).
   Time.freeze(1700000000000);
-  Console.println("today    = {Instant.now().toDate().toString()}");
+  Output.printLine("today    = {Instant.now().toDate().toString()}");
   Time.unfreeze();
 }

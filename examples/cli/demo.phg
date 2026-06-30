@@ -1,11 +1,11 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // A tiny program used by ../cli/README.md to demonstrate the phorj CLI:
 // source forms (file / stdin / inline), inspection (check / parse / lex),
 // the diagnostic dictionary (explain), and clean compile/runtime faults.
 function main(): void {
     int n = 6;
-    Console.println("phorj CLI demo");
-    Console.println("n doubled = {n * 2}");
+    Output.printLine("phorj CLI demo");
+    Output.printLine("n doubled = {n * 2}");
 }

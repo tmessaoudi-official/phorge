@@ -303,8 +303,8 @@ fn instance_field_with_initializer_is_ok() {
 
 #[test]
 fn unknown_static_field_read_is_error() {
-    let src = "import Core.Console; class C { static int x = 0; } \
-                   function main() -> void { Console.println(\"{C.y}\"); }";
+    let src = "import Core.Output; class C { static int x = 0; } \
+                   function main() -> void { Output.printLine(\"{C.y}\"); }";
     let bad = errors_of(src);
     assert!(
         bad.iter().any(|e| e.code == Some("E-STATIC-UNKNOWN")),

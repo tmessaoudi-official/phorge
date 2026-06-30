@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // `type` alias: a domain-specific name for a primitive. It is compile-time only — the checker
 // resolves `Celsius` to `int`, and it is fully erased from the transpiled PHP.
@@ -20,5 +20,5 @@ function main(): void {
     var lo = freezing();
     var hi = boiling();
     var range = hi - lo;
-    Console.println("{label}: {lo} to {hi} ({range} degrees)");
+    Output.printLine("{label}: {lo} to {hi} ({range} degrees)");
 }

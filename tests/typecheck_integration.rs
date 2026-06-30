@@ -4,7 +4,7 @@ use phorj::parser::Parser;
 
 /// The complete sample program from the design spec (§6), verbatim.
 const SAMPLE: &str = r#"package Main;
-import Core.Console;
+import Core.Output;
 
 enum Shape {
     Circle(float radius),
@@ -30,11 +30,11 @@ class Greeter {
 
 function main() -> void {
     Greeter g = new Greeter("Tak");
-    Console.println(g.greet());
+    Output.printLine(g.greet());
 
     List<Shape> shapes = [new Circle(2.0), new Rect(3.0, 4.0)];
     for (Shape s in shapes) {
-        Console.println("area = {area(s)}");
+        Output.printLine("area = {area(s)}");
     }
 }
 "#;

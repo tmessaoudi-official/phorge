@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // M3 S2 "null safety": optionals `T?`, `??`, `?.`, `if (var x = opt)`, `opt!`, and `match` over
 // `T?`. A non-optional `T` can never hold `null` — the checker enforces it (TypeScript
@@ -31,32 +31,32 @@ function main(): void {
     int? none = null;
 
     // `??` supplies a default when the left side is null (and skips it otherwise).
-    Console.println("coalesce: {some ?? -1} {none ?? -1}");
+    Output.printLine("coalesce: {some ?? -1} {none ?? -1}");
 
     // `?.` reads through a present receiver and short-circuits a null one to `null`.
     Box? box = new Box(42);
     Box? nobox = null;
-    Console.println("safe: {(box?.get()) ?? -1} {(nobox?.get()) ?? -1}");
+    Output.printLine("safe: {(box?.get()) ?? -1} {(nobox?.get()) ?? -1}");
 
     // `if (var x = opt)` binds the non-null inner inside the then-block only (smart-cast to `int`).
     if (var x = some) {
-        Console.println("if-let: got {x}");
+        Output.printLine("if-let: got {x}");
     } else {
-        Console.println("if-let: none");
+        Output.printLine("if-let: none");
     }
     if (var y = none) {
-        Console.println("if-let: got {y}");
+        Output.printLine("if-let: got {y}");
     } else {
-        Console.println("if-let: none");
+        Output.printLine("if-let: none");
     }
 
     // `opt!` force-unwraps a known-present optional to `int` (it would fault on null — never used on
     // a value that can be null; the `W-FORCE-UNWRAP` lint flags every use). `x` is then a real `int`.
     int forced = some!;
-    Console.println("force: {forced + 1}");
+    Output.printLine("force: {forced + 1}");
 
     // `match` over `T?` with null-arm narrowing.
-    Console.println("match: {describe(some)} / {describe(none)}");
+    Output.printLine("match: {describe(some)} / {describe(none)}");
 
     // Chained `opt!` through object optionals: a 3-node list, force-unwrapping `next` twice to reach
     // the third node's `v`. The two-`opt!`-in-one-interpolation case (`{a.next!.v} / {…next!.next!.v}`)
@@ -64,5 +64,5 @@ function main(): void {
     var third = new Node(30, null);
     var second = new Node(20, third);
     var first = new Node(10, second);
-    Console.println("chain: {first.next!.v} / {first.next!.next!.v}");
+    Output.printLine("chain: {first.next!.v} / {first.next!.next!.v}");
 }

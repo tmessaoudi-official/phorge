@@ -5,7 +5,7 @@
 // own integer literals: an optional sign, base-10 digits (leading zeros allowed), within `int` range,
 // and no surrounding whitespace. Compose it with `??` for a default, or `if (var n = …)` to branch.
 package Main;
-import Core.Console;
+import Core.Output;
 import Core.String;
 
 function describe(string s): string {
@@ -16,18 +16,18 @@ function describe(string s): string {
 }
 
 function main(): void {
-  Console.println(describe("42"));    // 42 -> 42
-  Console.println(describe("-7"));     // -7 -> -7
-  Console.println(describe("+5"));     // +5 -> 5   (leading + is fine)
-  Console.println(describe("007"));    // 007 -> 7  (leading zeros are fine)
-  Console.println(describe("3.14"));   // not an int (a float is not an integer)
-  Console.println(describe("12abc"));  // not an int (no partial parse)
-  Console.println(describe("abc"));    // not an int
-  Console.println(describe("99999999999999999999")); // not an int (out of int range)
+  Output.printLine(describe("42"));    // 42 -> 42
+  Output.printLine(describe("-7"));     // -7 -> -7
+  Output.printLine(describe("+5"));     // +5 -> 5   (leading + is fine)
+  Output.printLine(describe("007"));    // 007 -> 7  (leading zeros are fine)
+  Output.printLine(describe("3.14"));   // not an int (a float is not an integer)
+  Output.printLine(describe("12abc"));  // not an int (no partial parse)
+  Output.printLine(describe("abc"));    // not an int
+  Output.printLine(describe("99999999999999999999")); // not an int (out of int range)
 
   // Compose with `??` for a default.
   int port = String.parseInt("8080") ?? 0;
-  Console.println("port = {port}");       // port = 8080
+  Output.printLine("port = {port}");       // port = 8080
   int fallback = String.parseInt("nope") ?? -1;
-  Console.println("fallback = {fallback}"); // fallback = -1
+  Output.printLine("fallback = {fallback}"); // fallback = -1
 }

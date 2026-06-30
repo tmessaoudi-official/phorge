@@ -137,10 +137,10 @@ fn refuses_bareword_simple_subscript() {
 #[test]
 fn top_level_code_becomes_main_with_console_import() {
     let out = lift(r#"<?php $x = 1; echo $x;"#);
-    assert!(out.contains("import Core.Console;"), "{out}");
+    assert!(out.contains("import Core.Output;"), "{out}");
     assert!(out.contains("function main(): void {"), "{out}");
     assert!(out.contains("mutable var x = 1;"), "{out}");
-    assert!(out.contains("Console.print(x);"), "{out}");
+    assert!(out.contains("Output.print(x);"), "{out}");
     assert_reparses(&out);
 }
 

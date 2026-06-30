@@ -8,7 +8,7 @@
 // is E-OVERLOAD-STATIC-MIX, matching PHP, see the README.)
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // `open` so the subclass below can inherit the overloaded static factory.
 open class Color {
@@ -41,8 +41,8 @@ function main() -> void {
     Color b = Color.of(10, 20, 30);   // -> of(int, int, int)
     Color c = Color.of("red");        // -> of(string)
     Color d = Swatch.of(64);          // inherited overloaded static -> of(int)
-    Console.println(a.show());
-    Console.println(b.show());
-    Console.println(c.show());
-    Console.println(d.show());
+    Output.printLine(a.show());
+    Output.printLine(b.show());
+    Output.printLine(c.show());
+    Output.printLine(d.show());
 }

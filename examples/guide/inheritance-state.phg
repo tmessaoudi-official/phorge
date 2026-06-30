@@ -12,7 +12,7 @@
 // backends agree byte-for-byte.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // A parent whose constructor is pure promotion (declares + stores `name`).
 open class Named {
@@ -42,12 +42,12 @@ function main(): void {
     Employee e = new Employee("Ada", 1000);
 
     // Inherited state from BOTH parents is initialized: Named's promoted `name`, Paid's derived `annual`.
-    Console.println(e.summary());   // Ada: 12000/yr
-    Console.println(e.label());     // inherited method reads the inherited field
+    Output.printLine(e.summary());   // Ada: 12000/yr
+    Output.printLine(e.label());     // inherited method reads the inherited field
 
     // An Employee is a subtype of every ancestor (S6c.3): it flows into a parent-typed binding and
     // answers `instanceof` for each parent.
     Named n = e;
-    Console.println(n.label());
-    Console.println("{e instanceof Named} {e instanceof Paid} {e instanceof Employee}");
+    Output.printLine(n.label());
+    Output.printLine("{e instanceof Named} {e instanceof Paid} {e instanceof Employee}");
 }

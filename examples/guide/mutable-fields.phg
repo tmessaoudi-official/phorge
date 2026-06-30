@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // M-mut.6 — shared-mutable instance fields: `o.f = e`. Instances are HANDLES (like PHP/Java
 // objects), not value types: two bindings to the same instance share one cell, so a write through
@@ -24,17 +24,17 @@ function main(): void {
 
     // Direct field set.
     c.n = 42;
-    Console.println("c.n = {c.n}"); // 42
+    Output.printLine("c.n = {c.n}"); // 42
 
     // HANDLE semantics: `alias` and `c` are the SAME instance — a write through one is seen by both
     // (the opposite of the copy-on-write value types in element-set.phg).
     Counter alias = c;
     c.n = 100;
-    Console.println("c.n = {c.n}, alias.n = {alias.n}"); // 100, 100
+    Output.printLine("c.n = {c.n}, alias.n = {alias.n}"); // 100, 100
 
     // A method mutating `this.f` is likewise visible everywhere. `bump()` returns the new count;
     // we call it only for the mutation, so the result is explicitly `discard`-ed (must-use rule).
     discard c.bump();
     discard c.bump();
-    Console.println("c.n = {c.n}, alias.n = {alias.n}, hits = {alias.hits}"); // 102, 102, 2
+    Output.printLine("c.n = {c.n}, alias.n = {alias.n}, hits = {alias.hits}"); // 102, 102, 2
 }

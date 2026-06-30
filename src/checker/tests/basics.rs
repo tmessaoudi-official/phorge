@@ -6,7 +6,7 @@ use super::support::*;
 fn unknown_identifier_suggests_the_nearest_in_scope_name() {
     // `cont` is one edit from the in-scope `count` → the diagnostic carries a code + hint.
     let errs = errors_of(
-        "import Core.Console; function main() -> void { int count = 0; Console.println(\"{cont}\"); }",
+        "import Core.Output; function main() -> void { int count = 0; Output.printLine(\"{cont}\"); }",
     );
     let d = errs
         .iter()

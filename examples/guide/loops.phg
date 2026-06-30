@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // M-mut.3 — condition loops, made useful by mutation: `while`, `do-while`, C-style `for`,
 // while-let, plus `break` and `continue`. Every loop lowers to plain jumps (no new opcode).
@@ -12,21 +12,21 @@ function main(): void {
         sum += i;
         i += 1;
     }
-    Console.println("while sum 0..4 = {sum}"); // 10
+    Output.printLine("while sum 0..4 = {sum}"); // 10
 
     // `do-while`: the body runs once before the first test.
     mutable int tries = 0;
     do {
         tries += 1;
     } while (tries < 3);
-    Console.println("do-while tries = {tries}"); // 3
+    Output.printLine("do-while tries = {tries}"); // 3
 
     // C-style `for (init; cond; step)` — the counter must be `mutable` (the step reassigns it).
     mutable int product = 1;
     for (mutable int k = 1; k <= 4; k++) {
         product *= k;
     }
-    Console.println("for 4! = {product}"); // 24
+    Output.printLine("for 4! = {product}"); // 24
 
     // `continue` skips the rest of an iteration; `break` exits the loop.
     mutable int evens = 0;
@@ -39,7 +39,7 @@ function main(): void {
         }
         evens += 1;
     }
-    Console.println("evens below 10 = {evens}"); // 0,2,4,6,8 → 5
+    Output.printLine("evens below 10 = {evens}"); // 0,2,4,6,8 → 5
 
     // Nested loops: an inner `break` exits only the inner loop.
     mutable int cells = 0;
@@ -51,7 +51,7 @@ function main(): void {
             cells += 1;
         }
     }
-    Console.println("grid cells = {cells}"); // 3 rows * 4 cols = 12
+    Output.printLine("grid cells = {cells}"); // 3 rows * 4 cols = 12
 
     // while-let: loop while an optional is non-null, binding its inner value.
     mutable int? next = 3;
@@ -60,7 +60,7 @@ function main(): void {
         drained += v;
         next = null; // a real queue would hand back the next element
     }
-    Console.println("while-let drained = {drained}"); // 3
+    Output.printLine("while-let drained = {drained}"); // 3
 
     // while-let with a `when` guard: loop while the optional is non-null AND the bound value
     // satisfies the guard. A false guard exits the loop (like a match-arm `when`, but on the loop
@@ -71,5 +71,5 @@ function main(): void {
         taken += x;
         cursor = x + 1; // 1, 2, 3 pass; x = 4 fails the guard → exit
     }
-    Console.println("while-let guard taken = {taken}"); // 1+2+3 = 6
+    Output.printLine("while-let guard taken = {taken}"); // 1+2+3 = 6
 }

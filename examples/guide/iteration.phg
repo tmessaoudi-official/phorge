@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 import Core.Set;
 
 // Iteration protocol (B1) — `for (x in iterable)` walks any collection, not just a `List`. A `Set<T>`
@@ -25,16 +25,16 @@ function sumSet(Set<int> s): int {
 
 function main(): void {
     // A plain list.
-    Console.println("list sum = {sumList([10, 20, 30])}");
+    Output.printLine("list sum = {sumList([10, 20, 30])}");
 
     // A set: duplicates are removed, insertion order preserved → {3, 1, 2}.
     Set<int> s = Set.of([3, 1, 3, 2, 1]);
-    Console.println("set sum = {sumSet(s)}");
+    Output.printLine("set sum = {sumSet(s)}");
 
     // An integer range iterates its materialized elements, like any list.
     mutable int product = 1;
     for (int n in 1..=4) {
         product = product * n;
     }
-    Console.println("4! = {product}");
+    Output.printLine("4! = {product}");
 }

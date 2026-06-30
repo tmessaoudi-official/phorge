@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // Feature B — expression field initializers. PHP restricts property defaults to *constant
 // expressions* (no calls, no `$this`, no other-property reads — "Constant expression contains
@@ -24,6 +24,6 @@ class Parcel {
 
 function main(): void {
     Parcel t = new Parcel("alpha");
-    Console.println(t.summary());                // alpha: w=31 d=62
-    Console.println("{t.weight + t.doubled}");   // 93
+    Output.printLine(t.summary());                // alpha: w=31 d=62
+    Output.printLine("{t.weight + t.doubled}");   // 93
 }

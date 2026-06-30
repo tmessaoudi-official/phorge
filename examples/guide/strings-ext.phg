@@ -14,7 +14,7 @@
 // All four are byte-identical on `run`, `runvm`, and real PHP.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // `+` composes naturally and chains left-to-right, like any binary operator.
 function fullName(string first, string last): string {
@@ -24,25 +24,25 @@ function fullName(string first, string last): string {
 function main(): void {
     // Concatenation — literals, a call result, and a bound variable all compose.
     string who = fullName("Ada", "Lovelace");
-    Console.println("Hello, " + who + "!");
+    Output.printLine("Hello, " + who + "!");
 
     // `+` is just an operator: nest it, mix with interpolation.
     string tag = "[" + who + "]";
-    Console.println(tag);
+    Output.printLine(tag);
 
     // Unicode escapes: an emoji (5 hex digits) and a named-codepoint-style sequence.
-    Console.println("punch \u{1F44A} and star \u{2B50}");
+    Output.printLine("punch \u{1F44A} and star \u{2B50}");
 
     // `\u{}` works mid-string and alongside the other escapes.
     string mixed = "tab\u{9}then\u{2192}arrow";
-    Console.println(mixed);
+    Output.printLine(mixed);
 
     // Literal braces with `\{` / `\}` — the surrounding braces are literal, `{n}` still interpolates.
     int n = 8;
-    Console.println("\{margin: {n}px\}");
+    Output.printLine("\{margin: {n}px\}");
 
     // Raw strings: no escapes, no interpolation. The `r#"…"#` form carries embedded `"` and any
     // braces/backslashes verbatim — ideal for a JSON or regex literal.
     string json = r#"{"unit": "px", "pattern": "\d{2,3}"}"#;
-    Console.println(json);
+    Output.printLine(json);
 }

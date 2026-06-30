@@ -3,19 +3,19 @@ use super::*;
 #[test]
 fn pinned_console_println_slot() {
     let r = registry();
-    assert_eq!(r[CONSOLE_PRINTLN].module, "Core.Console");
-    assert_eq!(r[CONSOLE_PRINTLN].name, "println");
+    assert_eq!(r[CONSOLE_PRINTLN].module, "Core.Output");
+    assert_eq!(r[CONSOLE_PRINTLN].name, "printLine");
 }
 
 #[test]
 fn index_lookups_resolve_console_println() {
-    assert_eq!(index_of("Core.Console", "println"), Some(CONSOLE_PRINTLN));
+    assert_eq!(index_of("Core.Output", "printLine"), Some(CONSOLE_PRINTLN));
     assert_eq!(
-        index_of_by_leaf("Console", "println"),
+        index_of_by_leaf("Output", "printLine"),
         Some(CONSOLE_PRINTLN)
     );
-    assert_eq!(index_of("Core.Console", "nope"), None);
-    assert_eq!(index_of_by_leaf("nope", "println"), None);
+    assert_eq!(index_of("Core.Output", "nope"), None);
+    assert_eq!(index_of_by_leaf("nope", "printLine"), None);
 }
 
 #[test]
@@ -89,13 +89,13 @@ fn import_map_binds_leaf_to_full_path() {
         col: 1,
     };
     let items = vec![Item::Import {
-        path: vec!["Core".into(), "Console".into()],
+        path: vec!["Core".into(), "Output".into()],
         alias: None,
         type_only: false,
         span: sp,
     }];
     let m = import_map(&items);
-    assert_eq!(m.get("Console").map(String::as_str), Some("Core.Console"));
+    assert_eq!(m.get("Output").map(String::as_str), Some("Core.Output"));
 
     // An alias overrides the bound qualifier (M5 S2c).
     let aliased = vec![Item::Import {

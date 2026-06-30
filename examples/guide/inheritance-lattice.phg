@@ -12,7 +12,7 @@
 // interfaces), so all three backends agree byte-for-byte.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 open class Animal {
     open function name(): string {
@@ -47,15 +47,15 @@ function main(): void {
     Duck d = new Duck();
 
     // (1) `instanceof` against every ancestor in the lattice — all true.
-    Console.println("{d instanceof Duck} {d instanceof Fish} {d instanceof Bird} {d instanceof Animal}");
+    Output.printLine("{d instanceof Duck} {d instanceof Fish} {d instanceof Bird} {d instanceof Animal}");
 
     // (2) the Duck flows into ancestor-typed bindings; dispatch stays dynamic.
     Fish f = d;
     Animal a = d;
-    Console.println("{f.move()} {a.name()}");
-    Console.println(describe(d)); // a Duck passed where an Animal is expected
+    Output.printLine("{f.move()} {a.name()}");
+    Output.printLine(describe(d)); // a Duck passed where an Animal is expected
 
     // (3) a non-subtype test is false — Bird is an ancestor of Duck, but a fresh Animal is not a Bird.
     Animal plain = new Animal();
-    Console.println("{plain instanceof Bird}");
+    Output.printLine("{plain instanceof Bird}");
 }

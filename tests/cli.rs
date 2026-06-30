@@ -150,8 +150,8 @@ fn run_reads_program_from_stdin() {
         .unwrap()
         .write_all(
             br#"package Main;
-import Core.Console;
-function main() -> void { Console.println("{1 + 2}"); }"#,
+import Core.Output;
+function main() -> void { Output.printLine("{1 + 2}"); }"#,
         )
         .unwrap();
     let out = child.wait_with_output().expect("wait");
@@ -167,8 +167,8 @@ fn run_eval_inline_code() {
                 "run",
                 flag,
                 r#"package Main;
-import Core.Console;
-function main() -> void { Console.println("{2 * 3}"); }"#,
+import Core.Output;
+function main() -> void { Output.printLine("{2 * 3}"); }"#,
             ])
             .output()
             .expect("spawn phorj");
@@ -182,8 +182,8 @@ fn run_double_dash_then_path_is_a_file() {
     let path = write_temp(
         "dashdash",
         r#"package Main;
-import Core.Console;
-function main() -> void { Console.println("ok"); }"#,
+import Core.Output;
+function main() -> void { Output.printLine("ok"); }"#,
     );
     let out = Command::new(BIN)
         .args(["run", "--", path.to_str().unwrap()])
@@ -241,8 +241,8 @@ fn run_runtime_error_exits_1() {
     let path = write_temp(
         "runtime_err",
         r#"package Main;
-import Core.Console;
-function main() -> void { Console.println("{1 / 0}"); }"#,
+import Core.Output;
+function main() -> void { Output.printLine("{1 / 0}"); }"#,
     );
     let out = Command::new(BIN)
         .args(["run", path.to_str().unwrap()])
@@ -258,8 +258,8 @@ fn runvm_simple_program_exits_0() {
     let path = write_temp(
         "runvm_ok",
         r#"package Main;
-import Core.Console;
-function main() -> void { Console.println("{1 + 1}"); }"#,
+import Core.Output;
+function main() -> void { Output.printLine("{1 + 1}"); }"#,
     );
     let out = Command::new(BIN)
         .args(["runvm", path.to_str().unwrap()])
@@ -275,8 +275,8 @@ fn runvm_runtime_error_exits_1() {
     let path = write_temp(
         "runvm_rt",
         r#"package Main;
-import Core.Console;
-function main() -> void { Console.println("{1 / 0}"); }"#,
+import Core.Output;
+function main() -> void { Output.printLine("{1 / 0}"); }"#,
     );
     let out = Command::new(BIN)
         .args(["runvm", path.to_str().unwrap()])
@@ -346,11 +346,11 @@ fn mi_super_method_transpiles_to_a_trait_alias() {
     std::fs::write(
         &path,
         "package Main;\n\
-         import Core.Console;\n\
+         import Core.Output;\n\
          open class A { open function m(): string { return \"A\"; } }\n\
          open class B { open function m(): string { return \"B\"; } }\n\
          class C extends A, B { function m(): string { return \"{parent(A).m()}+{parent(B).m()}+C\"; } }\n\
-         function main(): void { C c = new C(); Console.println(c.m()); }\n",
+         function main(): void { C c = new C(); Output.printLine(c.m()); }\n",
     )
     .unwrap();
     let out = Command::new(BIN)
@@ -379,12 +379,12 @@ fn mi_transitive_parent_jump_is_a_clean_transpile_error() {
     std::fs::write(
         &path,
         "package Main;\n\
-         import Core.Console;\n\
+         import Core.Output;\n\
          open class G { open function m(): string { return \"G\"; } }\n\
          open class A extends G { open function m(): string { return \"A\"; } }\n\
          open class B { open function m(): string { return \"B\"; } }\n\
          class C extends A, B { function m(): string { return \"{parent(G).m()}+C\"; } }\n\
-         function main(): void { C c = new C(); Console.println(c.m()); }\n",
+         function main(): void { C c = new C(); Output.printLine(c.m()); }\n",
     )
     .unwrap();
     // run still works (MI-aware resolution).

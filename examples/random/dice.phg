@@ -9,7 +9,7 @@
 // Run it:   phg run examples/random/dice.phg
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Random;
 
 function main(): void {
@@ -17,14 +17,14 @@ function main(): void {
     Random.seed(2026);
 
     // Roll a six-sided die five times. `intBetween(lo, hi)` is inclusive on both ends.
-    Console.println("Five d6 rolls:");
+    Output.printLine("Five d6 rolls:");
     for (int i in 0..5) {
         var roll = Random.intBetween(1, 6);
-        Console.println("  roll {i}: {roll}");
+        Output.printLine("  roll {i}: {roll}");
     }
 
     // `next()` returns the raw non-negative value (useful as a hash-ish key or to derive your own
     // bounded value).
     var raw = Random.nextInt();
-    Console.println("raw next: {raw}");
+    Output.printLine("raw next: {raw}");
 }

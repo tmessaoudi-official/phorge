@@ -11,7 +11,7 @@
 // transpiled PCRE (no UCP), so ASCII keeps the three backends identical (see KNOWN_ISSUES).
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.String;
 import Core.Regex;
 
@@ -20,26 +20,26 @@ function main(): void {
     var date = Regex.compile(r"(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})");
     var hit = Regex.matches(date, "today is 2026-06-28.");
     var first = Regex.find(date, "today is 2026-06-28.") ?? "none";
-    Console.println("matches = {hit}");
-    Console.println("find    = {first}");
+    Output.printLine("matches = {hit}");
+    Output.printLine("find    = {first}");
 
     // Named captures → Map<string, string>? (null when there is no match).
     if (var g = Regex.findGroups(date, "2026-06-28")) {
         string y = g["year"];
         string m = g["month"];
         string d = g["day"];
-        Console.println("year={y} month={m} day={d}");
+        Output.printLine("year={y} month={m} day={d}");
     }
 
     // findAll → every whole match; split → pieces between matches.
     var word = Regex.compile(r"\w+");
     var words = String.join(Regex.findAll(word, "the quick brown fox"), ",");
-    Console.println("words = {words}");
+    Output.printLine("words = {words}");
     var comma = Regex.compile(r",\s*");
     var pieces = String.join(Regex.split(comma, "a, b,c,  d"), "|");
-    Console.println("split = {pieces}");
+    Output.printLine("split = {pieces}");
 
     // replace — every match replaced (literal replacement here).
     var redacted = Regex.replace(date, "from 2026-06-28 to 2027-01-01", "<date>");
-    Console.println("redact = {redacted}");
+    Output.printLine("redact = {redacted}");
 }

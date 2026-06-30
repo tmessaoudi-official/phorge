@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // A-62 — `"""…"""` multi-line text blocks (Java/Swift/Kotlin style). The opening `"""` is followed
 // by a newline; the closing `"""` sits on its own line and its column sets the dedent baseline.
@@ -20,7 +20,7 @@ function main(): void {
         Regards,
         The Phorj Team
         """;
-    Console.println(letter);
+    Output.printLine(letter);
 
     // A bare quote needs no escaping inside a text block — handy for SQL / HTML / JSON.
     string sql = """
@@ -28,5 +28,5 @@ function main(): void {
         FROM "users"
         WHERE name = '{name}'
         """;
-    Console.println(sql);
+    Output.printLine(sql);
 }

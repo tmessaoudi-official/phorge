@@ -27,8 +27,8 @@ fn prints_package_and_function() {
 
 #[test]
 fn prints_import() {
-    let out = pp("package Main;\nimport Core.Console;\nfunction main(): void {}\n");
-    assert!(out.contains("import Core.Console;"), "{out}");
+    let out = pp("package Main;\nimport Core.Output;\nfunction main(): void {}\n");
+    assert!(out.contains("import Core.Output;"), "{out}");
 }
 
 #[test]
@@ -60,7 +60,7 @@ fn prints_enum() {
 #[test]
 fn prints_control_flow_and_var() {
     let out = pp(
-        "package Main;\nfunction f(): void {\n  mutable var i = 0;\n  while (i < 10) { i = i + 1; }\n  for (int x in 0..5) { Console.println(\"{x}\"); }\n}\n",
+        "package Main;\nfunction f(): void {\n  mutable var i = 0;\n  while (i < 10) { i = i + 1; }\n  for (int x in 0..5) { Output.printLine(\"{x}\"); }\n}\n",
     );
     assert!(out.contains("mutable var i = 0;"), "{out}");
     assert!(out.contains("while (i < 10) {"), "{out}");
@@ -88,7 +88,7 @@ fn prints_match_and_new() {
 #[test]
 fn escapes_strings_including_braces() {
     // A literal `{`/`}`/quote/newline must be escaped so it re-parses as a literal, not interpolation.
-    let out = pp("package Main;\nfunction f(): void { Console.println(\"a\\{b\\}c\"); }\n");
+    let out = pp("package Main;\nfunction f(): void { Output.printLine(\"a\\{b\\}c\"); }\n");
     assert!(out.contains("\\{b\\}"), "braces must be escaped: {out}");
 }
 
@@ -140,7 +140,7 @@ fn assert_roundtrip(src: &str) {
 fn roundtrip_representative_program() {
     assert_roundtrip(
         "package Main;\n\
-         import Core.Console;\n\
+         import Core.Output;\n\
          enum Dir { Up, Down }\n\
          class Engine {\n\
            constructor(private mutable int power) {}\n\
@@ -152,7 +152,7 @@ fn roundtrip_representative_program() {
          function main(): void {\n\
            mutable var total = 0;\n\
            for (int i in 0..10) { total = total + i; }\n\
-           Console.println(\"{total}\");\n\
+           Output.printLine(\"{total}\");\n\
          }\n",
     );
 }

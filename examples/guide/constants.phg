@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // Feature A — `const` class constants. A `const` member is a compile-time, immutable, class-name-only
 // constant with member visibility. Unlike a PHP property default it lives on the class (never the
@@ -20,9 +20,9 @@ open class Limits {
 class Sub extends Limits {}
 
 function main(): void {
-    Console.println("{Limits.MAX}");      // 100
-    Console.println("{Limits.MAX + 1}");  // 101  — a const is a first-class arithmetic operand
+    Output.printLine("{Limits.MAX}");      // 100
+    Output.printLine("{Limits.MAX + 1}");  // 101  — a const is a first-class arithmetic operand
     Limits lim = new Limits();
-    Console.println(lim.describe());       // limits: 100
-    Console.println("{Sub.MAX}");         // 100  — inherited const via the subclass name
+    Output.printLine(lim.describe());       // limits: 100
+    Output.printLine("{Sub.MAX}");         // 100  — inherited const via the subclass name
 }

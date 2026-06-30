@@ -8,7 +8,7 @@
 // Transpiles to PHP `Class::method(args)`; run/runvm/real PHP are byte-identical.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 class MathUtil {
     static function square(int n): int { return n * n; }
@@ -30,10 +30,10 @@ class Greeter {
 
 function main(): void {
     // Direct static calls on the class.
-    Console.println("square(6) = {MathUtil.square(6)}");
-    Console.println("add(3, 4) = {MathUtil.add(3, 4)}");
+    Output.printLine("square(6) = {MathUtil.square(6)}");
+    Output.printLine("add(3, 4) = {MathUtil.add(3, 4)}");
 
     // A static factory returns an instance you then use normally.
     var g = Greeter.make("Phorj");
-    Console.println(g.greet());
+    Output.printLine(g.greet());
 }

@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // M-mut.5 — value-type element set: `xs[i] = e` (list) and `m[k] = e` (map). Lists and maps are
 // COPY-ON-WRITE value types: assigning one to another binding copies it, so mutating the copy
@@ -11,23 +11,23 @@ function main(): void {
     xs[1] = 20;
     xs[0] += 100;
     xs[2] *= 5;
-    Console.println("xs = [{xs[0]}, {xs[1]}, {xs[2]}]"); // [101, 20, 15]
+    Output.printLine("xs = [{xs[0]}, {xs[1]}, {xs[2]}]"); // [101, 20, 15]
 
     // Copy-on-write: `ys` is an independent copy — setting an element of `ys` leaves `xs` untouched.
     mutable List<int> ys = xs;
     ys[0] = 999;
-    Console.println("xs[0] = {xs[0]}, ys[0] = {ys[0]}"); // 101, 999
+    Output.printLine("xs[0] = {xs[0]}, ys[0] = {ys[0]}"); // 101, 999
 
     // Map element set: update an existing key, then insert a new one (insertion-ordered).
     mutable Map<string, int> scores = ["alice" => 1];
     scores["alice"] = 10;
     scores["bob"] = 7;
-    Console.println("alice = {scores[\"alice\"]}, bob = {scores[\"bob\"]}"); // 10, 7
+    Output.printLine("alice = {scores[\"alice\"]}, bob = {scores[\"bob\"]}"); // 10, 7
 
     // Fill a list in a loop — the natural pairing of element set with M-mut.3 loops.
     mutable List<int> squares = [0, 0, 0, 0, 0];
     for (mutable int i = 0; i < 5; i++) {
         squares[i] = i * i;
     }
-    Console.println("squares = [{squares[0]}, {squares[1]}, {squares[2]}, {squares[3]}, {squares[4]}]"); // [0, 1, 4, 9, 16]
+    Output.printLine("squares = [{squares[0]}, {squares[1]}, {squares[2]}, {squares[3]}, {squares[4]}]"); // [0, 1, 4, 9, 16]
 }

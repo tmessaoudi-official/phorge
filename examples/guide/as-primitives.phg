@@ -9,7 +9,7 @@
 //
 // (Class/interface downcasts are the OTHER `as` axis — see `as-cast.phg`.)
 package Main;
-import Core.Console;
+import Core.Output;
 
 function main(): void {
     int n = 7;
@@ -17,19 +17,19 @@ function main(): void {
     float f = n as float;             // 7.0
     decimal d = n as decimal;         // 7
     string s = n as string;           // "7"
-    Console.println("{f} {d} {s}");                       // 7 7 7
+    Output.printLine("{f} {d} {s}");                       // 7 7 7
 
     // float as int — exact-or-null (3.0 → 3, but 4.5 → null, NEVER a silent truncate)
     float whole = 4.0;
     float frac = 4.5;
     int? a = whole as int;            // 4
     int? b = frac as int;             // null
-    Console.println("{a ?? -1} {b ?? -1}");              // 4 -1
+    Output.printLine("{a ?? -1} {b ?? -1}");              // 4 -1
 
     // decimal as int — same exact-or-null rule
     decimal exact = 8.00d;
     decimal partial = 8.50d;
-    Console.println("{exact as int ?? -1} {partial as int ?? -1}");   // 8 -1
+    Output.printLine("{exact as int ?? -1} {partial as int ?? -1}");   // 8 -1
 
     // decimal as float — total; string as int/float — fallible parse → optional
     decimal half = 2.50d;
@@ -37,14 +37,14 @@ function main(): void {
     string num = "42";
     string nope = "x";
     string flt = "0.5";
-    Console.println("{hf} {num as int ?? -1} {nope as int ?? -1} {flt as float ?? -1.0}"); // 2.5 42 -1 0.5
+    Output.printLine("{hf} {num as int ?? -1} {nope as int ?? -1} {flt as float ?? -1.0}"); // 2.5 42 -1 0.5
 
     // union ASSERTION (S2): `as` on a one-of value narrows at runtime → `T?` (no conversion).
     // `as string` stays the total `toString` (every value renders).
     int|string maybe = 5;
     int|string other = "hi";
-    Console.println("{maybe as int ?? -1} {other as int ?? -1}");  // 5 -1
-    Console.println("{maybe as string} {other as string}");        // 5 hi
+    Output.printLine("{maybe as int ?? -1} {other as int ?? -1}");  // 5 -1
+    Output.printLine("{maybe as string} {other as string}");        // 5 hi
 
     // bool cells (S3): numeric/decimal <-> bool are total (explicit `!= 0` / `1`/`0`); string -> bool
     // is a STRICT parse ("true"/"false" only — NEVER PHP truthiness).
@@ -53,12 +53,12 @@ function main(): void {
     bool flag = true;
     string yes = "true";
     string bad = "nope";
-    Console.println("{nz as bool} {z as bool}");                   // true false
-    Console.println("{flag as int} {flag as string}");            // 1 true
-    Console.println("{yes as bool ?? false} {bad as bool ?? false}"); // true false
+    Output.printLine("{nz as bool} {z as bool}");                   // true false
+    Output.printLine("{flag as int} {flag as string}");            // 1 true
+    Output.printLine("{yes as bool ?? false} {bad as bool ?? false}"); // true false
 
     // decimal extras (S4): float -> decimal? (shortest displayed value), string -> decimal? (parse).
     float rate = 2.5;
     string price = "3.14";
-    Console.println("{rate as decimal ?? 0.0d} {price as decimal ?? 0.0d}"); // 2.5 3.14
+    Output.printLine("{rate as decimal ?? 0.0d} {price as decimal ?? 0.0d}"); // 2.5 3.14
 }

@@ -125,8 +125,8 @@ fn lift_roundtrip_preserves_behavior() {
         return;
     };
 
-    // Each sample echoes a STRING (lift maps `echo` → `Console.print(string)`); raw int/float echo is
-    // avoided on purpose — int echo would lift to a `Console.print(int)` type error and floats have a
+    // Each sample echoes a STRING (lift maps `echo` → `Output.print(string)`); raw int/float echo is
+    // avoided on purpose — int echo would lift to a `Output.print(int)` type error and floats have a
     // known interpreter-vs-PHP formatting divergence (KNOWN_ISSUES).
     let cases: &[(&str, &str)] = &[
         (

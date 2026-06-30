@@ -39,21 +39,21 @@ fn runnable_programs_keep_their_behavior() {
     // A spread of real surface: classes+ctor promotion, enums+match+guards, generics, lambdas+pipe,
     // optionals, ranges, string interpolation.
     let samples = [
-        "package Main; import Core.Console;\nfunction main(): void { Console.println(\"hi\"); }",
-        "package Main; import Core.Console;\n\
+        "package Main; import Core.Output;\nfunction main(): void { Output.printLine(\"hi\"); }",
+        "package Main; import Core.Output;\n\
          function add<T>(T a, T b): T { return a; }\n\
-         function main(): void { Console.println(\"{add(2, 3)}\"); }",
-        "package Main; import Core.Console;\n\
+         function main(): void { Output.printLine(\"{add(2, 3)}\"); }",
+        "package Main; import Core.Output;\n\
          enum Shape { Circle(int r), Square(int s) }\n\
          function area(Shape s): int { return match (s) { Circle(r) => r * r, Square(x) => x * x }; }\n\
-         function main(): void { Console.println(\"{area(new Circle(3))}\"); }",
-        "package Main; import Core.Console;\n\
+         function main(): void { Output.printLine(\"{area(new Circle(3))}\"); }",
+        "package Main; import Core.Output;\n\
          class Point { constructor(public int x, public int y) {} function sum(): int { return this.x + this.y; } }\n\
-         function main(): void { Point p = new Point(2, 5); Console.println(\"{p.sum()}\"); }",
-        "package Main; import Core.Console;\n\
-         function main(): void { var dbl = fn(int x): int => x * 2; Console.println(\"{3 |> dbl}\"); }",
-        "package Main; import Core.Console;\n\
-         function main(): void { int? m = null; Console.println(\"{m ?? -1}\"); for (int i in 0..3) { Console.println(\"{i}\"); } }",
+         function main(): void { Point p = new Point(2, 5); Output.printLine(\"{p.sum()}\"); }",
+        "package Main; import Core.Output;\n\
+         function main(): void { var dbl = fn(int x): int => x * 2; Output.printLine(\"{3 |> dbl}\"); }",
+        "package Main; import Core.Output;\n\
+         function main(): void { int? m = null; Output.printLine(\"{m ?? -1}\"); for (int i in 0..3) { Output.printLine(\"{i}\"); } }",
     ];
     for s in samples {
         assert_meaning_preserved(s);

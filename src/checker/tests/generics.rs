@@ -394,7 +394,7 @@ fn generic_native_call_infers_and_substitutes() {
     // the concrete argument types, so a well-typed program type-checks clean (M-RT S7b).
     assert!(errors_of(
         r#"package Main;
-import Core.Console;
+import Core.Output;
 import Core.List;
 import Core.Map;
 function main() -> void {
@@ -404,8 +404,8 @@ function main() -> void {
     var ages = ["a" => 10, "b" => 20];
     var ks = Map.keys(ages);
     var n = Map.size(ages);
-    Console.println("{total} {n}");
-    for (string k in ks) { Console.println(k); }
+    Output.printLine("{total} {n}");
+    for (string k in ks) { Output.printLine(k); }
 }"#
     )
     .is_empty());

@@ -12,7 +12,7 @@
 // handler is directly servable. run/runvm/real PHP are byte-identical.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Bytes;
 import Core.Http;
 
@@ -31,8 +31,8 @@ function main(): void {
     if (var req = Request.parse(raw)) {
         string m = req.method;
         string p = req.path;
-        Console.println("method={m} path={p}");
-        Console.println("host={req.header(\"Host\") ?? \"(none)\"}");
+        Output.printLine("method={m} path={p}");
+        Output.printLine("host={req.header(\"Host\") ?? \"(none)\"}");
 
         // Run the handler and serialize the response to the wire form.
         Response resp = handle(req);
@@ -40,16 +40,16 @@ function main(): void {
         int n = Bytes.length(wire);
         // CRLFs shown as " | " so the output stays one clean ASCII line.
         string oneLine = String.replace(Bytes.toString(wire) ?? "", nl, " | ");
-        Console.println("wire ({n}B): {oneLine}");
+        Output.printLine("wire ({n}B): {oneLine}");
     } else {
-        Console.println("malformed request");
+        Output.printLine("malformed request");
     }
 
     // A malformed request (no CRLFCRLF head/body boundary) parses to null.
     bytes bad = b"not a request";
     if (var r2 = Request.parse(bad)) {
-        Console.println("parsed: {r2.method}");
+        Output.printLine("parsed: {r2.method}");
     } else {
-        Console.println("malformed: yes");
+        Output.printLine("malformed: yes");
     }
 }

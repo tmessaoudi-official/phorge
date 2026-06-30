@@ -83,7 +83,7 @@ mod tests {
 
     #[test]
     fn container_round_trips() {
-        let src = b"import Core.Console; function main() -> void { Console.println(\"hi\"); }";
+        let src = b"import Core.Output; function main() -> void { Output.printLine(\"hi\"); }";
         let blob = encode_container(src);
         assert_eq!(decode_container(&blob).as_deref(), Some(&src[..]));
     }

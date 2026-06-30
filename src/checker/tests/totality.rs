@@ -92,7 +92,7 @@ fn calling_a_never_fn_diverges() {
 
 #[test]
 fn unit_fn_needs_no_return() {
-    let src = "import Core.Console; function f() -> void { Console.println(\"hi\"); } function main() -> void {}";
+    let src = "import Core.Output; function f() -> void { Output.printLine(\"hi\"); } function main() -> void {}";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
 
@@ -106,8 +106,8 @@ fn return_match_is_total() {
 
 #[test]
 fn code_after_return_warns_unreachable_once() {
-    let src = "import Core.Console; \
-                   function f() -> int { return 1; Console.println(\"x\"); Console.println(\"y\"); } \
+    let src = "import Core.Output; \
+                   function f() -> int { return 1; Output.printLine(\"x\"); Output.printLine(\"y\"); } \
                    function main() -> void {}";
     let warns = warnings_of(src);
     let n = warns
@@ -193,6 +193,6 @@ fn statement_lambda_returning_on_all_paths_is_ok() {
 #[test]
 fn void_statement_lambda_may_fall_off_end() {
     // A `-> void` lambda is value-less — falling off the end is fine (regression guard).
-    let src = "import Core.Console; function main() -> void { var f = fn(int n) -> void { Console.println(\"{n}\"); }; }";
+    let src = "import Core.Output; function main() -> void { var f = fn(int n) -> void { Output.printLine(\"{n}\"); }; }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }

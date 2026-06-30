@@ -1,7 +1,7 @@
 // lifted (verify) — a best-effort PHP->Phorj draft; review before trusting it.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 function greet(string name): string {
     return "Hello, {name}!";
@@ -16,6 +16,6 @@ open class Counter {
 
 function main(): void {
     mutable var c = new Counter(41);
-    Console.print(greet("Phorj"));
-    Console.print(" Counter starts at {c.start}, next is {c.next()}.");
+    Output.print(greet("Phorj"));
+    Output.print(" Counter starts at {c.start}, next is {c.next()}.");
 }

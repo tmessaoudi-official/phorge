@@ -6,7 +6,7 @@ package Main;
 // (`int`, `List`, …) stay import-free. Everything erases to fully-qualified PHP
 // (`new \Acme\Geometry\Rect(…)`, `instanceof \Acme\Geometry\Shape`), byte-identical on
 // run / runvm / real PHP.
-import Core.Console;
+import Core.Output;
 import type Acme.Geometry.Shape;
 import type Acme.Geometry.Rect;
 import type Acme.Geometry.Paint;
@@ -28,9 +28,9 @@ function paintName(Paint p): string {
 function main(): void {
   Rect r = new Rect(3, 4); // instantiate an imported class
   int a = describe(r); // pass it where an imported interface is expected
-  Console.println("area: {a}");
-  Console.println("{r instanceof Shape}"); // true — Rect implements Shape (cross-package)
-  Console.println("{r instanceof Rect}"); // true
+  Output.printLine("area: {a}");
+  Output.printLine("{r instanceof Shape}"); // true — Rect implements Shape (cross-package)
+  Output.printLine("{r instanceof Rect}"); // true
   Paint p = new Green(); // construct an imported enum's variant
-  Console.println("paint: {paintName(p)}");
+  Output.printLine("paint: {paintName(p)}");
 }

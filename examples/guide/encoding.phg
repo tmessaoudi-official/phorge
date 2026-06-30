@@ -6,7 +6,7 @@
 // on malformed input — never a fault).
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Bytes;
 import Core.Encoding;
 
@@ -16,18 +16,18 @@ function main(): void {
     // Encode to base64 and hex.
     var b64 = Encoding.base64Encode(data);
     var hex = Encoding.hexEncode(data);
-    Console.println("base64: {b64}");
-    Console.println("hex:    {hex}");
+    Output.printLine("base64: {b64}");
+    Output.printLine("hex:    {hex}");
 
     // Decode back (decoders return `bytes?` — `??` supplies a fallback on the absent case).
     var fromB64 = Encoding.base64Decode(b64) ?? data;
     var fromHex = Encoding.hexDecode(hex) ?? data;
     var b64Ok = fromB64 == data;
     var hexOk = fromHex == data;
-    Console.println("base64 round-trip: {b64Ok}");
-    Console.println("hex round-trip:    {hexOk}");
+    Output.printLine("base64 round-trip: {b64Ok}");
+    Output.printLine("hex round-trip:    {hexOk}");
 
     // Encoding raw (non-text) bytes works too — base64/hex are byte codecs, not text codecs.
     var raw = Bytes.fromString("a/b+c");
-    Console.println("encoded slashes: {Encoding.base64Encode(raw)}");
+    Output.printLine("encoded slashes: {Encoding.base64Encode(raw)}");
 }

@@ -16,40 +16,40 @@
 //     decimalToInt(decimal) -> int?    // truncate toward zero; null if the integer part is out of range
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Math;
 import Core.Conversion;
 
 function main(): void {
     // --- Float predicates. The special values are detected, not printed (printing NAN/INF would
     // diverge between Rust and PHP rendering). The bool results ARE byte-identical.
-    Console.println("isNaN(nan())        = {Math.isNaN(Math.nan())}");          // true
-    Console.println("isNaN(1.5)          = {Math.isNaN(1.5)}");                 // false
-    Console.println("isFinite(2.0)       = {Math.isFinite(2.0)}");             // true
-    Console.println("isFinite(infinity()) = {Math.isFinite(Math.infinity())}"); // false
-    Console.println("isInfinite(inf())   = {Math.isInfinite(Math.infinity())}"); // true
-    Console.println("isInfinite(negInf()) = {Math.isInfinite(Math.negativeInfinity())}"); // true
-    Console.println("isInfinite(3.0)     = {Math.isInfinite(3.0)}");           // false
+    Output.printLine("isNaN(nan())        = {Math.isNaN(Math.nan())}");          // true
+    Output.printLine("isNaN(1.5)          = {Math.isNaN(1.5)}");                 // false
+    Output.printLine("isFinite(2.0)       = {Math.isFinite(2.0)}");             // true
+    Output.printLine("isFinite(infinity()) = {Math.isFinite(Math.infinity())}"); // false
+    Output.printLine("isInfinite(inf())   = {Math.isInfinite(Math.infinity())}"); // true
+    Output.printLine("isInfinite(negInf()) = {Math.isInfinite(Math.negativeInfinity())}"); // true
+    Output.printLine("isInfinite(3.0)     = {Math.isInfinite(3.0)}");           // false
 
     // --- Integer division (truncating toward zero), the named twin of `/`.
-    Console.println("integerDivide(7, 2)   = {Math.integerDivide(7, 2)}");    // 3
-    Console.println("integerDivide(-7, 2)  = {Math.integerDivide(-7, 2)}");   // -3 (toward zero)
-    Console.println("integerDivide(17, 5)  = {Math.integerDivide(17, 5)}");   // 3
+    Output.printLine("integerDivide(7, 2)   = {Math.integerDivide(7, 2)}");    // 3
+    Output.printLine("integerDivide(-7, 2)  = {Math.integerDivide(-7, 2)}");   // -3 (toward zero)
+    Output.printLine("integerDivide(17, 5)  = {Math.integerDivide(17, 5)}");   // 3
 
     // --- int -> float (total). Stays exactly representable, so it prints cleanly.
     float f = Conversion.toFloat(7);
-    Console.println("toFloat(7)     = {f}");   // 7
+    Output.printLine("toFloat(7)     = {f}");   // 7
 
     // --- float -> int? (truncate toward zero; null on NaN/Inf/out-of-range). Use `??` for the null.
-    Console.println("toInt(3.9)     = {Conversion.toInt(3.9) ?? -1}");    // 3
-    Console.println("toInt(-3.9)    = {Conversion.toInt(-3.9) ?? -1}");   // -3
-    Console.println("toInt(nan())   = {Conversion.toInt(Math.nan()) ?? -1}");  // -1 (null → fallback)
-    Console.println("toInt(1e30)    = {Conversion.toInt(1000000000000000000000000000000.0) ?? -1}"); // -1 (out of range)
+    Output.printLine("toInt(3.9)     = {Conversion.toInt(3.9) ?? -1}");    // 3
+    Output.printLine("toInt(-3.9)    = {Conversion.toInt(-3.9) ?? -1}");   // -3
+    Output.printLine("toInt(nan())   = {Conversion.toInt(Math.nan()) ?? -1}");  // -1 (null → fallback)
+    Output.printLine("toInt(1e30)    = {Conversion.toInt(1000000000000000000000000000000.0) ?? -1}"); // -1 (out of range)
 
     // --- int <-> decimal and decimal -> int/float.
     decimal d = Conversion.intToDecimal(42);
-    Console.println("intToDecimal(42)        = {d}");                       // 42
-    Console.println("decimalToFloat(12.5d)   = {Conversion.decimalToFloat(12.5d)}"); // 12.5 (representable)
-    Console.println("decimalToInt(19.99d)    = {Conversion.decimalToInt(19.99d) ?? -1}");  // 19
-    Console.println("decimalToInt(-19.99d)   = {Conversion.decimalToInt(-19.99d) ?? -1}"); // -19 (toward zero)
+    Output.printLine("intToDecimal(42)        = {d}");                       // 42
+    Output.printLine("decimalToFloat(12.5d)   = {Conversion.decimalToFloat(12.5d)}"); // 12.5 (representable)
+    Output.printLine("decimalToInt(19.99d)    = {Conversion.decimalToInt(19.99d) ?? -1}");  // 19
+    Output.printLine("decimalToInt(-19.99d)   = {Conversion.decimalToInt(-19.99d) ?? -1}"); // -19 (toward zero)
 }

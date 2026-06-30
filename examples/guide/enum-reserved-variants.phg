@@ -7,7 +7,7 @@
 // `instanceof` sites alike. This is transpile-only: `run`/`runvm` address a variant by its Phorj
 // name, so the program behaves and prints identically on all three backends.
 package Main;
-import Core.Console;
+import Core.Output;
 
 // `Int`, `Float`, `Bool`, `Null` would each be an illegal PHP class name without mangling.
 enum Node {
@@ -29,9 +29,9 @@ function describe(Node n): string {
 }
 
 function main(): void {
-    Console.println(describe(new Null()));        // null
-    Console.println(describe(new Bool(true)));     // bool:true
-    Console.println(describe(new Int(42)));        // int:42
-    Console.println(describe(new Float(3.5)));     // float:3.5
-    Console.println(describe(new Str("hi")));      // str:hi
+    Output.printLine(describe(new Null()));        // null
+    Output.printLine(describe(new Bool(true)));     // bool:true
+    Output.printLine(describe(new Int(42)));        // int:42
+    Output.printLine(describe(new Float(3.5)));     // float:3.5
+    Output.printLine(describe(new Str("hi")));      // str:hi
 }

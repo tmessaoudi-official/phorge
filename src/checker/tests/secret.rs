@@ -11,7 +11,7 @@ const SECRET: &str =
     "class Secret<T> { constructor(private T value) {} function expose(): T { return this.value; } }";
 
 fn src_of(body: &str) -> String {
-    format!("import Core.Console; import Core.String; import Core.File; {SECRET} {body}")
+    format!("import Core.Output; import Core.String; import Core.File; {SECRET} {body}")
 }
 
 fn warns(body: &str, code: &str) -> bool {
@@ -36,7 +36,7 @@ fn secret_field_is_private() {
 
 #[test]
 fn printing_a_secret_is_a_type_error() {
-    let body = "function main() -> void { var s = new Secret(\"k\"); Console.println(s); }";
+    let body = "function main() -> void { var s = new Secret(\"k\"); Output.printLine(s); }";
     let es = errs(body);
     assert!(
         !es.is_empty() && es.iter().any(|e| e.message.contains("string")),
@@ -56,7 +56,7 @@ fn expose_is_the_read_path_and_checks_clean() {
 #[test]
 fn expose_directly_into_println_warns() {
     let body =
-        "function main() -> void { var s = new Secret(\"k\"); Console.println(s.expose()); }";
+        "function main() -> void { var s = new Secret(\"k\"); Output.printLine(s.expose()); }";
     assert!(warns(body, "W-SECRET"));
 }
 
@@ -71,6 +71,6 @@ fn expose_directly_into_file_write_warns() {
 fn expose_laundered_through_a_local_is_not_flagged() {
     // Documented scope: the lint is syntactic on the direct sink argument; a value bound to a local
     // first is not flagged (the type-system non-printability is the real guarantee).
-    let body = "function main() -> void { var s = new Secret(\"k\"); string p = s.expose(); Console.println(p); }";
+    let body = "function main() -> void { var s = new Secret(\"k\"); string p = s.expose(); Output.printLine(p); }";
     assert!(!warns(body, "W-SECRET"));
 }

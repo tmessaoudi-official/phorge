@@ -103,7 +103,7 @@ pub fn serve<T: Transport>(program: &Program, transport: &mut T, dev: bool) -> i
     }
 }
 
-/// Invoke `respond(bytes) -> bytes` once. Any captured stdout (a handler calling `Console.println`)
+/// Invoke `respond(bytes) -> bytes` once. Any captured stdout (a handler calling `Output.printLine`)
 /// is treated as a server log line and written to stderr, keeping the HTTP response body clean.
 /// A non-`bytes` return or a runtime fault degrades to a 500 — never a panic (EV-7).
 fn respond_once(program: &Program, raw: &[u8], dev: bool) -> Vec<u8> {

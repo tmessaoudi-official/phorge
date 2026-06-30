@@ -76,7 +76,7 @@ fn conflicting_visibility_prefix_is_rejected() {
 
 #[test]
 fn visibility_on_import_is_rejected() {
-    let err = prog_err("package Main;\nprivate import Core.Console;");
+    let err = prog_err("package Main;\nprivate import Core.Output;");
     assert!(err.contains("cannot carry a visibility"), "got: {err}");
 }
 
@@ -195,7 +195,7 @@ fn parses_function_decl() {
 fn parses_function_no_ret_no_params() {
     // The PARSER stays permissive: a function with no `-> T` parses with `ret == None`. The
     // return-type *mandate* (S0b, `E-MISSING-RETURN-TYPE`) is a CHECKER rule, not a parser one.
-    match item("function main() { Console.println(1); }") {
+    match item("function main() { Output.printLine(1); }") {
         Item::Function(f) => {
             assert_eq!(f.name, "main");
             assert!(f.params.is_empty());
@@ -441,8 +441,8 @@ fn parses_interface_decl() {
 
 #[test]
 fn parses_import() {
-    match item("import Core.Console;") {
-        Item::Import { path, .. } => assert_eq!(path, vec!["Core", "Console"]),
+    match item("import Core.Output;") {
+        Item::Import { path, .. } => assert_eq!(path, vec!["Core", "Output"]),
         other => panic!("got {other:?}"),
     }
     match item("import a;") {
@@ -471,7 +471,7 @@ fn parses_package_declaration() {
 
 #[test]
 fn parses_program_multiple_items() {
-    let src = "import Core.Console; enum E { A, } function main() -> void { return; }";
+    let src = "import Core.Output; enum E { A, } function main() -> void { return; }";
     let prog = parser(src).parse_program().expect("parse ok");
     assert_eq!(prog.items.len(), 3);
     assert!(matches!(prog.items[0], Item::Import { .. }));

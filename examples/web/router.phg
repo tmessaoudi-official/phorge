@@ -17,7 +17,7 @@ package Main;
 // There is NO socket here (that is W3's `phg serve`) and NO new language feature — `Router` is pure
 // Phorj over classes + lists + first-class functions, so the whole pipe is byte-identical on
 // `run` / `runvm` and round-trips through real PHP.
-import Core.Console;
+import Core.Output;
 import Core.Bytes;
 import Core.Http;
 
@@ -66,9 +66,9 @@ function show(Router rt, bytes raw): void {
     string m = req.method;
     string p = req.path;
     string body = Bytes.toString(resp.body) ?? "(binary)";
-    Console.println("{m} {p} -> {st}: {body}");
+    Output.printLine("{m} {p} -> {st}: {body}");
   } else {
-    Console.println("malformed request");
+    Output.printLine("malformed request");
   }
 }
 

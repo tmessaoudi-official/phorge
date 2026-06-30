@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // This program is also in the byte-identity sweep. `phg transpile` turns it into
 // runnable PHP 8.x — the only Phorj↔PHP-ecosystem path (output, not input).
@@ -23,5 +23,5 @@ function area(Shape s): float {
 
 function main(): void {
     Named n = new Named("demo");
-    Console.println("{n.labelOf()}: circle area = {area(new Circle(2.0))}");
+    Output.printLine("{n.labelOf()}: circle area = {area(new Circle(2.0))}");
 }

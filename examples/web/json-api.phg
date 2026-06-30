@@ -8,7 +8,7 @@
 // Endpoint contract: POST a JSON array of integers, get back `{"count": N, "sum": S}`; a non-array
 // body is `400 {"error": "expected a JSON array"}`; malformed JSON is `400 {"error": "invalid JSON"}`.
 package Main;
-import Core.Console;
+import Core.Output;
 import Core.Bytes;
 import Core.Json;
 
@@ -57,8 +57,8 @@ function handle(Request req): Response {
 }
 
 function show(Response resp): void {
-  Console.println("status: {resp.status}");
-  Console.println(Bytes.toString(resp.body) ?? "");
+  Output.printLine("status: {resp.status}");
+  Output.printLine(Bytes.toString(resp.body) ?? "");
 }
 
 function main(): void {

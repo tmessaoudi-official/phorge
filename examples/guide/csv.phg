@@ -7,7 +7,7 @@
 // byte-identical.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Csv;
 import Core.List;
 
@@ -15,25 +15,25 @@ function main(): void {
     // Parse a row whose middle field is quoted and contains the separator.
     var fields = Csv.parse("id,\"Doe, Jane\",42");
     for (string field in fields) {
-        Console.println("field: {field}");
+        Output.printLine("field: {field}");
     }
 
     // Empty input parses to zero fields (a clean empty list — deviates from PHP
     // str_getcsv's `[null]` so the type stays a plain List<string>).
     var empty = Csv.parse("");
-    Console.println("empty field count: {List.length(empty)}");
+    Output.printLine("empty field count: {List.length(empty)}");
 
     // A doubled quote inside an enclosed field decodes to one literal quote.
     var quoted = Csv.parse("\"she said \"\"hi\"\"\",ok");
-    Console.println("first: {quoted[0]}");
+    Output.printLine("first: {quoted[0]}");
 
     // Format is the inverse: fields needing protection are quoted automatically.
     var row = ["name", "city, state", "note \"x\""];
     var line = Csv.format(row);
-    Console.println("formatted: {line}");
+    Output.printLine("formatted: {line}");
 
     // parse ∘ format round-trips.
     var back = Csv.parse(line);
     var same = back == row;
-    Console.println("round-trips: {same}");
+    Output.printLine("round-trips: {same}");
 }

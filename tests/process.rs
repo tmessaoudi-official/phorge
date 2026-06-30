@@ -21,13 +21,13 @@ fn process_args_are_visible_to_the_program() {
     let _g = ARGS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     set_process_args(vec!["hello".into(), "world".into()]);
     let src = r#"package Main;
-import Core.Console;
+import Core.Output;
 import Core.Process;
 import Core.List;
 function main() -> void {
     var a = Process.args();
-    Console.println("n={List.length(a)}");
-    for (string s in a) { Console.println(s); }
+    Output.printLine("n={List.length(a)}");
+    for (string s in a) { Output.printLine(s); }
 }"#;
     assert_eq!(cmd_run(src).unwrap(), "n=2\nhello\nworld\n");
     // `runvm` shares the same process global, so it agrees (the Rust backends always do — only the
@@ -45,22 +45,22 @@ fn env_natives_under_controlled_environment() {
 
     // get → value | null (composes with `??`).
     let get_src = r#"package Main;
-import Core.Console;
+import Core.Output;
 import Core.Env;
 function main() -> void {
-    Console.println(Env.get("PHORJ_IT_PRESENT") ?? "<unset>");
-    Console.println(Env.get("PHORJ_IT_DEFINITELY_UNSET_XYZ") ?? "<unset>");
+    Output.printLine(Env.get("PHORJ_IT_PRESENT") ?? "<unset>");
+    Output.printLine(Env.get("PHORJ_IT_DEFINITELY_UNSET_XYZ") ?? "<unset>");
 }"#;
     assert_eq!(cmd_run(get_src).unwrap(), "yes\n<unset>\n");
 
     // all → a Map keyed by every env var; the set var is present, and keys come back sorted.
     let all_src = r#"package Main;
-import Core.Console;
+import Core.Output;
 import Core.Env;
 import Core.Map;
 function main() -> void {
     var e = Env.all();
-    Console.println("has={Map.has(e, \"PHORJ_IT_PRESENT\")}");
+    Output.printLine("has={Map.has(e, \"PHORJ_IT_PRESENT\")}");
 }"#;
     assert_eq!(cmd_run(all_src).unwrap(), "has=true\n");
 
@@ -74,9 +74,9 @@ fn main_int_return_is_the_exit_code() {
     // `main(): int` — the returned int is the process exit code; stdout is unaffected, and both
     // backends agree on (stdout, exit).
     let src = r#"package Main;
-import Core.Console;
+import Core.Output;
 function main(): int {
-    Console.println("done");
+    Output.printLine("done");
     return 7;
 }"#;
     assert_eq!(cmd_run_exit(src).unwrap(), ("done\n".to_string(), 7));
@@ -86,8 +86,8 @@ function main(): int {
 #[test]
 fn main_void_exits_zero() {
     let src = r#"package Main;
-import Core.Console;
-function main(): void { Console.println("hi"); }"#;
+import Core.Output;
+function main(): void { Output.printLine("hi"); }"#;
     assert_eq!(cmd_run_exit(src).unwrap(), ("hi\n".to_string(), 0));
     assert_eq!(cmd_runvm_exit(src).unwrap(), ("hi\n".to_string(), 0));
 }
@@ -98,10 +98,10 @@ fn main_receives_argv_as_a_parameter() {
     let _g = ARGS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     set_process_args(vec!["a".into(), "bb".into(), "ccc".into()]);
     let src = r#"package Main;
-import Core.Console;
+import Core.Output;
 import Core.List;
 function main(List<string> args): int {
-    for (string s in args) { Console.println(s); }
+    for (string s in args) { Output.printLine(s); }
     return List.length(args);
 }"#;
     assert_eq!(cmd_run_exit(src).unwrap(), ("a\nbb\nccc\n".to_string(), 3));

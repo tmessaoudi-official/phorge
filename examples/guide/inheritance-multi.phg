@@ -13,7 +13,7 @@
 // field-free, like the single-inheritance guide.)
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 open class Animal {
     // Reached by Duck through BOTH Swimmer and Flyer — but it is the same `Animal.name`, so it
@@ -43,6 +43,6 @@ class Duck extends Swimmer, Flyer {
 
 function main(): void {
     Duck d = new Duck();
-    Console.println(d.move()); // "swims" — resolved by `use Swimmer.move`
-    Console.println(d.name()); // "animal" — diamond shared base, auto-merged
+    Output.printLine(d.move()); // "swims" — resolved by `use Swimmer.move`
+    Output.printLine(d.name()); // "animal" — diamond shared base, auto-merged
 }

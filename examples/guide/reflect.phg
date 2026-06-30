@@ -12,7 +12,7 @@
 // typeName / className, which are resolved from the STATIC type — added in a later slice.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Reflection;
 import Core.Set;
 import Core.String;
@@ -43,57 +43,57 @@ function dbl(int n): int {
 
 function main(): void {
     // Scalars report their PHP-visible kind.
-    Console.println("int    -> {Reflection.kind(42)}");
-    Console.println("float  -> {Reflection.kind(3.14)}");
-    Console.println("bool   -> {Reflection.kind(true)}");
-    Console.println("string -> {Reflection.kind(\"hi\")}");
+    Output.printLine("int    -> {Reflection.kind(42)}");
+    Output.printLine("float  -> {Reflection.kind(3.14)}");
+    Output.printLine("bool   -> {Reflection.kind(true)}");
+    Output.printLine("string -> {Reflection.kind(\"hi\")}");
 
     // Every collection erases to a PHP array, so all three report "array".
-    Console.println("list   -> {Reflection.kind([1, 2, 3])}");
-    Console.println("map    -> {Reflection.kind([\"a\" => 1])}");
-    Console.println("set    -> {Reflection.kind(Set.of([1, 2, 2]))}");
+    Output.printLine("list   -> {Reflection.kind([1, 2, 3])}");
+    Output.printLine("map    -> {Reflection.kind([\"a\" => 1])}");
+    Output.printLine("set    -> {Reflection.kind(Set.of([1, 2, 2]))}");
 
     // An instance and an enum variant are both plain objects after erasure.
-    Console.println("object -> {Reflection.kind(new Point(1, 2))}");
-    Console.println("enum   -> {Reflection.kind(new Red())}");
+    Output.printLine("object -> {Reflection.kind(new Point(1, 2))}");
+    Output.printLine("enum   -> {Reflection.kind(new Red())}");
 
     // A first-class function value is callable.
-    Console.println("fn     -> {Reflection.kind(dbl)}");
+    Output.printLine("fn     -> {Reflection.kind(dbl)}");
 
     // `Reflection.className(x) -> string?` is the RUNTIME class name (≡ PHP get_class), or null for a
     // non-object. An enum variant reports the variant name (PHP transpiles it to a subclass).
     var p = new Point(3, 4);
-    Console.println("class(point) = {Reflection.className(p) ?? \"<none>\"}");
-    Console.println("class(enum)  = {Reflection.className(new Green()) ?? \"<none>\"}");
+    Output.printLine("class(point) = {Reflection.className(p) ?? \"<none>\"}");
+    Output.printLine("class(enum)  = {Reflection.className(new Green()) ?? \"<none>\"}");
     // A scalar is not a class instance → null (shown via the ?? fallback).
-    Console.println("class(int)   = {Reflection.className(7) ?? \"<none>\"}");
+    Output.printLine("class(int)   = {Reflection.className(7) ?? \"<none>\"}");
 
     // `Reflection.typeName(x) -> string` is the PRECISE Phorj type name, resolved from x's STATIC type
     // — so List / Map / Set / bytes / enum keep the identity that PHP erasure would collapse. Note
     // `typeName(list)` is "List" where `kind(list)` above was the coarse "array".
     List<int> nums = [1, 2, 3];
-    Console.println("typeName(list) = {Reflection.typeName(nums)}");
-    Console.println("typeName(map)  = {Reflection.typeName([\"a\" => 1])}");
-    Console.println("typeName(int)  = {Reflection.typeName(42)}");
+    Output.printLine("typeName(list) = {Reflection.typeName(nums)}");
+    Output.printLine("typeName(map)  = {Reflection.typeName([\"a\" => 1])}");
+    Output.printLine("typeName(int)  = {Reflection.typeName(42)}");
     // An enum reports the ENUM name (the static type — variants aren't types); className gave "Green".
-    Console.println("typeName(enum) = {Reflection.typeName(new Green())}");
+    Output.printLine("typeName(enum) = {Reflection.typeName(new Green())}");
     // An object reports its runtime class.
-    Console.println("typeName(obj)  = {Reflection.typeName(p)}");
+    Output.printLine("typeName(obj)  = {Reflection.typeName(p)}");
 
     // An optional resolves through a single-eval null-branch: null → "null", else the inner rule.
     int? present = 7;
     int? absent = null;
-    Console.println("typeName(int?) present = {Reflection.typeName(present)}");
-    Console.println("typeName(int?) absent  = {Reflection.typeName(absent)}");
+    Output.printLine("typeName(int?) present = {Reflection.typeName(present)}");
+    Output.printLine("typeName(int?) absent  = {Reflection.typeName(absent)}");
 
     // Enumeration natives (Tier 2): the sorted interface / parent names of an instance's class.
     var w = new Widget();
-    Console.println("interfaces = {String.join(Reflection.interfaces(w), \", \")}");
-    Console.println("parents    = {String.join(Reflection.parents(w), \", \")}");
+    Output.printLine("interfaces = {String.join(Reflection.interfaces(w), \", \")}");
+    Output.printLine("parents    = {String.join(Reflection.parents(w), \", \")}");
     // A non-class value has no interfaces/parents → empty lists.
-    Console.println("int ifaces = [{String.join(Reflection.interfaces(7), \", \")}]");
+    Output.printLine("int ifaces = [{String.join(Reflection.interfaces(7), \", \")}]");
 
     // methods / fields of an instance's class (sorted, incl. inherited + promoted ctor params).
-    Console.println("methods = {String.join(Reflection.methods(p), \", \")}");
-    Console.println("fields  = {String.join(Reflection.fields(p), \", \")}");
+    Output.printLine("methods = {String.join(Reflection.methods(p), \", \")}");
+    Output.printLine("fields  = {String.join(Reflection.fields(p), \", \")}");
 }

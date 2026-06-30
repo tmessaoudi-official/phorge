@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // A-6 — PHP-familiar `foreach (xs as x)` iteration, kept alongside Phorj's typed `for (T x in xs)`.
 // The element type is INFERRED from the iterable (no `var`/type needed), and an optional
@@ -12,12 +12,12 @@ function main(): void {
 
     // Value form — `w` is inferred as `string` from `langs: List<string>`.
     foreach (langs as w) {
-        Console.println("hello {w}");
+        Output.printLine("hello {w}");
     }
 
     // With a `with int i` position counter (0-based, auto-incrementing).
     foreach (langs as name with int i) {
-        Console.println("{i} = {name}");
+        Output.printLine("{i} = {name}");
     }
 
     // A range source iterates inferred `int`s — same as `for (int n in 0..=3)`.
@@ -25,10 +25,10 @@ function main(): void {
     foreach (1..=4 as n) {
         sum = sum + n;
     }
-    Console.println("sum 1..=4 = {sum}");
+    Output.printLine("sum 1..=4 = {sum}");
 
     // The typed `for (T x in xs)` form still works, unchanged, side by side.
     for (string lang in langs) {
-        Console.println("typed: {lang}");
+        Output.printLine("typed: {lang}");
     }
 }

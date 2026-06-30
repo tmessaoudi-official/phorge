@@ -10,7 +10,7 @@ package Main;
 // It's all pure Phorj over first-class functions + closures — no new `Op`, no runtime framework, so
 // run / runvm / real PHP stay byte-identical. Middleware composition is `fn(req) => mw(req, next)`
 // folded over the list.
-import Core.Console;
+import Core.Output;
 import Core.Bytes;
 import Core.Http;
 
@@ -21,7 +21,7 @@ function secret(Request req): Response { return Response.text(200, "secret data"
 function logging(Request req, (Request) -> Response next): Response {
   var n = next;
   Response resp = n(req);
-  Console.println("LOG {req.method} {req.path} -> {resp.status}");
+  Output.printLine("LOG {req.method} {req.path} -> {resp.status}");
   return resp;
 }
 
@@ -42,9 +42,9 @@ function show(Router rt, bytes raw): void {
     string m = req.method;
     string p = req.path;
     string body = Bytes.toString(resp.body) ?? "?";
-    Console.println("{m} {p} -> {st}: {body}");
+    Output.printLine("{m} {p} -> {st}: {body}");
   } else {
-    Console.println("malformed request");
+    Output.printLine("malformed request");
   }
 }
 

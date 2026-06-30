@@ -8,37 +8,37 @@
 //   • `removePrefix`/`removeSuffix(s, affix) -> string` — drop a leading/trailing affix if present.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.String;
 
 function main(): void {
     // padLeft / padRight: format a number column.
     var id = String.padLeft("7", 4, "0");   // "0007"
     var label = String.padRight("hi", 5, "."); // "hi..."
-    Console.println("id    = {id}");
-    Console.println("label = {label}");
+    Output.printLine("id    = {id}");
+    Output.printLine("label = {label}");
 
     // indexOf: present → offset, absent → null (via `??`).
     var at = String.indexOf("hello world", "world") ?? -1;
     var miss = String.indexOf("hello world", "xyz") ?? -1;
-    Console.println("indexOf world = {at}");   // 6
-    Console.println("indexOf xyz   = {miss}"); // -1
+    Output.printLine("indexOf world = {at}");   // 6
+    Output.printLine("indexOf xyz   = {miss}"); // -1
 
     // substring: a window; a negative start counts from the end.
     var ell = String.substring("hello", 1, 3); // "ell"
     var last2 = String.substring("hello", -2, 2); // "lo"
-    Console.println("sub 1,3  = {ell}");
-    Console.println("sub -2,2 = {last2}");
+    Output.printLine("sub 1,3  = {ell}");
+    Output.printLine("sub -2,2 = {last2}");
 
     // lastIndexOf: the final occurrence (here the second '/').
     var slash = String.lastIndexOf("a/b/c", "/") ?? -1;
-    Console.println("lastIndexOf / = {slash}"); // 3
+    Output.printLine("lastIndexOf / = {slash}"); // 3
 
     // removePrefix / removeSuffix: trim a known affix, leave the rest untouched.
     var noProto = String.removePrefix("https://x.io", "https://"); // "x.io"
     var stem = String.removeSuffix("report.csv", ".csv");          // "report"
     var asis = String.removeSuffix("report.csv", ".txt");          // unchanged
-    Console.println("noProto = {noProto}");
-    Console.println("stem    = {stem}");
-    Console.println("asis    = {asis}");
+    Output.printLine("noProto = {noProto}");
+    Output.printLine("stem    = {stem}");
+    Output.printLine("asis    = {asis}");
 }

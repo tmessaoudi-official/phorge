@@ -8,7 +8,7 @@
 // Byte-identical on run / runvm / real PHP.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.List;
 
 function main(): void {
@@ -17,27 +17,27 @@ function main(): void {
     // slice: a window; negative offset counts from the end.
     var mid = List.slice(xs, 1, 2);     // [20, 30]
     var tail2 = List.slice(xs, -2, 2);  // [40, 50]
-    Console.println("mid[0]   = {mid[0]}");          // 20
-    Console.println("tail2[1] = {tail2[1]}");        // 50
-    Console.println("mid len  = {List.length(mid)}"); // 2
+    Output.printLine("mid[0]   = {mid[0]}");          // 20
+    Output.printLine("tail2[1] = {tail2[1]}");        // 50
+    Output.printLine("mid len  = {List.length(mid)}"); // 2
 
     // indexOf: present → index, absent → null (surfaced via `??`).
     var at = List.indexOf(xs, 30) ?? -1;
     var miss = List.indexOf(xs, 99) ?? -1;
-    Console.println("indexOf 30 = {at}");   // 2
-    Console.println("indexOf 99 = {miss}"); // -1
+    Output.printLine("indexOf 30 = {at}");   // 2
+    Output.printLine("indexOf 99 = {miss}"); // -1
 
     // concat: join two lists.
     var more = List.concat(xs, [60, 70]);
-    Console.println("concat len = {List.length(more)}"); // 7
-    Console.println("concat[5]  = {more[5]}");           // 60
+    Output.printLine("concat len = {List.length(more)}"); // 7
+    Output.printLine("concat[5]  = {more[5]}");           // 60
 
     // first / last: ends as optionals; an empty list yields null → fallback.
     var head = List.first(xs) ?? 0;
     var end = List.last(xs) ?? 0;
-    Console.println("first = {head}"); // 10
-    Console.println("last  = {end}");  // 50
+    Output.printLine("first = {head}"); // 10
+    Output.printLine("last  = {end}");  // 50
     var empty = List.slice(xs, 0, 0);
     var noHead = List.first(empty) ?? -1;
-    Console.println("empty first = {noHead}"); // -1
+    Output.printLine("empty first = {noHead}"); // -1
 }

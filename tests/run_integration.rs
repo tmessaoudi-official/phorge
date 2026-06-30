@@ -4,7 +4,7 @@ use phorj::parser::Parser;
 
 /// The complete sample program from the language design spec (§6), verbatim.
 const SAMPLE: &str = r#"
-import Core.Console;
+import Core.Output;
 
 enum Shape {
     Circle(float radius),
@@ -30,11 +30,11 @@ class Greeter {
 
 function main() -> void {
     Greeter g = Greeter("Tak");
-    Console.println(g.greet());
+    Output.printLine(g.greet());
 
     List<Shape> shapes = [Circle(2.0), Rect(3.0, 4.0)];
     for (Shape s in shapes) {
-        Console.println("area = {area(s)}");
+        Output.printLine("area = {area(s)}");
     }
 }
 "#;
@@ -59,8 +59,8 @@ fn program_without_main_errors() {
 
 #[test]
 fn division_by_zero_does_not_panic() {
-    let e = run(r#"import Core.Console;
-function main() -> void { Console.println("{1 / 0}"); }"#)
+    let e = run(r#"import Core.Output;
+function main() -> void { Output.printLine("{1 / 0}"); }"#)
     .unwrap_err();
     assert!(e.message.contains("division by zero"), "{}", e.message);
 }

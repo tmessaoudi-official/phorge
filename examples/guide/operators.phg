@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 import Core.Math;
 
 // Arithmetic, comparison, logical, and unary operators.
@@ -8,40 +8,40 @@ import Core.Math;
 function main(): void {
     int a = 7;
     int b = 3;
-    Console.println("a + b = {a + b}");
-    Console.println("a - b = {a - b}");
-    Console.println("a * b = {a * b}");
-    Console.println("a / b = {a / b}");   // integer division
-    Console.println("a % b = {a % b}");
+    Output.printLine("a + b = {a + b}");
+    Output.printLine("a - b = {a - b}");
+    Output.printLine("a * b = {a * b}");
+    Output.printLine("a / b = {a / b}");   // integer division
+    Output.printLine("a % b = {a % b}");
 
     float x = 7.0;
     float y = 2.0;
-    Console.println("x / y = {x / y}");   // float division
+    Output.printLine("x / y = {x / y}");   // float division
 
-    Console.println("a < b   = {a < b}");
-    Console.println("a == 7  = {a == 7}");
-    Console.println("a != b  = {a != b}");
-    Console.println("and     = {(a > b) && (x > y)}");
-    Console.println("or      = {(a < b) || (x > y)}");
-    Console.println("not     = {!(a < b)}");
-    Console.println("neg     = {-a}");
+    Output.printLine("a < b   = {a < b}");
+    Output.printLine("a == 7  = {a == 7}");
+    Output.printLine("a != b  = {a != b}");
+    Output.printLine("and     = {(a > b) && (x > y)}");
+    Output.printLine("or      = {(a < b) || (x > y)}");
+    Output.printLine("not     = {!(a < b)}");
+    Output.printLine("neg     = {-a}");
 
     // `**` power. Type-directed: `int ** int` → int, `float ** float` → float.
     var sq = 2 ** 10;                  // 1024
-    Console.println("2 ** 10        = {sq}");
+    Output.printLine("2 ** 10        = {sq}");
     // Right-associative (like PHP): 2 ** (3 ** 2) = 2 ** 9 = 512.
     var ra = 2 ** 3 ** 2;
-    Console.println("2 ** 3 ** 2    = {ra}");
+    Output.printLine("2 ** 3 ** 2    = {ra}");
     // Binds tighter than `*`: 2 * (10 ** 2) = 200.
     var prec = 2 * 10 ** 2;
-    Console.println("2 * 10 ** 2    = {prec}");
+    Output.printLine("2 * 10 ** 2    = {prec}");
     // Unary minus is parsed before `**`, so this is (-7) ** 2 = 49 on every backend.
     var negPow = -a ** 2;
-    Console.println("-a ** 2        = {negPow}");
+    Output.printLine("-a ** 2        = {negPow}");
     // Float power (exact-representable result to stay byte-identical with PHP's echo).
     var fp = 3.0 ** 2.0;               // 9.0
-    Console.println("3.0 ** 2.0     = {fp}");
+    Output.printLine("3.0 ** 2.0     = {fp}");
     // `Math.integerPower` is the named, value-level twin of integer `**` (int ** int → int).
     var ip = Math.integerPower(5, 2);          // 25
-    Console.println("Math.integerPower(5,2) = {ip}");
+    Output.printLine("Math.integerPower(5,2) = {ip}");
 }

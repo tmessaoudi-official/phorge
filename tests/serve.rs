@@ -17,7 +17,7 @@ use phorj::value::Value;
 /// `package Main` entry, but the tests call `respond`/`serve`, never `main`.
 const SERVE_PROGRAM: &str = r#"
 package Main;
-import Core.Console;
+import Core.Output;
 import Core.Bytes;
 import Core.String;
 
@@ -85,7 +85,7 @@ function respond(bytes raw) -> bytes {
 function main() -> void {
   bytes raw = b"GET / HTTP/1.1\x0d\x0aHost: localhost\x0d\x0a\x0d\x0a";
   int len = Bytes.length(respond(raw));
-  Console.println("served {len} bytes");
+  Output.printLine("served {len} bytes");
 }
 "#;
 

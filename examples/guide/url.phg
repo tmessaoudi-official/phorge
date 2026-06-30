@@ -8,7 +8,7 @@
 // `%` escape is left literal, never a fault.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Url;
 
 function main(): void {
@@ -16,19 +16,19 @@ function main(): void {
 
     var form = Url.encodeForm(query);
     var raw = Url.encodeUriComponent(query);
-    Console.println("form: {form}");
-    Console.println("raw:  {raw}");
+    Output.printLine("form: {form}");
+    Output.printLine("raw:  {raw}");
 
     // Round-trip (the `+`/`%20` difference is invisible after decoding).
     var backForm = Url.decodeForm(form) ?? query;
     var backRaw = Url.decodeUriComponent(raw) ?? query;
-    Console.println("form round-trip: {backForm == query}");
-    Console.println("raw round-trip:  {backRaw == query}");
+    Output.printLine("form round-trip: {backForm == query}");
+    Output.printLine("raw round-trip:  {backRaw == query}");
 
     // The one behavioural difference between the two decoders: `+` is a space only in the form flavour.
     var plus = "a+b";
     var asForm = Url.decodeForm(plus) ?? plus;
     var asRaw = Url.decodeUriComponent(plus) ?? plus;
-    Console.println("urlDecode(\"a+b\"):    {asForm}");
-    Console.println("rawUrlDecode(\"a+b\"): {asRaw}");
+    Output.printLine("urlDecode(\"a+b\"):    {asForm}");
+    Output.printLine("rawUrlDecode(\"a+b\"): {asRaw}");
 }

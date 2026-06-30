@@ -8,7 +8,7 @@
 
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // The classic: returns its argument unchanged, at whatever type it was called with.
 function identity<T>(T x): T {
@@ -58,9 +58,9 @@ function main(): void {
   int incd = identity(7) + 1;          // 8
   int doubled = firstOr(xs, -1) * 2;   // 20
 
-  Console.println("identity: {n} {s} {flag}");
-  Console.println("firstOr head: {head}");
-  Console.println("applyTwice: {bumped}");
-  Console.println("lastOfTwo: {last}");
-  Console.println("operand use: {incd} {doubled}");
+  Output.printLine("identity: {n} {s} {flag}");
+  Output.printLine("firstOr head: {head}");
+  Output.printLine("applyTwice: {bumped}");
+  Output.printLine("lastOfTwo: {last}");
+  Output.printLine("operand use: {incd} {doubled}");
 }

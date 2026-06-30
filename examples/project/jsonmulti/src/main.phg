@@ -5,7 +5,7 @@
 // multi-package program round-trips byte-identically `run ≡ runvm ≡ real PHP`.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Json;
 import Acme.Meta;
 
@@ -15,8 +15,8 @@ function main(): void {
     "count" => new Int(42),
     "tags" => new Arr([new Str("a"), new Str("b")]),
   ]);
-  Console.println(Json.stringify(doc));
+  Output.printLine(Json.stringify(doc));
 
   var parsed = Json.parse("[1, 2, 3]");
-  Console.println(Json.stringify(parsed ?? new Null()));
+  Output.printLine(Json.stringify(parsed ?? new Null()));
 }

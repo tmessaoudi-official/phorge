@@ -1,6 +1,6 @@
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // Return-type overloading (M-RT Slice C): several functions may share a name AND parameter signature,
 // differing only in RETURN type. PHP has no overloading and cannot see the caller's expected type at
@@ -36,11 +36,11 @@ function main(): void {
     int p = port();
     bool enabled = read("enabled");
     string name = read("name");
-    Console.println("port = {p}");
+    Output.printLine("port = {p}");
     // port = 42
-    Console.println("enabled = {enabled}");
+    Output.printLine("enabled = {enabled}");
     // enabled = true
-    Console.println("name = {name}");
+    Output.printLine("name = {name}");
     // name = hello name
     // `discard` supplies no type context, so it needs an explicit selector to pick the overload.
     discard <int>read("ignored");

@@ -19,7 +19,7 @@ fn while_condition_must_be_bool() {
 #[test]
 fn c_for_is_ok() {
     assert!(errors_of(
-            "import Core.Console; function main() -> void { for (mutable int i = 0; i < 3; i++) { Console.println(\"{i}\"); } }"
+            "import Core.Output; function main() -> void { for (mutable int i = 0; i < 3; i++) { Output.printLine(\"{i}\"); } }"
         )
         .is_empty());
 }

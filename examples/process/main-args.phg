@@ -13,17 +13,17 @@
 // controlled environment in tests/process.rs instead.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.List;
 import Core.Process;
 
 function main(List<string> args): int {
-    Console.println("argc = {List.length(args)}");
+    Output.printLine("argc = {List.length(args)}");
     for (string s in args) {
-        Console.println("arg: {s}");
+        Output.printLine("arg: {s}");
     }
     // Both forms see the same arguments.
     var same = List.length(args) == List.length(Process.arguments());
-    Console.println("matches Process.arguments() = {same}");
+    Output.printLine("matches Process.arguments() = {same}");
     return List.length(args);
 }

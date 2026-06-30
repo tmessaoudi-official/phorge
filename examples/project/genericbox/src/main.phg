@@ -3,7 +3,7 @@
 // cross-package type, now with type parameters that infer and erase across the package boundary.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import type Acme.Containers.Box;
 import type Acme.Containers.Pair;
 
@@ -19,7 +19,7 @@ function main(): void {
   int a = p.left();
   string b = p.right();
 
-  Console.println("box int: {x} {y}");
-  Console.println("box str: {s}");
-  Console.println("pair: {a} {b}");
+  Output.printLine("box int: {x} {y}");
+  Output.printLine("box str: {s}");
+  Output.printLine("pair: {a} {b}");
 }

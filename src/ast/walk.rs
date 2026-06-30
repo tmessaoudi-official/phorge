@@ -567,8 +567,8 @@ mod uses_concurrency_tests {
     #[test]
     fn no_spawn_is_false() {
         assert!(!uses_concurrency(&parse(
-            "package Main;\nimport Core.Console;\n\
-             function main() -> void { Console.println(\"hi\"); }\n"
+            "package Main;\nimport Core.Output;\n\
+             function main() -> void { Output.printLine(\"hi\"); }\n"
         )));
     }
 

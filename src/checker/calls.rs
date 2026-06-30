@@ -698,11 +698,11 @@ impl Checker {
         // W-SECRET (Fork B): a freshly-`expose()`d `Secret` flowing *directly* into a sink is almost
         // certainly a leak (the plaintext gets logged / persisted). Syntactic on the direct argument —
         // a value laundered through a local is not flagged (full taint analysis is out of scope; the
-        // type-system non-printability of `Secret` is the real guarantee). Sinks: Console.println/print,
+        // type-system non-printability of `Secret` is the real guarantee). Sinks: Output.printLine/print,
         // File.write. `n` borrows the `'static` registry, so the `&mut self` lint call does not alias.
         if matches!(
             (n.module, n.name),
-            ("Core.Console", "println") | ("Core.Console", "print") | ("Core.File", "write")
+            ("Core.Output", "printLine") | ("Core.Output", "print") | ("Core.File", "write")
         ) {
             for a in args {
                 if self.arg_is_secret_expose(a) {

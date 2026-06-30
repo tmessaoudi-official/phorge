@@ -1,6 +1,6 @@
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // Parent-constructor forwarding (M-RT super/parent, B1b — single inheritance).
 //
@@ -62,11 +62,11 @@ class Derived extends Base {
 
 function main(): void {
     Dog d = new Dog("husky");
-    Console.println(d.describe());
+    Output.printLine(d.describe());
 
     Puppy p = new Puppy("beagle", 3);
-    Console.println(p.show());
+    Output.printLine(p.show());
 
     Derived x = new Derived("widget");
-    Console.println(x.k());
+    Output.printLine(x.k());
 }

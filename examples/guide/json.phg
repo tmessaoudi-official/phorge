@@ -13,7 +13,7 @@
 // `Null`/`Float` are PHP-reserved class names; the transpiler mangles them invisibly — see
 // `enum-reserved-variants.phg`.)
 package Main;
-import Core.Console;
+import Core.Output;
 import Core.Json;
 
 // Render a parsed JSON value's top-level shape — demonstrates matching every variant.
@@ -40,24 +40,24 @@ function main(): void {
         "parent" => new Null(),
     ]);
 
-    Console.println(Json.stringify(doc));        // compact, one line
-    Console.println("---");
-    Console.println(Json.stringifyPretty(doc));  // 4-space indented
+    Output.printLine(Json.stringify(doc));        // compact, one line
+    Output.printLine("---");
+    Output.printLine(Json.stringifyPretty(doc));  // 4-space indented
 
     // Parse a literal back. `parse` returns `Json?` — None on malformed input.
-    Console.println("---");
+    Output.printLine("---");
     var parsed = Json.parse("[true, 1, \"two\", 3.5, null]");
-    Console.println(Json.stringify(parsed ?? new Null()));     // round-trips
-    Console.println(shapeOf(parsed ?? new Null()));            // array
+    Output.printLine(Json.stringify(parsed ?? new Null()));     // round-trips
+    Output.printLine(shapeOf(parsed ?? new Null()));            // array
 
     // Round-trip number fidelity: 42 stays an int, 42.0 becomes a float.
-    Console.println(shapeOf(Json.parse("42") ?? new Null()));   // int
-    Console.println(shapeOf(Json.parse("42.0") ?? new Null())); // float
+    Output.printLine(shapeOf(Json.parse("42") ?? new Null()));   // int
+    Output.printLine(shapeOf(Json.parse("42.0") ?? new Null())); // float
 
     // Malformed input yields None — handle it with if-let.
     if (var v = Json.parse("[1, 2")) {
-        Console.println(shapeOf(v));
+        Output.printLine(shapeOf(v));
     } else {
-        Console.println("malformed -> None");
+        Output.printLine("malformed -> None");
     }
 }

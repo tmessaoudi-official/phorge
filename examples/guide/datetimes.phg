@@ -6,34 +6,34 @@
 // math is pure Phorj, so it is byte-identical on `run`/`runvm`/transpiled PHP.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Time;
 
 function main() -> void {
   // Build an instant from broken-down UTC fields.
   Instant dt = Instant.ofCivil(2023, 11, 14, 22, 13, 20);
-  Console.println("iso    = {dt.toIso()}");
-  Console.println("fields = {dt.year()}/{dt.month()}/{dt.day()} {dt.hour()}:{dt.minute()}:{dt.second()}");
-  Console.println("dow    = {dt.dayOfWeek()}");                 // 2 = Tuesday
-  Console.println("millis = {dt.epochMillis()}");
+  Output.printLine("iso    = {dt.toIso()}");
+  Output.printLine("fields = {dt.year()}/{dt.month()}/{dt.day()} {dt.hour()}:{dt.minute()}:{dt.second()}");
+  Output.printLine("dow    = {dt.dayOfWeek()}");                 // 2 = Tuesday
+  Output.printLine("millis = {dt.epochMillis()}");
 
   // Custom layouts: just interpolate the accessors (no printf-style pattern needed).
-  Console.println("custom = {dt.day()}/{dt.month()}/{dt.year()}");
+  Output.printLine("custom = {dt.day()}/{dt.month()}/{dt.year()}");
 
   // Round-trip: epoch → ISO.
   Instant epoch = Instant.ofEpochSeconds(0);
-  Console.println("epoch  = {epoch.toIso()}");
+  Output.printLine("epoch  = {epoch.toIso()}");
 
   // Add a duration, re-read the civil view.
   Instant inOneHour = dt.plus(Duration.hours(1)).plus(Duration.minutes(46)).plus(Duration.seconds(40));
-  Console.println("+1h46m40s = {inOneHour.toIso()}");
+  Output.printLine("+1h46m40s = {inOneHour.toIso()}");
 
   // Pre-1970 (negative epoch) breaks down correctly via floored division.
   Instant pre = Instant.ofCivil(1969, 12, 31, 23, 59, 59);
-  Console.println("pre1970 = {pre.toIso()} (ms = {pre.epochMillis()})");
+  Output.printLine("pre1970 = {pre.toIso()} (ms = {pre.epochMillis()})");
 
   // The frozen clock makes `now()` reproducible.
   Time.freeze(1700000000000);
-  Console.println("now    = {Instant.now().toIso()}");
+  Output.printLine("now    = {Instant.now().toIso()}");
   Time.unfreeze();
 }

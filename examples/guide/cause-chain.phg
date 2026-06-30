@@ -1,6 +1,6 @@
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // M-faults Slice 2c — exception cause chains. A higher-level error can carry the lower-level error
 // that triggered it, so context is preserved instead of lost. A conventional `cause` field of type
@@ -28,13 +28,13 @@ function readConfig(): int throws ConfigError {
 function main(): void {
   try {
     var n = readConfig();
-    Console.println("loaded {n}");
+    Output.printLine("loaded {n}");
   } catch (ConfigError e) {
-    Console.println("error: {e.message}");
+    Output.printLine("error: {e.message}");
     // `e.cause` is `Error?`; narrow it with an if-let, then `instanceof` to read the concrete cause.
     if (var c = e.cause) {
       if (c instanceof IoError) {
-        Console.println("  caused by: {c.message}");
+        Output.printLine("  caused by: {c.message}");
       }
     }
   }

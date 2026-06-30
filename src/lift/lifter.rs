@@ -86,11 +86,11 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
         }));
     }
 
-    // Prepend `import Core.Console;` if any `echo` was lifted.
+    // Prepend `import Core.Output;` if any `echo` was lifted.
     let mut final_items = Vec::new();
     if l.needs_console {
         final_items.push(Item::Import {
-            path: vec!["Core".into(), "Console".into()],
+            path: vec!["Core".into(), "Output".into()],
             alias: None,
             type_only: false,
             span: SP,
@@ -106,7 +106,7 @@ pub fn lift(prog: &php::PhpProgram) -> Result<Program, String> {
 }
 
 struct Lifter {
-    /// Set when an `echo` is lifted to `Console.print`, so the import is prepended.
+    /// Set when an `echo` is lifted to `Output.print`, so the import is prepended.
     needs_console: bool,
 }
 
@@ -842,11 +842,11 @@ fn static_member(class: &str, name: &str) -> Expr {
     }
 }
 
-/// `Console.print(arg)` — the lift target of a PHP `echo`.
+/// `Output.print(arg)` — the lift target of a PHP `echo`.
 fn console_print(arg: Expr) -> Expr {
     Expr::Call {
         callee: Box::new(Expr::Member {
-            object: Box::new(Expr::Ident("Console".into(), SP)),
+            object: Box::new(Expr::Ident("Output".into(), SP)),
             name: "print".into(),
             safe: false,
             span: SP,

@@ -217,11 +217,11 @@ mod tests {
     fn litmus_spawned_recver_succeeds_only_when_deferred() {
         let src = r#"
 package Main;
-import Core.Console;
+import Core.Output;
 
 function consume(Channel<int> ch): int {
     int v = ch.recv();
-    Console.println("got {v}");
+    Output.printLine("got {v}");
     return v;
 }
 
@@ -230,7 +230,7 @@ function main(): void {
     Task<int> t = spawn consume(ch);
     ch.send(42);
     int got = t.join();
-    Console.println("done {got}");
+    Output.printLine("done {got}");
 }
 "#;
         assert_eq!(coop_run(src).unwrap(), "got 42\ndone 42\n");
@@ -244,7 +244,7 @@ function main(): void {
     fn main_recv_blocks_until_spawned_producer_sends() {
         let src = r#"
 package Main;
-import Core.Console;
+import Core.Output;
 
 function produce(Channel<int> ch): int {
     ch.send(99);
@@ -255,9 +255,9 @@ function main(): void {
     Channel<int> ch = Channel.create();
     Task<int> p = spawn produce(ch);
     int v = ch.recv();
-    Console.println("recv {v}");
+    Output.printLine("recv {v}");
     int r = p.join();
-    Console.println("done {r}");
+    Output.printLine("done {r}");
 }
 "#;
         assert_eq!(coop_run(src).unwrap(), "recv 99\ndone 1\n");
@@ -270,17 +270,17 @@ function main(): void {
     fn fork_join_and_buffered_channels_match_eager_output() {
         let src = r#"
 package Main;
-import Core.Console;
+import Core.Output;
 
 function square(int n): int { return n * n; }
 
 function main(): void {
     Task<int> t = spawn square(9);
-    Console.println("9 squared = {t.join()}");
+    Output.printLine("9 squared = {t.join()}");
     Channel<string> words = Channel.create();
     words.send("hello");
     words.send("world");
-    Console.println("{words.recv()} {words.recv()}");
+    Output.printLine("{words.recv()} {words.recv()}");
 }
 "#;
         assert_eq!(coop_run(src).unwrap(), "9 squared = 81\nhello world\n");

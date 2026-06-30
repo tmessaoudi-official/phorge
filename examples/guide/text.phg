@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 import Core.String;
 
 // M3 Track B Wave 2 — the `Core.String` stdlib module. Each function erases to a PHP string builtin
@@ -16,39 +16,39 @@ function main(): void {
     string up = String.uppercase(greeting);
     string down = String.lowercase(greeting);
     string padded = String.trim("   padded   ");
-    Console.println("len = {n}, upper = {up}, lower = {down}, trimmed = {padded}");
+    Output.printLine("len = {n}, upper = {up}, lower = {down}, trimmed = {padded}");
 
     // `contains` returns a bool; render it through an expression-`if` so the output is a string.
     string has = if (String.contains(greeting, "Phorj")) { "yes" } else { "no" };
-    Console.println("contains 'Phorj' = {has}");
+    Output.printLine("contains 'Phorj' = {has}");
 
     // split → List<string>, then join with a different separator (the inverse op).
     List<string> parts = String.split("a,b,c", ",");
     string rejoined = String.join(parts, " - ");
-    Console.println("rejoined = {rejoined}");
+    Output.printLine("rejoined = {rejoined}");
 
     // lines → split on "\n" (→ explode). Index the resulting List<string> directly.
     List<string> rows = String.lines("one\ntwo\nthree");
-    Console.println("first row = {rows[0]}, third row = {rows[2]}");
+    Output.printLine("first row = {rows[0]}, third row = {rows[2]}");
 
     // capitalize → ASCII ucfirst (uppercase the first letter; multibyte first char unchanged).
     string capped = String.capitalize("phorj");
-    Console.println("capitalize = {capped}");
+    Output.printLine("capitalize = {capped}");
 
     string swapped = String.replace(greeting, "Phorj", "World");
-    Console.println("replaced = {swapped}");
+    Output.printLine("replaced = {swapped}");
 
     // P3.2 byte-safe subset: prefix/suffix tests (→ str_starts_with/str_ends_with) and repeat
     // (→ str_repeat). Bool results render via expression-`if` (PHP echoes a bool as 1/"").
     string sw = if (String.startsWith(greeting, "Hello")) { "yes" } else { "no" };
     string ew = if (String.endsWith(greeting, "Phorj")) { "yes" } else { "no" };
     string bar = String.repeat("=", 5);
-    Console.println("startsWith 'Hello' = {sw}, endsWith 'Phorj' = {ew}, bar = {bar}");
+    Output.printLine("startsWith 'Hello' = {sw}, endsWith 'Phorj' = {ew}, bar = {bar}");
 
     // M4 breadth (ASCII): reverse (→ strrev), and case-insensitive compare/contains
     // (→ strcasecmp/stripos). Non-ASCII is a documented edge (no mbstring under `php -n`).
     string rev = String.reverse("phorj");
     bool sameCi = String.equalsIgnoreCase("PHORJ", "phorj");
     bool hasCi = String.containsIgnoreCase("Hello, Phorj", "phorj");
-    Console.println("reverse = {rev}, equalsIgnoreCase = {sameCi}, containsIgnoreCase = {hasCi}");
+    Output.printLine("reverse = {rev}, equalsIgnoreCase = {sameCi}, containsIgnoreCase = {hasCi}");
 }

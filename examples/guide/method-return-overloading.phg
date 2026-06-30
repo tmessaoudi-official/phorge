@@ -1,6 +1,6 @@
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // Method return-type overloading (M-RT S2.2): like free functions (see `return-overloading.phg`), a
 // class METHOD may overload on return type alone — several methods sharing a name AND parameter
@@ -44,15 +44,15 @@ function main() -> void {
     bool debug = <bool>c.read("debug");
     string raw = <string>c.read("name");
 
-    Console.println("port = {port}");
+    Output.printLine("port = {port}");
     // port = 8080
-    Console.println("debug = {debug}");
+    Output.printLine("debug = {debug}");
     // debug = true
-    Console.println("raw = {raw}");
+    Output.printLine("raw = {raw}");
     // raw = prod:name
 
     // `label` shows a selector on `this` from inside another method (no surrounding typed sink).
     string viaThis = c.label("db");
-    Console.println("via this = {viaThis}");
+    Output.printLine("via this = {viaThis}");
     // via this = prod:db
 }

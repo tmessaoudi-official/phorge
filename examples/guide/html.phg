@@ -8,7 +8,7 @@ package Main;
 //   Wave 1  the escape KERNEL    text / raw / render
 //   Wave 2  the element BUILDERS  attr / boolAttr / el / voidEl / concat
 //   Wave 3  the `html"…"` literal sugar  html"<h1>{name}</h1>"
-import Core.Console;
+import Core.Output;
 import Core.Html;
 
 // Wave-1 style: hand-written markup wrapped with Html.raw; the dynamic value escaped.
@@ -38,59 +38,59 @@ function main(): void {
 
   // --- Wave 1: the escape kernel ---
   Html safe = Html.text(name);
-  Console.println(Html.render(safe));                // Tom &amp; &quot;Jerry&quot;
+  Output.printLine(Html.render(safe));                // Tom &amp; &quot;Jerry&quot;
   Html hr = Html.raw("<hr/>");
-  Console.println(Html.render(hr));                   // <hr/>
-  Console.println(Html.render(field("name", name)));  // <li>name: Tom &amp; &quot;Jerry&quot;</li>
-  Console.println(Html.render(field("bio", bio)));    // <li>bio: &lt;script&gt;alert(1)&lt;/script&gt;</li>
+  Output.printLine(Html.render(hr));                   // <hr/>
+  Output.printLine(Html.render(field("name", name)));  // <li>name: Tom &amp; &quot;Jerry&quot;</li>
+  Output.printLine(Html.render(field("bio", bio)));    // <li>bio: &lt;script&gt;alert(1)&lt;/script&gt;</li>
 
   // --- Wave 2: typed element builders ---
   // An element with an attribute (value escaped) and escaped text children.
   Html link = Html.element("a", [Html.attribute("href", "/p?x=1&y=2")], [Html.text("Tom & Jerry")]);
-  Console.println(Html.render(link));   // <a href="/p?x=1&amp;y=2">Tom &amp; Jerry</a>
+  Output.printLine(Html.render(link));   // <a href="/p?x=1&amp;y=2">Tom &amp; Jerry</a>
 
   // A no-attribute element — empty [] is accepted in call-argument position.
   Html para = Html.element("p", [], [Html.text(bio)]);
-  Console.println(Html.render(para));   // <p>&lt;script&gt;alert(1)&lt;/script&gt;</p>
+  Output.printLine(Html.render(para));   // <p>&lt;script&gt;alert(1)&lt;/script&gt;</p>
 
   // A self-closing void element with an attribute.
   Html img = Html.voidElement("img", [Html.attribute("src", "a&b.png")]);
-  Console.println(Html.render(img));    // <img src="a&amp;b.png"/>
+  Output.printLine(Html.render(img));    // <img src="a&amp;b.png"/>
 
   // A boolean (valueless) attribute.
   Html btn = Html.element("button", [Html.booleanAttribute("disabled")], [Html.text("Go")]);
-  Console.println(Html.render(btn));    // <button disabled>Go</button>
+  Output.printLine(Html.render(btn));    // <button disabled>Go</button>
 
   // concat joins sibling fragments into one Html.
   Html doc = Html.concat([Html.raw("<hr/>"), row("name", name)]);
-  Console.println(Html.render(doc));    // <hr/><li data-label="name">name: Tom &amp; &quot;Jerry&quot;</li>
+  Output.printLine(Html.render(doc));    // <hr/><li data-label="name">name: Tom &amp; &quot;Jerry&quot;</li>
 
   // --- Wave 3: the html"…" literal sugar ---
   // String holes auto-escape; a primitive hole stringifies then escapes.
   int year = 2026;
   Html h = html"<h1>{name}</h1><p>since {year}</p>";
-  Console.println(Html.render(h));      // <h1>Tom &amp; &quot;Jerry&quot;</h1><p>since 2026</p>
+  Output.printLine(Html.render(h));      // <h1>Tom &amp; &quot;Jerry&quot;</h1><p>since 2026</p>
 
   // An Html hole embeds verbatim — no double-escape (the value is already safe).
   Html badge = Html.element("span", [Html.booleanAttribute("hidden")], [Html.text(bio)]);
   Html line = html"<div>{badge}</div>";
-  Console.println(Html.render(line));   // <div><span hidden>&lt;script&gt;alert(1)&lt;/script&gt;</span></div>
+  Output.printLine(Html.render(line));   // <div><span hidden>&lt;script&gt;alert(1)&lt;/script&gt;</span></div>
 
   // Compose: pass an html"…" fragment into a helper that wraps it in more (multi-line) markup.
   Html inner = html"<p>{name}</p>";
-  Console.println(Html.render(card("Profile", inner)));
+  Output.printLine(Html.render(card("Profile", inner)));
 
   // --- Option 1: named per-tag helpers ---
   // Each tag is sugar over el/voidEl with the tag baked in: Html.divide(attrs, children),
   // Html.hr(attrs). Same auto-escaping (attribute values + text), same byte output.
   Html bar = Html.nav([Html.attribute("class", "top")],
                       [Html.a([Html.attribute("href", "/?a=1&b=2")], [Html.text("Home & Away")])]);
-  Console.println(Html.render(bar));   // <nav class="top"><a href="/?a=1&amp;b=2">Home &amp; Away</a></nav>
+  Output.printLine(Html.render(bar));   // <nav class="top"><a href="/?a=1&amp;b=2">Home &amp; Away</a></nav>
 
   Html items = Html.ul([], [Html.li([], [Html.text(name)]), Html.li([], [Html.text(bio)])]);
   // <ul><li>Tom &amp; &quot;Jerry&quot;</li><li>&lt;script&gt;alert(1)&lt;/script&gt;</li></ul>
-  Console.println(Html.render(items));
+  Output.printLine(Html.render(items));
 
   Html rule = Html.hr([]);              // a void element: <hr/>
-  Console.println(Html.render(rule));
+  Output.printLine(Html.render(rule));
 }

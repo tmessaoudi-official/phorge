@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 function dbl(int x): int { return x * 2; }
 function inc(int x): int { return x + 1; }
@@ -19,14 +19,14 @@ function main(): void {
         var t = x * x;
         return t + 1;
     };
-    Console.println("{add10(5)}");            // 15
-    Console.println("{add100(7)}");           // 107
-    Console.println("{scaled(4)}");           // 17
-    Console.println("{twice(3, add10)}");     // 23
-    Console.println("{5 |> dbl |> inc}");     // inc(dbl(5)) = 11
-    Console.println("{3 |> fn(int v) => v + 100}"); // 103
-    Console.println("{twice(2, dbl)}");       // dbl(dbl(2)) = 8  (named-fn ref)
+    Output.printLine("{add10(5)}");            // 15
+    Output.printLine("{add100(7)}");           // 107
+    Output.printLine("{scaled(4)}");           // 17
+    Output.printLine("{twice(3, add10)}");     // 23
+    Output.printLine("{5 |> dbl |> inc}");     // inc(dbl(5)) = 11
+    Output.printLine("{3 |> fn(int v) => v + 100}"); // 103
+    Output.printLine("{twice(2, dbl)}");       // dbl(dbl(2)) = 8  (named-fn ref)
     var add5 = adder(5);                       // adder returns a closure capturing n=5
-    Console.println("{add5(10)}");             // 15
-    Console.println("{adder(5)(10)}");         // call the returned closure directly (a call-result callee) → 15
+    Output.printLine("{add5(10)}");             // 15
+    Output.printLine("{adder(5)(10)}");         // call the returned closure directly (a call-result callee) → 15
 }

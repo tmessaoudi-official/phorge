@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // recursion
 function fact(int n): int {
@@ -26,12 +26,12 @@ function isOdd(int n): bool {
 
 function main(): void {
     if (fact(5) > 100) {
-        Console.println("5! is big: {fact(5)}");
+        Output.printLine("5! is big: {fact(5)}");
     } else {
-        Console.println("5! is small");
+        Output.printLine("5! is small");
     }
 
     for (int i in [0, 1, 2, 3, 4]) {
-        Console.println("isEven({i}) = {isEven(i)}");
+        Output.printLine("isEven({i}) = {isEven(i)}");
     }
 }

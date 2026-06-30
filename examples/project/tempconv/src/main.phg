@@ -6,7 +6,7 @@ package Main;
 //
 // Cross-package functions are imported by their package, then called *leaf-qualified* (Go's
 // `import "fmt"` -> `fmt.Println`). An import may be aliased with `as` to rename the leaf.
-import Core.Console;
+import Core.Output;
 import Acme.Convert;
 import Acme.Label as Fmt;
 
@@ -14,6 +14,6 @@ function main(): void {
     // `Convert.cToF` is a cross-package qualified call; `Fmt.tag` is a call on the *aliased* leaf.
     int freezing = Convert.cToF(0);
     int boiling = Convert.cToF(100);
-    Console.println(Fmt.tag("freezing", freezing));
-    Console.println(Fmt.tag("boiling", boiling));
+    Output.printLine(Fmt.tag("freezing", freezing));
+    Output.printLine(Fmt.tag("boiling", boiling));
 }

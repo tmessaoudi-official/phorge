@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // `match` in EXPRESSION position (M11) — usable as a sub-expression, not only as a whole
 // `return`/`var =` statement. Transpile (Track 1): a *literal* match lowers to a native PHP
@@ -33,9 +33,9 @@ function main(): void {
     string picked = name(match base { 100 => new Blue(), x => new Red() });
 
     // literal-pattern match in return position, via a helper
-    Console.println("code={code} picked={picked} sign={sign(0)} sign2={sign(7)}");
+    Output.printLine("code={code} picked={picked} sign={sign(0)} sign2={sign(7)}");
     // expression-position variant match (→ PHP `match (true)`)
-    Console.println("weights={weight(new Small(5))} {weight(new Big(5))}");
+    Output.printLine("weights={weight(new Small(5))} {weight(new Big(5))}");
 }
 
 function sign(int n): string {

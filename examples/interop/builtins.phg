@@ -7,7 +7,7 @@
 // transpiles to the global form `\name(...)`.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // Foreign PHP standard-library functions (their real PHP names — snake_case is fine here).
 declare function strtoupper(string s): string;
@@ -23,18 +23,18 @@ declare function abs(int n): int;
 declare function max(int a, int b): int;
 
 function main(): void {
-    Console.println(strtoupper("hello"));
+    Output.printLine(strtoupper("hello"));
     // HELLO
-    Console.println(strrev("phorj"));
+    Output.printLine(strrev("phorj"));
     // egrohp
-    Console.println(str_repeat("ab", 3));
+    Output.printLine(str_repeat("ab", 3));
     // ababab
-    Console.println(ucfirst("migrated"));
+    Output.printLine(ucfirst("migrated"));
     // Migrated
-    Console.println("{abs(-42)} {max(7, 12)}");
+    Output.printLine("{abs(-42)} {max(7, 12)}");
     // 42 12
     // Foreign results compose with native Phorj code and Core.* normally.
     string shout = strtoupper("phorj");
-    Console.println("{shout}!");
+    Output.printLine("{shout}!");
 }
 // PHORJ!

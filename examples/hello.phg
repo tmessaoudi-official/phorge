@@ -1,6 +1,6 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 function main(): void {
-    Console.println("Hello, Phorj!");
+    Output.printLine("Hello, Phorj!");
 }

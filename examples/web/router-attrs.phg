@@ -10,7 +10,7 @@ package Main;
 //
 // Note: a pattern with a `{param}` must be a RAW string (`r"/users/{id}"`) — a normal string would
 // interpolate `{id}` as a variable.
-import Core.Console;
+import Core.Output;
 import Core.Bytes;
 import Core.Http;
 
@@ -50,9 +50,9 @@ function show(Router rt, bytes raw): void {
     string m = req.method;
     string p = req.path;
     string body = Bytes.toString(resp.body) ?? "(binary)";
-    Console.println("{m} {p} -> {st}: {body}");
+    Output.printLine("{m} {p} -> {st}: {body}");
   } else {
-    Console.println("malformed request");
+    Output.printLine("malformed request");
   }
 }
 

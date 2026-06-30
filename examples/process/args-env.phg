@@ -8,7 +8,7 @@
 // Run it:   phg run examples/process/args-env.phg -- alpha beta
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Process;
 import Core.Env;
 import Core.List;
@@ -17,16 +17,16 @@ import Core.Map;
 function main(): void {
     // Program arguments — everything after the `--` terminator.
     var args = Process.arguments();
-    Console.println("argc = {List.length(args)}");
+    Output.printLine("argc = {List.length(args)}");
     for (string a in args) {
-        Console.println("arg: {a}");
+        Output.printLine("arg: {a}");
     }
 
     // A single environment variable, or null if unset — composes with `??` like any optional.
-    Console.println("HOME = {Env.get(\"HOME\") ?? \"<unset>\"}");
-    Console.println("PHORJ_DEMO = {Env.get(\"PHORJ_DEMO\") ?? \"<unset>\"}");
+    Output.printLine("HOME = {Env.get(\"HOME\") ?? \"<unset>\"}");
+    Output.printLine("PHORJ_DEMO = {Env.get(\"PHORJ_DEMO\") ?? \"<unset>\"}");
 
     // Every environment variable, sorted by key (a stable order; OS iteration order is not).
     var env = Env.all();
-    Console.println("env count = {Map.size(env)}");
+    Output.printLine("env count = {Map.size(env)}");
 }

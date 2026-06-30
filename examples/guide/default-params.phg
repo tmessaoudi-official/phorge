@@ -3,7 +3,7 @@
 // literal and must trail the required parameters. v1 covers **free functions** (methods are a
 // follow-up). The motivating native, `String.parseFloat`, carries one: `permissive` defaults to false.
 package Main;
-import Core.Console;
+import Core.Output;
 import Core.String;
 
 // One default: `greeting` falls back to "Hello" when omitted.
@@ -17,23 +17,23 @@ function pad(string s, int width = 6, string fill = " ") -> string {
 }
 
 function main(): void {
-    Console.println(greet("World"));         // Hello, World!  (default greeting)
-    Console.println(greet("World", "Hi"));   // Hi, World!     (explicit)
+    Output.printLine(greet("World"));         // Hello, World!  (default greeting)
+    Output.printLine(greet("World", "Hi"));   // Hi, World!     (explicit)
 
     var a = pad("hi");          // width 6, fill " "  -> "    hi"
     var b = pad("hi", 4);       // width 4, fill " "  -> "  hi"
     var c = pad("hi", 4, "*");  // width 4, fill "*"  -> "**hi"
-    Console.println("[{a}]");
-    Console.println("[{b}]");
-    Console.println("[{c}]");
+    Output.printLine("[{a}]");
+    Output.printLine("[{b}]");
+    Output.printLine("[{c}]");
 
     // parseFloat: strict by default, opt-in permissive — the payoff of the default parameter.
     var strict = String.parseFloat("3.5") ?? -1.0;          // 3.5
     var dotLead = String.parseFloat(".5") ?? -1.0;          // strict rejects -> -1
     var dotLeadLax = String.parseFloat(".5", true) ?? -1.0; // permissive accepts -> 0.5
     var notInf = String.parseFloat("inf") ?? -1.0;          // never inf -> -1
-    Console.println("strict 3.5  = {strict}");
-    Console.println("strict .5   = {dotLead}");
-    Console.println("lax .5      = {dotLeadLax}");
-    Console.println("inf -> {notInf}");
+    Output.printLine("strict 3.5  = {strict}");
+    Output.printLine("strict .5   = {dotLead}");
+    Output.printLine("lax .5      = {dotLeadLax}");
+    Output.printLine("inf -> {notInf}");
 }

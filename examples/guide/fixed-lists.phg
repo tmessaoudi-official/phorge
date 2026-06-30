@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // Fixed-length lists `[T; N]` (Phase 1 types slice). A `[T; N]` is a `List<T>` whose length is a
 // compile-time constant — distinct from `List<T>` only in the checker: the length is tracked, a
@@ -20,18 +20,18 @@ function total(List<int> xs): int {
 function main(): void {
     // A fixed-length list literal. The literal's length must equal N (checked at compile time).
     [int; 3] rgb = [255, 128, 0];
-    Console.println("r={rgb[0]} g={rgb[1]} b={rgb[2]}");
+    Output.printLine("r={rgb[0]} g={rgb[1]} b={rgb[2]}");
 
     // A fixed-list element is a first-class operand — `rgb[0] / 2` specializes on the VM.
     var half = rgb[0] / 2;
-    Console.println("half-red={half}");
+    Output.printLine("half-red={half}");
 
     // `[int; 3]` is assignable to `List<int>`: it flows into a list-typed parameter.
-    Console.println("sum={total(rgb)}");
+    Output.printLine("sum={total(rgb)}");
 
     // Element-set is length-preserving, so it is allowed on a `mutable` fixed list.
     mutable [int; 2] pair = [1, 2];
     pair[0] = 10;
     pair[1] = 20;
-    Console.println("pair={pair[0]},{pair[1]}");
+    Output.printLine("pair={pair[0]},{pair[1]}");
 }

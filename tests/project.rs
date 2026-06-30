@@ -47,8 +47,8 @@ fn multi_file_project_qualified_call_runs_byte_identically() {
     // S2b bare form. The loader resolves it against the imported package's mangled symbol.
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Console;\nimport Acme.Util;\n\
-         function main() -> void {\n    Console.println(\"{Util.compute(20)}\");\n}",
+        "package Main;\nimport Core.Output;\nimport Acme.Util;\n\
+         function main() -> void {\n    Output.printLine(\"{Util.compute(20)}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/compute.phg",
@@ -67,8 +67,8 @@ fn import_alias_resolves_qualified_call() {
     // `import Acme.Util as U;` binds the leaf `u`; the call qualifies on the alias.
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Console;\nimport Acme.Util as U;\n\
-         function main() -> void {\n    Console.println(\"{U.compute(20)}\");\n}",
+        "package Main;\nimport Core.Output;\nimport Acme.Util as U;\n\
+         function main() -> void {\n    Output.printLine(\"{U.compute(20)}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/compute.phg",
@@ -88,8 +88,8 @@ fn same_package_cross_file_bare_call_resolves() {
     tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Console;\nimport Acme.Util;\n\
-         function main() -> void {\n    Console.println(\"{Util.outer(20)}\");\n}",
+        "package Main;\nimport Core.Output;\nimport Acme.Util;\n\
+         function main() -> void {\n    Output.printLine(\"{Util.outer(20)}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/outer.phg",
@@ -112,8 +112,8 @@ fn unqualified_cross_package_call_is_rejected() {
     tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Console;\nimport Acme.Util;\n\
-         function main() -> void {\n    Console.println(\"{compute(20)}\");\n}",
+        "package Main;\nimport Core.Output;\nimport Acme.Util;\n\
+         function main() -> void {\n    Output.printLine(\"{compute(20)}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/compute.phg",
@@ -138,8 +138,8 @@ fn library_package_type_is_usable_cross_package() {
     tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Console;\nimport type Acme.Util.Shape;\n\
-         function main() -> void {\n    Shape s = new Shape(5);\n    Console.println(\"{s.w}\");\n}",
+        "package Main;\nimport Core.Output;\nimport type Acme.Util.Shape;\n\
+         function main() -> void {\n    Shape s = new Shape(5);\n    Output.printLine(\"{s.w}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/Shape.phg",
@@ -237,8 +237,8 @@ fn multi_package_transpiles_to_brace_namespaces() {
     tmp.write("phorj.toml", "module = \"acme/app\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Console;\nimport Acme.Util;\n\
-         function main() -> void {\n    Console.println(\"{Util.compute(20)}\");\n}",
+        "package Main;\nimport Core.Output;\nimport Acme.Util;\n\
+         function main() -> void {\n    Output.printLine(\"{Util.compute(20)}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/compute.phg",
@@ -288,9 +288,9 @@ fn cross_package_trait_composition_runs_byte_identically() {
     tmp.write("phorj.toml", "module = \"acme/mix\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Console;\nimport type Acme.Mix.Greet;\n\
+        "package Main;\nimport Core.Output;\nimport type Acme.Mix.Greet;\n\
          class Person {\n  use Greet;\n  constructor(public string name) {}\n}\n\
-         function main() -> void {\n  var p = new Person(\"ada\");\n  Console.println(\"{p.name}: {p.hello()}\");\n}",
+         function main() -> void {\n  var p = new Person(\"ada\");\n  Output.printLine(\"{p.name}: {p.hello()}\");\n}",
     );
     tmp.write(
         "src/Acme/Mix/Greet.phg",
@@ -309,9 +309,9 @@ fn cross_package_trait_transpiles_to_namespaced_trait() {
     tmp.write("phorj.toml", "module = \"acme/mix\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Console;\nimport type Acme.Mix.Greet;\n\
+        "package Main;\nimport Core.Output;\nimport type Acme.Mix.Greet;\n\
          class Person {\n  use Greet;\n  constructor(public string name) {}\n}\n\
-         function main() -> void {\n  var p = new Person(\"ada\");\n  Console.println(p.hello());\n}",
+         function main() -> void {\n  var p = new Person(\"ada\");\n  Output.printLine(p.hello());\n}",
     );
     tmp.write(
         "src/Acme/Mix/Greet.phg",
@@ -332,9 +332,9 @@ fn cross_package_trait_used_as_type_is_rejected() {
     tmp.write("phorj.toml", "module = \"acme/mix\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Console;\nimport type Acme.Mix.Greet;\n\
-         function f(Greet x) -> void { Console.println(\"no\"); }\n\
-         function main() -> void { Console.println(\"hi\"); }",
+        "package Main;\nimport Core.Output;\nimport type Acme.Mix.Greet;\n\
+         function f(Greet x) -> void { Output.printLine(\"no\"); }\n\
+         function main() -> void { Output.printLine(\"hi\"); }",
     );
     tmp.write(
         "src/Acme/Mix/Greet.phg",
@@ -354,8 +354,8 @@ fn cross_package_call_inside_map_literal_resolves() {
     tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Console;\nimport Acme.Util;\n\
-         function main() -> void {\n  Map<string, int> m = [\"k\" => Util.compute(20)];\n  Console.println(\"{m[\\\"k\\\"]}\");\n}",
+        "package Main;\nimport Core.Output;\nimport Acme.Util;\n\
+         function main() -> void {\n  Map<string, int> m = [\"k\" => Util.compute(20)];\n  Output.printLine(\"{m[\\\"k\\\"]}\");\n}",
     );
     tmp.write(
         "src/Acme/Util/compute.phg",
@@ -375,9 +375,9 @@ fn cross_package_inheritance_and_parent_calls_run_byte_identically() {
     tmp.write("phorj.toml", "module = \"acme/zoo\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Console;\nimport type Acme.Zoo.Animal;\n\
+        "package Main;\nimport Core.Output;\nimport type Acme.Zoo.Animal;\n\
          class Dog extends Animal {\n  open function speak() -> string { return \"woof/\" + parent(Animal).speak(); }\n}\n\
-         function main() -> void {\n  Console.println(new Dog(\"rex\").speak());\n}",
+         function main() -> void {\n  Output.printLine(new Dog(\"rex\").speak());\n}",
     );
     tmp.write(
         "src/Acme/Zoo/Animal.phg",
@@ -396,9 +396,9 @@ fn cross_package_inheritance_transpiles_to_qualified_extends() {
     tmp.write("phorj.toml", "module = \"acme/zoo\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport Core.Console;\nimport type Acme.Zoo.Animal;\n\
+        "package Main;\nimport Core.Output;\nimport type Acme.Zoo.Animal;\n\
          class Dog extends Animal {\n  open function speak() -> string { return parent.speak(); }\n}\n\
-         function main() -> void {\n  Console.println(new Dog(\"rex\").speak());\n}",
+         function main() -> void {\n  Output.printLine(new Dog(\"rex\").speak());\n}",
     );
     tmp.write(
         "src/Acme/Zoo/Animal.phg",

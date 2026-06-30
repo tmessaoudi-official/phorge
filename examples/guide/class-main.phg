@@ -10,20 +10,20 @@
 // real PHP are byte-identical, and a `main(): int` return becomes the process exit code.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 class App {
     constructor(public string name) {}
 
     function greet(): void {
-        Console.println("Hello from {this.name}");
+        Output.printLine("Hello from {this.name}");
     }
 
     // The Java-style entry: no `this`, returns the exit code. It builds an instance and runs it.
     static function main(): int {
         var app = new App("App.main");
         app.greet();
-        Console.println("done");
+        Output.printLine("done");
         return 0;
     }
 }

@@ -10,7 +10,7 @@
 // `as` over PRIMITIVES is value conversion (`int as float`, `float as int` ⇒ `int?`, …) — see
 // `as-primitives.phg`. The named `Core.Conversion` / `Core.String.parse*` functions remain available too.
 package Main;
-import Core.Console;
+import Core.Output;
 
 interface Shape {
     function area(): int;
@@ -39,7 +39,7 @@ function radiusOr(Shape s, int fallback): int {
 // print it a single time. (A naive `$x instanceof T ? $x : null` transpilation would run it twice —
 // the arrow-fn IIFE prevents that, and this example's byte-identity gate enforces it.)
 function noisy(): Shape {
-    Console.println("  (noisy ran)");
+    Output.printLine("  (noisy ran)");
     return new Circle(7);
 }
 
@@ -47,21 +47,21 @@ function main(): void {
     Shape c = new Circle(3);
     Shape sq = new Square(4);
 
-    Console.println("circle radius = {radiusOr(c, -1)}");  // 3  — c is a Circle
-    Console.println("square radius = {radiusOr(sq, -1)}"); // -1 — a Square is not a Circle → null
+    Output.printLine("circle radius = {radiusOr(c, -1)}");  // 3  — c is a Circle
+    Output.printLine("square radius = {radiusOr(sq, -1)}"); // -1 — a Square is not a Circle → null
 
     // `as` + `?.` + `??` inline: succeed → the value, fail → null → fallback.
     int r = (c as Circle)?.radius ?? 0;
-    Console.println("inline circle = {r}");                 // 3
+    Output.printLine("inline circle = {r}");                 // 3
     int bad = (sq as Circle)?.radius ?? 0;
-    Console.println("inline square = {bad}");               // 0
+    Output.printLine("inline square = {bad}");               // 0
 
     // cast to an interface a value implements always succeeds.
     if (var shape = c as Shape) {
-        Console.println("area = {shape.area()}");           // 9
+        Output.printLine("area = {shape.area()}");           // 9
     }
 
     // single-evaluation: "(noisy ran)" prints once, then the radius 7.
     int n = (noisy() as Circle)?.radius ?? 0;
-    Console.println("noisy radius = {n}");                  // 7
+    Output.printLine("noisy radius = {n}");                  // 7
 }

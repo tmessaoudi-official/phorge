@@ -11,25 +11,25 @@
 // Because UFCS ships, `Conversion.toFloat(n)` and `n.toFloat()` are the same call — module API and
 // method API in one. (The type *cast* — reinterpreting a value's type — is the separate `as` operator.)
 package Main;
-import Core.Console;
+import Core.Output;
 import Core.Conversion;
 
 function main(): void {
   // Stringify any scalar.
-  Console.println(Conversion.toString(42));     // 42
-  Console.println(Conversion.toString(true));    // true
-  Console.println(Conversion.toString(3.5));     // 3.5
+  Output.printLine(Conversion.toString(42));     // 42
+  Output.printLine(Conversion.toString(true));    // true
+  Output.printLine(Conversion.toString(3.5));     // 3.5
 
   // Widening int -> float (total). 7.0 prints as "7" (shortest round-trip).
   float f = Conversion.toFloat(7);
-  Console.println(Conversion.toString(f));       // 7
+  Output.printLine(Conversion.toString(f));       // 7
 
   // Lossy float -> int is explicit and named.
-  Console.println(Conversion.toString(Conversion.truncate(3.9)));  // 3
-  Console.println(Conversion.toString(Conversion.round(2.5)));     // 3
-  Console.println(Conversion.toString(Conversion.round(2.4)));     // 2
+  Output.printLine(Conversion.toString(Conversion.truncate(3.9)));  // 3
+  Output.printLine(Conversion.toString(Conversion.round(2.5)));     // 3
+  Output.printLine(Conversion.toString(Conversion.round(2.4)));     // 2
 
   // UFCS: the module function is also a method — same call.
   int n = 5;
-  Console.println(Conversion.toString(n.toFloat()));   // 5
+  Output.printLine(Conversion.toString(n.toFloat()));   // 5
 }

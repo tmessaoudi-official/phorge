@@ -14,11 +14,11 @@
 // capturable value).
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // The common case: a side-effecting function returns `void` — nothing to capture.
 function note(string msg): void {
-    Console.println(msg);
+    Output.printLine(msg);
 }
 
 // `Empty` is the holdable nothing: a function may return it and fall off the end (it implicitly

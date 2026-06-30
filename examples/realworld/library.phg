@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // A library catalogue. Note zero-payload variants (`Available`, `Lost`) are
 // *constructed* with call form — `Available()` — but matched bare.
@@ -37,7 +37,7 @@ function main(): void {
         new Book("SICP", new Lost()),
     ];
     for (Book b in shelf) {
-        Console.println("{b.titleOf()}: {describe(b.statusOf())}");
+        Output.printLine("{b.titleOf()}: {describe(b.statusOf())}");
     }
-    Console.println("late fee for 3.0 days = {fee(3.0)}c");
+    Output.printLine("late fee for 3.0 days = {fee(3.0)}c");
 }

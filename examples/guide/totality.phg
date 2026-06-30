@@ -11,7 +11,7 @@
 // `fn(int) -> int { … }` that can fall off the end is `E-MISSING-RETURN`, just like a named function.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // Every branch returns — total over all paths (an `if`/`else if`/`else` chain).
 function classify(int score): string {
@@ -44,13 +44,13 @@ function spinForever(): never {
 }
 
 function main(): void {
-    Console.println(classify(95));
-    Console.println(classify(75));
-    Console.println(classify(40));
-    Console.println("larger = {larger(3, 8)}");
-    Console.println(sign(0));
-    Console.println(sign(7));
-    Console.println(sign(-2));
+    Output.printLine(classify(95));
+    Output.printLine(classify(75));
+    Output.printLine(classify(40));
+    Output.printLine("larger = {larger(3, 8)}");
+    Output.printLine(sign(0));
+    Output.printLine(sign(7));
+    Output.printLine(sign(-2));
     // A statement-body lambda that returns on every path (Batch F) — one that could fall off the end
     // would be `E-MISSING-RETURN`.
     var absOf = fn(int n) -> int {
@@ -59,5 +59,5 @@ function main(): void {
         }
         return n;
     };
-    Console.println("abs = {absOf(-4)}");
+    Output.printLine("abs = {absOf(-4)}");
 }

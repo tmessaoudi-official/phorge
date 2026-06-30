@@ -11,7 +11,7 @@
 // (E-CTOR-MODIFIER) rather than silently dropped.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 class Counter {
     // The promoted `n` is private; the constructor itself is private too.
@@ -29,6 +29,6 @@ class Counter {
 function main() -> void {
     var a = Counter.zero;
     var b = a.next().next();
-    Console.println("a = {a.value()}");
-    Console.println("b = {b.value()}");
+    Output.printLine("a = {a.value()}");
+    Output.printLine("b = {b.value()}");
 }

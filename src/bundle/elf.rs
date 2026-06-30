@@ -68,7 +68,7 @@ mod tests {
         let exe = std::env::current_exe().expect("current_exe");
         let tmp = std::env::temp_dir().join("phorj_bundle_reader_test");
         let payload = std::env::temp_dir().join("phorj_bundle_reader_payload");
-        let src = b"import Core.Console; function main() -> void { Console.println(\"x\"); }";
+        let src = b"import Core.Output; function main() -> void { Output.printLine(\"x\"); }";
         std::fs::write(&payload, encode_container(src)).unwrap();
         let objcopy = std::env::var("PHORJ_OBJCOPY").unwrap_or_else(|_| "llvm-objcopy".into());
         let status = std::process::Command::new(&objcopy)

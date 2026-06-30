@@ -124,7 +124,7 @@ fn optional_type_is_now_supported() {
 fn while_let_binds_inner_in_body() {
     // while-let narrows the optional to its non-null inner inside the body (desugars to if-let).
     assert!(errors_of(
-            "import Core.Console; function main() -> void { mutable int? o = 5; while (var v = o) { Console.println(\"{v}\"); o = null; } }"
+            "import Core.Output; function main() -> void { mutable int? o = 5; while (var v = o) { Output.printLine(\"{v}\"); o = null; } }"
         )
         .is_empty());
 }

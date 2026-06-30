@@ -9,7 +9,7 @@
 // policy), so reading it before assignment yields `null`, never a fault.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 class Account {
   // Promoted ctor param — assigned by promotion.
@@ -36,5 +36,5 @@ class Account {
 
 function main() -> void {
   var a = new Account("ada", 100);
-  Console.println(a.describe());
+  Output.printLine(a.describe());
 }

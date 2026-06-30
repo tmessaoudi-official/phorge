@@ -9,7 +9,7 @@
 // a native PHP `trait` + `use`. Every backend (interpreter, VM, real PHP) agrees byte-for-byte.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // Method reuse, including a `private` helper only other trait methods can call.
 trait Loud {
@@ -62,10 +62,10 @@ function main(): void {
     Employee e = new Employee(1000); // Paid's constructor runs: annual = 1000 * 12 = 12000
     e.raise(10); // 12000 + 10% = 13200
 
-    Console.println(e.shout("hello")); // Loud: hello!
-    Console.println("{e.annual}"); // Paid state, mutated: 13200
-    Console.println(e.badge); // Identified hook reading the abstract id(): #7
+    Output.printLine(e.shout("hello")); // Loud: hello!
+    Output.printLine("{e.annual}"); // Paid state, mutated: 13200
+    Output.printLine(e.badge); // Identified hook reading the abstract id(): #7
 
     Employee.created = 3;
-    Console.println("{Employee.created}"); // Counted static: 3
+    Output.printLine("{Employee.created}"); // Counted static: 3
 }

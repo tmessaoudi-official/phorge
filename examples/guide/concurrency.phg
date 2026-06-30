@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // Green threads (M6 W4 / S4.3) — uncolored COOPERATIVE concurrency. `spawn` starts a green task, typed
 // `Channel<T>` FIFOs communicate between tasks, and `join` collects a task's result. No `async`/`await`
@@ -45,26 +45,26 @@ function interleave(): int {
     for (int i in 1..=3) {
         total = total + ch.recv();
     }
-    Console.println("producer sent {p.join()} values");
+    Output.printLine("producer sent {p.join()} values");
     return total;
 }
 
 function main(): void {
     // 1. spawn + join — start a task, then collect its value.
     Task<int> t = spawn square(9);
-    Console.println("9 squared = {t.join()}");
+    Output.printLine("9 squared = {t.join()}");
 
     // 2. fork-join over several tasks.
-    Console.println("2² + 3² + 4² = {sumOfSquares()}");
+    Output.printLine("2² + 3² + 4² = {sumOfSquares()}");
 
     // 3. a typed channel: send values, then receive them in FIFO order.
     Channel<string> words = Channel.create();
     words.send("hello");
     words.send("green");
     words.send("threads");
-    Console.println("{words.recv()} {words.recv()} {words.recv()}");
+    Output.printLine("{words.recv()} {words.recv()} {words.recv()}");
 
     // 4. genuine cooperative interleave: a blocked `recv` suspends the consumer until the spawned
     //    producer sends (impossible under the old eager model — it would have faulted at `spawn`).
-    Console.println("interleaved total = {interleave()}");
+    Output.printLine("interleaved total = {interleave()}");
 }

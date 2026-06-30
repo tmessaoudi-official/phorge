@@ -9,7 +9,7 @@
 // that is not an `\Exception`) is caught correctly. No PHP definition is emitted (PHP already has it).
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 declare function intdiv(int a, int b) -> int;
 
@@ -21,17 +21,17 @@ function main(): void {
     // intdiv(10, 0) raises PHP's \DivisionByZeroError — caught by name.
     try {
         int q = intdiv(10, 0);
-        Console.println("q={q}");
+        Output.printLine("q={q}");
     } catch (DivisionByZeroError e) {
-        Console.println("caught: {e.getMessage()}");
+        Output.printLine("caught: {e.getMessage()}");
     }
 
     // A non-failing call returns normally.
     try {
         int ok = intdiv(10, 3);
-        Console.println("ok={ok}");
+        Output.printLine("ok={ok}");
     } catch (DivisionByZeroError e) {
-        Console.println("unreachable: {e.getMessage()}");
+        Output.printLine("unreachable: {e.getMessage()}");
     }
 }
 // caught: Division by zero

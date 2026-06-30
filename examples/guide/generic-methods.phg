@@ -9,7 +9,7 @@
 
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // A stateless utility — no fields, no constructor (instantiated as `Util()`).
 class Util {
@@ -56,8 +56,8 @@ function main(): void {
   // backends (no typed-binding sink needed). 20 + 10 = 30.
   int operand = u.identity(20) + u.firstOr(xs, 0);
 
-  Console.println("identity: {n} {s} {flag}");
-  Console.println("firstOr head: {head}");
-  Console.println("applyTwice: {bumped}");
-  Console.println("operand: {operand}");
+  Output.printLine("identity: {n} {s} {flag}");
+  Output.printLine("firstOr head: {head}");
+  Output.printLine("applyTwice: {bumped}");
+  Output.printLine("operand: {operand}");
 }

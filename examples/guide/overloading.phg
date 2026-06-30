@@ -1,6 +1,6 @@
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // M-RT method & function overloading — DYNAMIC multiple dispatch. Several functions (or methods) may
 // share a name with distinct parameter signatures; the RUNTIME types of the arguments select the
@@ -36,19 +36,19 @@ class Formatter {
 }
 
 function main(): void {
-  Console.println(describe(42));
-  Console.println(describe("hi"));
-  Console.println(describe(true));
+  Output.printLine(describe(42));
+  Output.printLine(describe("hi"));
+  Output.printLine(describe(true));
 
-  Console.println("{combine(1)} {combine(1, 2)} {combine(1, 2, 3)}");
+  Output.printLine("{combine(1)} {combine(1, 2)} {combine(1, 2, 3)}");
 
   Circle c = new Circle(5);
   Square q = new Square(4);
-  Console.println("circle area = {area(c)}");
-  Console.println("square area (Shape fallback) = {area(q)}");
+  Output.printLine("circle area = {area(c)}");
+  Output.printLine("square area (Shape fallback) = {area(q)}");
 
   Formatter f = new Formatter(":");
-  Console.println(f.render(7));
-  Console.println(f.render("tag"));
-  Console.println(f.render(c));
+  Output.printLine(f.render(7));
+  Output.printLine(f.render("tag"));
+  Output.printLine(f.render(c));
 }

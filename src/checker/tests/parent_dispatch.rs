@@ -147,6 +147,6 @@ fn parent_used_as_a_value_identifier_is_unaffected() {
     // `parent` is contextual — recognized only as a call head (`parent.`/`parent(`). As a string key
     // (or any non-call-head position) it is an ordinary token, so this program is clean.
     let errs =
-        errors_of("import Core.Console; function main() -> void { Console.println(\"parent\"); }");
+        errors_of("import Core.Output; function main() -> void { Output.printLine(\"parent\"); }");
     assert!(errs.is_empty(), "{errs:?}");
 }

@@ -8,7 +8,7 @@ package Main;
 // over `/users/{name}` for `/users/42`, while `/users/ada` (not digits) falls through to `{name}`.
 // Patterns are raw strings (`r"…"`) so `{...}` and `\d` are literal. Pure Phorj over Core.Regex; the
 // match is byte-identical on run / runvm / real PHP for ASCII patterns.
-import Core.Console;
+import Core.Output;
 import Core.Bytes;
 import Core.Http;
 
@@ -31,7 +31,7 @@ function show(Router rt, string method, string path): void {
   Response resp = rt.handle(new Request(method, path, b"", [], []));
   int st = resp.status;
   string body = Bytes.toString(resp.body) ?? "?";
-  Console.println("{method} {path} -> {st}: {body}");
+  Output.printLine("{method} {path} -> {st}: {body}");
 }
 
 function main(): void {

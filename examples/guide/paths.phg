@@ -9,36 +9,36 @@
 //   join(a, b)    glue two segments with a single `/` (collapsing dup separators)
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Path;
 
 function main(): void {
     var p = "/var/log/app.log";
-    Console.println("path      = {p}");
-    Console.println("basename  = {Path.basename(p)}");
-    Console.println("dirname   = {Path.dirname(p)}");
-    Console.println("extension = {Path.extension(p)}");
-    Console.println("stem      = {Path.stem(p)}");
+    Output.printLine("path      = {p}");
+    Output.printLine("basename  = {Path.basename(p)}");
+    Output.printLine("dirname   = {Path.dirname(p)}");
+    Output.printLine("extension = {Path.extension(p)}");
+    Output.printLine("stem      = {Path.stem(p)}");
 
     // A multi-dot name: only the final segment is the extension.
     var archive = "backup.tar.gz";
     var ext = Path.extension(archive);
     var stem = Path.stem(archive);
-    Console.println("ext of {archive}  = {ext}");
-    Console.println("stem of {archive} = {stem}");
+    Output.printLine("ext of {archive}  = {ext}");
+    Output.printLine("stem of {archive} = {stem}");
 
     // No extension, and a relative path with a bare component.
     var readme = "README";
-    Console.println("dirname of README = {Path.dirname(readme)}");
-    Console.println("ext of README     = {Path.extension(readme)}");
+    Output.printLine("dirname of README = {Path.dirname(readme)}");
+    Output.printLine("ext of README     = {Path.extension(readme)}");
 
     // join collapses a trailing/leading slash to exactly one separator.
     var a = Path.join("/usr/local", "bin");
     var b = Path.join("dir/", "/file.txt");
-    Console.println("join a    = {a}");
-    Console.println("join b    = {b}");
+    Output.printLine("join a    = {a}");
+    Output.printLine("join b    = {b}");
 
     // Compose: relocate a file's directory while keeping its basename.
     var moved = Path.join("/tmp", Path.basename(p));
-    Console.println("moved     = {moved}");
+    Output.printLine("moved     = {moved}");
 }

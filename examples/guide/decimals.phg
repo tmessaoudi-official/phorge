@@ -3,7 +3,7 @@
 // comparison is numeric (scale-insensitive), and `decimal * int` stays decimal.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Decimal;
 
 function main(): void {
@@ -17,38 +17,38 @@ function main(): void {
     decimal total = subtotal + shipping;     // 64.47
     decimal discount = total - 14.47d;       // 50.00
 
-    Console.println("price    = {price}");
-    Console.println("subtotal = {subtotal}");
-    Console.println("total    = {total}");
-    Console.println("discount = {discount}");
+    Output.printLine("price    = {price}");
+    Output.printLine("subtotal = {subtotal}");
+    Output.printLine("total    = {total}");
+    Output.printLine("discount = {discount}");
 
     // Multiplication grows scale exactly: 1.11 * 1.11 = 1.2321 (scale 4).
     decimal r = 1.11d * 1.11d;
-    Console.println("1.11 * 1.11 = {r}");
+    Output.printLine("1.11 * 1.11 = {r}");
 
     // Remainder `%` is exact (no rounding); result keeps the max operand scale.
     decimal rem = 10.50d % 3.00d;
-    Console.println("10.50 %% 3.00 = {rem}");
+    Output.printLine("10.50 %% 3.00 = {rem}");
 
     // Bare `/` is exact-or-fault: it returns the exact quotient when it terminates (10.0/4.0 = 2.5,
     // 1/8 = 0.125), in minimal form. A non-terminating quotient (1d/3d) FAULTS — use
     // `Decimal.divide(a, b, scale, mode)` for a rounded result. (No silent precision loss.)
     decimal q1 = 10.0d / 4.0d;     // 2.5
     decimal q2 = 1d / 8d;          // 0.125
-    Console.println("10.0 / 4.0 = {q1}");
-    Console.println("1 / 8 = {q2}");
+    Output.printLine("10.0 / 4.0 = {q1}");
+    Output.printLine("1 / 8 = {q2}");
 
     // Comparison is numeric: 1.50 equals 1.5 even at different scales.
     decimal a = 1.50d;
     decimal b = 1.5d;
-    Console.println("1.50 == 1.5 : {a == b}");
-    Console.println("total > price : {total > price}");
+    Output.printLine("1.50 == 1.5 : {a == b}");
+    Output.printLine("total > price : {total > price}");
 
     // Trailing zeros render to the value's scale.
     decimal padded = 1.500d;
-    Console.println("padded   = {padded}");
+    Output.printLine("padded   = {padded}");
 
     // Build from a string at runtime (returns decimal?).
     decimal parsed = Decimal.of("12.34") ?? 0d;
-    Console.println("parsed   = {parsed}");
+    Output.printLine("parsed   = {parsed}");
 }

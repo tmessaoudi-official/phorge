@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 import Core.File;
 import Core.String;
 
@@ -17,24 +17,24 @@ function main(): void {
     // `exists` → bool; render it through an expression-`if` so the output is a string.
     bool present = File.exists(path);
     string status = if (present) { "found" } else { "absent" };
-    Console.println("fixture {status}");
+    Output.printLine("fixture {status}");
 
     // `read` → string?; `??` returns the contents for a present File.
     string? maybe = File.read(path);
     string body = maybe ?? "(missing)";
     int bytes = String.length(body);
-    Console.println("read {bytes} bytes");
+    Output.printLine("read {bytes} bytes");
 
     // A missing file reads as `null` → the fallback (never a fault).
     string? gone = File.read("examples/guide/fixtures/does-not-exist.txt");
     string fallback = gone ?? "(no such file)";
-    Console.println("missing = {fallback}");
+    Output.printLine("missing = {fallback}");
 
     // `if (var c = …)` binds the non-null content (S2 smart-cast) only inside the then-block.
     if (var c = File.read(path)) {
         int n = String.length(c);
-        Console.println("if-let ok: {n} bytes");
+        Output.printLine("if-let ok: {n} bytes");
     } else {
-        Console.println("if-let: absent");
+        Output.printLine("if-let: absent");
     }
 }

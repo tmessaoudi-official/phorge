@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 import Core.Math;
 
 // Float stringification is byte-identical across all three backends. The Phorj interpreter and VM
@@ -27,8 +27,8 @@ function main(): void {
     float whole = 42.0;
     float half = 12.5;
 
-    Console.println("sqrt(2) = {irrational}");
-    Console.println("big = {big}");
-    Console.println("small = {small}, tiny = {tiny}");
-    Console.println("pi = {pi}, whole = {whole}, half = {half}");
+    Output.printLine("sqrt(2) = {irrational}");
+    Output.printLine("big = {big}");
+    Output.printLine("small = {small}, tiny = {tiny}");
+    Output.printLine("pi = {pi}, whole = {whole}, half = {half}");
 }

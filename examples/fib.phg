@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 
 // Recursion: classic Fibonacci. Phorj is immutable (no reassignment), so the
 // iterative form would need a fresh binding each step — recursion is the natural fit.
@@ -12,6 +12,6 @@ function fib(int n): int {
 
 function main(): void {
     for (int i in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) {
-        Console.println("fib({i}) = {fib(i)}");
+        Output.printLine("fib({i}) = {fib(i)}");
     }
 }

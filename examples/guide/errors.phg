@@ -1,6 +1,6 @@
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // M-faults Slice 2 — checked exceptions: `throws`, `throw`, `try`/`catch`/`finally`, and `?`-throws
 // propagation. A thrown type must implement the built-in `Error` marker (transpiles to a PHP class
@@ -52,30 +52,30 @@ function main(): void {
   for (int n in [50, 0 - 5, 200]) {
     try {
       var r = doubled(n);
-      Console.println("ok({n}) = {r}");
+      Output.printLine("ok({n}) = {r}");
     } catch (NegativeInput e) {
-      Console.println("rejected({n}): {e.message}");
+      Output.printLine("rejected({n}): {e.message}");
     } catch (TooLarge e) {
-      Console.println("rejected({n}): {e.message}");
+      Output.printLine("rejected({n}): {e.message}");
     } finally {
-      Console.println("  (checked {n})");
+      Output.printLine("  (checked {n})");
     }
   }
 
   // A single union clause `catch (A | B e)` handles either checked error.
   try {
     var bad = validate(0 - 9);
-    Console.println("unreached");
+    Output.printLine("unreached");
   } catch (NegativeInput | TooLarge e) {
-    Console.println("union catch handled a checked error");
+    Output.printLine("union catch handled a checked error");
   }
 
   // A throwing **method** call is enforced just like a free call — wrap it in `try`/`catch`.
   var validator = new Validator();
   try {
     var c = validator.check(150);
-    Console.println("unreached");
+    Output.printLine("unreached");
   } catch (TooLarge e) {
-    Console.println("method throw handled: {e.message}");
+    Output.printLine("method throw handled: {e.message}");
   }
 }

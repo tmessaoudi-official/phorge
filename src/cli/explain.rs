@@ -97,7 +97,7 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-SHADOW-IMPORT" => {
             "E-SHADOW-IMPORT — a local binding shadows an imported module qualifier.\n\n\
-             Everything is namespaced (\"nothing in the wind\"): after `import Core.Console;` the\n\
+             Everything is namespaced (\"nothing in the wind\"): after `import Core.Output;` the\n\
              name `console` is a module qualifier, so a value binding (variable, parameter, loop or\n\
              match binding) of the same name would make `Console.x()` ambiguous — the run backends\n\
              would read a method call, the transpiler a native. Rename the binding, or drop the\n\
@@ -207,7 +207,7 @@ pub fn explain_text(code: &str) -> Option<String> {
             "W-SECRET — a Secret's plaintext is exposed directly into a sink (lint).\n\n\
              `Secret<T>` is opaque: it cannot be printed or interpolated (that is a type error), and\n\
              `.expose()` is the only way to read the wrapped value. This lint fires when an\n\
-             `.expose()` call is a *direct* argument to a sink — `Console.println`/`Console.print` or\n\
+             `.expose()` call is a *direct* argument to a sink — `Output.printLine`/`Output.print` or\n\
              `Core.File.write` — because the plaintext would then be logged or persisted. Bind the\n\
              exposed value and use it deliberately (hash it, compare it), or avoid sending a secret to\n\
              the sink at all. (The lint is syntactic on the direct argument; a value laundered through\n\
@@ -797,7 +797,7 @@ pub fn explain_text(code: &str) -> Option<String> {
         "E-VOID-CAPTURE" => {
             "E-VOID-CAPTURE — a `void` value cannot be captured.\n\n\
              `void` is the type of an expression that produces *nothing* (a side-effecting call like\n\
-             `Console.println(…)`), so there is nothing to bind: `var x = note(\"hi\");` is rejected.\n\
+             `Output.printLine(…)`), so there is nothing to bind: `var x = note(\"hi\");` is rejected.\n\
              Call it as a statement instead (drop the binding). If you genuinely need to hold the\n\
              empty value — e.g. to satisfy a generic slot — annotate it `Empty` (`Empty x = note(…);`):\n\
              `void` widens to the holdable `Empty`.\n"

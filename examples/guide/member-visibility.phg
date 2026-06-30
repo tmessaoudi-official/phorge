@@ -13,7 +13,7 @@
 // be a runnable example because every example must produce identical `Ok` output.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 open class Account {
     // A private (mutable) field + a protected field, reached only through the public API below.
@@ -37,7 +37,7 @@ class Savings extends Account {
 function main(): void {
     Savings s = new Savings(100, "Ada");
     s.deposit(50); // public method mutates the private balance internally
-    Console.println("{s.balanceOf()}"); // public accessor → 150
-    Console.println(s.statement()); // public method calls the private audit() internally → Ada:150
-    Console.println(s.ownerLabel()); // subclass reads the protected owner → saver Ada
+    Output.printLine("{s.balanceOf()}"); // public accessor → 150
+    Output.printLine(s.statement()); // public method calls the private audit() internally → Ada:150
+    Output.printLine(s.ownerLabel()); // subclass reads the protected owner → saver Ada
 }

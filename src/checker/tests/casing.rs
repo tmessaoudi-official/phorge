@@ -44,9 +44,9 @@ fn var_rejected_as_symbol_name_allowed_as_value() {
     }
     // But `var` is fine as a parameter / field / local / method name (legal PHP `$var` / `->var()`).
     assert!(check(&prog_raw(
-        "package Main; import Core.Console; \
+        "package Main; import Core.Output; \
          function inc(int var) -> int { return var + 1; } \
-         function main() -> void { Console.println(\"{inc(41)}\"); }"
+         function main() -> void { Output.printLine(\"{inc(41)}\"); }"
     ))
     .is_ok());
     let methods =

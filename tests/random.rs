@@ -18,12 +18,12 @@ static RNG_LOCK: Mutex<()> = Mutex::new(());
 fn seeded_random_is_deterministic_and_run_matches_runvm() {
     let _g = RNG_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let src = r#"package Main;
-import Core.Console;
+import Core.Output;
 import Core.Random;
 function main() -> void {
     Random.seed(42);
     for (int i in 0..5) {
-        Console.println("{Random.intBetween(1, 6)}");
+        Output.printLine("{Random.intBetween(1, 6)}");
     }
 }"#;
     // A fixed seed replays the same stream on repeated runs (the global is reset by `seed`).
@@ -53,11 +53,11 @@ fn distinct_seeds_diverge_across_backends_consistently() {
     let prog = |seed: i64| {
         format!(
             r#"package Main;
-import Core.Console;
+import Core.Output;
 import Core.Random;
 function main() -> void {{
     Random.seed({seed});
-    Console.println("{{Random.next()}}");
+    Output.printLine("{{Random.next()}}");
 }}"#
         )
     };

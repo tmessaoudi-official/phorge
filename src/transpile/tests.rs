@@ -47,14 +47,14 @@ fn t6d_index_native_call_and_const_reads_specialize() {
     // T6d: a native-call result carries its declared return type — `String.upper` → string, so the
     // interpolation hole concatenates directly (no `__phorj_str`).
     let nat = php(
-        "import Core.Console; import Core.String; function main() -> void { Console.println(\"got {String.uppercase(\\\"hi\\\")}\"); }",
+        "import Core.Output; import Core.String; function main() -> void { Output.printLine(\"got {String.uppercase(\\\"hi\\\")}\"); }",
     );
     assert!(nat.contains("strtoupper(\"hi\")"), "{nat}");
     assert!(!nat.contains("__phorj_str(strtoupper"), "{nat}");
 
     // T6d: a const read `Limits.MAX` is an `int` → `(string)` cast in interpolation, no `__phorj_str`.
     let c = php(
-        "import Core.Console; class Limits { const int MAX = 9; } function main() -> void { Console.println(\"max={Limits.MAX}\"); }",
+        "import Core.Output; class Limits { const int MAX = 9; } function main() -> void { Output.printLine(\"max={Limits.MAX}\"); }",
     );
     assert!(c.contains("(string)Limits::MAX"), "{c}");
     assert!(!c.contains("__phorj_str(Limits::MAX)"), "{c}");
@@ -168,12 +168,12 @@ fn indexing_emits_php_subscript() {
 fn ranges_emit_php_range() {
     // Ranges route through `__phorj_range` (QW-13): the helper yields `[]` for an empty/reversed
     // range, where PHP's bare `range()` would descend. The `inclusive` flag is the third arg.
-    let out = php(r#"import Core.Console;
-function main() -> void { for (int i in 0..3) { Console.println("{i}"); } }"#);
+    let out = php(r#"import Core.Output;
+function main() -> void { for (int i in 0..3) { Output.printLine("{i}"); } }"#);
     assert!(out.contains("__phorj_range(0, 3, false)"), "{out}");
     assert!(out.contains("function __phorj_range"), "{out}");
-    let inc = php(r#"import Core.Console;
-function main() -> void { for (int i in 1..=3) { Console.println("{i}"); } }"#);
+    let inc = php(r#"import Core.Output;
+function main() -> void { for (int i in 1..=3) { Output.printLine("{i}"); } }"#);
     assert!(inc.contains("__phorj_range(1, 3, true)"), "{inc}");
 }
 
@@ -230,8 +230,8 @@ fn interpolation_operator_hole_falls_back_to_concat() {
 
 #[test]
 fn println_newline_uses_echo_comma() {
-    // B-2: `Console.println` lowers to `echo X, "\n"` (comma list), not `echo X . "\n"`.
-    let out = php("import Core.Console; function main() -> void { Console.println(\"hi\"); }");
+    // B-2: `Output.printLine` lowers to `echo X, "\n"` (comma list), not `echo X . "\n"`.
+    let out = php("import Core.Output; function main() -> void { Output.printLine(\"hi\"); }");
     assert!(out.contains(r#"echo "hi", "\n""#), "comma list: {out}");
     assert!(!out.contains(r#". "\n""#), "no concat newline: {out}");
 }
@@ -331,13 +331,13 @@ fn expression_position_literal_match_emits_native_match() {
 
 #[test]
 fn println_becomes_echo() {
-    let out = php("import Core.Console; function main() -> void { Console.println(\"hi\"); }");
+    let out = php("import Core.Output; function main() -> void { Output.printLine(\"hi\"); }");
     assert!(out.contains(r#"echo "hi", "\n";"#), "{out}");
 }
 
 #[test]
 fn main_is_invoked_when_present() {
-    let out = php("import Core.Console; function main() -> void { Console.println(\"hi\"); }");
+    let out = php("import Core.Output; function main() -> void { Output.printLine(\"hi\"); }");
     assert!(out.trim_end().ends_with("main();"), "{out}");
     // no main -> no call
     let no_main = php("function helper() -> int { return 1; }");
@@ -450,7 +450,7 @@ fn member_access_and_method_call() {
     let out = php(
         "import core.console; class Greeter { constructor(private string name) {} \
                function greet() -> string { return name; } } \
-             function main() -> void { Greeter g = Greeter(\"Tak\"); Console.println(g.greet()); }",
+             function main() -> void { Greeter g = Greeter(\"Tak\"); Output.printLine(g.greet()); }",
     );
     assert!(out.contains(r#"$g = new Greeter("Tak");"#), "{out}");
     assert!(out.contains("$g->greet()"), "{out}");
@@ -530,7 +530,7 @@ fn match_as_call_argument_emits_match_true() {
 
 #[test]
 fn transpiles_expression_lambda_to_arrow_fn() {
-    let php_out = php("package Main; import Core.Console; function main()-> void { var d = fn(int x) => x*2; Console.println(\"{d(5)}\"); }");
+    let php_out = php("package Main; import Core.Output; function main()-> void { var d = fn(int x) => x*2; Output.printLine(\"{d(5)}\"); }");
     assert!(php_out.contains("fn($x) => $x * 2"), "{php_out}");
 }
 

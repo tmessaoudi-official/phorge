@@ -7,7 +7,7 @@
 // `$d->format(...)`, `\DateTimeImmutable::createFromFormat(...)`).
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 declare class DateTimeImmutable {
     constructor(string datetime);
@@ -18,14 +18,14 @@ declare class DateTimeImmutable {
 function main(): void {
     // Construct + instance method.
     DateTimeImmutable d = new DateTimeImmutable("2023-11-14 22:13:20");
-    Console.println(d.format("Y-m-d"));
+    Output.printLine(d.format("Y-m-d"));
     // 2023-11-14
-    Console.println(d.format("H:i:s"));
+    Output.printLine(d.format("H:i:s"));
     // 22:13:20
     // Static factory + a chained instance call. ('D' is locale-independent English.)
     DateTimeImmutable leap = DateTimeImmutable.createFromFormat("Y-m-d", "2024-02-29");
-    Console.println(leap.format("l"));
+    Output.printLine(leap.format("l"));
     // Thursday
-    Console.println(leap.format("Y-m-d"));
+    Output.printLine(leap.format("Y-m-d"));
 }
 // 2024-02-29

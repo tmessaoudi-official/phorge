@@ -1,6 +1,6 @@
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // Super/parent dispatch under MULTIPLE INHERITANCE (M-RT super/parent, B2).
 //
@@ -45,9 +45,9 @@ class Duck extends Bird, Swimmer {
 
 function main(): void {
     Duck d = new Duck();
-    Console.println(d.describe());
+    Output.printLine(d.describe());
 
     // The single-inheritance ancestor still works on its own.
     Bird b = new Bird();
-    Console.println(b.describe());
+    Output.printLine(b.describe());
 }

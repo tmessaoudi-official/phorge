@@ -1,5 +1,5 @@
 package Main;
-import Core.Console;
+import Core.Output;
 import Core.Math;
 
 // M3 Track B Wave 2 — the `Core.Math` stdlib module. Each function erases to the PHP builtin of
@@ -14,42 +14,42 @@ function main(): void {
     float power = Math.pow(2.0, 10.0);
     float down = Math.floor(3.7);
     float up = Math.ceil(3.2);
-    Console.println("sqrt(16) = {root}, 2^10 = {power}, floor(3.7) = {down}, ceil(3.2) = {up}");
+    Output.printLine("sqrt(16) = {root}, 2^10 = {power}, floor(3.7) = {down}, ceil(3.2) = {up}");
 
     // int math
     int magnitude = Math.abs(-7);
     int smaller = Math.min(3, 8);
     int larger = Math.max(3, 8);
-    Console.println("abs(-7) = {magnitude}, min(3,8) = {smaller}, max(3,8) = {larger}");
+    Output.printLine("abs(-7) = {magnitude}, min(3,8) = {smaller}, max(3,8) = {larger}");
 
     // round → int, half-away-from-zero (PHP's default mode), then a truncating cast.
     int near = Math.round(2.5);
     int far = Math.round(-2.5);
-    Console.println("round(2.5) = {near}, round(-2.5) = {far}");
+    Output.printLine("round(2.5) = {near}, round(-2.5) = {far}");
 
     // --- M-NUM S4: integer helpers (sign / clamp / gcd) — all return `int`, byte-identical. ---
     int s1 = Math.sign(-7);
     int s2 = Math.sign(0);
     int s3 = Math.sign(42);
-    Console.println("sign(-7) = {s1}, sign(0) = {s2}, sign(42) = {s3}");
+    Output.printLine("sign(-7) = {s1}, sign(0) = {s2}, sign(42) = {s3}");
 
     // `clamp(v, lo, hi)` = max(lo, min(v, hi)) — never panics, even if lo > hi (mirrors PHP).
     int c1 = Math.clamp(15, 0, 10);
     int c2 = Math.clamp(-3, 0, 10);
     int c3 = Math.clamp(5, 0, 10);
-    Console.println("clamp(15,0,10) = {c1}, clamp(-3,0,10) = {c2}, clamp(5,0,10) = {c3}");
+    Output.printLine("clamp(15,0,10) = {c1}, clamp(-3,0,10) = {c2}, clamp(5,0,10) = {c3}");
 
     // `gcd` has no PHP-core builtin, so it erases to a `__phorj_gcd` helper (Euclid) emitted on
     // both legs — byte-identical by construction, exactly like `__phorj_div`/`__phorj_round_div`.
     int g1 = Math.gcd(48, 36);
     int g2 = Math.gcd(17, 5);
-    Console.println("gcd(48,36) = {g1}, gcd(17,5) = {g2}");
+    Output.printLine("gcd(48,36) = {g1}, gcd(17,5) = {g2}");
 
     // `lcm` pairs with `gcd` (= |a|/gcd*|b|), erasing to a `__phorj_lcm` helper; `lcm(_, 0) = 0`.
     int l1 = Math.lcm(4, 6);
     int l2 = Math.lcm(21, 6);
     int l3 = Math.lcm(7, 0);
-    Console.println("lcm(4,6) = {l1}, lcm(21,6) = {l2}, lcm(7,0) = {l3}");
+    Output.printLine("lcm(4,6) = {l1}, lcm(21,6) = {l2}, lcm(7,0) = {l3}");
 
     // --- Transcendentals (log / exp / trig) erase to the PHP libm builtins. A non-representable
     // result would diverge between Rust's shortest-round-trip and PHP's libm, so we exercise them at
@@ -60,7 +60,7 @@ function main(): void {
     float c0 = Math.cos(0.0);
     float s0 = Math.sin(0.0);
     float t0 = Math.tan(0.0);
-    Console.println("exp(0)={e0}, log(1)={l1}, log10(1)={lt}, cos(0)={c0}, sin(0)={s0}, tan(0)={t0}");
+    Output.printLine("exp(0)={e0}, log(1)={l1}, log10(1)={lt}, cos(0)={c0}, sin(0)={s0}, tan(0)={t0}");
 
     // --- `numberFormat(value, decimals)` → a grouped string, rounded half-away-from-zero. It erases
     // to a `__phorj_number_format` helper (identical string-building on both legs), so it is the safe
@@ -69,16 +69,16 @@ function main(): void {
     string n2 = Math.numberFormat(1234.5678, 2);
     string n3 = Math.numberFormat(-1234.5, 1);
     string n4 = Math.numberFormat(0.0, 2);
-    Console.println("{n1} | {n2} | {n3} | {n4}");
+    Output.printLine("{n1} | {n2} | {n3} | {n4}");
 
     // Half-way money values round on the *intended decimal* (digit-string rounding), identical on
     // all three backends: 0.285 -> 0.29, 2.675 -> 2.68 (not 0.28 / 2.67).
     string m1 = Math.numberFormat(0.285, 2);
     string m2 = Math.numberFormat(2.675, 2);
-    Console.println("0.285~{m1}, 2.675~{m2}");
+    Output.printLine("0.285~{m1}, 2.675~{m2}");
 
     string pf = Math.numberFormat(Math.pi(), 4);
     string ef = Math.numberFormat(Math.e(), 4);
     string xf = Math.numberFormat(Math.exp(1.0), 4);
-    Console.println("pi~{pf}, e~{ef}, exp(1)~{xf}");
+    Output.printLine("pi~{pf}, e~{ef}, exp(1)~{xf}");
 }
