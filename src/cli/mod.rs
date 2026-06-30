@@ -782,12 +782,12 @@ fn inject_secret_prelude(prog: &Program) -> std::borrow::Cow<'_, Program> {
 const TIME_PRELUDE: &str = r#"
 class Duration {
   constructor(public int ms) {}
-  static function millis(int n) -> Duration { return new Duration(n); }
+  static function milliseconds(int n) -> Duration { return new Duration(n); }
   static function seconds(int n) -> Duration { return new Duration(n * 1000); }
   static function minutes(int n) -> Duration { return new Duration(n * 60000); }
   static function hours(int n) -> Duration { return new Duration(n * 3600000); }
   static function days(int n) -> Duration { return new Duration(n * 86400000); }
-  function toMillis() -> int { return this.ms; }
+  function toMilliseconds() -> int { return this.ms; }
   function toSeconds() -> int { return this.ms / 1000; }
   function toMinutes() -> int { return this.ms / 60000; }
   function toHours() -> int { return this.ms / 3600000; }
@@ -857,10 +857,10 @@ class Date {
 }
 class Instant {
   constructor(public int ms) {}
-  static function ofEpochMillis(int m) -> Instant { return new Instant(m); }
+  static function ofEpochMilliseconds(int m) -> Instant { return new Instant(m); }
   static function ofEpochSeconds(int s) -> Instant { return new Instant(s * 1000); }
   static function now() -> Instant { return new Instant(Time.nowMilliseconds()); }
-  function epochMillis() -> int { return this.ms; }
+  function epochMilliseconds() -> int { return this.ms; }
   function epochSeconds() -> int { return this.ms / 1000; }
   function plus(Duration d) -> Instant { return new Instant(this.ms + d.ms); }
   function minus(Duration d) -> Instant { return new Instant(this.ms - d.ms); }
@@ -870,14 +870,14 @@ class Instant {
   function compareTo(Instant o) -> int {
     return if (this.ms < o.ms) { -1 } else { if (this.ms > o.ms) { 1 } else { 0 } };
   }
-  // Civil-date view (UTC, day-resolution): floor-divide millis by a day (floor, not truncate, so a
+  // Civil-date view (UTC, day-resolution): floor-divide milliseconds by a day (floor, not truncate, so a
   // pre-1970 instant maps to the right civil day).
   function toDate() -> Date {
     int day = if (this.ms >= 0) { this.ms / 86400000 } else { (this.ms - 86399999) / 86400000 };
     return Date.ofEpochDay(day);
   }
   // ── civil (wall-time) view, UTC ──────────────────────────────────────────────────────────────
-  // An `Instant` is also the human date-time: it exposes year/month/day/hour/minute/second/millis and
+  // An `Instant` is also the human date-time: it exposes year/month/day/hour/minute/second/milliseconds and
   // an ISO-8601 string. (No separate `DateTime` class — that name collides with PHP's built-in, and
   // `Instant` already IS the point in time; fields are derived on demand.) `ofCivil` builds an instant
   // from broken-down UTC fields.
@@ -886,7 +886,7 @@ class Instant {
     return new Instant(day * 86400000 + h * 3600000 + mi * 60000 + s * 1000);
   }
   // Milliseconds within the current UTC day, always in [0, 86399999] (uses the floored epoch-day).
-  function millisOfDay() -> int {
+  function millisecondsOfDay() -> int {
     int day = if (this.ms >= 0) { this.ms / 86400000 } else { (this.ms - 86399999) / 86400000 };
     return this.ms - day * 86400000;
   }
@@ -894,10 +894,10 @@ class Instant {
   function month() -> int { return this.toDate().month(); }
   function day() -> int { return this.toDate().day(); }
   function dayOfWeek() -> int { return this.toDate().dayOfWeek(); }
-  function hour() -> int { return this.millisOfDay() / 3600000; }
-  function minute() -> int { return (this.millisOfDay() / 60000) % 60; }
-  function second() -> int { return (this.millisOfDay() / 1000) % 60; }
-  function millis() -> int { return this.millisOfDay() % 1000; }
+  function hour() -> int { return this.millisecondsOfDay() / 3600000; }
+  function minute() -> int { return (this.millisecondsOfDay() / 60000) % 60; }
+  function second() -> int { return (this.millisecondsOfDay() / 1000) % 60; }
+  function milliseconds() -> int { return this.millisecondsOfDay() % 1000; }
   // ISO-8601 UTC: `YYYY-MM-DDTHH:MM:SSZ` (always `Z`; second-resolution, sub-second dropped). For any
   // other layout, interpolate the accessors directly (Phorj has first-class string interpolation).
   function toIso() -> string {

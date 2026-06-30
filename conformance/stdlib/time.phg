@@ -6,14 +6,14 @@ import Core.Time;
 function main() -> void {
   Time.freeze(1700000000000);
   Instant now = Instant.now();
-  Output.printLine("{now.epochMillis()}");
+  Output.printLine("{now.epochMilliseconds()}");
   Output.printLine("{now.epochSeconds()}");
   Duration d = Duration.hours(2).plus(Duration.minutes(15));
-  Output.printLine("{d.toMillis()}");
+  Output.printLine("{d.toMilliseconds()}");
   Output.printLine("{d.toMinutes()}");
   Output.printLine("{d.toSeconds()}");
   Instant later = now.plus(d);
-  Output.printLine("{later.epochMillis()}");
+  Output.printLine("{later.epochMilliseconds()}");
   Output.printLine("{later.durationSince(now).toSeconds()}");
   Output.printLine("{now.isBefore(later)}");
   Output.printLine("{later.isAfter(now)}");
@@ -25,6 +25,6 @@ function main() -> void {
   Output.printLine("{Duration.days(1).toHours()}");
   Output.printLine("{d.negate().toMinutes()}");
   Output.printLine("{d.negate().isNegative()}");
-  Output.printLine("{Duration.millis(0).isZero()}");
+  Output.printLine("{Duration.milliseconds(0).isZero()}");
   Time.unfreeze();
 }

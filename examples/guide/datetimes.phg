@@ -1,7 +1,7 @@
 // Core.Time — the civil (wall-time) view of an Instant + ISO-8601 (M-TIME S3).
 //
-// An `Instant` is both a machine timestamp (epoch-millis) AND a human date-time: it exposes
-// year/month/day/hour/minute/second/millis and `toIso()`, all in UTC. There is no separate `DateTime`
+// An `Instant` is both a machine timestamp (epoch-milliseconds) AND a human date-time: it exposes
+// year/month/day/hour/minute/second/milliseconds and `toIso()`, all in UTC. There is no separate `DateTime`
 // class — that name collides with PHP's built-in, and `Instant` already is the point in time. All field
 // math is pure Phorj, so it is byte-identical on `run`/`runvm`/transpiled PHP.
 package Main;
@@ -15,7 +15,7 @@ function main() -> void {
   Output.printLine("iso    = {dt.toIso()}");
   Output.printLine("fields = {dt.year()}/{dt.month()}/{dt.day()} {dt.hour()}:{dt.minute()}:{dt.second()}");
   Output.printLine("dow    = {dt.dayOfWeek()}");                 // 2 = Tuesday
-  Output.printLine("millis = {dt.epochMillis()}");
+  Output.printLine("milliseconds = {dt.epochMilliseconds()}");
 
   // Custom layouts: just interpolate the accessors (no printf-style pattern needed).
   Output.printLine("custom = {dt.day()}/{dt.month()}/{dt.year()}");
@@ -30,7 +30,7 @@ function main() -> void {
 
   // Pre-1970 (negative epoch) breaks down correctly via floored division.
   Instant pre = Instant.ofCivil(1969, 12, 31, 23, 59, 59);
-  Output.printLine("pre1970 = {pre.toIso()} (ms = {pre.epochMillis()})");
+  Output.printLine("pre1970 = {pre.toIso()} (ms = {pre.epochMilliseconds()})");
 
   // The frozen clock makes `now()` reproducible.
   Time.freeze(1700000000000);

@@ -1,6 +1,6 @@
 // Core.Time — instants and durations (M-TIME S1).
 //
-// `Instant` is a point in time (epoch-millis, UTC); `Duration` is a span. All arithmetic is exact
+// `Instant` is a point in time (epoch-milliseconds, UTC); `Duration` is a span. All arithmetic is exact
 // integer math, so it is byte-identical on `run`/`runvm`/transpiled PHP. The wall clock is
 // non-deterministic, so we FREEZE it first — `Instant.now()` then returns the pinned value, making this
 // example reproducible (the `Core.Random` determinism pattern).
@@ -14,12 +14,12 @@ function main() -> void {
   Time.freeze(1700000000000);
 
   Instant now = Instant.now();
-  Output.printLine("now epoch-millis  = {now.epochMillis()}");
+  Output.printLine("now epoch-milliseconds  = {now.epochMilliseconds()}");
   Output.printLine("now epoch-seconds = {now.epochSeconds()}");
 
   // Durations: build from units, combine, convert.
   Duration d = Duration.hours(1).plus(Duration.minutes(30));
-  Output.printLine("1h30m in millis   = {d.toMillis()}");
+  Output.printLine("1h30m in milliseconds   = {d.toMilliseconds()}");
   Output.printLine("1h30m in minutes  = {d.toMinutes()}");
 
   // Instant arithmetic.
@@ -31,13 +31,13 @@ function main() -> void {
   // Construct from seconds, subtract a day.
   Instant epoch = Instant.ofEpochSeconds(0);
   Instant yesterday = now.minus(Duration.days(1));
-  Output.printLine("epoch millis      = {epoch.epochMillis()}");
+  Output.printLine("epoch milliseconds      = {epoch.epochMilliseconds()}");
   Output.printLine("a day earlier (s) = {yesterday.epochSeconds()}");
 
   // Negative and zero durations.
   Duration back = d.negate();
   Output.printLine("negated isNegative= {back.isNegative()}");
-  Output.printLine("zero isZero       = {Duration.millis(0).isZero()}");
+  Output.printLine("zero isZero       = {Duration.milliseconds(0).isZero()}");
 
   Time.unfreeze();
 }
