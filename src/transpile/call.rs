@@ -129,7 +129,7 @@ impl Transpiler {
                         // closure has no `&mut self` to set the flag, so set it here (the established
                         // gated-helper pattern — see `emit_runtime_helpers`).
                         let nat = &crate::native::registry()[idx];
-                        if nat.module == "Core.Reflect" {
+                        if nat.module == "Core.Reflection" {
                             match nat.name {
                                 "kind" => self.uses_reflect_kind = true,
                                 "className" => self.uses_reflect_class_name = true,

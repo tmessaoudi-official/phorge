@@ -74,7 +74,7 @@ impl Checker {
                             // before any backend (Core.Reflect, Tier 3) — never the generic-native
                             // path. `q` is reused for the synthesized `className`/`kind` calls.
                             let n = &crate::native::registry()[idx];
-                            if n.module == "Core.Reflect" && n.name == "typeName" {
+                            if n.module == "Core.Reflection" && n.name == "typeName" {
                                 return self.check_reflect_type_name(q, args, span);
                             }
                             let ty = self.check_native_call(idx, args, span);
@@ -1789,7 +1789,7 @@ impl Checker {
             // backend; a UFCS-produced raw `typeName(x)` call would instead reach the backend (where
             // its PHP erasure is only coarse) and diverge. Exclude it — call it qualified. `kind` /
             // `className` are plain natives (byte-identical), so they stay UFCS-eligible.
-            if n.module == "Core.Reflect" && n.name == "typeName" {
+            if n.module == "Core.Reflection" && n.name == "typeName" {
                 continue;
             }
             let leaf = n.module.rsplit('.').next().unwrap_or(n.module);

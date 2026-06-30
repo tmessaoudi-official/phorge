@@ -31,13 +31,13 @@ fn reflect_kind_maps_values_to_coarse_php_reproducible_kinds() {
 
 #[test]
 fn reflect_kind_is_registered_and_resolvable_by_leaf() {
-    let i = index_of("Core.Reflect", "kind").expect("Reflect.kind registered");
-    assert_eq!(index_of_by_leaf("Reflect", "kind"), Some(i));
+    let i = index_of("Core.Reflection", "kind").expect("Reflect.kind registered");
+    assert_eq!(index_of_by_leaf("Reflection", "kind"), Some(i));
 }
 
 #[test]
 fn reflect_kind_php_emits_the_gated_helper() {
-    let i = index_of("Core.Reflect", "kind").unwrap();
+    let i = index_of("Core.Reflection", "kind").unwrap();
     assert_eq!((registry()[i].php)(&["$x".into()]), "__phorj_kind($x)");
 }
 
@@ -109,8 +109,8 @@ fn reflect_enumeration_natives_read_class_tables() {
             .collect::<Vec<_>>(),
         other => panic!("not a list: {other:?}"),
     };
-    let i = index_of("Core.Reflect", "interfaces").expect("interfaces registered");
-    let p = index_of("Core.Reflect", "parents").expect("parents registered");
+    let i = index_of("Core.Reflection", "interfaces").expect("interfaces registered");
+    let p = index_of("Core.Reflection", "parents").expect("parents registered");
     let call = |idx: usize, v: Value| match registry()[idx].eval {
         NativeEval::Reflective(f) => f(&[v], &tables).unwrap(),
         _ => panic!("expected a Reflective native"),
@@ -123,8 +123,8 @@ fn reflect_enumeration_natives_read_class_tables() {
 
 #[test]
 fn reflect_class_name_is_registered_and_php_emits_the_gated_helper() {
-    let i = index_of("Core.Reflect", "className").expect("Reflect.className registered");
-    assert_eq!(index_of_by_leaf("Reflect", "className"), Some(i));
+    let i = index_of("Core.Reflection", "className").expect("Reflect.className registered");
+    assert_eq!(index_of_by_leaf("Reflection", "className"), Some(i));
     assert_eq!(
         (registry()[i].php)(&["$x".into()]),
         "__phorj_class_name($x)"

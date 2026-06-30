@@ -146,7 +146,7 @@ fn reflect_type_name(args: &[Value], _: &mut String) -> Result<Value, String> {
 pub(crate) fn reflect_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
-            module: "Core.Reflect",
+            module: "Core.Reflection",
             name: "kind",
             // Generic over any single argument (S7b registry-`Ty::Param` discipline — never erased to a
             // backend; the compiler types the call by expression shape, the transpiler via `php`).
@@ -160,7 +160,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             php: |a| format!("__phorj_kind({})", parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Reflect",
+            module: "Core.Reflection",
             name: "className",
             params: vec![Ty::Param("T".into())],
             ret: Ty::Optional(Box::new(Ty::String)),
@@ -172,7 +172,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             php: |a| format!("__phorj_class_name({})", parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Reflect",
+            module: "Core.Reflection",
             name: "typeName",
             params: vec![Ty::Param("T".into())],
             ret: Ty::String,
@@ -183,7 +183,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             php: |a| format!("__phorj_kind({})", parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Reflect",
+            module: "Core.Reflection",
             name: "interfaces",
             params: vec![Ty::Param("T".into())],
             ret: Ty::List(Box::new(Ty::String)),
@@ -194,7 +194,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             php: |a| format!("__phorj_reflect_of({}, \"interfaces\")", parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Reflect",
+            module: "Core.Reflection",
             name: "parents",
             params: vec![Ty::Param("T".into())],
             ret: Ty::List(Box::new(Ty::String)),
@@ -203,7 +203,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             php: |a| format!("__phorj_reflect_of({}, \"parents\")", parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Reflect",
+            module: "Core.Reflection",
             name: "methods",
             params: vec![Ty::Param("T".into())],
             ret: Ty::List(Box::new(Ty::String)),
@@ -212,7 +212,7 @@ pub(crate) fn reflect_natives() -> Vec<NativeFn> {
             php: |a| format!("__phorj_reflect_of({}, \"methods\")", parg(a, 0)),
         },
         NativeFn {
-            module: "Core.Reflect",
+            module: "Core.Reflection",
             name: "fields",
             params: vec![Ty::Param("T".into())],
             ret: Ty::List(Box::new(Ty::String)),

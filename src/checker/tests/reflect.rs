@@ -1,13 +1,13 @@
-//! Checker tests — Core.Reflect (`kind` / `className` / the precise `typeName` static-type pass).
+//! Checker tests — Core.Reflection (`kind` / `className` / the precise `typeName` static-type pass).
 
 use super::support::*;
 
 #[test]
 fn type_name_resolves_to_string() {
-    // `Reflect.typeName(x)` resolves to `string` (usable wherever a string is expected).
+    // `Reflection.typeName(x)` resolves to `string` (usable wherever a string is expected).
     assert!(errors_of(
-        r#"import Core.Reflect;
-function main() -> void { string s = Reflect.typeName(42); }"#
+        r#"import Core.Reflection;
+function main() -> void { string s = Reflection.typeName(42); }"#
     )
     .is_empty());
 }
@@ -15,8 +15,8 @@ function main() -> void { string s = Reflect.typeName(42); }"#
 #[test]
 fn type_name_arity_is_checked() {
     let errs = errors_of(
-        r#"import Core.Reflect;
-function main() -> void { string s = Reflect.typeName(1, 2); }"#,
+        r#"import Core.Reflection;
+function main() -> void { string s = Reflection.typeName(1, 2); }"#,
     );
     assert!(
         errs.iter()
@@ -30,7 +30,7 @@ fn type_name_is_excluded_from_ufcs() {
     // `typeName` is erased from the static type; a UFCS-produced raw call would reach the backend
     // un-erased and diverge, so `.typeName()` is not offered as UFCS — it must be called qualified.
     let errs = errors_of(
-        r#"import Core.Reflect;
+        r#"import Core.Reflection;
 function main() -> void { int x = 5; string s = x.typeName(); }"#,
     );
     assert!(
@@ -43,12 +43,12 @@ function main() -> void { int x = 5; string s = x.typeName(); }"#,
 fn class_name_and_kind_resolve() {
     // `className` is `string?`; `kind` is `string`. Both are plain natives (no static pass).
     assert!(errors_of(
-        r#"import Core.Reflect;
+        r#"import Core.Reflection;
 class P { constructor(public int x) {} }
 function main() -> void {
   var p = new P(1);
-  string? c = Reflect.className(p);
-  string k = Reflect.kind(p);
+  string? c = Reflection.className(p);
+  string k = Reflection.kind(p);
 }"#
     )
     .is_empty());
@@ -57,9 +57,9 @@ function main() -> void {
 #[test]
 fn kind_and_class_name_stay_ufcs_eligible() {
     // Unlike `typeName`, `kind`/`className` are byte-identical plain natives, so UFCS still works:
-    // `p.kind()` ≡ `Reflect.kind(p)`.
+    // `p.kind()` ≡ `Reflection.kind(p)`.
     assert!(errors_of(
-        r#"import Core.Reflect;
+        r#"import Core.Reflection;
 class P { constructor(public int x) {} }
 function main() -> void { var p = new P(1); string k = p.kind(); }"#
     )
