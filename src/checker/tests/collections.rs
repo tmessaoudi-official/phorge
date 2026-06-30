@@ -101,6 +101,21 @@ fn for_in_requires_list() {
 }
 
 #[test]
+fn for_in_string_binds_char_as_string() {
+    // B1: a `string` iterates its characters, each a 1-char `string`.
+    assert!(errors_of(
+        "import Core.Output; function main() -> void { for (string c in \"hi\") { Output.printLine(c); } }"
+    )
+    .is_empty());
+    // The element is a string, not (say) an int — a mismatched binding type is rejected.
+    let errs = errors_of("function main() -> void { for (int c in \"hi\") { } }");
+    assert!(
+        errs.iter().any(|e| e.message.contains("declared `int`")),
+        "{errs:?}"
+    );
+}
+
+#[test]
 fn range_in_for_checks_clean_and_binds_int() {
     assert!(
         errors_of("function main() -> void { for (int i in 0..5) { int x = i + 1; } }").is_empty()

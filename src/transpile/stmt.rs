@@ -128,7 +128,15 @@ impl Transpiler {
                 ..
             } => {
                 let it = self.emit_expr(iter)?;
-                self.line(&format!("foreach ({it} as ${name}) {{"));
+                // B1: a `string` iterates its characters — PHP `foreach` over a raw string is invalid,
+                // so wrap it in `str_split` (1-byte chunks; byte-identical to the backends' char walk in
+                // the ASCII domain). A List/Set already transpiles to a PHP array `foreach` directly.
+                let src = if matches!(self.expr_kind(iter), OpKind::Str) {
+                    format!("str_split({it})")
+                } else {
+                    it
+                };
+                self.line(&format!("foreach ({src} as ${name}) {{"));
                 self.indent += 1;
                 self.push_scope();
                 self.declare(name);

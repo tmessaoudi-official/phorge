@@ -296,6 +296,10 @@ pub fn iter_elements(v: &Value) -> Result<Vec<Value>, String> {
     match v {
         Value::List(items) => Ok((**items).clone()),
         Value::Set(elems) => Ok(elems.iter().map(HKey::to_value).collect()),
+        // B1: a `string` iterates its characters as 1-char strings (ASCII-domain like the rest of the
+        // String stdlib — Unicode scalars; the transpiler emits PHP `str_split`, byte-identical for
+        // ASCII). An empty string yields no elements (matches PHP 8 `str_split("")` == []).
+        Value::Str(s) => Ok(s.chars().map(|c| Value::Str(c.to_string())).collect()),
         other => Err(format!("cannot iterate over {}", other.type_name())),
     }
 }
