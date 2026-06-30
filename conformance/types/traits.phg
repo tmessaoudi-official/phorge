@@ -1,7 +1,7 @@
 // Conformance: traits — horizontal reuse via `use` (a trait method mixed into a class).
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 trait Greet {
     function hello() -> string {
@@ -22,6 +22,6 @@ class Robot {
 
 function main() -> void {
     Robot r = new Robot();
-    Console.println(r.hello());
-    Console.println(r.tag());
+    Output.printLine(r.hello());
+    Output.printLine(r.tag());
 }

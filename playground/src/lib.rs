@@ -171,7 +171,7 @@ mod tests {
     use serde_json::Value;
 
     const HELLO: &str =
-        "package Main;\nimport Core.Console;\nfunction main() -> void {\n    Console.println(\"hi\");\n}\n";
+        "package Main;\nimport Core.Output;\nfunction main() -> void {\n    Output.printLine(\"hi\");\n}\n";
 
     fn parse(s: &str) -> Value {
         serde_json::from_str(s).expect("wrapper must emit valid JSON")
@@ -233,10 +233,10 @@ mod tests {
         // method-call result used as an arithmetic operand (`a.join() + b.join()`) makes the VM
         // compiler's `ctype` miss the side-table and fall through to `method_rets`, rejecting what the
         // interpreter accepts: a playground-only run≠runvm divergence the CLI differential never saw.
-        let src = "package Main;\nimport Core.Console;\n\
+        let src = "package Main;\nimport Core.Output;\n\
             function sq(int n): int { return n * n; }\n\
             function f(): int { Task<int> a = spawn sq(2); Task<int> b = spawn sq(3); return a.join() + b.join(); }\n\
-            function main() -> void { Console.println(\"{f()}\"); }\n";
+            function main() -> void { Output.printLine(\"{f()}\"); }\n";
         let r = parse(&run_json(src));
         let vm = parse(&runvm_json(src));
         assert_eq!(r["ok"], json!(true), "run must accept the program: {r}");
@@ -254,7 +254,7 @@ mod tests {
 
     #[test]
     fn run_index_out_of_range_is_a_fault_not_a_panic() {
-        let oob = "package Main;\nimport Core.Console;\nfunction main() -> void {\n    List<int> xs = [1];\n    Console.println(\"{xs[5]}\");\n}\n";
+        let oob = "package Main;\nimport Core.Output;\nfunction main() -> void {\n    List<int> xs = [1];\n    Output.printLine(\"{xs[5]}\");\n}\n";
         let v = parse(&run_json(oob));
         assert_eq!(v["ok"], json!(false));
         assert!(

@@ -1,7 +1,7 @@
 // Conformance: static methods, including overloaded statics (Statics-B) and inheritance.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 open class Money {
     constructor(public int cents) {}
@@ -21,7 +21,7 @@ open class Money {
 class Wallet extends Money {}
 
 function main() -> void {
-    Console.println(Money.of(5).show());
-    Console.println(Money.of(5, 25).show());
-    Console.println(Wallet.of(3).show());
+    Output.printLine(Money.of(5).show());
+    Output.printLine(Money.of(5, 25).show());
+    Output.printLine(Wallet.of(3).show());
 }

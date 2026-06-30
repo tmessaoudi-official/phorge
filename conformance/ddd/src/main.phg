@@ -3,7 +3,7 @@
 // entities, all byte-identical on run / runvm / real PHP (exact integer-cents arithmetic).
 package Main;
 
-import Core.Console;
+import Core.Output;
 import type Catalog.Money;
 import type Catalog.Product;
 import type Ordering.OrderLine;
@@ -19,10 +19,10 @@ function main() -> void {
     ];
     Order order = new Order(1001, lines);
 
-    Console.println("Order #{order.id}");
-    Console.println("lines: {order.lineCount()}");
+    Output.printLine("Order #{order.id}");
+    Output.printLine("lines: {order.lineCount()}");
 
     Money total = order.total();
     string formatted = total.format();
-    Console.println("total: {formatted}");
+    Output.printLine("total: {formatted}");
 }

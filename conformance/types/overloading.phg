@@ -1,7 +1,7 @@
 // Conformance: function + method overloading (runtime multiple dispatch).
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 function describe(int n) -> string {
     return "int {n}";
@@ -21,9 +21,9 @@ class Adder {
 }
 
 function main() -> void {
-    Console.println(describe(7));
-    Console.println(describe("hi"));
+    Output.printLine(describe(7));
+    Output.printLine(describe("hi"));
     Adder ad = new Adder();
-    Console.println(ad.add(2, 3));
-    Console.println(ad.add("x", "y"));
+    Output.printLine(ad.add(2, 3));
+    Output.printLine(ad.add("x", "y"));
 }

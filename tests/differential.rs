@@ -920,7 +920,7 @@ fn p4c_programs_match_between_backends() {
 }
 
 /// True if `src` imports an **impure** stdlib module — one whose natives read the ambient environment
-/// (`Core.Process` / `Core.Env`). Such a program is QUARANTINED from the byte-identity differential:
+/// (`Core.Process` / `Core.Environment`). Such a program is QUARANTINED from the byte-identity differential:
 /// the PHP leg runs in a separate process whose argv/env need not match the Rust process, so the
 /// output is not a fixed golden. These are tested separately under a controlled environment in
 /// `tests/process.rs` (their `examples/process/` files are walkthroughs, not gated examples — Q2-A of
@@ -2834,12 +2834,12 @@ function main() -> void {
 
 #[test]
 fn m_num_s2_decimal_div_by_zero_faults_identically() {
-    // `Decimal.div` with a zero divisor faults the same way on both backends (the `decimal division
+    // `Decimal.divide` with a zero divisor faults the same way on both backends (the `decimal division
     // by zero` body contains `division by zero`, so it classifies as FaultKind::DivZero). The PHP
     // helper throws the same body — but a fault is not a runnable example (Ok-only rule), so this is a
     // run≡runvm parity check, not a 3-way one.
     agree_err(
-        "import Core.Decimal; function main() -> void { decimal r = Decimal.div(10.00d, 0d, 2, new HalfUp()); }",
+        "import Core.Decimal; function main() -> void { decimal r = Decimal.divide(10.00d, 0d, 2, new HalfUp()); }",
     );
 }
 
@@ -2848,7 +2848,7 @@ fn m_num_s2_decimal_scale_out_of_range_faults_identically() {
     // A negative `scale` faults `decimal scale out of range` on both backends (FaultKind::Other, but
     // the body is byte-identical so `agree_err` is satisfied).
     agree_err(
-        "import Core.Decimal; function main() -> void { decimal r = Decimal.div(10.00d, 3d, -1, new HalfUp()); }",
+        "import Core.Decimal; function main() -> void { decimal r = Decimal.divide(10.00d, 3d, -1, new HalfUp()); }",
     );
     agree_err(
         "import Core.Decimal; function main() -> void { decimal r = Decimal.round(2.345d, -1, new HalfUp()); }",
@@ -2859,7 +2859,7 @@ fn m_num_s2_decimal_scale_out_of_range_faults_identically() {
 fn m_num_s2_decimal_div_overflow_faults_identically() {
     // A target scale that overflows 10^k before the division faults `decimal overflow` on both.
     agree_err(
-        "import Core.Decimal; function main() -> void { decimal r = Decimal.div(1d, 3d, 200, new HalfUp()); }",
+        "import Core.Decimal; function main() -> void { decimal r = Decimal.divide(1d, 3d, 200, new HalfUp()); }",
     );
 }
 

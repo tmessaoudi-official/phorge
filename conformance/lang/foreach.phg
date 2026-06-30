@@ -2,19 +2,19 @@
 // a range source, and the typed `for (T x in xs)` form side by side. Stable per STABILITY.md.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 function main() -> void {
     List<string> langs = ["Phorj", "PHP", "TypeScript"];
 
     // Value form — `w` is inferred as `string` from the iterable.
     foreach (langs as w) {
-        Console.println("hello {w}");
+        Output.printLine("hello {w}");
     }
 
     // With a 0-based position counter.
     foreach (langs as name with int idx) {
-        Console.println("{idx}={name}");
+        Output.printLine("{idx}={name}");
     }
 
     // A range source iterates inferred `int`s.
@@ -22,10 +22,10 @@ function main() -> void {
     foreach (1..=4 as n) {
         sum = sum + n;
     }
-    Console.println("range-sum {sum}");
+    Output.printLine("range-sum {sum}");
 
     // The typed `for (T x in xs)` form, unchanged.
     for (string lang in langs) {
-        Console.println("typed {lang}");
+        Output.printLine("typed {lang}");
     }
 }

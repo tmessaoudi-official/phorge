@@ -2,7 +2,7 @@
 // stdlib breadth slice. Byte-identical run≡runvm≡real PHP.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Set;
 import Core.Map;
 
@@ -10,15 +10,15 @@ function main() -> void {
     Set<int> base = Set.of([1, 2, 3]);
     Set<int> grown = Set.add(Set.add(base, 4), 2); // 2 already present -> no-op
     Set<int> shrunk = Set.remove(grown, 1);
-    Console.println("sizes {Set.size(base)} {Set.size(grown)} {Set.size(shrunk)}");
-    Console.println("subset {Set.isSubset(Set.of([2, 3]), base)} {Set.isSubset(base, shrunk)}");
+    Output.printLine("sizes {Set.size(base)} {Set.size(grown)} {Set.size(shrunk)}");
+    Output.printLine("subset {Set.isSubset(Set.of([2, 3]), base)} {Set.isSubset(base, shrunk)}");
 
     Map<string, int> m = ["a" => 1, "b" => 2];
-    Console.println("getOr {Map.getOr(m, \"a\", 0)} {Map.getOr(m, \"z\", 99)}");
+    Output.printLine("getOr {Map.getOrDefault(m, \"a\", 0)} {Map.getOrDefault(m, \"z\", 99)}");
     Map<string, int> merged = Map.merge(m, ["b" => 20, "c" => 3]);
-    Console.println("merge {Map.getOr(merged, \"b\", 0)} {Map.getOr(merged, \"c\", 0)} {Map.size(merged)}");
+    Output.printLine("merge {Map.getOrDefault(merged, \"b\", 0)} {Map.getOrDefault(merged, \"c\", 0)} {Map.size(merged)}");
     Map<string, int> tens = Map.map(m, fn(int x) => x * 10);
-    Console.println("map {Map.getOr(tens, \"a\", 0)} {Map.getOr(tens, \"b\", 0)}");
+    Output.printLine("map {Map.getOrDefault(tens, \"a\", 0)} {Map.getOrDefault(tens, \"b\", 0)}");
     Map<string, int> big = Map.filter(merged, fn(int x) => x > 2);
-    Console.println("filter {Map.size(big)}");
+    Output.printLine("filter {Map.size(big)}");
 }

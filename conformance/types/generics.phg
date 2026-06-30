@@ -1,7 +1,7 @@
 // Conformance: erased generics — a generic function and a generic class.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 function identity<T>(T x) -> T {
     return x;
@@ -15,13 +15,13 @@ class Box<T> {
 }
 
 function main() -> void {
-    Console.println("{identity(42)}");
-    Console.println(identity("hi"));
+    Output.printLine("{identity(42)}");
+    Output.printLine(identity("hi"));
 
     Box<string> b = new Box("boxed");
-    Console.println(b.get());
+    Output.printLine(b.get());
 
     Box<int> n = new Box(7);
     int v = n.get();
-    Console.println("{v}");
+    Output.printLine("{v}");
 }

@@ -1,15 +1,15 @@
 // Conformance: string interpolation, concatenation, escapes, Unicode.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 function main() -> void {
     string name = "Ada";
     int n = 42;
-    Console.println("hello, {name}!");
-    Console.println("n = {n}, n+1 = {n + 1}");
-    Console.println("a" + "b" + "c");
-    Console.println("tab\tend");
-    Console.println("brace \{literal\}");
-    Console.println("\u{2713} done");
+    Output.printLine("hello, {name}!");
+    Output.printLine("n = {n}, n+1 = {n + 1}");
+    Output.printLine("a" + "b" + "c");
+    Output.printLine("tab\tend");
+    Output.printLine("brace \{literal\}");
+    Output.printLine("\u{2713} done");
 }

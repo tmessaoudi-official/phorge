@@ -4,7 +4,7 @@
 // Stable per STABILITY.md (Classes & objects).
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 open class Account {
     // A private mutable field + a protected field, reached only through the public API below.
@@ -27,7 +27,7 @@ class Savings extends Account {
 function main() -> void {
     Savings s = new Savings(100, "Ada");
     s.deposit(50);
-    Console.println("{s.balanceOf()}");
-    Console.println(s.statement());
-    Console.println(s.ownerLabel());
+    Output.printLine("{s.balanceOf()}");
+    Output.printLine(s.statement());
+    Output.printLine(s.ownerLabel());
 }

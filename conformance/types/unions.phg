@@ -1,7 +1,7 @@
 // Conformance: union types `A | B` + match-over-union (type patterns).
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 class Cash {
     constructor(public int amount) {}
@@ -19,6 +19,6 @@ function describe(Cash | Card payment) -> string {
 }
 
 function main() -> void {
-    Console.println(describe(new Cash(100)));
-    Console.println(describe(new Card("4321")));
+    Output.printLine(describe(new Cash(100)));
+    Output.printLine(describe(new Card("4321")));
 }

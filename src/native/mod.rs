@@ -70,7 +70,7 @@ pub struct NativeFn {
     /// native erases to (decision N-2). For `Output.printLine`: `echo {a}, "\n"`.
     pub php: fn(&[String]) -> String,
     /// Whether this native is **deterministic** w.r.t. the program text (`true` for all but the
-    /// ambient-environment natives — `Core.Process`/`Core.Env`, whose result depends on the process,
+    /// ambient-environment natives — `Core.Process`/`Core.Environment`, whose result depends on the process,
     /// not the source). A program that calls an impure native is *quarantined* from the byte-identity
     /// differential (the PHP leg runs in a separate process whose argv/env need not match) and tested
     /// separately under a controlled environment — see `tests/process.rs`. Declared per-native here

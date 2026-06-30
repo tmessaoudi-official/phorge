@@ -1,4 +1,4 @@
-//! `Core.Process` / `Core.Env` — the ambient-environment natives (M-Batteries kickoff,
+//! `Core.Process` / `Core.Environment` — the ambient-environment natives (M-Batteries kickoff,
 //! `docs/specs/2026-06-25-process-io-quarantine-seam-design.md`).
 //!
 //! These are the first `pure: false` natives: their results depend on the *process* (its argv / env
@@ -9,8 +9,8 @@
 //! example) under `examples/process/`.
 //!
 //! - `Core.Process.args() -> List<string>` — program arguments (everything after `phg run f.phg --`).
-//! - `Core.Env.get(name) -> string?` — one environment variable, or `null` if unset.
-//! - `Core.Env.all() -> Map<string, string>` — every environment variable, **sorted by key** (Q4) so
+//! - `Core.Environment.get(name) -> string?` — one environment variable, or `null` if unset.
+//! - `Core.Environment.all() -> Map<string, string>` — every environment variable, **sorted by key** (Q4) so
 //!   the result is stable (OS iteration order is not).
 
 use super::*;
@@ -51,7 +51,7 @@ fn env_get(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         // An unset variable is `null` (string?); composes with `??` / if-let like any optional.
         [Value::Str(name)] => Ok(std::env::var(name).map_or(Value::Null, Value::Str)),
-        _ => Err("Env.get expects (string)".into()),
+        _ => Err("Environment.get expects (string)".into()),
     }
 }
 
@@ -80,7 +80,7 @@ pub(crate) fn process_natives() -> Vec<NativeFn> {
             php: |_| "array_slice($argv ?? [], 1)".to_string(),
         },
         NativeFn {
-            module: "Core.Env",
+            module: "Core.Environment",
             name: "get",
             params: vec![Ty::String],
             ret: Ty::Optional(Box::new(Ty::String)),
@@ -96,7 +96,7 @@ pub(crate) fn process_natives() -> Vec<NativeFn> {
             },
         },
         NativeFn {
-            module: "Core.Env",
+            module: "Core.Environment",
             name: "all",
             params: vec![],
             ret: Ty::Map(Box::new(Ty::String), Box::new(Ty::String)),

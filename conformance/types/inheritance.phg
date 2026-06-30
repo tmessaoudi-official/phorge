@@ -1,7 +1,7 @@
 // Conformance: single inheritance — `open`/final-by-default, method override, polymorphic dispatch.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 open class Animal {
     open function sound() -> string {
@@ -27,6 +27,6 @@ class Cat extends Animal {
 function main() -> void {
     Animal a = new Dog();
     Animal b = new Cat();
-    Console.println(a.describe());
-    Console.println(b.describe());
+    Output.printLine(a.describe());
+    Output.printLine(b.describe());
 }

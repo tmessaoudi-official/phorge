@@ -1,7 +1,7 @@
 // Conformance: if/else, for-in over a range, while, expression-if.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 function classify(int n) -> string {
     return if (n < 0) { "neg" } else { if (n == 0) { "zero" } else { "pos" } };
@@ -12,15 +12,15 @@ function main() -> void {
     for (int i in 1..=5) {
         sum = sum + i;
     }
-    Console.println("sum 1..5 = {sum}");
+    Output.printLine("sum 1..5 = {sum}");
 
     mutable int k = 3;
     while (k > 0) {
-        Console.println("k = {k}");
+        Output.printLine("k = {k}");
         k = k - 1;
     }
 
-    Console.println(classify(-2));
-    Console.println(classify(0));
-    Console.println(classify(7));
+    Output.printLine(classify(-2));
+    Output.printLine(classify(0));
+    Output.printLine(classify(7));
 }

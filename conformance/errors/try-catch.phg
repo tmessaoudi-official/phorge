@@ -1,7 +1,7 @@
 // Conformance: checked exceptions — `throws`, `throw`, `try`/`catch`/`finally`.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 class BadInput implements Error {
     constructor(public string message) {}
@@ -16,11 +16,11 @@ function checked(int n) -> int throws BadInput {
 
 function main() -> void {
     try {
-        Console.println("ok {checked(5)}");
-        Console.println("ok {checked(-1)}");
+        Output.printLine("ok {checked(5)}");
+        Output.printLine("ok {checked(-1)}");
     } catch (BadInput e) {
-        Console.println("caught {e.message}");
+        Output.printLine("caught {e.message}");
     } finally {
-        Console.println("done");
+        Output.printLine("done");
     }
 }

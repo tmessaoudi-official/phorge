@@ -1,23 +1,23 @@
-// Conformance: Core.Math + Core.Text over exactly-representable values (no irrational floats).
+// Conformance: Core.Math + Core.String over exactly-representable values (no irrational floats).
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Math;
-import Core.Text;
+import Core.String;
 
 function main() -> void {
-    Console.println("abs={Math.abs(-5)} min={Math.min(3, 8)} max={Math.max(3, 8)}");
-    Console.println("sqrt={Math.sqrt(16.0)} pow={Math.pow(2.0, 3.0)}");
+    Output.printLine("abs={Math.abs(-5)} min={Math.min(3, 8)} max={Math.max(3, 8)}");
+    Output.printLine("sqrt={Math.sqrt(16.0)} pow={Math.pow(2.0, 3.0)}");
 
     string s = "Hello, World";
-    Console.println("len={Text.length(s)}");
-    Console.println("upper={Text.upper(s)}");
-    bool hasWorld = Text.contains(s, "World");
-    Console.println("contains={hasWorld}");
+    Output.printLine("len={String.length(s)}");
+    Output.printLine("upper={String.uppercase(s)}");
+    bool hasWorld = String.contains(s, "World");
+    Output.printLine("contains={hasWorld}");
 
-    List<string> parts = Text.split("a,b,c", ",");
-    string joined = Text.join(parts, "-");
-    Console.println("join={joined}");
-    string replaced = Text.replace("foo bar", "o", "0");
-    Console.println("replace={replaced}");
+    List<string> parts = String.split("a,b,c", ",");
+    string joined = String.join(parts, "-");
+    Output.printLine("join={joined}");
+    string replaced = String.replace("foo bar", "o", "0");
+    Output.printLine("replace={replaced}");
 }

@@ -2,7 +2,7 @@
 // fully erased before any backend (so the PHP output is alias-free). Stable per STABILITY.md.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 type Celsius = int;
 type Name = string;
@@ -27,8 +27,8 @@ function total(Scores xs) -> int {
 function main() -> void {
     Celsius lo = freezing();
     Celsius hi = 100;
-    Console.println(label("water", lo));
-    Console.println(label("steam", hi));
+    Output.printLine(label("water", lo));
+    Output.printLine(label("steam", hi));
     Scores marks = [3, 4, 5];
-    Console.println("total {total(marks)}");
+    Output.printLine("total {total(marks)}");
 }

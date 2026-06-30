@@ -1,22 +1,22 @@
 // Conformance: Map<K,V> — literals, indexing, has, size, keys iteration, values.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.List;
 import Core.Map;
 
 function main() -> void {
     Map<string, int> ages = ["alice" => 30, "bob" => 25, "carol" => 41];
     int alice = ages["alice"];
-    Console.println("alice={alice}");
-    Console.println("size={Map.size(ages)}");
+    Output.printLine("alice={alice}");
+    Output.printLine("size={Map.size(ages)}");
     bool hasBob = Map.has(ages, "bob");
     bool hasDave = Map.has(ages, "dave");
-    Console.println("hasBob={hasBob} hasDave={hasDave}");
+    Output.printLine("hasBob={hasBob} hasDave={hasDave}");
 
     for (string name in Map.keys(ages)) {
-        Console.println("key {name}");
+        Output.printLine("key {name}");
     }
     int total = List.sum(Map.values(ages));
-    Console.println("total={total}");
+    Output.printLine("total={total}");
 }

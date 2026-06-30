@@ -643,12 +643,20 @@ impl<'a> Compiler<'a> {
     /// method return type. Anything it can name but isn't numeric/class collapses to `Other`; only a
     /// genuinely unresolvable operand errors (the same surface that errored pre-Wave-4).
     fn ctype(&self, e: &Expr) -> Result<CTy, String> {
-        // S2.1-broad: consult the checker's reified-operand side-table FIRST. It holds only
-        // `Call`/`Member`/`Index` entries whose result the checker proved concrete (and only ones that
-        // map to a real operand `CTy`, the rest dropped at the compile boundary), so a generic method
-        // result (`box.get() + 1`), a generic field read (`box.value + 1`), or a `List<T>`/`Map`-typed
-        // return specializes as the operand the checker proved — even though the static shape erased to
-        // `mixed`. Empty on the run-family `compile` path ⇒ zero overhead, byte-identical.
+        // S2.1-broad reified-operand side-table — consulted as a **FALLBACK**, not first. The normal
+        // class-aware resolution wins whenever it yields a concrete operand type, so a correctly-typed
+        // field/method read is never overridden. Why fallback (not first): the map is keyed only by
+        // `span.start`, and an injected prelude (parsed from its own 0-based source string, then
+        // prepended) can share a `span.start` with a user expression — consulting it first let a user
+        // entry hijack a prelude `this.field` read, a spurious "cannot infer numeric type" (the
+        // `datetimes.phg` regression). Reified now applies ONLY when the normal path can't resolve the
+        // operand (an erased generic — `box.get() + 1`, `box.value + 1`, a `List<T>`/`Map` return —
+        // which collapses to `Other`), exactly what the side-table was built for, so the generic
+        // specialization is unaffected. Empty on the run-family `compile` path ⇒ zero overhead.
+        let normal = self.ctype_normal(e);
+        if matches!(normal, Ok(ref c) if !matches!(c, CTy::Other)) {
+            return normal;
+        }
         if !self.reified_operands.is_empty() {
             let key = match e {
                 Expr::Call { span, .. } | Expr::Member { span, .. } | Expr::Index { span, .. } => {
@@ -660,6 +668,11 @@ impl<'a> Compiler<'a> {
                 return Ok(cty.clone());
             }
         }
+        normal
+    }
+
+    /// The class-aware operand resolution proper; the reified-operand fallback in [`ctype`] wraps it.
+    fn ctype_normal(&self, e: &Expr) -> Result<CTy, String> {
         match e {
             Expr::Int(..) => Ok(CTy::Int),
             Expr::Float(..) => Ok(CTy::Float),

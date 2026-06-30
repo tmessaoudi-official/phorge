@@ -1,17 +1,17 @@
 // Conformance: bytes primitive — `b"…"` literals (\xHH), Core.Bytes interop.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Bytes;
 
 function main() -> void {
     bytes hello = Bytes.fromString("hello");
-    Console.println("len={Bytes.length(hello)}");
+    Output.printLine("len={Bytes.length(hello)}");
 
     bytes raw = b"\x48\x69";              // "Hi"
     string s = Bytes.toString(raw) ?? "?";
-    Console.println(s);
+    Output.printLine(s);
 
     bytes joined = Bytes.concat(hello, raw);
-    Console.println("joinedLen={Bytes.length(joined)}");
+    Output.printLine("joinedLen={Bytes.length(joined)}");
 }

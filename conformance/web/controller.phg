@@ -3,7 +3,7 @@
 // byte-identical run≡runvm≡real PHP.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Bytes;
 import Core.Http;
 
@@ -21,7 +21,7 @@ function root(Request req) -> Response { return Response.text(200, "root"); }
 function show(Router rt, string path) -> void {
   Response resp = rt.handle(new Request("GET", path, b"", [], []));
   int st = resp.status;
-  Console.println("{path} -> {st} " + (Bytes.toString(resp.body) ?? "?"));
+  Output.printLine("{path} -> {st} " + (Bytes.toString(resp.body) ?? "?"));
 }
 
 function main() -> void {

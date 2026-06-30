@@ -1,7 +1,7 @@
 // Conformance: classes — constructor promotion, methods, this, field reads.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 class Rect {
     constructor(public int w, public int h) {}
@@ -17,7 +17,7 @@ class Rect {
 
 function main() -> void {
     Rect r = new Rect(3, 4);
-    Console.println("area = {r.area()}");
+    Output.printLine("area = {r.area()}");
     Rect big = r.scaled(2);
-    Console.println("big = {big.w}x{big.h}, area = {big.area()}");
+    Output.printLine("big = {big.w}x{big.h}, area = {big.area()}");
 }

@@ -1,6 +1,6 @@
 //! Process/Env quarantine-seam tests under a CONTROLLED environment.
 //!
-//! `Core.Process`/`Core.Env` are `pure: false`: their results depend on the process, not the program
+//! `Core.Process`/`Core.Environment` are `pure: false`: their results depend on the process, not the program
 //! text, so the byte-identity differential SKIPS any program importing them (see
 //! `uses_impure_native` in `tests/differential.rs`). They are instead exercised here, where the test
 //! sets the args/env it expects. This crate is separate from the `#![forbid(unsafe_code)]` library,
@@ -25,7 +25,7 @@ import Core.Output;
 import Core.Process;
 import Core.List;
 function main() -> void {
-    var a = Process.args();
+    var a = Process.arguments();
     Output.printLine("n={List.length(a)}");
     for (string s in a) { Output.printLine(s); }
 }"#;
@@ -46,20 +46,20 @@ fn env_natives_under_controlled_environment() {
     // get → value | null (composes with `??`).
     let get_src = r#"package Main;
 import Core.Output;
-import Core.Env;
+import Core.Environment;
 function main() -> void {
-    Output.printLine(Env.get("PHORJ_IT_PRESENT") ?? "<unset>");
-    Output.printLine(Env.get("PHORJ_IT_DEFINITELY_UNSET_XYZ") ?? "<unset>");
+    Output.printLine(Environment.get("PHORJ_IT_PRESENT") ?? "<unset>");
+    Output.printLine(Environment.get("PHORJ_IT_DEFINITELY_UNSET_XYZ") ?? "<unset>");
 }"#;
     assert_eq!(cmd_run(get_src).unwrap(), "yes\n<unset>\n");
 
     // all → a Map keyed by every env var; the set var is present, and keys come back sorted.
     let all_src = r#"package Main;
 import Core.Output;
-import Core.Env;
+import Core.Environment;
 import Core.Map;
 function main() -> void {
-    var e = Env.all();
+    var e = Environment.all();
     Output.printLine("has={Map.has(e, \"PHORJ_IT_PRESENT\")}");
 }"#;
     assert_eq!(cmd_run(all_src).unwrap(), "has=true\n");
@@ -94,7 +94,7 @@ function main(): void { Output.printLine("hi"); }"#;
 
 #[test]
 fn main_receives_argv_as_a_parameter() {
-    // `main(List<string> args)` — the param is bound to the same argv `Core.Process.args()` exposes.
+    // `main(List<string> args)` — the param is bound to the same argv `Core.Process.arguments()` exposes.
     let _g = ARGS_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     set_process_args(vec!["a".into(), "bb".into(), "ccc".into()]);
     let src = r#"package Main;

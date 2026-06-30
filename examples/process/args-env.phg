@@ -1,8 +1,8 @@
-// Core.Process / Core.Env — the ambient-environment natives.
+// Core.Process / Core.Environment — the ambient-environment natives.
 //
 // This is a WALKTHROUGH, not a byte-identity-gated example: its output depends on the process
 // (its arguments and environment), which the PHP leg of the differential runs in a separate
-// process that need not match. So programs importing Core.Process / Core.Env are QUARANTINED from
+// process that need not match. So programs importing Core.Process / Core.Environment are QUARANTINED from
 // the oracle and tested separately under a controlled environment (tests/process.rs).
 //
 // Run it:   phg run examples/process/args-env.phg -- alpha beta
@@ -10,7 +10,7 @@ package Main;
 
 import Core.Output;
 import Core.Process;
-import Core.Env;
+import Core.Environment;
 import Core.List;
 import Core.Map;
 
@@ -23,10 +23,10 @@ function main(): void {
     }
 
     // A single environment variable, or null if unset — composes with `??` like any optional.
-    Output.printLine("HOME = {Env.get(\"HOME\") ?? \"<unset>\"}");
-    Output.printLine("PHORJ_DEMO = {Env.get(\"PHORJ_DEMO\") ?? \"<unset>\"}");
+    Output.printLine("HOME = {Environment.get(\"HOME\") ?? \"<unset>\"}");
+    Output.printLine("PHORJ_DEMO = {Environment.get(\"PHORJ_DEMO\") ?? \"<unset>\"}");
 
     // Every environment variable, sorted by key (a stable order; OS iteration order is not).
-    var env = Env.all();
+    var env = Environment.all();
     Output.printLine("env count = {Map.size(env)}");
 }

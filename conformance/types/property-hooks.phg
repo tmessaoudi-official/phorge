@@ -4,7 +4,7 @@
 // the Rust backends' shortest-round-trip and PHP's echo).
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 class Account {
     constructor(public mutable int raw) {}
@@ -23,11 +23,11 @@ class Account {
 
 function main() -> void {
     Account a = new Account(50);
-    Console.println("balance {a.balance} empty {a.isEmpty}");
+    Output.printLine("balance {a.balance} empty {a.isEmpty}");
     a.balance = -10; // the set hook clamps to 0
-    Console.println("after {a.balance} empty {a.isEmpty}");
+    Output.printLine("after {a.balance} empty {a.isEmpty}");
     a.balance = 75;
-    Console.println("set {a.balance}");
+    Output.printLine("set {a.balance}");
     // A computed read is a first-class arithmetic operand.
-    Console.println("plus {a.balance + 25}");
+    Output.printLine("plus {a.balance + 25}");
 }

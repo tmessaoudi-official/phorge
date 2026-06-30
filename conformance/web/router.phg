@@ -3,7 +3,7 @@
 // golden-output regression coverage. Byte-identical run≡runvm≡real PHP.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Bytes;
 import Core.Http;
 
@@ -16,7 +16,7 @@ function show(Router rt, string method, string path): void {
   Response resp = rt.handle(new Request(method, path, b"", [], []));
   int st = resp.status;
   string body = Bytes.toString(resp.body) ?? "?";
-  Console.println("{method} {path} -> {st} {body}");
+  Output.printLine("{method} {path} -> {st} {body}");
 }
 
 function main() -> void {

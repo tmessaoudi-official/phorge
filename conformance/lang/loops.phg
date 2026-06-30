@@ -2,7 +2,7 @@
 // break/continue, while-let. Stable per STABILITY.md (Bindings & flow, Operators).
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 function main() -> void {
     // while: test before each iteration; compound-assign accumulates.
@@ -12,21 +12,21 @@ function main() -> void {
         sum += i;
         i += 1;
     }
-    Console.println("while {sum}");
+    Output.printLine("while {sum}");
 
     // do-while: body runs once before the first test.
     mutable int tries = 0;
     do {
         tries += 1;
     } while (tries < 3);
-    Console.println("do {tries}");
+    Output.printLine("do {tries}");
 
     // C-for with ++ ; *= product.
     mutable int product = 1;
     for (mutable int k = 1; k <= 4; k++) {
         product *= k;
     }
-    Console.println("for {product}");
+    Output.printLine("for {product}");
 
     // break + continue.
     mutable int evens = 0;
@@ -39,7 +39,7 @@ function main() -> void {
         }
         evens += 1;
     }
-    Console.println("evens {evens}");
+    Output.printLine("evens {evens}");
 
     // The full compound-assign family on one accumulator.
     mutable int x = 20;
@@ -49,7 +49,7 @@ function main() -> void {
     x /= 4;
     x %= 7;
     x--;
-    Console.println("compound {x}");
+    Output.printLine("compound {x}");
 
     // while-let: loop while an optional is non-null, binding its inner value.
     mutable int? next = 3;
@@ -58,5 +58,5 @@ function main() -> void {
         drained += v;
         next = null;
     }
-    Console.println("while-let {drained}");
+    Output.printLine("while-let {drained}");
 }

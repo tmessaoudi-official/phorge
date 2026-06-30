@@ -57,7 +57,7 @@ import Core.Output;
 import Core.Random;
 function main() -> void {{
     Random.seed({seed});
-    Output.printLine("{{Random.next()}}");
+    Output.printLine("{{Random.nextInt()}}");
 }}"#
         )
     };

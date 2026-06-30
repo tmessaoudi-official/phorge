@@ -2,7 +2,7 @@
 // strings `r"…"` / `r#"…"#` (no escapes, no interpolation). Stable per STABILITY.md (Operators).
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 function main() -> void {
     string name = "Ada";
@@ -16,13 +16,13 @@ function main() -> void {
         Regards,
         The Phorj Team
         """;
-    Console.println(letter);
+    Output.printLine(letter);
 
     // Raw strings: every byte literal — no escapes, no interpolation. The `r#"…"#` form carries an
     // embedded `"` verbatim. Ideal for JSON / regex literals.
     string json = r#"{"unit": "px", "pattern": "\d{2,3}"}"#;
-    Console.println(json);
+    Output.printLine(json);
 
     string plain = r"no \n escape and {no} interpolation";
-    Console.println(plain);
+    Output.printLine(plain);
 }

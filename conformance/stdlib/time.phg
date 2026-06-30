@@ -1,30 +1,30 @@
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Time;
 
 function main() -> void {
   Time.freeze(1700000000000);
   Instant now = Instant.now();
-  Console.println("{now.epochMillis()}");
-  Console.println("{now.epochSeconds()}");
+  Output.printLine("{now.epochMillis()}");
+  Output.printLine("{now.epochSeconds()}");
   Duration d = Duration.hours(2).plus(Duration.minutes(15));
-  Console.println("{d.toMillis()}");
-  Console.println("{d.toMinutes()}");
-  Console.println("{d.toSeconds()}");
+  Output.printLine("{d.toMillis()}");
+  Output.printLine("{d.toMinutes()}");
+  Output.printLine("{d.toSeconds()}");
   Instant later = now.plus(d);
-  Console.println("{later.epochMillis()}");
-  Console.println("{later.durationSince(now).toSeconds()}");
-  Console.println("{now.isBefore(later)}");
-  Console.println("{later.isAfter(now)}");
-  Console.println("{now.compareTo(later)}");
-  Console.println("{later.compareTo(now)}");
-  Console.println("{now.compareTo(now)}");
+  Output.printLine("{later.epochMillis()}");
+  Output.printLine("{later.durationSince(now).toSeconds()}");
+  Output.printLine("{now.isBefore(later)}");
+  Output.printLine("{later.isAfter(now)}");
+  Output.printLine("{now.compareTo(later)}");
+  Output.printLine("{later.compareTo(now)}");
+  Output.printLine("{now.compareTo(now)}");
   Instant prev = now.minus(Duration.days(1));
-  Console.println("{prev.epochSeconds()}");
-  Console.println("{Duration.days(1).toHours()}");
-  Console.println("{d.negate().toMinutes()}");
-  Console.println("{d.negate().isNegative()}");
-  Console.println("{Duration.millis(0).isZero()}");
+  Output.printLine("{prev.epochSeconds()}");
+  Output.printLine("{Duration.days(1).toHours()}");
+  Output.printLine("{d.negate().toMinutes()}");
+  Output.printLine("{d.negate().isNegative()}");
+  Output.printLine("{Duration.millis(0).isZero()}");
   Time.unfreeze();
 }

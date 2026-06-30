@@ -4,7 +4,7 @@
 // STABILITY.md (Types).
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 // A function over plain `List<T>` — a `[T; N]` flows in (a fixed list is a list).
 function total(List<int> xs) -> int {
@@ -17,18 +17,18 @@ function total(List<int> xs) -> int {
 
 function main() -> void {
     [int; 3] rgb = [255, 128, 0];
-    Console.println("r={rgb[0]} g={rgb[1]} b={rgb[2]}");
+    Output.printLine("r={rgb[0]} g={rgb[1]} b={rgb[2]}");
 
     // A fixed-list element is a first-class operand.
     var half = rgb[0] / 2;
-    Console.println("half {half}");
+    Output.printLine("half {half}");
 
     // `[int; 3]` is assignable to `List<int>`.
-    Console.println("sum {total(rgb)}");
+    Output.printLine("sum {total(rgb)}");
 
     // Element-set is length-preserving, allowed on a `mutable` fixed list.
     mutable [int; 2] pair = [1, 2];
     pair[0] = 10;
     pair[1] = 20;
-    Console.println("pair {pair[0]},{pair[1]}");
+    Output.printLine("pair {pair[0]},{pair[1]}");
 }

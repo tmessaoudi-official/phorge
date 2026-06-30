@@ -859,7 +859,7 @@ class Instant {
   constructor(public int ms) {}
   static function ofEpochMillis(int m) -> Instant { return new Instant(m); }
   static function ofEpochSeconds(int s) -> Instant { return new Instant(s * 1000); }
-  static function now() -> Instant { return new Instant(Time.nowMillis()); }
+  static function now() -> Instant { return new Instant(Time.nowMilliseconds()); }
   function epochMillis() -> int { return this.ms; }
   function epochSeconds() -> int { return this.ms / 1000; }
   function plus(Duration d) -> Instant { return new Instant(this.ms + d.ms); }

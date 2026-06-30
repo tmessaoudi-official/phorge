@@ -1,15 +1,15 @@
 // Conformance: integer + float arithmetic, operator precedence, power, bitwise.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 function main() -> void {
-    Console.println("{2 + 3 * 4}");
-    Console.println("{(2 + 3) * 4}");
-    Console.println("{17 / 5} {17 % 5}");
-    Console.println("{2 ** 10}");
-    Console.println("{1.5 + 2.25}");
-    Console.println("{10.0 / 4.0}");
-    Console.println("{6 & 3} {6 | 1} {6 ^ 3} {1 << 4} {256 >> 2}");
-    Console.println("{-7} {-(3 - 9)}");
+    Output.printLine("{2 + 3 * 4}");
+    Output.printLine("{(2 + 3) * 4}");
+    Output.printLine("{17 / 5} {17 % 5}");
+    Output.printLine("{2 ** 10}");
+    Output.printLine("{1.5 + 2.25}");
+    Output.printLine("{10.0 / 4.0}");
+    Output.printLine("{6 & 3} {6 | 1} {6 ^ 3} {1 << 4} {256 >> 2}");
+    Output.printLine("{-7} {-(3 - 9)}");
 }

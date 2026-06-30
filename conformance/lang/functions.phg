@@ -1,7 +1,7 @@
 // Conformance: typed params, recursion, default parameters, lambdas + pipe.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 function fact(int n) -> int {
     return if (n <= 1) { 1 } else { n * fact(n - 1) };
@@ -16,10 +16,10 @@ function applyTwice(int x, (int) -> int f) -> int {
 }
 
 function main() -> void {
-    Console.println("{fact(5)}");
-    Console.println(greet("Ada"));
-    Console.println(greet("Ada", "Hi"));
+    Output.printLine("{fact(5)}");
+    Output.printLine(greet("Ada"));
+    Output.printLine(greet("Ada", "Hi"));
     var inc = fn(int x) => x + 1;
-    Console.println("{applyTwice(10, inc)}");
-    Console.println("{5 |> inc |> inc}");
+    Output.printLine("{applyTwice(10, inc)}");
+    Output.printLine("{5 |> inc |> inc}");
 }

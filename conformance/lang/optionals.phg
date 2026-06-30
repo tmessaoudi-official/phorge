@@ -1,7 +1,7 @@
 // Conformance: optionals T?, ?? coalesce, ?. safe access, if-let, opt! force-unwrap.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 class Box {
     constructor(public int value) {}
@@ -17,12 +17,12 @@ function pick(bool present) -> Box? {
 function main() -> void {
     int a = pick(true)?.value ?? -1;
     int b = pick(false)?.value ?? -1;
-    Console.println("{a} {b}");
+    Output.printLine("{a} {b}");
 
     if (var box = pick(true)) {
-        Console.println("got {box.value}");
+        Output.printLine("got {box.value}");
     }
 
     Box forced = pick(true)!;
-    Console.println("forced {forced.value}");
+    Output.printLine("forced {forced.value}");
 }

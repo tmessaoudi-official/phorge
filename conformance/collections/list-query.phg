@@ -3,26 +3,26 @@
 // empty-list null case. Byte-identical run≡runvm≡real PHP.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.List;
 
 function main() -> void {
     List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6];
-    Console.println("unique {List.length(List.unique(xs))}");
-    Console.println("min {List.min(xs) ?? 0} max {List.max(xs) ?? 0}");
-    Console.println("find {List.find(xs, fn(int x) => x > 4) ?? -1}");
-    Console.println("any {List.any(xs, fn(int x) => x > 8)} all {List.all(xs, fn(int x) => x > 0)}");
-    Console.println("any2 {List.any(xs, fn(int x) => x > 9)} all2 {List.all(xs, fn(int x) => x < 5)}");
+    Output.printLine("unique {List.length(List.unique(xs))}");
+    Output.printLine("min {List.min(xs) ?? 0} max {List.max(xs) ?? 0}");
+    Output.printLine("find {List.find(xs, fn(int x) => x > 4) ?? -1}");
+    Output.printLine("any {List.any(xs, fn(int x) => x > 8)} all {List.all(xs, fn(int x) => x > 0)}");
+    Output.printLine("any2 {List.any(xs, fn(int x) => x > 9)} all2 {List.all(xs, fn(int x) => x < 5)}");
 
     List<string> codes = ["10", "9", "100", "2"];
-    Console.println("smin {List.min(codes) ?? \"?\"} smax {List.max(codes) ?? \"?\"}");
+    Output.printLine("smin {List.min(codes) ?? \"?\"} smax {List.max(codes) ?? \"?\"}");
 
     List<int> none = List.filter(xs, fn(int x) => x > 100);
-    Console.println("empty {List.min(none) ?? -1},{List.max(none) ?? -1}");
+    Output.printLine("empty {List.min(none) ?? -1},{List.max(none) ?? -1}");
 
     // take/drop clamp n to [0, len] (n<0 ⇒ 0, n>len ⇒ len) — never fault.
-    Console.println("take2 {List.length(List.take(xs, 2))} sum {List.sum(List.take(xs, 2))}");
-    Console.println("take0 {List.length(List.take(xs, 0))} take99 {List.length(List.take(xs, 99))}");
-    Console.println("drop2 {List.length(List.drop(xs, 2))} sum {List.sum(List.drop(xs, 2))}");
-    Console.println("drop99 {List.length(List.drop(xs, 99))} dropNeg {List.length(List.drop(xs, -3))}");
+    Output.printLine("take2 {List.length(List.take(xs, 2))} sum {List.sum(List.take(xs, 2))}");
+    Output.printLine("take0 {List.length(List.take(xs, 0))} take99 {List.length(List.take(xs, 99))}");
+    Output.printLine("drop2 {List.length(List.drop(xs, 2))} sum {List.sum(List.drop(xs, 2))}");
+    Output.printLine("drop99 {List.length(List.drop(xs, 99))} dropNeg {List.length(List.drop(xs, -3))}");
 }

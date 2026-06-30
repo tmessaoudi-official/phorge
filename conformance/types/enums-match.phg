@@ -1,7 +1,7 @@
 // Conformance: enums with payloads, match (variant + literal + guard patterns).
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 enum Shape {
     Circle(int radius),
@@ -26,10 +26,10 @@ function sign(int n) -> string {
 }
 
 function main() -> void {
-    Console.println("{area(new Circle(2))}");
-    Console.println("{area(new Rect(3, 5))}");
-    Console.println("{area(new Unit())}");
-    Console.println(sign(0));
-    Console.println(sign(9));
-    Console.println(sign(-4));
+    Output.printLine("{area(new Circle(2))}");
+    Output.printLine("{area(new Rect(3, 5))}");
+    Output.printLine("{area(new Unit())}");
+    Output.printLine(sign(0));
+    Output.printLine(sign(9));
+    Output.printLine(sign(-4));
 }

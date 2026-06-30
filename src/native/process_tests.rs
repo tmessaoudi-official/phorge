@@ -4,8 +4,8 @@ use super::*;
 fn process_env_natives_are_impure_and_registered() {
     for (module, name) in [
         ("Core.Process", "arguments"),
-        ("Core.Env", "get"),
-        ("Core.Env", "all"),
+        ("Core.Environment", "get"),
+        ("Core.Environment", "all"),
     ] {
         let i = index_of(module, name).unwrap_or_else(|| panic!("{module}.{name} registered"));
         assert!(
@@ -22,13 +22,13 @@ fn process_env_natives_are_impure_and_registered() {
 #[test]
 fn every_other_native_is_pure() {
     // The quarantine seam relies on exactly the impure natives being marked impure. Whole-module
-    // impure: the ambient-environment natives (`Core.Process`/`Core.Env`). `Core.Random` is PURE
+    // impure: the ambient-environment natives (`Core.Process`/`Core.Environment`). `Core.Random` is PURE
     // (2026-06-27): the transpiler hand-rolls the same xorshift64, so a seeded sequence is
     // byte-identical and Random rejoins the oracle. `Core.Crypto` is the one **mixed** module —
     // `hashPassword` is impure (random salt → quarantined) but `verifyPassword` is pure
     // (deterministic for a fixed `(password, hash)` → gateable). `Core.Time` is impure (M-TIME): an
     // unfrozen `nowMillis()` reads the wall clock; a program freezes the clock to become gateable.
-    let impure_modules = ["Core.Process", "Core.Env", "Core.Time"];
+    let impure_modules = ["Core.Process", "Core.Environment", "Core.Time"];
     for n in registry() {
         let impure = impure_modules.contains(&n.module)
             || (n.module == "Core.Cryptography" && n.name == "hashPassword");
@@ -85,7 +85,7 @@ fn env_all_is_sorted_by_key() {
                 (HKey::Str(x), HKey::Str(y)) => x.cmp(y),
                 _ => std::cmp::Ordering::Equal,
             });
-            assert_eq!(keys, sorted, "Env.all() keys must be sorted");
+            assert_eq!(keys, sorted, "Environment.all() keys must be sorted");
         }
         other => panic!("env_all returned {other:?}"),
     }

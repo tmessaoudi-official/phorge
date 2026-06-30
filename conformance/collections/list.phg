@@ -1,24 +1,24 @@
 // Conformance: List<T> — literals, indexing, length, reverse, sum, contains, map/filter/reduce.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.List;
 
 function main() -> void {
     List<int> xs = [1, 2, 3, 4];
-    Console.println("first={xs[0]} last={xs[3]}");
-    Console.println("len={List.length(xs)} sum={List.sum(xs)}");
-    Console.println("has3={List.contains(xs, 3)} has9={List.contains(xs, 9)}");
+    Output.printLine("first={xs[0]} last={xs[3]}");
+    Output.printLine("len={List.length(xs)} sum={List.sum(xs)}");
+    Output.printLine("has3={List.contains(xs, 3)} has9={List.contains(xs, 9)}");
 
     List<int> rev = List.reverse(xs);
-    Console.println("rev0={rev[0]}");
+    Output.printLine("rev0={rev[0]}");
 
     List<int> doubled = List.map(xs, fn(int x) => x * 2);
-    Console.println("mapSum={List.sum(doubled)}");
+    Output.printLine("mapSum={List.sum(doubled)}");
 
     List<int> evens = List.filter(xs, fn(int x) => x % 2 == 0);
-    Console.println("evens={List.length(evens)}");
+    Output.printLine("evens={List.length(evens)}");
 
     int product = List.reduce(xs, 1, fn(int acc, int x) => acc * x);
-    Console.println("product={product}");
+    Output.printLine("product={product}");
 }

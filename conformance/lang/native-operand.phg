@@ -4,18 +4,18 @@
 // CTy-operand trap). Regression for that fix. Byte-identical run≡runvm≡real PHP.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.List;
 import Core.Math;
-import Core.Text;
+import Core.String;
 
 function main() -> void {
     List<int> xs = [10, 20, 30, 40];
 
     // List.length(...) as the left operand of every arithmetic form.
-    Console.println("{List.length(xs) - 1}");
-    Console.println("{List.length(xs) + 2}");
-    Console.println("{List.length(xs) * 3}");
+    Output.printLine("{List.length(xs) - 1}");
+    Output.printLine("{List.length(xs) + 2}");
+    Output.printLine("{List.length(xs) * 3}");
 
     // The classic loop-counter form that first surfaced the bug.
     mutable int i = List.length(xs) - 1;
@@ -24,10 +24,10 @@ function main() -> void {
         sum += xs[i];
         i -= 1;
     }
-    Console.println("rev-sum {sum}");
+    Output.printLine("rev-sum {sum}");
 
     // Other int-returning natives as operands.
-    Console.println("{Math.abs(-7) + 1}");
-    Console.println("{Math.max(3, 9) - 4}");
-    Console.println("{Text.length(\"hello\") * 2}");
+    Output.printLine("{Math.abs(-7) + 1}");
+    Output.printLine("{Math.max(3, 9) - 4}");
+    Output.printLine("{String.length(\"hello\") * 2}");
 }

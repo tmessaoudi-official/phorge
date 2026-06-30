@@ -1,18 +1,18 @@
 // Conformance: decimal fixed-point — exact `+ - *`, and named rounded division/rounding.
 package Main;
 
-import Core.Console;
+import Core.Output;
 import Core.Decimal;
 
 function main() -> void {
     decimal price = 19.99d;
     decimal total = price * 3d;          // exact: 59.97
-    Console.println("total = {total}");
+    Output.printLine("total = {total}");
 
-    decimal share = Decimal.div(total, 7d, 2, new HalfUp());
-    Console.println("share = {share}");
+    decimal share = Decimal.divide(total, 7d, 2, new HalfUp());
+    Output.printLine("share = {share}");
 
     decimal tie = 2.345d;
-    Console.println("up   = {Decimal.round(tie, 2, new HalfUp())}");
-    Console.println("even = {Decimal.round(tie, 2, new HalfEven())}");
+    Output.printLine("up   = {Decimal.round(tie, 2, new HalfUp())}");
+    Output.printLine("even = {Decimal.round(tie, 2, new HalfEven())}");
 }

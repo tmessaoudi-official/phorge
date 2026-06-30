@@ -1,7 +1,7 @@
 // Conformance: intersection types `A & B` — a value satisfying multiple interfaces at once.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 interface Named {
     function name() -> string;
@@ -26,5 +26,5 @@ function describe(Named & Aged who) -> string {
 }
 
 function main() -> void {
-    Console.println(describe(new Person("Ada", 36)));
+    Output.printLine(describe(new Person("Ada", 36)));
 }

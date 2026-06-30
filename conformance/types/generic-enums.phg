@@ -1,7 +1,7 @@
 // Conformance: generic enums — `<T>` on a sum type, inferred at the variant constructor.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 enum Option<T> {
     None,
@@ -16,7 +16,7 @@ function describe(Option<int> o) -> string {
 }
 
 function main() -> void {
-    Console.println(describe(new Some(7)));
+    Output.printLine(describe(new Some(7)));
     Option<int> z = new None();
-    Console.println(describe(z));
+    Output.printLine(describe(z));
 }

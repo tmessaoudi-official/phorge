@@ -1,7 +1,7 @@
 // Conformance: destructuring — struct (irrefutable) + fixed-length list patterns.
 package Main;
 
-import Core.Console;
+import Core.Output;
 
 class Point {
     constructor(public int x, public int y) {}
@@ -20,6 +20,6 @@ function swap(int a, int b) -> string {
 
 function main() -> void {
     Point p = new Point(3, 4);
-    Console.println(describe(p));
-    Console.println(swap(7, 9));
+    Output.printLine(describe(p));
+    Output.printLine(swap(7, 9));
 }
