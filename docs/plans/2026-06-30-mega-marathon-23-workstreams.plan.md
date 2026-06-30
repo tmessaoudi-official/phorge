@@ -7,6 +7,20 @@
 > slate — it is locked below. Only stop for genuine design forks (real ambiguity with no
 > defensible default) via `AskUserQuestion`.
 
+## Progress log (most recent first)
+
+- **NAMING overhaul ✅ COMPLETE** (inserted mid-marathon; SSOT `docs/specs/2026-06-30-naming-overhaul-design.md`):
+  all 7 stages green + byte-identical. Lambda `fn`→`function`, `recv`→`receive`, Time millis→milliseconds,
+  `Empty`→`empty` + `E-VOID-IN-UNION`, Result `Ok`/`Err`→`Success`/`Failure`, packages/natives/CLI renamed,
+  living-docs sweep. Binary smoke-tested.
+- **A1 ✅ COMPLETE** — green-threads cooperative cutover (steps 2–5), byte-identical end-to-end.
+- **B1 ✅ COMPLETE** — iteration protocol: `for-in` over List/Set/**string** (chars) / **Map** (two-binding
+  `for (K k, V v in map)`), + **`List.enumerate`** (`Map<int,T>`, Pythonic `for (i, x in enumerate)`).
+  AST `Stmt::For` gained `val: Option<(Type,String)>`. **`zip` DEFERRED to B3** (needs heterogeneous tuple
+  pairs — a `Map<A,B>` interim was rejected; see KNOWN_ISSUES). Foundation for B2/A2/D1.
+- **NEXT: A2** (generator `yield` + lazy sequences — can build on the A1 green-thread coroutine infra
+  `green::sched`/`coro`), then A3 → B2/B3/B4 → C → D → E → F → G → H.
+
 ## Standing rules (apply to EVERY workstream — no exceptions)
 
 - **Autonomy:** project bypass sentinel
