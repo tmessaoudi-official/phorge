@@ -400,7 +400,7 @@ async function boot() {
   // current Phorj — return types are mandatory — so the editor never boots a program that errors
   // on the first run. Mirrors gen_examples.py's DEFAULT (keep the two in sync).
   let initialDoc = examples["hello (default)"] ||
-    'package Main;\nimport Core.Console;\n\nfunction main(): void {\n    List<string> who = ["world", "Phorj"];\n    for (string w in who) {\n        Console.println("Hello, {w}!");\n    }\n}\n';
+    'package Main;\nimport Core.Output;\n\nfunction main(): void {\n    List<string> who = ["world", "Phorj"];\n    for (string w in who) {\n        Output.printLine("Hello, {w}!");\n    }\n}\n';
   if (location.hash.length > 2) {
     try {
       const decoded = await decodeSource(location.hash.slice(1));

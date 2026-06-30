@@ -16,12 +16,12 @@ GUIDE = HERE.parent.parent / "examples" / "guide"
 OUT = HERE / "examples.js"
 
 DEFAULT = """package Main;
-import Core.Console;
+import Core.Output;
 
 function main(): void {
     List<string> who = ["world", "Phorj"];
     for (string w in who) {
-        Console.println("Hello, {w}!");
+        Output.printLine("Hello, {w}!");
     }
 }
 """
