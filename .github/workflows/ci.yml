@@ -28,7 +28,7 @@ jobs:
     name: gate (fmt + clippy + test + PHP oracle)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # rustup honours rust-toolchain.toml (channel 1.96.0 + rustfmt + clippy components).
       # `rustup show` installs that pinned toolchain and its components on first use, so the
@@ -73,7 +73,7 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install pinned Rust toolchain
         run: rustup show
       - name: Cache cargo registry + target
@@ -92,7 +92,7 @@ jobs:
     name: cross-build (phg build --target parity)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install pinned Rust toolchain
         run: rustup show
