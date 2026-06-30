@@ -388,7 +388,7 @@ impl<'c> Interp<'c> {
                     // `recv` on an empty channel: the synchronous path faults; the cooperative path
                     // SUSPENDS the task (`Trap::Recv`) until a `send` on this channel wakes it, then
                     // retries — byte-identical interleaving to the VM (the shared `green::sched` kernel).
-                    "recv" => loop {
+                    "receive" => loop {
                         let front = buf.borrow_mut().pop_front();
                         match front {
                             Some(v) => return Ok(v),

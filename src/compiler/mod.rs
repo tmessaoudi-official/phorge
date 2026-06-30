@@ -896,7 +896,7 @@ impl<'a> Compiler<'a> {
             // `spawn <call>` is a `Task<T>` handle (M6 W4). Modeled as `CTy::Class("Task")` (the
             // reserved built-in) so `var t = spawn f(); t.join()` dispatches the `Op::Join` lowering —
             // without it the instance-method path would not recognize the receiver. (The payload type
-            // `T` is not carried, so a `t.join()`/`ch.recv()` result is not specialized to `AddI`/etc.
+            // `T` is not carried, so a `t.join()`/`ch.receive()` result is not specialized to `AddI`/etc.
             // when used directly as an arithmetic operand — it still runs correctly via the polymorphic
             // arithmetic path, only without the int/float fast op; byte-identity is unaffected.)
             Expr::Spawn { .. } => Ok(CTy::Class("Task".to_string())),

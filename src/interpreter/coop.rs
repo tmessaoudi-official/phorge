@@ -220,7 +220,7 @@ package Main;
 import Core.Output;
 
 function consume(Channel<int> ch): int {
-    int v = ch.recv();
+    int v = ch.receive();
     Output.printLine("got {v}");
     return v;
 }
@@ -254,7 +254,7 @@ function produce(Channel<int> ch): int {
 function main(): void {
     Channel<int> ch = Channel.create();
     Task<int> p = spawn produce(ch);
-    int v = ch.recv();
+    int v = ch.receive();
     Output.printLine("recv {v}");
     int r = p.join();
     Output.printLine("done {r}");
@@ -280,7 +280,7 @@ function main(): void {
     Channel<string> words = Channel.create();
     words.send("hello");
     words.send("world");
-    Output.printLine("{words.recv()} {words.recv()}");
+    Output.printLine("{words.receive()} {words.receive()}");
 }
 "#;
         assert_eq!(coop_run(src).unwrap(), "9 squared = 81\nhello world\n");

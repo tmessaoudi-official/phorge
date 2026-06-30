@@ -1121,11 +1121,11 @@ impl Checker {
                 }
                 Some(Ty::Void)
             }
-            ("Channel", "recv") => {
+            ("Channel", "receive") => {
                 if !args.is_empty() {
                     return Some(self.err_coded(
                         span,
-                        "`recv` takes no arguments".to_string(),
+                        "`receive` takes no arguments".to_string(),
                         "E-CONCURRENCY-ARITY",
                         None,
                     ));

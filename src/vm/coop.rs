@@ -136,7 +136,7 @@ package Main;
 import Core.Output;
 
 function consume(Channel<int> ch): int {
-    int v = ch.recv();
+    int v = ch.receive();
     Output.printLine("got {v}");
     return v;
 }
@@ -168,7 +168,7 @@ function produce(Channel<int> ch): int {
 function main(): void {
     Channel<int> ch = Channel.create();
     Task<int> p = spawn produce(ch);
-    int v = ch.recv();
+    int v = ch.receive();
     Output.printLine("recv {v}");
     int r = p.join();
     Output.printLine("done {r}");

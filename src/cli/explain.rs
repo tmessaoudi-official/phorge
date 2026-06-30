@@ -1130,12 +1130,12 @@ pub fn explain_text(code: &str) -> Option<String> {
         }
         "E-CONCURRENCY-METHOD" => {
             "E-CONCURRENCY-METHOD — unknown method on a concurrency handle.\n\n\
-             `Channel<T>` has `send(v)` and `recv()`; `Task<T>` has `join()`; the channel constructor is\n\
+             `Channel<T>` has `send(v)` and `receive()`; `Task<T>` has `join()`; the channel constructor is\n\
              `Channel.create()`. No other built-in method exists on these handles (M6 W4).\n"
         }
         "E-CONCURRENCY-ARITY" => {
             "E-CONCURRENCY-ARITY — a concurrency-handle method got the wrong number of arguments.\n\n\
-             `ch.send(v)` takes exactly one argument; `ch.recv()` and `t.join()` take none (M6 W4).\n"
+             `ch.send(v)` takes exactly one argument; `ch.receive()` and `t.join()` take none (M6 W4).\n"
         }
         _ => return None,
     };

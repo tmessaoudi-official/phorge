@@ -668,7 +668,7 @@ impl Compiler<'_> {
                     }
                 }
             }
-            // Built-in concurrency instance methods (M6 W4): `ch.send(v)` / `ch.recv()` / `t.join()`,
+            // Built-in concurrency instance methods (M6 W4): `ch.send(v)` / `ch.receive()` / `t.join()`,
             // dispatched off the receiver's compile-time type (`Channel`/`Task` are reserved class
             // names, never user classes). Lowers to the dedicated op — there is no method-table entry
             // to find, so this MUST precede the generic `CallMethod` path.
@@ -681,7 +681,7 @@ impl Compiler<'_> {
                         }
                         match (cls.as_str(), name.as_str()) {
                             ("Channel", "send") => self.emit(Op::ChannelSend, line),
-                            ("Channel", "recv") => self.emit(Op::ChannelRecv, line),
+                            ("Channel", "receive") => self.emit(Op::ChannelRecv, line),
                             ("Task", "join") => self.emit(Op::Join, line),
                             _ => {
                                 return Err(format!("`{cls}` has no built-in method `{name}`"));
