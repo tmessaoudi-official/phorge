@@ -88,6 +88,19 @@ binary (not just the differential — see the A1 loader-path lesson):
 A `tools/` codemod script per category (like `core_rename*.py`) is the safe vehicle; verify each with the
 full gate before committing. Distributable coordinates (manifest `module`, vendor dirs) stay lowercase.
 
+### Status — ✅ COMPLETE (2026-06-30)
+All 7 stages landed green + byte-identical (`run≡runvm≡real PHP 8.5`), each a self-contained commit:
+1–4 (natives / packages / `Core.Output`+`Core.Environment` / CLI subcommands) — earlier commits.
+5. `4eec4f3` — lambda `fn`→`function` (retired the `Fn` token; PHP arrow-fn `fn($x)=>` unaffected).
+   `21bb2c2` — `Channel.recv`→`Channel.receive`.
+   `e8bfcc8` — Time `millis`-family → `milliseconds` (PHP `__phorj_now_millis` helper unchanged).
+6. `6ac717a` — type `Empty`→lowercase `empty` + new `E-VOID-IN-UNION` rule (void rejected, empty allowed
+   in a union); `5c17351` — Result variants `Ok`/`Err`→`Success`/`Failure` (structural detection across
+   all four backends). New explain code `E-VOID-IN-UNION`; tests `union_rejects_void_member` /
+   `union_allows_empty_member`.
+7. Living-docs sweep (examples/README, KNOWN_ISSUES, README, FEATURES, INVARIANTS) — collision-safe
+   token codemod. CHANGELOG historical entries left as-is (they record what shipped at the time).
+
 ## Decisions Log
 - [2026-06-30] AGREED: full naming overhaul per the table above; `Task`/`Channel` kept (rejected
   Thread/Observable); lambdas use `function`; `Empty`→lowercase `empty` (void-not-in-union, empty-in-union);

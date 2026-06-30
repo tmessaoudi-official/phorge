@@ -53,7 +53,7 @@ not a panic:
   free/native calls, not method dispatch); (2) **literal defaults only** — a non-literal default
   (`x = f()`) is `E-DEFAULT-PARAM-EXPR`; (3) **direct calls only** — a function **value** (closure /
   named-fn ref) called with missing args is the ordinary arity error, not filled (closures carry no
-  default metadata). (4) `Text.parseFloat`'s `(float)` cast matches Rust `f64::from_str` for typical
+  default metadata). (4) `String.parseFloat`'s `(float)` cast matches Rust `f64::from_str` for typical
   decimals; an extreme-precision input could differ in the last ULP (examples use simple values), and
   `inf`/`nan` are **rejected by design** in both strict and permissive modes (byte-identity — PHP's
   cast can't produce them).
@@ -102,16 +102,16 @@ not a panic:
   far beyond any realistic money use, and an i128 decimal can carry at most ~38 significant digits anyway.
 
 - **Float predicates + numeric conversions (M-NUM S3) — shipped corners + deferrals.** `Core.Math`'s
-  `isNan`/`isFinite`/`isInfinite`/`nan`/`infinity`/`negInfinity`/`intdiv` and `Core.Convert`'s
+  `isNaN`/`isFinite`/`isInfinite`/`nan`/`infinity`/`negativeInfinity`/`integerDivide` and `Core.Conversion`'s
   `toFloat`/`toInt`/`intToDecimal`/`decimalToFloat`/`decimalToInt` ship as additive natives.
-  Corners: (1) **`intdiv` faults are not runnable examples** — a zero divisor (`"division by zero"`) and
-  the `intdiv(i64::MIN, -1)` overflow (`"integer overflow"`) are clean faults, byte-identical on
-  `run`/`runvm` (FaultKind parity) and PHP `intdiv` throws the matching class; but every shipped example
+  Corners: (1) **`integerDivide` faults are not runnable examples** — a zero divisor (`"division by zero"`) and
+  the `integerDivide(i64::MIN, -1)` overflow (`"integer overflow"`) are clean faults, byte-identical on
+  `run`/`runvm` (FaultKind parity) and PHP `integerDivide` throws the matching class; but every shipped example
   must produce identical *Ok* output, so the faults are exercised by the `value::int_intdiv_truncates_and_faults`
-  kernel test + the `math_intdiv` native test, not the example set. (2) **`Math.nan()`/`infinity()`/`negInfinity()`
+  kernel test + the `math_intdiv` native test, not the example set. (2) **`Math.nan()`/`infinity()`/`negativeInfinity()`
   must not be *printed*** — Rust renders `NaN`/`inf`/`-inf` while PHP `echo`es `NAN`/`INF`/`-INF`
   (the pre-existing float-display divergence, also noted for `Core.Json`); the example exercises them
-  only through the `bool`-returning predicates, never `Console.println(infinity())`. The `run ≡ runvm`
+  only through the `bool`-returning predicates, never `Output.printLine(infinity())`. The `run ≡ runvm`
   spine is always byte-identical (both Rust); only printing a special value would diverge from PHP.
   (3) **`toInt(float) -> int?` / `decimalToInt(decimal) -> int?` return `null` on out-of-range / special
   inputs** — `toInt` is `null` for NaN/±∞/out-of-i64-range (deliberately avoiding PHP's `(int)NAN == 0`);
@@ -273,7 +273,7 @@ not a panic:
   be a class/union/intersection value (a primitive or an `Optional` left operand is `E-CAST-TYPE`), so
   a **chained cast on the optional result** (`(x as A) as B`, where `x as A` is `A?`) is rejected —
   bind/if-let the first cast, then cast the narrowed value. **Primitive targets** (`x as int`) are
-  rejected by design (value *conversion* is the `Core.Convert` axis).
+  rejected by design (value *conversion* is the `Core.Conversion` axis).
 - **Intersection types (M-RT S5) — deferred corners** (each rejected cleanly, never a panic): **two or
   more concrete classes** (`Cat & Dog` → `E-INTERSECT-MULTI-CLASS`; a value has exactly one class — this
   becomes meaningful only once class `extends` lands in S6), **primitive/enum/optional/function members**
@@ -602,7 +602,7 @@ or simply unavailable, never a crash):
   valid code.
 - **Lambdas and first-class function references now work inside library (non-`main`) packages**
   (validated 2026-06-29). The loader's name-mangling pass rewrites a same-package function reference in
-  every position — at a call site, inside a lambda body (`fn(int x) => dbl(x)`), AND in value position
+  every position — at a call site, inside a lambda body (`function(int x) => dbl(x)`), AND in value position
   (`var f = dbl;` / passing `dbl` to a higher-order call) — to its package FQN, so the backends resolve
   the mangled function. For `package Main` the mangle is a no-op, so single-file programs are
   byte-identical. Verified `run ≡ runvm ≡ real PHP` (`examples/project/funcvalues/`). Still deferred:
@@ -628,11 +628,11 @@ or simply unavailable, never a crash):
   for a tag outside the set use the generic `el(tag, attrs, children)` / `voidEl(tag, attrs)`. The
   set is macro-driven (each tag is monomorphized), so extending it is a one-line addition — not a
   limitation, just a scope choice. (The earlier "no named helpers at all" deferral is resolved.)
-- **Tag and attribute *names* are not escaped — only values and text are.** `el`/`voidEl` tags and
-  `attr`/`boolAttr` names are treated as trusted author literals (like the surrounding markup);
-  only attribute **values** (via `attr`) and **text** (via `text`) pass through
+- **Tag and attribute *names* are not escaped — only values and text are.** `element`/`voidElement` tags and
+  `attribute`/`booleanAttribute` names are treated as trusted author literals (like the surrounding markup);
+  only attribute **values** (via `attribute`) and **text** (via `text`) pass through
   `htmlspecialchars(_, ENT_QUOTES)`. Do not build a tag or attribute name from untrusted input.
-- **Escaping covers text and attribute-value contexts only.** `html.text` / `attr` are correct for
+- **Escaping covers text and attribute-value contexts only.** `html.text` / `attribute` are correct for
   HTML text and quoted attribute values via `htmlspecialchars(_, ENT_QUOTES)`. They are **not** safe
   for URL contexts (`href="javascript:…"`), inline CSS, or `<script>` bodies — those need
   context-specific escaping and are out of scope until a later wave. Use `html.raw` only for markup
@@ -690,15 +690,15 @@ or simply unavailable, never a crash):
 
 The concurrency *surface* and value model (`docs/specs/2026-06-29-m6-w4-green-threads-design.md`):
 `spawn <call>` → `Task<T>`, `t.join()`, typed `Channel<T>` (`Channel.create()` / `ch.send(v)` /
-`ch.recv()`). Both backends run it **byte-identically** (`run≡runvm`); it is **quarantined from the PHP
+`ch.receive()`). Both backends run it **byte-identically** (`run≡runvm`); it is **quarantined from the PHP
 oracle** (PHP has no green threads — the transpiler emits `E-CONCURRENCY-NO-PHP`, never a misleading
 synchronous lowering).
 
 - **Cooperative scheduling is LIVE (S4.3 cutover).** A `spawn`ned single-overload free-function call is
   **deferred** (it does NOT run at `spawn`); tasks run on stackful coroutines (`corosensei`, native) or
   the eager model (wasm) driven by the single deterministic `green::sched` scheduler — both backends, so
-  interleaving is byte-identical. A `recv` on an **empty** channel (or a `join` on an unfinished task)
-  **suspends** the task until a `send`/completion wakes it. Programs that need true interleaving (a `recv`
+  interleaving is byte-identical. A `receive` on an **empty** channel (or a `join` on an unfinished task)
+  **suspends** the task until a `send`/completion wakes it. Programs that need true interleaving (a `receive`
   *before* the matching `send`) now work instead of fault. **wasm keeps the eager model** (corosensei has
   no native stack to switch); the playground concurrency demo is synchronous-degenerate until a wasm
   frame-swap executor (tracked).
@@ -757,7 +757,7 @@ synchronous lowering).
   aarch64 host isn't supported in v1 (those binaries carry an empty manifest → the "needs a source
   checkout" message); the primary dev host is the only cross-build origin needed now.
 - **Built binaries honor argv + the exit code (Batch-1 B).** A standalone built binary passes its
-  real command-line arguments to `Core.Process.args()` / `main`'s `List<string>` parameter and exits
+  real command-line arguments to `Core.Process.arguments()` / `main`'s `List<string>` parameter and exits
   with `main`'s `int` return. (`--version`/`--help` remain features of the `phorj` CLI itself, not of
   built binaries — a built binary's argv belongs entirely to its embedded program.)
 - **Process exit codes follow the OS 8-bit convention (0–255).** `main`'s `int` return is passed
@@ -840,9 +840,9 @@ SORT_STRING dedupe matches `HKey` equality. Set union/intersection and iteration
 Still pending on this path: the higher-order `Core.List` `map`/`filter`/`reduce` (the
 closure-from-native mechanism — `NativeEval::HigherOrder` + a re-entrant VM closure invoker).
 
-## Core.Text breadth (M4) — ASCII only
+## Core.String breadth (M4) — ASCII only
 
-`Text.reverse`/`equalsIgnoreCase`/`containsIgnoreCase` (like all of `Core.Text`) are **ASCII-oriented** —
+`String.reverse`/`equalsIgnoreCase`/`containsIgnoreCase` (like all of `Core.String`) are **ASCII-oriented** —
 the PHP oracle runs `php -n` (no mbstring), so they map to byte/ASCII core functions
 (`strrev`/`strcasecmp`/`stripos`). `reverse` reverses by chars (== bytes for ASCII; a non-ASCII string
 would byte-reverse differently in PHP `strrev`); the case-insensitive pair folds only ASCII letters.
@@ -859,7 +859,7 @@ The rule (`E-FILE-NAME`/`E-FILE-MULTI-PUBLIC`/`E-FILE-MIXED-PUBLIC`) is enforced
 - `private`/`internal` helper types and functions ride along free (no PSR-4 micro-file tax); only the
   *public* surface is constrained.
 - **Deferred:** a per-project opt-out; applying the rule inside `package Main` (entry files stay exempt
-  by design); auto-rename tooling (`phg fmt --rename-files`).
+  by design); auto-rename tooling (`phg format --rename-files`).
 
 ## Foreign PHP interop (M8.5) — scope + deferrals
 
@@ -924,12 +924,12 @@ are deliberate edges, each either rejected cleanly or kept inside ASCII where th
 ## Secret<T> (Fork B) — scope
 
 `Secret<T>` is an opaque wrapper whose guarantee is by construction: a `Secret` is non-printable
-(`Console.println(s)` / interpolation is a type error) and its value is private (`.expose()` is the
+(`Output.printLine(s)` / interpolation is a type error) and its value is private (`.expose()` is the
 only read path). Deliberate scope edges:
 
 - **`W-SECRET` is syntactic on the direct sink argument.** It flags `sink(secret.expose())` (where
-  the sink is `Console.println`/`print` or `Core.File.write`) but **not** a value laundered through a
-  local (`var p = s.expose(); println(p);`). Full taint/flow analysis is out of scope — the
+  the sink is `Output.printLine`/`print` or `Core.File.write`) but **not** a value laundered through a
+  local (`var p = s.expose(); printLine(p);`). Full taint/flow analysis is out of scope — the
   type-system non-printability is the real guarantee; the lint is a convenience for the common slip.
 - **No runtime `***` redaction.** Path 1 (opaque + non-printable) was chosen over a runtime-redacting
   wrapper, so there is no `Value::Secret` and a Secret never renders as `***` — it simply can't be
@@ -1011,11 +1011,11 @@ only read path). Deliberate scope edges:
   fine. (Remaining narrower corners — `private` *static* fields and intersection-typed receivers — are
   noted near the declaration-visibility entry above.)
 
-- **`Core.Reflect.traits` is not provided.** `Reflect.interfaces`/`parents`/`methods`/`fields` are
+- **`Core.Reflection.traits` is not provided.** `Reflection.interfaces`/`parents`/`methods`/`fields` are
   available, but there is no `traits` enumeration native. A Phorj `trait`'s members are *folded into*
   the using class before any backend runs (a trait is reuse, not a runtime type — unlike an
   interface), so there is no runtime trait identity to report, and PHP's `class_uses` is direct-only,
-  which would not match the folded model. Use `Reflect.methods`/`fields` to inspect what a trait
+  which would not match the folded model. Use `Reflection.methods`/`fields` to inspect what a trait
   contributed. Also unprovided: reflection over enum variants (`interfaces(variant)` etc. return `[]`)
   and `Reflect.*` across packages with namespaced (FQN) class names.
 
@@ -1031,13 +1031,13 @@ only read path). Deliberate scope edges:
   library project. `Core.Test` is `pure` but only meaningful under `phg test`; its PHP emission exists
   only for a future `--emit-phpunit` bridge and is **not** byte-identity-gated.
 
-- **`phg fmt` — v1 limitations (M-fmt).** The formatter is *tidy + comment-safe*, not yet opinionated.
+- **`phg format` — v1 limitations (M-fmt).** The formatter is *tidy + comment-safe*, not yet opinionated.
   (1) **No line-wrapping / width reflow** — a long line stays long; canonical indentation, spacing,
   and blank-line collapse only. (2) **Comment reattachment is position-based**, not a full lossless
   CST: an own-line comment formats above the following declaration/statement, but a **trailing
   same-line comment** (`x = 1; // note`) reattaches as a *leading* comment of the next node, and a
   comment **above the `package` line** moves just below it. Comments are never lost, and the result is
-  idempotent — just occasionally relocated. (3) A **statement-body lambda** (`fn(x) -> T { … }`) is
+  idempotent — just occasionally relocated. (3) A **statement-body lambda** (`function(x) -> T { … }`) is
   rendered on a single line (a lambda is an expression; no reflow yet). All three are additive
   follow-ups; the hard guarantee — formatting never changes program meaning (`parse(fmt(x))`
   preserved) — holds today, gated by a dogfood test over the whole example corpus.

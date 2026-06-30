@@ -13,13 +13,13 @@ executable** with no runtime to install.
 
 Phorj is built to grow into a **full, general-purpose language** — aiming to match the breadth that
 makes PHP productive (and then some), not a toy DSL. **Performance is a first-class goal:** programs
-run on a bytecode VM, and an early three-way benchmark (`phg bench --vs-php`) already shows the VM
+run on a bytecode VM, and an early three-way benchmark (`phg benchmark --vs-php`) already shows the VM
 ahead of PHP on a sample workload — with rigorous, comprehensive benchmarks a tracked milestone on
 the road to GA.
 
 ```phorj
 package Main;
-import Core.Console;
+import Core.Output;
 
 enum Shape {
     Circle(float radius),
@@ -36,7 +36,7 @@ function area(Shape s): float {
 function main() {
     List<Shape> shapes = [Circle(2.0), Rect(3.0, 4.0)];
     for (Shape s in shapes) {
-        Console.println("area = {area(s)}");
+        Output.printLine("area = {area(s)}");
     }
 }
 ```
@@ -104,10 +104,10 @@ chmod +x phg-*-linux-x86_64-musl
 $ phg run examples/hello.phg
 Hello, Phorj!
 
-$ echo 'package Main; import Core.Console; function main() { Console.println("{1 + 2}"); }' | phg run -
+$ echo 'package Main; import Core.Output; function main() { Output.printLine("{1 + 2}"); }' | phg run -
 3
 
-$ phg run -e 'package Main; import Core.Console; function main() { Console.println("inline!"); }'
+$ phg run -e 'package Main; import Core.Output; function main() { Output.printLine("inline!"); }'
 inline!
 ```
 
@@ -198,15 +198,15 @@ continues. Exit code is `0` iff every test passes — so `phg test` drops straig
 `assertNull`/`assertNotNull`, and `assertFaults(() -> T)` (passes iff the closure faults). A runnable
 showcase lives in [`selftest/`](selftest/README.md).
 
-## Formatting (`phg fmt`)
+## Formatting (`phg format`)
 
-`phg fmt` rewrites source to a canonical form (`gofmt`/`rustfmt` shaped):
+`phg format` rewrites source to a canonical form (`gofmt`/`rustfmt` shaped):
 
 ```sh
-phg fmt                 # format every *.phg under the current directory, in place
-phg fmt src/app.phg     # one file
-phg fmt --check .       # CI gate: exit 1 if anything isn't formatted, write nothing
-cat app.phg | phg fmt - # stdin → stdout
+phg format                 # format every *.phg under the current directory, in place
+phg format src/app.phg     # one file
+phg format --check .       # CI gate: exit 1 if anything isn't formatted, write nothing
+cat app.phg | phg format - # stdin → stdout
 ```
 
 It is **meaning-preserving by construction** — it prints from the parsed AST (not by re-spacing
@@ -277,7 +277,7 @@ Every program under [`examples/`](examples/README.md) runs byte-identically on b
 
 `phg transpile <file>` emits PHP 8.x (type-checked first): enums → an abstract base class plus a
 `final` subclass per variant; `match` → an `instanceof` chain; interpolation → concatenation;
-`println` → `echo`. The round-trip is verified against a real `php` in `tests/cli.rs`. (PHP → Phorj
+`printLine` → `echo`. The round-trip is verified against a real `php` in `tests/cli.rs`. (PHP → Phorj
 import is a separate future milestone.)
 
 ## Roadmap & vision

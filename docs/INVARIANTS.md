@@ -48,11 +48,11 @@ on every target — the backends all carry `Value::Int(i64)` and the transpile f
 in practice, so the width never varies. `int` arithmetic that would leave the `i64` range is a **checked
 fault** (`FAULT_INT_OVERFLOW`, EV-7 — never a silent wrap, unlike PHP which auto-promotes an overflowing
 `int` to `float`). `float` is IEEE-754 double (`f64`). `decimal` is an exact i128-carried fixed-point
-value (M-NUM S1). Conversions between these are **explicit** natives (`Core.Convert`) — there is no
+value (M-NUM S1). Conversions between these are **explicit** natives (`Core.Conversion`) — there is no
 implicit coercion.
 
 ## 4. Float display parity — `12.0` renders as `"12"`
-`println`/interpolation render via `Value::as_display`, which formats floats with Rust `{}`
+`printLine`/interpolation render via `Value::as_display`, which formats floats with Rust `{}`
 (`12.0 → "12"`, design rule EV-6). Both backends use the same method, so the transpiled PHP and
 both runtimes agree. Don't introduce a second formatting path.
 
@@ -109,6 +109,6 @@ to keep that gate reproducible. The tracked `scripts/git-hooks/pre-commit` runs
 --all-targets` + `cargo fmt --check` + `cargo build --release`, all clean.
 
 ## 11. No perf change without a measured before/after
-`phg bench <file>` (median-of-N, output-identity gated) is the baseline tool. Any
+`phg benchmark <file>` (median-of-N, output-identity gated) is the baseline tool. Any
 perf-motivated change (Copy-on-`Op`, deep-copy elimination, dispatch tweaks) must ship with a
 before/after number from it — perf claims are **Verified**, not asserted.

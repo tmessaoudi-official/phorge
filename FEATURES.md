@@ -11,7 +11,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 |---|---|---|
 | Static types: `int`, `float`, `bool`, `string` | ✅ | checked at compile time |
 | Raw bytes: `bytes` + `b"…"` literals (`\xHH`) | ✅ | octet sequences distinct from UTF-8 `string`; `Core.Bytes` interop (`fromString`/`toString`/`len`/`concat`/`slice`/`find`) |
-| Typed HTML: `Html`/`Attr` + `Core.Html` kernel, builders & `html"…"` sugar | ✅ | distinct from `string` (XSS-safe by construction); kernel `text` (auto-escape) / `raw` (audited trust) / `render`; builders `el` / `voidEl` / `attr` / `boolAttr` / `concat` + named per-tag helpers (`div`/`p`/`a`/`ul`/`li`/`br`/`img`/…, macro-baked); `html"<h1>{name}</h1>"` literal sugar — holes escape by type unless already `Html`, desugars to kernel calls (no new `Op`) |
+| Typed HTML: `Html`/`Attr` + `Core.Html` kernel, builders & `html"…"` sugar | ✅ | distinct from `string` (XSS-safe by construction); kernel `text` (auto-escape) / `raw` (audited trust) / `render`; builders `element` / `voidElement` / `attribute` / `booleanAttribute` / `concat` + named per-tag helpers (`div`/`p`/`a`/`ul`/`li`/`br`/`img`/…, macro-baked); `html"<h1>{name}</h1>"` literal sugar — holes escape by type unless already `Html`, desugars to kernel calls (no new `Op`) |
 | Empty list literal `[]` in call arguments | ✅ | takes its element type from the expected parameter (e.g. `el("p", [], […])`); other positions still need a non-empty literal |
 | Generic lists: `List<T>` + list literals | ✅ | `[1, 2, 3]` |
 | Immutable-by-default bindings | ✅ | no reassignment; fresh binding instead |
@@ -29,7 +29,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Indexing `xs[i]` | ✅ | bounds-checked; out-of-range → clean runtime fault, never a panic |
 | Integer ranges `a..b` / `a..=b` | ✅ | materialize to `List<int>`; mainly `for (int i in 0..n)` |
 | Expression `if` | ✅ | `var x = if (c) { 1 } else { 2 };` (value position; `else` required) |
-| Lambdas / closures | ✅ | `fn(int x) => x * 2` (expression body) and `fn(int x): int { … }` (statement body, `: T` required); capture enclosing locals by value |
+| Lambdas / closures | ✅ | `function(int x) => x * 2` (expression body) and `function(int x): int { … }` (statement body, `: T` required); capture enclosing locals by value |
 | First-class function values | ✅ | a bare named function is a value (`twice(3, dbl)`); function types `(int) => int`; transpile to PHP arrow fn / `function(){} use()` / first-class callable |
 | `Map<K, V>` literals `[k => v]` + indexing `m[k]` | ✅ | keys are `int`/`bool`/`string`; insertion-ordered; a missing key faults cleanly; transpiles to a PHP `[k => v]` array (M-RT S3) |
 | `Core.Map` query: `keys`/`values`/`has`/`size`; `Core.List` `reverse`/`sum` | ✅ | the first generic stdlib natives — type params inferred at the call site, erased to PHP `array_keys`/`array_values`/`array_key_exists`/`count`/`array_reverse`/`array_sum` (M-RT S7b) |
@@ -61,8 +61,8 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 |---|---|---|
 | Tree-walking interpreter (reference semantics) | ✅ | `phg run` |
 | Bytecode compiler + stack VM (byte-identical) | ✅ | `phg runvm` |
-| Backend benchmark (median-of-N, identity-gated) + memory (peak/current RSS, Linux) | ✅ | `phg bench` |
-| Bytecode disassembler (per-function listings + descriptor tables) | ✅ | `phg disasm` |
+| Backend benchmark (median-of-N, identity-gated) + memory (peak/current RSS, Linux) | ✅ | `phg benchmark` |
+| Bytecode disassembler (per-function listings + descriptor tables) | ✅ | `phg disassemble` |
 | Phorj → PHP transpiler (runs under real PHP) | ✅ | `phg transpile` |
 | Type-check / parse / lex inspection | ✅ | `phg check` / `parse` / `lex`; `phg check --json` emits machine-readable diagnostics (stage/severity/message/line/col/code/hint) for editors/LSP |
 | `--version` / `--help`, plus per-command help with examples | ✅ | `phg -v` / `-h` / `phg <cmd> --help` |
@@ -71,7 +71,7 @@ of the "today" column, see [`examples/`](examples/README.md); for the forward pl
 | Program from stdin / inline / `--` | ✅ | `run -`, `run -e '…'`, `run -- <file>` |
 | Vendor git dependencies (offline, lockfile-pinned) | ✅ | `phg vendor` |
 | Test runner: `test "name" {}` blocks + `Core.Test` assertions (incl. `assertFaults`) | ✅ | `phg test [path…]` |
-| Formatter: canonical-form, comment-preserving, meaning-preserving (no reflow yet) | ✅ | `phg fmt [--check] [path… \| -]` |
+| Formatter: canonical-form, comment-preserving, meaning-preserving (no reflow yet) | ✅ | `phg format [--check] [path… \| -]` |
 | HTTP server: `handle(Request) -> Response` (pure Phorj) over a real socket; PHP `php -S` bridge | ✅ | `phg serve foo.phg` |
 | Standalone executable (host) | ✅ | `phg build foo.phg` |
 | Standalone executable (Linux cross + Windows) | 🔨 | `phg build --target … / --all` |
