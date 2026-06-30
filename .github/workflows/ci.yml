@@ -153,5 +153,5 @@ jobs:
       # The real cross-parity tests: now that cargo-zigbuild, the targets, and llvm-objcopy are all
       # present, tests/build.rs executes (instead of skipping) the musl native-exec and windows PE
       # round-trip assertions.
-      - name: cargo test --test build (cross parity)
-        run: cargo test --test build
+      - name: cargo test --test build -- --test-threads=1 (cross parity)
+        run: cargo test --test build -- --test-threads=1

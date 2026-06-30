@@ -188,8 +188,6 @@ pub(crate) fn build_stub(target: &str) -> Result<std::path::PathBuf, String> {
 /// Cross-compile the stub from a phorj source checkout via `cargo-zigbuild` (Phase 2, unchanged), then
 /// cache it. Reached only when a `Cargo.toml` is present.
 fn build_stub_local(target: &str, cached: &std::path::Path) -> Result<std::path::PathBuf, String> {
-    // --cap-lints=warn so target-specific lints don't trip the deny gate; --bin phg pins the one
-    // intended binary (future-proof against added [[bin]] targets).
     let status = std::process::Command::new("cargo-zigbuild")
         .args(["build", "--release", "--bin", "phg", "--target", target])
         .env("RUSTFLAGS", "--cap-lints=warn")
@@ -216,7 +214,15 @@ fn build_stub_local(target: &str, cached: &std::path::Path) -> Result<std::path:
         .parent()
         .ok_or_else(|| "cache path has no parent".to_string())?;
     std::fs::create_dir_all(parent).map_err(|e| format!("cannot create cache dir: {e}"))?;
-    std::fs::copy(&built, cached).map_err(|e| format!("cannot cache stub: {e}"))?;
+    if cached.is_file() {
+        return Ok(cached.to_path_buf());
+    }
+    let tmp = parent.join(format!(".build-{}", std::process::id()));
+    std::fs::copy(&built, &tmp).map_err(|e| format!("cannot stage stub: {e}"))?;
+    std::fs::rename(&tmp, cached).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("cannot publish stub into cache: {e}")
+    })?;
     Ok(cached.to_path_buf())
 }
 
