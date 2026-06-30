@@ -487,7 +487,7 @@ impl Parser {
                 } else {
                     // Parse the first element, then disambiguate: a following `=>` makes this a map
                     // literal (`[k => v, …]`); otherwise it's a list (`[a, b, …]`). A lambda element
-                    // (`fn(x) => x`) consumes its own `=>` inside `parse_expr`, so it never trips the
+                    // (`function(x) => x`) consumes its own `=>` inside `parse_expr`, so it never trips the
                     // map peek. Once chosen, a mismatched separator errors cleanly at `expect`.
                     let first = self.parse_expr()?;
                     if self.eat(&TokenKind::FatArrow) {
@@ -517,15 +517,15 @@ impl Parser {
                     }
                 }
             }
-            // Lambda expression: `fn(int x, int y) -> int => x + y` (expression body only;
+            // Lambda expression: `function(int x, int y) -> int => x + y` (expression body only;
             // statement-body lambdas land in S3 Task 6).
-            TokenKind::Fn => {
+            TokenKind::Function => {
                 self.advance(); // consume 'fn'
-                self.expect(&TokenKind::LParen, "'(' after 'fn'")?;
+                self.expect(&TokenKind::LParen, "'(' after 'function'")?;
                 let params = self.parse_params()?;
                 self.expect(&TokenKind::RParen, "')' to close lambda parameters")?;
                 // Optional return-type annotation before the `=>`/`{` body. A-1: `:` is canonical
-                // (`fn(int x): string => …`); `->` stays as a silent transition alias.
+                // (`function(int x): string => …`); `->` stays as a silent transition alias.
                 let ret = if self.eat(&TokenKind::Colon) || self.eat(&TokenKind::Arrow) {
                     Some(self.parse_type()?)
                 } else {

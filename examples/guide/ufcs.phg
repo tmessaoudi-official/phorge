@@ -32,7 +32,7 @@ function main(): void {
     var nums = [1, 2, 3, 4, 5];
 
     // Native UFCS + chaining: keep the elements > 2, square them, then sum / count.
-    var pipeline = nums.filter(fn(int x) => x > 2).map(fn(int x) => x * x);
+    var pipeline = nums.filter(function(int x) => x > 2).map(function(int x) => x * x);
     Output.printLine("chain sum  = {pipeline.sum()}"); // 3²+4²+5² = 50
     Output.printLine("chain len  = {pipeline.length()}"); // 3
 

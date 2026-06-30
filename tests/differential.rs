@@ -1336,35 +1336,36 @@ fn s2_match_over_optional_is_byte_identical() {
 #[test]
 fn lambdas_agree() {
     // Basic lambda var call
-    agree("import Core.Output; function main() -> void { var d = fn(int x) => x*2; Output.printLine(\"{d(5)}\"); }");
+    agree("import Core.Output; function main() -> void { var d = function(int x) => x*2; Output.printLine(\"{d(5)}\"); }");
     // Lambda capturing TWO enclosing vars (slot-ordering trigger — invariant #8)
-    agree("import Core.Output; function main() -> void { var a=10; var b=100; var f=fn(int x)=>x+a+b; Output.printLine(\"{f(1)}\"); }");
+    agree("import Core.Output; function main() -> void { var a=10; var b=100; var f=function(int x)=>x+a+b; Output.printLine(\"{f(1)}\"); }");
     // Higher-order user function (lambda passed as argument)
-    agree("import Core.Output; function twice(int x,(int)->int f)->int{return f(f(x));} function main()-> void { Output.printLine(\"{twice(3, fn(int n)=>n+1)}\"); }");
+    agree("import Core.Output; function twice(int x,(int)->int f)->int{return f(f(x));} function main()-> void { Output.printLine(\"{twice(3, function(int n)=>n+1)}\"); }");
     // Lambda call inside string interpolation (height-sensitive — F13)
-    agree("import Core.Output; function main()-> void { var inc=fn(int x)=>x+1; Output.printLine(\"{inc(1)} {inc(2)}\"); }");
+    agree("import Core.Output; function main()-> void { var inc=function(int x)=>x+1; Output.printLine(\"{inc(1)} {inc(2)}\"); }");
     // Lambda call inside a match arm (height-sensitive — F13)
-    agree("import Core.Output; enum E{A(),B()} function pick(E e,(int)->int f)->int{ return match e { A()=>f(1), B()=>f(2) }; } function main()-> void { Output.printLine(\"{pick(new A(), fn(int x)=>x*10)}\"); }");
+    agree("import Core.Output; enum E{A(),B()} function pick(E e,(int)->int f)->int{ return match e { A()=>f(1), B()=>f(2) }; } function main()-> void { Output.printLine(\"{pick(new A(), function(int x)=>x*10)}\"); }");
     // Zero-param lambda
-    agree("import Core.Output; function main()-> void { var greet=fn()=>42; Output.printLine(\"{greet()}\"); }");
+    agree("import Core.Output; function main()-> void { var greet=function()=>42; Output.printLine(\"{greet()}\"); }");
 }
 
 #[test]
 fn lambda_call_errors_agree() {
     // Arity mismatch: lambda expects 1 arg, called with 2
-    agree_err("import Core.Output; function main()-> void { var f=fn(int x)=>x; Output.printLine(\"{f(1,2)}\"); }");
+    agree_err("import Core.Output; function main()-> void { var f=function(int x)=>x; Output.printLine(\"{f(1,2)}\"); }");
 }
 
 #[test]
 fn statement_body_lambda_agrees() {
-    agree("import Core.Output; function main()-> void { var base=100; var f = fn(int x) -> int { var y = x*2; return y + base; }; Output.printLine(\"{f(3)}\"); }");
+    agree("import Core.Output; function main()-> void { var base=100; var f = function(int x) -> int { var y = x*2; return y + base; }; Output.printLine(\"{f(3)}\"); }");
     // 106
 }
 
 #[test]
 fn statement_body_lambda_needs_return_type() {
-    let errs =
-        check_errs("package Main; function main()-> void { var f = fn(int x) { return x; }; }");
+    let errs = check_errs(
+        "package Main; function main()-> void { var f = function(int x) { return x; }; }",
+    );
     assert!(
         errs.iter().any(|e| e.message.contains("explicit `-> T`")),
         "{errs:?}"
@@ -1373,7 +1374,7 @@ fn statement_body_lambda_needs_return_type() {
 
 #[test]
 fn transpiles_statement_lambda_with_use_clause() {
-    let php = transpile_ok("package Main; import Core.Output; function main()-> void { var base=100; var f = fn(int x) -> int { return x + base; }; Output.printLine(\"{f(3)}\"); }");
+    let php = transpile_ok("package Main; import Core.Output; function main()-> void { var base=100; var f = function(int x) -> int { return x + base; }; Output.printLine(\"{f(3)}\"); }");
     // T6: `x` (int param) + `base` (int local) → native `+`, no `__phorj_add` helper.
     assert!(
         php.contains("function($x) use ($base)") && php.contains("return $x + $base"),
@@ -1385,8 +1386,8 @@ fn transpiles_statement_lambda_with_use_clause() {
 fn pipe_agrees() {
     // `5 |> dbl |> inc` == inc(dbl(5)) == 11 (left-associative)
     agree("import Core.Output; function dbl(int x)->int{return x*2;} function inc(int x)->int{return x+1;} function main()-> void { Output.printLine(\"{5 |> dbl |> inc}\"); }");
-    // inline lambda on the right: `3 |> fn(int v) => v + 10` == 13
-    agree("import Core.Output; function main()-> void { var add=fn(int a,int b)->int{return a+b;}; Output.printLine(\"{3 |> fn(int v) => v + 10}\"); }");
+    // inline lambda on the right: `3 |> function(int v) => v + 10` == 13
+    agree("import Core.Output; function main()-> void { var add=function(int a,int b)->int{return a+b;}; Output.printLine(\"{3 |> function(int v) => v + 10}\"); }");
     // precedence: `1 + 2 |> dbl` == dbl(1+2) == 6
     agree("import Core.Output; function dbl(int x)->int{return x*2;} function main()-> void { Output.printLine(\"{1 + 2 |> dbl}\"); }");
 }
@@ -1574,7 +1575,7 @@ fn named_fn_ref_as_value_agrees() {
 
 #[test]
 fn transpiles_lambda_literal_call_target() {
-    let php = transpile_ok("package Main; import Core.Output; function main()-> void { Output.printLine(\"{3 |> fn(int v) => v + 100}\"); }");
+    let php = transpile_ok("package Main; import Core.Output; function main()-> void { Output.printLine(\"{3 |> function(int v) => v + 100}\"); }");
     // T6: `v` (int param) + `100` (int literal) → native `+`.
     assert!(php.contains("(fn($v) => $v + 100)(3)"), "{php}");
 }
@@ -1586,7 +1587,7 @@ fn call_of_general_expression_callee_agrees_and_transpiles() {
     // this guards the VM compiler + transpiler, which previously rejected it ("unsupported call
     // target") — a three-backend inconsistency on the byte-identity spine (Wave 1.4 audit).
     let src =
-        "import Core.Output; function adder() -> (int) -> int { return fn(int x) => x + 1; } \
+        "import Core.Output; function adder() -> (int) -> int { return function(int x) => x + 1; } \
                function main()-> void { Output.printLine(\"{adder()(41)}\"); }";
     agree(src); // run ≡ runvm  → 42
     let php = transpile_ok(&with_pkg(src));
@@ -1596,15 +1597,15 @@ fn call_of_general_expression_callee_agrees_and_transpiles() {
 #[test]
 fn higher_order_natives_agree() {
     // map / filter / reduce with inline lambdas (results shown via List.sum — PHP can't echo arrays).
-    agree("import Core.Output; import Core.List; function main()-> void { var d=List.map([1,2,3], fn(int x)=>x*2); Output.printLine(\"{List.sum(d)}\"); }"); // 12
-    agree("import Core.Output; import Core.List; function main()-> void { var e=List.filter([1,2,3,4], fn(int x)=>x%2==0); Output.printLine(\"{List.sum(e)}\"); }"); // 6
-    agree("import Core.Output; import Core.List; function main()-> void { Output.printLine(\"{List.reduce([1,2,3,4], 1, fn(int a,int x)=>a*x)}\"); }"); // 24
-                                                                                                                                                        // A lambda capturing an enclosing local, passed to a native (capture window parity, invariant #8).
-    agree("import Core.Output; import Core.List; function main()-> void { var k=10; var s=List.map([1,2,3], fn(int x)=>x*k); Output.printLine(\"{List.sum(s)}\"); }"); // 60
-                                                                                                                                                                       // A bare NAMED function reference (zero-capture closure) passed straight to a native.
+    agree("import Core.Output; import Core.List; function main()-> void { var d=List.map([1,2,3], function(int x)=>x*2); Output.printLine(\"{List.sum(d)}\"); }"); // 12
+    agree("import Core.Output; import Core.List; function main()-> void { var e=List.filter([1,2,3,4], function(int x)=>x%2==0); Output.printLine(\"{List.sum(e)}\"); }"); // 6
+    agree("import Core.Output; import Core.List; function main()-> void { Output.printLine(\"{List.reduce([1,2,3,4], 1, function(int a,int x)=>a*x)}\"); }"); // 24
+                                                                                                                                                              // A lambda capturing an enclosing local, passed to a native (capture window parity, invariant #8).
+    agree("import Core.Output; import Core.List; function main()-> void { var k=10; var s=List.map([1,2,3], function(int x)=>x*k); Output.printLine(\"{List.sum(s)}\"); }"); // 60
+                                                                                                                                                                             // A bare NAMED function reference (zero-capture closure) passed straight to a native.
     agree("import Core.Output; import Core.List; function dbl(int x)->int{return x*2;} function main()-> void { var d=List.map([1,2,3], dbl); Output.printLine(\"{List.sum(d)}\"); }"); // 12
                                                                                                                                                                                         // RE-ENTRANCY: a native called from inside another native's closure (map nested in reduce's fn).
-    agree("import Core.Output; import Core.List; function main()-> void { Output.printLine(\"{List.reduce([1,2,3], 0, fn(int a,int x)=>a + List.sum(List.map([x], fn(int y)=>y*y)))}\"); }");
+    agree("import Core.Output; import Core.List; function main()-> void { Output.printLine(\"{List.reduce([1,2,3], 0, function(int a,int x)=>a + List.sum(List.map([x], function(int y)=>y*y)))}\"); }");
     // 14
 }
 
@@ -1613,13 +1614,13 @@ fn higher_order_native_closure_fault_agrees() {
     // A fault raised *inside* a closure run by a native must propagate byte-identically on both
     // backends (interpreter `call_closure` ⇄ VM re-entrant `call_closure_value`). Can't be a runnable
     // example (every example must produce identical Ok output) — lives here as a fault-parity case.
-    agree_err("import Core.Output; import Core.List; function main()-> void { var d=List.map([1,2,3], fn(int x)=>x/0); Output.printLine(\"{List.sum(d)}\"); }");
+    agree_err("import Core.Output; import Core.List; function main()-> void { var d=List.map([1,2,3], function(int x)=>x/0); Output.printLine(\"{List.sum(d)}\"); }");
     // DivZero on both
 }
 
 #[test]
 fn transpiles_higher_order_natives() {
-    let php = transpile_ok("package Main; import Core.Output; import Core.List; function main()-> void { var d=List.map([1,2,3], fn(int x)=>x*2); var e=List.filter(d, fn(int x)=>x>2); Output.printLine(\"{List.reduce(e, 0, fn(int a,int x)=>a+x)}\"); }");
+    let php = transpile_ok("package Main; import Core.Output; import Core.List; function main()-> void { var d=List.map([1,2,3], function(int x)=>x*2); var e=List.filter(d, function(int x)=>x>2); Output.printLine(\"{List.reduce(e, 0, function(int a,int x)=>a+x)}\"); }");
     assert!(php.contains("array_map(fn($x) => $x * 2,"), "{php}");
     assert!(php.contains("array_values(array_filter("), "{php}");
     assert!(php.contains("array_reduce("), "{php}");
@@ -1635,7 +1636,7 @@ fn generic_methods_agree() {
     agree("import Core.Output; class U { function firstOr<T>(List<T> xs, T d)->T { for (T x in xs) { return x; } return d; } } function main()-> void { var u=new U(); Output.printLine(\"{u.firstOr([10,20], -1)} {u.firstOr([], 99)}\"); }"); // 10 99
                                                                                                                                                                                                                                                 // A type parameter inside a function-typed parameter, and the closure invoked in the method body
                                                                                                                                                                                                                                                 // (exercises the VM's re-entrant closure path from inside a generic method).
-    agree("import Core.Output; class U { function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } function main()-> void { var u=new U(); Output.printLine(\"{u.applyTwice(5, fn(int v)=>v+1)}\"); }");
+    agree("import Core.Output; class U { function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } function main()-> void { var u=new U(); Output.printLine(\"{u.applyTwice(5, function(int v)=>v+1)}\"); }");
     // 7
 }
 
@@ -1792,7 +1793,7 @@ fn generic_class_member_results_are_vm_operands() {
 fn transpiles_generic_method_to_mixed() {
     // A generic method erases to `mixed`-typed PHP (params and return), exactly as a generic free
     // function does; `List<T>` → `array`, `(T)->T` → `\Closure`. No type variable reaches the output.
-    let php = transpile_ok("package Main; class U { function id<T>(T x)->T { return x; } function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } function main()-> void { var u=new U(); var n = u.id(1); var m = u.applyTwice(2, fn(int v)=>v+1); }");
+    let php = transpile_ok("package Main; class U { function id<T>(T x)->T { return x; } function applyTwice<T>(T x, (T)->T f)->T { return f(f(x)); } } function main()-> void { var u=new U(); var n = u.id(1); var m = u.applyTwice(2, function(int v)=>v+1); }");
     assert!(php.contains("function id(mixed $x): mixed"), "{php}");
     assert!(
         php.contains("function applyTwice(mixed $x, \\Closure $f): mixed"),
@@ -1806,18 +1807,18 @@ fn escaping_and_nested_lambdas_agree() {
     // param, then it is called after the function has returned. Captures live in the closure's Rc,
     // so both backends must agree. (Guards the trailing-lambda-block layout: a lambda defined in a
     // function *before* `main` must not shift `main`'s entry index.)
-    agree("import Core.Output; function mk(int a)->(int)->int{ return fn(int b)=>a+b; } function main()-> void { var f=mk(10); Output.printLine(\"{f(5)}\"); }"); // 15
-                                                                                                                                                                  // Escaping closure capturing a `var` local of the enclosing function (not a param).
-    agree("import Core.Output; function mk(int z)->(int)->int{ var a=z*2; return fn(int b)=>a+b; } function main()-> void { var f=mk(10); Output.printLine(\"{f(5)}\"); }"); // 25
-                                                                                                                                                                             // Lexically NESTED lambda: a lambda whose body defines and returns another capturing lambda.
-    agree("import Core.Output; function mk(int a)->(int)->int{ var outer=fn(int b)->(int)->int{ return fn(int c)=>a+b+c; }; return outer(a); } function main()-> void { var f=mk(100); Output.printLine(\"{f(11)}\"); }"); // 100+100+11 = 211
-                                                                                                                                                                                                                           // Two functions defined before `main`, the first bearing a lambda — exercises the entry-index
-                                                                                                                                                                                                                           // and Op::Call stability under the trailing-lambda block (a regression would call the wrong fn).
-    agree("import Core.Output; function a(int x)->int{ var inc=fn(int n)=>n+1; return inc(x); } function b(int x)->int{ return x*10; } function main()-> void { Output.printLine(\"{a(4)} {b(4)}\"); }");
+    agree("import Core.Output; function mk(int a)->(int)->int{ return function(int b)=>a+b; } function main()-> void { var f=mk(10); Output.printLine(\"{f(5)}\"); }"); // 15
+                                                                                                                                                                        // Escaping closure capturing a `var` local of the enclosing function (not a param).
+    agree("import Core.Output; function mk(int z)->(int)->int{ var a=z*2; return function(int b)=>a+b; } function main()-> void { var f=mk(10); Output.printLine(\"{f(5)}\"); }"); // 25
+                                                                                                                                                                                   // Lexically NESTED lambda: a lambda whose body defines and returns another capturing lambda.
+    agree("import Core.Output; function mk(int a)->(int)->int{ var outer=function(int b)->(int)->int{ return function(int c)=>a+b+c; }; return outer(a); } function main()-> void { var f=mk(100); Output.printLine(\"{f(11)}\"); }"); // 100+100+11 = 211
+                                                                                                                                                                                                                                       // Two functions defined before `main`, the first bearing a lambda — exercises the entry-index
+                                                                                                                                                                                                                                       // and Op::Call stability under the trailing-lambda block (a regression would call the wrong fn).
+    agree("import Core.Output; function a(int x)->int{ var inc=function(int n)=>n+1; return inc(x); } function b(int x)->int{ return x*10; } function main()-> void { Output.printLine(\"{a(4)} {b(4)}\"); }");
     // 5 40
     // A lambda inside a METHOD body (capturing a method param) — the constructor/method compile
     // loops number their lambdas from the same trailing block, so this guards that path too.
-    agree("import Core.Output; class Box { constructor(public int v) {} function scaledBy(int k)->int{ var f=fn(int x)->int{ return x*k; }; return f(this.v); } } function main()-> void { var b=new Box(7); Output.printLine(\"{b.scaledBy(3)}\"); }");
+    agree("import Core.Output; class Box { constructor(public int v) {} function scaledBy(int k)->int{ var f=function(int x)->int{ return x*k; }; return f(this.v); } } function main()-> void { var b=new Box(7); Output.printLine(\"{b.scaledBy(3)}\"); }");
     // 21
 }
 

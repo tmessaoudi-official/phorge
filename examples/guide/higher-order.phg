@@ -16,26 +16,26 @@ function main(): void {
     var nums = [1, 2, 3, 4, 5];
 
     // map: double each element.
-    var doubled = List.map(nums, fn(int x) => x * 2);
+    var doubled = List.map(nums, function(int x) => x * 2);
     Output.printLine("map sum     = {List.sum(doubled)}");
     Output.printLine("map[0]      = {doubled[0]}");
 
     // filter: keep the even elements (the predicate returns bool).
-    var evens = List.filter(nums, fn(int x) => x % 2 == 0);
+    var evens = List.filter(nums, function(int x) => x % 2 == 0);
     Output.printLine("filter sum  = {List.sum(evens)}");
     Output.printLine("filter[0]   = {evens[0]}");
 
     // reduce: product over the list, seeded with 1.
-    var product = List.reduce(nums, 1, fn(int acc, int x) => acc * x);
+    var product = List.reduce(nums, 1, function(int acc, int x) => acc * x);
     Output.printLine("reduce prod = {product}");
 
     // closures capture enclosing locals by value — `factor` is captured into the lambda.
     var factor = 10;
-    var scaled = List.map(nums, fn(int x) => x * factor);
+    var scaled = List.map(nums, function(int x) => x * factor);
     Output.printLine("scaled sum  = {List.sum(scaled)}");
 
     // composition: filter, then map, then reduce — higher-order natives chain like any call.
-    var kept = List.filter(nums, fn(int x) => x > 2);
-    var squared = List.map(kept, fn(int x) => x * x);
+    var kept = List.filter(nums, function(int x) => x > 2);
+    var squared = List.map(kept, function(int x) => x * x);
     Output.printLine("compose sum = {List.sum(squared)}");
 }

@@ -4,7 +4,7 @@ package Main;
 //
 // A `#[Route(...)]` may sit on a **static** method; `Http.autoRouter()` collects those methods (and
 // any `#[Route]` free functions) and compile-time-desugars each into a registration whose handler is
-// a `fn(Request req) => ClassName.method(req)` lambda — so a class becomes a tidy namespace of route
+// a `function(Request req) => ClassName.method(req)` lambda — so a class becomes a tidy namespace of route
 // handlers. Static is required (an instance controller has no routable receiver yet → a non-static
 // `#[Route]` method is `E-ROUTE-METHOD-STATIC`). No runtime reflection; byte-identical run/runvm/PHP.
 import Core.Output;

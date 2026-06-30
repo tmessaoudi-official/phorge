@@ -34,5 +34,5 @@ function main(): void {
   Output.printLine(showStrs(List.sort(words)));   // 10 9 apple banana cherry
 
   // sortWith: a descending comparator (b - a).
-  Output.printLine(showInts(List.sortWith(nums, fn(int a, int b) => b - a))); // 9 6 5 4 3 2 1 1
+  Output.printLine(showInts(List.sortWith(nums, function(int a, int b) => b - a))); // 9 6 5 4 3 2 1 1
 }

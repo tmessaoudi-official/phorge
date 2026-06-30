@@ -10,12 +10,12 @@ function twice(int x, (int) => int f): int { return f(f(x)); }
 // A function returning a function — the return type is written in the *parenthesized* form
 // `((int) -> int)` (slice 3 / spec #8); the parens-free `(int) -> int` parses to the same type.
 // The returned lambda captures the local `n` by value.
-function adder(int n): ((int) => int) { return fn(int x) => x + n; }
+function adder(int n): ((int) => int) { return function(int x) => x + n; }
 
 function main(): void {
-    var add10 = fn(int x) => x + 10;          // expression-body lambda (return type inferred)
-    var add100 = fn(int x): int => x + 100;   // expression-body lambda WITH an explicit `: int` return type
-    var scaled = fn(int x): int {           // statement-body lambda (captures none)
+    var add10 = function(int x) => x + 10;          // expression-body lambda (return type inferred)
+    var add100 = function(int x): int => x + 100;   // expression-body lambda WITH an explicit `: int` return type
+    var scaled = function(int x): int {           // statement-body lambda (captures none)
         var t = x * x;
         return t + 1;
     };
@@ -24,7 +24,7 @@ function main(): void {
     Output.printLine("{scaled(4)}");           // 17
     Output.printLine("{twice(3, add10)}");     // 23
     Output.printLine("{5 |> dbl |> inc}");     // inc(dbl(5)) = 11
-    Output.printLine("{3 |> fn(int v) => v + 100}"); // 103
+    Output.printLine("{3 |> function(int v) => v + 100}"); // 103
     Output.printLine("{twice(2, dbl)}");       // dbl(dbl(2)) = 8  (named-fn ref)
     var add5 = adder(5);                       // adder returns a closure capturing n=5
     Output.printLine("{add5(10)}");             // 15

@@ -46,7 +46,7 @@ function main(): void {
   int head = firstOr(xs, -1);
 
   // `applyTwice` with an inline lambda: increments 5 twice → 7.
-  int bumped = applyTwice(5, fn(int v) => v + 1);
+  int bumped = applyTwice(5, function(int v) => v + 1);
 
   // `lastOfTwo` over strings.
   string last = lastOfTwo("alpha", "omega");

@@ -28,7 +28,7 @@ function main(): void {
     Output.printLine("pear={Map.getOrDefault(updated, \"pear\", 0)} plum={Map.getOrDefault(updated, \"plum\", 0)}");
 
     // map over values (keys preserved), then filter the result.
-    Map<string, int> cents = Map.map(updated, fn(int p) => p * 100);
-    Map<string, int> dear = Map.filter(cents, fn(int c) => c >= 500);
+    Map<string, int> cents = Map.map(updated, function(int p) => p * 100);
+    Map<string, int> dear = Map.filter(cents, function(int c) => c >= 500);
     Output.printLine("apple cents={Map.getOrDefault(cents, \"apple\", 0)} dear count={Map.size(dear)}");
 }

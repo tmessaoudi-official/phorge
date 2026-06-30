@@ -2,7 +2,7 @@ package Main;
 
 // Cross-package TYPES (M-RT): a library package's class / interface / enum, used here via the
 // terminal `import type Pkg.Path.TypeName;` form. Each binds a bare type name (`Shape`, `Rect`,
-// `Paint`) to the library's type; functions still use the Go-qualified form (`pkg.fn()`). Built-ins
+// `Paint`) to the library's type; functions still use the Go-qualified form (`pkg.function()`). Built-ins
 // (`int`, `List`, …) stay import-free. Everything erases to fully-qualified PHP
 // (`new \Acme\Geometry\Rect(…)`, `instanceof \Acme\Geometry\Shape`), byte-identical on
 // run / runvm / real PHP.

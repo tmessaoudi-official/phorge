@@ -530,7 +530,7 @@ fn match_as_call_argument_emits_match_true() {
 
 #[test]
 fn transpiles_expression_lambda_to_arrow_fn() {
-    let php_out = php("package Main; import Core.Output; function main()-> void { var d = fn(int x) => x*2; Output.printLine(\"{d(5)}\"); }");
+    let php_out = php("package Main; import Core.Output; function main()-> void { var d = function(int x) => x*2; Output.printLine(\"{d(5)}\"); }");
     assert!(php_out.contains("fn($x) => $x * 2"), "{php_out}");
 }
 

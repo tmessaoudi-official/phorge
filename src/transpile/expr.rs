@@ -393,7 +393,7 @@ impl Transpiler {
                 match body {
                     LambdaBody::Expr(e) => {
                         // T6: type the params in a fresh scope so arithmetic in the arrow body
-                        // specializes (`fn(int a, int b) => a + b` → `$a + $b`).
+                        // specializes (`function(int a, int b) => a + b` → `$a + $b`).
                         self.push_scope();
                         for p in params {
                             self.declare(&p.name);

@@ -903,23 +903,26 @@ impl Printer<'_> {
                 let ps = self.params(params)?;
                 match body {
                     LambdaBody::Expr(e) => {
-                        // Expression body: `fn(params)[: Ret] => expr` (the `: Ret` annotation is
+                        // Expression body: `function(params)[: Ret] => expr` (the `: Ret` annotation is
                         // optional on an expression lambda; print it when present).
                         let r = match ret {
                             Some(t) => format!(": {}", ty(t)?),
                             None => String::new(),
                         };
-                        Ok(format!("fn({ps}){r} => {}", self.expr(e)?))
+                        Ok(format!("function({ps}){r} => {}", self.expr(e)?))
                     }
                     LambdaBody::Block(stmts) => {
-                        // Statement body: `fn(params) -> Ret { … }` (the return type is required).
+                        // Statement body: `function(params) -> Ret { … }` (the return type is required).
                         let r = match ret {
                             Some(t) => format!(" -> {}", ty(t)?),
                             None => String::new(),
                         };
                         // A lambda is an expression, so its block body is rendered on one line (v1 has
                         // no reflow). `inline_block` handles any statement, including control flow.
-                        Ok(format!("fn({ps}){r} {{ {} }}", self.inline_block(stmts)?))
+                        Ok(format!(
+                            "function({ps}){r} {{ {} }}",
+                            self.inline_block(stmts)?
+                        ))
                     }
                 }
             }
@@ -1283,7 +1286,7 @@ fn prec_of(e: &Expr) -> u8 {
         Expr::InstanceOf { .. } | Expr::Cast { .. } => 8,
         Expr::Unary { .. } => PREC_UNARY,
         Expr::Range { .. } => PREC_RANGE,
-        // A lambda (`fn(x) => …`) and the value-position `if`/`match` are "loose" primaries: their
+        // A lambda (`function(x) => …`) and the value-position `if`/`match` are "loose" primaries: their
         // bodies/arms extend rightward, so as a postfix receiver (`(lambda)(args)`, the pipe-desugared
         // call) or a binary operand they MUST be parenthesized. Treat them at the loosest precedence so
         // `operand`/`postfix_operand` wrap them.

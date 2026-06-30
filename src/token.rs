@@ -68,7 +68,6 @@ pub enum TokenKind {
     Ident(String),
     // keywords
     Function,
-    Fn,
     Class,
     Enum,
     Constructor,

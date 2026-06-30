@@ -8,12 +8,12 @@ function firstOf(List<int> xs): int {
 
 test "indexing past the end faults" {
     var xs = [10, 20, 30];
-    Test.assertFaults(fn() => xs[5]);
+    Test.assertFaults(function() => xs[5]);
 }
 
 test "a missing map key faults" {
     var scores = ["alice" => 1, "bob" => 2];
-    Test.assertFaults(fn() => scores["carol"]);
+    Test.assertFaults(function() => scores["carol"]);
 }
 
 test "code that should NOT fault" {

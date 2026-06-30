@@ -122,8 +122,8 @@ fn assert_faults_passes_when_the_closure_faults() {
     d.write(
         "faults_test.phg",
         "package Main;\nimport Core.Test;\n\
-         test \"oob faults\" { Test.assertFaults(fn() => [1, 2, 3][9]); }\n\
-         test \"no fault is a failure\" { Test.assertFaults(fn() => 1 + 1); }\n",
+         test \"oob faults\" { Test.assertFaults(function() => [1, 2, 3][9]); }\n\
+         test \"no fault is a failure\" { Test.assertFaults(function() => 1 + 1); }\n",
     );
     let (report, code) = cli::cmd_test(&[d.path().display().to_string()]);
     assert_eq!(code, 1, "{report}");

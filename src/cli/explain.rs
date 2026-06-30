@@ -767,7 +767,7 @@ pub fn explain_text(code: &str) -> Option<String> {
         "E-ROUTE-METHOD-STATIC" => {
             "E-ROUTE-METHOD-STATIC — a `#[Route]` method is not `static`.\n\n\
              A `#[Route]` on a class method requires `static`: `Http.autoRouter()` lowers it to\n\
-             `fn(req) => ClassName.method(req)`, a static call. An instance method has no routable\n\
+             `function(req) => ClassName.method(req)`, a static call. An instance method has no routable\n\
              receiver yet (there is no controller-instance lifecycle this slice). Mark the handler\n\
              `static function …`, or move it to a free function.\n"
         }
@@ -792,7 +792,7 @@ pub fn explain_text(code: &str) -> Option<String> {
              for a side-effecting function that returns nothing, `-> Empty` to return the holdable\n\
              empty value, or the concrete type it returns (`-> int`, `-> Shape`, …). Constructors have\n\
              no return slot and property hooks are typed by their property, so neither needs one;\n\
-             expression-body lambdas (`fn(x) => e`) infer their return from the expression.\n"
+             expression-body lambdas (`function(x) => e`) infer their return from the expression.\n"
         }
         "E-VOID-CAPTURE" => {
             "E-VOID-CAPTURE — a `void` value cannot be captured.\n\n\

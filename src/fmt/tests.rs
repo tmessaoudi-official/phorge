@@ -51,7 +51,7 @@ fn runnable_programs_keep_their_behavior() {
          class Point { constructor(public int x, public int y) {} function sum(): int { return this.x + this.y; } }\n\
          function main(): void { Point p = new Point(2, 5); Output.printLine(\"{p.sum()}\"); }",
         "package Main; import Core.Output;\n\
-         function main(): void { var dbl = fn(int x): int => x * 2; Output.printLine(\"{3 |> dbl}\"); }",
+         function main(): void { var dbl = function(int x): int => x * 2; Output.printLine(\"{3 |> dbl}\"); }",
         "package Main; import Core.Output;\n\
          function main(): void { int? m = null; Output.printLine(\"{m ?? -1}\"); for (int i in 0..3) { Output.printLine(\"{i}\"); } }",
     ];

@@ -881,7 +881,7 @@ impl<'a> Compiler<'a> {
             // `var x = if (c) { 1 } else { 2 }` specializes arithmetic on `x` (like `Match`).
             Expr::If { then_expr, .. } => self.ctype(then_expr),
             // A lambda's compile-time type reflects its declared params and return type so that
-            // a `var f = fn(int x) => x + 1` local later resolves calls on `f` to `CallValue`.
+            // a `var f = function(int x) => x + 1` local later resolves calls on `f` to `CallValue`.
             Expr::Lambda { params, ret, .. } => Ok(CTy::Fn {
                 params: params.iter().map(|p| resolve_cty(&p.ty)).collect(),
                 ret: Box::new(ret.as_ref().map_or(CTy::Other, resolve_cty)),

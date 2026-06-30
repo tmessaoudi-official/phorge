@@ -174,7 +174,8 @@ fn exhaustive_distinct_match_has_no_unreachable_warning() {
 fn statement_lambda_falling_off_end_is_missing_return() {
     // A `-> int` statement-body lambda that can fall off the end binds `unit` into an `int` slot —
     // the same leak the totality cluster closed for free fns/methods; now enforced for lambdas too.
-    let src = "function main() -> void { var f = fn(int n) -> int { if (n > 0) { return n; } }; }";
+    let src =
+        "function main() -> void { var f = function(int n) -> int { if (n > 0) { return n; } }; }";
     assert!(
         errors_of(src)
             .iter()
@@ -186,13 +187,13 @@ fn statement_lambda_falling_off_end_is_missing_return() {
 
 #[test]
 fn statement_lambda_returning_on_all_paths_is_ok() {
-    let src = "function main() -> void { var f = fn(int n) -> int { if (n > 0) { return n; } return 0; }; }";
+    let src = "function main() -> void { var f = function(int n) -> int { if (n > 0) { return n; } return 0; }; }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
 
 #[test]
 fn void_statement_lambda_may_fall_off_end() {
     // A `-> void` lambda is value-less — falling off the end is fine (regression guard).
-    let src = "import Core.Output; function main() -> void { var f = fn(int n) -> void { Output.printLine(\"{n}\"); }; }";
+    let src = "import Core.Output; function main() -> void { var f = function(int n) -> void { Output.printLine(\"{n}\"); }; }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }

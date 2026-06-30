@@ -519,14 +519,14 @@ class Router {
     return new Router(merged, this.mws);
   }
   // Fold a middleware list around a handler: first-registered runs OUTERMOST. Each step builds a
-  // `fn(req) => mw(req, prev)` closure capturing the middleware and the previously-wrapped handler.
+  // `function(req) => mw(req, prev)` closure capturing the middleware and the previously-wrapped handler.
   static function compose(List<(Request, (Request) -> Response) -> Response> mws, (Request) -> Response handler): (Request) -> Response {
     mutable var h = handler;
     mutable int i = List.length(mws) - 1;
     while (i >= 0) {
       var mw = mws[i];
       var prev = h;
-      h = fn(Request req) -> Response { return mw(req, prev); };
+      h = function(Request req) -> Response { return mw(req, prev); };
       i -= 1;
     }
     return h;

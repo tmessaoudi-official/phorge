@@ -125,14 +125,14 @@ fn int_param(name: &str) -> Param {
 
 #[test]
 fn free_vars_no_captures() {
-    // `fn(int x) => x` — `x` is a param, no free vars.
+    // `function(int x) => x` — `x` is a param, no free vars.
     let body = LambdaBody::Expr(Box::new(ident("x")));
     assert_eq!(free_vars(&[int_param("x")], &body), Vec::<String>::new());
 }
 
 #[test]
 fn free_vars_simple_capture() {
-    // `fn(int x) => x + a` — `a` is free.
+    // `function(int x) => x + a` — `a` is free.
     let body = LambdaBody::Expr(Box::new(Expr::Binary {
         op: BinaryOp::Add,
         lhs: Box::new(ident("x")),
@@ -144,7 +144,7 @@ fn free_vars_simple_capture() {
 
 #[test]
 fn free_vars_two_captures_sorted() {
-    // `fn(int x) => x + a + b` — `a` and `b` are free; result is sorted.
+    // `function(int x) => x + a + b` — `a` and `b` are free; result is sorted.
     let inner = Expr::Binary {
         op: BinaryOp::Add,
         lhs: Box::new(ident("x")),
@@ -163,7 +163,7 @@ fn free_vars_two_captures_sorted() {
 
 #[test]
 fn free_vars_inner_var_not_captured() {
-    // `fn(int x) { var y = x; return y; }` — `y` is bound inside, `x` is a param.
+    // `function(int x) { var y = x; return y; }` — `y` is bound inside, `x` is a param.
     let body = LambdaBody::Block(vec![
         Stmt::VarDecl {
             ty: Type::Infer(sp()),

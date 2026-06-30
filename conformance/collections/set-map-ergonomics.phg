@@ -17,8 +17,8 @@ function main() -> void {
     Output.printLine("getOr {Map.getOrDefault(m, \"a\", 0)} {Map.getOrDefault(m, \"z\", 99)}");
     Map<string, int> merged = Map.merge(m, ["b" => 20, "c" => 3]);
     Output.printLine("merge {Map.getOrDefault(merged, \"b\", 0)} {Map.getOrDefault(merged, \"c\", 0)} {Map.size(merged)}");
-    Map<string, int> tens = Map.map(m, fn(int x) => x * 10);
+    Map<string, int> tens = Map.map(m, function(int x) => x * 10);
     Output.printLine("map {Map.getOrDefault(tens, \"a\", 0)} {Map.getOrDefault(tens, \"b\", 0)}");
-    Map<string, int> big = Map.filter(merged, fn(int x) => x > 2);
+    Map<string, int> big = Map.filter(merged, function(int x) => x > 2);
     Output.printLine("filter {Map.size(big)}");
 }

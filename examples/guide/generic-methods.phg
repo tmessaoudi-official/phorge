@@ -48,7 +48,7 @@ function main(): void {
   int head = u.firstOr(xs, -1);
 
   // A generic method taking an inline lambda: increments 5 twice → 7.
-  int bumped = u.applyTwice(5, fn(int v) => v + 1);
+  int bumped = u.applyTwice(5, function(int v) => v + 1);
 
   // A generic-method result used DIRECTLY as an arithmetic operand (S2.1): the return `T` erases to
   // `mixed`, but because the result echoes a parameter the VM recovers its operand type from that

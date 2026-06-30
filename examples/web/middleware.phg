@@ -8,7 +8,7 @@ package Main;
 //   * `router.group(prefix, build)` mounts a sub-router under a path prefix; `build` registers the
 //     sub-routes (and their own group-scoped middleware) on a fresh router.
 // It's all pure Phorj over first-class functions + closures — no new `Op`, no runtime framework, so
-// run / runvm / real PHP stay byte-identical. Middleware composition is `fn(req) => mw(req, next)`
+// run / runvm / real PHP stay byte-identical. Middleware composition is `function(req) => mw(req, next)`
 // folded over the list.
 import Core.Output;
 import Core.Bytes;
@@ -53,7 +53,7 @@ function main(): void {
   Router rt = new Router([], [])
     .use(logging)
     .route("GET", "/", home)
-    .group("/admin", fn(Router r) -> Router {
+    .group("/admin", function(Router r) -> Router {
       return r.use(requireAuth).route("GET", "/secret", secret);
     });
 

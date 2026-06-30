@@ -151,8 +151,8 @@ fn parses_map_and_list_literals() {
         Expr::List(items, _) => assert!(items.is_empty()),
         other => panic!("got {other:?}"),
     }
-    // A lambda element consumes its own `=>`, so `[fn(int x) => x]` is a one-element list.
-    match expr("[fn(int x) => x]") {
+    // A lambda element consumes its own `=>`, so `[function(int x) => x]` is a one-element list.
+    match expr("[function(int x) => x]") {
         Expr::List(items, _) => {
             assert_eq!(items.len(), 1);
             assert!(matches!(items[0], Expr::Lambda { .. }));
@@ -164,8 +164,8 @@ fn parses_map_and_list_literals() {
 #[test]
 fn parses_lambda_colon_return_type() {
     // A-1: a typed lambda uses `:` for its return type, then `=>` for the (expression) body:
-    // `fn(int x): string => …`. The `->` form stays as a transition alias.
-    match expr(r#"fn(int x): string => "n""#) {
+    // `function(int x): string => …`. The `->` form stays as a transition alias.
+    match expr(r#"function(int x): string => "n""#) {
         Expr::Lambda { ret, body, .. } => {
             assert!(ret.is_some());
             assert!(matches!(body, LambdaBody::Expr(_)));
@@ -173,7 +173,7 @@ fn parses_lambda_colon_return_type() {
         other => panic!("expected lambda, got {other:?}"),
     }
     // block body with `:` return type
-    match expr("fn(int x): int { return x; }") {
+    match expr("function(int x): int { return x; }") {
         Expr::Lambda { ret, body, .. } => {
             assert!(ret.is_some());
             assert!(matches!(body, LambdaBody::Block(_)));
@@ -181,7 +181,10 @@ fn parses_lambda_colon_return_type() {
         other => panic!("expected lambda, got {other:?}"),
     }
     // `->` alias still parses
-    assert!(matches!(expr("fn(int x) -> int => x"), Expr::Lambda { .. }));
+    assert!(matches!(
+        expr("function(int x) -> int => x"),
+        Expr::Lambda { .. }
+    ));
 }
 
 #[test]

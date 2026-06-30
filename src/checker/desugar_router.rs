@@ -22,7 +22,7 @@ use crate::token::Span;
 
 /// One collected route: the `#[Route]` method literal, the pattern literal (both kept as the original
 /// argument `Expr`s, so a raw-string pattern survives), and the **handler expression** — a bare
-/// `Ident` for a free function, or a `fn(Request req) => Class.method(req)` lambda for a (static)
+/// `Ident` for a free function, or a `function(Request req) => Class.method(req)` lambda for a (static)
 /// method (M6 W2-ext slice 3).
 type Route = (Expr, Expr, Expr);
 
@@ -87,7 +87,7 @@ pub fn desugar_auto_router(program: Program) -> Program {
 }
 
 /// Every well-formed `#[Route(method, pattern)]` handler, in source order: free functions (handler =
-/// a bare `Ident`) and **static** class methods (handler = a `fn(Request req) => Class.method(req)`
+/// a bare `Ident`) and **static** class methods (handler = a `function(Request req) => Class.method(req)`
 /// lambda). A malformed `Route` (wrong arg count) is skipped — the checker reports `E-ROUTE-ARGS`; a
 /// non-`static` `#[Route]` method is skipped here and reported `E-ROUTE-METHOD-STATIC`.
 fn collect_routes(program: &Program) -> Vec<Route> {
@@ -122,7 +122,7 @@ fn collect_routes(program: &Program) -> Vec<Route> {
     out
 }
 
-/// `fn(Request req) -> Response { return Class.method(req); }` — the handler value for a `#[Route]`
+/// `function(Request req) -> Response { return Class.method(req); }` — the handler value for a `#[Route]`
 /// static method (a static call isn't itself a first-class value, so it's wrapped in a lambda).
 fn method_handler_lambda(class: &str, method: &str, sp: Span) -> Expr {
     let named = |n: &str| Type::Named {
@@ -158,7 +158,7 @@ fn method_handler_lambda(class: &str, method: &str, sp: Span) -> Expr {
 
 /// `new Router([], []).route(m1, p1, h1).route(m2, p2, h2) …` — built fresh at each call site. Each
 /// handler `hN` is the collected handler `Expr` (a bare `Ident` for a free function, or a
-/// `fn(Request req) => Class.method(req)` lambda for a static method). The `new`/`.route` wrapper nodes
+/// `function(Request req) => Class.method(req)` lambda for a static method). The `new`/`.route` wrapper nodes
 /// carry the `Http.autoRouter()` call's span, so a downstream type error points at the call site.
 fn build_router(routes: &[Route], sp: Span) -> Expr {
     let mut e = Expr::New(

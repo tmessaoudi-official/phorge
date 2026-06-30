@@ -57,14 +57,14 @@ fn init_type_mismatch_is_error() {
 fn closure_default_capturing_this_is_lambda_this_error() {
     // A field-default closure that touches `this` is rejected by the existing E-LAMBDA-THIS guard
     // (this-capture defers to the closures slice).
-    let src = "class C { int n = 1; (int) -> int f = fn(int x) => this.n + x; } \
+    let src = "class C { int n = 1; (int) -> int f = function(int x) => this.n + x; } \
                function main() -> void {}";
     assert!(has(src, "E-LAMBDA-THIS"));
 }
 
 #[test]
 fn non_capturing_closure_default_is_ok() {
-    let src = "class C { (int) -> int dbl = fn(int x) => x * 2; constructor() {} } \
+    let src = "class C { (int) -> int dbl = function(int x) => x * 2; constructor() {} } \
                function main() -> void {}";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }

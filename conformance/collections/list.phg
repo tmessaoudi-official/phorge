@@ -13,12 +13,12 @@ function main() -> void {
     List<int> rev = List.reverse(xs);
     Output.printLine("rev0={rev[0]}");
 
-    List<int> doubled = List.map(xs, fn(int x) => x * 2);
+    List<int> doubled = List.map(xs, function(int x) => x * 2);
     Output.printLine("mapSum={List.sum(doubled)}");
 
-    List<int> evens = List.filter(xs, fn(int x) => x % 2 == 0);
+    List<int> evens = List.filter(xs, function(int x) => x % 2 == 0);
     Output.printLine("evens={List.length(evens)}");
 
-    int product = List.reduce(xs, 1, fn(int acc, int x) => acc * x);
+    int product = List.reduce(xs, 1, function(int acc, int x) => acc * x);
     Output.printLine("product={product}");
 }

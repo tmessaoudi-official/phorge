@@ -18,12 +18,12 @@ function main(): void {
     Output.printLine("flatten length = {List.length(flat)}, sum = {List.sum(flat)}");
 
     // List.count — how many elements satisfy a predicate.
-    int evens = List.count([1, 2, 3, 4, 5, 6], fn(int x) => x % 2 == 0);
+    int evens = List.count([1, 2, 3, 4, 5, 6], function(int x) => x % 2 == 0);
     Output.printLine("evens = {evens}");
 
     // Map.isEmpty — directly, and after filtering everything out.
     Map<string, int> ages = ["ada" => 36, "alan" => 41];
-    Map<string, int> over100 = Map.filter(ages, fn(int v) => v > 100);
+    Map<string, int> over100 = Map.filter(ages, function(int v) => v > 100);
     Output.printLine("ages empty = {Map.isEmpty(ages)}, filtered empty = {Map.isEmpty(over100)}");
 
     // Set.isEmpty + Set.toList (insertion order, deduplicated).

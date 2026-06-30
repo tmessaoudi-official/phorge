@@ -745,7 +745,7 @@ impl Compiler<'_> {
             self.emit(Op::CallMethod(idx, args.len()), line);
             return Ok(());
         }
-        // Inline lambda call: `(fn(int x) => x+1)(3)` or (after pipe lowering) `3 |> fn(int v) =>
+        // Inline lambda call: `(function(int x) => x+1)(3)` or (after pipe lowering) `3 |> function(int v) =>
         // v+10`. Compile the lambda expression to push a closure, then push args, then dispatch.
         if let Expr::Lambda {
             params,
@@ -929,7 +929,7 @@ impl Compiler<'_> {
         Ok(())
     }
 
-    /// Compile a `fn(params) => body` expression-body lambda (M3 S3 Task 4).
+    /// Compile a `function(params) => body` expression-body lambda (M3 S3 Task 4).
     ///
     /// Layout:
     ///   - Compute the lambda's free variables (sorted, deterministic — invariant #8).

@@ -32,7 +32,7 @@ function main() -> void {
   Router rt = new Router([], [])
     .use(tag)
     .route("GET", "/", home)
-    .group("/admin", fn(Router r) -> Router {
+    .group("/admin", function(Router r) -> Router {
       return r.use(requireAuth).route("GET", "/x", secret);
     });
 

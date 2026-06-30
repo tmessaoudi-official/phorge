@@ -212,11 +212,12 @@ fn instanceof_keyword_is_recognized() {
 }
 
 #[test]
-fn fn_is_a_reserved_keyword() {
+fn fn_is_not_reserved_lambdas_use_function() {
     use TokenKind::*;
-    assert_eq!(kinds("fn"), vec![Fn, Eof]);
-    // contextual sanity: `fn (` still lexes as the keyword then a paren
-    assert_eq!(kinds("fn ("), vec![Fn, LParen, Eof]);
+    // `fn` was retired as a keyword (lambdas now use the full `function` keyword); it lexes as a
+    // plain identifier and is freely usable as a name.
+    assert_eq!(kinds("fn"), vec![Ident("fn".into()), Eof]);
+    assert_eq!(kinds("fn ("), vec![Ident("fn".into()), LParen, Eof]);
 }
 
 #[test]

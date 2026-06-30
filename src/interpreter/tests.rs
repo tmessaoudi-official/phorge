@@ -275,7 +275,7 @@ fn lambda_value_call_interpreter() {
     let out = out(r#"package Main;
 import Core.Output;
 function main() -> void {
-    var double = fn(int x) => x * 2;
+    var double = function(int x) => x * 2;
     Output.printLine("{double(5)}");
 }"#);
     assert_eq!(out, "10\n");
@@ -288,7 +288,7 @@ import Core.Output;
 function main() -> void {
     var a = 10;
     var b = 100;
-    var f = fn(int x) => x + a + b;
+    var f = function(int x) => x + a + b;
     Output.printLine("{f(1)}");
 }"#);
     assert_eq!(out, "111\n");
@@ -300,7 +300,7 @@ fn higher_order_user_function_interpreter() {
 import Core.Output;
 function twice(int x, (int) -> int f) -> int { return f(f(x)); }
 function main() -> void {
-    Output.printLine("{twice(3, fn(int n) => n + 1)}");
+    Output.printLine("{twice(3, function(int n) => n + 1)}");
 }"#);
     assert_eq!(out, "5\n");
 }
@@ -311,7 +311,7 @@ fn method_lambda_may_capture_this_but_field_init_lambda_may_not() {
     let ok = check_errs(
         r#"package Main;
 class C { constructor(public int x) {}
-  function method() -> ((int) -> int) { return fn(int n) => n + this.x; } }
+  function method() -> ((int) -> int) { return function(int n) => n + this.x; } }
 function main() -> void { }"#,
     );
     assert!(
@@ -321,7 +321,7 @@ function main() -> void { }"#,
     // A field-initializer lambda may NOT capture `this` (partially-built instance) → E-LAMBDA-THIS.
     let bad = check_errs(
         r#"package Main;
-class C { int x = 1; (() -> int) f = fn() => this.x; }
+class C { int x = 1; (() -> int) f = function() => this.x; }
 function main() -> void { }"#,
     );
     assert!(

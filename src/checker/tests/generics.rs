@@ -29,7 +29,7 @@ fn generic_unifies_through_list_and_function() {
     let ok = errors_of(
             "function firstOr<T>(List<T> xs, T fallback) -> T { for (T x in xs) { return x; } return fallback; } \
              function applyTwice<T>(T x, (T) -> T f) -> T { return f(f(x)); } \
-             function main() -> void { List<int> xs = [1, 2]; int a = firstOr(xs, 0); int b = applyTwice(5, fn(int v) => v + 1); }",
+             function main() -> void { List<int> xs = [1, 2]; int a = firstOr(xs, 0); int b = applyTwice(5, function(int v) => v + 1); }",
         );
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }

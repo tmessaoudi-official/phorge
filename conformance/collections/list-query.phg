@@ -10,14 +10,14 @@ function main() -> void {
     List<int> xs = [3, 1, 4, 1, 5, 9, 2, 6];
     Output.printLine("unique {List.length(List.unique(xs))}");
     Output.printLine("min {List.min(xs) ?? 0} max {List.max(xs) ?? 0}");
-    Output.printLine("find {List.find(xs, fn(int x) => x > 4) ?? -1}");
-    Output.printLine("any {List.any(xs, fn(int x) => x > 8)} all {List.all(xs, fn(int x) => x > 0)}");
-    Output.printLine("any2 {List.any(xs, fn(int x) => x > 9)} all2 {List.all(xs, fn(int x) => x < 5)}");
+    Output.printLine("find {List.find(xs, function(int x) => x > 4) ?? -1}");
+    Output.printLine("any {List.any(xs, function(int x) => x > 8)} all {List.all(xs, function(int x) => x > 0)}");
+    Output.printLine("any2 {List.any(xs, function(int x) => x > 9)} all2 {List.all(xs, function(int x) => x < 5)}");
 
     List<string> codes = ["10", "9", "100", "2"];
     Output.printLine("smin {List.min(codes) ?? \"?\"} smax {List.max(codes) ?? \"?\"}");
 
-    List<int> none = List.filter(xs, fn(int x) => x > 100);
+    List<int> none = List.filter(xs, function(int x) => x > 100);
     Output.printLine("empty {List.min(none) ?? -1},{List.max(none) ?? -1}");
 
     // take/drop clamp n to [0, len] (n<0 ⇒ 0, n>len ⇒ len) — never fault.

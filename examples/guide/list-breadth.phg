@@ -16,11 +16,11 @@ function main(): void {
     Output.printLine("min={List.min(xs) ?? 0} max={List.max(xs) ?? 0}");
 
     // `find` returns an optional — pair it with `??` (or if-let).
-    int firstBig = List.find(xs, fn(int x) => x > 4) ?? -1;
+    int firstBig = List.find(xs, function(int x) => x > 4) ?? -1;
     Output.printLine("first > 4: {firstBig}");
 
-    bool hasBig = List.any(xs, fn(int x) => x > 8);
-    bool allPos = List.all(xs, fn(int x) => x > 0);
+    bool hasBig = List.any(xs, function(int x) => x > 8);
+    bool allPos = List.all(xs, function(int x) => x > 0);
     Output.printLine("any > 8: {hasBig}, all > 0: {allPos}");
 
     // `min`/`max` order strings by byte, so a list of numeric-looking strings is consistent across
@@ -29,7 +29,7 @@ function main(): void {
     Output.printLine("string min={List.min(codes) ?? \"?\"} max={List.max(codes) ?? \"?\"}");
 
     // Empty list: min/max/find are null.
-    List<int> none = List.filter(xs, fn(int x) => x > 100);
+    List<int> none = List.filter(xs, function(int x) => x > 100);
     Output.printLine("empty min: {List.min(none) ?? -1}");
 
     // take / drop — prefix and suffix, clamping n to [0, len] (never fault).

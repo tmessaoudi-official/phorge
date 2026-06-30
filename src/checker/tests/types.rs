@@ -282,16 +282,18 @@ fn constructors_and_hooks_are_exempt() {
 #[test]
 fn expression_lambda_return_annotation_matches_is_ok() {
     // Option 1: an expression-body lambda may carry an explicit `: T` return type
-    // (`fn(int x): int => …`). When the inferred body type is assignable to the annotation, the
+    // (`function(int x): int => …`). When the inferred body type is assignable to the annotation, the
     // lambda type-checks cleanly — and the lambda's type is the *declared* return type.
-    assert!(errors_of("function main() -> void { var f = fn(int x): int => x + 1; }").is_empty());
+    assert!(
+        errors_of("function main() -> void { var f = function(int x): int => x + 1; }").is_empty()
+    );
 }
 
 #[test]
 fn expression_lambda_return_annotation_mismatch_errors() {
     // The annotation is enforced: a body whose inferred type is not assignable to the declared
     // return type is a type error (`expected `int`, found `string``).
-    let errs = errors_of("function main() -> void { var f = fn(int x): int => \"no\"; }");
+    let errs = errors_of("function main() -> void { var f = function(int x): int => \"no\"; }");
     assert!(
         errs.iter()
             .any(|e| e.message.contains("expected `int`") && e.message.contains("found `string`")),

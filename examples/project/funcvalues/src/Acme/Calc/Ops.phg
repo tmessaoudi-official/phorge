@@ -1,7 +1,7 @@
 // Lambdas and first-class function values inside a *library* package (M3 S3, cross-package).
 //
 // Two things that used to be `package Main`-only now work in a dotted library package: (1) a lambda
-// body that calls a same-package function (`fn(int x) => dbl(x)`), and (2) a bare function *value*
+// body that calls a same-package function (`function(int x) => dbl(x)`), and (2) a bare function *value*
 // reference (`var f = dbl;`). The loader mangles a same-package function reference — at a call site,
 // inside a lambda body, AND in value position — to its package FQN, so the backends resolve the
 // mangled function. For `package Main` the mangle is a no-op, so single-file programs are unchanged.
@@ -15,7 +15,7 @@ function dbl(int x): int {
 
 // (1) A lambda whose body calls a same-package function — passed to a higher-order native.
 public function doubleAll(List<int> xs): List<int> {
-  return List.map(xs, fn(int x) => dbl(x));
+  return List.map(xs, function(int x) => dbl(x));
 }
 
 // (2) A bare function value: `dbl` referenced as a value, then invoked.

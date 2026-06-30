@@ -8,7 +8,7 @@
 // PHP (`never` → PHP 8.1 native `never`) and runs byte-identically on both backends.
 //
 // The return-on-all-paths rule applies to statement-body **lambdas** too (Soundness Batch F): a
-// `fn(int) -> int { … }` that can fall off the end is `E-MISSING-RETURN`, just like a named function.
+// `function(int) -> int { … }` that can fall off the end is `E-MISSING-RETURN`, just like a named function.
 package Main;
 
 import Core.Output;
@@ -53,7 +53,7 @@ function main(): void {
     Output.printLine(sign(-2));
     // A statement-body lambda that returns on every path (Batch F) — one that could fall off the end
     // would be `E-MISSING-RETURN`.
-    var absOf = fn(int n) -> int {
+    var absOf = function(int n) -> int {
         if (n < 0) {
             return 0 - n;
         }

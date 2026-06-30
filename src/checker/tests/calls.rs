@@ -126,7 +126,7 @@ fn local_shadowing_function_name_errors() {
     // in M3 S3). Coded `E-SHADOW-FN`. See `declare`.
     let errs = errors_of(
         r#"function dbl(int x) -> int { return x * 2; }
-function main() -> void { var dbl = fn(int x) => x + 1000; }"#,
+function main() -> void { var dbl = function(int x) => x + 1000; }"#,
     );
     assert!(
         errs.iter().any(|e| e.code == Some("E-SHADOW-FN")),
@@ -332,7 +332,7 @@ fn ufcs_chaining_native_pipeline() {
         "import Core.List; \
          function main() -> void { \
             var xs = [1, 2, 3, 4]; \
-            var ys = xs.filter(fn(int x) => x > 1).map(fn(int x) => x * x); \
+            var ys = xs.filter(function(int x) => x > 1).map(function(int x) => x * x); \
             int n = ys.length(); }"
     )
     .is_empty());

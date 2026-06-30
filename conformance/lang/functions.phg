@@ -19,7 +19,7 @@ function main() -> void {
     Output.printLine("{fact(5)}");
     Output.printLine(greet("Ada"));
     Output.printLine(greet("Ada", "Hi"));
-    var inc = fn(int x) => x + 1;
+    var inc = function(int x) => x + 1;
     Output.printLine("{applyTwice(10, inc)}");
     Output.printLine("{5 |> inc |> inc}");
 }
