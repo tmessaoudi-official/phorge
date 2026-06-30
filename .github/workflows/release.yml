@@ -74,7 +74,7 @@ jobs:
 
       # Always keep the archive as a run artifact — lets workflow_dispatch verify the build with no release.
       - name: Upload run artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.asset }}
           path: |
