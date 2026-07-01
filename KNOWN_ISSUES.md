@@ -364,9 +364,11 @@ an explicit non-goal, never a panic):
   F4) — it terminates rather than overflowing the stack.
 - **No identity `===`.** Only structural `==` exists; an `Rc::ptr_eq`-based identity operator is an
   optional future addition.
-- **Nested place-stores.** `this.f[i] = e` (index into a field) and compound nested paths are
-  rejected (`E-ASSIGN-TARGET`); a field path `a.b.c = e` *is* supported (handle semantics), but an
-  *indexed* field target is not. A field-set on an intersection-typed object is also deferred.
+- **Nested place-stores — partly shipped.** A **local-rooted nested value index** `grid[i][j] = e` /
+  `m[k1][k2] = e` (any depth) **now works** (Spec `2026-07-01-nested-value-index-assign`; `value::set_nested`
+  + `Op::SetPathLocal`, COW root-to-leaf, byte-identical). Still deferred: a **field-base** indexed target
+  `this.f[i] = e` / `obj.f[i] = e` (`E-ASSIGN-TARGET` — "a field base lands in the next slice", slice 1b),
+  and a field-set on an intersection-typed object. A plain field path `a.b.c = e` *is* supported.
 - **Property hooks are virtual-only** (M-mut.7b). A hook declares no storage of its own — its get/set
   bodies read and write *other* fields. **Backed hooks** (a hook with its own slot + the PHP
   `$this->name` self-reference), **hooks on `static` fields**, **hooks in interfaces**, and
@@ -395,8 +397,9 @@ but they shape how imperative code ports:
   place — verified `run≡runvm` in the ported `AggregationBenchmark`. Only a **nested *value*-container**
   index-assign (`grid[i][j]=e` for a `List<List<int>>` matrix, `m[k1][k2]=e` of value types) hits the
   nested-place wall. So of the benchforge suite, Fibonacci/PrimeSieve/**Aggregation** are ported;
-  Sorting (in-place recursive quicksort) needs by-ref params, and Matrix needs nested-value index-assign
-  — those two are the genuine blockers, not group-by.
+  Sorting (in-place recursive quicksort) needs by-ref params. **Matrix's nested-value index-assign
+  (`grid[i][j]=e`) is now IMPLEMENTED** (Spec `2026-07-01-nested-value-index-assign`), so the only
+  remaining genuine blocker is Sorting's by-ref recursion — not group-by, not matrix.
 - **No empty `Map`/`Set` literal.** `[]` is always an empty *list* (its element type resolved from the
   expected type since W0). There is no `[:]`-style empty-map literal, and `[]` cannot stand in for an
   empty `Map<K,V>`/`Set<T>` binding (the runtime value would be a list). Build a non-empty literal, or

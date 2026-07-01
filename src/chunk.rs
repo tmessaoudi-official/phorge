@@ -164,6 +164,13 @@ pub enum Op {
     /// preserved: a genuinely shared container still copies. The checker restricts index-assign to a
     /// local container, so the target is always a slot. Pushes nothing.
     SetIndexLocal(usize),
+    /// Pop a value and `depth` index values; nested copy-on-write set `local[i0][i1]…=value` **in
+    /// place in the local slot** (Spec nested-value-index-assign). `depth ≥ 2` (the `depth==1` case is
+    /// `SetIndexLocal`). The indices were pushed in source order `i0..i_{depth-1}` (so `i_{depth-1}` is
+    /// on top); this pops them, reverses to source order, and calls the shared `value::set_nested`
+    /// kernel on the root slot — `make_mut` root-to-leaf, so COW is preserved (a shared level copies).
+    /// The checker restricts the base to a local. Pushes nothing.
+    SetPathLocal(usize, usize),
     /// Pop a list; push its length as an `Int`.
     Len,
     /// Pop an iterable (`List`/`Set`); push a `List` of its elements in iteration order (B1 iteration
@@ -596,6 +603,7 @@ impl BytecodeProgram {
                     | Op::GetLocal(_)
                     | Op::SetLocal(_)
                     | Op::SetIndexLocal(_)
+                    | Op::SetPathLocal(_, _)
                     | Op::Concat(_)
                     | Op::MakeList(_)
                     | Op::MakeMap(_)

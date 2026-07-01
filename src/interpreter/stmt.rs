@@ -24,44 +24,37 @@ impl<'c> Interp<'c> {
                         rt(format!("undefined variable `{name}`"))
                     }
                 }
-                // Value-type element set `xs[i] = e` / `m[k] = e` (M-mut.5). Copy-on-write: mutate
-                // the container **in its slot** via `Rc::make_mut` — a genuinely shared `Rc` still
-                // copies (COW preserved), but a uniquely-owned container mutates in place. Looking up
-                // the slot mutably (rather than cloning it out first) is what keeps `make_mut`'s
-                // refcount at 1 in the common case, making element-set O(1) instead of O(n)-per-write
-                // (M-DOGFOOD W8 — the prior `.cloned()` inflated the refcount so every write deep-copied
-                // the whole container, making imperative array algorithms O(n²)). Eval order matches the
-                // VM: index, then value, *before* borrowing the slot.
-                Expr::Index { object, index, .. } => {
-                    let name = match &**object {
-                        Expr::Ident(n, _) => n,
-                        _ => unreachable!("checker restricts index-assign to a local container"),
+                // Value-type element set — flat `xs[i]=e` (M-mut.5) or NESTED `g[i][j]=e` (Spec
+                // nested-value-index). Flatten the place into (root local, index path j0..jk), eval the
+                // indices left-to-right then the value, then mutate the root **in its slot** via the
+                // shared `value::set_nested` kernel (COW `Rc::make_mut` root-to-leaf, O(1) per level in
+                // the common case — same single-source the VM calls, so `run ≡ runvm`). Looking the slot
+                // up mutably keeps the outer refcount at 1 (M-DOGFOOD W8, generalized).
+                Expr::Index { .. } => {
+                    // Collect index expressions innermost-`Index`-first, then reverse to source order.
+                    let mut chain: Vec<&Expr> = Vec::new();
+                    let mut cur = target;
+                    let root = loop {
+                        match cur {
+                            Expr::Index { object, index, .. } => {
+                                chain.push(index);
+                                cur = object;
+                            }
+                            Expr::Ident(n, _) => break n,
+                            _ => unreachable!("checker restricts the index-assign base to a local"),
+                        }
                     };
-                    let idx_val = self.eval(index)?;
-                    let new_val = self.eval(value)?;
-                    let slot = self.frame.lookup_mut(name).ok_or_else(|| {
-                        Signal::Runtime(Diagnostic::runtime(format!("undefined variable `{name}`")))
-                    })?;
-                    match slot {
-                        Value::List(xs) => {
-                            let idx = match idx_val {
-                                Value::Int(n) => n,
-                                v => {
-                                    return rt(format!(
-                                        "expected int index, found {}",
-                                        v.type_name()
-                                    ))
-                                }
-                            };
-                            crate::value::list_set(Rc::make_mut(xs).as_mut_slice(), idx, new_val)
-                                .map_err(|m| Signal::Runtime(Diagnostic::runtime(m)))?;
-                        }
-                        Value::Map(m) => {
-                            crate::value::map_set(Rc::make_mut(m), &idx_val, new_val)
-                                .map_err(|e| Signal::Runtime(Diagnostic::runtime(e)))?;
-                        }
-                        v => return rt(format!("cannot index-assign {}", v.type_name())),
+                    chain.reverse();
+                    let mut idx_vals: Vec<Value> = Vec::with_capacity(chain.len());
+                    for e in chain {
+                        idx_vals.push(self.eval(e)?);
                     }
+                    let new_val = self.eval(value)?;
+                    let slot = self.frame.lookup_mut(root).ok_or_else(|| {
+                        Signal::Runtime(Diagnostic::runtime(format!("undefined variable `{root}`")))
+                    })?;
+                    crate::value::set_nested(slot, &idx_vals, new_val)
+                        .map_err(|m| Signal::Runtime(Diagnostic::runtime(m)))?;
                     Ok(())
                 }
                 // Shared-mutable instance field set `o.f = e` / `this.f = e` (M-mut.6). Eval the

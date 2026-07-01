@@ -501,6 +501,8 @@ impl<'a> Compiler<'a> {
             Op::SetIndex => -2,
             // SetIndexLocal pops (index, value) and mutates the local slot in place — pushes nothing.
             Op::SetIndexLocal(_) => -2,
+            // SetPathLocal pops `depth` indices + the value; mutates the local slot in place — no push.
+            Op::SetPathLocal(_, depth) => -(*depth as isize + 1),
             // BitNot is unary (pop one, push one) like Neg/Not.
             Op::Neg | Op::Not | Op::BitNot | Op::Len | Op::IterElems | Op::Jump(_) => 0,
             Op::MatchTag(_) | Op::GetEnumField(_) => 0, // pop one, push one

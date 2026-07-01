@@ -268,6 +268,18 @@ impl<'a> Vm<'a> {
                     other => return Err(format!("cannot index-assign {}", other.type_name())),
                 }
             }
+            Op::SetPathLocal(slot, depth) => {
+                // Nested in-place COW element set on a local container (Spec nested-value-index).
+                // Stack (top-down): value, i_{depth-1}, …, i0. Pop the value, then the indices
+                // (reversing to source order), and mutate the root slot in place via the shared
+                // `value::set_nested` kernel (same single-source the interpreter calls → run≡runvm).
+                let v = self.pop();
+                let mut indices: Vec<Value> = (0..depth).map(|_| self.pop()).collect();
+                indices.reverse();
+                let base = self.frames[fr].slot_base;
+                let idx = self.frame_slot(base, slot);
+                crate::value::set_nested(&mut self.stack[idx], &indices, v)?;
+            }
             Op::Len => match self.pop() {
                 Value::List(xs) => self.stack.push(Value::Int(xs.len() as i64)),
                 v => return Err(format!("cannot take length of {}", v.type_name())),

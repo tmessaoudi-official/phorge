@@ -217,3 +217,18 @@ fn list_literal_element_not_assignable_to_annotation_errors() {
             .is_empty()
     );
 }
+
+#[test]
+fn nested_value_index_assign_typechecks() {
+    // grid[i][j] = e on a mutable List<List<int>> (M-DOGFOOD follow-on, Spec 1 slice 1a).
+    assert!(
+        errors_of("import Core.List; function main() -> void { mutable List<List<int>> g = [[1, 2], [3, 4]]; g[0][1] = 9; int x = g[0][1]; }").is_empty(),
+        "{:?}",
+        errors_of("import Core.List; function main() -> void { mutable List<List<int>> g = [[1, 2], [3, 4]]; g[0][1] = 9; }")
+    );
+    // immutable root still rejected
+    assert!(
+        !errors_of("function main() -> void { List<List<int>> g = [[1]]; g[0][0] = 9; }")
+            .is_empty()
+    );
+}

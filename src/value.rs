@@ -387,6 +387,53 @@ pub fn map_set(map: &mut Vec<(HKey, Value)>, key: &Value, v: Value) -> Result<()
     Ok(())
 }
 
+/// Set a nested element `container[i0][i1]…[ik] = v` in place (Spec nested-value-index-assign). COW is
+/// applied `Rc::make_mut` **root-to-leaf**: after the outer `make_mut` the inner `Rc` is uniquely held,
+/// so descent mutates in place; a genuinely-shared level still copies (value semantics preserved). The
+/// caller owns the outermost COW (it mutates `container` in its slot). `indices` is non-empty; a
+/// single index is the flat `xs[i]=e` case. A bad index/key faults exactly like a read (`"list index
+/// out of range"` / `"map key not found"`). **Single-sourced so `run ≡ runvm`** — both backends call it.
+pub fn set_nested(container: &mut Value, indices: &[Value], v: Value) -> Result<(), String> {
+    let (idx, rest) = indices
+        .split_first()
+        .expect("set_nested requires at least one index");
+    match container {
+        Value::List(xs) => {
+            let list = std::rc::Rc::make_mut(xs);
+            let i = match idx {
+                Value::Int(n) => *n,
+                other => return Err(format!("expected int index, found {}", other.type_name())),
+            };
+            let i = usize::try_from(i)
+                .ok()
+                .filter(|i| *i < list.len())
+                .ok_or_else(|| "list index out of range".to_string())?;
+            if rest.is_empty() {
+                list[i] = v;
+                Ok(())
+            } else {
+                set_nested(&mut list[i], rest, v)
+            }
+        }
+        Value::Map(m) => {
+            let map = std::rc::Rc::make_mut(m);
+            if rest.is_empty() {
+                map_set(map, idx, v)
+            } else {
+                let k = HKey::from_value(idx)
+                    .ok_or_else(|| format!("invalid map key: {}", idx.type_name()))?;
+                let slot = map
+                    .iter_mut()
+                    .find(|(ek, _)| *ek == k)
+                    .map(|(_, val)| val)
+                    .ok_or_else(|| "map key not found".to_string())?;
+                set_nested(slot, rest, v)
+            }
+        }
+        other => Err(format!("cannot index-assign {}", other.type_name())),
+    }
+}
+
 impl Value {
     /// Short name for diagnostics. Composite types fold to a constant so the
     /// return can stay `&'static str`.

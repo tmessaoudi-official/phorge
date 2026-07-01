@@ -42,20 +42,37 @@ impl Compiler<'_> {
                 // mutable local (checker-enforced); load it, push index + value, `SetIndex` (COW),
                 // then store the resulting container back. Nested places (`a[i][j]`, `this.f[i]`)
                 // are a later slice — the checker rejects a non-Ident container as `E-ASSIGN-TARGET`.
-                Expr::Index { object, index, .. } => {
-                    let name = match &**object {
-                        Expr::Ident(n, _) => n,
-                        _ => unreachable!("checker restricts index-assign to a local container"),
+                Expr::Index { .. } => {
+                    // Flatten `root[i0]…[ik]` into (root local, index exprs in source order). A single
+                    // index is the flat W8 `SetIndexLocal`; a nested chain is `SetPathLocal(slot, depth)`
+                    // (Spec nested-value-index). Both mutate the slot in place (COW, O(1)/level) rather
+                    // than the old GetLocal+SetIndex+SetLocal clone.
+                    let mut chain: Vec<&Expr> = Vec::new();
+                    let mut cur: &Expr = target;
+                    let name = loop {
+                        match cur {
+                            Expr::Index { object, index, .. } => {
+                                chain.push(index);
+                                cur = object;
+                            }
+                            Expr::Ident(n, _) => break n,
+                            _ => unreachable!("checker restricts the index-assign base to a local"),
+                        }
                     };
+                    chain.reverse(); // [i0..ik]
                     let slot = self
                         .resolve_local(name)
                         .ok_or_else(|| format!("unresolved local in index-assignment: {name}"))?;
-                    // `SetIndexLocal` mutates the container in its slot (COW, O(1) per write) instead
-                    // of `GetLocal` + `SetIndex` + `SetLocal`, which cloned the slot's `Rc` onto the
-                    // stack and so deep-copied the whole container on every write (M-DOGFOOD W8).
-                    self.expr(index)?; // [index]
-                    self.expr(value)?; // [index, value]
-                    self.emit(Op::SetIndexLocal(slot), span.line); // mutate slot in place, pop both
+                    let depth = chain.len();
+                    for e in chain {
+                        self.expr(e)?; // push i0..ik in source order
+                    }
+                    self.expr(value)?; // push the value
+                    if depth == 1 {
+                        self.emit(Op::SetIndexLocal(slot), span.line);
+                    } else {
+                        self.emit(Op::SetPathLocal(slot, depth), span.line);
+                    }
                     Ok(())
                 }
                 // Static write `ClassName.field = e` (M-mut.7): push the value, store into the
