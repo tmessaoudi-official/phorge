@@ -383,14 +383,20 @@ but they shape how imperative code ports:
 - **No by-reference / `mutable` parameters.** A parameter cannot be declared `mutable` (parse error),
   and lists/maps/sets are value-type (COW), so mutating a container passed to a function never
   propagates back to the caller. Combined with the nested-place restriction above, **in-place
-  imperative array algorithms that mutate across a call boundary cannot be expressed** — e.g. PHP's
-  `quicksort(array &$arr, …)` (in-place recursive sort) and group-by via `$groups[$k]['sum'] += …`.
-  The Phorj idiom is **functional** (return a new container; `List.map`/`filter`/`reduce`,
-  `List.sort`) or **keep the mutation in one scope on a `mutable` local** (a local `xs[i]=e` is O(1)
-  since the W8 fix). A decision to support in-place cross-call mutation (by-ref/`inout` params, or
-  nested-place stores) is a future language question, not a defect. The benchforge benchmarks that fit
-  the model are ported (Fibonacci, PrimeSieve); the mutation-heavy ones (Sorting/Search/Aggregation/…)
-  are intentionally not force-fitted.
+  imperative array algorithms that mutate a container across a call boundary cannot be expressed** —
+  e.g. PHP's `quicksort(array &$arr, …)`. The Phorj idiom is **functional** (return a new container;
+  `List.map`/`filter`/`reduce`, `List.sort`) or **keep the mutation in one scope on a `mutable` local**
+  (a local `xs[i]=e` is O(1) since the W8 fix). A decision to support in-place cross-call mutation
+  (by-ref/`inout` params) is a future language question, not a defect.
+- **Group-by / accumulator patterns DO work — via a shared-mutable class instance, not nested value
+  arrays.** PHP's `$groups[$cat]['sum'] += …` (nested value-array) has no direct equivalent, but the
+  idiomatic Phorj form does: a `Map<K, AccClass>` where the accumulator is a **class** (instances are
+  shared-mutable handles), so `groups[cat].sum = groups[cat].sum + v` mutates the held instance in
+  place — verified `run≡runvm` in the ported `AggregationBenchmark`. Only a **nested *value*-container**
+  index-assign (`grid[i][j]=e` for a `List<List<int>>` matrix, `m[k1][k2]=e` of value types) hits the
+  nested-place wall. So of the benchforge suite, Fibonacci/PrimeSieve/**Aggregation** are ported;
+  Sorting (in-place recursive quicksort) needs by-ref params, and Matrix needs nested-value index-assign
+  — those two are the genuine blockers, not group-by.
 - **No empty `Map`/`Set` literal.** `[]` is always an empty *list* (its element type resolved from the
   expected type since W0). There is no `[:]`-style empty-map literal, and `[]` cannot stand in for an
   empty `Map<K,V>`/`Set<T>` binding (the runtime value would be a list). Build a non-empty literal, or
