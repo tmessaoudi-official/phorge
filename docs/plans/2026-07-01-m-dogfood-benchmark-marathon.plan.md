@@ -52,5 +52,11 @@
 
 ## Progress
 
-- [ ] W0  - [ ] W1  - [ ] W2  - [ ] W3  - [ ] W4  - [ ] W5  - [ ] W6
+- [x] **W0** (empty-list init `2350428`; comma-throws + line-wrap `debe230`; keyword-vs-import rule → INVARIANTS §12)
+- [ ] W1  - [ ] W2  - [ ] W3  - [ ] W4  - [ ] W5  - [ ] W6
 - [ ] W7  - [ ] W8  - [ ] W9  - [ ] W10  - [ ] W11  - [ ] W12  - [ ] Wrap
+
+### New gaps surfaced during the marathon (feed later waves)
+- **`Core.List` has no append/push/add** — only query ops (map/filter/reduce/concat…). Imperative `$arr[] = x` has no direct equivalent; idiom is `List.map(range, fn)` / `List.concat`. → W5 (decide: add mutable append or keep functional).
+- **`import <unknown module>` type-checks clean** (e.g. `import Core.Types` on a non-existent module is a silent no-op) — candidate `W-UNKNOWN-IMPORT` lint. → W12.
+- **DF-1 return-type syntax** (`:` vs `->`, both accepted) — batch as a design question.

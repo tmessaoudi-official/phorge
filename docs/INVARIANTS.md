@@ -112,3 +112,27 @@ to keep that gate reproducible. The tracked `scripts/git-hooks/pre-commit` runs
 `phg benchmark <file>` (median-of-N, output-identity gated) is the baseline tool. Any
 perf-motivated change (Copy-on-`Op`, deep-copy elimination, dispatch tweaks) must ship with a
 before/after number from it — perf claims are **Verified**, not asserted.
+
+## 12. Keyword-vs-import 3-way rule — "nothing in the wind" is about *symbols*, not *grammar*
+Phorj's namespace decision ("everything namespaced, nothing in the wind") governs **symbols**
+(functions and user/library types), never the **type grammar**. There are exactly three tiers, and
+the boundary is not negotiable per-file:
+
+1. **Built-in types — never imported (keyword-class).** They are part of the type grammar, like
+   `if`/`for`. The named set is single-sourced in `is_builtin_type_name` (`src/checker/common.rs`):
+   `int float bool string bytes decimal double i8..i64 u8..u64 void never empty`, the containers
+   `List Map Set`, the markers/handles `Error Channel Task`, and `Html Attr`. The **structural**
+   type forms are equally import-free: optional `T?`, function types `(A, B) -> R`, unions `A | B`,
+   intersections `A & B`, ranges `a..b`. You never write `import Core.Types.int` — importing a
+   primitive would break familiarity-first (no mainstream language does it) and buy nothing.
+2. **User / library types — `import type Pkg.Path.Name [as Alias];`.** A `class`/`enum`/`interface`
+   defined in another package is reached only through a selective type import (M-RT cross-package
+   types). No wildcard (PHP has no `use A\*`).
+3. **Stdlib *functions* — `import Core.X;` then leaf-qualified calls (`X.fn(...)`).** e.g.
+   `import Core.Console;` → `Console.println(...)`. Functions are always qualified; there is no bare
+   global.
+
+Corollary (rejected designs, M-DOGFOOD): **no forced import of primitives** and **no `Integer`/
+`Float`/`Decimal` object wrappers** — method-on-primitive is UFCS (`n.abs()`), nullability is `T?`,
+primitives-in-generics already work (`List<int>`), and `decimal` is already a primitive. A wrapper
+tier would be Java autoboxing: redundant capability plus surprise.
