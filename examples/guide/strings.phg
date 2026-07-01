@@ -13,7 +13,9 @@ function main(): void {
     Output.printLine("n + 1 = {n + 1}");
     Output.printLine(greet(name));
 
-    // bind first — the interpolation sub-lexer does not nest string literals inside {…}
-    string w = "world";
-    Output.printLine("nested call: {greet(w)}");
+    // A string literal may now appear INSIDE an interpolation expression (M-DOGFOOD W2) — the
+    // sub-lexer consumes the nested `"…"` verbatim, so its quotes and braces don't end the outer
+    // string. No more "bind to a local first" workaround.
+    Output.printLine("nested call: {greet("world")}");
+    Output.printLine("two nested: {greet("A")} and {greet("B")}");
 }

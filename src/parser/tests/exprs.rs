@@ -288,12 +288,14 @@ fn parses_string_interpolation() {
 
 #[test]
 fn unterminated_interpolation_errors() {
-    // The lexer now owns the interpolation split (so `\{` literal braces are unambiguous), so an
-    // unterminated `{` is caught at lex stage rather than parse.
+    // The lexer owns the interpolation split (so `\{` literal braces are unambiguous), so an
+    // unterminated interpolation is caught at lex stage rather than parse. Since M-DOGFOOD W2 a `"`
+    // inside `{…}` opens a NESTED string, so `"Hello {name"` (missing `}`) now surfaces as an
+    // unterminated nested string — still a lex error naming the interpolation, still at the right spot.
     let e = lex("\"Hello {name\"").unwrap_err();
     assert!(
-        e.message.contains("unterminated interpolation"),
-        "{}",
+        e.message.contains("interpolation"),
+        "expected an interpolation lex error, got: {}",
         e.message
     );
 }

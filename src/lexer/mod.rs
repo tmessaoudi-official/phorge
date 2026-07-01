@@ -273,15 +273,50 @@ impl<'a> Lexer<'a> {
                     ))
                 }
                 Some(b'"') => {
-                    if interp.is_some() {
-                        return Err(Diagnostic::new(
-                            Stage::Lex,
-                            "unterminated interpolation '{' in string",
-                            line,
-                            col,
-                        ));
+                    match interp.as_mut() {
+                        // Inside an interpolation expression, a `"` opens a NESTED string literal
+                        // (M-DOGFOOD W2): consume it verbatim (its `"`, and any `{`/`}` inside it)
+                        // into the inner source, so it neither closes the outer string nor mis-nests
+                        // the interpolation. Escapes are kept verbatim — the inner source is re-lexed
+                        // as an expression later, which processes them. (A raw string with embedded
+                        // quotes inside an interpolation remains a deferral.)
+                        Some(buf) => {
+                            buf.push(b'"');
+                            loop {
+                                let (nl, nc) = (self.line, self.col);
+                                match self.bump() {
+                                    None => {
+                                        return Err(Diagnostic::new(
+                                            Stage::Lex,
+                                            "unterminated string in interpolation",
+                                            nl,
+                                            nc,
+                                        ))
+                                    }
+                                    Some(b'\\') => {
+                                        buf.push(b'\\');
+                                        match self.bump() {
+                                            Some(c) => buf.push(c),
+                                            None => {
+                                                return Err(Diagnostic::new(
+                                                    Stage::Lex,
+                                                    "unterminated escape in interpolation string",
+                                                    nl,
+                                                    nc,
+                                                ))
+                                            }
+                                        }
+                                    }
+                                    Some(b'"') => {
+                                        buf.push(b'"');
+                                        break;
+                                    }
+                                    Some(c) => buf.push(c),
+                                }
+                            }
+                        }
+                        None => break,
                     }
-                    break;
                 }
                 // A bare `{` outside an interpolation opens one (flush the pending literal first); a
                 // `{` already inside one is just a character of the inner expression source.
