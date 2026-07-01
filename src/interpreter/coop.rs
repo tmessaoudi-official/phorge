@@ -55,6 +55,8 @@ impl<'c> Interp<'c> {
             coop,
             coop_suspend: Some(suspend),
             program: Some(program.clone()),
+            // A spawned green task's child interpreter is never debugged in v1 (single-task stepping).
+            debug: None,
         };
         interp.collect(&program);
         interp

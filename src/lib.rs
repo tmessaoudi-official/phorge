@@ -8,6 +8,7 @@ pub mod checker;
 pub mod chunk;
 pub mod cli;
 pub mod compiler;
+pub mod debug;
 pub mod diagnostic;
 pub mod dispatch;
 pub mod dump;

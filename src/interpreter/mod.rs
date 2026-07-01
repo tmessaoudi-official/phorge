@@ -249,6 +249,11 @@ pub struct Interp<'c> {
         allow(dead_code)
     )]
     program: Option<std::rc::Rc<Program>>,
+    /// An attached interactive-debugger session (M-DX S5, `phg debug`). `None` on every normal run —
+    /// the hot `exec_stmt` path only consults it when it is `Some`. Interpreter-only + Dev-only;
+    /// a pure side-channel (never affects stdout / the correctness spine). Not shared into a spawned
+    /// green task's child interpreter (debugging is single-task in v1).
+    debug: Option<crate::debug::DebugSession>,
 }
 
 /// Run a whole program: collect declarations, locate `main`, call it, and return
@@ -267,6 +272,22 @@ pub fn interpret(program: &Program) -> Result<String, Diagnostic> {
 /// process exit status; the stdout-only [`interpret`] wrapper preserves every existing caller and the
 /// differential harness (which gates stdout identity).
 pub fn interpret_main(program: &Program) -> Result<(String, i64), Diagnostic> {
+    run_program_main(program, None)
+}
+
+/// Like [`interpret_main`] but with an attached interactive-debugger session (M-DX S5, `phg debug`).
+/// Interpreter-only + Dev-only; a side-channel that never affects stdout or the parity spine.
+pub fn interpret_debug(
+    program: &Program,
+    session: crate::debug::DebugSession,
+) -> Result<(String, i64), Diagnostic> {
+    run_program_main(program, Some(session))
+}
+
+fn run_program_main(
+    program: &Program,
+    debug: Option<crate::debug::DebugSession>,
+) -> Result<(String, i64), Diagnostic> {
     let mut interp = Interp {
         funcs: HashMap::new(),
         classes: HashMap::new(),
@@ -290,6 +311,7 @@ pub fn interpret_main(program: &Program) -> Result<(String, i64), Diagnostic> {
         coop: std::rc::Rc::new(std::cell::RefCell::new(crate::green::exec::Coop::new())),
         coop_suspend: None,
         program: None,
+        debug,
     };
     interp.collect(program);
     // Feature B-static: runtime static initializers run once, before `main`. A fault here surfaces
@@ -415,6 +437,7 @@ pub fn call_named(
         coop: std::rc::Rc::new(std::cell::RefCell::new(crate::green::exec::Coop::new())),
         coop_suspend: None,
         program: None,
+        debug: None,
     };
     interp.collect(program);
     let set = match interp.funcs.get(name) {
@@ -724,6 +747,26 @@ impl<'c> Interp<'c> {
     fn capture_fault_dump(&self, diag: &mut Diagnostic) {
         let locals = self.frame.snapshot_locals();
         diag.dump = Some(Box::new(crate::dump::format_locals(&locals)));
+    }
+
+    /// Run one interactive-debugger pause (M-DX S5). `#[cold]` + `#[inline(never)]` so the stack-heavy
+    /// snapshot/frontend machinery never bloats the hot recursive `exec_stmt` frame (same discipline as
+    /// [`Self::capture_fault_dump`]). A `quit` from the frontend detaches the session (the program then
+    /// runs to completion).
+    #[cold]
+    #[inline(never)]
+    fn debug_pause(&mut self, line: u32) {
+        let locals = self.frame.snapshot_locals();
+        let frames = self.snapshot_frames();
+        let depth = self.depth;
+        let quit = if let Some(session) = &mut self.debug {
+            session.pause(line, depth, locals, frames)
+        } else {
+            false
+        };
+        if quit {
+            self.debug = None;
+        }
     }
 
     fn exec_stmts(&mut self, stmts: &[Stmt]) -> R<()> {

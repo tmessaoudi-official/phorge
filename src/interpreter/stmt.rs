@@ -6,8 +6,19 @@ impl<'c> Interp<'c> {
     pub(super) fn exec_stmt(&mut self, s: &Stmt) -> R<()> {
         // Track the current source line on the active trace frame, so a fault reports the right line
         // (and a non-top frame reports its call-site line — the call statement currently executing).
+        let line = stmt_line(s);
         if let Some(fr) = self.trace_stack.last_mut() {
-            fr.line = stmt_line(s);
+            fr.line = line;
+        }
+        // M-DX S5: an attached interactive debugger pauses before a statement. The hot path is a cheap
+        // `Option` check; the pause machinery is a `#[cold]` helper so it never bloats this recursive
+        // frame (same discipline as S3's dump capture).
+        if self
+            .debug
+            .as_ref()
+            .is_some_and(|d| d.should_pause(line, self.depth))
+        {
+            self.debug_pause(line);
         }
         match s {
             Stmt::VarDecl { name, init, .. } => {

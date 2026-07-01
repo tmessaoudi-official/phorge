@@ -6,6 +6,8 @@
 > PHP-8.5 oracle byte-identity + guide example, then commit.
 
 ## Decisions Log
+- [2026-07-01] AGREED: build **full S5 now** (engine + REPL + DAP), despite context depth — commit
+  incrementally (A engine+hook+tests → B REPL+`phg debug` → C DAP+round-trip+docs) to limit exposure.
 - [2026-07-01] AGREED: build the **full milestone, all 6 slices** (S1→S0→S2→S3→S4→S5) in one
   autonomous sweep; commit each green; stop only on a genuine design fork or an unresolvable red gate.
 - [2026-07-01] AGREED: **no per-slice plan files** — build straight from the locked design spec, keep a
