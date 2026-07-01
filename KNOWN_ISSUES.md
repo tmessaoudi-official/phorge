@@ -216,6 +216,15 @@ not a panic:
   (`examples/project/inherit/`). Cross-package **multiple** inheritance (a class decomposed to PHP
   traits across packages) is still out of scope (the MI transpile path is `package Main`-only).
 
+- **Value-dump on fault — interpreter-rich, VM backtrace-only (M-DX S3).** `phg run --dump-on-fault`
+  prints the faulting frame's named locals; `phg runvm --dump-on-fault` prints the byte-identical
+  backtrace but no locals section. The bytecode VM stores slot-indexed locals with no runtime
+  slot→name table, so a byte-identical *named* dump would need a per-scope debug-symbol table —
+  deliberately not built (the same interpreter-only rationale as the S5 debugger: the parity spine
+  guarantees the backends agree, so a dump on the interpreter faithfully reflects a VM fault). Also
+  deferred: the *faulting expression's operands* (only frame locals are captured — the offending
+  sub-values are usually among them); a Release artifact emits nothing by design.
+
 - **Override signature checking — return covariance shipped (M-DX S1); parameters deferred.** An
   override's **return type** must now be the overridden type or a subtype of it (`E-OVERRIDE-SIG`) —
   a return-incompatible override previously type-checked clean then fatalled in transpiled PHP. Still

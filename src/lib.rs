@@ -10,6 +10,7 @@ pub mod cli;
 pub mod compiler;
 pub mod diagnostic;
 pub mod dispatch;
+pub mod dump;
 pub mod fmt;
 pub mod green;
 pub mod inspect;

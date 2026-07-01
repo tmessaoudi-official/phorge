@@ -22,6 +22,69 @@ fn no_arguments_is_usage_error_exit_2() {
     assert_eq!(out.status.code(), Some(2));
 }
 
+/// M-DX S3: `phg run --dump-on-fault` appends the faulting frame's locals (secure + deterministic)
+/// to the stderr fault render; without the flag it does not. A `Secret` local is redacted.
+#[test]
+fn dump_on_fault_shows_redacted_locals_only_when_requested() {
+    let fixture = "tests/fixtures/dump_fault.phg";
+
+    // Without the flag: fault + backtrace, but no locals dump.
+    let plain = Command::new(BIN)
+        .args(["run", fixture])
+        .output()
+        .expect("spawn phorj");
+    let plain_err = String::from_utf8_lossy(&plain.stderr);
+    assert!(plain_err.contains("list index out of range"), "{plain_err}");
+    assert!(
+        !plain_err.contains("faulting frame locals"),
+        "no dump without the flag: {plain_err}"
+    );
+
+    // With the flag: the locals section appears, the Secret is redacted, and no plaintext leaks.
+    let dumped = Command::new(BIN)
+        .args(["run", "--dump-on-fault", fixture])
+        .output()
+        .expect("spawn phorj");
+    let err = String::from_utf8_lossy(&dumped.stderr);
+    assert!(
+        err.contains("faulting frame locals:"),
+        "dump present: {err}"
+    );
+    assert!(err.contains("doubled = 10"), "shows a local: {err}");
+    assert!(err.contains("xs = [10, 20]"), "shows a list local: {err}");
+    assert!(
+        err.contains("token = Secret(<redacted>)"),
+        "secret redacted: {err}"
+    );
+    assert!(
+        !err.contains("hunter2"),
+        "secret plaintext MUST NOT leak: {err}"
+    );
+    // The stderr dump never bleeds into stdout (side-channel only).
+    assert!(
+        String::from_utf8_lossy(&dumped.stdout).is_empty(),
+        "dump stays off stdout"
+    );
+}
+
+/// M-DX S3: the VM backend has no named locals, so `runvm --dump-on-fault` emits the (byte-identical)
+/// backtrace without a locals section — never slot noise, never a leak.
+#[test]
+fn dump_on_fault_vm_emits_backtrace_without_locals() {
+    let out = Command::new(BIN)
+        .args(["runvm", "--dump-on-fault", "tests/fixtures/dump_fault.phg"])
+        .output()
+        .expect("spawn phorj");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("list index out of range"), "{err}");
+    assert!(err.contains("stack trace"), "backtrace present: {err}");
+    assert!(
+        !err.contains("faulting frame locals"),
+        "VM has no named locals: {err}"
+    );
+    assert!(!err.contains("hunter2"), "no leak: {err}");
+}
+
 #[test]
 fn version_flag_prints_version_exit_0() {
     for flag in ["--version", "-v"] {

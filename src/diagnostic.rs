@@ -69,6 +69,16 @@ pub struct Diagnostic {
     /// Runtime call stack, innermost → outermost. Empty for front-end diagnostics and for runtime
     /// faults before frames are attached. Rendered after the message/caret (slice 1).
     pub frames: Vec<Frame>,
+    /// An optional pre-rendered **value-dump** section (M-DX S3), appended after the stack trace. A
+    /// secure, bounded, deterministic snapshot of the faulting frame's locals, produced by the
+    /// interpreter via `crate::inspect` when `--dump-on-fault` is set under the Dev profile. Held as
+    /// an opaque string so this module stays free of any `Value` dependency (front-end diagnostics
+    /// never carry runtime values). **Boxed as `Box<String>`** (a *thin* 8-byte pointer — `Box<str>`
+    /// would be a 16-byte fat pointer) so it costs one word in the common (no-dump) case. `Diagnostic`
+    /// is the payload of the interpreter's hot recursive `Signal` error type: keeping it small avoids
+    /// both `clippy::result_large_err` and — critically — a per-frame stack-size increase that, times
+    /// `MAX_CALL_DEPTH`, would overflow the deep-stack worker before the depth guard fires.
+    pub dump: Option<Box<String>>,
 }
 
 impl Diagnostic {
@@ -82,7 +92,15 @@ impl Diagnostic {
             code: None,
             hint: None,
             frames: Vec::new(),
+            dump: None,
         }
+    }
+
+    /// Attach a pre-rendered value-dump section (M-DX S3). Rendered after the stack trace.
+    #[must_use]
+    pub fn with_dump(mut self, dump: String) -> Self {
+        self.dump = Some(Box::new(dump));
+        self
     }
 
     /// Attach a runtime call stack (error-handling slice 1). When this diagnostic has no position of
@@ -164,6 +182,10 @@ impl Diagnostic {
             s.push_str(&format!("\n  hint: {hint}"));
         }
         s.push_str(&self.render_frames());
+        if let Some(dump) = &self.dump {
+            s.push('\n');
+            s.push_str(dump);
+        }
         s
     }
 

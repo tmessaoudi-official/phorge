@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — value-dump on fault: `phg run --dump-on-fault` (M-DX S3)
+
+The headline diagnostic aid: on an uncaught runtime fault, print the **faulting frame's local
+variables** (name → value) to stderr, after the stack trace. Opt-in and Dev-only.
+
+- **Enablement:** `--dump-on-fault` on `phg run`/`runvm`, and only under the Dev profile — a
+  `Release` `phg build` artifact never emits it (gated by `dump::should_dump` = enabled ∧ Dev; no
+  environment variable can turn it on).
+- **Secure + deterministic:** rendered through the S2 `inspect` renderer — `Secret<T>` locals show
+  `Secret(<redacted>)` (never the plaintext), depth/element/length are capped, and locals are sorted
+  by name (reproducible).
+- **Side-channel only:** stderr, never stdout; nothing is transpiled — `run ≡ runvm ≡ PHP` is
+  untouched (the dump-carrying `Diagnostic.dump` is a boxed, out-of-spine string).
+- **Backends:** the rich named-locals dump is produced on the **interpreter** (which holds live
+  named scopes); `runvm` shares the byte-identical **backtrace** but omits the locals section (the VM
+  has slot-indexed locals with no name table — same interpreter-only rationale as the S5 debugger).
+- Walkthrough: `examples/dump/README.md`. Tests: `dump` unit (gate + redaction + format), end-to-end
+  `tests/cli.rs` (redacted locals only with the flag; VM backtrace-only; no stdout bleed).
+
 ### Added — secure value renderer (M-DX S2)
 
 `inspect::render(&Value) -> String` — the single, safe-by-construction `Value → String` substrate the

@@ -363,9 +363,15 @@ fn main() {
     let check_json = cmd == "check" && args[2..].iter().any(|a| a == "--json");
     // `benchmark --json` emits the measurements as a machine-readable object (M-DOGFOOD W9).
     let bench_json = cmd == "benchmark" && args[2..].iter().any(|a| a == "--json");
+    // `run`/`runvm --dump-on-fault` (M-DX S3): on an uncaught fault, dump the faulting frame's locals
+    // to stderr. Dev-only + opt-in; the interpreter produces the rich dump (see `crate::dump`).
+    let dump_on_fault =
+        matches!(cmd, "run" | "runvm") && args[2..].iter().any(|a| a == "--dump-on-fault");
     let rest: Vec<String> = args[2..]
         .iter()
-        .filter(|a| a.as_str() != "--vs-php" && a.as_str() != "--json")
+        .filter(|a| {
+            a.as_str() != "--vs-php" && a.as_str() != "--json" && a.as_str() != "--dump-on-fault"
+        })
         .cloned()
         .collect();
     // run/runvm/check/transpile are project-aware (M5 S2b): a <file> source is resolved through the
@@ -384,6 +390,10 @@ fn main() {
         };
         if matches!(cmd, "run" | "runvm") {
             phorj::native::set_process_args(prog_args);
+            // M-DX S0/S3: the interactive run tool is the Dev profile; enable the value-dump when
+            // `--dump-on-fault` was passed (Dev + opt-in — `dump::should_dump` re-checks the profile).
+            phorj::profile::set_active(phorj::profile::Profile::Dev);
+            phorj::dump::set_enabled(dump_on_fault);
         }
         let unit = match spec {
             cli::SourceSpec::File(path) => loader::load(std::path::Path::new(&path)),

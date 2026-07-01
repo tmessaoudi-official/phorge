@@ -35,7 +35,17 @@
       byte caps with `…`), deterministic (insertion-ordered Map/Set, slot-ordered fields, no
       addresses/Rc-counts). Every `Value` variant covered; opaque handles → `<function>`/`<channel>`/
       `<task>`. 10 unit tests. Internal substrate — no CLI/example yet (ships with S3/S5).
-- [ ] **S3** Value-dump on fault (faulting-frame locals + backtrace headers; Dev + opt-in)
+- [x] **S3** Value-dump on fault — DONE. `phg run --dump-on-fault` dumps the faulting frame's named
+      locals (via S2 `inspect`) to stderr after the backtrace; Dev + opt-in (`dump::should_dump` =
+      enabled ∧ Dev; absent in Release). Secret-redacted, capped, sorted (deterministic). Interpreter
+      captures locals at the innermost `run_call` (before scope unwind, `#[cold]` helper); VM shares
+      the byte-identical backtrace, no locals (no slot→name table — S5-consistent). `Diagnostic.dump:
+      Option<Box<String>>` (out-of-spine). Walkthrough `examples/dump/README.md`; dump unit + cli e2e
+      tests. **DECISION: interpreter-rich locals, not byte-identical VM named-locals** (deviation from
+      S3's literal "byte-identical dump" — resolved per the locked S5 interpreter-only precedent; flag
+      for review). **GOTCHA: `Box<str>` is a 16-byte fat pointer** — using it on `Diagnostic` grew the
+      hot recursive `Signal` frame enough to overflow the 256 MB `MAX_CALL_DEPTH` worker; `Box<String>`
+      (thin 8-byte) fits. Verified pre-S3 parent was clean → confirmed the regression + fix.
 - [ ] **S4** Assertions (`assert`, always-checked, FaultKind::Assert, transpile to `if(!c)`)
 - [ ] **S5** Interactive debugger (interpreter-only; REPL + DAP frontends)
 
@@ -49,3 +59,15 @@
   a future slice (migrate loader to `Diagnostic`).
 - [S1] The hardcoded "known codes" list in the `explain` fallback had already drifted (missing the 24).
   Removed it entirely; the ratchet is the SSOT guarantee now.
+- [S3] **`Box<str>` is a fat pointer (16 bytes), `Box<String>` is thin (8 bytes).** Putting a
+  `Option<Box<str>>` on `Diagnostic` (the interpreter's hot recursive `Signal` payload) grew the
+  per-frame stack enough that a `MAX_CALL_DEPTH`-deep recursion overflowed the 256 MB deep-stack worker
+  *before* the depth guard fired — a `SIGABRT` in `tests/differential.rs`. `git stash` + testing the
+  parent proved it was an S3 regression; `Box<String>` fixed it. Lesson: adding ANY field to
+  `Diagnostic`/`Signal` must stay within the frame-size margin; prefer a thin boxed pointer.
+- [S3] **DEVIATION FROM SPEC (flag for review):** S3's literal design says the dump is "byte-identical
+  between backends." The VM has no slot→name table, so byte-identical *named* locals would be a
+  debug-symbol subproject. Resolved per the already-locked S5 decision (debugger is interpreter-only
+  because the spine guarantees the backends agree): rich locals on the interpreter, byte-identical
+  backtrace on both. Alternative if the developer wants true VM parity: build a per-scope VM
+  debug-symbol table (larger; contradicts the S5 rationale).

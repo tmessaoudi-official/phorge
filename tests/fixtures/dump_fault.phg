@@ -1,0 +1,14 @@
+package Main;
+import Core.Output;
+import Core.Secret;
+
+function compute(int n) -> int {
+  int doubled = n * 2;
+  Secret<string> token = new Secret("hunter2");
+  List<int> xs = [10, 20];
+  return xs[n] + doubled;
+}
+
+function main() -> void {
+  Output.printLine("{compute(5)}");
+}

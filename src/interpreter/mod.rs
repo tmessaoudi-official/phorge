@@ -150,6 +150,20 @@ impl CallScopes {
         }
         false
     }
+
+    /// Snapshot every in-scope local as `(name, value)` for a value-dump (M-DX S3), inner scope
+    /// shadowing outer, **sorted by name** for a deterministic dump (`HashMap` iteration order is
+    /// nondeterministic). Clones the values (the dump is a side-channel; it must not disturb state).
+    fn snapshot_locals(&self) -> Vec<(String, Value)> {
+        let mut map: std::collections::BTreeMap<String, Value> = std::collections::BTreeMap::new();
+        for scope in &self.scopes {
+            // outer → inner, so an inner binding overwrites an outer one of the same name
+            for (name, value) in scope {
+                map.insert(name.clone(), value.clone());
+            }
+        }
+        map.into_iter().collect()
+    }
 }
 
 pub struct Interp<'c> {
@@ -665,7 +679,21 @@ impl<'c> Interp<'c> {
         for (n, a) in names.iter().zip(args) {
             self.frame.declare(n, a);
         }
-        let result = self.exec_stmts(body);
+        let mut result = self.exec_stmts(body);
+        // M-DX S3: this is the innermost `run_call` to observe a surfacing fault, so `self.frame`
+        // still holds the *faulting* frame's live locals (they are discarded on the next line). If a
+        // dump is enabled and not already captured (the `is_none` guard makes the deepest frame win as
+        // the fault unwinds outward), snapshot the locals into the diagnostic. Side-channel only.
+        //
+        // The actual capture lives in a `#[cold] #[inline(never)]` helper: `run_call` is the hot
+        // recursive frame, and inlining the snapshot/render temporaries (a `BTreeMap`, string builders,
+        // the recursive value renderer) here would reserve their stack in *every* frame — enough,
+        // times `MAX_CALL_DEPTH`, to overflow the 256 MB worker before the depth guard fires.
+        if let Err(Signal::Runtime(diag)) = &mut result {
+            if diag.dump.is_none() && crate::dump::should_dump() {
+                self.capture_fault_dump(diag);
+            }
+        }
         self.frame = saved_frame;
         self.this = saved_this;
         self.cur_class = saved_class;
@@ -686,6 +714,16 @@ impl<'c> Interp<'c> {
     /// Snapshot the live trace stack as ordered frames (innermost → outermost) for a fault diagnostic.
     fn snapshot_frames(&self) -> Vec<crate::diagnostic::Frame> {
         self.trace_stack.iter().rev().cloned().collect()
+    }
+
+    /// Capture the faulting frame's locals into `diag`'s value-dump (M-DX S3). Kept `#[cold]` +
+    /// `#[inline(never)]` so its stack-heavy temporaries never bloat the hot recursive `run_call`
+    /// frame (see the call site). Reached at most once per fault (guarded by `dump.is_none()`).
+    #[cold]
+    #[inline(never)]
+    fn capture_fault_dump(&self, diag: &mut Diagnostic) {
+        let locals = self.frame.snapshot_locals();
+        diag.dump = Some(Box::new(crate::dump::format_locals(&locals)));
     }
 
     fn exec_stmts(&mut self, stmts: &[Stmt]) -> R<()> {
