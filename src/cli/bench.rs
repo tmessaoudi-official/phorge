@@ -79,7 +79,12 @@ fn php_bench_section(
     };
     let php_src = match crate::transpile::emit(prog) {
         Ok(s) => s,
-        Err(e) => return (format!("\nvs PHP: transpile failed ({e}) — skipping\n"), None),
+        Err(e) => {
+            return (
+                format!("\nvs PHP: transpile failed ({e}) — skipping\n"),
+                None,
+            )
+        }
     };
     let path = std::env::temp_dir().join(format!("phorj_bench_{}.php", std::process::id()));
     if std::fs::write(&path, &php_src).is_err() {
@@ -307,9 +312,8 @@ pub(super) fn bench_report_opts(
             } else {
                 "null".to_string()
             };
-            let opt_ns = |d: Option<Duration>| {
-                d.map_or("null".to_string(), |d| d.as_nanos().to_string())
-            };
+            let opt_ns =
+                |d: Option<Duration>| d.map_or("null".to_string(), |d| d.as_nanos().to_string());
             let opt_kb = |k: Option<u64>| k.map_or("null".to_string(), |k| k.to_string());
             let j = format!(
                 "{{\"iters\":{iters},\"output_bytes\":{ob},\"parse_check_ns\":{fr},\

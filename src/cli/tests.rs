@@ -307,7 +307,10 @@ fn bench_json_emits_a_machine_readable_object() {
 function main(): void { int x = 21; Output.printLine("{x + x}"); }"#);
     let out = bench_report_opts(&src, 3, false, true).expect("bench json");
     // Structural checks (no JSON dep in the lib): object shape + the required numeric keys.
-    assert!(out.trim_start().starts_with('{') && out.trim_end().ends_with('}'), "{out}");
+    assert!(
+        out.trim_start().starts_with('{') && out.trim_end().ends_with('}'),
+        "{out}"
+    );
     for key in [
         "\"iters\":",
         "\"output_bytes\":",
@@ -322,7 +325,10 @@ function main(): void { int x = 21; Output.printLine("{x + x}"); }"#);
     }
     // Without --vs-php, php_ns is null; the human report headers must be absent.
     assert!(out.contains("\"php_ns\":null"), "{out}");
-    assert!(!out.contains("phg bench —"), "json must not include the text header: {out}");
+    assert!(
+        !out.contains("phg bench —"),
+        "json must not include the text header: {out}"
+    );
 }
 
 #[test]

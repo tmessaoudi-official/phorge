@@ -212,5 +212,8 @@ fn list_literal_upcasts_elements_to_annotation_supertype() {
 #[test]
 fn list_literal_element_not_assignable_to_annotation_errors() {
     // With a List<int> annotation, a string element is rejected (per-element assignability).
-    assert!(!errors_of("import Core.List; function main() -> void { List<int> xs = [1, \"a\"]; }").is_empty());
+    assert!(
+        !errors_of("import Core.List; function main() -> void { List<int> xs = [1, \"a\"]; }")
+            .is_empty()
+    );
 }
