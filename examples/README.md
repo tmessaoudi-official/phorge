@@ -191,7 +191,7 @@ so a new example is auto-gated the moment it lands. This page is updated as exam
 | `Core.List` query/aggregate: `unique`, `min`/`max`(→`T?`), `find`(→`T?`), `any`/`all` | `guide/list-breadth` |
 | `Core.Set`/`Core.Map` ergonomics: `add`/`remove`/`isSubset`, `getOrDefault`/`merge`/`map`/`filter` | `guide/collection-ergonomics` |
 | `Core.String` breadth: `padLeft`/`padRight`, `indexOf`/`lastIndexOf`(→`int?`), `substring`, `removePrefix`/`removeSuffix` (byte-based, tier-1) | `guide/text-ops` |
-| `Core.Path`: `baseName`/`directoryName`/`extension`/`stem`/`join` (pure path strings, → `baseName`/`directoryName`/`pathinfo`) | `guide/paths` |
+| `Core.Path`: `baseName`/`directoryName`/`extension`/`fileStem`/`join` (pure path strings, → `basename`/`dirname`/`pathinfo`) | `guide/paths` |
 | `Core.Set` algebra: `union`/`intersection`/`difference` | `guide/set-ops` |
 | `Set<T>`: `Core.Set` `of`/`contains`/`size` (insertion-ordered, deduped) | `guide/sets` |
 | `Core.Regex` (ReDoS-safe `regex` crate): `compile`/`matches`/`find`/`findAll`/`findGroups`/`replace`/`split`; raw-string patterns, named captures → `Map`, erases to `preg_*` | `guide/regex` |

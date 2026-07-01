@@ -82,13 +82,13 @@ fn path_join_str(a: &str, b: &str) -> String {
 fn path_basename(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(p)] => Ok(Value::Str(php_basename(p))),
-        _ => Err("Path.basename expects (string)".into()),
+        _ => Err("Path.baseName expects (string)".into()),
     }
 }
 fn path_dirname(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(p)] => Ok(Value::Str(php_dirname(p))),
-        _ => Err("Path.dirname expects (string)".into()),
+        _ => Err("Path.directoryName expects (string)".into()),
     }
 }
 fn path_extension(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -100,7 +100,7 @@ fn path_extension(args: &[Value], _: &mut String) -> Result<Value, String> {
 fn path_stem(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Str(p)] => Ok(Value::Str(php_stem(p))),
-        _ => Err("Path.stem expects (string)".into()),
+        _ => Err("Path.fileStem expects (string)".into()),
     }
 }
 fn path_join(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -116,7 +116,7 @@ pub(crate) fn path_natives() -> Vec<NativeFn> {
     vec![
         NativeFn {
             module: "Core.Path",
-            name: "basename",
+            name: "baseName",
             params: vec![s()],
             ret: Ty::String,
             pure: true,
@@ -125,7 +125,7 @@ pub(crate) fn path_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.Path",
-            name: "dirname",
+            name: "directoryName",
             params: vec![s()],
             ret: Ty::String,
             pure: true,
@@ -143,7 +143,7 @@ pub(crate) fn path_natives() -> Vec<NativeFn> {
         },
         NativeFn {
             module: "Core.Path",
-            name: "stem",
+            name: "fileStem",
             params: vec![s()],
             ret: Ty::String,
             pure: true,

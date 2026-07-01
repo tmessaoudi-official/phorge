@@ -10,6 +10,10 @@
   Stdlib-breadth.
 - [2026-07-01] AGREED: order = **Naming → M-perf → VM-symbols → Stdlib** (rework-minimization + gate
   -early + isolated-quality + additive-last).
+- [2026-07-01] AGREED: fold five ADD candidates into this autonomous run — `phg repl`, `phg doc`,
+  parser multi-error recovery, A2 generators/`yield`, plus opportunistic wins (doc-comments `///` with
+  `phg doc`, `phg new`, `defer`, VM tail-call-opt inside M-perf, format specifiers with `sprintf`).
+  Start = Lane 1 W1. Autonomy = full (30/8, per-slice commit, stop only on genuine forks / push).
 
 ## Lane order + scope
 
@@ -96,6 +100,17 @@
 - **Lane 4 needs one decision per module** (native-vs-`.phg`, optional-vs-fault, determinism tier) —
   the M4 charter answers most; the fresh session should read the charter at Lane-4 Phase 0 and only
   pause if a module's policy is genuinely ambiguous. Not a blocker to starting.
+
+## OPEN QUESTION (developer, 2026-07-01) — answer at session end, with challenge
+Dynamic reflection surface — the developer asks:
+1. Can we **instantiate a class from a string at runtime** dynamically, WITHOUT importing it? (PHP `new $className()`)
+2. Can we **call a function dynamically at runtime from a string**? (PHP `$fn()` / `call_user_func`)
+3. What **callable formats** do we currently have? (first-class fn values, closures, method refs?)
+> To answer: audit `Core.Reflection` (`src/native/reflect.rs`), `Value::Closure`, first-class fn values,
+> the resolution model (imports resolved at compile-time via the loader mangle pass). CHALLENGE angle:
+> dynamic-from-string fights the whole design — compile-time namespacing, "nothing in the wind",
+> byte-identity spine, and the type system's non-null/exhaustiveness guarantees. A string→class/fn
+> lookup is un-typeable and un-erasable. Frame the tension explicitly before recommending.
 
 ## Progress
 - [ ] Lane 1 — Naming-overhaul (NOT STARTED) — W1..W7
