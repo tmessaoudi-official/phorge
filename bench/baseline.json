@@ -1,0 +1,7 @@
+{
+  "_comment": "Lane 2 W1 perf-regression baseline. Gate on vm_speedup (tree-walk / VM ratio), which is machine-independent (both backends run on the same CPU) unlike absolute ns. Timing noise is one-directional (scheduler/GC only ever slow a run — observed a 3.27 outlier vs a ~22 true value), so the gate uses best-of-N (max speedup = least-perturbed run) and a generous floor = baseline_vm_speedup * min_ratio. The gate catches gross (>~1.7x) VM regressions, not micro-noise. baseline_vm_speedup is set conservatively below the observed best (~22.5) so a slower CI ratio-regime does not false-fail.",
+  "workload": "examples/bench/workload.phg",
+  "baseline_vm_speedup": 18.0,
+  "min_ratio": 0.6,
+  "runs": 5
+}

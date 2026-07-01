@@ -113,7 +113,14 @@ Dynamic reflection surface — the developer asks:
 > lookup is un-typeable and un-erasable. Frame the tension explicitly before recommending.
 
 ## Progress
-- [ ] Lane 1 — Naming-overhaul (NOT STARTED) — W1..W7
-- [ ] Lane 2 — M-perf (NOT STARTED) — W1..W7
+- [x] Lane 1 — Naming-overhaul (**COMPLETE** 2026-07-01, `88082a8`/`4f539f0`/`b8679e7`) — W1 discovery
+      found ~95% already shipped; delta was Path (baseName/directoryName/fileStem) + new
+      Random.nextFloat (dyadic, byte-identical) + doc/comment drift cleanup (module headers,
+      example READMEs, explain text, INVARIANTS/ARCHITECTURE). CHANGELOG history left intact.
+- [~] Lane 2 — M-perf (IN PROGRESS) — **W1 DONE** (CI perf-regression gate: `scripts/perf-gate.sh`
+      gates best-of-N `vm_speedup` from `phg benchmark --json` vs `bench/baseline.json`, machine-
+      independent ratio + one-directional-noise → best-of-N + generous floor; wired as gating CI job).
+      W2..W7 = VM wins (Rc-share Value::Str, intern IsInstance, dispatch, const-fold, peephole, lazy
+      for-range) — each guarded by the new gate.
 - [ ] Lane 3 — VM debug symbols (NOT STARTED) — W1..W5
 - [ ] Lane 4 — Stdlib breadth (NOT STARTED) — W1..W8

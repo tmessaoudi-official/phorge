@@ -65,6 +65,27 @@ jobs:
           PHORJ_REQUIRE_PHP: '1'
         run: cargo test --workspace
 
+  perf-gate:
+    # Lane 2 W1: block a gross VM performance regression. scripts/perf-gate.sh gates on `vm_speedup`
+    # (tree-walk / VM ratio) from `phg benchmark --json` — machine-independent (both backends share the
+    # CPU), unlike absolute ns. Timing noise is one-directional (only ever slows a run), so the script
+    # takes best-of-N and a generous floor (bench/baseline.json: baseline_vm_speedup * min_ratio ≈ 10.8
+    # vs a true ~20-25) — huge margin, so a noisy runner still clears it while a real ~1.7x+ regression
+    # trips it. If a shared runner ever false-fails, lower min_ratio in the baseline or set
+    # continue-on-error here; do not delete the gate.
+    name: perf-gate (VM regression)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+      - name: Build release binary
+        run: cargo build --release --bin phg
+      - name: Run perf gate
+        run: bash scripts/perf-gate.sh
+
   oracle-nightly:
     # Non-gating canary: run the PHP oracle against the in-development 8.6 so bleeding-edge breakage
     # surfaces early. continue-on-error keeps a flaky/unavailable dev build from failing CI — the 8.5
