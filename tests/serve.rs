@@ -291,6 +291,56 @@ fn respond_fault_degrades_to_500_and_loop_continues() {
     }
 }
 
+/// M-DX S0: under the **Dev** profile an uncaught fault renders the rich HTML error page (trace +
+/// request), while **Release** returns the bare `text/plain` 500 — the profile is the sole switch and
+/// it changes only this side-channel. (Fills the coverage gap: no test previously exercised `dev=true`.)
+#[test]
+fn dev_profile_shows_rich_error_page_release_shows_bare_500() {
+    use phorj::profile::Profile;
+    let prog = checked(
+        "package Main;\nfunction respond(bytes raw) -> bytes { List<bytes> xs = [raw]; return xs[5]; }\n",
+    );
+    let req = b"GET /boom HTTP/1.1\r\n\r\n".to_vec();
+
+    // Dev profile → rich HTML page.
+    let mut dev_fx = FixtureTransport::new(vec![req.clone()]);
+    serve(&prog, &mut dev_fx, Profile::Dev.is_dev()).expect("loop completes");
+    let dev_resp = String::from_utf8_lossy(&dev_fx.sent[0]);
+    assert!(
+        dev_resp.starts_with("HTTP/1.1 500 Internal Server Error"),
+        "{dev_resp}"
+    );
+    assert!(
+        dev_resp.contains("Content-Type: text/html"),
+        "dev page is HTML: {dev_resp}"
+    );
+    assert!(
+        dev_resp.contains("Runtime fault"),
+        "dev page shows the fault: {dev_resp}"
+    );
+    assert!(
+        dev_resp.contains("development only"),
+        "dev page is labelled dev-only"
+    );
+
+    // Release profile → bare plain-text 500, no trace/source leak.
+    let mut rel_fx = FixtureTransport::new(vec![req]);
+    serve(&prog, &mut rel_fx, Profile::Release.is_dev()).expect("loop completes");
+    let rel_resp = String::from_utf8_lossy(&rel_fx.sent[0]);
+    assert!(
+        rel_resp.starts_with("HTTP/1.1 500 Internal Server Error"),
+        "{rel_resp}"
+    );
+    assert!(
+        rel_resp.contains("Content-Type: text/plain"),
+        "release 500 is plain: {rel_resp}"
+    );
+    assert!(
+        !rel_resp.contains("Runtime fault"),
+        "release must NOT leak a trace: {rel_resp}"
+    );
+}
+
 /// P1-e: a `respond` that returns a non-`bytes` value also degrades to a 500 (the runtime never
 /// trusts the return type — it checks the actual value).
 #[test]

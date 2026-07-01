@@ -350,9 +350,12 @@ pub fn serve_tcp(
     program: &Program,
     addr: &str,
     timeout: Option<Duration>,
-    dev: bool,
+    profile: crate::profile::Profile,
     workers: usize,
 ) -> io::Result<()> {
+    // M-DX S0: the build profile is the source of truth; serve's fault pages are a Dev-only
+    // side-channel (they leak traces/source). Derive the leaf `dev` bool here at the CLI boundary.
+    let dev = profile.is_dev();
     // S4.2: SIGINT/SIGTERM → graceful shutdown (drain in-flight, exit 0). Installed once for either path.
     let shutdown = install_shutdown_handler();
     if workers <= 1 {

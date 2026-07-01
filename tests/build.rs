@@ -385,3 +385,60 @@ fn build_rejects_unknown_trailing_arg() {
         "unknown trailing arg must be a usage error"
     );
 }
+
+/// M-DX S0: `phg build` bakes the profile into the artifact's container — Release by default, Dev
+/// only with `--dev` — and (the keystone) the profile changes NO observable program output. A
+/// shipped artifact is therefore Release by construction; no environment variable can flip it.
+#[test]
+fn built_artifact_carries_profile_and_output_is_profile_invariant() {
+    if !objcopy_available() {
+        return;
+    }
+    use phorj::profile::Profile;
+    let prog = "examples/hello.phg";
+    let rel = std::env::temp_dir().join(format!("phorj_rel_{}", std::process::id()));
+    let dev = std::env::temp_dir().join(format!("phorj_dev_{}", std::process::id()));
+    let _ = std::fs::remove_file(&rel);
+    let _ = std::fs::remove_file(&dev);
+
+    assert!(Command::new(BIN)
+        .args(["build", prog, "-o", rel.to_str().unwrap()])
+        .status()
+        .expect("spawn build")
+        .success());
+    assert!(Command::new(BIN)
+        .args(["build", prog, "--dev", "-o", dev.to_str().unwrap()])
+        .status()
+        .expect("spawn build --dev")
+        .success());
+
+    // The profile round-trips out of each artifact's embedded `.phorj` container.
+    let rel_bytes = std::fs::read(&rel).expect("read release artifact");
+    let dev_bytes = std::fs::read(&dev).expect("read dev artifact");
+    let rel_sec = phorj::bundle::find_section(&rel_bytes).expect("release .phorj section");
+    let dev_sec = phorj::bundle::find_section(&dev_bytes).expect("dev .phorj section");
+    assert_eq!(
+        phorj::bundle::container::decode_container_full(rel_sec)
+            .unwrap()
+            .1,
+        Profile::Release,
+        "default build must be Release (secure by construction)"
+    );
+    assert_eq!(
+        phorj::bundle::container::decode_container_full(dev_sec)
+            .unwrap()
+            .1,
+        Profile::Dev,
+        "--dev build must be Dev"
+    );
+
+    // Keystone: a profile changes side-channels only — stdout is byte-identical across profiles.
+    let rel_out = Command::new(&rel).output().expect("run release artifact");
+    let dev_out = Command::new(&dev).output().expect("run dev artifact");
+    let _ = std::fs::remove_file(&rel);
+    let _ = std::fs::remove_file(&dev);
+    assert_eq!(
+        rel_out.stdout, dev_out.stdout,
+        "profile must not change program output (M-DX keystone)"
+    );
+}

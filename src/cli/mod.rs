@@ -1270,12 +1270,12 @@ pub fn serve_program(
     diag_src: &str,
     addr: &str,
     timeout: Option<std::time::Duration>,
-    dev: bool,
+    profile: crate::profile::Profile,
     workers: usize,
 ) -> Result<String, String> {
     on_deep_stack(|| {
         let checked = check_and_expand(prog, diag_src)?;
-        crate::serve::serve_tcp(&checked, addr, timeout, dev, workers)
+        crate::serve::serve_tcp(&checked, addr, timeout, profile, workers)
             .map_err(|e| format!("serve: {e}"))?;
         Ok(String::new())
     })
@@ -1285,7 +1285,12 @@ pub fn serve_program(
 /// derive the default output name); `out_path` overrides it. Validates the program first (never emits
 /// a broken binary), then delegates to `bundle::cross::build_host`, which reuses this phg binary as
 /// the stub and embeds `src` as a `.phorj` section. Returns a one-line success message.
-pub fn cmd_build(input_path: &str, src: &str, out_path: Option<&str>) -> Result<String, String> {
+pub fn cmd_build(
+    input_path: &str,
+    src: &str,
+    out_path: Option<&str>,
+    profile: crate::profile::Profile,
+) -> Result<String, String> {
     cmd_check(src)?; // validate; emit nothing on failure
     let out = match out_path {
         Some(p) => std::path::PathBuf::from(p),
@@ -1297,7 +1302,7 @@ pub fn cmd_build(input_path: &str, src: &str, out_path: Option<&str>) -> Result<
             std::path::PathBuf::from(stem)
         }
     };
-    crate::bundle::cross::build_host(src, &out)
+    crate::bundle::cross::build_host(src, &out, profile)
 }
 
 /// `parse`: lex -> parse; dump the AST.

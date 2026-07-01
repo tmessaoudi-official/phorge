@@ -6,6 +6,25 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — build profiles: `Dev` / `Release` (M-DX S0)
+
+A first-class `profile::Profile { Dev, Release }` — the gate every environment-sensitive,
+value-exposing, or diagnostic-verbosity feature will key off. **Keystone: a profile changes
+side-channels/diagnostics ONLY, never observable program output** — `run≡runvm≡real PHP` holds
+identically under both (verified: a Dev and a Release `phg build` of the same program print
+byte-for-byte the same output).
+
+- **How it's chosen (entry-time, never a runtime env var):** `phg run`/`runvm`/`test` are Dev (the
+  interactive tool); `phg serve` is Release unless `--dev` (its rich HTML fault page leaks
+  traces/source); `phg build` is **Release by default**, `--dev` opt-in.
+- **Secure by construction:** `phg build` bakes the profile into the artifact's `.phorj` container
+  (the previously-unused `flags` byte, bit 0 — backward-compatible: a pre-profile artifact reads as
+  Release). A shipped binary sets its profile from its own container before running, so no
+  environment variable can flip a Release artifact into Dev.
+- **Folded in the ad-hoc `serve --dev` switch:** `serve` now derives its dev fault-page behaviour
+  from the `Profile` rather than a hand-plumbed bool. (Filled the test gap: the `dev=true` rich-page
+  path was previously uncovered.)
+
 ### Fixed — diagnostics quality + three soundness holes (M-DX S1)
 
 Front-end-only, no new `Op`/`Value`, byte-identical `run≡runvm≡real PHP` (no runtime change). Closes

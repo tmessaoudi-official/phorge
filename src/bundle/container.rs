@@ -18,10 +18,17 @@ fn crc32(bytes: &[u8]) -> u32 {
     !crc
 }
 
-/// Build the payload container for `source` (Phase 1: `payload_kind = 0`, source UTF-8).
+/// Build the payload container for `source` at the default (secure) profile, [`Profile::Release`].
 /// Layout per design §3: magic | version | header_len | kind | comp | enc | flags | len |
 /// payload_crc32 | header_crc32(over [0..28)) | payload.
 pub fn encode_container(source: &[u8]) -> Vec<u8> {
+    encode_container_with(source, crate::profile::Profile::Release)
+}
+
+/// Build the payload container for `source`, baking `profile` into the `flags` byte's bit 0 (M-DX S0).
+/// `Release` sets bit 0 = 0, so a pre-profile artifact (flags `0`) decodes as `Release` — the secure
+/// default. This is the only place a built artifact's profile is chosen; it cannot be an env var.
+pub fn encode_container_with(source: &[u8], profile: crate::profile::Profile) -> Vec<u8> {
     let mut out = Vec::with_capacity(HEADER_LEN as usize + source.len());
     out.extend_from_slice(&MAGIC); // 0..8
     out.extend_from_slice(&CONTAINER_VERSION.to_le_bytes()); // 8..10
@@ -29,7 +36,7 @@ pub fn encode_container(source: &[u8]) -> Vec<u8> {
     out.push(0); // 12 payload_kind = source_utf8
     out.push(0); // 13 compression = none
     out.push(0); // 14 encryption = none
-    out.push(0); // 15 flags
+    out.push(profile.to_flag_bit()); // 15 flags — bit 0 = profile (Dev=1 / Release=0)
     out.extend_from_slice(&(source.len() as u64).to_le_bytes()); // 16..24
     out.extend_from_slice(&crc32(source).to_le_bytes()); // 24..28 payload_crc32
     let header_crc = crc32(&out[0..28]); // 28..32 header_crc32
@@ -41,6 +48,12 @@ pub fn encode_container(source: &[u8]) -> Vec<u8> {
 /// Validate + extract the source bytes from a container blob. Returns `None` on any malformed,
 /// tampered, truncated, or unsupported-version/kind input — callers fall through to the CLI.
 pub fn decode_container(blob: &[u8]) -> Option<Vec<u8>> {
+    decode_container_full(blob).map(|(src, _profile)| src)
+}
+
+/// Like [`decode_container`] but also returns the [`Profile`](crate::profile::Profile) baked into the
+/// `flags` byte (M-DX S0). A shipped artifact's entry point uses this to set its active profile.
+pub fn decode_container_full(blob: &[u8]) -> Option<(Vec<u8>, crate::profile::Profile)> {
     if blob.len() < HEADER_LEN as usize || blob[0..8] != MAGIC {
         return None;
     }
@@ -68,7 +81,8 @@ pub fn decode_container(blob: &[u8]) -> Option<Vec<u8>> {
     if crc32(payload) != payload_crc {
         return None;
     }
-    Some(payload.to_vec())
+    let profile = crate::profile::Profile::from_flags(blob[15]);
+    Some((payload.to_vec(), profile))
 }
 
 #[cfg(test)]
@@ -86,6 +100,27 @@ mod tests {
         let src = b"import Core.Output; function main() -> void { Output.printLine(\"hi\"); }";
         let blob = encode_container(src);
         assert_eq!(decode_container(&blob).as_deref(), Some(&src[..]));
+    }
+
+    #[test]
+    fn profile_round_trips_and_defaults_to_release() {
+        use crate::profile::Profile;
+        // Default encoder → Release (secure default); flags byte 0.
+        let rel = encode_container(b"x");
+        assert_eq!(rel[15], 0);
+        assert_eq!(
+            decode_container_full(&rel),
+            Some((b"x".to_vec(), Profile::Release))
+        );
+        // Explicit Dev sets bit 0.
+        let dev = encode_container_with(b"x", Profile::Dev);
+        assert_eq!(dev[15], 1);
+        assert_eq!(
+            decode_container_full(&dev),
+            Some((b"x".to_vec(), Profile::Dev))
+        );
+        // A pre-profile artifact (all-zero flags) is Release, not accidentally Dev.
+        assert_eq!(decode_container_full(&rel).unwrap().1, Profile::Release);
     }
 
     #[test]

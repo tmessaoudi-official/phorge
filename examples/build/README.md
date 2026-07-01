@@ -48,3 +48,21 @@ Linux `x86_64-musl`, `aarch64-{gnu,musl}`, and `x86_64-pc-windows-gnu`. Each pro
 self-reads its own object format (ELF / PE / Mach-O) via std-only, checked-arithmetic section
 readers. The macOS reader ships and is fixture-tested, but producing a *signed* macOS stub is
 deferred — see `ROADMAP.md` (M2.5 Phase 3: distribution & signing).
+
+## Build profiles — `--dev` (M-DX S0)
+
+A built artifact carries a **build profile** baked into its container: **Release by default**, or
+**Dev** with `--dev`.
+
+```bash
+phg build app.phg            # Release artifact (the shipped default)
+phg build app.phg --dev      # Dev artifact (debug-oriented)
+```
+
+The profile gates *side-channels only* — value inspection, richer fault detail, the debugger (as
+those land). It is **secure by construction**: the profile lives in the artifact's `.phorj`
+container, chosen at build time, so **no environment variable can flip a Release binary into Dev at
+runtime**. And it is invisible to program behavior — a Dev and a Release build of the same program
+print byte-for-byte the same output (the M-DX keystone: a profile never changes observable
+behavior). `phg run`/`runvm` are Dev (the interactive tool); `phg serve` is Release unless `--dev`
+(its rich HTML fault page leaks traces/source, so it is Dev-only).

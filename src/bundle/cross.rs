@@ -1,6 +1,8 @@
 //! Cross-build orchestration + stub cache. Wired in Wave C.
 
-use crate::bundle::{encode_container, section::ELF_PE_SECTION};
+use crate::bundle::container::encode_container_with;
+use crate::bundle::section::ELF_PE_SECTION;
+use crate::profile::Profile;
 use std::path::PathBuf;
 
 /// Copy `stub` to `out` with the phorj payload added as the ELF/PE `.phorj` section, then mark it
@@ -14,9 +16,10 @@ pub(crate) fn embed_section(
     stub: &std::path::Path,
     out: &std::path::Path,
     src: &str,
+    profile: Profile,
 ) -> Result<(), String> {
     let payload = std::env::temp_dir().join(format!("phorj-build-{}.bin", std::process::id()));
-    std::fs::write(&payload, encode_container(src.as_bytes()))
+    std::fs::write(&payload, encode_container_with(src.as_bytes(), profile))
         .map_err(|e| format!("cannot write payload: {e}"))?;
     let objcopy = std::env::var("PHORJ_OBJCOPY").unwrap_or_else(|_| "llvm-objcopy".into());
     let status = std::process::Command::new(&objcopy)
@@ -48,9 +51,9 @@ pub(crate) fn embed_section(
 }
 
 /// Build for the host target: the stub is this running phg binary. Returns the human report line.
-pub fn build_host(src: &str, out: &std::path::Path) -> Result<String, String> {
+pub fn build_host(src: &str, out: &std::path::Path, profile: Profile) -> Result<String, String> {
     let stub = std::env::current_exe().map_err(|e| format!("cannot locate phg binary: {e}"))?;
-    embed_section(&stub, out, src)?;
+    embed_section(&stub, out, src, profile)?;
     Ok(format!("built {}\n", out.display()))
 }
 
@@ -120,6 +123,7 @@ pub fn build_target(
     src: &str,
     target: &str,
     out_path: Option<&str>,
+    profile: Profile,
 ) -> Result<String, String> {
     crate::cli::cmd_check(src)?;
     reject_if_macos(target)?;
@@ -133,12 +137,17 @@ pub fn build_target(
         None => std::path::PathBuf::from(output_name(stem, target)),
     };
     let stub = build_stub(target)?;
-    embed_section(&stub, &out, src)?;
+    embed_section(&stub, &out, src, profile)?;
     Ok(format!("built {} ({target})\n", out.display()))
 }
 
 /// Build for host + all Phase-2 targets into `dist/`. `out_path` is ignored (per-target names).
-pub fn build_all(input_path: &str, src: &str, _out_path: Option<&str>) -> Result<String, String> {
+pub fn build_all(
+    input_path: &str,
+    src: &str,
+    _out_path: Option<&str>,
+    profile: Profile,
+) -> Result<String, String> {
     crate::cli::cmd_check(src)?;
     let stem = std::path::Path::new(input_path)
         .file_stem()
@@ -152,14 +161,14 @@ pub fn build_all(input_path: &str, src: &str, _out_path: Option<&str>) -> Result
         "dist/{}",
         output_name(&format!("{stem}-{host_label}"), &host_label)
     ));
-    build_host(src, &host_out)?;
+    build_host(src, &host_out, profile)?;
     report.push_str(&format!("built {} ({host_label})\n", host_out.display()));
     for t in PHASE2_TARGETS {
         ensure_target_installed(t)?;
         let out =
             std::path::PathBuf::from(format!("dist/{}", output_name(&format!("{stem}-{t}"), t)));
         let stub = build_stub(t)?;
-        embed_section(&stub, &out, src)?;
+        embed_section(&stub, &out, src, profile)?;
         report.push_str(&format!("built {} ({t})\n", out.display()));
     }
     Ok(report)

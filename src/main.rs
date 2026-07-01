@@ -13,7 +13,11 @@ const USAGE: &str =
 fn main() {
     // Self-executing artifact: if this binary carries an embedded program, run it on the VM and
     // exit before any CLI parsing. No payload -> fall through to the normal dispatcher.
-    if let Some(src) = phorj::bundle::embedded_source() {
+    if let Some((src, profile)) = phorj::bundle::embedded_program() {
+        // M-DX S0: a shipped artifact runs at the profile baked into its container (Release by
+        // default, Dev only if built with `--dev`). Set it before running so profile-gated machinery
+        // reads it — secure by construction: no environment variable can flip a Release artifact.
+        phorj::profile::set_active(profile);
         // A standalone built binary runs as a normal executable, so `Core.Process.args()` reads the
         // real process arguments (everything after the program name).
         phorj::native::set_process_args(std::env::args().skip(1).collect());
@@ -175,6 +179,9 @@ fn main() {
         let mut out: Option<&str> = None;
         let mut target: Option<&str> = None;
         let mut all = false;
+        // M-DX S0: `phg build` is Release by default (secure by construction — value-exposing
+        // machinery is gated off in the artifact). `--dev` opts a debug artifact in.
+        let mut profile = phorj::profile::Profile::Release;
         let mut i = 3;
         while i < args.len() {
             match args[i].as_str() {
@@ -196,6 +203,10 @@ fn main() {
                     all = true;
                     i += 1;
                 }
+                "--dev" => {
+                    profile = phorj::profile::Profile::Dev;
+                    i += 1;
+                }
                 "--sign" => {
                     eprintln!("signing is Phase 3");
                     exit(2);
@@ -211,11 +222,11 @@ fn main() {
             exit(2);
         }
         let res = if all {
-            phorj::bundle::cross::build_all(file, &src, out)
+            phorj::bundle::cross::build_all(file, &src, out, profile)
         } else if let Some(t) = target {
-            phorj::bundle::cross::build_target(file, &src, t, out)
+            phorj::bundle::cross::build_target(file, &src, t, out, profile)
         } else {
-            cli::cmd_build(file, &src, out)
+            cli::cmd_build(file, &src, out, profile)
         };
         match res {
             Ok(text) => {
@@ -319,7 +330,22 @@ fn main() {
                 exit(1);
             }
         };
-        match cli::serve_program(&unit.program, &unit.diag_src, addr, timeout, dev, workers) {
+        // M-DX S0: `--dev` selects the Dev profile (rich fault pages); the default is the secure
+        // Release profile (bare 500, no trace/source leak). Set it as the process profile too.
+        let profile = if dev {
+            phorj::profile::Profile::Dev
+        } else {
+            phorj::profile::Profile::Release
+        };
+        phorj::profile::set_active(profile);
+        match cli::serve_program(
+            &unit.program,
+            &unit.diag_src,
+            addr,
+            timeout,
+            profile,
+            workers,
+        ) {
             Ok(text) => {
                 print!("{text}");
                 return;

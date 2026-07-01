@@ -21,7 +21,14 @@
       list; golden-diagnostic corpus (`conformance/diagnostics/` + `tests/diagnostics.rs`, bless-able).
       Full workspace green at PHP-8.5 floor, clippy+fmt clean. Corpus-per-all-codes = flagged future
       work (seeded with slice-touched codes only).
-- [ ] **S0** Build profiles (Dev/Release), secure-by-construction, fold in `serve --dev`
+- [x] **S0** Build profiles — DONE. `profile::Profile { Dev, Release }` (`src/profile.rs`) + process
+      `set_active`/`active` SSOT. `phg build` Release-by-default / `--dev` opt-in, baked into the
+      `.phorj` container `flags` byte (bit 0, backward-compatible — pre-profile artifact = Release).
+      `serve --dev` refolded onto Profile. Keystone verified: Dev vs Release build → byte-identical
+      output. Tests: profile unit + container round-trip + serve dev/release page + build-artifact
+      round-trip & output-invariance. Deferred: run/runvm rely on the Dev default (no explicit
+      set_active — no consumer yet); the "env var can't flip Release→Dev" test defers to S3 (needs an
+      observable Dev-only behavior); build embedding bytecode-not-source is its own follow-up.
 - [ ] **S2** Secure value renderer (Secret redaction, caps, deterministic, stderr-only)
 - [ ] **S3** Value-dump on fault (faulting-frame locals + backtrace headers; Dev + opt-in)
 - [ ] **S4** Assertions (`assert`, always-checked, FaultKind::Assert, transpile to `if(!c)`)
