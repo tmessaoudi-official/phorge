@@ -53,7 +53,7 @@
 ## Progress
 
 - [x] **W0** (empty-list init `2350428`; comma-throws + line-wrap `debe230`; keyword-vs-import rule → INVARIANTS §12)
-- [ ] W1  - [ ] W2  - [ ] W3  - [ ] W4  - [ ] W5  - [ ] W6
+- [x] **W1** (Core.Runtime memory+monotonic natives, Stopwatch, quarantine)  - [ ] W2  - [ ] W3  - [ ] W4  - [ ] W5  - [ ] W6
 - [ ] W7  - [ ] W8  - [ ] W9  - [ ] W10  - [ ] W11  - [ ] W12  - [ ] Wrap
 
 ### New gaps surfaced during the marathon (feed later waves)

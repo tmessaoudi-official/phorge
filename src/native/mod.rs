@@ -40,6 +40,7 @@ mod path;
 mod process;
 mod random;
 mod reflect;
+mod runtime;
 // `Core.Regex` is crate-backed (`regex`) — gated so the WASM playground builds without the
 // dependency (see docs/specs/2026-06-27-dependency-policy.md).
 #[cfg(feature = "regex")]
@@ -345,6 +346,7 @@ fn build() -> Vec<NativeFn> {
     registry.extend(json::json_natives());
     registry.extend(reflect::reflect_natives());
     registry.extend(process::process_natives());
+    registry.extend(runtime::runtime_natives());
     registry.extend(test::test_natives());
     registry.extend(time::time_natives());
     #[cfg(feature = "crypto")]

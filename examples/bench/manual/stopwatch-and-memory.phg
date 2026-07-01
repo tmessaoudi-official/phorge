@@ -1,0 +1,58 @@
+// Manual benchmarking from inside a Phorj program (M-DOGFOOD W1).
+//
+// `Core.Runtime` is the "roll your own benchmark harness" seam: a monotonic high-resolution clock
+// and live resident-memory counters. These read the running process, so they are NON-DETERMINISTIC
+// and `pure: false` — a program that imports `Core.Runtime` is QUARANTINED from the byte-identity
+// differential (its output varies per run, so it is NOT a gated example). This complements the
+// automated `phg bench --vs-php`, which measures the same thing from outside.
+//
+// The `Stopwatch` below is plain Phorj — copy it into your own code. It is built on
+// `Runtime.monotonicNanos()` (monotonic, immune to wall-clock jumps — unlike `Core.Time`).
+package Main;
+
+import Core.Output;
+import Core.Runtime;
+
+class Stopwatch {
+    private mutable int startNs = 0;
+
+    public function start() -> void {
+        this.startNs = Runtime.monotonicNanos();
+    }
+
+    public function elapsedNanos() -> int {
+        return Runtime.monotonicNanos() - this.startNs;
+    }
+
+    public function elapsedMicros() -> int {
+        return this.elapsedNanos() / 1000;
+    }
+
+    public function elapsedMillis() -> int {
+        return this.elapsedNanos() / 1000000;
+    }
+}
+
+function fib(int n) -> int {
+    if (n < 2) {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+
+function main() -> void {
+    // Reset the peak so the reading below reflects only this workload.
+    Runtime.resetPeakMemory();
+
+    var sw = new Stopwatch();
+    sw.start();
+    int result = fib(30);
+    int micros = sw.elapsedMicros();
+
+    Output.printLine("fib(30)           = {result}");
+    // Sanity assertions instead of the raw timing/memory numbers, so the walkthrough reads cleanly
+    // (the raw numbers are what YOU print in a real benchmark — see the README for sample output).
+    Output.printLine("elapsed measured  = {micros >= 0}");
+    Output.printLine("peak memory read  = {Runtime.peakMemoryBytes() > 0}");
+    Output.printLine("current mem read  = {Runtime.memoryBytes() > 0}");
+}

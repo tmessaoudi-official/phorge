@@ -28,7 +28,15 @@ fn every_other_native_is_pure() {
     // `hashPassword` is impure (random salt → quarantined) but `verifyPassword` is pure
     // (deterministic for a fixed `(password, hash)` → gateable). `Core.Time` is impure (M-TIME): an
     // unfrozen `nowMillis()` reads the wall clock; a program freezes the clock to become gateable.
-    let impure_modules = ["Core.Process", "Core.Environment", "Core.Time"];
+    // `Core.Runtime` is whole-module impure (M-DOGFOOD W1): the monotonic clock + resident-memory
+    // counters read the live process, so a benchmark program is quarantined (never gateable — its
+    // numbers vary per run by design).
+    let impure_modules = [
+        "Core.Process",
+        "Core.Environment",
+        "Core.Time",
+        "Core.Runtime",
+    ];
     for n in registry() {
         let impure = impure_modules.contains(&n.module)
             || (n.module == "Core.Cryptography" && n.name == "hashPassword");
