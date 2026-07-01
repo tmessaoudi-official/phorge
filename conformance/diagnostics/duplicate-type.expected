@@ -1,0 +1,5 @@
+type error at 4:1: type `Widget` is already defined
+enum Widget { A }
+^
+  [E-DUP-TYPE]
+  hint: rename one declaration — a class/enum/interface/trait/type name must be unique

@@ -1,0 +1,7 @@
+package Main;
+
+class Point { constructor(public int x) {} }
+
+function main() -> void {
+    Point p = Point(1);
+}

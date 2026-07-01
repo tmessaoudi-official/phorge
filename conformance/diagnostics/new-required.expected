@@ -1,0 +1,5 @@
+type error at 6:20: construct `Point` with `new Point(…)`
+    Point p = Point(1);
+                   ^
+  [E-NEW-REQUIRED]
+  hint: write `new Point(…)`

@@ -1,0 +1,5 @@
+package Main;
+
+enum Color { Red, Red }
+
+function main() -> void {}

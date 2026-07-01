@@ -1,0 +1,5 @@
+type error at 8:5: method `k` overrides `Base`'s `k` but returns `string`, which is not assignable to the overridden return type `int`
+    function k() -> string { return "boom"; }
+    ^
+  [E-OVERRIDE-SIG]
+  hint: make `k`'s return type `int` or a subtype of it

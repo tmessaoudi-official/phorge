@@ -1144,6 +1144,150 @@ pub fn explain_text(code: &str) -> Option<String> {
             "E-CONCURRENCY-ARITY — a concurrency-handle method got the wrong number of arguments.\n\n\
              `ch.send(v)` takes exactly one argument; `ch.receive()` and `t.join()` take none (M6 W4).\n"
         }
+        // ── M-DX S1: audit-gap codes (previously emitted with no `phg explain` entry) ──
+        "E-BREAK-OUTSIDE-LOOP" => {
+            "E-BREAK-OUTSIDE-LOOP — `break` was used outside a loop.\n\n\
+             `break` exits the nearest enclosing `while`/`for` loop, so it is only meaningful inside\n\
+             one. A `break` in a plain block, a function body, or a `match` arm has no loop to exit.\n\
+             Remove it, or move the logic into a loop.\n"
+        }
+        "E-CONTINUE-OUTSIDE-LOOP" => {
+            "E-CONTINUE-OUTSIDE-LOOP — `continue` was used outside a loop.\n\n\
+             `continue` skips to the next iteration of the nearest enclosing `while`/`for` loop, so it\n\
+             is only meaningful inside one. Remove it, or move the logic into a loop.\n"
+        }
+        "E-NEW-REQUIRED" => {
+            "E-NEW-REQUIRED — a class/enum-variant construction is missing `new`.\n\n\
+             Construction is explicit: write `new ClassName(…)` (and `new Variant(…)` for an enum\n\
+             variant with fields). A bare `ClassName(…)` is not a call — add `new`.\n"
+        }
+        "E-NEW-ON-NONCONSTRUCT" => {
+            "E-NEW-ON-NONCONSTRUCT — `new` was applied to something that is not constructible.\n\n\
+             `new` constructs a class instance or an enum variant. Applying it to a function, a\n\
+             built-in type, a variable, or an unknown name is rejected. Call a function without `new`;\n\
+             construct only declared classes / enum variants.\n"
+        }
+        "E-STATIC-NO-INIT" => {
+            "E-STATIC-NO-INIT — a `static` field has no initializer.\n\n\
+             A `static` field is class-level state with no constructor to set it, so it must be\n\
+             initialized where it is declared: `static mutable int total = 0;`. Add an initializer.\n"
+        }
+        "E-STATIC-INIT-TYPE" => {
+            "E-STATIC-INIT-TYPE — a `static` field's initializer type does not match its declared type.\n\n\
+             A `static T name = expr;` requires `expr` to be assignable to `T`. Static initializers may\n\
+             be any expression (evaluated once at program start, in declaration order), but the value's\n\
+             type is still checked. Convert the value, or change the field's declared type.\n"
+        }
+        "E-STATIC-UNKNOWN" => {
+            "E-STATIC-UNKNOWN — a `ClassName.field` access names no static field on the class.\n\n\
+             `ClassName.name` reads a `static` field (or `const`) declared on the class or inherited\n\
+             from an ancestor. The class declares no such static — check the name, or declare\n\
+             `static … name = …;` on the class.\n"
+        }
+        "E-WITH-NONCLASS" => {
+            "E-WITH-NONCLASS — the receiver of a `with` expression is not a class instance.\n\n\
+             `value with { field: … }` produces a copy of a class instance with some fields replaced,\n\
+             so `value` must be a class instance. A primitive, list, map, or optional has no fields to\n\
+             copy — use a plain reassignment, or build the value directly.\n"
+        }
+        "E-WITH-FIELD" => {
+            "E-WITH-FIELD — a `with` expression sets a field the class does not declare.\n\n\
+             Each `field: value` in `inst with { … }` must name a field declared on the instance's\n\
+             class (including inherited fields). Check for a typo, or set only declared fields.\n"
+        }
+        "E-WITH-TYPE" => {
+            "E-WITH-TYPE — a `with` expression sets a field to a value of the wrong type.\n\n\
+             In `inst with { field: value }`, `value` must be assignable to `field`'s declared type —\n\
+             the same rule as constructing or assigning the field. Convert the value, or set a\n\
+             different field.\n"
+        }
+        "E-GENERIC-PARAM" => {
+            "E-GENERIC-PARAM — a generic type parameter is invalid.\n\n\
+             A type parameter (`<T>` on a function, method, class, or enum) must be PascalCase, must\n\
+             not shadow a built-in type name (`int`, `List`, …), and must be distinct from the other\n\
+             parameters of the same declaration. Rename the parameter (e.g. `T`, `K`, `V`, `Elem`).\n"
+        }
+        "E-TYPE-ARG-COUNT" => {
+            "E-TYPE-ARG-COUNT — a type was given the wrong number of type arguments.\n\n\
+             A generic type takes exactly its declared arity: `List<T>`/`Set<T>`/`Optional<T>` and a\n\
+             one-parameter user type take one; `Map<K, V>` takes two; `Box<T>`/`Pair<A, B>` take their\n\
+             declared count. A non-generic type (and an opaque type *parameter*) takes none — drop the\n\
+             `<…>`. Supply exactly the arguments the declaration expects.\n"
+        }
+        "E-DUP-TYPE" => {
+            "E-DUP-TYPE — a type name is declared more than once.\n\n\
+             Class, enum, interface, trait, and `type`-alias names share one namespace within a package,\n\
+             and each must be unique — two declarations of `Foo` (even of different kinds) collide.\n\
+             Rename one declaration.\n"
+        }
+        "E-DUP-VARIANT" => {
+            "E-DUP-VARIANT — an enum declares the same variant name twice.\n\n\
+             Each variant of an `enum` must have a distinct name (`enum E { A, A }` is rejected) — a\n\
+             duplicate used to silently overwrite the first, so a `match` could never reach it. Rename\n\
+             one variant.\n"
+        }
+        "E-DUP-STATIC" => {
+            "E-DUP-STATIC — a class declares the same `static` field twice.\n\n\
+             Each `static` field of a class must have a distinct name. A duplicate used to silently\n\
+             overwrite the first. Rename one, or remove the redundant declaration.\n"
+        }
+        "E-DUP-CONST" => {
+            "E-DUP-CONST — a class declares the same `const` twice.\n\n\
+             Each class constant (`const NAME = …;`) must have a distinct name. A duplicate used to\n\
+             silently overwrite the first. Rename one, or remove the redundant declaration.\n"
+        }
+        "E-OVERRIDE-SIG" => {
+            "E-OVERRIDE-SIG — an overriding method's return type is not compatible with the parent's.\n\n\
+             An override must be substitutable for the method it replaces: its return type has to be\n\
+             the overridden return type or a subtype of it (covariance). Returning a wider or unrelated\n\
+             type (`Sub.k(): string` overriding `Base.k(): int`) would let a call typed by the parent\n\
+             receive the wrong runtime value — and transpiled PHP would fatal on the incompatible\n\
+             signature. Make the override return the parent's type, or a subtype of it. (Parameter\n\
+             variance and overloaded/generic overrides are documented deferrals — see KNOWN_ISSUES.)\n"
+        }
+        "E-UFCS-AMBIGUOUS" => {
+            "E-UFCS-AMBIGUOUS — a UFCS method-style call matches more than one native.\n\n\
+             Uniform function call syntax lets `x.name(…)` resolve to a stdlib native whose first\n\
+             parameter accepts `x` (e.g. `s.upper()` ⇒ `Text.upper(s)`). When two eligible natives\n\
+             share that leaf name, the call is ambiguous. Call the native explicitly by its module\n\
+             (`Text.upper(s)`), which is never ambiguous.\n"
+        }
+        "E-DECL-PACKAGE" => {
+            "E-DECL-PACKAGE — a `.d.phg` declaration file declares a `package`.\n\n\
+             A `*.d.phg` ambient-declaration file (M8.5) describes global foreign PHP symbols, which\n\
+             have no package. Remove the `package` line. (Ordinary `.phg` files, by contrast, MUST\n\
+             declare a package — see E-NO-PACKAGE.)\n"
+        }
+        "E-DECL-NONFOREIGN" => {
+            "E-DECL-NONFOREIGN — a `.d.phg` declaration file contains a non-`declare` item.\n\n\
+             A `*.d.phg` file (M8.5) may contain only foreign ambient declarations — every `function`\n\
+             / `class` in it must be `declare`d (it describes existing PHP, it does not define Phorj\n\
+             behavior). Move any real implementation into a normal `.phg` file, or mark the item\n\
+             `declare`.\n"
+        }
+        "E-TYPE-IMPORT-UNKNOWN" => {
+            "E-TYPE-IMPORT-UNKNOWN — an `import type` names a type the package does not export.\n\n\
+             `import type acme.geometry.Point [as P];` must be package-qualified and name a public type\n\
+             that package actually exports. This fires when the import is not package-qualified, or the\n\
+             package exports no such type. Check the package path and the type name.\n"
+        }
+        "E-TYPE-IMPORT-BUILTIN" => {
+            "E-TYPE-IMPORT-BUILTIN — an `import type` names a built-in type.\n\n\
+             Built-in types (`int`, `float`, `bool`, `string`, `bytes`, `List`, `Map`, `Set`, …) are\n\
+             import-free — they are always in scope, like `int`. Remove the `import type` for a\n\
+             built-in; only user/library types are imported.\n"
+        }
+        "E-TYPE-IMPORT-CONFLICT" => {
+            "E-TYPE-IMPORT-CONFLICT — two `import type`s bind the same bare name.\n\n\
+             Each selective type import introduces a bare type name into the file; two imports that\n\
+             would bind the same name collide. Alias one with `as`: `import type a.b.Point as BPoint;`.\n"
+        }
+        "E-TYPE-IMPORT-SHADOW" => {
+            "E-TYPE-IMPORT-SHADOW — an `import type` name collides with a local type or module qualifier.\n\n\
+             The bare name a selective type import introduces must not shadow a type declared in this\n\
+             file or an imported module qualifier. Alias the import with `as` to give it a distinct\n\
+             name, or rename the local declaration.\n"
+        }
         _ => return None,
     };
     Some(body.to_string())
@@ -1152,9 +1296,13 @@ pub fn explain_text(code: &str) -> Option<String> {
 /// `explain <code>`: print the explanation for a diagnostic code, or error on an unknown one.
 pub fn cmd_explain(code: &str) -> Result<String, String> {
     explain_text(code).ok_or_else(|| {
+        // Every code Phorj emits carries a `[CODE]` in its rendered diagnostic — pass that code here.
+        // (Historically this listed all known codes inline; that list drifted, so it was removed in
+        // favor of the `every_emitted_diagnostic_code_has_an_explanation` coverage ratchet, which
+        // guarantees every emitted code is explainable.)
         format!(
-            "unknown diagnostic code `{code}` \
-             (known: E-NO-PACKAGE, E-RESERVED-PACKAGE, E-PKG-PATH, E-PKG-TYPE, E-VENDOR-MISSING, E-VENDOR-MAIN, E-DUP-DEF, E-UNKNOWN-IDENT, E-UNKNOWN-TYPE, E-INFER-NULL, E-ALIAS-CYCLE, E-RANGE-TYPE, E-OPT-ASSIGN, E-OPT-USE, E-IF-LET-TYPE, E-OPT-UNWRAP, W-FORCE-UNWRAP, E-LAMBDA-THIS, E-SHADOW-FN, E-NAME-CASE, E-TYPE-CASE, E-PKG-CASE, E-INSTANCEOF-TYPE, E-CAST-TYPE, E-DECIMAL-DIV, E-DECIMAL-FLOAT-MIX, E-DECIMAL-LITERAL, E-DEFAULT-PARAM-ORDER, E-DEFAULT-PARAM-EXPR, E-DEFAULT-PARAM-TYPE, E-DEFAULT-PARAM-CONTEXT, E-IFACE-IMPL, E-IFACE-UNIMPL, E-IFACE-SIG, E-IFACE-CYCLE, E-MAP-KEY, E-UNION-MEMBER, E-UNION-ARITY, E-VOID-IN-UNION, E-MATCH-TYPE, E-INTERSECT-MEMBER, E-INTERSECT-MULTI-CLASS, E-INTERSECT-ARITY, E-INTERSECT-SIG, E-INTERSECT-NO-MEMBER, E-HOOK-NO-GET, E-HOOK-NO-SET, E-HOOK-TYPE, E-HOOK-DUP, E-FIELD-VISIBILITY, E-METHOD-VISIBILITY, E-CTOR-VISIBILITY, E-CTOR-MODIFIER, E-FIELD-UNINITIALIZED, E-MAIN-SIGNATURE, E-MULTIPLE-MAIN, E-TEST-OUTSIDE-TESTS, E-STATIC-CALL, E-STATIC-THIS, E-DUP-PARAM, E-DUP-FIELD, E-VIS-PRIVATE, E-VIS-INTERNAL, E-PROPAGATE-POSITION, E-PROPAGATE-CONTEXT, E-PROPAGATE-ERR, E-RESERVED-INTRINSIC, E-INTRINSIC-LITERAL, E-THROW-TYPE, E-THROW-UNDECLARED, E-CALL-UNHANDLED, E-UNCAUGHT-THROW, E-THROWS-TOO-BROAD, E-CATCH-TYPE, W-CATCH-UNREACHABLE, E-STRUCT-PAT-TYPE, E-STRUCT-FIELD-UNKNOWN, E-PATTERN-DUP-BIND, E-OR-PATTERN-BIND, E-FIXEDLIST-LEN, E-FIXEDLIST-BOUNDS, E-DESTRUCTURE-TYPE, E-DESTRUCTURE-NOT-CLASS, E-DESTRUCTURE-FIELD-UNKNOWN, E-DESTRUCTURE-NOT-LIST, E-DESTRUCTURE-NEEDS-ELSE, E-DESTRUCTURE-ELSE-IRREFUTABLE, E-DESTRUCTURE-ELSE-FALLTHROUGH, E-DESTRUCTURE-DUP-BIND, E-FIXEDLIST-DESTRUCTURE-LEN, E-ATTR-TARGET, E-UNKNOWN-ATTRIBUTE, E-ROUTE-ARGS, E-ROUTE-SPEC, E-ROUTE-HANDLER, E-ROUTE-METHOD-STATIC, E-FOREIGN-RUNTIME, E-FILE-NAME, E-FILE-MULTI-PUBLIC, E-FILE-MIXED-PUBLIC, E-CONCURRENCY-NO-PHP, E-SPAWN-NOT-CALL, E-SPAWN-VOID, E-CHANNEL-ANNOTATION, E-CHANNEL-NEW-ARITY, E-CHANNEL-NEW-TYPE, E-CONCURRENCY-METHOD, E-CONCURRENCY-ARITY)"
+            "unknown diagnostic code `{code}` — pass a code exactly as it appears in a `[…]` diagnostic \
+             (e.g. `phg explain E-UNKNOWN-IDENT`)"
         )
     })
 }

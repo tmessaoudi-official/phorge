@@ -99,6 +99,11 @@ fn collect_single(dir: &Path, out: &mut Vec<PathBuf>) {
     for entry in entries {
         let path = entry.expect("conformance dir entry").path();
         if path.is_dir() {
+            // `conformance/diagnostics/` is a *negative* corpus (programs that must FAIL, gated by
+            // `tests/diagnostics.rs` against `.expected` files) — not golden-*output* programs.
+            if path.file_name().and_then(|n| n.to_str()) == Some("diagnostics") {
+                continue;
+            }
             collect_single(&path, out);
         } else if path.extension().and_then(|e| e.to_str()) == Some("phg") {
             out.push(path);

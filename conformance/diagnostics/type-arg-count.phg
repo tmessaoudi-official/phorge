@@ -1,0 +1,5 @@
+package Main;
+
+function main() -> void {
+    Map<int> m = [1 => 2];
+}

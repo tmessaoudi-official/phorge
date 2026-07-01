@@ -1,0 +1,6 @@
+package Main;
+
+class Widget {}
+enum Widget { A }
+
+function main() -> void {}

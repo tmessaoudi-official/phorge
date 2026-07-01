@@ -1,0 +1,5 @@
+type error at 4:5: Map expects 2 type arguments, got 1
+    Map<int> m = [1 => 2];
+    ^
+  [E-TYPE-ARG-COUNT]
+  hint: a `Map<K, V>` needs exactly two type arguments

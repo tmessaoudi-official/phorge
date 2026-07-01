@@ -202,9 +202,11 @@ impl Checker {
                 "Set" => Ty::Set(Box::new(self.one_arg(name, args, *span))),
                 "Map" => {
                     if args.len() != 2 {
-                        return self.err(
+                        return self.err_coded(
                             *span,
                             format!("Map expects 2 type arguments, got {}", args.len()),
+                            "E-TYPE-ARG-COUNT",
+                            Some("a `Map<K, V>` needs exactly two type arguments".into()),
                         );
                     }
                     let k = self.resolve_type(&args[0]);
@@ -231,9 +233,13 @@ impl Checker {
                         if args.is_empty() {
                             Ty::Param(other.to_string())
                         } else {
-                            self.err(
+                            self.err_coded(
                                 *span,
                                 format!("type parameter `{other}` takes no type arguments"),
+                                "E-TYPE-ARG-COUNT",
+                                Some(format!(
+                                    "`{other}` is an opaque type parameter — drop the `<…>`"
+                                )),
                             )
                         }
                     } else if self.aliases.contains_key(other) {
@@ -273,12 +279,16 @@ impl Checker {
                         // generics-all / generic enums).
                         if args.len() != arity {
                             let plural = if arity == 1 { "" } else { "s" };
-                            self.err(
+                            self.err_coded(
                                 *span,
                                 format!(
                                     "type `{other}` expects {arity} type argument{plural}, got {}",
                                     args.len()
                                 ),
+                                "E-TYPE-ARG-COUNT",
+                                Some(format!(
+                                    "give `{other}` exactly {arity} type argument{plural}"
+                                )),
                             )
                         } else {
                             let resolved = args.iter().map(|a| self.resolve_type(a)).collect();
@@ -307,15 +317,22 @@ impl Checker {
         if args.is_empty() {
             ty
         } else {
-            self.err(span, format!("type `{name}` takes no type arguments"))
+            self.err_coded(
+                span,
+                format!("type `{name}` takes no type arguments"),
+                "E-TYPE-ARG-COUNT",
+                Some(format!("`{name}` is not generic — drop the `<…>`")),
+            )
         }
     }
 
     pub(super) fn one_arg(&mut self, name: &str, args: &[crate::ast::Type], span: Span) -> Ty {
         if args.len() != 1 {
-            self.err(
+            self.err_coded(
                 span,
                 format!("{name} expects 1 type argument, got {}", args.len()),
+                "E-TYPE-ARG-COUNT",
+                Some(format!("`{name}<T>` needs exactly one type argument")),
             );
             Ty::Error
         } else {

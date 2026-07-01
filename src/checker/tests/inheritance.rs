@@ -23,6 +23,42 @@ fn extending_a_non_open_class_errors() {
     );
 }
 
+// ── M-DX S1: override return-type covariance (soundness hole B) ──
+// A return-type-incompatible override used to type-check clean and then either store a wrong-typed
+// value on the Rust backends or fatal in transpiled PHP (`Sub::k(): string` vs `Base::k(): int`).
+
+#[test]
+fn override_incompatible_return_type_errors() {
+    let errs = errors_of(
+        "open class Base { open function k() -> int { return 1; } } \
+             class Sub extends Base { function k() -> string { return \"x\"; } }",
+    );
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-OVERRIDE-SIG")),
+        "got {errs:?}"
+    );
+}
+
+#[test]
+fn override_same_return_type_is_ok() {
+    let errs = errors_of(
+        "open class Base { open function k() -> int { return 1; } } \
+             class Sub extends Base { function k() -> int { return 2; } }",
+    );
+    assert!(errs.is_empty(), "expected clean, got {errs:?}");
+}
+
+#[test]
+fn override_covariant_return_type_is_ok() {
+    // A narrower return type (a subtype) is sound — `Dog <: Animal`.
+    let errs = errors_of(
+        "open class Animal {} class Dog extends Animal {} \
+             open class Base { open function make() -> Animal { return new Animal(); } } \
+             class Sub extends Base { function make() -> Dog { return new Dog(); } }",
+    );
+    assert!(errs.is_empty(), "expected clean, got {errs:?}");
+}
+
 #[test]
 fn extending_an_unknown_name_errors() {
     let errs = errors_of("class Dog extends Bogus {}");

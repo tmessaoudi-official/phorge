@@ -1,0 +1,5 @@
+type error at 5:5: duplicate static field `total`
+    static int total = 2;
+    ^
+  [E-DUP-STATIC]
+  hint: each static field must have a distinct name

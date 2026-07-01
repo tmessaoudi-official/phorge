@@ -51,7 +51,12 @@ impl Checker {
                 continue; // the per-item collector reports `cannot redefine built-in type`
             }
             if !self.prebound.insert(name.to_string()) {
-                self.err(span, format!("type `{name}` is already defined"));
+                self.err_coded(
+                    span,
+                    format!("type `{name}` is already defined"),
+                    "E-DUP-TYPE",
+                    Some("rename one declaration — a class/enum/interface/trait/type name must be unique".into()),
+                );
                 continue;
             }
             match item {
@@ -178,7 +183,12 @@ impl Checker {
                 || self.enums.contains_key(&i.name)
                 || self.interfaces.contains_key(&i.name))
         {
-            self.err(i.span, format!("type `{}` is already defined", i.name));
+            self.err_coded(
+                i.span,
+                format!("type `{}` is already defined", i.name),
+                "E-DUP-TYPE",
+                Some("rename one declaration — a class/enum/interface/trait/type name must be unique".into()),
+            );
             return;
         }
         // Register the name first so a method signature may reference the interface itself.
@@ -385,6 +395,50 @@ impl Checker {
                                         f.name
                                     )),
                                 );
+                            }
+                            // M-DX S1 (soundness hole B): an override's return type must be a subtype
+                            // of the overridden one (covariance). A wider/unrelated return used to
+                            // type-check clean, then store a wrong-typed value on the Rust backends —
+                            // and *fatal* in transpiled PHP (`Sub::k(): string` vs `Base::k(): int`).
+                            // Scoped to the simple case: single (non-overloaded), non-generic
+                            // signatures on both sides. Parameter contravariance and overloaded/
+                            // generic overrides remain documented deferrals (KNOWN_ISSUES).
+                            let rets = {
+                                let child = self
+                                    .classes
+                                    .get(&c.name)
+                                    .and_then(|ci| ci.methods.get(&f.name));
+                                let parent =
+                                    self.classes.get(anc).and_then(|ci| ci.methods.get(&f.name));
+                                match (child, parent) {
+                                    (Some(cs), Some(ps))
+                                        if cs.len() == 1
+                                            && ps.len() == 1
+                                            && cs[0].type_params.is_empty()
+                                            && ps[0].type_params.is_empty() =>
+                                    {
+                                        Some((cs[0].ret.clone(), ps[0].ret.clone()))
+                                    }
+                                    _ => None,
+                                }
+                            };
+                            if let Some((child_ret, parent_ret)) = rets {
+                                if !self.ty_assignable(&child_ret, &parent_ret) {
+                                    self.err_coded(
+                                        f.span,
+                                        format!(
+                                            "method `{}` overrides `{anc}`'s `{}` but returns \
+                                             `{child_ret}`, which is not assignable to the \
+                                             overridden return type `{parent_ret}`",
+                                            f.name, f.name
+                                        ),
+                                        "E-OVERRIDE-SIG",
+                                        Some(format!(
+                                            "make `{}`'s return type `{parent_ret}` or a subtype of it",
+                                            f.name
+                                        )),
+                                    );
+                                }
                             }
                             break; // the nearest declaration decides
                         }
@@ -1335,7 +1389,12 @@ impl Checker {
         if !self.prebound.contains(&e.name)
             && (self.enums.contains_key(&e.name) || self.classes.contains_key(&e.name))
         {
-            self.err(e.span, format!("type `{}` is already defined", e.name));
+            self.err_coded(
+                e.span,
+                format!("type `{}` is already defined", e.name),
+                "E-DUP-TYPE",
+                Some("rename one declaration — a class/enum/interface/trait/type name must be unique".into()),
+            );
             return;
         }
         // Register the name + type parameters first so variant field types can reference the enum
@@ -1355,7 +1414,16 @@ impl Checker {
         let mut variants = HashMap::new();
         for v in &e.variants {
             let fields = v.fields.iter().map(|p| self.resolve_type(&p.ty)).collect();
-            variants.insert(v.name.clone(), fields);
+            // M-DX S1 (soundness hole C): a repeated variant name used to silently overwrite the
+            // first in this `HashMap` — a duplicate `enum E { A, A }` type-checked clean. Reject it.
+            if variants.insert(v.name.clone(), fields).is_some() {
+                self.err_coded(
+                    v.span,
+                    format!("duplicate enum variant `{}`", v.name),
+                    "E-DUP-VARIANT",
+                    Some("each variant of an enum must have a distinct name".into()),
+                );
+            }
         }
         self.active_type_params.clear();
         self.enums.get_mut(&e.name).unwrap().variants = variants;
@@ -1373,7 +1441,12 @@ impl Checker {
         if !self.prebound.contains(&c.name)
             && (self.classes.contains_key(&c.name) || self.enums.contains_key(&c.name))
         {
-            self.err(c.span, format!("type `{}` is already defined", c.name));
+            self.err_coded(
+                c.span,
+                format!("type `{}` is already defined", c.name),
+                "E-DUP-TYPE",
+                Some("rename one declaration — a class/enum/interface/trait/type name must be unique".into()),
+            );
             return;
         }
         // Register the name + type parameters first so members can reference the class type itself
@@ -1407,6 +1480,12 @@ impl Checker {
         // a duplicate *promoted* param is caught by `E-DUP-PARAM` on the constructor.
         {
             let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+            // M-DX S1 (soundness hole D): statics and consts each have their own namespace and used
+            // to skip this loop entirely (`continue`), so a duplicate `static`/`const` name silently
+            // overwrote the first in the `statics`/`consts` `HashMap`. Track each namespace so a
+            // repeat is rejected, mirroring the instance-field `E-DUP-FIELD` check.
+            let mut seen_static: std::collections::HashSet<&str> = std::collections::HashSet::new();
+            let mut seen_const: std::collections::HashSet<&str> = std::collections::HashSet::new();
             for m in &c.members {
                 if let ClassMember::Field {
                     modifiers,
@@ -1415,8 +1494,26 @@ impl Checker {
                     ..
                 } = m
                 {
-                    if modifiers.contains(&Modifier::Static) || modifiers.contains(&Modifier::Const)
-                    {
+                    if modifiers.contains(&Modifier::Static) {
+                        if !seen_static.insert(name.as_str()) {
+                            self.err_coded(
+                                *span,
+                                format!("duplicate static field `{name}`"),
+                                "E-DUP-STATIC",
+                                Some("each static field must have a distinct name".into()),
+                            );
+                        }
+                        continue;
+                    }
+                    if modifiers.contains(&Modifier::Const) {
+                        if !seen_const.insert(name.as_str()) {
+                            self.err_coded(
+                                *span,
+                                format!("duplicate `const {name}`"),
+                                "E-DUP-CONST",
+                                Some("each class constant must have a distinct name".into()),
+                            );
+                        }
                         continue;
                     }
                     if !seen.insert(name.as_str()) {

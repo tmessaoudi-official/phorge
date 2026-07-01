@@ -216,6 +216,15 @@ not a panic:
   (`examples/project/inherit/`). Cross-package **multiple** inheritance (a class decomposed to PHP
   traits across packages) is still out of scope (the MI transpile path is `package Main`-only).
 
+- **Override signature checking — return covariance shipped (M-DX S1); parameters deferred.** An
+  override's **return type** must now be the overridden type or a subtype of it (`E-OVERRIDE-SIG`) —
+  a return-incompatible override previously type-checked clean then fatalled in transpiled PHP. Still
+  deferred (each currently unchecked, a documented gap, not a divergence the backends disagree on):
+  (a) **parameter contravariance** — an override's parameter types are not yet checked against the
+  parent's; (b) **overloaded overrides** — the covariance check is scoped to a single (non-overloaded)
+  signature on both sides; (c) **generic-method overrides** — skipped (the `Ty::Param` comparison needs
+  substitution). These ride the same follow-up as the LSP parameter-variance work.
+
 - **Traits — S8 shipped; deferrals (all clean compile-time, or transpile-oracle-gated):** `trait`/`use`
   composition (methods, `mutable`/`static` state, a trait constructor, abstract requirements, property
   hooks) is in, byte-identical across backends + real PHP 8.4. Deferred: (1) **traits as types** —

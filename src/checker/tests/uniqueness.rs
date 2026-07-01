@@ -65,3 +65,38 @@ fn distinct_params_and_fields_are_ok() {
                function main() -> void { }";
     assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
+
+// ── M-DX S1: duplicate enum variant / static field (silent-overwrite soundness holes C/D) ──
+
+#[test]
+fn duplicate_enum_variant_is_error() {
+    // Was silently accepted (a HashMap insert let the second `A` overwrite the first).
+    let src = "enum E { A, A } function main() -> void { }";
+    assert!(has(src, "E-DUP-VARIANT"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn distinct_enum_variants_are_ok() {
+    let src = "enum E { A, B, C } function main() -> void { }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn duplicate_static_field_is_error() {
+    // Was silently accepted (statics were `continue`d past the E-DUP-FIELD loop, then a HashMap
+    // insert overwrote the first).
+    let src = "class C { static int x = 1; static int x = 2; } function main() -> void { }";
+    assert!(has(src, "E-DUP-STATIC"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn distinct_static_fields_are_ok() {
+    let src = "class C { static int x = 1; static int y = 2; } function main() -> void { }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn duplicate_const_is_error() {
+    let src = "class C { const int X = 1; const int X = 2; } function main() -> void { }";
+    assert!(has(src, "E-DUP-CONST"), "{:?}", errors_of(src));
+}

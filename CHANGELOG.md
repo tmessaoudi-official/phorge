@@ -6,6 +6,32 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Fixed — diagnostics quality + three soundness holes (M-DX S1)
+
+Front-end-only, no new `Op`/`Value`, byte-identical `run≡runvm≡real PHP` (no runtime change). Closes
+the M-DX/W1 enforcement-audit gaps and hardens the type system:
+
+- **Override return covariance (`E-OVERRIDE-SIG`)** — a return-type-incompatible override
+  (`Sub.k(): string` overriding `open Base.k(): int`) used to type-check clean, then store a
+  wrong-typed value on the Rust backends *and* fatal in transpiled PHP. Now rejected: an override's
+  return type must be the overridden type or a subtype of it. (Parameter variance + overloaded/generic
+  overrides remain documented deferrals.)
+- **Duplicate enum variant (`E-DUP-VARIANT`)**, **duplicate `static` field (`E-DUP-STATIC`)**, and
+  **duplicate `const` (`E-DUP-CONST`)** — each used to silently overwrite the first in a `HashMap`;
+  now rejected, mirroring the existing instance-field `E-DUP-FIELD` check.
+- **Uncoded diagnostics given stable codes** — "type X is already defined" → `E-DUP-TYPE`; the
+  generic/collection arity errors → `E-TYPE-ARG-COUNT` (so both are `phg explain`-able and greppable).
+- **24 previously-undocumented codes now self-document** via `phg explain` (the W1 audit found 14; the
+  new **diagnostic-coverage ratchet** found 10 more — all four `E-TYPE-IMPORT-*`, the `E-DECL-*` pair,
+  and this slice's new codes).
+- **Diagnostic-coverage ratchet** (`every_emitted_diagnostic_code_has_an_explanation`) — a test scans
+  non-test `src/` for every emitted `E-*`/`W-*` code and asserts each has a `phg explain` entry, so a
+  new code without documentation is a CI failure. The drift-prone hardcoded "known codes" list in the
+  `explain` fallback was removed in its favor.
+- **Golden-diagnostic corpus** (`conformance/diagnostics/`, gated by `tests/diagnostics.rs`) — each
+  case pins the *exact rendered diagnostic* (header, source line, caret, `[CODE]`, `hint:`); regenerate
+  with `PHORJ_BLESS=1 cargo test --test diagnostics`.
+
 ### Changed — green threads: cooperative cutover **DONE** (M6 W4 / S4.3)
 
 `spawn`/channels are now **genuinely cooperative**, not synchronous-degenerate. A spawned single-overload

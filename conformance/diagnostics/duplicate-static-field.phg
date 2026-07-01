@@ -1,0 +1,8 @@
+package Main;
+
+class Counter {
+    static int total = 1;
+    static int total = 2;
+}
+
+function main() -> void {}

@@ -1,0 +1,5 @@
+type error at 3:19: duplicate enum variant `Red`
+enum Color { Red, Red }
+                  ^
+  [E-DUP-VARIANT]
+  hint: each variant of an enum must have a distinct name
