@@ -525,3 +525,16 @@ fn list_is_empty_flatten_and_count() {
     let mut boom = |_f: &Value, _a: Vec<Value>| Err("kaboom".to_string());
     assert!(list_count(&[nums, placeholder], &mut boom).is_err());
 }
+
+#[test]
+fn append_adds_one_element() {
+    let xs = Value::List(std::rc::Rc::new(vec![Value::Int(1), Value::Int(2)]));
+    match list_append(&[xs, Value::Int(3)], &mut String::new()).unwrap() {
+        Value::List(out) => {
+            assert_eq!(out.len(), 3);
+            assert!(matches!(out[2], Value::Int(3)));
+        }
+        other => panic!("expected list, got {other:?}"),
+    }
+    assert!(list_append(&[Value::Int(1)], &mut String::new()).is_err());
+}

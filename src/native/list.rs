@@ -225,6 +225,20 @@ fn list_concat(args: &[Value], _: &mut String) -> Result<Value, String> {
         _ => Err("List.concat expects (List<T>, List<T>)".into()),
     }
 }
+
+/// `append(List<T>, T) -> List<T>` — a new list with `v` added at the end. Lists are immutable
+/// (COW), so this returns a fresh list; for building in a hot loop prefer `List.fill` + index-set
+/// (O(1) per write since M-DOGFOOD W8) or `List.map(range, fn)`. Erases to PHP `array_merge($xs, [$v])`.
+fn list_append(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs), v] => {
+            let mut out = (**xs).clone();
+            out.push(v.clone());
+            Ok(Value::List(std::rc::Rc::new(out)))
+        }
+        _ => Err("List.append expects (List<T>, T)".into()),
+    }
+}
 /// `first(List<T>) -> T?` / `last(List<T>) -> T?` — the first/last element, or `null` for an empty
 /// list. Erase inline to `($xs[0] ?? null)` / `($xs[count($xs) - 1] ?? null)`.
 fn list_first(args: &[Value], _: &mut String) -> Result<Value, String> {
@@ -571,6 +585,17 @@ pub(crate) fn list_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(list_concat),
             php: |a| format!("array_merge({}, {})", parg(a, 0), parg(a, 1)),
+        },
+        // `append(List<T>, T) -> List<T>` — a new list with the element added at the end (COW, O(n));
+        // for hot loops prefer `List.fill` + index-set (O(1)/write) or `List.map(range, fn)`.
+        NativeFn {
+            module: "Core.List",
+            name: "append",
+            params: vec![list(t()), t()],
+            ret: list(t()),
+            pure: true,
+            eval: NativeEval::Pure(list_append),
+            php: |a| format!("array_merge({}, [{}])", parg(a, 0), parg(a, 1)),
         },
         // `first(List<T>) -> T?` / `last(List<T>) -> T?` — head/tail or null for an empty list.
         NativeFn {

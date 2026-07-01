@@ -21,6 +21,10 @@ function main(): void {
     Output.printLine("reversed[0] = {head}");
     Output.printLine("sum(rev)   = {List.sum(rev)}");
 
+    // append (generic) — a new list with one element added at the end (lists are immutable/COW).
+    var more = List.append(nums, 6);
+    Output.printLine("appended   = {List.length(more)} last={more[5]}");
+
     // contains (generic, PHP `in_array` strict) — membership over a scalar list.
     Output.printLine("has 3      = {List.contains(nums, 3)}");
     Output.printLine("has 9      = {List.contains(nums, 9)}");
