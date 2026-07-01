@@ -5,7 +5,7 @@
 //!
 //! ```text
 //! # comment / blank lines skipped
-//! version 0.5.0-alpha.1                 # optional, sanity-checked against CARGO_PKG_VERSION
+//! version 0.5.1-alpha.1                 # optional, sanity-checked against CARGO_PKG_VERSION
 //! x86_64-unknown-linux-musl  <64-hex>
 //! aarch64-unknown-linux-gnu  <64-hex>
 //! ```
@@ -136,7 +136,7 @@ mod tests {
     fn parses_well_formed_with_comments_and_version() {
         let m = parse(
             "# header comment\n\
-             version 0.5.0-alpha.1\n\
+             version 0.5.1-alpha.1\n\
              \n\
              x86_64-unknown-linux-musl ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n\
              aarch64-unknown-linux-gnu e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n",

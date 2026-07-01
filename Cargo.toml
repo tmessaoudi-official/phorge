@@ -1,10 +1,10 @@
 [package]
 name = "phorj"
 # Pre-1.0; the version tracks milestone progress, not a release cadence. First tagged pre-release:
-# 0.5.0-alpha.1 rolls up everything since the 0.4.0 internal mark — M3 + M-RT (full rich-type system),
+# 0.5.1-alpha.1 rolls up everything since the 0.4.0 internal mark — M3 + M-RT (full rich-type system),
 # M5 (packages), M2.5 cross-OS `phg build`, M6 (web, partial), the pattern cluster, and the WASM
 # playground. `-v`/`--version` reads this value via CARGO_PKG_VERSION.
-version = "0.5.0-alpha.1"
+version = "0.5.1-alpha.1"
 edition = "2021"
 # Single-sources the cross-stub registry base (M2.5 Phase 3a): the download client derives
 # `{repository}/releases/download/v{version}/` as the default registry. `PHORJ_STUB_REGISTRY` overrides.
