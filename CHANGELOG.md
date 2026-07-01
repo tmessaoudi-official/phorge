@@ -6,6 +6,19 @@ cadence. Milestones and their status live in `docs/MILESTONES.md`.
 
 ## [Unreleased]
 
+### Added — secure value renderer (M-DX S2)
+
+`inspect::render(&Value) -> String` — the single, safe-by-construction `Value → String` substrate the
+value-dump (S3), assertion detail (S4), and debugger (S5) will share. Internal (no CLI surface yet);
+lives outside the correctness spine (side-channel only, never transpiled). Three guarantees:
+- **Secret redaction** — an instance of the injected `Secret<T>` wrapper renders `Secret(<redacted>)`
+  without ever descending into its `value` field (mirrors the transpiler's `#[\SensitiveParameter]`
+  and the type system's non-printability), including when nested inside a list/map/instance.
+- **Bounded** — depth, per-collection element count, and scalar byte length are capped
+  (`RenderCaps`); overflow truncates with `…`/`… (+N more)`.
+- **Deterministic** — insertion-ordered `Map`/`Set` and slot-ordered instance fields; no addresses,
+  `Rc` counts, or hash order — reproducible, so it is golden-testable.
+
 ### Added — build profiles: `Dev` / `Release` (M-DX S0)
 
 A first-class `profile::Profile { Dev, Release }` — the gate every environment-sensitive,

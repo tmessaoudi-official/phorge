@@ -29,7 +29,12 @@
       round-trip & output-invariance. Deferred: run/runvm rely on the Dev default (no explicit
       set_active — no consumer yet); the "env var can't flip Release→Dev" test defers to S3 (needs an
       observable Dev-only behavior); build embedding bytecode-not-source is its own follow-up.
-- [ ] **S2** Secure value renderer (Secret redaction, caps, deterministic, stderr-only)
+- [x] **S2** Secure value renderer — DONE. `src/inspect.rs`: `render(&Value)`/`render_with(caps)`,
+      `RenderCaps { max_depth, max_elements, max_scalar_bytes }`. Secret redaction (recognizes the
+      injected `Secret` wrapper class, redacts without descending, incl. nested), bounded (depth/elem/
+      byte caps with `…`), deterministic (insertion-ordered Map/Set, slot-ordered fields, no
+      addresses/Rc-counts). Every `Value` variant covered; opaque handles → `<function>`/`<channel>`/
+      `<task>`. 10 unit tests. Internal substrate — no CLI/example yet (ships with S3/S5).
 - [ ] **S3** Value-dump on fault (faulting-frame locals + backtrace headers; Dev + opt-in)
 - [ ] **S4** Assertions (`assert`, always-checked, FaultKind::Assert, transpile to `if(!c)`)
 - [ ] **S5** Interactive debugger (interpreter-only; REPL + DAP frontends)
