@@ -16,7 +16,8 @@
 //! constant), so the same seed always replays the same stream.
 //!
 //! - `Random.seed(int) -> void` — reset the generator to a deterministic state for that seed.
-//! - `Random.next() -> int` — advance and return the raw non-negative value.
+//! - `Random.nextInt() -> int` — advance and return the raw non-negative value.
+//! - `Random.nextFloat() -> float` — advance and return a value in `[0.0, 1.0)` (dyadic, exact).
 //! - `Random.intBetween(int lo, int hi) -> int` — advance and return a value in `[lo, hi]` (inclusive).
 
 use super::*;
@@ -74,6 +75,25 @@ fn random_next(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
+/// Advance and return a float in `[0.0, 1.0)`. Uses the top 53 bits of the (non-negative, 63-bit)
+/// step output as the mantissa, divided by `2^53` — a dyadic rational `k / 2^53` with `k < 2^53`, so
+/// it is *exactly* representable in `f64` and the identical division is exact in PHP (both operands
+/// exactly representable). This keeps `nextFloat` byte-identical on `run`/`runvm`/transpiled PHP,
+/// unlike an irrational float (see KNOWN_ISSUES) — the value is a clean fraction, not a transcendental.
+fn advance_float() -> f64 {
+    // `advance()` is a non-negative i64 (< 2^63, 63 significant bits); `>> 10` keeps the top 53.
+    let mantissa = (advance() as u64) >> 10;
+    // 2^53 = 9007199254740992. Division of an integer < 2^53 by 2^53 is exact in IEEE-754.
+    (mantissa as f64) / 9_007_199_254_740_992.0
+}
+
+fn random_next_float(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [] => Ok(Value::Float(advance_float())),
+        _ => Err("Random.nextFloat expects ()".into()),
+    }
+}
+
 fn random_int_between(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [Value::Int(lo), Value::Int(hi)] => {
@@ -114,6 +134,15 @@ pub(crate) fn random_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(random_next),
             php: |_| "__phorj_rng_next()".to_string(),
+        },
+        NativeFn {
+            module: "Core.Random",
+            name: "nextFloat",
+            params: vec![],
+            ret: Ty::Float,
+            pure: true,
+            eval: NativeEval::Pure(random_next_float),
+            php: |_| "__phorj_rng_next_float()".to_string(),
         },
         NativeFn {
             module: "Core.Random",

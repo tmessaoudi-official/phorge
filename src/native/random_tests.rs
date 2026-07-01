@@ -20,6 +20,40 @@ fn between(lo: i64, hi: i64) -> i64 {
         other => panic!("expected int, got {other:?}"),
     }
 }
+fn next_float() -> f64 {
+    match random_next_float(&[], &mut String::new()).unwrap() {
+        Value::Float(f) => f,
+        other => panic!("expected float, got {other:?}"),
+    }
+}
+
+#[test]
+fn next_float_in_unit_interval_and_reproducible() {
+    let _g = RNG_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    seed(42);
+    let first: Vec<f64> = (0..8).map(|_| next_float()).collect();
+    // Every draw is in [0.0, 1.0).
+    for &f in &first {
+        assert!((0.0..1.0).contains(&f), "nextFloat {f} out of [0,1)");
+    }
+    // Same seed replays the same float stream.
+    seed(42);
+    let second: Vec<f64> = (0..8).map(|_| next_float()).collect();
+    assert_eq!(
+        first, second,
+        "a fixed seed must replay the same float stream"
+    );
+    // Each value is a dyadic k/2^53, so `f * 2^53` is an exact non-negative integer (byte-identity
+    // guarantee: exactly representable, matches PHP's identical division).
+    for &f in &first {
+        let scaled = f * 9_007_199_254_740_992.0;
+        assert_eq!(
+            scaled.fract(),
+            0.0,
+            "nextFloat {f} is not a clean dyadic k/2^53"
+        );
+    }
+}
 
 #[test]
 fn same_seed_replays_the_same_stream() {

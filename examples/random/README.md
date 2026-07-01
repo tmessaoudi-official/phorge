@@ -6,8 +6,9 @@ reproducible — handy for tests, simulations, and shuffles you want to repeat.
 ```phorj
 import Core.Random;
 
-Random.seed(n: int) -> void                 // reset the generator to a deterministic state
-Random.next() -> int                         // advance; return the raw non-negative value
+Random.seed(n: int) -> void                  // reset the generator to a deterministic state
+Random.nextInt() -> int                      // advance; return the raw non-negative value
+Random.nextFloat() -> float                  // advance; return a dyadic value in [0.0, 1.0)
 Random.intBetween(lo: int, hi: int) -> int   // advance; return a value in [lo, hi] (inclusive)
 ```
 
@@ -21,7 +22,11 @@ Five d6 rolls:
   roll 2: 4
   roll 3: 5
   roll 4: 3
-raw next: 4299401598188713652
+raw nextInt: 4299401598188713652
+Three nextFloat draws:
+  draw 0: 0.898320862390934
+  draw 1: 0.4722541960987271
+  draw 2: 0.6818400769746191
 ```
 
 Because the seed is fixed (`2026`), those rolls are the same on every run and on both Rust backends.
@@ -44,5 +49,9 @@ sequence couldn't match; that divergence is gone.)
   value masked to a non-negative `int` (`< 2^63`). The PHP emission masks the `>> 7` (PHP `>>` is
   arithmetic, Rust's `u64 >>` is logical) and writes `GOLDEN` as its signed-i64 reinterpretation.
 - **Bounds.** `intBetween(lo, hi)` is inclusive on both ends; `hi < lo` is a fault.
-- **Transpiled PHP.** `seed` → `__phorj_rng_seed`; `next` → `__phorj_rng_next()`; `intBetween` →
-  `__phorj_rng_int_between(lo, hi)` — all over a shared by-reference function-static state.
+- **`nextFloat`.** Returns the top 53 bits of a step / `2^53` — a dyadic fraction `k / 2^53`, which is
+  *exactly* representable in `f64`, so the identical division is exact in PHP too. That keeps it
+  byte-identical (an irrational float like `sqrt(2)` would not be — see `KNOWN_ISSUES.md`).
+- **Transpiled PHP.** `seed` → `__phorj_rng_seed`; `nextInt` → `__phorj_rng_next()`; `nextFloat` →
+  `__phorj_rng_next_float()`; `intBetween` → `__phorj_rng_int_between(lo, hi)` — all over a shared
+  by-reference function-static state.

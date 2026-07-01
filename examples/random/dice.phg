@@ -1,10 +1,9 @@
 // Core.Random — a seeded pseudo-random generator.
 //
-// This is a WALKTHROUGH, not a byte-identity-gated example. `Core.Random` advances a process-global
-// generator (`pure: false`), so programs importing it are QUARANTINED from the oracle: the Rust
-// backends (`run`/`runvm`) share one generator and agree, but the transpiled PHP uses PHP's own
-// `mt_rand`, whose sequence intentionally differs. Reproducibility + `run ≡ runvm` are covered in
-// tests/random.rs.
+// Byte-identity-gated: `Core.Random` is `pure: true` — the transpiler hand-rolls the *same* xorshift64
+// as the Rust kernel (`__phorj_rng_*`), so a seeded sequence is identical on `run`, `runvm`, and the
+// transpiled PHP. (It used to be quarantined behind PHP's `mt_rand`; that divergence is gone.)
+// Reproducibility + `run ≡ runvm` are also covered in tests/random.rs.
 //
 // Run it:   phg run examples/random/dice.phg
 package Main;
@@ -23,8 +22,16 @@ function main(): void {
         Output.printLine("  roll {i}: {roll}");
     }
 
-    // `next()` returns the raw non-negative value (useful as a hash-ish key or to derive your own
+    // `nextInt()` returns the raw non-negative value (useful as a hash-ish key or to derive your own
     // bounded value).
     var raw = Random.nextInt();
-    Output.printLine("raw next: {raw}");
+    Output.printLine("raw nextInt: {raw}");
+
+    // `nextFloat()` returns a value in [0.0, 1.0) — a dyadic fraction, so it is *exactly* representable
+    // and byte-identical across all three backends (unlike an irrational float).
+    Output.printLine("Three nextFloat draws:");
+    for (int j in 0..3) {
+        var f = Random.nextFloat();
+        Output.printLine("  draw {j}: {f}");
+    }
 }

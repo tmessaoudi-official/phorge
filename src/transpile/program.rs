@@ -947,6 +947,13 @@ impl Transpiler {
             self.line("return __phorj_rng_step() & PHP_INT_MAX;");
             self.indent -= 1;
             self.line("}");
+            // `nextFloat`: top 53 bits of the step output / 2^53 → a dyadic `[0.0, 1.0)` fraction,
+            // exact in IEEE-754 on both backends (both operands exactly representable).
+            self.line("function __phorj_rng_next_float() {");
+            self.indent += 1;
+            self.line("return ((__phorj_rng_step() & PHP_INT_MAX) >> 10) / 9007199254740992.0;");
+            self.indent -= 1;
+            self.line("}");
             self.line("function __phorj_rng_int_between($lo, $hi) {");
             self.indent += 1;
             self.line("$span = $hi - $lo + 1;");
