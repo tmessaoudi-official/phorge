@@ -3,10 +3,14 @@ import Core.Output;
 import Core.File;
 import Core.String;
 
-// M3 Track B Wave 2 — the `Core.File` stdlib module (std::fs ↔ PHP file builtins). `read` returns
-// `string?`, so it composes with the S2 null-safety operators (`??`, `if (var x = …)`). The example
-// reads a COMMITTED fixture so both backends read identical bytes and stay byte-identical — run it
-// from the repository root (the fixture path is repo-root-relative).
+// The `Core.File` stdlib module (std::fs ↔ PHP file builtins). `read` returns `string?`, so it
+// composes with the S2 null-safety operators (`??`, `if (var x = …)`).
+//
+// This is a WALKTHROUGH, not a byte-identity-gated example: the mutation ops
+// (`append`/`delete`/`rename`/`copy`) are `pure: false` (they change the filesystem — state outside
+// the program text), so a program importing `Core.File` is QUARANTINED from the oracle and covered by
+// `tests/filesystem.rs` under a controlled temp dir instead. The Rust backends (`run`/`runvm`) still
+// agree; only the separate PHP process is unreliable. Run it from the repository root.
 //
 // (Note: a variable may not be named `text`/`file`/`console` here — that would shadow an imported
 // module qualifier, which the checker rejects with E-SHADOW-IMPORT.)
@@ -37,4 +41,18 @@ function main(): void {
     } else {
         Output.printLine("if-let: absent");
     }
+
+    // --- filesystem mutation (pure: false — this is what quarantines the module) ---
+    // A self-cleaning round-trip on temp files next to the fixtures directory.
+    string tmp = "examples/guide/fixtures/.demo.txt";
+    string tmp2 = "examples/guide/fixtures/.demo-copy.txt";
+    File.write(tmp, "line one\n");
+    File.append(tmp, "line two\n");                 // append, not overwrite
+    Output.printLine("wrote {File.size(tmp) ?? 0} bytes");
+    int copied = File.copy(tmp, tmp2);              // returns the byte count
+    Output.printLine("copied {copied} bytes -> exists {File.exists(tmp2)}");
+    File.rename(tmp2, tmp);                          // rename over the original (overwrite-move)
+    Output.printLine("after rename: copy gone {File.exists(tmp2)}");
+    File.delete(tmp);                                // clean up so the repo stays pristine
+    Output.printLine("cleaned up: {File.exists(tmp)}");
 }

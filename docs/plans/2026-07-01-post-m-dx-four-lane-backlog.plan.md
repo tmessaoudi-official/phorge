@@ -15,6 +15,23 @@
   `phg doc`, `phg new`, `defer`, VM tail-call-opt inside M-perf, format specifiers with `sprintf`).
   Start = Lane 1 W1. Autonomy = full (30/8, per-slice commit, stop only on genuine forks / push).
 
+## NEW DECISIONS (developer, 2026-07-01, after research re-ask) — three new work items
+- [2026-07-01] AGREED **Q1**: add **method-references-as-values** (`obj.method` → a first-class typed
+  closure) — the one genuine callable gap — + a guide example for the `Map<string, () => T>` typed-
+  registry pattern. NO string-dispatch primitive (un-typeable/un-erasable).
+- [2026-07-01] AGREED **Q2**: **stateless filesystem namespace** — expand `Core.File`
+  (+ a `Core.Directory`): `append`/`delete`/`rename`/`copy`/`mkdir`/`listDir`/`size`/`isDir`/`metadata`.
+  All `pure:false` → quarantined from the byte-identity oracle (the `Core.Process` recipe). NO stateful
+  handles (that needs `Value::Resource` + `defer` + lifecycle → a separate mini-milestone if ever).
+- [2026-07-01] AGREED **Q3**: build a **full Guzzle-style HTTP client incl. HTTPS** — amend the
+  dependency policy to admit **`rustls`** under the crypto clause (wasm-gated, like argon2/ctrlc/
+  corosensei). HTTP/1.1 over `std::net`, reuse the M6 `Request`/`Response` value model (client-side
+  extensions), middleware as closures, pooling via the EXISTING green threads (no tokio), transpiles to
+  PHP Guzzle/curl; the socket send is quarantined behind a `Transport` trait (like `src/serve.rs`).
+  This is a real milestone (**M-HTTP-Client**) — design-spec first.
+- Build order this session-family: **Q2 (filesystem, self-contained) → Q1 (method-refs) → Q3 design
+  spec → Q3 build**, interleaved with the locked Lanes 2–4 as budget allows.
+
 ## Lane order + scope
 
 ### 1. Naming-overhaul codemod (FIRST — breaking; do before adding surface)

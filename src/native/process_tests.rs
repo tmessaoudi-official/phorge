@@ -30,16 +30,21 @@ fn every_other_native_is_pure() {
     // unfrozen `nowMillis()` reads the wall clock; a program freezes the clock to become gateable.
     // `Core.Runtime` is whole-module impure (M-DOGFOOD W1): the monotonic clock + resident-memory
     // counters read the live process, so a benchmark program is quarantined (never gateable — its
-    // numbers vary per run by design).
+    // numbers vary per run by design). `Core.File` is MIXED (2026-07-01): the filesystem-mutation ops
+    // (`append`/`delete`/`rename`/`copy`) are impure (non-idempotent disk side effects), while
+    // `read`/`exists`/`write`/`size` stay pure — so any importer is quarantined, tested in
+    // `tests/filesystem.rs`.
     let impure_modules = [
         "Core.Process",
         "Core.Environment",
         "Core.Time",
         "Core.Runtime",
     ];
+    let mixed_impure_file = ["append", "delete", "rename", "copy"];
     for n in registry() {
         let impure = impure_modules.contains(&n.module)
-            || (n.module == "Core.Cryptography" && n.name == "hashPassword");
+            || (n.module == "Core.Cryptography" && n.name == "hashPassword")
+            || (n.module == "Core.File" && mixed_impure_file.contains(&n.name));
         assert_eq!(
             n.pure, !impure,
             "{}.{} purity flag disagrees with its module",
