@@ -65,15 +65,15 @@
             "2": { "name": "keyword.declaration.phorj" }
           }
         },
-        { "name": "keyword.declaration.phorj", "match": "\\b(package|import|function|class|enum|interface|trait|type|declare)\\b" }
+        { "name": "keyword.declaration.phorj", "match": "\\b(package|import|function|class|enum|interface|trait|type|declare|constructor)\\b" }
       ]
     },
     "keywords": {
       "patterns": [
-        { "name": "keyword.control.phorj", "match": "\\b(return|if|else|for|while|do|match|throw|try|catch|finally|break|continue|in)\\b" },
-        { "name": "storage.modifier.phorj", "match": "\\b(var|mutable|static|const|open|abstract|public|private|protected|internal|use|extends|implements)\\b" },
+        { "name": "keyword.control.phorj", "match": "\\b(return|if|else|for|while|do|match|when|throw|throws|try|catch|finally|break|continue|in|spawn|receive)\\b" },
+        { "name": "storage.modifier.phorj", "match": "\\b(var|mutable|static|const|open|abstract|public|private|protected|internal|use|with|extends|implements)\\b" },
         { "name": "keyword.operator.word.phorj", "match": "\\b(new|instanceof|as)\\b" },
-        { "name": "keyword.other.phorj", "match": "\\b(test)\\b" }
+        { "name": "keyword.other.phorj", "match": "\\b(test|panic|assert|discard)\\b" }
       ]
     },
     "constants": {
