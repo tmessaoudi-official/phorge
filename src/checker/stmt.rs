@@ -92,16 +92,28 @@ impl Checker {
                             )
                         }
                     }
-                    // `List<T> xs = []`: an empty list literal has no element to infer from, so it
-                    // takes its element type from the declared annotation (expected-type at the decl
-                    // site). The runtime value is an empty `Value::List` regardless of `T`, so no
-                    // backend change is needed. A non-`List` annotation falls through to the normal
-                    // path, which surfaces the "cannot infer" / mismatch diagnostic.
+                    // A list literal with a `List<T>` annotation is checked against that expected
+                    // element type (M-DOGFOOD W0 + W3): each element must be assignable to `T`. This
+                    // (a) supplies the element type for an empty `[]` (the runtime value is an empty
+                    // `Value::List` regardless of `T`, so no backend change), and (b) lets a
+                    // heterogeneous list of subtypes upcast — e.g. `List<Shape> xs = [new Sq(), new
+                    // Tri()]` — which post-hoc element unification could not (a) do at all and (b)
+                    // `List` is invariant so `List<Sq>` is not assignable to `List<Shape>`. A
+                    // non-`List` annotation (e.g. a fixed-length `[T; N]`) falls through to the
+                    // normal path, which owns its own length/element checks.
                     crate::ast::Expr::List(elems, _)
-                        if elems.is_empty() && !matches!(ty, crate::ast::Type::Infer(_)) =>
+                        if !matches!(ty, crate::ast::Type::Infer(_)) =>
                     {
                         match self.resolve_type(ty) {
-                            list @ Ty::List(_) => list,
+                            Ty::List(elem_ty) => {
+                                for e in elems {
+                                    let et = self.check_expr(e);
+                                    if !self.ty_assignable(&et, &elem_ty) {
+                                        self.err_assign(Self::expr_span(e), &et, &elem_ty);
+                                    }
+                                }
+                                Ty::List(elem_ty)
+                            }
                             _ => self.check_expr(init),
                         }
                     }

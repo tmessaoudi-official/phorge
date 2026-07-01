@@ -35,11 +35,15 @@ fn list_literal_unifies_elements() {
 
 #[test]
 fn list_literal_mixed_elements_error() {
-    let errs = errors_of("function main() -> void { List<int> xs = [1, true]; }");
+    // Un-annotated (`var`): the element-unification path reports "list elements must share one type".
+    let errs = errors_of("function main() -> void { var xs = [1, true]; }");
     assert!(
         errs.iter().any(|e| e.message.contains("list elements")),
         "{errs:?}"
     );
+    // Annotated (`List<int>`): the expected-type path reports the offending element's mismatch.
+    let errs2 = errors_of("function main() -> void { List<int> xs = [1, true]; }");
+    assert!(!errs2.is_empty(), "annotated mixed list must still error");
 }
 
 #[test]
@@ -192,4 +196,21 @@ fn empty_list_literal_infers_from_return_type() {
 fn empty_list_literal_still_needs_context() {
     // No expected type (`var`) → still an error; the fix is expected-type-driven, not a blanket default.
     assert!(!errors_of("function main() -> void { var xs = []; }").is_empty());
+}
+
+#[test]
+fn list_literal_upcasts_elements_to_annotation_supertype() {
+    // A heterogeneous list of interface implementers upcasts to the annotation's element type
+    // (M-DOGFOOD W3) — post-hoc element unification could not, and List is invariant.
+    let src = "interface Shape { function area() -> int; } \
+               class Sq implements Shape { constructor(private int s) {} function area() -> int { return this.s * this.s; } } \
+               class Tri implements Shape { constructor(private int b) {} function area() -> int { return this.b; } } \
+               function main() -> void { List<Shape> xs = [new Sq(2), new Tri(3)]; Shape first = xs[0]; }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn list_literal_element_not_assignable_to_annotation_errors() {
+    // With a List<int> annotation, a string element is rejected (per-element assignability).
+    assert!(!errors_of("import Core.List; function main() -> void { List<int> xs = [1, \"a\"]; }").is_empty());
 }
