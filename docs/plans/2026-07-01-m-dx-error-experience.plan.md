@@ -55,7 +55,45 @@
       already delivered by S3 `--dump-on-fault` (a failing assert is a `Signal::Runtime` fault); a
       second operand path would be redundant + interpreter/VM-asymmetric + a spine risk. Message stays
       uniform across profiles (byte-identical).
-- [ ] **S5** Interactive debugger (interpreter-only; REPL + DAP frontends)
+- [ ] **S5** Interactive debugger (interpreter-only; REPL + DAP frontends) — **NOT STARTED** (largest
+      slice; deferred to a fresh session for a well-tested build). Ready-to-execute plan below.
+
+### S5 implementation plan (ready to execute)
+**Engine (foundation) — `src/debug.rs`:**
+- `enum StepMode { Continue, StepInto, StepOver(usize depth), StepOut(usize depth) }`.
+- `struct Debugger { breakpoints: BTreeSet<u32>, mode: StepMode }` with `should_pause(line, depth) -> bool`
+  (Continue→line∈breakpoints; StepInto→always; StepOver→depth<=target ∨ bp; StepOut→depth<target ∨ bp)
+  and `apply(cmd, depth)`.
+- `enum DebugCommand { Continue, StepInto, StepOver, StepOut, SetBreakpoint(u32), ClearBreakpoint(u32), Quit }`.
+- `struct PauseCtx { line: u32, depth: usize, locals: Vec<(String,Value)>, frames: Vec<Frame> }`.
+- `trait DebugFrontend { fn on_pause(&mut self, ctx: &PauseCtx) -> DebugCommand; }` (REPL impl reads
+  stdin/writes stderr; a **test** impl returns scripted commands → deterministic step-sequence tests).
+- Reuse S2 `inspect::render` for locals + `snapshot_frames` for the backtrace.
+**Interpreter hook — `src/interpreter/`:**
+- Add `debug: Option<(Debugger, Box<dyn DebugFrontend>)>` to `Interp` (3 construction sites:
+  `interpret_main` mod.rs:270, mod.rs:395, `Interp::for_task` coop.rs:35 — non-debug = `None`).
+- Hook at `exec_stmt` (stmt.rs:6, right after the trace-line update): if debug attached and
+  `should_pause(line, self.depth)`, call a `#[cold] #[inline(never)]` `debug_pause` (same hot-frame
+  discipline as S3's `capture_fault_dump`) that loops `on_pause` (applying breakpoint-set commands,
+  re-prompting) until a step/continue/quit command; quit → `rt("debug: quit")`.
+- New entry `interpret_debug(program, frontend)` mirroring `interpret_main`.
+**REPL frontend — `src/debug.rs` or `src/cli/debug_repl.rs`:** commands `break <line>`/`b`,
+  `step`/`s`, `next`/`n`, `stepout`/`o`, `continue`/`c`, `locals`/`l`, `backtrace`/`bt`, `quit`/`q`.
+  Prints pause context (line, locals via `inspect`, backtrace) to **stderr**; program output stays on
+  stdout.
+**DAP frontend — `src/dap.rs`:** model the transport on the existing **LSP stdio JSON framing**
+  (`src/lsp/` — Content-Length headers + JSON). Core requests: `initialize`, `launch`,
+  `setBreakpoints`, `configurationDone`, `threads`, `stackTrace`, `scopes`, `variables`, `continue`,
+  `next`, `stepIn`, `stepOut`, `terminated`/`exited`. Runs the interpreter on a worker thread; the DAP
+  loop + interpreter communicate via channels (a `DebugFrontend` impl that blocks on a channel).
+**CLI — `src/main.rs` + `src/cli/`:** `phg debug <file>` (REPL) and `phg debug --dap <file>` (DAP
+  server). Dev-only (`profile::active().is_dev()`); add to USAGE + `help_for`.
+**Tests:** engine step-sequence tests (scripted frontend over a fixture); DAP protocol round-trip
+  (build a request, feed bytes, assert response framing/fields); REPL command parsing. **Never touches
+  the differential spine** (debugger is stderr/side-channel, interpreter-only).
+**Docs/example:** `examples/debug/README.md` walkthrough (a debug session is interactive, not a
+  runnable "Ok" example — README per the examples rule) + CHANGELOG + KNOWN_ISSUES (VM stepping,
+  conditional breakpoints, watchpoints, hot-reload deferred per spec).
 
 ## Surprises / improvements flagged
 - [S1] The W1 audit's "14 missing explain" undercounted: the coverage ratchet (a source scan) found
