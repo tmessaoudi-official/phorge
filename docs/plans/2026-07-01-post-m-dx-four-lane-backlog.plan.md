@@ -31,6 +31,18 @@
   This is a real milestone (**M-HTTP-Client**) — design-spec first.
 - Build order this session-family: **Q2 (filesystem, self-contained) → Q1 (method-refs) → Q3 design
   spec → Q3 build**, interleaved with the locked Lanes 2–4 as budget allows.
+- [2026-07-01] NAMESPACE / "NOTHING IN THE WIND" overhaul — design-locked (SSOT
+  `docs/specs/2026-07-01-no-wind-namespace-and-language-surface-design.md`). Developer's rule:
+  *nothing usable without an explicit import*, only the grammar (keywords + built-in type words) is
+  exempt; a name imported to a bare call site is NOT in the wind. Decisions: (1) fault-intrinsics move
+  behind **`import Core;`** → **`Core.assert/panic/todo/unreachable(...)`** (qualified + imported;
+  `E-UNIMPORTED`); (2) **deep/arbitrary-depth imports** `import Core.A.B.C…` binding BOTH bare-leaf and
+  parent-qualified call forms, no wildcards; (3) **aliasing EXISTS** (`import a.b as c`) — extend to
+  stdlib + deep; (4) de-reserve **`Attr`→Core.Html**, **`Error`→Core.Error**, **`Channel`/`Task`→
+  `Core.Async`** (NOT "Concurrent" — tasks are cooperative single-threaded, developer-corrected).
+- [2026-07-01] REAL PARALLELISM — **ON HOLD**; developer will have **Fable** audit + produce a complete
+  deep **M-Parallel** plan (actor vs data-parallel vs async-reactor vs shared-memory; the `Rc` model
+  forecloses shared-memory). Models brainstormed in the SSOT.
 
 ## Lane order + scope
 
