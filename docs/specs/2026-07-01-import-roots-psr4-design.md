@@ -70,9 +70,10 @@ even when `App = "src"`. Folder mapping is a loader concern; PHP output is folde
 
 ## Scope / decisions
 
-- **Default root = `src/`, folder=path** (rule 1) — zero-config projects keep working; `[packages]` is
-  purely additive/overriding. (Confirm with developer — the alternative is "`[packages]` mandatory, no
-  default", fully explicit but heavier for small projects.)
+- **Default root = `src/`, folder=path** (rule 1) — LOCKED (developer, 2026-07-01): `[packages]` is
+  optional and purely additive/overriding; zero-config projects keep working (unmapped first-party
+  resolves as `src/` + folder=path). Rejected the "mandatory, no default" alternative as too heavy for
+  small projects.
 - **`vendor:` is the only prefix** this slice. A future slice could add user prefixes if a real need
   appears, but the namespace-root already disambiguates first-party, so none is planned.
 - **Breaking** — existing examples/projects (`package Main;` + bare `import Acme.Util` for a vendored
