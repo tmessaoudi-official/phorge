@@ -241,11 +241,11 @@ impl Parser {
         } else {
             None
         };
-        // `throws T (| T)*` (M-faults 2b). `parse_type` consumes a `A | B` union natively, so one
-        // call captures the whole declared set as a single (possibly `Union`) `Type`; the checker
-        // flattens it. Empty when the clause is absent.
+        // `throws T (| T)* (, T (| T)*)*` (M-faults 2b + M-DOGFOOD W0 comma form). Each entry is a
+        // full type (so a union `A | B` is captured natively) and entries may be comma-separated;
+        // the checker flattens the `Vec` into the declared throw set. Empty when the clause is absent.
         let throws = if self.eat(&TokenKind::Throws) {
-            vec![self.parse_type()?]
+            self.parse_throws_clause()?
         } else {
             Vec::new()
         };
@@ -726,7 +726,7 @@ impl Parser {
                 None
             };
             let throws = if self.eat(&TokenKind::Throws) {
-                vec![self.parse_type()?]
+                self.parse_throws_clause()?
             } else {
                 Vec::new()
             };

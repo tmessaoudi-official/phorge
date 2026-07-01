@@ -301,3 +301,34 @@ fn non_throwing_method_call_is_clean() {
     );
     assert!(ok.is_empty(), "expected clean, got {ok:?}");
 }
+
+#[test]
+fn throws_comma_separated_multiple_is_clean() {
+    // `throws A, B` (comma form, M-DOGFOOD W0) declares the same set as `throws A | B`. A caller
+    // must discharge every declared throw — catching both is clean.
+    let ok = errors_of(&format!(
+        "{ERRDEF} function f() -> void throws BadInput, NotFound {{ throw new BadInput(\"x\"); }} \
+             function main() -> void {{ try {{ f(); }} catch (BadInput e) {{}} catch (NotFound e) {{}} }}"
+    ));
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}
+
+#[test]
+fn throws_comma_partial_catch_is_unhandled() {
+    // Catching only one of two comma-declared throws leaves the other undischarged.
+    let bad = errors_of(&format!(
+        "{ERRDEF} function f() -> void throws BadInput, NotFound {{ throw new BadInput(\"x\"); }} \
+             function main() -> void {{ try {{ f(); }} catch (BadInput e) {{}} }}"
+    ));
+    assert!(!bad.is_empty(), "expected undischarged NotFound, got clean");
+}
+
+#[test]
+fn throws_comma_and_union_mix() {
+    // `throws A | B, C` mixes a union and a comma entry; the checker flattens to {A, B, C}.
+    let ok = errors_of(&format!(
+        "{ERRDEF} function f() -> void throws BadInput | NotFound {{ throw new BadInput(\"x\"); }} \
+             function main() -> void {{ try {{ f(); }} catch (BadInput e) {{}} catch (NotFound e) {{}} }}"
+    ));
+    assert!(ok.is_empty(), "expected clean, got {ok:?}");
+}

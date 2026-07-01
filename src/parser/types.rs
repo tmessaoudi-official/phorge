@@ -19,6 +19,19 @@ impl Parser {
         Ok(Type::Union(members, sp))
     }
 
+    /// Parse a `throws` clause's type list (M-DOGFOOD W0). Each entry is a full [`Self::parse_type`],
+    /// so a union entry (`A | B`) is captured natively; entries may also be comma-separated
+    /// (`throws A, B, C`). The checker flattens the resulting `Vec` into the declared throw set, so
+    /// `throws A | B`, `throws A, B`, and `throws A | B, C` all reduce to the same set. Newlines are
+    /// insignificant, so the list wraps freely across lines.
+    pub(super) fn parse_throws_clause(&mut self) -> Result<Vec<Type>, Diagnostic> {
+        let mut tys = vec![self.parse_type()?];
+        while self.eat(&TokenKind::Comma) {
+            tys.push(self.parse_type()?);
+        }
+        Ok(tys)
+    }
+
     /// Parse an intersection level `A & B & C` (M-RT S5), which binds **tighter than** `|` — so
     /// `A | B & C` ≡ `A | (B & C)`. A single atom is returned unchanged (so a non-intersection
     /// program's AST is byte-identical). Sits between [`Self::parse_type`] (union) and

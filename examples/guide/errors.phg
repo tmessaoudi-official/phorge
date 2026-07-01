@@ -33,6 +33,17 @@ function doubled(int n): int throws NegativeInput | TooLarge {
   return v * 2;
 }
 
+// The declared set may also be written **comma-separated** (M-DOGFOOD W0) and **wrapped across
+// lines** — this is exactly equivalent to the `|` union form above (the checker flattens both to the
+// same set). `implements`, `extends`, and `throws` all accept line breaks freely.
+function tripled(int n): int throws
+  NegativeInput,
+  TooLarge
+{
+  var v = validate(n)?;
+  return v * 3;
+}
+
 // A class **method** may declare `throws` too — and the checker now enforces it at the call site
 // exactly like a free function (Soundness Batch C): a bare `v.check(n)` that is neither caught nor
 // declared is a compile error (`E-CALL-UNHANDLED`), so a checked exception can never escape silently
@@ -60,6 +71,13 @@ function main(): void {
     } finally {
       Output.printLine("  (checked {n})");
     }
+  }
+
+  // The comma-form declaration is enforced identically to the union form.
+  try {
+    Output.printLine("tripled(4) = {tripled(4)}");
+  } catch (NegativeInput | TooLarge e) {
+    Output.printLine("unreached");
   }
 
   // A single union clause `catch (A | B e)` handles either checked error.
