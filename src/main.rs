@@ -335,6 +335,8 @@ fn main() {
     let bench_vs_php = cmd == "benchmark" && args[2..].iter().any(|a| a == "--vs-php");
     // `check --json` emits machine-readable diagnostics (LSP foothold) instead of the "OK" Text.
     let check_json = cmd == "check" && args[2..].iter().any(|a| a == "--json");
+    // `benchmark --json` emits the measurements as a machine-readable object (M-DOGFOOD W9).
+    let bench_json = cmd == "benchmark" && args[2..].iter().any(|a| a == "--json");
     let rest: Vec<String> = args[2..]
         .iter()
         .filter(|a| a.as_str() != "--vs-php" && a.as_str() != "--json")
@@ -419,7 +421,9 @@ fn main() {
             "tokenize" => cli::cmd_lex(&src),
             "lift" => cli::cmd_lift(&src),
             "disassemble" => cli::cmd_disasm(&src),
+            "benchmark" if bench_vs_php && bench_json => cli::cmd_bench_vs_php_json(&src),
             "benchmark" if bench_vs_php => cli::cmd_bench_vs_php(&src),
+            "benchmark" if bench_json => cli::cmd_bench_json(&src),
             "benchmark" => cli::cmd_bench(&src),
             _ => unreachable!("validated above"),
         }

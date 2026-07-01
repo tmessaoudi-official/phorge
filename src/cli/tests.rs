@@ -294,10 +294,35 @@ fn bench_vs_php_emits_a_php_section() {
     // graceful skip note (php absent). Both start with "vs PHP", so the test is host-agnostic.
     let src = wp(r#"import Core.Output;
 function main(): void { int x = 21; Output.printLine("{x + x}"); }"#);
-    let out = bench_report_opts(&src, 3, true).expect("bench");
+    let out = bench_report_opts(&src, 3, true, false).expect("bench");
     assert!(out.contains("vs PHP"), "{out}");
     // The standard report is still present.
     assert!(out.contains("vm run"), "{out}");
+}
+
+#[test]
+fn bench_json_emits_a_machine_readable_object() {
+    // `--json` (M-DOGFOOD W9) emits a JSON object of the measurements instead of the human report.
+    let src = wp(r#"import Core.Output;
+function main(): void { int x = 21; Output.printLine("{x + x}"); }"#);
+    let out = bench_report_opts(&src, 3, false, true).expect("bench json");
+    // Structural checks (no JSON dep in the lib): object shape + the required numeric keys.
+    assert!(out.trim_start().starts_with('{') && out.trim_end().ends_with('}'), "{out}");
+    for key in [
+        "\"iters\":",
+        "\"output_bytes\":",
+        "\"parse_check_ns\":",
+        "\"compile_ns\":",
+        "\"tree_walk_ns\":",
+        "\"vm_ns\":",
+        "\"vm_speedup\":",
+        "\"php_ns\":",
+    ] {
+        assert!(out.contains(key), "missing {key} in {out}");
+    }
+    // Without --vs-php, php_ns is null; the human report headers must be absent.
+    assert!(out.contains("\"php_ns\":null"), "{out}");
+    assert!(!out.contains("phg bench —"), "json must not include the text header: {out}");
 }
 
 #[test]

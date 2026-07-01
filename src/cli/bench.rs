@@ -24,7 +24,18 @@ pub fn cmd_bench(src: &str) -> Result<String, String> {
 
 /// `bench --vs-php`: the standard bench report plus a transpile-and-time-PHP comparison (Track D).
 pub fn cmd_bench_vs_php(src: &str) -> Result<String, String> {
-    bench_report_opts(src, BENCH_DEFAULT_ITERS, true)
+    bench_report_opts(src, BENCH_DEFAULT_ITERS, true, false)
+}
+
+/// `bench --json`: the same measurements as a machine-readable JSON object (for cross-language
+/// diffing / CI), instead of the human report (M-DOGFOOD W9).
+pub fn cmd_bench_json(src: &str) -> Result<String, String> {
+    bench_report_opts(src, BENCH_DEFAULT_ITERS, false, true)
+}
+
+/// `bench --vs-php --json`: JSON output including the PHP median (M-DOGFOOD W9).
+pub fn cmd_bench_vs_php_json(src: &str) -> Result<String, String> {
+    bench_report_opts(src, BENCH_DEFAULT_ITERS, true, true)
 }
 
 /// `php --version`'s first line, or `None` if `php` is not on `PATH`. Used to gate + label the
@@ -50,24 +61,32 @@ fn php_version_line() -> Option<String> {
 /// then median-time `php <file>`. Returns a report section comparing PHP to the faster Phorj backend
 /// (`tw`/`vm` medians), or a graceful note when `php` is absent or the transpiled output diverges.
 /// Each sample spawns a `php` process — that cost is part of what's measured and is called out.
+///
+/// Returns the report text **and** the measured PHP median (`Some` only when the timing succeeded and
+/// the transpiled output matched), so a JSON caller can include the number without re-parsing the text.
 fn php_bench_section(
     prog: &Program,
     iters: usize,
     expected: &str,
     tw: Duration,
     vm: Duration,
-) -> String {
+) -> (String, Option<Duration>) {
     let Some(ver) = php_version_line() else {
-        return "\nvs PHP: `php` not on PATH — skipping (install php to enable --vs-php)\n"
-            .to_string();
+        return (
+            "\nvs PHP: `php` not on PATH — skipping (install php to enable --vs-php)\n".to_string(),
+            None,
+        );
     };
     let php_src = match crate::transpile::emit(prog) {
         Ok(s) => s,
-        Err(e) => return format!("\nvs PHP: transpile failed ({e}) — skipping\n"),
+        Err(e) => return (format!("\nvs PHP: transpile failed ({e}) — skipping\n"), None),
     };
     let path = std::env::temp_dir().join(format!("phorj_bench_{}.php", std::process::id()));
     if std::fs::write(&path, &php_src).is_err() {
-        return "\nvs PHP: could not write temp file — skipping\n".to_string();
+        return (
+            "\nvs PHP: could not write temp file — skipping\n".to_string(),
+            None,
+        );
     }
     let run_php = || -> Result<String, String> {
         let o = std::process::Command::new("php")
@@ -83,18 +102,21 @@ fn php_bench_section(
         }
         Ok(String::from_utf8_lossy(&o.stdout).into_owned())
     };
-    let section = match run_php() {
-        Err(e) => format!("\nvs PHP: run failed ({e}) — skipping\n"),
+    let (section, php_med): (String, Option<Duration>) = match run_php() {
+        Err(e) => (format!("\nvs PHP: run failed ({e}) — skipping\n"), None),
         // Output-identity gate — the same parity contract used between the Phorj backends. A
         // divergence is a transpile-bug report, not a timing result.
-        Ok(out) if out != expected => format!(
-            "\nvs PHP: transpiled output differs from Phorj ({} vs {} bytes) — skipping \
-             (transpile divergence, not a timing result)\n",
-            out.len(),
-            expected.len()
+        Ok(out) if out != expected => (
+            format!(
+                "\nvs PHP: transpiled output differs from Phorj ({} vs {} bytes) — skipping \
+                 (transpile divergence, not a timing result)\n",
+                out.len(),
+                expected.len()
+            ),
+            None,
         ),
         Ok(_) => match median_of(iters, run_php) {
-            Err(e) => format!("\nvs PHP: timing failed ({e})\n"),
+            Err(e) => (format!("\nvs PHP: timing failed ({e})\n"), None),
             Ok(php) => {
                 let mut s = format!("\nvs PHP — {ver}\n");
                 s.push_str(&format!(
@@ -124,12 +146,12 @@ fn php_bench_section(
                 s.push_str(
                     "  note: PHP timing includes process spawn and depends on opcache/JIT (php.ini)\n",
                 );
-                s
+                (s, Some(php))
             }
         },
     };
     let _ = std::fs::remove_file(&path);
-    section
+    (section, php_med)
 }
 
 /// Median wall-clock of `f` over `iters` samples after one untimed warmup. Generic over the
@@ -196,12 +218,19 @@ fn fmt_kb(kb: Option<u64>) -> String {
 /// The bench engine (separated from [`cmd_bench`] so tests can pass a small `iters`). Runs on the
 /// deep-stack worker like every other pipeline command.
 pub(super) fn bench_report(src: &str, iters: usize) -> Result<String, String> {
-    bench_report_opts(src, iters, false)
+    bench_report_opts(src, iters, false, false)
 }
 
-/// Bench engine with an opt-in PHP comparison (`--vs-php`, Track D). `vs_php` transpiles the program,
-/// gates its PHP output against the Phorj backends' output, and median-times `php <file>`.
-pub(super) fn bench_report_opts(src: &str, iters: usize, vs_php: bool) -> Result<String, String> {
+/// Bench engine with an opt-in PHP comparison (`--vs-php`, Track D) and an opt-in JSON output
+/// (`--json`, M-DOGFOOD W9). `vs_php` transpiles the program, gates its PHP output against the Phorj
+/// backends' output, and median-times `php <file>`. `json` emits the same measurements as a
+/// machine-readable object instead of the human report.
+pub(super) fn bench_report_opts(
+    src: &str,
+    iters: usize,
+    vs_php: bool,
+    json: bool,
+) -> Result<String, String> {
     on_deep_stack(|| {
         // Thread the checker's reified-operand side-table into the VM compile (the byte-identical
         // path `cmd_runvm` uses) so a program whose arithmetic operand is a method/field result
@@ -262,6 +291,45 @@ pub(super) fn bench_report_opts(src: &str, iters: usize, vs_php: bool) -> Result
             )
         };
 
+        // The PHP median (when `--vs-php`) — captured whether we emit text or JSON, so `--json`
+        // includes it. Computed once here so the text and JSON paths agree.
+        let (php_section, php_med) = if vs_php {
+            php_bench_section(&prog, iters, &tw_out, tw, vm)
+        } else {
+            (String::new(), None)
+        };
+
+        if json {
+            // Hand-built JSON (std-only, no serde). Durations in integer nanoseconds; the vm speedup
+            // is a float (or null when unmeasurable); memory in KiB (or null off-Linux).
+            let vm_speedup = if tw_ns > 0 && vm_ns > 0 {
+                format!("{:.4}", tw_ns as f64 / vm_ns as f64)
+            } else {
+                "null".to_string()
+            };
+            let opt_ns = |d: Option<Duration>| {
+                d.map_or("null".to_string(), |d| d.as_nanos().to_string())
+            };
+            let opt_kb = |k: Option<u64>| k.map_or("null".to_string(), |k| k.to_string());
+            let j = format!(
+                "{{\"iters\":{iters},\"output_bytes\":{ob},\"parse_check_ns\":{fr},\
+                 \"compile_ns\":{co},\"tree_walk_ns\":{tw},\"vm_ns\":{vm},\"vm_speedup\":{sp},\
+                 \"php_ns\":{php},\"cold_rss_kib\":{cold},\"peak_rss_kib\":{peak},\
+                 \"resident_rss_kib\":{res}}}\n",
+                ob = tw_out.len(),
+                fr = front.as_nanos(),
+                co = comp.as_nanos(),
+                tw = tw.as_nanos(),
+                vm = vm.as_nanos(),
+                sp = vm_speedup,
+                php = opt_ns(php_med),
+                cold = opt_kb(cold_alloc),
+                peak = opt_kb(mem::peak_rss_kb()),
+                res = opt_kb(mem::current_rss_kb()),
+            );
+            return Ok(j);
+        }
+
         let mut out = String::new();
         out.push_str(&format!(
             "phg bench — median of {iters} (warmup 1, std Instant)\n"
@@ -282,7 +350,7 @@ pub(super) fn bench_report_opts(src: &str, iters: usize, vs_php: bool) -> Result
 
         // Optional PHP comparison (Track D) — appended after the Phorj verdict, before memory.
         if vs_php {
-            out.push_str(&php_bench_section(&prog, iters, &tw_out, tw, vm));
+            out.push_str(&php_section);
         }
 
         // Memory (Linux /proc). The cold-run growth (captured before any warmup) is the workload's

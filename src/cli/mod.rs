@@ -18,7 +18,7 @@ mod explain;
 mod fmt_cmd;
 mod rewrite_new;
 mod test_runner;
-pub use bench::{cmd_bench, cmd_bench_vs_php};
+pub use bench::{cmd_bench, cmd_bench_json, cmd_bench_vs_php, cmd_bench_vs_php_json};
 pub use explain::{cmd_explain, explain_text};
 pub use fmt_cmd::{cmd_fmt, fmt_source};
 pub use rewrite_new::cmd_rewrite_new;
