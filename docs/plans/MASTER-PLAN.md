@@ -5,6 +5,12 @@
 > Decisions Log + QUESTION CATALOG live in git history at/before `60540fc`);
 > input reports indexed in Appendix C. It supersedes the live content of the 15 MERGE plans
 > (P-plan-verdicts §2/§5) — every one of P's **56 live items (LI-A1…LI-H6)** appears below; none dropped.
+>
+> **On design-spec references (2026-07-02 consolidation):** the per-milestone design specs were
+> consolidated; `docs/specs/` now holds only the 17 live/SSOT specs. Where a HOW line below says
+> "the X spec" for a consolidated one (e.g. "update the S5 spec"), record the change in the surviving
+> SSOT spec if one covers it, else in `docs/HISTORY.md`; the original design text is in git history
+> (≤`60540fc`) and its decisions in the canonical register `docs/research/full-audit/raw/C-decisions.md`.
 
 ---
 
