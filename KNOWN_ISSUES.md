@@ -1019,11 +1019,19 @@ only read path). Deliberate scope edges:
 
 ## Behavioral quirks
 
-- **Errors inside string interpolation report line 1 (and the caret points there).** A fault *or* a
-  type error raised within a `"{ … }"` interpolation is reported at line 1 because the interpolation
-  sub-lexer resets position — so the diagnostic caret (S0.4) underlines column 1 of the program rather
-  than the real sub-expression. (VM runtime errors carry an accurate line; the interpreter's runtime
-  errors generally do not. Errors *outside* interpolation are located and underlined accurately.)
+- **Errors inside string interpolation report line 1 (W0-5 / H §5).** Because
+  `parser::split_interpolation` re-lexes the inner expression with a fresh lexer that resets to line 1,
+  anything raised *within* a `"{ … }"` interpolation loses its true line. Two cases:
+  - **Front-end type errors** inside interpolation report line 1 on *both* backends (the checker is
+    shared) and the caret underlines column 1 — a diagnostic-quality issue, not a backend divergence.
+  - **Runtime faults** inside interpolation are a real `run` ≡ `runvm` **divergence**: `run` (the
+    interpreter, via its stack-trace frames) reports the **true** line, but `runvm` reports **line 1**
+    (stack-trace frames likewise). Message, `FaultKind`, and exit code still agree, so the differential
+    harness stays green — only the line diverges. Pinned by the `#[ignore]`d
+    `interpolation_fault_line_matches_between_backends` gate in `tests/differential.rs`; the fix needs
+    VM debug symbols (scope IP ranges) and is scheduled **W5-13**.
+
+  Errors *outside* interpolation are located and underlined accurately on both backends.
 - **Recursion is depth-limited.** Recursion runs on a fixed-size (256 MB) worker stack with explicit
   depth caps (`src/limits.rs`); extremely deep recursion faults cleanly rather than overflowing the
   native stack.

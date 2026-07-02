@@ -161,6 +161,61 @@ fn agree_err(src: &str) {
     );
 }
 
+/// The line `N` from a rendered `… error at N[:col]:` fault header, or `None` if absent. Used by the
+/// W0-5 fault-line skew gate below.
+fn fault_line(err: &str) -> Option<usize> {
+    let after = &err[err.find(" at ")? + 4..];
+    after
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<String>()
+        .parse()
+        .ok()
+}
+
+/// W0-5 (H §5): faults raised INSIDE a `"{…}"` interpolation report the wrong line on the VM —
+/// `run` gives the true line, `runvm` reports line 1 (stack-trace frames likewise skewed). Message,
+/// FaultKind, and exit code agree (so `agree_err` and the CLI differential stay green); only the line
+/// diverges. This is a real break in the byte-identity claim, disclosed in KNOWN_ISSUES + G-1.1.
+///
+/// The fix needs VM debug symbols (scope IP ranges, LI-C1) and is scheduled W5-13. This test is the
+/// ready gate: it asserts the VM line MATCHES `run` for three interpolation-fault shapes (index OOB,
+/// divide-by-zero, force-unwrap — the H `r1`/`r6`/`r11` shapes). It fails today (VM reports 1), so it
+/// is `#[ignore]`d; **un-ignore it when W5-13 lands** and it must go green.
+#[test]
+#[ignore = "W5-13: VM reports line 1 for faults inside string interpolation (H §5); un-ignore when VM debug symbols land"]
+fn interpolation_fault_line_matches_between_backends() {
+    // (source, true line of the fault). Each faults inside a `"{…}"` on a line != 1.
+    let cases: &[(&str, usize)] = &[
+        (
+            "package Main;\nimport Core.Output;\nfunction main() -> void {\n    var xs = [1];\n    Output.printLine(\"v = {xs[9]}\");\n}",
+            5,
+        ),
+        (
+            "package Main;\nimport Core.Output;\nfunction main() -> void {\n    Output.printLine(\"v = {1 / 0}\");\n}",
+            4,
+        ),
+        (
+            "package Main;\nimport Core.Output;\nfunction main() -> void {\n    int? n = null;\n    Output.printLine(\"v = {n!}\");\n}",
+            5,
+        ),
+    ];
+    for (src, want) in cases {
+        let run = cmd_run(src).expect_err("program must fault on run");
+        let vm = cmd_runvm(src).expect_err("program must fault on runvm");
+        assert_eq!(
+            fault_line(&run),
+            Some(*want),
+            "run must report the true line for:\n{src}\n{run}"
+        );
+        assert_eq!(
+            fault_line(&vm),
+            fault_line(&run),
+            "VM fault line must match run (interpolation skew) for:\n{src}\n run={run}\n vm={vm}"
+        );
+    }
+}
+
 /// Programs spanning the whole P2 surface. Each must run identically on both backends.
 const P2_PROGRAMS: &[&str] = &[
     // literals + interpolation

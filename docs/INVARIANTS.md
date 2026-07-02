@@ -84,11 +84,16 @@ Malformed or adversarial `.phg` must exit 1 with a clean `Diagnostic`, **never**
 ## 7. Errors are one `Diagnostic`; backend position-asymmetry is deliberate
 All stages produce `diagnostic::Diagnostic { stage, message, line, col }`. `Display` has three
 forms (`line==0` → no position; `col==0` → `at <line>` (VM runtime); else `at <line>:<col>`
-(front-end)). **Known asymmetry:** the VM attaches a source line to runtime faults
-(`Chunk.lines[ip]`); the tree-walker tracks no position (`runtime error: …`). The body-substring
-oracle (#1) tolerates this. **Known limitation:** a fault *inside* string interpolation reports
-line 1 — `parser::split_interpolation` re-lexes the inner expression with a fresh lexer that resets
-to line 1. Deferred to the LSP/diagnostics layer.
+(front-end)). Both backends now attach a source line to runtime faults (the VM via
+`Chunk.lines[ip]`, the interpreter via its stack-trace frames) and they agree for ordinary faults.
+**Known limitation (fault-line skew — W0-5 / H §5):** a fault raised *inside* a `"{…}"` string
+interpolation is the one exception — `run` reports the true line, but `runvm` reports **line 1**
+(stack-trace frames likewise), because `parser::split_interpolation` re-lexes the inner expression
+with a fresh lexer that resets to line 1 and the VM has no scope IP ranges to recover the real line.
+Message, `FaultKind`, and exit code still agree, so the body-substring oracle (#1), `agree_err`, and
+the CLI differential all stay green — only the line diverges. Pinned by the `#[ignore]`d
+`interpolation_fault_line_matches_between_backends` gate in `tests/differential.rs`; the fix needs
+VM debug symbols (scope IP ranges) and is scheduled **W5-13**.
 
 ## 8. Determinism — sort `HashMap`-derived lists before rendering
 Any user-facing list built from `HashMap`/`HashSet` iteration must be sorted before `join`, or the

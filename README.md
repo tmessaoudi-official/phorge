@@ -273,6 +273,12 @@ Every program under [`examples/`](examples/README.md) runs byte-identically on b
 `examples/realworld/` holds four real programs (a ledger, a shop, an RPG, a small library);
 `examples/guide/` holds focused tours of each feature.
 
+> **Byte-identity caveats (disclosed):** two exceptions to `run ≡ runvm ≡ transpiled PHP`. (1) *Concurrency*
+> (`spawn`/`Channel`/`Task`) is permanently outside the PHP oracle — `run ≡ runvm` holds, the PHP leg is a
+> hard error (`E-TRANSPILE-CONCURRENCY`). (2) *Fault line numbers inside `"{…}"` interpolation* diverge on the
+> VM (reports line 1 vs. the true line) until **W5-13** — message, kind, and exit code still agree. See
+> [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) and [`docs/INVARIANTS.md`](docs/INVARIANTS.md).
+
 ## Phorj → PHP transpiler
 
 `phg transpile <file>` emits PHP 8.x (type-checked first): enums → an abstract base class plus a
