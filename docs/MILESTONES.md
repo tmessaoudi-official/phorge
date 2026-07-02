@@ -1,9 +1,15 @@
 # Phorj Milestones
 
-Living status doc. Frozen design lives in `docs/specs/2026-06-15-phorj-language-design.md`
-(§5 = roadmap). Per-milestone plans live in `docs/plans/`. `examples/README.md` is the living
-showcase of the runnable language surface (every example byte-identical on both backends + the
-Phorj→PHP transpile bridge).
+Living status doc. Frozen origin design lives in `docs/specs/2026-06-15-phorj-language-design.md`
+(§5 = roadmap). `examples/README.md` is the living showcase of the runnable language surface (every
+example byte-identical on both backends + the Phorj→PHP transpile bridge).
+
+> **⚠ Forward SSOT = [`docs/plans/MASTER-PLAN.md`](plans/MASTER-PLAN.md)** — the consolidated roadmap
+> to 100% (Waves 0–6). This file is the *delivered-status ledger*; `docs/HISTORY.md` is the narrative.
+> In the **2026-07-02 consolidation** the per-milestone design specs and plans were folded into those
+> SSOTs and removed: where a `docs/specs/…` or `docs/plans/…` link below is dead, the design is in git
+> history (≤`60540fc`) and its decisions in `docs/research/full-audit/raw/C-decisions.md` (the
+> canonical decision register). Only MASTER-PLAN survives in `docs/plans/`.
 
 ## M1 — Tree-walking interpreter + transpiler — ✅ COMPLETE (2026-06-15, `9da6e56`)
 
@@ -222,7 +228,7 @@ Codes `E-VIS-PRIVATE`/`E-VIS-INTERNAL` (with `phg explain`); example `examples/p
 Design `docs/specs/2026-06-21-visibility-modifiers-design.md`. Deferred (KNOWN_ISSUES): visibility on
 `type` aliases / `import` re-exports; member-level `Modifier` visibility stays PHP-only-enforced.
 
-## Error handling & stack traces — 🔨 Slice 1 ✅ COMPLETE (2026-06-21); Slice 2 designed
+## Error handling & stack traces — ✅ Slice 1 (2026-06-21) + Slice 2 SHIPPED
 
 Two slices (developer-chosen, traces first). **Slice 1 — fault reporting — ✅ COMPLETE:** uncaught
 runtime faults render a call stack (frames + `file:line`, source line) identically on `run`/`runvm`
@@ -232,7 +238,8 @@ runtime faults render a call stack (frames + `file:line`, source line) identical
 `docs/specs/2026-06-21-stack-traces-and-fault-reporting-design.md`. Deferred: method/ctor/closure
 frames are line-only (Slice 1.1); fault cause-chain (needs the catchable model).
 
-**Slice 2 — the catchable error model — DECIDED 2026-06-22 (locked), not yet built.** Three tiers,
+**Slice 2 — the catchable error model — ✅ SHIPPED** (decided 2026-06-22; `throws`/`Result`/faults +
+try/catch/finally/`?`, CHANGELOG 2b/2c). Three tiers,
 one enforced-failure principle: **(1) enforced typed `throws E`** — the fix to PHP's *unchecked*
 `@throws` docblock (checker-enforced at the call site, `?`-propagable, **specific type required** — no
 `throws Exception` swallow), transpiles to **idiomatic PHP exceptions**; the PHP-familiar *default*
@@ -292,8 +299,9 @@ just `run ≡ runvm`. **Fails-not-skips:** `PHORJ_REQUIRE_PHP=1` makes a missing
 
 ## M8–M12 — Road to GA 1.0 — 🔨 / 🔲
 
-The sequenced path to a stable 1.0 lives in **`docs/plans/2026-06-19-phorj-ga-roadmap.plan.md`** — the
-forward SSOT, mapping ~50 review findings: **M8** trust & hardening (vendor/serve/`write_atomic`, lints) ∥
+The sequenced path to a stable 1.0 lives in **[`docs/plans/MASTER-PLAN.md`](plans/MASTER-PLAN.md)** —
+the forward SSOT (Waves 0–6), which absorbed the earlier ga-roadmap plan and maps ~50 review findings:
+**M8** trust & hardening (vendor/serve/`write_atomic`, lints) ∥
 **M9** engineering hygiene (CI enforcement ✅, ADRs ✅, exhaustive `validate` ✅, single-sourcing, doc-SSOT) →
 **M10** erasure-first generics (`Ty::Var` — [ADR-0002](adr/0002-erasure-not-monomorphization.md)) → **M11**
 stdlib breadth (`core.list`/`json`, `Map`/`Set`) → **M12** release automation + 1.0.
@@ -330,7 +338,8 @@ rollup + top-10 spine + reject-list-with-reasons + 10 cross-track themes); raw p
 4. **Namespace PascalCase reshape** (audit-missed, now tracked): `package Main`, `E-PKG-CASE`
    (PascalCase package/folder segments, **enforced incl. vendor**; PHP/Composer deps case-mapped to
    PSR-4 at the importer boundary), manifest `name → module`, lift `E-PKG-TYPE` — a breaking codemod,
-   design `docs/specs/2026-06-20-package-namespace-reshape-design.md`, pending build.
+   **✅ SHIPPED** (`E-PKG-CASE` enforced incl. vendor; `package Main` reshape complete) — design in git
+   history (≤`60540fc`).
 
 ## v2 — Native + systems — 🔲 FUTURE
 

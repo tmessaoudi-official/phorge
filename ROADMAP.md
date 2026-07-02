@@ -1,8 +1,12 @@
 # Roadmap
 
 This is the forward-looking plan for Phorj. For *delivered* status with commit references see
-[`docs/MILESTONES.md`](docs/MILESTONES.md); for the long-term ambition see [VISION.md](VISION.md). The
-frozen designs that back each milestone live in `docs/specs/`.
+[`docs/MILESTONES.md`](docs/MILESTONES.md); for the long-term ambition see [VISION.md](VISION.md).
+
+> **⚠ Forward SSOT = [`docs/plans/MASTER-PLAN.md`](docs/plans/MASTER-PLAN.md)** — the consolidated
+> roadmap to 100% (Waves 0–6) is the per-item authority; this file remains the higher-level narrative.
+> Design specs were consolidated in the 2026-07-02 pass; dead `docs/specs/…` links resolve to git
+> history (≤`60540fc`) + the `docs/research/full-audit/raw/C-decisions.md` register.
 
 Phorj is pre-1.0 and single-developer. Dates are intentionally omitted — milestones ship when they
 ship, and the version number tracks milestone progress, not a release cadence.
@@ -146,8 +150,8 @@ release automation, audit command, and the GA governance doc-bundle → **M12 / 
 **Namespace PascalCase reshape (tracked here — the audit missed it):** `package Main`, `E-PKG-CASE`
 (PascalCase package/folder segments, **enforced including vendored deps**; PHP/Composer deps are
 case-mapped to PSR-4 at the importer boundary, never by relaxing the rule), manifest `name → module`,
-and lifting `E-PKG-TYPE`. A milestone-scale **breaking codemod**, design-locked in
-`docs/specs/2026-06-20-package-namespace-reshape-design.md`, pending implementation.
+and lifting `E-PKG-TYPE`. A milestone-scale **breaking codemod** — **✅ SHIPPED** (`E-PKG-CASE`
+enforced incl. vendor; `package Main` reshape complete); design in git history (≤`60540fc`).
 
 ## 🔲 v2 — Native & systems
 
