@@ -2,7 +2,7 @@
 
 - **Status:** Accepted (2026-06-19)
 - **Deciders:** project author
-- **Fuller design:** `docs/specs/2026-06-16-m2-p5-object-model-design.md` (supersedes the original
+- **Fuller design:** m2-p5 object-model design (consolidated 2026-07-02; git history ≤`60540fc`) (supersedes the original
   M2 design's §7 "arena + mark-sweep GC" for the current language).
 
 ## Context

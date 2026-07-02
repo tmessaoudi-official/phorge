@@ -3,7 +3,7 @@
 - **Status:** Accepted (2026-06-19)
 - **Deciders:** project author
 - **Fuller design:** `docs/ARCHITECTURE.md` §"Backends today vs. planned"; GA roadmap
-  `docs/plans/2026-06-19-phorj-ga-roadmap.plan.md` Decisions Log; ecosystem spec decision E-1.
+  the ga-roadmap plan Decisions Log (consolidated 2026-07-02; git history ≤`60540fc`); ecosystem spec decision E-1.
 
 ## Context
 

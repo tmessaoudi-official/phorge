@@ -37,7 +37,7 @@ hash fn) barely moves the total. The needle lives in rocks 2–6, which were get
 
 ## Burn-down log
 - 2026-06-27: baseline established. GA ≈ 49%. Next focus: rock 2 (tooling), starting M-Test
-  (`docs/specs/2026-06-27-m-test-design.md`, T1).
+  (M-Test design consolidated 2026-07-02; git history ≤`60540fc`, T1).
 - 2026-06-27: **M-Test COMPLETE** (T1–T5) — `phg test` runner + `Core.Test` assertions + `assertFaults`
   + `selftest/` showcase. Rock 2 30% → 45%. **GA ≈ 49% → 52%.** Next on the critical path: `phg fmt`
   (comment-safe), then a minimal LSP, to finish rock 2.

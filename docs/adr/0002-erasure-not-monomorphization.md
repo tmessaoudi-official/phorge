@@ -2,7 +2,7 @@
 
 - **Status:** Accepted (2026-06-19)
 - **Deciders:** project author
-- **Fuller design:** `docs/specs/2026-06-17-m3-language-roadmap-design.md` — decisions **D-L2**,
+- **Fuller design:** m3 language-roadmap design (consolidated 2026-07-02; git history ≤`60540fc`) — decisions **D-L2**,
   **D-L4**, **D-L9** (the transpile contract).
 
 ## Context

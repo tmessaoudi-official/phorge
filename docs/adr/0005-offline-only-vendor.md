@@ -2,8 +2,8 @@
 
 - **Status:** Accepted (2026-06-19)
 - **Deciders:** project author
-- **Fuller design:** `docs/specs/2026-06-18-m5-project-model-design.md` — decision **M5-10**;
-  M5 S3 plan `docs/plans/2026-06-18-m5-modules-packages.md`.
+- **Fuller design:** m5 project-model design — decision **M5-10**; the M5 S3 plan
+  (both consolidated 2026-07-02; git history ≤`60540fc`).
 
 ## Context
 

@@ -2,7 +2,7 @@
 
 - **Status:** Accepted (2026-06-19)
 - **Deciders:** project author
-- **Fuller design:** `docs/specs/2026-06-18-m5-project-model-design.md` — decision **M5-7** (and §4,
+- **Fuller design:** m5 project-model design (consolidated 2026-07-02; git history ≤`60540fc`) — decision **M5-7** (and §4,
   the free-function nuance that forces it).
 
 ## Context
