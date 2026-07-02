@@ -82,6 +82,32 @@ pub(super) fn validate_folder_path(
     Ok(())
 }
 
+/// W0-4: per-file package-declaration gates (`E-RESERVED-PACKAGE` / `E-PKG-CASE`). The checker's
+/// `program.rs` applies these to a *loose* program's `program.package`, but in project mode the
+/// loader flat-merges every file (mangling non-`Main` defs) **before** `check()` runs, so a file's
+/// own package decl never reaches the checker — a `package Core.*;` hijack or a lowercase
+/// `package acme;` was silently accepted (H §2.3, P1). Validating here, per-file before the merge,
+/// restores the already-decided rules (DEC-020 reserved `Core.` root; PascalCase package segments).
+/// `package Main`/empty are exempt (empty is left to the checker's `E-NO-PACKAGE`).
+pub(super) fn validate_package_decl(prog: &Program, file: &Path) -> Result<(), String> {
+    if prog.package.first().map(String::as_str) == Some("Core") {
+        return Err(format!(
+            "{}: `Core` is a reserved package root (the standard library) — use a different root, \
+             e.g. `package App;` [E-RESERVED-PACKAGE]",
+            file.display()
+        ));
+    }
+    for seg in &prog.package {
+        if !crate::checker::common::is_pascal(seg) {
+            return Err(format!(
+                "{}: package segment `{seg}` must be PascalCase [E-PKG-CASE]",
+                file.display()
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// The public-surface file-naming rule (`docs/specs/2026-06-28-public-surface-file-rule-design.md`): a
 /// non-`main` file's public face is either exactly one public named type (and the file stem equals it,
 /// byte-exact incl. casing) or some public free functions (no public type) — never both, never two

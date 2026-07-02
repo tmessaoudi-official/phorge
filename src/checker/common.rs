@@ -41,7 +41,9 @@ pub(super) fn is_camel(s: &str) -> bool {
 }
 
 /// PascalCase: an uppercase ASCII first letter and no `_` (`Shape`, `Circle`, `HttpRequest`).
-pub(super) fn is_pascal(s: &str) -> bool {
+/// `pub(crate)` so the loader can reuse the one canonical definition for its per-file package-decl
+/// casing gate (W0-4), avoiding a drifting second copy.
+pub(crate) fn is_pascal(s: &str) -> bool {
     s.chars().next().is_some_and(|c| c.is_ascii_uppercase()) && !s.contains('_')
 }
 

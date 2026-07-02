@@ -409,3 +409,41 @@ fn cross_package_inheritance_transpiles_to_qualified_extends() {
     assert!(php.contains("extends \\Acme\\Zoo\\Animal"), "got:\n{php}");
     assert!(php.contains("parent::speak()"), "got:\n{php}");
 }
+
+// ── W0-4: loader-side reserved-package + package-casing gates (project mode) ─────────────────────
+// H §2.3 (P1): in project mode the flat merge mangles per-file defs *before* `check()`, so a file's
+// own `package` decl never reaches program.rs — a `package Core.*;` hijack or a lowercase package
+// declaration was silently accepted. The loader now validates each file's package decl per-file,
+// before the merge, mirroring the checker's E-RESERVED-PACKAGE / E-PKG-CASE.
+
+#[test]
+fn project_reserved_core_package_is_rejected() {
+    let tmp = TempDir::new();
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
+    let entry = tmp.write(
+        "src/main.phg",
+        "package Main;\nimport Core.Output;\nfunction main() -> void { Output.printLine(\"hi\"); }",
+    );
+    // Lives at the folder that matches its (reserved) package, so E-PKG-PATH passes and the
+    // reserved-root rule is what fires.
+    tmp.write(
+        "src/Core/Output/sneak.phg",
+        "package Core.Output;\nfunction sneak() -> void {}",
+    );
+    let err = loader::load(&entry).expect_err("a `package Core.*` file must be rejected");
+    assert!(err.contains("E-RESERVED-PACKAGE"), "got: {err}");
+}
+
+#[test]
+fn project_lowercase_package_decl_is_rejected() {
+    let tmp = TempDir::new();
+    tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
+    let entry = tmp.write("src/main.phg", "package Main;\nfunction main() -> void {}");
+    // Folder matches the (lowercase) package, so E-PKG-PATH passes and E-PKG-CASE is what fires.
+    tmp.write(
+        "src/acme/util.phg",
+        "package acme;\nfunction u() -> void {}",
+    );
+    let err = loader::load(&entry).expect_err("a lowercase package decl must be rejected");
+    assert!(err.contains("E-PKG-CASE"), "got: {err}");
+}

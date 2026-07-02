@@ -35,7 +35,7 @@ mod assign;
 mod calls;
 mod casing;
 mod collect;
-mod common;
+pub(crate) mod common;
 mod expr;
 mod matches;
 mod program;

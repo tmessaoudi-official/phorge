@@ -278,6 +278,7 @@ fn load_project(entry: &Path, project: &Project) -> Result<Unit, String> {
         src_map.insert(file.clone(), src.clone());
         let prog = parse_at(file, &src)?;
         validate_folder_path(&prog, file, &src_entry.root)?;
+        validate_package_decl(&prog, file)?;
         validate_public_surface(&prog, file)?;
         if src_entry.vendored && (prog.package.is_empty() || prog.package == ["Main"]) {
             return Err(format!(

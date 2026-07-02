@@ -60,8 +60,8 @@ fn project_merges_files_flat() {
         "package Main;\nfunction main() -> void {}\nfunction local() -> void {}",
     );
     tmp.write(
-        "src/acme/util/parse.phg",
-        "package acme.util;\nfunction parse() -> void {}",
+        "src/Acme/Util/parse.phg",
+        "package Acme.Util;\nfunction parse() -> void {}",
     );
     let u = load(&entry).unwrap();
     assert_eq!(u.program.package, ["Main"]);
@@ -83,13 +83,13 @@ fn project_load_reports_stats() {
         "package Main;\nfunction main() -> void {}\nclass C {}",
     );
     tmp.write(
-        "src/acme/util/parse.phg",
-        "package acme.util;\nfunction parse() -> void {}",
+        "src/Acme/Util/parse.phg",
+        "package Acme.Util;\nfunction parse() -> void {}",
     );
     let u = load(&entry).unwrap();
     let stats = u.stats.expect("project mode reports stats");
     assert_eq!(stats.files, 2, "two source files");
-    assert_eq!(stats.packages, 2, "main + acme.util");
+    assert_eq!(stats.packages, 2, "main + Acme.Util");
     assert_eq!(stats.defs, 3, "main, C, parse");
     // The human summary mentions the project-wide scope.
     let summary = stats.summary();
@@ -120,7 +120,7 @@ fn folder_path_mismatch_is_rejected() {
     let entry = tmp.write("src/main.phg", "package Main;\nfunction main() -> void {}");
     // File sits in src/acme/util but declares the wrong package.
     tmp.write(
-        "src/acme/util/parse.phg",
+        "src/Acme/Util/parse.phg",
         "package acme.wrong;\nfunction parse() -> void {}",
     );
     let err = load(&entry).unwrap_err();
@@ -149,7 +149,7 @@ fn library_package_outside_source_root_is_rejected() {
     // A dotted package living outside the source root entirely.
     tmp.write(
         "lib/parse.phg",
-        "package acme.util;\nfunction parse() -> void {}",
+        "package Acme.Util;\nfunction parse() -> void {}",
     );
     // Run it as the entry so it is loaded even though it is not under src/.
     let err = load(&tmp.path().join("lib/parse.phg")).unwrap_err();
@@ -170,12 +170,12 @@ fn duplicate_function_in_package_is_rejected() {
     let entry = tmp.write("src/main.phg", "package Main;\nfunction main() -> void {}");
     // Two files in the same package each define `f` — collides after the flat merge.
     tmp.write(
-        "src/acme/util/a.phg",
-        "package acme.util;\nfunction f() -> void {}",
+        "src/Acme/Util/a.phg",
+        "package Acme.Util;\nfunction f() -> void {}",
     );
     tmp.write(
-        "src/acme/util/b.phg",
-        "package acme.util;\nfunction f() -> void {}",
+        "src/Acme/Util/b.phg",
+        "package Acme.Util;\nfunction f() -> void {}",
     );
     let err = load(&entry).unwrap_err();
     assert!(err.contains("E-DUP-DEF"), "got: {err}");
@@ -207,11 +207,11 @@ fn import_type_of_internal_library_type_is_rejected() {
     tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport type acme.geo.Hidden;\nfunction main() -> void { Hidden h = Hidden(); }",
+        "package Main;\nimport type Acme.Geo.Hidden;\nfunction main() -> void { Hidden h = Hidden(); }",
     );
     tmp.write(
-        "src/acme/geo/geo.phg",
-        "package acme.geo;\ninternal class Hidden { constructor() {} }",
+        "src/Acme/Geo/geo.phg",
+        "package Acme.Geo;\ninternal class Hidden { constructor() {} }",
     );
     let err = load(&entry).unwrap_err();
     assert!(err.contains("E-VIS-INTERNAL"), "got: {err}");
@@ -223,12 +223,12 @@ fn import_type_of_public_library_type_is_allowed() {
     tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport type acme.geo.Shown;\nfunction main() -> void { Shown s = Shown(); }",
+        "package Main;\nimport type Acme.Geo.Shown;\nfunction main() -> void { Shown s = Shown(); }",
     );
     // Public-surface rule: a file with one public type is named after it (`Shown.phg`).
     tmp.write(
-        "src/acme/geo/Shown.phg",
-        "package acme.geo;\npublic class Shown { constructor() {} }",
+        "src/Acme/Geo/Shown.phg",
+        "package Acme.Geo;\npublic class Shown { constructor() {} }",
     );
     assert!(load(&entry).is_ok());
 }
@@ -287,11 +287,11 @@ fn internal_function_called_cross_package_is_rejected() {
     tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport acme.util;\nfunction main() -> int { return util.secret(); }",
+        "package Main;\nimport Acme.Util;\nfunction main() -> int { return Util.secret(); }",
     );
     tmp.write(
-        "src/acme/util/util.phg",
-        "package acme.util;\ninternal function secret() -> int { return 7; }",
+        "src/Acme/Util/util.phg",
+        "package Acme.Util;\ninternal function secret() -> int { return 7; }",
     );
     let err = load(&entry).unwrap_err();
     assert!(err.contains("E-VIS-INTERNAL"), "got: {err}");
@@ -303,11 +303,11 @@ fn public_function_called_cross_package_is_allowed() {
     tmp.write("phorj.toml", "module = \"acme/app\"\nsource = \"src\"");
     let entry = tmp.write(
         "src/main.phg",
-        "package Main;\nimport acme.util;\nfunction main() -> int { return util.shown(); }",
+        "package Main;\nimport Acme.Util;\nfunction main() -> int { return Util.shown(); }",
     );
     tmp.write(
-        "src/acme/util/util.phg",
-        "package acme.util;\npublic function shown() -> int { return 7; }",
+        "src/Acme/Util/util.phg",
+        "package Acme.Util;\npublic function shown() -> int { return 7; }",
     );
     assert!(load(&entry).is_ok());
 }
@@ -440,12 +440,12 @@ fn forward_and_cross_file_type_references_resolve() {
     );
     // Two library files; `Order.phg` (merged first, alphabetically) references `OrderLine` (later).
     tmp.write(
-        "src/acme/lib/Order.phg",
-        "package acme.lib;\npublic class Order { constructor(public OrderLine line) {} }",
+        "src/Acme/Lib/Order.phg",
+        "package Acme.Lib;\npublic class Order { constructor(public OrderLine line) {} }",
     );
     tmp.write(
-        "src/acme/lib/OrderLine.phg",
-        "package acme.lib;\npublic class OrderLine { constructor(public int qty) {} }",
+        "src/Acme/Lib/OrderLine.phg",
+        "package Acme.Lib;\npublic class OrderLine { constructor(public int qty) {} }",
     );
     tmp.write(
         "src/B.phg",
