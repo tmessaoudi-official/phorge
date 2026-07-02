@@ -356,6 +356,9 @@ pub struct Checker {
     aliases: HashMap<String, crate::ast::Type>,
     /// alias names currently being expanded — detects `type A = B; type B = A;` cycles.
     alias_stack: Vec<String>,
+    /// Alias names already reported as part of a cycle (W0-4). Dedupes the collect-time graph walk
+    /// against the resolve-time use-site detection so one cycle yields exactly one `E-ALIAS-CYCLE`.
+    alias_cycle_reported: std::collections::HashSet<String>,
     /// Active import map (leaf qualifier → full dotted module path; see [`crate::native::import_map`]).
     /// Drives namespaced native-call resolution (`console.println`) and the shadowing guard that
     /// keeps an imported qualifier disjoint from every value binding (M3 Wave 1).
@@ -512,6 +515,7 @@ impl Checker {
             loop_depth: 0,
             aliases: HashMap::new(),
             alias_stack: Vec::new(),
+            alias_cycle_reported: std::collections::HashSet::new(),
             imports: HashMap::new(),
             html_resolutions: HashMap::new(),
             ufcs_resolutions: HashMap::new(),

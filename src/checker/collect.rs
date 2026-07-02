@@ -143,6 +143,85 @@ impl Checker {
         // `implements` (cycles, unknown names, method conformance) and build the shared
         // class→interface table the backends consume verbatim (M-RT S2).
         self.check_interface_graph(program);
+        // W0-4: every alias is registered now — walk the alias→alias graph eagerly so a cycle that
+        // is never *used* (never reaches `resolve_type`) is still rejected. Coded + deduped with the
+        // resolve-time detection via `alias_cycle_reported`.
+        self.check_alias_cycles(program);
+    }
+
+    /// W0-4: detect `type` alias cycles by a graph walk over alias→alias edges, independent of whether
+    /// the alias is ever used. An unused cycle (`type A = B; type B = A;`) never reaches `resolve_type`,
+    /// so this collect-time pass is the only thing that catches it. One `E-ALIAS-CYCLE` per cycle,
+    /// deduped against the resolve-time use-site path through `alias_cycle_reported`.
+    pub(super) fn check_alias_cycles(&mut self, program: &Program) {
+        use crate::ast::Item;
+        for item in &program.items {
+            let Item::TypeAlias { name, span, .. } = item else {
+                continue;
+            };
+            if self.alias_cycle_reported.contains(name) {
+                continue;
+            }
+            // DFS from `name` over alias→alias edges; a return to `name` is a cycle. `path` is the
+            // route back to `name` when found, so the message can name the whole loop.
+            let mut path: Vec<String> = Vec::new();
+            let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+            if self.alias_reaches_self(name, name, &mut path, &mut seen) {
+                let mut cycle = path;
+                cycle.push(name.clone());
+                self.report_alias_cycle(&cycle, *span);
+            }
+        }
+    }
+
+    /// DFS helper for [`Self::check_alias_cycles`]: does following alias edges from `current` lead back
+    /// to `target`? `path` accumulates the alias names walked (for the diagnostic); `seen` bounds the
+    /// walk on any (possibly unrelated) sub-cycle so it always terminates.
+    fn alias_reaches_self(
+        &self,
+        target: &str,
+        current: &str,
+        path: &mut Vec<String>,
+        seen: &mut std::collections::HashSet<String>,
+    ) -> bool {
+        let Some(ty) = self.aliases.get(current) else {
+            return false;
+        };
+        let mut refs: Vec<String> = Vec::new();
+        collect_alias_refs(ty, &self.aliases, &mut refs);
+        for r in refs {
+            if r == target {
+                return true;
+            }
+            if seen.insert(r.clone()) {
+                path.push(r.clone());
+                if self.alias_reaches_self(target, &r, path, seen) {
+                    return true;
+                }
+                path.pop();
+            }
+        }
+        false
+    }
+
+    /// Emit one `E-ALIAS-CYCLE` for a detected cycle, deduped: if any name in the cycle was already
+    /// reported (by the other detection path), stay silent. Marks every member reported (W0-4).
+    pub(super) fn report_alias_cycle(&mut self, cycle: &[String], span: Span) {
+        if cycle.iter().any(|n| self.alias_cycle_reported.contains(n)) {
+            return;
+        }
+        for n in cycle {
+            self.alias_cycle_reported.insert(n.clone());
+        }
+        self.err_coded(
+            span,
+            format!("type alias cycle: {}", cycle.join(" → ")),
+            "E-ALIAS-CYCLE",
+            Some(
+                "break the cycle so every alias bottoms out at a built-in, class, or enum type"
+                    .into(),
+            ),
+        );
     }
 
     /// M-RT S8: collect a trait by reusing the class machinery. A synthetic `ClassDecl` carries the
@@ -1876,6 +1955,43 @@ impl Checker {
         info.ctor_vis = ctor_vis;
         // `ctor_owner` was initialized to the class's own name; an own ctor keeps it. An inherited
         // ctor's owner/visibility are merged in `merge_inherited` for a class with no own ctor.
+    }
+}
+
+/// Collect the alias-name references inside a type annotation (W0-4). Walks the `Type` structure and
+/// pushes every `Named` head that is itself a registered alias — the edges of the alias→alias graph
+/// used by `check_alias_cycles`. Non-alias names (classes, primitives, enums) and generic args that
+/// aren't aliases are ignored; nested composite types (optional, union, intersection, function,
+/// fixed-list) are recursed so `type A = List<B>?` still records the edge to `B`.
+fn collect_alias_refs(
+    ty: &crate::ast::Type,
+    aliases: &HashMap<String, crate::ast::Type>,
+    out: &mut Vec<String>,
+) {
+    use crate::ast::Type;
+    match ty {
+        Type::Named { name, args, .. } => {
+            if aliases.contains_key(name) {
+                out.push(name.clone());
+            }
+            for a in args {
+                collect_alias_refs(a, aliases, out);
+            }
+        }
+        Type::Optional { inner, .. } => collect_alias_refs(inner, aliases, out),
+        Type::Union(members, _) | Type::Intersection(members, _) => {
+            for m in members {
+                collect_alias_refs(m, aliases, out);
+            }
+        }
+        Type::Function { params, ret, .. } => {
+            for p in params {
+                collect_alias_refs(p, aliases, out);
+            }
+            collect_alias_refs(ret, aliases, out);
+        }
+        Type::FixedList { elem, .. } => collect_alias_refs(elem, aliases, out),
+        Type::Infer(_) | Type::Erased(_) => {}
     }
 }
 

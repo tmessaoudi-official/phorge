@@ -40,6 +40,46 @@ fn type_alias_cycle_is_an_error() {
 }
 
 #[test]
+fn type_alias_cycle_carries_code() {
+    // W0-4: the used-cycle diagnostic used to be uncoded (`self.err`) — `phg explain E-ALIAS-CYCLE`
+    // documented a code the compiler never attached. It now carries the code.
+    let errs =
+        errors_of("type A = B; type B = A; function f(A x) -> void {} function main() -> void {}");
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-ALIAS-CYCLE")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn unused_type_alias_cycle_is_an_error() {
+    // W0-4: an alias cycle that is never *used* used to pass clean (resolve_type never ran on it).
+    // The collect-time graph walk now catches it regardless of use.
+    let errs = errors_of("type A = B; type B = A; function main() -> void {}");
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-ALIAS-CYCLE")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn unused_self_referential_alias_is_an_error() {
+    // Direct self-cycle, unused: `type A = A;`.
+    let errs = errors_of("type A = A; function main() -> void {}");
+    assert!(
+        errs.iter().any(|e| e.code == Some("E-ALIAS-CYCLE")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn non_cyclic_unused_alias_is_ok() {
+    // Guard: an ordinary unused alias chain that bottoms out is fine — the walk must not false-positive.
+    let errs = errors_of("type A = int; type B = A; function main() -> void {}");
+    assert!(errs.is_empty(), "{errs:?}");
+}
+
+#[test]
 fn duplicate_type_name_is_an_error() {
     let errs = errors_of("type A = int; type A = float; function main() -> void {}");
     assert!(

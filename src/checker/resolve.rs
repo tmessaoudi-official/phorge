@@ -244,7 +244,19 @@ impl Checker {
                         }
                     } else if self.aliases.contains_key(other) {
                         if self.alias_stack.iter().any(|n| n == other) {
-                            return self.err(*span, format!("type alias cycle through `{other}`"));
+                            // W0-4: the cycle is `other` plus every alias currently on the stack from
+                            // the point `other` first appears. Report it *coded* (E-ALIAS-CYCLE) and
+                            // deduped, so a cycle already caught by the collect-time walk (or an
+                            // earlier use) is not re-reported.
+                            let start = self
+                                .alias_stack
+                                .iter()
+                                .position(|n| n == other)
+                                .unwrap_or(0);
+                            let mut cycle: Vec<String> = self.alias_stack[start..].to_vec();
+                            cycle.push(other.to_string());
+                            self.report_alias_cycle(&cycle, *span);
+                            return Ty::Error;
                         }
                         let aliased = self.aliases.get(other).cloned().expect("alias present");
                         self.alias_stack.push(other.to_string());
