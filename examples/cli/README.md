@@ -8,8 +8,8 @@ byte-identity sweep). Run `phg <command> --help` for per-command help with worke
 
 ```bash
 phg run demo.phg                                              # a file
-echo 'package Main; import Core.Output; function main() { Output.printLine("from stdin"); }' | phg run -   # stdin
-phg run -e 'package Main; import Core.Output; function main() { Output.printLine("inline program"); }'     # inline
+echo 'package Main; import Core.Output; function main(): void { Output.printLine("from stdin"); }' | phg run -   # stdin
+phg run -e 'package Main; import Core.Output; function main(): void { Output.printLine("inline program"); }'     # inline
 ```
 
 ```
@@ -62,10 +62,10 @@ Front-end errors carry a caret-underlined span, a stable code, and a did-you-mea
 name is in scope:
 
 ```
-$ phg run -e 'package Main; import Core.Output; function main() { int count = 1; int y = conut + 1; Output.printLine("{y}"); }'
-type error at 1:77: unknown identifier `conut`
-package Main; import Core.Output; function main() { int count = 1; int y = conut + 1; Output.printLine("{y}"); }
-                                                                            ^
+$ phg run -e 'package Main; import Core.Output; function main(): void { int count = 1; int y = conut + 1; Output.printLine("{y}"); }'
+type error at 1:82: unknown identifier `conut`
+package Main; import Core.Output; function main(): void { int count = 1; int y = conut + 1; Output.printLine("{y}"); }
+                                                                                 ^
   [E-UNKNOWN-IDENT]
   hint: did you mean `count`?
 ```
@@ -86,17 +86,25 @@ the current class's fields. ...
 Phorj never panics on input — runtime faults are clean, one-line errors with exit code 1:
 
 ```
-$ phg run   -e 'package Main; function main() { int a = 10; int b = 0; int x = a / b; }'
-runtime error: division by zero
-
-$ phg runvm -e 'package Main; function main() { int a = 10; int b = 0; int x = a / b; }'
+$ phg run   -e 'package Main; function main(): void { int a = 10; int b = 0; int x = a / b; }'
 runtime error at 1: division by zero
+package Main; function main(): void { int a = 10; int b = 0; int x = a / b; }
+stack trace (most recent call first):
+  → main               line 1
 
-$ phg run   -e 'package Main; function main() { List<int> xs = [1, 2]; int v = xs[5]; }'
-runtime error: list index out of range
+$ phg runvm -e 'package Main; function main(): void { int a = 10; int b = 0; int x = a / b; }'
+runtime error at 1: division by zero
+package Main; function main(): void { int a = 10; int b = 0; int x = a / b; }
+stack trace (most recent call first):
+  → main               line 1
+
+$ phg run   -e 'package Main; function main(): void { List<int> xs = [1, 2]; int v = xs[5]; }'
+runtime error at 1: list index out of range
 ```
 
-Both backends fault on the same condition with the same message *body*; the VM also reports the line
-(`at 1`). The differential harness (`tests/differential.rs`) gates that `run` and `runvm` fault on
-exactly the same inputs — the same checked-arithmetic / bounds-checking guarantee (integer overflow,
-division by zero, out-of-range indexing) that `guide/operators.phg` describes.
+Both backends fault on the same condition with the same message *body*, line, and exit code — the
+output is byte-identical (one documented exception: fault lines inside string interpolation, see
+[`KNOWN_ISSUES.md`](../../KNOWN_ISSUES.md)). The differential harness (`tests/differential.rs`) gates
+that `run` and `runvm` fault on exactly the same inputs — the same checked-arithmetic / bounds-checking
+guarantee (integer overflow, division by zero, out-of-range indexing) that `guide/operators.phg`
+describes.

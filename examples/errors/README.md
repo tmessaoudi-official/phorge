@@ -11,12 +11,12 @@ This program faults two calls deep:
 ```phorj
 package Main;
 
-function f() -> int {
+function f(): int {
   var xs = [1];
   return xs[5];          // index out of range
 }
 
-function main() {
+function main(): void {
   var r = f();
 }
 ```

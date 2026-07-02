@@ -33,8 +33,8 @@ function area(Shape s): float {
     };
 }
 
-function main() {
-    List<Shape> shapes = [Circle(2.0), Rect(3.0, 4.0)];
+function main(): void {
+    List<Shape> shapes = [new Circle(2.0), new Rect(3.0, 4.0)];
     for (Shape s in shapes) {
         Output.printLine("area = {area(s)}");
     }
@@ -104,10 +104,10 @@ chmod +x phg-*-linux-x86_64-musl
 $ phg run examples/hello.phg
 Hello, Phorj!
 
-$ echo 'package Main; import Core.Output; function main() { Output.printLine("{1 + 2}"); }' | phg run -
+$ echo 'package Main; import Core.Output; function main(): void { Output.printLine("{1 + 2}"); }' | phg run -
 3
 
-$ phg run -e 'package Main; import Core.Output; function main() { Output.printLine("inline!"); }'
+$ phg run -e 'package Main; import Core.Output; function main(): void { Output.printLine("inline!"); }'
 inline!
 ```
 
