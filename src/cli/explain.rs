@@ -1007,6 +1007,13 @@ pub fn explain_text(code: &str) -> Option<String> {
              Inherited and trait-supplied static methods resolve fine (Statics-A), and overloaded static\n\
              methods are dispatched by argument type (Statics-B).\n"
         }
+        "E-VARIANT-QUALIFIER" => {
+            "E-VARIANT-QUALIFIER — a qualified variant pattern named the wrong enum.\n\n\
+             In a `match`, a qualified pattern `Enum.Variant(…)` must name the *scrutinee's* enum. If\n\
+             the scrutinee is a `Shape`, an arm `Color.Red(c) => …` is a mistake — the qualifier says\n\
+             `Color` but the value is a `Shape`. Use the scrutinee's enum (`Shape.Circle(…)`) or the\n\
+             bare form (`Circle(…)`), which resolves against the scrutinee automatically.\n"
+        }
         "E-STATIC-VIA-INSTANCE" => {
             "E-STATIC-VIA-INSTANCE — a `static` method was called through an instance.\n\n\
              A static method belongs to the class, not an instance, so it is reached only as\n\

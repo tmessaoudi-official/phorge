@@ -298,6 +298,18 @@ function main(): void {
     Output.printLine("{n}");
 }"#,
     );
+    // Slice A2: qualified MATCH patterns `Enum.Variant(binds) =>` (erased to bare before backends).
+    agree(
+        r#"import Core.Output;
+enum Shape { Circle(float r), Square(float s) }
+function area(Shape s): float {
+    return match s { Shape.Circle(r) => 3.0 * r * r, Shape.Square(x) => x * x };
+}
+function main(): void {
+    Output.printLine("{area(new Shape.Circle(2.0))}");
+    Output.printLine("{area(new Shape.Square(3.0))}");
+}"#,
+    );
 }
 
 /// M-RT S6a — single inheritance: an inherited method, an overridden method (via a subclass ref),

@@ -403,3 +403,43 @@ fn qualified_variant_arg_type_checked() {
                function main() -> void { var c = new Shape.Circle(\"x\"); }";
     assert!(!errors_of(src).is_empty(), "{:?}", errors_of(src));
 }
+
+// ── qualified enum-variant MATCH patterns `Enum.Variant(binds) =>` (slice A2) ──────────────────────
+
+#[test]
+fn qualified_variant_pattern_type_checks() {
+    // `Shape.Circle(r) =>` — a qualified variant pattern is accepted and exhaustive alongside the
+    // other qualified arm; the bare form stays valid too.
+    let src = "enum Shape { Circle(float r), Square(float s) } \
+               function area(Shape s) -> float { return match s { Shape.Circle(r) => r, Shape.Square(x) => x }; }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn qualified_variant_pattern_mixed_with_bare_is_ok() {
+    // Qualified and bare arms may coexist (both resolve to the same variant).
+    let src = "enum Shape { Circle(float r), Square(float s) } \
+               function area(Shape s) -> float { return match s { Shape.Circle(r) => r, Square(x) => x }; }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn qualified_pattern_wrong_variant_errors() {
+    let src = "enum Shape { Circle(float r), Square(float s) } \
+               function f(Shape s) -> float { return match s { Shape.Nope(r) => r, s2 => 0.0 }; }";
+    assert!(
+        errors_of(src)
+            .iter()
+            .any(|d| d.message.contains("no variant")),
+        "{:?}",
+        errors_of(src)
+    );
+}
+
+#[test]
+fn qualified_pattern_wrong_enum_errors() {
+    // The qualifier must name the scrutinee's enum, not a different one.
+    let src = "enum Shape { Circle(float r) } enum Color { Red(int c) } \
+               function f(Shape s) -> float { return match s { Color.Red(c) => 0.0, s2 => 1.0 }; }";
+    assert!(!errors_of(src).is_empty(), "{:?}", errors_of(src));
+}

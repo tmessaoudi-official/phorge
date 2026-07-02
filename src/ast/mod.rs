@@ -89,6 +89,11 @@ pub enum Pattern {
     Variant {
         name: String,
         fields: Vec<Pattern>,
+        /// Optional enum qualifier from a `Enum.Variant(binds)` pattern (variant-qualification A2).
+        /// `None` for the bare `Variant(binds)` form. The checker validates it names the scrutinee's
+        /// enum + the variant belongs; the backends match by `name` alone (the qualifier is a
+        /// compile-time check only), so it needs no backend handling.
+        enum_qualifier: Option<String>,
         span: Span,
     },
     /// `Circle c` / `Square _` — a **type pattern** for match-over-union (M-RT S4): matches when the

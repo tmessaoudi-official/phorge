@@ -240,7 +240,12 @@ impl Checker {
                     );
                 }
             }
-            Pattern::Variant { name, fields, span } => {
+            Pattern::Variant {
+                name,
+                fields,
+                enum_qualifier,
+                span,
+            } => {
                 let (enum_name, eargs) = match scrut {
                     Ty::Named(n, eargs) if self.enums.contains_key(n) => (n.clone(), eargs.clone()),
                     Ty::Error => return,
@@ -249,6 +254,18 @@ impl Checker {
                         return;
                     }
                 };
+                // A qualified pattern `Enum.Variant(..)` (A2): the qualifier must name the scrutinee's
+                // enum. (The variant-belongs check is the `None` arm below, shared with the bare form.)
+                if let Some(q) = enum_qualifier {
+                    if q != &enum_name {
+                        self.err_coded(
+                            *span,
+                            format!("pattern qualifier `{q}` does not match the scrutinee's enum `{enum_name}`"),
+                            "E-VARIANT-QUALIFIER",
+                            Some(format!("use `{enum_name}.{name}(…)` (or the bare `{name}(…)`)")),
+                        );
+                    }
+                }
                 let field_tys: Vec<Ty> = match self.enums[&enum_name].variants.get(name) {
                     // Substitute the enum's type parameters with the scrutinee's type arguments
                     // (`Option<int>` ⇒ `{T → int}`) so a generic variant's payload binds at the

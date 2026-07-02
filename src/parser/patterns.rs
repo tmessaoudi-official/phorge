@@ -52,6 +52,36 @@ impl Parser {
                 if name == "_" {
                     return Ok(Pattern::Wildcard(sp));
                 }
+                // Qualified variant pattern `Enum.Variant(binds)` (variant-qualification A2): the
+                // leading ident is the enum qualifier. Only the variant form (`(fields)`, or nullary
+                // with no parens) is valid after a dotted path — never a struct/type/binding pattern.
+                // The checker validates the qualifier names the scrutinee's enum.
+                if self.eat(&TokenKind::Dot) {
+                    let variant = self.expect_ident(
+                        "a variant name after `.` in a qualified pattern (`Enum.Variant(…)`)",
+                    )?;
+                    let mut fields = Vec::new();
+                    if self.eat(&TokenKind::LParen) {
+                        if !self.check(&TokenKind::RParen) {
+                            loop {
+                                fields.push(self.parse_pattern()?);
+                                if !self.eat(&TokenKind::Comma) {
+                                    break;
+                                }
+                                if self.check(&TokenKind::RParen) {
+                                    break; // trailing comma
+                                }
+                            }
+                        }
+                        self.expect(&TokenKind::RParen, "')' to close variant pattern")?;
+                    }
+                    return Ok(Pattern::Variant {
+                        name: variant,
+                        fields,
+                        enum_qualifier: Some(name),
+                        span: sp,
+                    });
+                }
                 if self.eat(&TokenKind::LParen) {
                     let mut fields = Vec::new();
                     if !self.check(&TokenKind::RParen) {
@@ -69,6 +99,7 @@ impl Parser {
                     Ok(Pattern::Variant {
                         name,
                         fields,
+                        enum_qualifier: None,
                         span: sp,
                     })
                 } else if self.check(&TokenKind::LBrace)

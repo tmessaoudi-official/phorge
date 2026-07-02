@@ -33,6 +33,7 @@ fn builds_variant_pattern() {
             name: "r".into(),
             span: sp(),
         }],
+        enum_qualifier: None,
         span: sp(),
     };
     match p {
