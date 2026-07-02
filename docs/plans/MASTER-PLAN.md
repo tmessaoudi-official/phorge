@@ -1237,7 +1237,7 @@ examples). Where a ⏳ marker conflicts with this ledger, THE LEDGER WINS. Detai
 | Core-package reservation | **loader-side enforcement ADOPTED** (revives E-RESERVED-PACKAGE/E-PKG-CASE on project paths) |
 | Enforcement batch 1 | **ADOPTED** — W-CATCH-NEVER-THROWN, W-UNUSED-{LOCAL,PARAM,IMPORT}, NaN→fault unify, +5 smaller |
 | Enforcement batch 2 | **ADOPTED all ten** (W-THROWS-NEVER scoped off interfaces/open, W-EMPTY-CATCH, E-INSTANCEOF-IMPOSSIBLE, W-USELESS-COALESCE/SAFE, E-DIV-ZERO-CONST, E-CONST-OVERFLOW, W-CONST-CONDITION, W-SELF-ASSIGN/COMPARE, W-DUPLICATE-CONDITION, W-IDENTICAL-BRANCHES) |
-| Enforcement batch 3 | **COMMISSIONED** — linter-catalog sweep (clippy/PHPStan/ESLint/detekt), pending report |
+| Enforcement batch 3 | **ADOPTED all 26** (2026-07-02 sign-off) — incl. live-verified E-FINALLY-CONTROL-FLOW + E-MAP-DUP-KEY; 16 rejects recorded w/ FP stories (raw/L-lint-batch3.md) |
 | Cross-language 13 | **ADOPTED all 13** — `phg fix` ships FIRST in Wave 2 |
 | Bulk-six autonomous items | **RATIFIED** (pattern-cluster, totality, invariance, COW index-assign, dogfood grammar, debugger surface) |
 | `new` on enum variants | **KEPT** — one construction rule; asymmetry powers E-MATCH-BARE-TYPE's did-you-mean |
@@ -1247,3 +1247,4 @@ examples). Where a ⏳ marker conflicts with this ledger, THE LEDGER WINS. Detai
 | CLAUDE.md rewrite | **APPLIED** — rules-only (15 invariants incl. ladder + adjudication rules); history → docs/HISTORY.md |
 | hooksPath P0 | **REPAIRED** — `core.hooksPath scripts/git-hooks` |
 | Showcase | **ALL SIX ADOPTED** (front door, flagship, truthful README, spec+conformance, honest benchmarks, editor refresh) |
+| Master plan | **SIGNED OFF by the developer, 2026-07-02** — this document is THE roadmap; next session: CLAUDE.md → here → Wave 0 item 1 |
