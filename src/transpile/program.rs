@@ -1302,6 +1302,35 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        // NDJSON (JSON Lines). `parse_lines` reuses `__phorj_json_build` (gated via uses_json_decode);
+        // `stringify_lines` reuses `__phorj_json_encode` (uses_json_encode). Split/join + the PHP
+        // `trim()` default set match the Rust `json_parse_lines`/`json_stringify_lines` exactly.
+        if self.uses_json_parse_lines {
+            self.line("function __phorj_json_parse_lines($s) {");
+            self.indent += 1;
+            self.line("$out = [];");
+            self.line("foreach (explode(\"\\n\", $s) as $line) {");
+            self.indent += 1;
+            self.line("$t = trim($line);");
+            self.line("if ($t === \"\") { continue; }");
+            self.line("$d = json_decode($t);");
+            self.line("if (json_last_error() !== JSON_ERROR_NONE) { return null; }");
+            self.line("$out[] = __phorj_json_build($d);");
+            self.indent -= 1;
+            self.line("}");
+            self.line("return $out;");
+            self.indent -= 1;
+            self.line("}");
+        }
+        if self.uses_json_stringify_lines {
+            self.line("function __phorj_json_stringify_lines($xs) {");
+            self.indent += 1;
+            self.line("$parts = [];");
+            self.line("foreach ($xs as $x) { $parts[] = __phorj_json_encode($x); }");
+            self.line("return implode(\"\\n\", $parts);");
+            self.indent -= 1;
+            self.line("}");
+        }
     }
 
     /// Emit `__phorj_reflect_of($v, $kind)` + its static table, built from the SAME `ClassTables` the

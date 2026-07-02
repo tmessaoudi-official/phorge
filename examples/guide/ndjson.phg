@@ -1,0 +1,39 @@
+// NDJSON / JSON Lines — one JSON value per line (`Core.Json`, an extension of `parse`/`stringify`).
+//
+//   Core.Json.parseLines(string) -> List<Json>?     // None if ANY line is malformed JSON
+//   Core.Json.stringifyLines(List<Json>) -> string   // each value compact-encoded, joined by "\n"
+//
+// The de-facto format for log streams and record dumps: `jq`, `kubectl`, and most data pipelines emit
+// it. Empty/whitespace lines are skipped on parse. Byte-identical run/runvm/real PHP (each line goes
+// through the same `json_decode`/`json_encode` as `parse`/`stringify`).
+package Main;
+
+import Core.Output;
+import Core.Json;
+
+function main(): void {
+    // Build three records and dump them as NDJSON (one compact JSON value per line).
+    List<Json> records = [
+        new Json.Object(["user" => new Json.String("ada"), "score" => new Json.Int(42)]),
+        new Json.Object(["user" => new Json.String("linus"), "score" => new Json.Int(37)]),
+        new Json.Array([new Json.Int(1), new Json.Int(2), new Json.Int(3)]),
+    ];
+    string dump = Json.stringifyLines(records);
+    Output.printLine(dump);
+
+    Output.printLine("--- parsed back ---");
+    // Round-trip: parse the NDJSON back into a `List<Json>?` and re-dump it (identical).
+    if (var parsed = Json.parseLines(dump)) {
+        Output.printLine(Json.stringifyLines(parsed));
+    } else {
+        Output.printLine("malformed NDJSON");
+    }
+
+    // Blank lines are skipped; a malformed line makes the whole parse None.
+    Output.printLine("--- malformed -> None ---");
+    if (var ok = Json.parseLines("true\nnot json")) {
+        Output.printLine(Json.stringifyLines(ok));
+    } else {
+        Output.printLine("None (a line was not valid JSON)");
+    }
+}

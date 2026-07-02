@@ -149,6 +149,16 @@ impl Transpiler {
                                     self.uses_json_encode = true;
                                 }
                                 "parse" => self.uses_json_decode = true,
+                                // NDJSON: parseLines reuses __phorj_json_build (decode); stringifyLines
+                                // reuses __phorj_json_encode. Each gates its own line helper too.
+                                "parseLines" => {
+                                    self.uses_json_decode = true;
+                                    self.uses_json_parse_lines = true;
+                                }
+                                "stringifyLines" => {
+                                    self.uses_json_encode = true;
+                                    self.uses_json_stringify_lines = true;
+                                }
                                 _ => {}
                             }
                         }

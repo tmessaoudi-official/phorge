@@ -39,6 +39,48 @@ fn json_stringify(args: &[Value], _: &mut String) -> Result<Value, String> {
     }
 }
 
+// NDJSON (JSON Lines): one JSON value per line. `parseLines` parses each non-empty (trimmed) line;
+// any malformed line makes the whole parse fail (None), mirroring `parse`. `stringifyLines` encodes
+// each value and joins with `\n` (no trailing newline). Both backends and the transpiled-PHP
+// `__phorj_json_{parse,stringify}_lines` helpers split/join identically, so byte-identity holds.
+fn json_parse_lines(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::Str(s)] => {
+            let mut out: Vec<Value> = Vec::new();
+            for line in s.split('\n') {
+                // Trim exactly PHP `trim()`'s default set (space, \t, \r, \v, \0 — \n already split
+                // out), NOT Rust's Unicode `.trim()`, so the transpiled `__phorj_json_parse_lines`
+                // (which uses PHP `trim`) is byte-identical on exotic-whitespace input too.
+                let t = line.trim_matches([' ', '\t', '\r', '\u{0b}', '\0']);
+                if t.is_empty() {
+                    continue;
+                }
+                match parse_json(t) {
+                    Some(v) => out.push(v),
+                    None => return Ok(Value::Null), // any malformed line → None
+                }
+            }
+            Ok(Value::List(Rc::new(out)))
+        }
+        _ => Err("Json.parseLines expects (string)".into()),
+    }
+}
+
+fn json_stringify_lines(args: &[Value], _: &mut String) -> Result<Value, String> {
+    match args {
+        [Value::List(xs)] => {
+            let mut lines: Vec<String> = Vec::with_capacity(xs.len());
+            for x in xs.iter() {
+                let mut s = String::new();
+                encode(x, &mut s)?;
+                lines.push(s);
+            }
+            Ok(Value::Str(lines.join("\n")))
+        }
+        _ => Err("Json.stringifyLines expects (List<Json>)".into()),
+    }
+}
+
 fn json_stringify_pretty(args: &[Value], _: &mut String) -> Result<Value, String> {
     match args {
         [j] => {
@@ -426,6 +468,24 @@ pub(crate) fn json_natives() -> Vec<NativeFn> {
             pure: true,
             eval: NativeEval::Pure(json_parse),
             php: |a| format!("__phorj_json_decode({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Json",
+            name: "parseLines",
+            params: vec![Ty::String],
+            ret: Ty::Optional(Box::new(Ty::List(Box::new(json())))),
+            pure: true,
+            eval: NativeEval::Pure(json_parse_lines),
+            php: |a| format!("__phorj_json_parse_lines({})", parg(a, 0)),
+        },
+        NativeFn {
+            module: "Core.Json",
+            name: "stringifyLines",
+            params: vec![Ty::List(Box::new(json()))],
+            ret: Ty::String,
+            pure: true,
+            eval: NativeEval::Pure(json_stringify_lines),
+            php: |a| format!("__phorj_json_stringify_lines({})", parg(a, 0)),
         },
         NativeFn {
             module: "Core.Json",

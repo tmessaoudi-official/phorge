@@ -128,3 +128,56 @@ fn natives_registered_with_expected_signatures() {
     assert!(crate::native::index_of("Core.Json", "stringify").is_some());
     assert!(crate::native::index_of("Core.Json", "stringifyPretty").is_some());
 }
+
+// ── NDJSON / JSON Lines (parseLines / stringifyLines) ────────────────────────────────────────────
+
+#[test]
+fn ndjson_registered() {
+    assert!(crate::native::index_of("Core.Json", "parseLines").is_some());
+    assert!(crate::native::index_of("Core.Json", "stringifyLines").is_some());
+}
+
+#[test]
+fn ndjson_stringify_lines_joins_with_newline() {
+    let mut out = String::new();
+    let xs = Value::List(std::rc::Rc::new(vec![
+        jnode("Int", vec![Value::Int(1)]),
+        jnode("Bool", vec![Value::Bool(true)]),
+        jnode("Null", vec![]),
+    ]));
+    let s = json_stringify_lines(&[xs], &mut out).unwrap();
+    assert!(
+        matches!(s, Value::Str(ref t) if t == "1\ntrue\nnull"),
+        "{s:?}"
+    );
+}
+
+#[test]
+fn ndjson_parse_lines_skips_blank_and_builds() {
+    let mut out = String::new();
+    // Leading blank + trailing whitespace line are skipped; two values parsed.
+    let v = json_parse_lines(&[Value::Str("\n1\n  \ntrue\n".into())], &mut out).unwrap();
+    match v {
+        Value::List(xs) => assert_eq!(xs.len(), 2),
+        other => panic!("expected a list, got {other:?}"),
+    }
+}
+
+#[test]
+fn ndjson_parse_lines_malformed_line_is_none() {
+    let mut out = String::new();
+    let v = json_parse_lines(&[Value::Str("true\nnot json".into())], &mut out).unwrap();
+    assert!(matches!(v, Value::Null)); // any malformed line → None
+}
+
+#[test]
+fn ndjson_round_trips_through_both_kernels() {
+    let mut out = String::new();
+    let src = "{\"a\":1}\n[2,3]\ntrue";
+    let parsed = json_parse_lines(&[Value::Str(src.into())], &mut out).unwrap();
+    let redumped = json_stringify_lines(&[parsed], &mut out).unwrap();
+    assert!(
+        matches!(redumped, Value::Str(ref t) if t == src),
+        "{redumped:?}"
+    );
+}

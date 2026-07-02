@@ -232,6 +232,8 @@ struct Transpiler {
     uses_json_encode: bool,
     uses_json_pretty: bool,
     uses_json_decode: bool,
+    uses_json_parse_lines: bool,
+    uses_json_stringify_lines: bool,
     /// Set when `Core.Text.parseInt` is emitted — defines `__phorj_parse_int` once per file. The
     /// helper mirrors Rust's `i64::from_str` (optional sign, base-10 digits, i64 range, no surrounding
     /// whitespace) and returns `null` (Phorj `None`) otherwise — including on i64 overflow, which
@@ -517,6 +519,8 @@ impl Transpiler {
             uses_json_encode: false,
             uses_json_pretty: false,
             uses_json_decode: false,
+            uses_json_parse_lines: false,
+            uses_json_stringify_lines: false,
             uses_text_parse_int: false,
             uses_list_sort: false,
             uses_list_sort_with: false,
