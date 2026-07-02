@@ -1207,3 +1207,43 @@ record update · WASM playground · whole-project checking.
 *Maintenance: when an item completes, mark it `✅ <short-sha>` in place (never delete rows); when a ⏳
 resolves, replace the marker with the ruling + date; re-run §10 after every wave. This file is the
 single forward SSOT — `ROADMAP.md` and `docs/MILESTONES.md` point here after Wave 0's doc batch.*
+
+---
+
+## 12. RULINGS LEDGER — 2026-07-02 full adjudication (supersedes the ⏳BLOCKED-ON markers above)
+
+Every pending marker in this plan was adjudicated interactively on 2026-07-02 (full re-ask, embedded
+examples). Where a ⏳ marker conflicts with this ledger, THE LEDGER WINS. Details + examples in
+`docs/plans/2026-07-01-full-audit-and-master-plan.plan.md` (Decisions Log).
+
+| Ruling | Outcome |
+|---|---|
+| E-MATCH-BARE-TYPE | **ADOPTED** — hard error, bare PascalCase in pattern position + did-you-mean |
+| foreach vs for-in | **REPLACEMENT EXECUTED** — foreach only; `for` C-style only; E-RETIRED-SYNTAX + `phg fix` rewrite; repo codemod |
+| E-INTERSECT-SIG | **RELAXED** via shipped overload-resolution rules |
+| Generics explicit type args | **ADOPTED both sites** — `new Box<int>(…)` + `f<T>(…)` w/ lookahead |
+| UFCS | **TYPE-SCOPED** (developer design): same leaf legal across receiver types; specificity ranking (method > concrete > interface > generic); tie ⇒ E-UFCS-AMBIGUOUS; CI rebind/tie guard |
+| Core override | **REJECTED entirely** — Core sealed; UFCS extensions (incl. primitives, `1.xyz()`) are the extension story; test-seam design for Time/Random remains a Wave-5 item |
+| Capture writes | **E-CAPTURE-WRITE hard error + `Core.Ref<T>` box** (instance-handle sharing verified by probe) |
+| Ladder rule | **ADOPTED + in CLAUDE.md rule 14** — no-faithful-PHP-mapping ⇒ surface to developer; native-only + E-TRANSPILE-<FEATURE> + quarantine + disclosure; silent downgrade FORBIDDEN |
+| Concurrency PHP leg | **E-TRANSPILE-CONCURRENCY hard error + `--sequential-concurrency` explicit opt-in w/ warning** |
+| M-Parallel direction | **WORKER ISOLATES** (own heap/thread, channel messaging, nothing shared); shared-memory Arc rewrite REJECTED |
+| Messaging | **CO-HEADLINE**: enforcement ("compile ahead of PHP's runtime errors") + the two-way bridge |
+| Completion numbers | **RATIFIED** — parity ≈58% / vision ≈60%; recompute at every milestone close |
+| Unicode strings (DEF-016) | **ADOPTED** — Unicode-correct by default on `string`; bytes stay explicit via `bytes`; M-text Wave 4 |
+| Gap priority | **Web spine (Wave 3) then lifter-unblockers (Wave 4)**; generators DESIGN runs during Wave 3 |
+| Stdlib charter | **3-bucket ADOPTED** (A→M-Batteries · B→extension-policy-gated · C→rejected-with-reasons) |
+| E-IMPORT-UNKNOWN | **ADOPTED** — hard error + did-you-mean |
+| Core-package reservation | **loader-side enforcement ADOPTED** (revives E-RESERVED-PACKAGE/E-PKG-CASE on project paths) |
+| Enforcement batch 1 | **ADOPTED** — W-CATCH-NEVER-THROWN, W-UNUSED-{LOCAL,PARAM,IMPORT}, NaN→fault unify, +5 smaller |
+| Enforcement batch 2 | **ADOPTED all ten** (W-THROWS-NEVER scoped off interfaces/open, W-EMPTY-CATCH, E-INSTANCEOF-IMPOSSIBLE, W-USELESS-COALESCE/SAFE, E-DIV-ZERO-CONST, E-CONST-OVERFLOW, W-CONST-CONDITION, W-SELF-ASSIGN/COMPARE, W-DUPLICATE-CONDITION, W-IDENTICAL-BRANCHES) |
+| Enforcement batch 3 | **COMMISSIONED** — linter-catalog sweep (clippy/PHPStan/ESLint/detekt), pending report |
+| Cross-language 13 | **ADOPTED all 13** — `phg fix` ships FIRST in Wave 2 |
+| Bulk-six autonomous items | **RATIFIED** (pattern-cluster, totality, invariance, COW index-assign, dogfood grammar, debugger surface) |
+| `new` on enum variants | **KEPT** — one construction rule; asymmetry powers E-MATCH-BARE-TYPE's did-you-mean |
+| Doc reconciliation | **BATCHED** — 7 stale records + DRIFT-01..09, one Wave-0 task |
+| Hygiene block | **ADOPTED** — anti-regrowth rule (soft 800/hard 1000 + size-gate CI), 23-split decomposition, examples-README restructure, KNOWN_ISSUES prune + cleanups, A-P2 fixes, VM perf pair |
+| Plan deletions | **EXECUTED** — 48 DELETE-VERIFIED plans removed (evidence: raw/P-plan-verdicts.md) |
+| CLAUDE.md rewrite | **APPLIED** — rules-only (15 invariants incl. ladder + adjudication rules); history → docs/HISTORY.md |
+| hooksPath P0 | **REPAIRED** — `core.hooksPath scripts/git-hooks` |
+| Showcase | **ALL SIX ADOPTED** (front door, flagship, truthful README, spec+conformance, honest benchmarks, editor refresh) |
