@@ -32,6 +32,7 @@ mod encoding;
 mod file;
 mod hash;
 mod html;
+mod ini;
 mod json;
 mod list;
 mod map;
@@ -338,6 +339,7 @@ fn build() -> Vec<NativeFn> {
     registry.extend(decimal::decimal_natives());
     registry.extend(encoding::encoding_natives());
     registry.extend(hash::hash_natives());
+    registry.extend(ini::ini_natives());
     registry.extend(url::url_natives());
     registry.extend(path::path_natives());
     registry.extend(validate::validate_natives());

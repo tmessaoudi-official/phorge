@@ -162,6 +162,9 @@ impl Transpiler {
                                 _ => {}
                             }
                         }
+                        if nat.module == "Core.Ini" && nat.name == "parse" {
+                            self.uses_ini_parse = true;
+                        }
                         if nat.module == "Core.String" {
                             match nat.name {
                                 "parseInt" => self.uses_text_parse_int = true,

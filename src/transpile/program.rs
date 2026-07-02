@@ -1331,6 +1331,32 @@ impl Transpiler {
             self.indent -= 1;
             self.line("}");
         }
+        // Core.Ini — a hand-rolled simple INI parser matching `native::ini::ini_parse` line-for-line
+        // (NOT PHP `parse_ini_string`, whose type-coercion Phorj deliberately rejects). PHP `trim()`'s
+        // default set matches the Rust `trim_matches`; overwriting an existing key keeps its position
+        // (PHP array semantics == `build_map`). Returns a PHP array = the `Map<string,string>` value.
+        if self.uses_ini_parse {
+            self.line("function __phorj_ini_parse($s) {");
+            self.indent += 1;
+            self.line("$out = [];");
+            self.line("$section = \"\";");
+            self.line("foreach (explode(\"\\n\", $s) as $line) {");
+            self.indent += 1;
+            self.line("$t = trim($line);");
+            self.line("if ($t === \"\" || $t[0] === \";\" || $t[0] === \"#\") { continue; }");
+            self.line("if ($t[0] === \"[\" && substr($t, -1) === \"]\") { $section = trim(substr($t, 1, -1)); continue; }");
+            self.line("$eq = strpos($t, \"=\");");
+            self.line("if ($eq === false) { continue; }");
+            self.line("$key = trim(substr($t, 0, $eq));");
+            self.line("$val = trim(substr($t, $eq + 1));");
+            self.line("$full = $section === \"\" ? $key : $section . \".\" . $key;");
+            self.line("$out[$full] = $val;");
+            self.indent -= 1;
+            self.line("}");
+            self.line("return $out;");
+            self.indent -= 1;
+            self.line("}");
+        }
     }
 
     /// Emit `__phorj_reflect_of($v, $kind)` + its static table, built from the SAME `ClassTables` the

@@ -1,0 +1,30 @@
+// `Core.Ini` — a small, legible INI config parser.
+//
+//   Core.Ini.parse(string) -> Map<string, string>
+//
+// `key = value` lines, `[section]` headers (which dot the keys under them — `[db]` + `host = x`
+// becomes `db.host`), and `;` / `#` comment lines. Keys and values are trimmed; a value may itself
+// contain `=` (only the first splits); a later duplicate key overwrites (keeping its first position).
+//
+// Deliberately NOT PHP's `parse_ini_string`: values are ALWAYS strings — `on`/`yes`/`true`/`1` are
+// not coerced to bool/int. Phorj removes PHP's surprises. Byte-identical run/runvm/real PHP (the PHP
+// leg emits a matching hand-rolled parser, never the quirky `parse_ini_string`).
+package Main;
+
+import Core.Output;
+
+import Core.Ini;
+
+import Core.Map;
+
+function main(): void {
+    string config = "; app config\n" + "name = phorj\n" + "debug = on\n" + "\n" + "[server]\n" + "host = 0.0.0.0\n" + "port = 8080\n" + "# the DB section\n" + "[db]\n" + "dsn = host=localhost;port=5432";
+    // stays the string "on", never coerced to a bool
+    // value contains '=' — only the first splits
+    Map<string, string> cfg = Ini.parse(config);
+    Output.printLine("name  = {Map.get(cfg, \"name\") ?? \"?\"}");
+    Output.printLine("debug = {Map.get(cfg, \"debug\") ?? \"?\"}");
+    Output.printLine("server.host = {Map.get(cfg, \"server.host\") ?? \"?\"}");
+    Output.printLine("server.port = {Map.get(cfg, \"server.port\") ?? \"?\"}");
+    Output.printLine("db.dsn = {Map.get(cfg, \"db.dsn\") ?? \"?\"}");
+}
