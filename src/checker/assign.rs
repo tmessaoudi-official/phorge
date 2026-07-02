@@ -206,7 +206,13 @@ impl Checker {
                     );
                     return;
                 }
-                match info.statics.get(name).cloned() {
+                // Hoist owned copies out of the `info` borrow before any `&mut self` call below
+                // (E-* emit + `enforce_member_vis`), so the immutable borrow of `self.classes[cls]`
+                // has ended (W0-2: static write visibility joins the existing mut/type checks).
+                let static_ty = info.statics.get(name).cloned();
+                let is_mut = info.static_mut.contains(name);
+                let svis = info.static_vis.get(name).cloned();
+                match static_ty {
                     None => {
                         self.err_coded(
                             span,
@@ -216,7 +222,10 @@ impl Checker {
                         );
                     }
                     Some(fty) => {
-                        let is_mut = info.static_mut.contains(name);
+                        // W0-2: a `private`/`protected` static write from outside its scope is
+                        // rejected here (E-FIELD-VISIBILITY) — closing the run≡runvm≡PHP hole (PHP
+                        // fatals writing a `private static` from outside).
+                        self.enforce_member_vis(svis, name, span, true);
                         if !is_mut {
                             self.err_coded(
                                 span,

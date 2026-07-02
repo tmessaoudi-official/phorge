@@ -810,6 +810,15 @@ impl Checker {
                         if tinfo.static_mut.contains(k) {
                             child.static_mut.insert(k.clone());
                         }
+                        // W0-2: a `use`d trait's static is re-owned to the using class (trait `use`
+                        // semantics — its `private` static is reachable from the using class),
+                        // mirroring the `field_vis` re-own above.
+                        if let Some(sv) = tinfo.static_vis.get(k) {
+                            child
+                                .static_vis
+                                .entry(k.clone())
+                                .or_insert((sv.0, cls.clone()));
+                        }
                     }
                 }
                 // Feature A: a `use`d trait's constants flatten into the using class (own wins).
@@ -868,6 +877,15 @@ impl Checker {
                     child.statics.insert(k.clone(), v.clone());
                     if parent_info.static_mut.contains(k) {
                         child.static_mut.insert(k.clone());
+                    }
+                    // W0-2: inherit static visibility, **preserving the declaring owner** (like
+                    // `field_vis`/consts) — an inherited `private` static is checked against the
+                    // parent (not visible from the child), a `protected` one is (child <: owner).
+                    if let Some(sv) = parent_info.static_vis.get(k) {
+                        child
+                            .static_vis
+                            .entry(k.clone())
+                            .or_insert_with(|| sv.clone());
                     }
                 }
             }
@@ -1469,6 +1487,7 @@ impl Checker {
                 type_params: c.type_params.clone(),
                 is_abstract: c.is_abstract,
                 field_vis: HashMap::new(),
+                static_vis: HashMap::new(),
                 method_vis: HashMap::new(),
                 static_methods: std::collections::HashSet::new(),
             },
@@ -1534,6 +1553,7 @@ impl Checker {
         let mut method_vis: HashMap<String, (MemberVis, String)> = HashMap::new();
         let mut mutable_fields = std::collections::HashSet::new();
         let mut statics: HashMap<String, Ty> = HashMap::new();
+        let mut static_vis: HashMap<String, (MemberVis, String)> = HashMap::new();
         let mut consts: HashMap<String, ConstEntry> = HashMap::new();
         let mut static_mut = std::collections::HashSet::new();
         let mut methods: HashMap<String, Vec<FnSig>> = HashMap::new();
@@ -1633,6 +1653,10 @@ impl Checker {
                             );
                         }
                         statics.insert(name.clone(), fty);
+                        // W0-2: record vis + declaring owner alongside the type, so a
+                        // `private`/`protected` static read/write from outside is rejected (mirrors
+                        // `field_vis`; owner preserved through inheritance for owner/subclass checks).
+                        static_vis.insert(name.clone(), (MemberVis::of(modifiers), c.name.clone()));
                         if modifiers.contains(&Modifier::Mutable) {
                             static_mut.insert(name.clone());
                         }
@@ -1835,6 +1859,7 @@ impl Checker {
         let info = self.classes.get_mut(&c.name).unwrap();
         info.fields = fields;
         info.field_vis = field_vis;
+        info.static_vis = static_vis;
         info.method_vis = method_vis;
         info.static_methods = static_methods;
         info.mutable_fields = mutable_fields;

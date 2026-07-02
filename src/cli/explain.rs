@@ -934,10 +934,12 @@ pub fn explain_text(code: &str) -> Option<String> {
         "E-FIELD-VISIBILITY" => {
             "E-FIELD-VISIBILITY — a `private`/`protected` field was read or written from outside its scope.\n\n\
              A `private` field is reachable only inside the declaring class; a `protected` field only\n\
-             inside that class and its subclasses (an un-annotated field is `public`). The check runs in\n\
-             the type-checker so every backend agrees — without it a `private` read would pass on the\n\
-             Phorj interpreter/VM but throw in the transpiled PHP. Add a public accessor method (e.g.\n\
-             `function valueOf() -> int { return this.value; }`), or declare the field `public`.\n"
+             inside that class and its subclasses (an un-annotated field is `public`). This covers both\n\
+             instance fields (`o.f`) and `static` fields (`Class.s`) — reads and writes alike. The check\n\
+             runs in the type-checker so every backend agrees — without it a `private` static read would\n\
+             pass on the Phorj interpreter/VM but throw in the transpiled PHP (`Cannot access private\n\
+             property`). Add a public accessor method (e.g. `function valueOf() -> int { return this.value; }`),\n\
+             or declare the field `public`.\n"
         }
         "E-METHOD-VISIBILITY" => {
             "E-METHOD-VISIBILITY — a `private`/`protected` method was called from outside its scope.\n\n\

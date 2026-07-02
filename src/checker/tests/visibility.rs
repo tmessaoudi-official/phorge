@@ -129,3 +129,73 @@ fn protected_field_read_from_outside_is_error() {
                function main() -> void { var b = new B(5); var v = b.x; }";
     assert!(has(src, "E-FIELD-VISIBILITY"), "{:?}", errors_of(src));
 }
+
+// ── static fields (W0-2, P0 spine repair) ──────────────────────────────────────────────────────
+// A `private`/`protected` static read/write from outside its scope used to check clean, print on
+// run/runvm, and FATAL on the PHP leg (`Cannot access private property A::$s`) — a three-way spine
+// break. Static fields now carry visibility like consts + instance fields, gated on both paths.
+
+#[test]
+fn external_private_static_read_is_error() {
+    let src = "class A { private static int s = 3; } \
+               function main() -> void { var x = A.s; }";
+    assert!(has(src, "E-FIELD-VISIBILITY"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn external_public_static_read_is_ok() {
+    let src = "class A { static int s = 3; } \
+               function main() -> void { var x = A.s; }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn internal_private_static_read_is_ok() {
+    let src = "class A { private static int s = 3; \
+                         function get() -> int { return A.s; } } \
+               function main() -> void { var a = new A(); var x = a.get(); }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn external_private_static_write_is_error() {
+    let src = "class A { private static mutable int s = 3; } \
+               function main() -> void { A.s = 9; }";
+    assert!(has(src, "E-FIELD-VISIBILITY"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn external_protected_static_read_is_error() {
+    let src = "class A { protected static int s = 3; } \
+               function main() -> void { var x = A.s; }";
+    assert!(has(src, "E-FIELD-VISIBILITY"), "{:?}", errors_of(src));
+}
+
+#[test]
+fn protected_static_read_from_subclass_is_ok() {
+    let src = "open class B { protected static int s = 3; } \
+               class D extends B { function ds() -> int { return D.s; } } \
+               function main() -> void { var d = new D(); var v = d.ds(); }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn internal_private_static_read_from_static_method_is_ok() {
+    // A static method of the owning class must still see its own private static — `cur_class` has to
+    // be set inside a `static function` body (it has no `this`, but the enclosing class IS in scope
+    // for visibility). Guards against the W0-2 gate over-rejecting in-class static-method access.
+    let src = "class A { private static int s = 3; \
+                         static function peek() -> int { return A.s; } } \
+               function main() -> void { var x = A.peek(); }";
+    assert!(errors_of(src).is_empty(), "{:?}", errors_of(src));
+}
+
+#[test]
+fn external_private_static_compound_write_is_error() {
+    // `A.s += 1` desugars to `A.s = A.s + 1` — the read leg (`A.s`) AND the write leg both hit the
+    // W0-2 gate, so a compound write from outside is rejected too (the P0 is closed for `+=`/`++`,
+    // not only plain `=`).
+    let src = "class A { private static mutable int s = 3; } \
+               function main() -> void { A.s += 1; }";
+    assert!(has(src, "E-FIELD-VISIBILITY"), "{:?}", errors_of(src));
+}

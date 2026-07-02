@@ -1,0 +1,5 @@
+type error at 8:14: `s` is a private field of `A`
+    var x = A.s;
+             ^
+  [E-FIELD-VISIBILITY]
+  hint: it is accessible only inside `A`

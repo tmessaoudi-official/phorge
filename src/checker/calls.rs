@@ -1499,7 +1499,14 @@ impl Checker {
                         return entry.ty;
                     }
                     return match self.classes[cls].statics.get(name).cloned() {
-                        Some(t) => t,
+                        Some(t) => {
+                            // W0-2: a `private`/`protected` static read from outside its scope is
+                            // rejected here (E-FIELD-VISIBILITY), mirroring the const path above and
+                            // the instance-field path below — closing the run≡runvm≡PHP hole.
+                            let v = self.classes[cls].static_vis.get(name).cloned();
+                            self.enforce_member_vis(v, name, span, true);
+                            t
+                        }
                         None => self.err_coded(
                             span,
                             format!("`{cls}` has no static field `{name}`"),

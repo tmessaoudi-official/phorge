@@ -142,6 +142,10 @@ struct ClassInfo {
     /// instance-field read/write sites (Wave 1.1) so `run ≡ runvm ≡ transpiled PHP` — which enforces
     /// visibility natively — all reject an out-of-scope access instead of diverging at runtime.
     field_vis: HashMap<String, (MemberVis, String)>,
+    /// Static-field visibility + declaring owner, parallel to [`Self::statics`] (like [`Self::field_vis`]
+    /// for instance fields). W0-2: a `private`/`protected` static read/write from outside its scope is
+    /// rejected here, closing the run≡runvm≡PHP hole (PHP emits a real `private static` property).
+    static_vis: HashMap<String, (MemberVis, String)>,
     /// Member visibility for methods: method name → (vis, owner). Per-name (an overload set shares one
     /// visibility — the first-declared overload's modifiers win). Enforced at the method-call site.
     method_vis: HashMap<String, (MemberVis, String)>,
@@ -223,6 +227,7 @@ impl ClassInfo {
             type_params,
             is_abstract: false,
             field_vis: HashMap::new(),
+            static_vis: HashMap::new(),
             method_vis: HashMap::new(),
             static_methods: std::collections::HashSet::new(),
         }
